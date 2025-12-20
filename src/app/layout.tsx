@@ -1,98 +1,89 @@
-import { DevtoolsProvider } from "@providers/devtools";
-import { useNotificationProvider } from "@refinedev/antd";
-import { GitHubBanner, Refine } from "@refinedev/core";
+"use client";
+
+import { Refine } from "@refinedev/core";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
+import { notificationProvider, RefineThemes, ThemedLayoutV2 } from "@refinedev/antd";
+import { App as AntdApp, ConfigProvider } from "antd";
 import routerProvider from "@refinedev/nextjs-router";
-import { Metadata } from "next";
-import { cookies } from "next/headers";
-import React, { Suspense } from "react";
-
-import { AntdRegistry } from "@ant-design/nextjs-registry";
-import { ColorModeContextProvider } from "@contexts/color-mode";
-import { authProviderClient } from "@providers/auth-provider/auth-provider.client";
-import { dataProvider } from "@providers/data-provider";
 import "@refinedev/antd/dist/reset.css";
+import React from "react";
 
-export const metadata: Metadata = {
-  title: "Academia Crystal",
-  description: "Software de Gestión para Academia de Belleza",
-  icons: {
-    icon: "/favicon.ico",
-  },
-};
+// --- IMPORTACIONES EXACTAS SEGÚN TU PROYECTO ---
+import { dataProvider } from "../providers/data-provider";
+import { authProvider } from "../providers/auth-provider/auth-provider.client";
 
-export default async function RootLayout({
+// --- TRUCO: SILENCIADOR DE ADVERTENCIAS ---
+// Esto evita que salga la pantalla roja de "antd v5 support React 16~18"
+if (typeof window !== "undefined") {
+  const originalError = console.error;
+  console.error = (...args) => {
+    if (typeof args[0] === "string" && args[0].includes("antd v5 support")) return;
+    originalError(...args);
+  };
+}
+
+export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
-  const cookieStore = await cookies();
-  const theme = cookieStore.get("theme");
-  const defaultMode = theme?.value === "dark" ? "dark" : "light";
-
+}) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body>
-        <Suspense>
-          <GitHubBanner />
-          <RefineKbarProvider>
-            <AntdRegistry>
-              <ColorModeContextProvider defaultMode={defaultMode}>
-                <DevtoolsProvider>
-                  <Refine
-                    routerProvider={routerProvider}
-                    authProvider={authProviderClient}
-                    dataProvider={dataProvider}
-                    notificationProvider={useNotificationProvider}
-                    // AQUI ESTA LA LISTA COMPLETA DE TUS MENUS
-                    resources={[
-                      {
-                        name: "cursos",
-                        list: "/cursos",
-                        create: "/cursos/create",
-                        edit: "/cursos/edit/:id",
-                        show: "/cursos/show/:id",
-                        meta: { canDelete: true },
-                      },
-                      {
-                        name: "inventario",
-                        list: "/inventario",
-                        create: "/inventario/create",
-                        edit: "/inventario/edit/:id",
-                        show: "/inventario/show/:id",
-                        meta: { canDelete: true },
-                      },
-                      {
-                        name: "perfiles",
-                        list: "/perfiles",
-                        create: "/perfiles/create",
-                        edit: "/perfiles/edit/:id",
-                        show: "/perfiles/show/:id",
-                        meta: { canDelete: true },
-                      },
-                      {
-                        name: "matriculas",
-                        list: "/matriculas",
-                        create: "/matriculas/create",
-                        edit: "/matriculas/edit/:id",
-                        show: "/matriculas/show/:id",
-                        meta: { canDelete: true },
-                      }
-                    ]}
-                    options={{
-                      syncWithLocation: true,
-                      warnWhenUnsavedChanges: true,
-                      projectId: "Jql38c-WWYmlx-vE6fxG",
-                    }}
-                  >
-                    {children}
-                    <RefineKbar />
-                  </Refine>
-                </DevtoolsProvider>
-              </ColorModeContextProvider>
-            </AntdRegistry>
-          </RefineKbarProvider>
-        </Suspense>
+        <RefineKbarProvider>
+          <ConfigProvider theme={RefineThemes.Blue}>
+            <AntdApp>
+              <Refine
+                routerProvider={routerProvider}
+                dataProvider={dataProvider}
+                authProvider={authProvider}
+                notificationProvider={notificationProvider}
+                resources={[
+                  {
+                    name: "perfiles",
+                    list: "/perfiles",
+                    create: "/perfiles/create",
+                    edit: "/perfiles/edit",
+                    show: "/perfiles/show",
+                    meta: { label: "Estudiantes", icon: "👩‍🎓" },
+                  },
+                  {
+                    name: "cursos",
+                    list: "/cursos",
+                    create: "/cursos/create",
+                    edit: "/cursos/edit",
+                    show: "/cursos/show",
+                    meta: { label: "Cursos", icon: "📚" },
+                  },
+                  {
+                    name: "matriculas",
+                    list: "/matriculas",
+                    create: "/matriculas/create",
+                    edit: "/matriculas/edit",
+                    show: "/matriculas/show",
+                    meta: { label: "Matrículas", icon: "📝" },
+                  },
+                  {
+                    name: "inventario",
+                    list: "/inventario",
+                    create: "/inventario/create",
+                    edit: "/inventario/edit",
+                    show: "/inventario/show",
+                    meta: { label: "Inventario", icon: "💅" },
+                  },
+                ]}
+                options={{
+                  syncWithLocation: true,
+                  warnWhenUnsavedChanges: true,
+                  useNewQueryKeys: true,
+                }}
+              >
+                {children}
+                <RefineKbar />
+              </Refine>
+            </AntdApp>
+          </ConfigProvider>
+        </RefineKbarProvider>
       </body>
     </html>
   );
