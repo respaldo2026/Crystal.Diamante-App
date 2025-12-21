@@ -1,26 +1,13 @@
 "use client";
 
+import React, { Suspense } from "react";
 import { Refine } from "@refinedev/core";
-import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
-import { notificationProvider, RefineThemes, ThemedLayoutV2 } from "@refinedev/antd";
-import { App as AntdApp, ConfigProvider } from "antd";
+import { AntdRegistry } from "@ant-design/nextjs-registry";
+import { App as AntdApp, Layout } from "antd";
 import routerProvider from "@refinedev/nextjs-router";
 import "@refinedev/antd/dist/reset.css";
-import React from "react";
 
-// --- IMPORTACIONES EXACTAS SEGÚN TU PROYECTO ---
 import { dataProvider } from "../providers/data-provider";
-import { authProvider } from "../providers/auth-provider/auth-provider.client";
-
-// --- TRUCO: SILENCIADOR DE ADVERTENCIAS ---
-// Esto evita que salga la pantalla roja de "antd v5 support React 16~18"
-if (typeof window !== "undefined") {
-  const originalError = console.error;
-  console.error = (...args) => {
-    if (typeof args[0] === "string" && args[0].includes("antd v5 support")) return;
-    originalError(...args);
-  };
-}
 
 export default function RootLayout({
   children,
@@ -30,60 +17,43 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        <RefineKbarProvider>
-          <ConfigProvider theme={RefineThemes.Blue}>
+        <Suspense>
+          <AntdRegistry>
             <AntdApp>
               <Refine
                 routerProvider={routerProvider}
                 dataProvider={dataProvider}
-                authProvider={authProvider}
-                notificationProvider={notificationProvider}
+                options={{
+                  syncWithLocation: true,
+                  warnWhenUnsavedChanges: true,
+                }}
                 resources={[
-                  {
-                    name: "perfiles",
-                    list: "/perfiles",
-                    create: "/perfiles/create",
-                    edit: "/perfiles/edit",
-                    show: "/perfiles/show",
-                    meta: { label: "Estudiantes", icon: "👩‍🎓" },
-                  },
-                  {
-                    name: "cursos",
-                    list: "/cursos",
-                    create: "/cursos/create",
-                    edit: "/cursos/edit",
-                    show: "/cursos/show",
-                    meta: { label: "Cursos", icon: "📚" },
-                  },
                   {
                     name: "matriculas",
                     list: "/matriculas",
                     create: "/matriculas/create",
-                    edit: "/matriculas/edit",
-                    show: "/matriculas/show",
-                    meta: { label: "Matrículas", icon: "📝" },
-                  },
-                  {
-                    name: "inventario",
-                    list: "/inventario",
-                    create: "/inventario/create",
-                    edit: "/inventario/edit",
-                    show: "/inventario/show",
-                    meta: { label: "Inventario", icon: "💅" },
+                    edit: "/matriculas/edit/:id",
+                    show: "/matriculas/show/:id",
+                    meta: { canDelete: true, label: "Matrículas" },
                   },
                 ]}
-                options={{
-                  syncWithLocation: true,
-                  warnWhenUnsavedChanges: true,
-                  useNewQueryKeys: true,
-                }}
               >
-                {children}
-                <RefineKbar />
+                {/* DISEÑO SIMPLE Y LIMPIO - SIN FORMULARIOS */}
+                <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
+                  <Layout.Header style={{ display: 'flex', alignItems: 'center', padding: '0 24px' }}>
+                     <h2 style={{ color: "white", margin: 0 }}>Crystal App</h2>
+                  </Layout.Header>
+                  <Layout.Content style={{ padding: "24px" }}>
+                    <div style={{ background: "white", padding: "24px", borderRadius: "8px", minHeight: "80vh" }}>
+                      {children}
+                    </div>
+                  </Layout.Content>
+                </Layout>
+
               </Refine>
             </AntdApp>
-          </ConfigProvider>
-        </RefineKbarProvider>
+          </AntdRegistry>
+        </Suspense>
       </body>
     </html>
   );

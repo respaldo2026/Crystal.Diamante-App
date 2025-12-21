@@ -1,62 +1,65 @@
 "use client";
 
-import { DateField, List, ShowButton, useTable } from "@refinedev/antd";
-import { Table, Tag } from "antd";
+import React from "react";
+import { List, useTable, EditButton, DeleteButton } from "@refinedev/antd";
+import { Table, Space, Tag } from "antd";
 
-export default function MatriculasList() {
+export default function ListMatriculas() {
   const { tableProps } = useTable({
-    syncWithLocation: true,
+    resource: "matriculas",
     meta: {
-      select: "*, perfiles(nombre_completo), cursos(nombre)",
+      // AQUÍ ESTÁ EL TRUCO MAESTRO:
+      // Usamos el signo ! para obligar a usar el nombre que encontramos en tu SQL.
+      // Sintaxis: tabla!nombre_del_puente(columnas)
+      select: "*, perfiles!fk_matriculas_perfiles_v2(nombre_completo), cursos!fk_matriculas_cursos_v2(nombre)",
     },
   });
 
   return (
     <List>
       <Table {...tableProps} rowKey="id">
-        {/* ID Numérico (Sin slice para evitar errores) */}
-        <Table.Column dataIndex="id" title="ID" width={50} />
         
-        {/* Nombre del Estudiante */}
+        <Table.Column dataIndex="id" title="ID" width={50} />
+
+        {/* Estudiante */}
         <Table.Column
           title="Estudiante"
-          render={(record: any) => (
-              <span style={{ fontWeight: "bold" }}>
-                  {record?.perfiles?.nombre_completo || "Sin Nombre"}
-              </span>
-          )}
+          dataIndex={["perfiles", "nombre_completo"]} 
+          render={(value) => value || "---"} 
         />
 
-        {/* Nombre del Curso */}
+        {/* Curso */}
         <Table.Column
           title="Curso"
-          render={(record: any) => (
-             <Tag color="blue">
-                 {record?.cursos?.nombre || "Curso Eliminado"}
-             </Tag>
-          )}
+          dataIndex={["cursos", "nombre"]} 
+          render={(value) => <Tag color="blue">{value || "---"}</Tag>}
         />
 
-        {/* Monto */}
-        <Table.Column
-             dataIndex="monto_pagado"
-             title="Pagado"
-             render={(value) => `$ ${value}`}
+        <Table.Column 
+            dataIndex="monto_pagado" 
+            title="Monto" 
+            render={(value) => `$ ${Number(value).toLocaleString()}`} 
         />
 
-        {/* Fecha */}
-        <Table.Column
-            dataIndex="fecha_inicio"
-            title="Fecha"
-            render={(value) => <DateField value={value} format="DD/MM/YYYY" />}
+        <Table.Column 
+            dataIndex="fecha_inicio" 
+            title="Fecha Inicio" 
         />
 
-        {/* Botón Ver */}
+        <Table.Column 
+            dataIndex="estado" 
+            title="Estado"
+            render={(value) => <Tag>{value || "Activo"}</Tag>}
+        />
+
         <Table.Column
           title="Acciones"
           dataIndex="actions"
           render={(_, record: any) => (
-             <ShowButton hideText size="small" recordItemId={record.id} />
+            <Space>
+              <EditButton hideText size="small" recordItemId={record.id} />
+              <DeleteButton hideText size="small" recordItemId={record.id} />
+            </Space>
           )}
         />
       </Table>
