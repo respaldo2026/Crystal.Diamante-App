@@ -1,22 +1,71 @@
 "use client";
 
 import React from "react";
-import { List, useTable, EditButton, DeleteButton } from "@refinedev/antd";
-import { Table, Space, Tag } from "antd";
+import { 
+  List, 
+  useTable, 
+  EditButton, 
+  DeleteButton 
+} from "@refinedev/antd";
+import { 
+  Table, 
+  Space, 
+  Tag, 
+  Form, 
+  Input, 
+  Button, 
+  Card,
+  Row,
+  Col
+} from "antd";
+import { SearchOutlined } from "@ant-design/icons";
 
 export default function ListMatriculas() {
-  const { tableProps } = useTable({
+  const { tableProps, searchFormProps } = useTable({
     resource: "matriculas",
+    // 1. Mantenemos el truco del "Francotirador" para que cargue los datos bien
     meta: {
-      // AQUÍ ESTÁ EL TRUCO MAESTRO:
-      // Usamos el signo ! para obligar a usar el nombre que encontramos en tu SQL.
-      // Sintaxis: tabla!nombre_del_puente(columnas)
       select: "*, perfiles!fk_matriculas_perfiles_v2(nombre_completo), cursos!fk_matriculas_cursos_v2(nombre)",
+    },
+    // 2. Aquí configuramos el filtro
+    onSearch: (params: any) => {
+      const filters: any = [];
+      const { q } = params; // 'q' es lo que escribes en el buscador
+
+      if (q) {
+        filters.push({
+          field: "perfiles.nombre_completo", // Buscamos en el nombre del estudiante
+          operator: "contains", // Que "contenga" el texto
+          value: q,
+        });
+      }
+
+      return filters;
     },
   });
 
   return (
     <List>
+      
+      {/* --- BARRA DE BÚSQUEDA --- */}
+      <Card bordered={false} style={{ marginBottom: 20 }}>
+        <Form {...searchFormProps} layout="inline">
+          <Form.Item name="q" style={{ width: '300px' }}>
+            <Input 
+              placeholder="Buscar por nombre de estudiante..." 
+              prefix={<SearchOutlined />} 
+              allowClear
+            />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit">
+              Buscar
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
+      {/* ------------------------- */}
+
       <Table {...tableProps} rowKey="id">
         
         <Table.Column dataIndex="id" title="ID" width={50} />
@@ -25,7 +74,7 @@ export default function ListMatriculas() {
         <Table.Column
           title="Estudiante"
           dataIndex={["perfiles", "nombre_completo"]} 
-          render={(value) => value || "---"} 
+          render={(value) => <b>{value || "---"}</b>} 
         />
 
         {/* Curso */}
@@ -49,7 +98,13 @@ export default function ListMatriculas() {
         <Table.Column 
             dataIndex="estado" 
             title="Estado"
-            render={(value) => <Tag>{value || "Activo"}</Tag>}
+            render={(value) => {
+                let color = "default";
+                if (value === "activo") color = "green";
+                if (value === "suspendido") color = "red";
+                if (value === "finalizado") color = "gold";
+                return <Tag color={color}>{value?.toUpperCase() || "ACTIVO"}</Tag>
+            }}
         />
 
         <Table.Column
