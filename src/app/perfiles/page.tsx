@@ -1,50 +1,56 @@
 "use client";
 
-import { List, ShowButton, EditButton, DeleteButton, useTable } from "@refinedev/antd";
-import { Table, Tag, Space } from "antd";
+import React from "react";
+import { List, useTable, EditButton, DeleteButton } from "@refinedev/antd";
+import { Table, Space, Avatar } from "antd";
+import { UserOutlined } from "@ant-design/icons";
 
-export default function PerfilesList() {
-  // Esta tabla es sencilla, solo trae los usuarios
+export default function ListPerfiles() {
   const { tableProps } = useTable({
-    syncWithLocation: true,
+    resource: "perfiles",
   });
 
   return (
     <List>
       <Table {...tableProps} rowKey="id">
         
-        {/* Columna 1: Nombre */}
+        {/* Foto / Icono */}
+        <Table.Column 
+            title=""
+            render={() => <Avatar icon={<UserOutlined />} />}
+            width={60}
+        />
+
+        <Table.Column dataIndex="id" title="ID" width={50} />
+        
         <Table.Column 
             dataIndex="nombre_completo" 
             title="Nombre Completo" 
-            sorter
+            render={(value) => <b>{value}</b>}
         />
-        
-        {/* Columna 2: Correo */}
+
         <Table.Column 
             dataIndex="email" 
-            title="Correo Electrónico" 
+            title="Correo" 
         />
 
-        {/* Columna 3: Rol (Estudiante/Admin) */}
-        <Table.Column
-          dataIndex="rol"
-          title="Rol"
-          render={(value) => (
-            <Tag color={value === "admin" ? "red" : "green"}>
-              {value ? value.toUpperCase() : "SIN ROL"}
-            </Tag>
-          )}
+        <Table.Column 
+            dataIndex="telefono" 
+            title="Teléfono" 
         />
 
-        {/* Columna 4: Botones */}
+        <Table.Column 
+            dataIndex="rol" 
+            title="Rol" 
+            render={(value) => value === 'admin' ? '👑 Admin' : '🎓 Estudiante'}
+        />
+
         <Table.Column
           title="Acciones"
           dataIndex="actions"
           render={(_, record: any) => (
             <Space>
               <EditButton hideText size="small" recordItemId={record.id} />
-              <ShowButton hideText size="small" recordItemId={record.id} />
               <DeleteButton hideText size="small" recordItemId={record.id} />
             </Space>
           )}
