@@ -1,112 +1,82 @@
 "use client";
 
 import React from "react";
-import { 
-  List, 
-  useTable, 
-  EditButton, 
-  DeleteButton 
-} from "@refinedev/antd";
-import { 
-  Table, 
-  Space, 
-  Tag, 
-  Form, 
-  Input, 
-  Button, 
-  Card,
-  Row,
-  Col
-} from "antd";
-import { SearchOutlined } from "@ant-design/icons";
+import { List, useTable, EditButton, DeleteButton, useSelect } from "@refinedev/antd";
+import { Table, Space, Tag, Avatar, Typography } from "antd";
+import { UserOutlined, BookOutlined, CalendarOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
+
+const { Text } = Typography;
 
 export default function ListMatriculas() {
-  const { tableProps, searchFormProps } = useTable({
+  const { tableProps } = useTable({
     resource: "matriculas",
-    // 1. Mantenemos el truco del "Francotirador" para que cargue los datos bien
-    meta: {
-      select: "*, perfiles!fk_matriculas_perfiles_v2(nombre_completo), cursos!fk_matriculas_cursos_v2(nombre)",
-    },
-    // 2. Aquí configuramos el filtro
-    onSearch: (params: any) => {
-      const filters: any = [];
-      const { q } = params; // 'q' es lo que escribes en el buscador
-
-      if (q) {
-        filters.push({
-          field: "perfiles.nombre_completo", // Buscamos en el nombre del estudiante
-          operator: "contains", // Que "contenga" el texto
-          value: q,
-        });
-      }
-
-      return filters;
-    },
+    sorters: { initial: [{ field: "created_at", order: "desc" }] },
   });
 
-  return (
-    <List>
-      
-      {/* --- BARRA DE BÚSQUEDA --- */}
-      <Card bordered={false} style={{ marginBottom: 20 }}>
-        <Form {...searchFormProps} layout="inline">
-          <Form.Item name="q" style={{ width: '300px' }}>
-            <Input 
-              placeholder="Buscar por nombre de estudiante..." 
-              prefix={<SearchOutlined />} 
-              allowClear
-            />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit">
-              Buscar
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
-      {/* ------------------------- */}
+  // 1. Traer nombres de Estudiantes
+  const { selectProps: studentSelect } = useSelect({
+    resource: "perfiles",
+    optionLabel: "nombre_completo",
+    optionValue: "id",
+  });
 
+  // 2. Traer nombres de Cursos
+  const { selectProps: cursoSelect } = useSelect({
+    resource: "cursos",
+    optionLabel: "nombre",
+    optionValue: "id",
+  });
+
+  // Helpers para mostrar nombres
+  const getEstudiante = (id: string) => studentSelect.options?.find((o) => o.value === id)?.label || "Cargando...";
+  const getCurso = (id: string) => cursoSelect.options?.find((o) => o.value === id)?.label || "Cargando...";
+
+  return (
+    <List title="Gestión de Matrículas">
       <Table {...tableProps} rowKey="id">
         
-        <Table.Column dataIndex="id" title="ID" width={50} />
-
-        {/* Estudiante */}
-        <Table.Column
-          title="Estudiante"
-          dataIndex={["perfiles", "nombre_completo"]} 
-          render={(value) => <b>{value || "---"}</b>} 
-        />
-
-        {/* Curso */}
-        <Table.Column
-          title="Curso"
-          dataIndex={["cursos", "nombre"]} 
-          render={(value) => <Tag color="blue">{value || "---"}</Tag>}
-        />
-
+        {/* COLUMNA ESTUDIANTE */}
         <Table.Column 
-            dataIndex="monto_pagado" 
-            title="Monto" 
-            render={(value) => `$ ${Number(value).toLocaleString()}`} 
+            title="Estudiante" 
+            dataIndex="estudiante_id"
+            render={(id) => (
+                <Space>
+                    <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#722ed1' }} />
+                    <Text strong>{getEstudiante(id)}</Text>
+                </Space>
+            )}
         />
 
+        {/* COLUMNA CURSO */}
         <Table.Column 
-            dataIndex="fecha_inicio" 
-            title="Fecha Inicio" 
+            title="Curso Inscrito" 
+            dataIndex="curso_id"
+            render={(id) => (
+                <Tag icon={<BookOutlined />} color="blue">
+                    {getCurso(id)}
+                </Tag>
+            )}
         />
 
+        {/* COLUMNA FECHA */}
         <Table.Column 
-            dataIndex="estado" 
-            title="Estado"
-            render={(value) => {
-                let color = "default";
-                if (value === "activo") color = "green";
-                if (value === "suspendido") color = "red";
-                if (value === "finalizado") color = "gold";
-                return <Tag color={color}>{value?.toUpperCase() || "ACTIVO"}</Tag>
+            title="Inicio" 
+            dataIndex="fecha_inicio"
+            render={(val) => <><CalendarOutlined /> {dayjs(val).format("DD/MM/YYYY")}</>}
+        />
+
+        {/* COLUMNA ESTADO */}
+        <Table.Column 
+            title="Estado" 
+            dataIndex="estado"
+            render={(val) => {
+                const colors: any = { activo: 'green', suspendido: 'orange', finalizado: 'blue', retirado: 'red' };
+                return <Tag color={colors[val]}>{val?.toUpperCase()}</Tag>;
             }}
         />
 
+        {/* ACCIONES */}
         <Table.Column
           title="Acciones"
           dataIndex="actions"

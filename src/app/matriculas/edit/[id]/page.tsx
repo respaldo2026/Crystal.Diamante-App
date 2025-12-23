@@ -2,97 +2,88 @@
 
 import React from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
-import { Form, Select, DatePicker, InputNumber } from "antd";
+import { Form, Select, DatePicker, Row, Col, Input, Alert, Tag } from "antd";
 import dayjs from "dayjs";
 
 export default function EditMatricula() {
   const { formProps, saveButtonProps, queryResult } = useForm({
-    // Aseguramos que cargue los datos necesarios
-    meta: {
-      select: "*, perfiles(id, nombre_completo), cursos(id, nombre)",
-    },
+    resource: "matriculas",
+    redirect: "list",
   });
 
   const matriculaData = queryResult?.data?.data;
 
-  // 1. Selector de ESTUDIANTES
-  const { selectProps: studentSelectProps } = useSelect({
-    resource: "perfiles",
-    optionLabel: "nombre_completo",
-    optionValue: "id",
-    defaultValue: matriculaData?.estudiante_id,
-  });
-
-  // 2. Selector de CURSOS
-  const { selectProps: courseSelectProps } = useSelect({
+  // Cargar lista de cursos (por si quieres cambiarlo de curso)
+  const { selectProps: cursoSelect } = useSelect({
     resource: "cursos",
+    defaultValue: matriculaData?.curso_id,
     optionLabel: "nombre",
     optionValue: "id",
-    defaultValue: matriculaData?.curso_id,
+  });
+
+  // Cargar lista de estudiantes (Solo para mostrar el nombre, no para editarlo)
+  const { selectProps: studentSelect } = useSelect({
+    resource: "perfiles",
+    defaultValue: matriculaData?.estudiante_id,
+    optionLabel: "nombre_completo",
+    optionValue: "id",
   });
 
   return (
     <Edit saveButtonProps={saveButtonProps} title="Editar Matrícula">
       <Form {...formProps} layout="vertical">
         
-        {/* Campo: Estudiante */}
-        <Form.Item
-          label="Estudiante"
-          name="estudiante_id"
-          rules={[{ required: true, message: "Selecciona un estudiante" }]}
-        >
-          <Select {...studentSelectProps} placeholder="Cargando estudiantes..." />
-        </Form.Item>
+        {/* ALERTA VISUAL DE ESTADO */}
+        {matriculaData?.estado === 'suspendido' && (
+            <Alert message="⚠️ Este estudiante tiene la matrícula SUSPENDIDA." type="warning" showIcon style={{marginBottom: 20}} />
+        )}
 
-        {/* Campo: Curso */}
-        <Form.Item
-          label="Curso"
-          name="curso_id"
-          rules={[{ required: true, message: "Selecciona un curso" }]}
-        >
-          <Select {...courseSelectProps} placeholder="Cargando cursos..." />
-        </Form.Item>
+        <Row gutter={24}>
+            <Col xs={24} md={12}>
+                <Form.Item label="Estudiante (No editable)" name="estudiante_id">
+                    <Select {...studentSelect} disabled />
+                </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+                <Form.Item label="Curso Inscrito" name="curso_id" rules={[{ required: true }]}>
+                    <Select {...cursoSelect} />
+                </Form.Item>
+            </Col>
+        </Row>
 
-        {/* Campo: Monto */}
-        <Form.Item
-          label="Monto Pagado ($)"
-          name="monto_pagado"
-          rules={[{ required: true, message: "Ingresa el monto" }]}
-        >
-          <InputNumber
-            style={{ width: "100%" }}
-            formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-            parser={(value) => value?.replace(/\$\s?|(,*)/g, "") as unknown as number}
-          />
-        </Form.Item>
+        <Row gutter={24}>
+            <Col xs={24} md={8}>
+                <Form.Item 
+                    label="Fecha de Inicio" 
+                    name="fecha_inicio" 
+                    getValueProps={(value) => ({ value: value ? dayjs(value) : "" })}
+                >
+                    <DatePicker style={{width:'100%'}} format="DD/MM/YYYY" />
+                </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+                <Form.Item label="Estado de la Matrícula" name="estado">
+                    <Select options={[
+                        { value: 'activo', label: '🟢 Activo (Cursando)' },
+                        { value: 'suspendido', label: '🟠 Suspendido (Mora/Sanción)' },
+                        { value: 'finalizado', label: '🔵 Finalizado (Graduado)' },
+                        { value: 'retirado', label: '🔴 Retirado' },
+                    ]} />
+                </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+                 <Form.Item 
+                    label="Fecha de Finalización" 
+                    name="fecha_fin"
+                    getValueProps={(value) => ({ value: value ? dayjs(value) : "" })}
+                >
+                    <DatePicker style={{width:'100%'}} format="DD/MM/YYYY" placeholder="Solo si terminó" />
+                </Form.Item>
+            </Col>
+        </Row>
 
-        {/* Campo: Estado */}
-        <Form.Item
-          label="Estado de la Matrícula"
-          name="estado"
-          // AQUÍ ESTABA EL ERROR: Eliminé 'initialValue="activo"'
-          // Ahora tomará el valor real de la base de datos automáticamente.
-          rules={[{ required: true }]}
-        >
-          <Select
-            options={[
-              { value: "activo", label: "🟢 Activo" },
-              { value: "suspendido", label: "🔴 Suspendido/Retirado" },
-              { value: "finalizado", label: "🎓 Finalizado" },
-            ]}
-          />
-        </Form.Item>
-
-        {/* Campo: Fecha */}
-        <Form.Item
-          label="Fecha de Inicio"
-          name="fecha_inicio"
-          getValueProps={(value) => ({
-            value: value ? dayjs(value) : "",
-          })}
-          rules={[{ required: true, message: "Selecciona la fecha" }]}
-        >
-          <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
+        <Form.Item label="Observaciones / Novedades" name="observaciones">
+            <Input.TextArea rows={3} />
         </Form.Item>
 
       </Form>

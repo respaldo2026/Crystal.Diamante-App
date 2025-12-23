@@ -2,100 +2,81 @@
 
 import React from "react";
 import { useList } from "@refinedev/core";
-import { Card, Col, Row, Statistic, Typography } from "antd";
-import { 
-  DollarCircleOutlined, 
-  UserOutlined, 
-  ReadOutlined 
-} from "@ant-design/icons";
+import { Typography, Row, Col, Card, Statistic } from "antd";
+import { DollarCircleOutlined, UserOutlined, BookOutlined, ShopOutlined } from "@ant-design/icons";
 
 const { Title } = Typography;
 
 export default function DashboardPage() {
-  // 1. Traemos TODAS las matrículas para sumar el dinero
-  const { data: matriculasData, isLoading: loadingMatriculas } = useList({
+  // 1. Traemos las matrículas para sumar dinero
+  const { data: matriculasData } = useList({
     resource: "matriculas",
-    pagination: { mode: "off" }, // "off" trae todo sin paginar para poder sumar
+    pagination: { mode: "off" }, // Traemos todo sin paginar
   });
 
-  // 2. Traemos TODOS los perfiles para contarlos
-  const { data: perfilesData, isLoading: loadingPerfiles } = useList({
-    resource: "perfiles",
-    pagination: { mode: "off" },
-  });
+  // 2. Traemos estudiantes y cursos para contar
+  const { data: perfilesData } = useList({ resource: "perfiles" });
+  const { data: cursosData } = useList({ resource: "cursos" });
 
-  // --- CÁLCULOS MATEMÁTICOS ---
-  
-  // Calcular Total de Dinero ($)
-  // Recorremos cada matrícula y sumamos el "monto_pagado"
-  const totalIngresos = matriculasData?.data?.reduce((total, item: any) => {
-    return total + (Number(item.monto_pagado) || 0);
-  }, 0);
-
-  // Contar Total de Estudiantes
+  // Cálculos rápidos
+  const matriculas = matriculasData?.data || [];
+  const totalIngresos = matriculas.reduce((sum, item: any) => sum + (Number(item.monto_pagado) || 0), 0);
   const totalEstudiantes = perfilesData?.data?.length || 0;
-
-  // Contar Total de Matrículas
-  const totalMatriculas = matriculasData?.data?.length || 0;
-
+  const totalCursos = cursosData?.data?.length || 0;
 
   return (
-    <div style={{ padding: "20px" }}>
-      <Title level={2}>📊 Tablero de Control</Title>
-      <br />
-
+    <div style={{ padding: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: 30 }}>
+        <div style={{ fontSize: '32px' }}>💎</div>
+        <Title level={2} style={{ margin: 0, color: '#722ed1' }}>Panel de Control Crystal</Title>
+      </div>
+      
       <Row gutter={[16, 16]}>
         
         {/* TARJETA 1: INGRESOS TOTALES */}
         <Col xs={24} sm={8}>
-          <Card bordered={false} style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-            <Statistic
-              title="Ingresos Totales"
-              value={totalIngresos}
-              precision={0}
-              valueStyle={{ color: '#3f8600', fontWeight: 'bold' }}
-              prefix={<DollarCircleOutlined />}
-              suffix="$"
-              loading={loadingMatriculas}
+          {/* CORRECCIÓN AQUÍ: variant="borderless" */}
+          <Card variant="borderless" style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.1)", borderRadius: 12 }}>
+            <Statistic 
+              title="Ingresos Totales" 
+              value={totalIngresos} 
+              prefix="$" 
+              valueStyle={{ color: '#3f8600', fontWeight: 'bold' }} 
+              suffix={<DollarCircleOutlined />}
             />
           </Card>
         </Col>
 
         {/* TARJETA 2: ESTUDIANTES REGISTRADOS */}
         <Col xs={24} sm={8}>
-          <Card bordered={false} style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-            <Statistic
-              title="Estudiantes Registrados"
-              value={totalEstudiantes}
-              valueStyle={{ color: '#1677ff', fontWeight: 'bold' }}
+          <Card variant="borderless" style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.1)", borderRadius: 12 }}>
+            <Statistic 
+              title="Usuarios Registrados" 
+              value={totalEstudiantes} 
+              valueStyle={{ color: '#1677ff', fontWeight: 'bold' }} 
               prefix={<UserOutlined />}
-              loading={loadingPerfiles}
             />
           </Card>
         </Col>
 
-        {/* TARJETA 3: MATRÍCULAS TOTALES */}
+        {/* TARJETA 3: CURSOS DISPONIBLES */}
         <Col xs={24} sm={8}>
-          <Card bordered={false} style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-            <Statistic
-              title="Matrículas Realizadas"
-              value={totalMatriculas}
-              valueStyle={{ color: '#cf1322', fontWeight: 'bold' }}
-              prefix={<ReadOutlined />}
-              loading={loadingMatriculas}
+          <Card variant="borderless" style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.1)", borderRadius: 12 }}>
+            <Statistic 
+              title="Cursos Activos" 
+              value={totalCursos} 
+              valueStyle={{ color: '#722ed1', fontWeight: 'bold' }} 
+              prefix={<BookOutlined />}
             />
           </Card>
         </Col>
 
       </Row>
 
-      <br /><br />
-      
-      {/* MENSAJE DE BIENVENIDA */}
-      <Card>
-        <Title level={4}>👋 ¡Bienvenido a Crystal App!</Title>
-        <p>Desde aquí puedes gestionar tu academia. Usa el menú de la izquierda para ver los detalles.</p>
-      </Card>
+      <div style={{ marginTop: 40, textAlign: 'center', color: '#888' }}>
+        <ShopOutlined style={{ fontSize: 40, marginBottom: 10, color: '#d9d9d9' }} />
+        <p>Bienvenido al sistema de gestión de tu Academia.</p>
+      </div>
     </div>
   );
 }

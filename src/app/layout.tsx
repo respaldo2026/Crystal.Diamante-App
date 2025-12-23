@@ -9,8 +9,9 @@ import Link from "next/link";
 import "@refinedev/antd/dist/reset.css";
 
 import { dataProvider } from "../providers/data-provider";
+// import { authProvider } from "../providers/auth-provider"; 
 
-// TEMA CRYSTAL (Púrpura)
+// --- TEMA CRYSTAL (Púrpura) ---
 const crystalTheme = {
   token: {
     colorPrimary: "#722ed1", 
@@ -38,16 +39,37 @@ export default function RootLayout({
                 <Refine
                   routerProvider={routerProvider}
                   dataProvider={dataProvider}
+                  // authProvider={authProvider} 
                   options={{
                     syncWithLocation: true,
                     warnWhenUnsavedChanges: true,
                   }}
                   resources={[
+                    // 1. DASHBOARD
                     {
                       name: "dashboard",
                       list: "/", 
                       meta: { label: "Dashboard" },
                     },
+                    // 2. ESTUDIANTES (Módulo Exclusivo)
+                    {
+                      name: "estudiantes",
+                      list: "/estudiantes",
+                      create: "/estudiantes/create",
+                      edit: "/estudiantes/edit/:id",
+                      show: "/estudiantes/show/:id",
+                      meta: { canDelete: true, label: "Estudiantes" },
+                    },
+                    // 3. PROFESORES (Módulo Exclusivo)
+                    {
+                      name: "profesores",
+                      list: "/profesores",
+                      create: "/profesores/create",
+                      edit: "/profesores/edit/:id",
+                      show: "/profesores/show/:id",
+                      meta: { label: "Docentes" },
+                    },
+                    // 4. MATRÍCULAS
                     {
                       name: "matriculas",
                       list: "/matriculas",
@@ -56,15 +78,7 @@ export default function RootLayout({
                       show: "/matriculas/show/:id",
                       meta: { canDelete: true, label: "Matrículas" },
                     },
-                    {
-                      name: "perfiles",
-                      list: "/perfiles",
-                      create: "/perfiles/create",
-                      edit: "/perfiles/edit/:id",
-                      show: "/perfiles/show/:id",
-                      meta: { canDelete: true, label: "Estudiantes" },
-                    },
-                    // --- NUEVO RECURSO: CURSOS ---
+                    // 5. CURSOS
                     {
                       name: "cursos",
                       list: "/cursos",
@@ -73,11 +87,24 @@ export default function RootLayout({
                       show: "/cursos/show/:id",
                       meta: { canDelete: true, label: "Cursos" },
                     },
+                    // 6. INVENTARIO
+                    {
+                      name: "productos",
+                      list: "/inventario",
+                      create: "/inventario/create",
+                      meta: { label: "Inventario" },
+                    },
+                    // 7. TESORERÍA
+                    {
+                      name: "tesoreria",
+                      list: "/tesoreria",
+                      meta: { label: "Tesorería" },
+                    },
                   ]}
                 >
                   <Layout style={{ minHeight: "100vh", background: "#f5f5f5" }}>
                     
-                    {/* CABECERA */}
+                    {/* --- HEADER --- */}
                     <Layout.Header style={{ 
                       display: 'flex', 
                       alignItems: 'center', 
@@ -86,6 +113,7 @@ export default function RootLayout({
                       boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                       zIndex: 10
                     }}>
+                       {/* LOGO */}
                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <div style={{ 
                             background: 'white', 
@@ -97,25 +125,39 @@ export default function RootLayout({
                             justifyContent: 'center',
                             fontSize: '20px'
                           }}>💎</div>
-                          <h2 style={{ color: "white", margin: 0, fontWeight: 'bold', letterSpacing: '1px' }}>
+                          <h2 style={{ color: "white", margin: 0, fontWeight: 'bold' }}>
                               CRYSTAL APP
                           </h2>
                        </div>
 
+                       {/* MENÚ DE NAVEGACIÓN */}
                        <Space wrap>
                           <Link href="/">
                             <Button type="text" style={{ color: 'white' }}>📊 Dashboard</Button>
                           </Link>
                           
-                          {/* BOTONES DE NAVEGACIÓN */}
+                          {/* Botón Estudiantes */}
+                          <Link href="/estudiantes">
+                            <Button type="text" style={{ color: 'white' }}>🎓 Estudiantes</Button>
+                          </Link>
+
+                          {/* Botón Profesores */}
+                          <Link href="/profesores">
+                            <Button type="text" style={{ color: 'white' }}>👩‍🏫 Profesores</Button>
+                          </Link>
+
                           <Link href="/cursos">
                             <Button type="text" style={{ color: 'white' }}>📚 Cursos</Button>
                           </Link>
-                          <Link href="/perfiles">
-                            <Button type="text" style={{ color: 'white' }}>👥 Estudiantes</Button>
+
+                          <Link href="/inventario">
+                            <Button type="text" style={{ color: 'white' }}>📦 Inventario</Button>
+                          </Link>
+
+                          <Link href="/tesoreria">
+                            <Button type="text" style={{ color: 'white' }}>💰 Tesorería</Button>
                           </Link>
                           
-                          {/* Matrículas resaltado */}
                           <Link href="/matriculas">
                             <Button style={{ 
                                 background: 'white', 
@@ -128,8 +170,9 @@ export default function RootLayout({
                        </Space>
                     </Layout.Header>
 
-                    <Layout.Content style={{ padding: "24px", maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-                      <div style={{ minHeight: "80vh", borderRadius: "12px" }}>
+                    {/* --- CONTENIDO --- */}
+                    <Layout.Content style={{ padding: "24px", maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+                      <div style={{ minHeight: "80vh" }}>
                         {children}
                       </div>
                     </Layout.Content>

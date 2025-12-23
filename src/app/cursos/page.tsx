@@ -1,54 +1,70 @@
 "use client";
 
 import React from "react";
-import { List, useTable, EditButton, DeleteButton } from "@refinedev/antd";
-import { Table, Space, Tag } from "antd";
+import { List, useTable, EditButton, ShowButton, DeleteButton, useSelect } from "@refinedev/antd";
+import { Table, Space, Tag, Typography } from "antd";
+import { BookOutlined, UserOutlined } from "@ant-design/icons";
+
+const { Text } = Typography;
 
 export default function ListCursos() {
   const { tableProps } = useTable({
     resource: "cursos",
+    sorters: { initial: [{ field: "created_at", order: "desc" }] },
   });
 
+  // Truco para mostrar NOMBRES de profesores en vez de IDs
+  const { selectProps: teacherSelect } = useSelect({
+    resource: "perfiles",
+    optionLabel: "nombre_completo",
+    optionValue: "id",
+    filters: [{ field: "rol", operator: "eq", value: "profesor" }],
+  });
+
+  const getNombreProfesor = (id: string) => {
+    const profe = teacherSelect.options?.find((p) => p.value === id);
+    return profe ? profe.label : "Sin asignar";
+  };
+
   return (
-    <List>
+    <List title="Oferta Académica (Cursos)">
       <Table {...tableProps} rowKey="id">
-        
-        <Table.Column dataIndex="id" title="ID" width={50} />
-        
         <Table.Column 
+            title="Curso" 
             dataIndex="nombre" 
-            title="Nombre del Curso" 
-            render={(value) => <b>{value}</b>}
+            render={(val) => <><BookOutlined style={{color:'#722ed1', marginRight:8}}/> <b>{val}</b></>}
         />
-
         <Table.Column 
-            dataIndex="descripcion" 
-            title="Descripción" 
-            ellipsis={true} // Corta el texto si es muy largo
-        />
-
-        <Table.Column 
-            dataIndex="precio" 
-            title="Precio" 
-            render={(value) => (
-                <Tag color="purple" style={{ fontSize: '14px' }}>
-                    $ {Number(value).toLocaleString()}
-                </Tag>
+            title="Docente Encargado" 
+            dataIndex="profesor_id"
+            render={(id) => (
+                <Space>
+                    <UserOutlined style={{color: '#888'}}/>
+                    <Text type="secondary">{getNombreProfesor(id)}</Text>
+                </Space>
             )}
         />
-
         <Table.Column 
-            dataIndex="duracion" 
-            title="Duración" 
+            title="Costo" 
+            dataIndex="precio" 
+            render={(val) => val ? `$ ${Number(val).toLocaleString()}` : "Gratis"}
         />
-
+        <Table.Column 
+            title="Estado" 
+            dataIndex="estado" 
+            render={(val) => {
+                let color = val === 'activo' ? 'green' : (val === 'cerrado' ? 'red' : 'orange');
+                return <Tag color={color}>{val?.toUpperCase() || 'BORRADOR'}</Tag>
+            }}
+        />
         <Table.Column
           title="Acciones"
           dataIndex="actions"
           render={(_, record: any) => (
             <Space>
-              <EditButton hideText size="small" recordItemId={record.id} />
-              <DeleteButton hideText size="small" recordItemId={record.id} />
+              {/* Apuntamos a las carpetas que ya creaste */}
+              <EditButton hideText size="small" recordItemId={record.id} resource="cursos" />
+              <DeleteButton hideText size="small" recordItemId={record.id} resource="cursos" />
             </Space>
           )}
         />
