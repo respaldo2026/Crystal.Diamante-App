@@ -3,10 +3,12 @@
 import React from "react";
 import { Refine } from "@refinedev/core";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
-import { notificationProvider, RefineThemes, ThemedLayout, ThemedTitle } from "@refinedev/antd";
+// CORRECCIÓN 1: Quitamos notificationProvider para arreglar el error de importación
+import { RefineThemes, ThemedLayout, ThemedTitle } from "@refinedev/antd";
 import { ConfigProvider, App as AntdApp } from "antd";
 import "@refinedev/antd/dist/reset.css";
 
+// ICONOS
 import { 
   DashboardOutlined, 
   UserOutlined, 
@@ -15,13 +17,12 @@ import {
   FileTextOutlined, 
   DollarCircleOutlined, 
   SettingOutlined, 
-  ShopOutlined,
-  CalculatorOutlined // <--- NUEVO ICONO PARA NÓMINA
+  CalculatorOutlined // Icono para Nómina
 } from "@ant-design/icons";
 
 import routerProvider from "@refinedev/nextjs-router";
 
-// TUS PROVIDERS (No los cambies si ya funcionan)
+// PROVIDERS (Rutas relativas)
 import { dataProvider } from "../providers/data-provider"; 
 import { authProvider } from "../providers/auth-provider/auth-provider.client"; 
 
@@ -40,7 +41,8 @@ export default function RootLayout({
                 routerProvider={routerProvider}
                 dataProvider={dataProvider}
                 authProvider={authProvider}
-                notificationProvider={notificationProvider}
+                // CORRECCIÓN: Eliminamos la línea notificationProvider={...} para evitar el error
+                
                 resources={[
                   {
                     name: "dashboard",
@@ -86,6 +88,8 @@ export default function RootLayout({
                   {
                     name: "matriculas",
                     list: "/matriculas",
+                    create: "/matriculas/create",
+                    edit: "/matriculas/edit/:id",
                     meta: {
                       label: "Matrículas",
                       icon: <FileTextOutlined />,
@@ -99,7 +103,6 @@ export default function RootLayout({
                       icon: <DollarCircleOutlined />,
                     },
                   },
-                  // --- AQUÍ ESTÁ EL NUEVO BOTÓN DE NÓMINA ---
                   {
                     name: "nomina",
                     list: "/nomina",
@@ -108,7 +111,6 @@ export default function RootLayout({
                       icon: <CalculatorOutlined />,
                     },
                   },
-                  // ------------------------------------------
                   {
                     name: "configuracion",
                     list: "/configuracion",

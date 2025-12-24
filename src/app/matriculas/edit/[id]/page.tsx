@@ -1,91 +1,147 @@
 "use client";
 
-import React from "react";
-import { Edit, useForm, useSelect } from "@refinedev/antd";
-import { Form, Select, DatePicker, Row, Col, Input, Alert, Tag } from "antd";
+import React, { useEffect, useState } from "react";
+import { Edit } from "@refinedev/antd";
+import { Form, Select, DatePicker, message, Row, Col, Spin, Tag } from "antd";
+import { createClient } from "@supabase/supabase-js";
+import { useRouter, useParams } from "next/navigation";
 import dayjs from "dayjs";
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 export default function EditMatricula() {
-  const { formProps, saveButtonProps, queryResult } = useForm({
-    resource: "matriculas",
-    redirect: "list",
-  });
+  const [form] = Form.useForm();
+  const router = useRouter();
+  const params = useParams();
+  const idMatricula = params?.id as string;
+  
+  const [loading, setLoading] = useState(true);
+  const [estudiantes, setEstudiantes] = useState<any[]>([]);
+  const [cursos, setCursos] = useState<any[]>([]);
 
-  const matriculaData = queryResult?.data?.data;
+  useEffect(() => {
+    cargarDatos();
+  }, [idMatricula]);
 
-  // Cargar lista de cursos (por si quieres cambiarlo de curso)
-  const { selectProps: cursoSelect } = useSelect({
-    resource: "cursos",
-    defaultValue: matriculaData?.curso_id,
-    optionLabel: "nombre",
-    optionValue: "id",
-  });
+  const cargarDatos = async () => {
+    setLoading(true);
+    try {
+        // 1. Cargar Listas (Estudiantes y Cursos)
+        const { data: dataEst } = await supabase
+            .from("perfiles")
+            .select("id, nombre_completo, documento")
+            .eq("rol", "estudiante") // Filtro de seguridad
+            .order("nombre_completo");
+        setEstudiantes(dataEst || []);
 
-  // Cargar lista de estudiantes (Solo para mostrar el nombre, no para editarlo)
-  const { selectProps: studentSelect } = useSelect({
-    resource: "perfiles",
-    defaultValue: matriculaData?.estudiante_id,
-    optionLabel: "nombre_completo",
-    optionValue: "id",
-  });
+        const { data: dataCursos } = await supabase
+            .from("cursos")
+            .select("id, nombre, horario")
+            .order("nombre");
+        setCursos(dataCursos || []);
+
+        // 2. Cargar la Matrícula Actual
+        if (idMatricula) {
+            const { data: matricula, error } = await supabase
+                .from("matriculas")
+                .select("*")
+                .eq("id", idMatricula)
+                .single();
+
+            if (error) throw error;
+
+            // Rellenar formulario
+            form.setFieldsValue({
+                ...matricula,
+                fecha_inicio: matricula.fecha_inicio ? dayjs(matricula.fecha_inicio) : null,
+                fecha_fin: matricula.fecha_fin ? dayjs(matricula.fecha_fin) : null,
+            });
+        }
+    } catch (error: any) {
+        message.error("Error cargando datos: " + error.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const onFinish = async (values: any) => {
+    try {
+      const { error } = await supabase
+        .from("matriculas")
+        .update({
+            curso_id: values.curso_id,
+            fecha_inicio: values.fecha_inicio ? values.fecha_inicio.format("YYYY-MM-DD") : null,
+            fecha_fin: values.fecha_fin ? values.fecha_fin.format("YYYY-MM-DD") : null,
+            estado: values.estado, // Importante para suspender o graduar
+            // Nota: No actualizamos estudiante_id por seguridad
+        })
+        .eq("id", idMatricula);
+
+      if (error) throw error;
+
+      message.success("Matrícula actualizada correctamente");
+      router.push("/matriculas");
+    } catch (error: any) {
+      message.error("Error al actualizar: " + error.message);
+    }
+  };
+
+  if (loading) return <div style={{ padding: 50, textAlign: "center" }}><Spin size="large" /></div>;
 
   return (
-    <Edit saveButtonProps={saveButtonProps} title="Editar Matrícula">
-      <Form {...formProps} layout="vertical">
-        
-        {/* ALERTA VISUAL DE ESTADO */}
-        {matriculaData?.estado === 'suspendido' && (
-            <Alert message="⚠️ Este estudiante tiene la matrícula SUSPENDIDA." type="warning" showIcon style={{marginBottom: 20}} />
-        )}
-
+    <Edit title="Editar Matrícula" saveButtonProps={{ onClick: form.submit }}>
+      <Form form={form} layout="vertical" onFinish={onFinish}>
         <Row gutter={24}>
-            <Col xs={24} md={12}>
-                <Form.Item label="Estudiante (No editable)" name="estudiante_id">
-                    <Select {...studentSelect} disabled />
+            <Col span={12}>
+                <Form.Item label="Estudiante" name="estudiante_id">
+                    <Select 
+                        disabled // Bloqueado para evitar errores de cambio de identidad
+                        placeholder="Estudiante..."
+                        options={estudiantes.map(e => ({ 
+                            label: `${e.nombre_completo} - CC: ${e.documento || 'S/N'}`, 
+                            value: e.id 
+                        }))}
+                    />
                 </Form.Item>
             </Col>
-            <Col xs={24} md={12}>
-                <Form.Item label="Curso Inscrito" name="curso_id" rules={[{ required: true }]}>
-                    <Select {...cursoSelect} />
+            <Col span={12}>
+                <Form.Item label="Curso / Cohorte" name="curso_id" rules={[{ required: true }]}>
+                    <Select 
+                        placeholder="Selecciona el curso..."
+                        options={cursos.map(c => ({ 
+                            label: `${c.nombre} (${c.horario || 'Sin horario'})`, 
+                            value: c.id 
+                        }))}
+                    />
                 </Form.Item>
             </Col>
         </Row>
-
+        
         <Row gutter={24}>
-            <Col xs={24} md={8}>
-                <Form.Item 
-                    label="Fecha de Inicio" 
-                    name="fecha_inicio" 
-                    getValueProps={(value) => ({ value: value ? dayjs(value) : "" })}
-                >
+             <Col span={8}>
+                <Form.Item label="Fecha de Inicio" name="fecha_inicio" rules={[{ required: true }]}>
                     <DatePicker style={{width:'100%'}} format="DD/MM/YYYY" />
                 </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-                <Form.Item label="Estado de la Matrícula" name="estado">
+             </Col>
+             <Col span={8}>
+                <Form.Item label="Fecha Finalización" name="fecha_fin" tooltip="Llenar solo cuando se gradúe">
+                    <DatePicker style={{width:'100%'}} format="DD/MM/YYYY" placeholder="Opcional" />
+                </Form.Item>
+             </Col>
+             <Col span={8}>
+                <Form.Item label="Estado Actual" name="estado" rules={[{ required: true }]}>
                     <Select options={[
-                        { value: 'activo', label: '🟢 Activo (Cursando)' },
-                        { value: 'suspendido', label: '🟠 Suspendido (Mora/Sanción)' },
-                        { value: 'finalizado', label: '🔵 Finalizado (Graduado)' },
-                        { value: 'retirado', label: '🔴 Retirado' },
+                        { label: <Tag color="green">ACTIVO (Cursando)</Tag>, value: 'activo' },
+                        { label: <Tag color="orange">SUSPENDIDO</Tag>, value: 'suspendido' },
+                        { label: <Tag color="blue">GRADUADO</Tag>, value: 'graduado' },
+                        { label: <Tag color="red">RETIRADO</Tag>, value: 'retirado' }
                     ]} />
                 </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-                 <Form.Item 
-                    label="Fecha de Finalización" 
-                    name="fecha_fin"
-                    getValueProps={(value) => ({ value: value ? dayjs(value) : "" })}
-                >
-                    <DatePicker style={{width:'100%'}} format="DD/MM/YYYY" placeholder="Solo si terminó" />
-                </Form.Item>
-            </Col>
+             </Col>
         </Row>
-
-        <Form.Item label="Observaciones / Novedades" name="observaciones">
-            <Input.TextArea rows={3} />
-        </Form.Item>
-
       </Form>
     </Edit>
   );
