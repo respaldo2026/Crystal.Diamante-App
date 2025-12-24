@@ -3,11 +3,12 @@
 import React, { useEffect, useState } from "react";
 import { Show } from "@refinedev/antd";
 import { 
-  Typography, Tag, Tabs, Row, Col, Card, Button, 
-  Modal, Form, Input, DatePicker, Avatar, List, Divider, Drawer, Switch, message, Spin, Select, InputNumber, Timeline, Alert
+  Typography, Row, Col, Card, Button, 
+  Modal, Form, Input, DatePicker, Avatar, List, Divider, Drawer, Switch, message, Spin, Select, InputNumber, Timeline, Alert,
+  Tabs, Tag
 } from "antd";
 import { 
-  UserOutlined, BookOutlined, TeamOutlined, PlusOutlined
+  UserOutlined, BookOutlined, TeamOutlined, PlusOutlined, ExclamationCircleOutlined, StarOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation"; 
@@ -24,7 +25,13 @@ export default function ShowProfesorDashboard() {
   const params = useParams();
   const idProfesor = params?.id as string;
 
-  // ESTADOS
+  // HOOKS DE ANT DESIGN
+  const [messageApi, contextHolder] = message.useMessage();
+  const [modal, modalContextHolder] = Modal.useModal();
+  const [formPensum] = Form.useForm();
+  const [formNotas] = Form.useForm();
+
+  // ESTADOS GENERALES
   const [profesor, setProfesor] = useState<any>(null);
   const [misCursos, setMisCursos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,18 +43,22 @@ export default function ShowProfesorDashboard() {
   const [temasCurso, setTemasCurso] = useState<any[]>([]);
   const [temaSeleccionado, setTemaSeleccionado] = useState<string | null>(null);
   
+  // Asistencia y Horas (NÓMINA)
   const [asistenciaMap, setAsistenciaMap] = useState<Record<string, boolean>>({});
   const [fechaAsistencia, setFechaAsistencia] = useState(dayjs());
-  
-  // ESTADOS DE CARGA PARA BOTONES (Anti-Freeze)
+  const [horasClase, setHorasClase] = useState<number>(2); // <--- NUEVO: Por defecto 2 horas
   const [guardandoAsistencia, setGuardandoAsistencia] = useState(false);
+
+  // Pensum
+  const [modalPensumVisible, setModalPensumVisible] = useState(false);
   const [guardandoTema, setGuardandoTema] = useState(false);
 
-  // MODAL PENSUM
-  const [modalPensumVisible, setModalPensumVisible] = useState(false);
-  const [formPensum] = Form.useForm();
+  // Calificaciones
+  const [modalNotasVisible, setModalNotasVisible] = useState(false);
+  const [estudianteACalificar, setEstudianteACalificar] = useState<any>(null);
+  const [guardandoNota, setGuardandoNota] = useState(false);
 
-  // 1. CARGAR DATOS
+  // 1. CARGAR DATOS INICIALES
   useEffect(() => {
     if (idProfesor) cargarDashboard();
   }, [idProfesor]);
@@ -77,7 +88,6 @@ export default function ShowProfesorDashboard() {
         setMisCursos(cursosFmt);
     } catch (error: any) {
         console.error("Error cargando dashboard:", error);
-        message.error("Error cargando datos: " + error.message);
     } finally {
         setLoading(false);
     }
@@ -86,10 +96,11 @@ export default function ShowProfesorDashboard() {
   // 2. ABRIR GESTIÓN DE CLASE
   const abrirGestionClase = async (curso: any) => {
       try {
-          message.loading({ content: "Cargando aula...", key: "loadingAula" });
+          messageApi.loading({ content: "Cargando aula...", key: "loadingAula" });
           setCursoActivo(curso);
           setAlumnosClase([]);
           setTemaSeleccionado(null);
+          setHorasClase(2); // Reiniciar horas a 2
           
           // A) Estudiantes
           const { data: dataAlumnos, error: errAlumnos } = await supabase
@@ -113,82 +124,169 @@ export default function ShowProfesorDashboard() {
 
           setTemasCurso(dataTemas || []);
 
-          // Pre-llenar asistencia
-          const mapa: any = {};
-          dataAlumnos?.forEach((a: any) => mapa[a.id] = true);
-          setAsistenciaMap(mapa);
+          // C) BUSCAR ASISTENCIA PREVIA
+          const fechaHoyStr = dayjs().format("YYYY-MM-DD");
+          const { data: asistenciasHoy } = await supabase
+              .from("asistencias")
+              .select("matricula_id, estado, tema_id")
+              .eq("fecha", fechaHoyStr)
+              .in("matricula_id", dataAlumnos?.map((a: any) => a.id) || []);
 
+          const mapa: any = {};
+          
+          if (asistenciasHoy && asistenciasHoy.length > 0) {
+              asistenciasHoy.forEach((asist: any) => {
+                  mapa[asist.matricula_id] = asist.estado === 'presente';
+              });
+              if(asistenciasHoy[0].tema_id) setTemaSeleccionado(asistenciasHoy[0].tema_id);
+              messageApi.success({ content: "Datos cargados", key: "loadingAula" });
+          } else {
+              dataAlumnos?.forEach((a: any) => mapa[a.id] = true);
+              messageApi.success({ content: "Aula lista", key: "loadingAula" });
+          }
+          
+          setAsistenciaMap(mapa);
           setDrawerVisible(true);
-          message.success({ content: "Aula lista", key: "loadingAula" });
       } catch (error: any) {
-          message.error({ content: "Error al abrir clase: " + error.message, key: "loadingAula" });
+          messageApi.error({ content: "Error: " + error.message, key: "loadingAula" });
       }
   };
 
-  // 3. GUARDAR ASISTENCIA
-  const guardarAsistencia = async () => {
+  // 3. CONFIRMAR Y GUARDAR (ASISTENCIA + HORAS TRABAJADAS)
+  const confirmarGuardado = () => {
       if(!temaSeleccionado) {
-          message.warning("⚠️ Selecciona el tema visto hoy.");
+          messageApi.warning("⚠️ Selecciona el tema enseñado hoy.");
           return;
       }
-      
+
+      modal.confirm({
+          title: '¿Registrar Clase?',
+          icon: <ExclamationCircleOutlined />,
+          content: (
+              <div>
+                  <p>Se guardará la asistencia de los alumnos.</p>
+                  <p>Además, se registrarán <b>{horasClase} horas</b> trabajadas para tu pago de nómina.</p>
+              </div>
+          ),
+          okText: 'Confirmar y Guardar',
+          cancelText: 'Cancelar',
+          onOk: ejecutarGuardadoReal
+      });
+  };
+
+  const ejecutarGuardadoReal = async () => {
       setGuardandoAsistencia(true);
       try {
+          // 1. Guardar Asistencia ALUMNOS
           const registros = alumnosClase.map(alumno => ({
-              matricula_id: alumno.id, // Esto debe ser un número (BigInt)
+              matricula_id: alumno.id,
               fecha: fechaAsistencia.format("YYYY-MM-DD"),
               estado: asistenciaMap[alumno.id] ? 'presente' : 'ausente',
-              tema_id: temaSeleccionado, // UUID del tema
+              tema_id: temaSeleccionado,
               observaciones: asistenciaMap[alumno.id] ? 'Tema completado' : 'Tema pendiente'
           }));
 
-          const { error } = await supabase.from("asistencias").insert(registros);
+          const { error: errAsis } = await supabase
+            .from("asistencias")
+            .upsert(registros, { onConflict: 'matricula_id, fecha' });
 
-          if (error) throw error;
+          if (errAsis) throw errAsis;
 
-          message.success("✅ Asistencia registrada");
+          // 2. Guardar Sesión PROFESOR (Para Nómina)
+          const temaTxt = temasCurso.find(t => t.id === temaSeleccionado)?.titulo || 'Tema del día';
+          
+          const { error: errSesion } = await supabase
+            .from("sesiones_clase")
+            .upsert({
+                curso_id: cursoActivo.id,
+                profesor_id: idProfesor,
+                fecha: fechaAsistencia.format("YYYY-MM-DD"),
+                horas_dictadas: horasClase,
+                tema_visto: temaTxt,
+                estado_pago: 'pendiente'
+            }, { onConflict: 'curso_id, profesor_id, fecha' }); // Evita duplicados el mismo día
+
+          if (errSesion) throw errSesion;
+
+          messageApi.success("✅ Clase y Horas registradas correctamente");
           setDrawerVisible(false);
       } catch (error: any) {
-          if (error.message.includes("unique")) message.warning("Ya registraste este tema hoy.");
-          else message.error("Error guardando: " + error.message);
+          messageApi.error("Error guardando: " + error.message);
       } finally {
           setGuardandoAsistencia(false);
       }
   };
 
-  // 4. GUARDAR TEMA
+  // 4. GUARDAR TEMA PENSUM
   const guardarTemaPensum = async () => {
       setGuardandoTema(true);
       try {
           const values = await formPensum.validateFields();
           const { error } = await supabase.from("temas_curso").insert({
               ...values,
-              curso_id: cursoActivo.id // Número (BigInt)
+              curso_id: cursoActivo.id
           });
 
           if (error) throw error;
 
-          message.success("Tema agregado");
+          messageApi.success("Tema agregado");
           formPensum.resetFields();
           setModalPensumVisible(false);
           
-          // Recargar temas sin cerrar todo
           const { data } = await supabase.from("temas_curso").select("*").eq("curso_id", cursoActivo.id).order("orden");
           setTemasCurso(data || []);
 
       } catch (error: any) {
-          message.error("Error al crear tema: " + error.message);
+          messageApi.error("Error: " + error.message);
       } finally {
           setGuardandoTema(false);
       }
   };
 
-  if (loading) return <div style={{padding: 50, textAlign:'center'}}><Spin size="large" tip="Cargando Oficina Virtual..."/></div>;
+  // 5. CALIFICAR
+  const abrirCalificar = (alumno: any) => {
+      setEstudianteACalificar(alumno);
+      formNotas.resetFields();
+      setModalNotasVisible(true);
+  };
+
+  const guardarNota = async () => {
+      setGuardandoNota(true);
+      try {
+          const values = await formNotas.validateFields();
+          
+          const { error } = await supabase.from("calificaciones").insert({
+             matricula_id: estudianteACalificar.id,
+             concepto: values.concepto,
+             nota: values.nota,
+             observaciones: values.observaciones
+          });
+
+          if (error) throw error;
+
+          messageApi.success(`Nota guardada para ${estudianteACalificar.perfiles.nombre_completo}`);
+          setModalNotasVisible(false);
+          formNotas.resetFields();
+
+      } catch (error: any) {
+          messageApi.error("Error al guardar nota: " + error.message);
+      } finally {
+          setGuardandoNota(false);
+      }
+  };
+
+  if (loading) return (
+      <div style={{ padding: 50, textAlign: 'center' }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 15, color: '#888' }}>Cargando Oficina Virtual...</div>
+      </div>
+  );
 
   return (
     <Show title="Oficina Virtual" headerButtons={() => <Button href="/profesores">Volver</Button>}>
+      {contextHolder}
+      {modalContextHolder}
       
-      {/* HEADER */}
       {profesor && (
         <Card style={{marginBottom: 20, borderLeft: '5px solid #722ed1'}}>
             <Row align="middle" gutter={16}>
@@ -218,17 +316,20 @@ export default function ShowProfesorDashboard() {
                 </Card>
             </Col>
         ))}
-        {misCursos.length === 0 && <Alert message="No tienes cursos activos asignados." type="info" />}
+        {misCursos.length === 0 && <Alert message="No tienes cursos activos." type="info" />}
       </Row>
 
-      {/* DRAWER CLASE */}
       <Drawer
         title={`Clase: ${cursoActivo?.nombre}`}
         width={600}
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
-        maskClosable={false} // Evita cierres accidentales
-        extra={<Button type="primary" onClick={guardarAsistencia} loading={guardandoAsistencia}>Guardar Clase</Button>}
+        maskClosable={false}
+        extra={
+            <Button type="primary" onClick={confirmarGuardado} loading={guardandoAsistencia}>
+                Guardar Asistencia
+            </Button>
+        }
       >
         <Tabs defaultActiveKey="1" items={[
             {
@@ -238,10 +339,23 @@ export default function ShowProfesorDashboard() {
                         <Card variant="borderless" style={{background: '#f0f2f5', marginBottom: 20}}>
                             <Row gutter={16}>
                                 <Col span={12}>
-                                    <label>Fecha:</label>
+                                    <label>Fecha Clase:</label>
                                     <DatePicker style={{width:'100%'}} value={fechaAsistencia} onChange={val => setFechaAsistencia(val || dayjs())} allowClear={false}/>
                                 </Col>
                                 <Col span={12}>
+                                    <label>Horas Dictadas:</label>
+                                    <InputNumber 
+                                        min={1} 
+                                        max={8} 
+                                        value={horasClase} 
+                                        onChange={(val) => setHorasClase(val || 2)} 
+                                        style={{ width: '100%' }} 
+                                        addonAfter="Hrs"
+                                    />
+                                </Col>
+                            </Row>
+                            <Row style={{marginTop: 10}}>
+                                <Col span={24}>
                                     <label>Tema de hoy:</label>
                                     <Select 
                                         style={{width:'100%'}} 
@@ -284,12 +398,41 @@ export default function ShowProfesorDashboard() {
                                 </List.Item>
                             )}
                         />
-                        {alumnosClase.length === 0 && <p>No hay alumnos matriculados.</p>}
                     </>
                 )
             },
             {
-                key: '2', label: '📚 Ver Pensum',
+                key: '2', label: '⭐ Calificar',
+                children: (
+                    <div>
+                        <Alert message="Selecciona un estudiante para asignar una nota." type="info" style={{marginBottom: 15}} />
+                        <List
+                            itemLayout="horizontal"
+                            dataSource={alumnosClase}
+                            renderItem={(alumno: any) => (
+                                <List.Item actions={[
+                                    <Button 
+                                        type="dashed" 
+                                        shape="round" 
+                                        icon={<StarOutlined />} 
+                                        onClick={() => abrirCalificar(alumno)}
+                                    >
+                                        Calificar
+                                    </Button>
+                                ]}>
+                                    <List.Item.Meta
+                                        avatar={<Avatar style={{backgroundColor: '#faad14'}}>{alumno.perfiles.nombre_completo[0]}</Avatar>}
+                                        title={alumno.perfiles.nombre_completo}
+                                        description="Gestionar notas"
+                                    />
+                                </List.Item>
+                            )}
+                        />
+                    </div>
+                )
+            },
+            {
+                key: '3', label: '📚 Ver Pensum',
                 children: (
                     <>
                         <Button type="dashed" icon={<PlusOutlined />} block onClick={() => setModalPensumVisible(true)} style={{marginBottom: 20}}>
@@ -302,7 +445,7 @@ export default function ShowProfesorDashboard() {
         ]} />
       </Drawer>
 
-      {/* MODAL NUEVO TEMA */}
+      {/* MODAL NUEVO TEMA PENSUM */}
       <Modal
         title="Nuevo Tema en el Pensum"
         open={modalPensumVisible}
@@ -325,6 +468,42 @@ export default function ShowProfesorDashboard() {
               </Row>
               <Form.Item name="descripcion" label="Descripción">
                   <Input.TextArea rows={2} />
+              </Form.Item>
+          </Form>
+      </Modal>
+
+      {/* MODAL CALIFICAR */}
+      <Modal
+        title={<span><StarOutlined /> Calificar a {estudianteACalificar?.perfiles.nombre_completo}</span>}
+        open={modalNotasVisible}
+        onOk={guardarNota}
+        confirmLoading={guardandoNota}
+        onCancel={() => setModalNotasVisible(false)}
+        okText="Guardar Nota"
+      >
+          <Form form={formNotas} layout="vertical">
+              <Row gutter={16}>
+                  <Col span={16}>
+                      <Form.Item 
+                        name="concepto" 
+                        label="Actividad o Evaluación" 
+                        rules={[{required:true, message: 'Indica qué estás calificando'}]}
+                      >
+                          <Input placeholder="Ej: Examen Teórico, Práctica Gel..." />
+                      </Form.Item>
+                  </Col>
+                  <Col span={8}>
+                      <Form.Item 
+                        name="nota" 
+                        label="Nota (0-5)" 
+                        rules={[{required:true, message: 'Falta la nota'}]}
+                      >
+                          <InputNumber min={0} max={5} step={0.1} style={{width: '100%'}} />
+                      </Form.Item>
+                  </Col>
+              </Row>
+              <Form.Item name="observaciones" label="Observaciones (Opcional)">
+                  <Input.TextArea rows={2} placeholder="Comentarios sobre el desempeño..." />
               </Form.Item>
           </Form>
       </Modal>

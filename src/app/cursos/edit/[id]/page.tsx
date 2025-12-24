@@ -1,100 +1,177 @@
 "use client";
 
-import React from "react";
-import { Edit, useForm, useSelect } from "@refinedev/antd";
-import { Form, Input, Select, InputNumber, DatePicker, Row, Col, Divider, Alert } from "antd";
+import React, { useEffect, useState } from "react";
+import { Edit } from "@refinedev/antd";
+import { Form, Input, Select, DatePicker, InputNumber, Row, Col, message, Spin } from "antd";
+import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
+import { useRouter, useParams } from "next/navigation";
 
-export default function EditCurso() {
-  // 1. Hook para cargar y guardar datos
-  const { formProps, saveButtonProps, queryResult } = useForm({
-    resource: "cursos",
-    redirect: "list", // Al guardar, vuelve a la lista
-  });
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-  const cursoData = queryResult?.data?.data;
+export default function EditCourse() {
+  const [form] = Form.useForm();
+  const router = useRouter();
+  const params = useParams();
+  const idCurso = params?.id as string;
 
-  // 2. Cargar lista de profesores para cambiarlo si es necesario
-  const { selectProps: teacherSelect } = useSelect({
-    resource: "perfiles",
-    defaultValue: cursoData?.profesor_id, // Pre-seleccionar el profesor actual
-    optionLabel: "nombre_completo",
-    optionValue: "id",
-    filters: [
-        { field: "rol", operator: "eq", value: "profesor" }
-    ],
-  });
+  const [loading, setLoading] = useState(true);
+  const [profesores, setProfesores] = useState<any[]>([]);
+
+  // 1. Cargar Profesores y Datos del Curso al iniciar
+  useEffect(() => {
+    cargarDatos();
+  }, [idCurso]);
+
+  const cargarDatos = async () => {
+    setLoading(true);
+    try {
+        // A) Cargar lista de profesores
+        const { data: dataProfs } = await supabase
+            .from("perfiles")
+            .select("id, nombre_completo")
+            .order("nombre_completo");
+        setProfesores(dataProfs || []);
+
+        // B) Cargar datos del curso actual
+        if (idCurso) {
+            const { data: curso, error } = await supabase
+                .from("cursos")
+                .select("*")
+                .eq("id", idCurso)
+                .single();
+
+            if (error) throw error;
+
+            // Rellenar el formulario
+            form.setFieldsValue({
+                ...curso,
+                // Convertir fecha de string (BD) a objeto Dayjs (Ant Design)
+                fecha_inicio: curso.fecha_inicio ? dayjs(curso.fecha_inicio) : null,
+            });
+        }
+    } catch (error: any) {
+        message.error("Error cargando curso: " + error.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  // 2. Guardar Cambios
+  const onFinish = async (values: any) => {
+    try {
+      const { error } = await supabase
+        .from("cursos")
+        .update({
+            nombre: values.nombre,
+            descripcion: values.descripcion,
+            estado: values.estado,
+            profesor_id: values.profesor_id,
+            // CAMPOS FINANCIEROS Y ACADÉMICOS
+            precio_inscripcion: values.precio_inscripcion,
+            precio_mensualidad: values.precio_mensualidad,
+            duracion: values.duracion,
+            fecha_inicio: values.fecha_inicio ? values.fecha_inicio.format("YYYY-MM-DD") : null,
+        })
+        .eq("id", idCurso); // Importante: Filtrar por ID
+
+      if (error) throw error;
+
+      message.success("Curso actualizado correctamente");
+      router.push("/cursos"); // Volver a la lista
+    } catch (error: any) {
+      message.error("Error al actualizar: " + error.message);
+    }
+  };
+
+  if (loading) return <div style={{ padding: 50, textAlign: "center" }}><Spin size="large" /></div>;
 
   return (
-    <Edit saveButtonProps={saveButtonProps} title={`Editar: ${cursoData?.nombre || "Curso"}`}>
-      <Form {...formProps} layout="vertical">
-        
+    <Edit title="Editar Curso" saveButtonProps={{ onClick: form.submit }}>
+      <Form 
+        form={form} 
+        layout="vertical" 
+        onFinish={onFinish}
+      >
         <Row gutter={24}>
-            <Col span={16}>
-                <Form.Item label="Nombre del Curso" name="nombre" rules={[{ required: true }]}>
-                    <Input />
+          <Col span={16}>
+            <Form.Item 
+                label="Nombre del Curso" 
+                name="nombre" 
+                rules={[{ required: true, message: 'El nombre es obligatorio' }]}
+            >
+              <Input placeholder="Ej: Manicure Ruso Avanzado" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Estado" name="estado">
+              <Select options={[
+                { label: '🟢 Activo', value: 'activo' },
+                { label: '🔴 Inactivo', value: 'inactivo' }
+              ]} />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item label="Descripción Corta" name="descripcion">
+          <Input.TextArea rows={3} placeholder="¿De qué trata este curso?" />
+        </Form.Item>
+
+        <h3 style={{ marginTop: 20, color: '#722ed1' }}>Detalles Académicos y Financieros</h3>
+        <Row gutter={24}>
+            <Col span={12}>
+                <Form.Item label="Docente Encargado" name="profesor_id" rules={[{ required: true }]}>
+                    <Select 
+                        placeholder="Selecciona un profesor..."
+                        options={profesores.map(p => ({ label: p.nombre_completo, value: p.id }))}
+                    />
                 </Form.Item>
             </Col>
-            <Col span={8}>
-                <Form.Item label="Estado Actual" name="estado">
-                    <Select options={[
-                        { value: 'activo', label: '🟢 Activo' },
-                        { value: 'inscripciones', label: '🟡 Inscripciones' },
-                        { value: 'cerrado', label: '🔴 Cerrado' },
-                    ]}/>
+            <Col span={12}>
+                <Form.Item label="Duración (Texto)" name="duracion">
+                    <Input placeholder="Ej: 3 Meses / 40 Horas" />
                 </Form.Item>
             </Col>
         </Row>
 
-        <Form.Item label="Descripción" name="descripcion">
-            <Input.TextArea rows={3} />
-        </Form.Item>
-
-        <Divider orientation="left" style={{color:'#722ed1'}}>Configuración Académica</Divider>
-
         <Row gutter={24}>
-            <Col xs={24} md={12}>
-                <Form.Item label="Docente Encargado" name="profesor_id" rules={[{ required: true }]}>
-                    <Select {...teacherSelect} placeholder="Selecciona un profesor..." />
+            <Col span={8}>
+                <Form.Item label="Fecha de Inicio" name="fecha_inicio" rules={[{ required: true }]}>
+                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
                 </Form.Item>
             </Col>
-            
-            <Col xs={24} md={12}>
-                <Form.Item label="Precio" name="precio">
+            <Col span={8}>
+                <Form.Item 
+                    label="Valor Inscripción" 
+                    name="precio_inscripcion" 
+                    rules={[{ required: true }]}
+                    tooltip="Pago único al iniciar"
+                >
                     <InputNumber 
                         style={{ width: '100%' }} 
                         formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={value => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
+                        parser={value => value!.replace(/\$\s?|(,*)/g, '')}
+                    />
+                </Form.Item>
+            </Col>
+            <Col span={8}>
+                <Form.Item 
+                    label="Valor Mensualidad" 
+                    name="precio_mensualidad" 
+                    rules={[{ required: true }]}
+                    tooltip="Pago periódico o por clase"
+                >
+                    <InputNumber 
+                        style={{ width: '100%' }} 
+                        formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                        parser={value => value!.replace(/\$\s?|(,*)/g, '')}
                     />
                 </Form.Item>
             </Col>
         </Row>
-
-        <Row gutter={24}>
-            {/* TRUCO IMPORTANTE: getValueProps convierte el texto de Supabase a fecha de Calendario */}
-            <Col span={12}>
-                <Form.Item 
-                    label="Fecha de Inicio" 
-                    name="fecha_inicio" 
-                    getValueProps={(value) => ({ value: value ? dayjs(value) : "" })}
-                >
-                    <DatePicker style={{width:'100%'}} format="DD/MM/YYYY" />
-                </Form.Item>
-            </Col>
-            <Col span={12}>
-                 <Form.Item 
-                    label="Fecha de Finalización" 
-                    name="fecha_fin" 
-                    getValueProps={(value) => ({ value: value ? dayjs(value) : "" })}
-                >
-                    <DatePicker style={{width:'100%'}} format="DD/MM/YYYY" />
-                </Form.Item>
-            </Col>
-        </Row>
-
-        {cursoData?.estado === 'cerrado' && (
-             <Alert message="Este curso está marcado como cerrado." type="warning" showIcon />
-        )}
 
       </Form>
     </Edit>

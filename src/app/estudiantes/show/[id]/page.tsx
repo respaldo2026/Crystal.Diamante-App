@@ -3,16 +3,17 @@
 import React, { useEffect, useState } from "react";
 import { Show } from "@refinedev/antd";
 import { 
-  Typography, Tag, Tabs, Row, Col, Card, Statistic, Table, 
-  Button, Alert, Spin, Empty, Divider
+  Typography, Row, Col, Card, Button, 
+  Statistic, Table, Tag, Timeline, Calendar, Badge,
+  Spin, Avatar, Alert, Progress, Tabs, message 
 } from "antd";
 import { 
-  UserOutlined, ReadOutlined, IdcardOutlined, MailOutlined, PhoneOutlined, SafetyCertificateOutlined
+  UserOutlined, CalendarOutlined, DollarCircleOutlined, 
+  ReadOutlined, TrophyOutlined, ClockCircleOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import type { Dayjs } from 'dayjs';
 import { useParams } from "next/navigation"; 
-
-// 1. CONEXIÓN DIRECTA A SUPABASE (La técnica infalible)
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -20,162 +21,290 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export default function ShowEstudiante() {
+const { Title, Text } = Typography;
+
+export default function StudentDashboard() {
   const params = useParams();
   const idEstudiante = params?.id as string;
+  const [messageApi, contextHolder] = message.useMessage();
 
-  // ESTADOS
-  const [estudiante, setEstudiante] = useState<any>(null);
-  // Preparamos el terreno para las matrículas (aunque esté vacío por ahora)
-  const [matriculas, setMatriculas] = useState<any[]>([]);
+  // Estados
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [perfil, setPerfil] = useState<any>(null);
+  const [matriculaActiva, setMatriculaActiva] = useState<any>(null);
+  
+  // Datos específicos
+  const [asistencias, setAsistencias] = useState<any[]>([]);
+  const [calificaciones, setCalificaciones] = useState<any[]>([]);
+  const [proximoPago, setProximoPago] = useState<string | null>(null);
+  const [estadisticas, setEstadisticas] = useState({
+    asistidas: 0,
+    faltas: 0,
+    promedio: 0
+  });
 
-  // 2. FUNCIÓN DE CARGA
-  const cargarDatos = async () => {
+  useEffect(() => {
+    if (idEstudiante) cargarDatosEstudiante();
+  }, [idEstudiante]);
+
+  const cargarDatosEstudiante = async () => {
     try {
-        setLoading(true);
-        setErrorMsg("");
+      setLoading(true);
 
-        if (!idEstudiante) throw new Error("ID inválido");
+      // 1. Perfil
+      const { data: dataPerfil, error: errPerfil } = await supabase
+        .from("perfiles")
+        .select("*")
+        .eq("id", idEstudiante)
+        .single();
+      if (errPerfil) throw errPerfil;
+      setPerfil(dataPerfil);
 
-        // A) Traer Estudiante de la tabla 'perfiles'
-        const { data: dataEst, error: errEst } = await supabase
-            .from("perfiles")
+      // 2. Buscar Matrícula Activa
+      const { data: dataMatricula, error: errMat } = await supabase
+        .from("matriculas")
+        .select(`
+            id, fecha_inicio, estado,
+            cursos ( id, nombre, descripcion, precio_mensualidad, perfiles(nombre_completo) )
+        `)
+        .eq("estudiante_id", idEstudiante)
+        .eq("estado", "activo")
+        .single(); // Asumimos una activa a la vez
+
+      if (dataMatricula) {
+        setMatriculaActiva(dataMatricula);
+
+        // 3. Asistencias
+        const { data: dataAsis } = await supabase
+            .from("asistencias")
+            .select("fecha, estado, tema:temas_curso(titulo)")
+            .eq("matricula_id", dataMatricula.id);
+        
+        const listaAsis = dataAsis || [];
+        setAsistencias(listaAsis);
+
+        // Calcular asistencias/faltas
+        const total = listaAsis.length;
+        const presentes = listaAsis.filter((a: any) => a.estado === 'presente').length;
+        const faltas = listaAsis.filter((a: any) => a.estado === 'ausente').length;
+
+        // 4. Calificaciones (Asumiendo tabla 'calificaciones')
+        // Si no tienes esta tabla, esto vendrá vacío y no romperá el código.
+        const { data: dataNotas } = await supabase
+            .from("calificaciones") 
             .select("*")
-            .eq("id", idEstudiante)
-            .maybeSingle(); 
+            .eq("matricula_id", dataMatricula.id);
+            
+        const notas = dataNotas || [];
+        setCalificaciones(notas);
 
-        if (errEst) throw errEst;
-        if (!dataEst) throw new Error("Estudiante no encontrado.");
+        // Calcular Promedio
+        const sumaNotas = notas.reduce((acc: number, curr: any) => acc + (curr.nota || 0), 0);
+        const promedio = notas.length > 0 ? (sumaNotas / notas.length).toFixed(1) : 0;
+
+        setEstadisticas({ 
+            asistidas: presentes, 
+            faltas: faltas, 
+            promedio: Number(promedio) 
+        });
+
+        // 5. Calcular Próximo Pago (Lógica simple)
+        // Buscamos el último pago realizado
+        const { data: ultimosPagos } = await supabase
+            .from("pagos")
+            .select("fecha_pago, periodo_pagado")
+            .eq("matricula_id", dataMatricula.id)
+            .order("fecha_pago", { ascending: false })
+            .limit(1);
+
+        let fechaProx = dayjs(dataMatricula.fecha_inicio).add(1, 'month');
         
-        setEstudiante(dataEst);
-
-        // B) Intentar traer Matrículas (Si la tabla existe)
-        // Esto no romperá la app si la tabla matriculas no tiene datos aún
-        const { data: dataMatr } = await supabase
-            .from("matriculas")
-            .select(`
-                *,
-                cursos ( nombre )
-            `)
-            .eq("estudiante_id", idEstudiante);
+        if (ultimosPagos && ultimosPagos.length > 0) {
+            // Si ya pagó, el próximo es 1 mes después del último periodo pagado
+            const ultimo = dayjs(ultimosPagos[0].fecha_pago);
+            fechaProx = ultimo.add(1, 'month');
+        }
         
-        if (dataMatr) setMatriculas(dataMatr);
+        setProximoPago(fechaProx.format("YYYY-MM-DD"));
 
-    } catch (error: any) {
-        console.error("Error cargando estudiante:", error);
-        setErrorMsg(error.message);
+      }
+    } catch (error) {
+      console.error(error);
+      messageApi.error("Error cargando datos del estudiante");
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    cargarDatos();
-  }, [idEstudiante]);
+  // Renderizado de calendario para ver faltas visualmente
+  const dateCellRender = (value: Dayjs) => {
+    const fechaStr = value.format("YYYY-MM-DD");
+    const asistenciaDia = asistencias.find((a: any) => a.fecha === fechaStr);
 
-  // --- PANTALLAS DE CARGA Y ERROR ---
-  if (loading) return <div style={{ padding: 50, textAlign: 'center' }}><Spin size="large" /><h3>Cargando expediente...</h3></div>;
-  
-  if (errorMsg || !estudiante) {
+    if (asistenciaDia) {
       return (
-        <div style={{ padding: 20 }}>
+        <Badge 
+            status={asistenciaDia.estado === 'presente' ? 'success' : 'error'} 
+            text={asistenciaDia.estado === 'presente' ? 'Asistió' : 'Faltó'} 
+        />
+      );
+    }
+    return null;
+  };
+
+  if (loading) return <div style={{padding:50, textAlign:'center'}}><Spin size="large" /></div>;
+
+  return (
+    <Show title="Portal del Estudiante" headerButtons={() => <Button href="/estudiantes">Volver a Lista</Button>}>
+        {contextHolder}
+        
+        {/* ENCABEZADO PERFIL */}
+        <Card style={{marginBottom: 24, background: 'linear-gradient(to right, #4facfe 0%, #00f2fe 100%)', border:0}}>
+            <Row align="middle" gutter={24}>
+                <Col>
+                    <Avatar size={80} style={{backgroundColor: '#fff', color: '#1890ff'}} icon={<UserOutlined />} />
+                </Col>
+                <Col>
+                    <Title level={2} style={{color: '#fff', margin: 0}}>Hola, {perfil?.nombre_completo?.split(" ")[0]}</Title>
+                    <Text style={{color: '#fff', opacity: 0.9}}>Bienvenido a tu panel académico</Text>
+                </Col>
+            </Row>
+        </Card>
+
+        {matriculaActiva ? (
+            <>
+                {/* TARJETAS DE RESUMEN (KPIs) */}
+                <Row gutter={[16, 16]} style={{marginBottom: 24}}>
+                    
+                    {/* PRÓXIMO PAGO */}
+                    <Col xs={24} sm={8}>
+                        <Card hoverable>
+                            <Statistic 
+                                title="Próximo Pago" 
+                                value={proximoPago || "Pendiente"} 
+                                prefix={<CalendarOutlined />}
+                                valueStyle={ dayjs(proximoPago).isBefore(dayjs()) ? { color: '#cf1322' } : { color: '#3f8600' } }
+                            />
+                            {dayjs(proximoPago).isBefore(dayjs()) && <Tag color="red" style={{marginTop:10}}>Vencido</Tag>}
+                            <Text type="secondary" style={{display:'block', marginTop: 5}}>Mensualidad Curso</Text>
+                        </Card>
+                    </Col>
+
+                    {/* PROMEDIO */}
+                    <Col xs={24} sm={8}>
+                        <Card hoverable>
+                            <Statistic 
+                                title="Promedio Actual" 
+                                value={estadisticas.promedio} 
+                                precision={1}
+                                prefix={<TrophyOutlined />}
+                                suffix="/ 5.0"
+                                valueStyle={{ color: '#1890ff' }}
+                            />
+                            <Progress percent={(estadisticas.promedio / 5) * 100} showInfo={false} size="small" />
+                        </Card>
+                    </Col>
+
+                    {/* ASISTENCIA */}
+                    <Col xs={24} sm={8}>
+                        <Card hoverable>
+                            <Statistic 
+                                title="Clases Faltadas" 
+                                value={estadisticas.faltas} 
+                                prefix={<Alert message="" type="error" style={{padding:0, background:'transparent', border:0}} />}
+                                valueStyle={{ color: estadisticas.faltas > 3 ? '#cf1322' : '#333' }}
+                            />
+                            <Text type="secondary">Has asistido a {estadisticas.asistidas} clases</Text>
+                        </Card>
+                    </Col>
+                </Row>
+
+                {/* CONTENIDO PRINCIPAL TABS */}
+                <Card>
+                    <Tabs defaultActiveKey="1" items={[
+                        {
+                            key: '1', 
+                            label: <span><ReadOutlined /> Mi Curso</span>,
+                            children: (
+                                <div style={{padding: 20}}>
+                                    <Title level={4}>{matriculaActiva.cursos.nombre}</Title>
+                                    <p>{matriculaActiva.cursos.descripcion}</p>
+                                    <Divider />
+                                    <Row gutter={16}>
+                                        <Col span={12}>
+                                            <Statistic title="Profesor" value={matriculaActiva.cursos.perfiles?.nombre_completo || "No asignado"} valueStyle={{fontSize: 16}} />
+                                        </Col>
+                                        <Col span={12}>
+                                            <Statistic title="Valor Mensualidad" value={matriculaActiva.cursos.precio_mensualidad} prefix="$" valueStyle={{fontSize: 16}} />
+                                        </Col>
+                                    </Row>
+                                </div>
+                            )
+                        },
+                        {
+                            key: '2', 
+                            label: <span><ClockCircleOutlined /> Asistencia</span>,
+                            children: (
+                                <Row gutter={24}>
+                                    <Col xs={24} md={16}>
+                                        <Alert message="Registro Visual" description="Los puntos verdes son asistencias, los rojos faltas." type="info" showIcon style={{marginBottom: 10}}/>
+                                        <Calendar fullscreen={false} cellRender={dateCellRender} />
+                                    </Col>
+                                    <Col xs={24} md={8}>
+                                        <Title level={5}>Historial de Faltas</Title>
+                                        {asistencias.filter((a:any) => a.estado === 'ausente').length === 0 ? (
+                                            <Alert message="¡Excelente! No tienes faltas." type="success" />
+                                        ) : (
+                                            <Timeline style={{marginTop: 20}}>
+                                                {asistencias.filter((a:any) => a.estado === 'ausente').map((falta: any, idx: number) => (
+                                                    <Timeline.Item color="red" key={idx}>
+                                                        <Text strong>{falta.fecha}</Text>
+                                                        <br/>
+                                                        <Text type="secondary">Tema perdido: {falta.tema?.titulo || "No registrado"}</Text>
+                                                    </Timeline.Item>
+                                                ))}
+                                            </Timeline>
+                                        )}
+                                    </Col>
+                                </Row>
+                            )
+                        },
+                        {
+                            key: '3', 
+                            label: <span><TrophyOutlined /> Calificaciones</span>,
+                            children: (
+                                <Table 
+                                    dataSource={calificaciones}
+                                    rowKey="id"
+                                    pagination={false}
+                                    columns={[
+                                        { title: 'Actividad / Tema', dataIndex: 'concepto', key: 'concepto' },
+                                        { title: 'Fecha', dataIndex: 'created_at', key: 'fecha', render: (val: string) => dayjs(val).format("DD/MM/YYYY") },
+                                        { 
+                                            title: 'Nota', 
+                                            dataIndex: 'nota', 
+                                            key: 'nota',
+                                            render: (nota: number) => (
+                                                <Tag color={nota >= 3 ? 'green' : 'red'}>{nota}</Tag>
+                                            )
+                                        },
+                                        { title: 'Comentarios', dataIndex: 'observaciones', key: 'observaciones' }
+                                    ]}
+                                />
+                            )
+                        }
+                    ]} />
+                </Card>
+            </>
+        ) : (
             <Alert 
-                message="No se pudo cargar el estudiante" 
-                description={errorMsg || "Verifica que el ID sea correcto."} 
-                type="error" 
+                message="No tienes matrícula activa" 
+                description="Actualmente no estás inscrito en ningún curso activo. Contacta a administración." 
+                type="warning" 
                 showIcon 
             />
-            <br />
-            <Button href="/estudiantes">Volver a la Lista</Button>
-        </div>
-      );
-  }
-
-  // --- VISTA PRINCIPAL ---
-  return (
-    <Show 
-        title={`Alumno: ${estudiante.nombre_completo}`}
-        headerButtons={({ defaultButtons }) => (
-            <>
-              <Button href="/estudiantes" style={{ marginRight: 5 }}>Lista</Button>
-              {/* Botón futuro para matricular */}
-              {/* <Button type="primary">Nueva Matrícula</Button> */}
-            </>
         )}
-    >
-      {/* TARJETAS DE RESUMEN */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={8}>
-             <Card variant="borderless">
-                <Statistic 
-                    title="Estado Académico" 
-                    value={"ACTIVO"} 
-                    prefix={<SafetyCertificateOutlined />} 
-                    valueStyle={{ color: '#52c41a' }}
-                />
-             </Card>
-          </Col>
-          <Col span={8}>
-             <Card variant="borderless">
-                <Statistic 
-                    title="Cursos Inscritos" 
-                    value={matriculas.length} 
-                    prefix={<ReadOutlined />} 
-                />
-             </Card>
-          </Col>
-      </Row>
-
-      <Tabs defaultActiveKey="1" items={[
-          {
-            key: '1', label: 'Datos del Alumno',
-            children: (
-                <Card variant="borderless">
-                    <Row gutter={24}>
-                        <Col span={12}>
-                            <p><IdcardOutlined /> <b> Documento:</b><br/> {estudiante.identificacion}</p>
-                            <p><PhoneOutlined /> <b> Teléfono:</b><br/> {estudiante.telefono || "No registrado"}</p>
-                        </Col>
-                        <Col span={12}>
-                            <p><MailOutlined /> <b> Email:</b><br/> {estudiante.email || "No registrado"}</p>
-                            <p><UserOutlined /> <b> Rol:</b><br/> <Tag color="blue">{estudiante.rol?.toUpperCase()}</Tag></p>
-                        </Col>
-                    </Row>
-                    <Divider />
-                    <small style={{ color: '#999' }}>ID Interno: {estudiante.id}</small>
-                </Card>
-            )
-          },
-          {
-            key: '2', label: 'Historial de Cursos',
-            children: matriculas.length > 0 ? (
-                <Table dataSource={matriculas} rowKey="id" pagination={false}>
-                    <Table.Column 
-                        title="Curso" 
-                        dataIndex={['cursos', 'nombre']} 
-                        render={(val, record: any) => val || "Curso #" + record.curso_id.slice(0,4)} 
-                    />
-                    <Table.Column 
-                        title="Fecha Inicio" 
-                        dataIndex="created_at" 
-                        render={(v)=> v ? dayjs(v).format("DD/MM/YYYY") : "-"}
-                    />
-                    <Table.Column 
-                        title="Estado" 
-                        dataIndex="estado" 
-                        render={(v) => <Tag color={v === 'activo' ? 'green' : 'default'}>{v?.toUpperCase() || 'INSCRITO'}</Tag>} 
-                    />
-                </Table>
-            ) : (
-                <Empty 
-                    image={Empty.PRESENTED_IMAGE_SIMPLE} 
-                    description="El estudiante no tiene matrículas activas." 
-                />
-            )
-          }
-      ]} />
     </Show>
   );
 }
+import { Divider } from "antd"; // Asegurando importación de Divider usada arriba
