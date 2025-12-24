@@ -1,143 +1,61 @@
 "use client";
 
-import type { AuthProvider } from "@refinedev/core";
+import { AuthBindings } from "@refinedev/core";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
-export const authProviderClient: AuthProvider = {
+// IMPORTANTE: Aquí usamos 'export const' para que el Layout pueda encontrarlo con { }
+export const authProvider: AuthBindings = {
   login: async ({ email, password }) => {
-    const { data, error } = await supabaseBrowserClient.auth.signInWithPassword(
-      {
-        email,
-        password,
-      }
-    );
+    const { error } = await supabaseBrowserClient.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (error) {
       return {
         success: false,
-        error,
-      };
-    }
-
-    if (data?.session) {
-      await supabaseBrowserClient.auth.setSession(data.session);
-
-      return {
-        success: true,
-        redirectTo: "/",
-      };
-    }
-
-    // for third-party login
-    return {
-      success: false,
-      error: {
-        name: "LoginError",
-        message: "Invalid username or password",
-      },
-    };
-  },
-  logout: async () => {
-    const { error } = await supabaseBrowserClient.auth.signOut();
-
-    if (error) {
-      return {
-        success: false,
-        error,
+        error: {
+          name: "LoginError",
+          message: error.message,
+        },
       };
     }
 
     return {
       success: true,
-      redirectTo: "/login",
+      redirectTo: "/",
     };
   },
-  register: async ({ email, password }) => {
-    try {
-      const { data, error } = await supabaseBrowserClient.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        return {
-          success: false,
-          error,
-        };
-      }
-
-      if (data) {
-        return {
-          success: true,
-          redirectTo: "/",
-        };
-      }
-    } catch (error: any) {
+  logout: async () => {
+    const { error } = await supabaseBrowserClient.auth.signOut();
+    if (error) {
       return {
         success: false,
         error,
       };
     }
-
     return {
-      success: false,
-      error: {
-        message: "Register failed",
-        name: "Invalid email or password",
-      },
-    };
-  },
-  check: async () => {
-    const { data, error } = await supabaseBrowserClient.auth.getUser();
-    const { user } = data;
-
-    if (error) {
-      return {
-        authenticated: false,
-        redirectTo: "/login",
-        logout: true,
-      };
-    }
-
-    if (user) {
-      return {
-        authenticated: true,
-      };
-    }
-
-    return {
-      authenticated: false,
+      success: true,
       redirectTo: "/login",
     };
   },
-  getPermissions: async () => {
-    const user = await supabaseBrowserClient.auth.getUser();
+  check: async () => {
+    const { data } = await supabaseBrowserClient.auth.getSession();
+    const { session } = data;
 
-    if (user) {
-      return user.data.user?.role;
-    }
-
-    return null;
-  },
-  getIdentity: async () => {
-    const { data } = await supabaseBrowserClient.auth.getUser();
-
-    if (data?.user) {
+    if (!session) {
       return {
-        ...data.user,
-        name: data.user.email,
+        authenticated: false,
+        redirectTo: "/login",
       };
     }
 
-    return null;
+    return {
+      authenticated: true,
+    };
   },
   onError: async (error) => {
-    if (error?.code === "PGRST301" || error?.code === 401) {
-      return {
-        logout: true,
-      };
-    }
-
+    console.error(error);
     return { error };
   },
 };

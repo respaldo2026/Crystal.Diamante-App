@@ -3,7 +3,6 @@
 import React from "react";
 import { Refine } from "@refinedev/core";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
-// VOLVEMOS A LA VERSIÓN V1 QUE ES COMPATIBLE CON TU PROYECTO
 import { RefineThemes, ThemedLayout, ThemedTitle } from "@refinedev/antd";
 import { ConfigProvider, App as AntdApp } from "antd";
 import "@refinedev/antd/dist/reset.css";
@@ -18,11 +17,16 @@ import {
   DollarCircleOutlined, 
   SettingOutlined, 
   CalculatorOutlined,
-  ShopOutlined // Icono de Inventario
+  ShopOutlined 
 } from "@ant-design/icons";
 
 import routerProvider from "@refinedev/nextjs-router";
+
+// PROVIDERS
 import { dataProvider } from "../providers/data-provider"; 
+
+// --- CORRECCIÓN DEFINITIVA ---
+// Usamos { } porque en el paso 1 definimos 'export const authProvider'
 import { authProvider } from "../providers/auth-provider/auth-provider.client"; 
 
 export default function RootLayout({
@@ -44,7 +48,10 @@ export default function RootLayout({
                   {
                     name: "dashboard",
                     list: "/",
-                    meta: { label: "Dashboard", icon: <DashboardOutlined /> },
+                    meta: {
+                      label: "Dashboard",
+                      icon: <DashboardOutlined />,
+                    },
                   },
                   {
                     name: "estudiantes",
@@ -52,7 +59,10 @@ export default function RootLayout({
                     create: "/estudiantes/create",
                     edit: "/estudiantes/edit/:id",
                     show: "/estudiantes/show/:id",
-                    meta: { label: "Estudiantes", icon: <UserOutlined /> },
+                    meta: {
+                      label: "Estudiantes",
+                      icon: <UserOutlined />,
+                    },
                   },
                   {
                     name: "profesores",
@@ -60,7 +70,10 @@ export default function RootLayout({
                     create: "/profesores/create",
                     edit: "/profesores/edit/:id",
                     show: "/profesores/show/:id",
-                    meta: { label: "Profesores", icon: <TeamOutlined /> },
+                    meta: {
+                      label: "Profesores",
+                      icon: <TeamOutlined />,
+                    },
                   },
                   {
                     name: "cursos",
@@ -68,36 +81,52 @@ export default function RootLayout({
                     create: "/cursos/create",
                     edit: "/cursos/edit/:id",
                     show: "/cursos/show/:id",
-                    meta: { label: "Cursos", icon: <BookOutlined /> },
+                    meta: {
+                      label: "Cursos",
+                      icon: <BookOutlined />,
+                    },
                   },
-                  // --- INVENTARIO ---
                   {
                     name: "inventario",
                     list: "/inventario",
-                    meta: { label: "Inventario", icon: <ShopOutlined /> },
+                    meta: {
+                      label: "Inventario",
+                      icon: <ShopOutlined />,
+                    },
                   },
-                  // ------------------
                   {
                     name: "matriculas",
                     list: "/matriculas",
                     create: "/matriculas/create",
                     edit: "/matriculas/edit/:id",
-                    meta: { label: "Matrículas", icon: <FileTextOutlined /> },
+                    meta: {
+                      label: "Matrículas",
+                      icon: <FileTextOutlined />,
+                    },
                   },
                   {
                     name: "tesoreria",
                     list: "/tesoreria",
-                    meta: { label: "Tesorería", icon: <DollarCircleOutlined /> },
+                    meta: {
+                      label: "Tesorería",
+                      icon: <DollarCircleOutlined />,
+                    },
                   },
                   {
                     name: "nomina",
                     list: "/nomina",
-                    meta: { label: "Pago Profesores", icon: <CalculatorOutlined /> },
+                    meta: {
+                      label: "Pago Profesores",
+                      icon: <CalculatorOutlined />,
+                    },
                   },
                   {
                     name: "configuracion",
                     list: "/configuracion",
-                    meta: { label: "Configuración", icon: <SettingOutlined /> },
+                    meta: {
+                      label: "Configuración",
+                      icon: <SettingOutlined />,
+                    },
                   },
                 ]}
                 options={{

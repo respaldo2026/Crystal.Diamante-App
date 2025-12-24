@@ -1,123 +1,175 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Create } from "@refinedev/antd";
-import { Form, Select, DatePicker, message, Row, Col, Card, Alert } from "antd";
-import { createClient } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
+import { Create, useForm, useSelect } from "@refinedev/antd";
+import { Form, Select, DatePicker, Input, Card, Statistic, message, Alert } from "antd";
+import { supabaseBrowserClient } from "@utils/supabase/client";
+import { UserOutlined, BookOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+export default function MatriculaCreate() {
+    const { formProps, saveButtonProps, onFinish } = useForm({
+        redirect: "list"
+    });
 
-export default function CreateMatricula() {
-  const [form] = Form.useForm();
-  const router = useRouter();
-  
-  const [estudiantes, setEstudiantes] = useState<any[]>([]);
-  const [cursos, setCursos] = useState<any[]>([]);
+    const [cuposInfo, setCuposInfo] = useState<{ ocupados: number, total: number } | null>(null);
+    const [checking, setChecking] = useState(false);
 
-  useEffect(() => {
-    cargarDatos();
-  }, []);
+    // 1. Selector de Estudiantes (Solo mostramos estudiantes, no profesores)
+    const { selectProps: studentSelectProps } = useSelect({
+        resource: "perfiles",
+        optionLabel: "nombre_completo",
+        optionValue: "id",
+        filters: [
+            { field: "rol", operator: "eq", value: "estudiante" }
+        ]
+    });
 
-  const cargarDatos = async () => {
-    // 1. Cargar SOLO ESTUDIANTES
-    const { data: dataEst } = await supabase
-      .from("perfiles")
-      .select("id, nombre_completo, documento")
-      .eq("rol", "estudiante") // <--- FILTRO: SOLO ESTUDIANTES
-      .order("nombre_completo");
-    setEstudiantes(dataEst || []);
+    // 2. Selector de Cursos
+    const { selectProps: cursoSelectProps } = useSelect({
+        resource: "cursos",
+        optionLabel: "nombre",
+        optionValue: "id",
+        filters: [
+             { field: "estado", operator: "eq", value: "activo" }
+        ]
+    });
 
-    // 2. Cargar CURSOS ACTIVOS
-    const { data: dataCursos } = await supabase
-      .from("cursos")
-      .select("id, nombre, horario")
-      .eq("estado", "activo")
-      .order("nombre");
-    setCursos(dataCursos || []);
-  };
+    // 3. Función para verificar cupos en tiempo real al seleccionar curso
+    const handleCursoChange = async (cursoId: string) => {
+        if (!cursoId) return;
+        setChecking(true);
+        setCuposInfo(null);
 
-  const onFinish = async (values: any) => {
-    try {
-      // Verificar si ya está matriculado en ese curso
-      const { data: existe } = await supabase
-        .from("matriculas")
-        .select("id")
-        .eq("estudiante_id", values.estudiante_id)
-        .eq("curso_id", values.curso_id)
-        .eq("estado", "activo")
-        .single();
+        const supabase = supabaseBrowserClient;
 
-      if (existe) {
-          message.error("⚠️ Este estudiante ya está matriculado en este curso.");
-          return;
-      }
+        try {
+            // A. Obtener límite del curso
+            const { data: curso, error: errCurso } = await supabase
+                .from('cursos')
+                .select('cupos, nombre')
+                .eq('id', cursoId)
+                .single();
+            
+            if (errCurso) throw errCurso;
 
-      const { error } = await supabase.from("matriculas").insert({
-        estudiante_id: values.estudiante_id,
-        curso_id: values.curso_id,
-        fecha_inicio: values.fecha_inicio.format("YYYY-MM-DD"),
-        estado: "activo"
-      });
+            // B. Contar inscritos actuales
+            const { count, error: errCount } = await supabase
+                .from('matriculas')
+                .select('*', { count: 'exact', head: true })
+                .eq('curso_id', cursoId);
 
-      if (error) throw error;
+            if (errCount) throw errCount;
 
-      message.success("Matrícula creada exitosamente");
-      router.push("/matriculas");
-    } catch (error: any) {
-      message.error("Error: " + error.message);
-    }
-  };
+            setCuposInfo({
+                ocupados: count || 0,
+                total: curso.cupos || 20 // 20 por defecto si es nulo
+            });
 
-  return (
-    <Create title="Nueva Matrícula" saveButtonProps={{ onClick: form.submit }}>
-      <Alert 
-        message="Asegúrate de que el estudiante ya esté registrado en el sistema antes de matricularlo." 
-        type="info" 
-        showIcon 
-        style={{marginBottom: 20}}
-      />
-      
-      <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ fecha_inicio: dayjs() }}>
-        <Row gutter={24}>
-            <Col span={12}>
-                <Form.Item label="Estudiante" name="estudiante_id" rules={[{ required: true }]}>
+        } catch (error) {
+            console.error("Error verificando cupos:", error);
+        } finally {
+            setChecking(false);
+        }
+    };
+
+    // 4. Interceptamos el guardado para evitar matrícula si está lleno
+    const handleOnFinish = async (values: any) => {
+        if (cuposInfo && cuposInfo.ocupados >= cuposInfo.total) {
+            message.error("⛔ ¡El curso está lleno! No se puede matricular.");
+            return;
+        }
+        // Si hay espacio, procedemos con el guardado normal de Refine
+        onFinish(values);
+    };
+
+    // Calcular estado visual
+    const isFull = cuposInfo ? cuposInfo.ocupados >= cuposInfo.total : false;
+    const disponibilidad = cuposInfo ? (cuposInfo.total - cuposInfo.ocupados) : 0;
+
+    return (
+        <Create saveButtonProps={{...saveButtonProps, onClick: () => formProps.form?.submit()}} title="Nueva Matrícula">
+            
+            {/* ALERTAS VISUALES DE CUPO */}
+            {cuposInfo && (
+                <div style={{ marginBottom: 20 }}>
+                    {isFull ? (
+                        <Alert 
+                            message="CURSO LLENO" 
+                            description={`Ya hay ${cuposInfo.ocupados} de ${cuposInfo.total} estudiantes inscritos.`} 
+                            type="error" 
+                            showIcon 
+                        />
+                    ) : (
+                        <Alert 
+                            message="Cupos Disponibles" 
+                            description={`Quedan ${disponibilidad} lugares disponibles (Inscritos: ${cuposInfo.ocupados}/${cuposInfo.total})`} 
+                            type="success" 
+                            showIcon 
+                        />
+                    )}
+                </div>
+            )}
+
+            <Form {...formProps} layout="vertical" onFinish={handleOnFinish}>
+                
+                <Form.Item
+                    label="Estudiante"
+                    name="estudiante_id"
+                    rules={[{ required: true, message: "Selecciona un estudiante" }]}
+                >
                     <Select 
+                        {...studentSelectProps} 
                         placeholder="Buscar estudiante..."
                         showSearch
                         optionFilterProp="label"
-                        options={estudiantes.map(e => ({ 
-                            label: `${e.nombre_completo} - CC: ${e.documento || 'S/N'}`, 
-                            value: e.id 
-                        }))}
+                        suffixIcon={<UserOutlined />}
                     />
                 </Form.Item>
-            </Col>
-            <Col span={12}>
-                <Form.Item label="Curso / Cohorte" name="curso_id" rules={[{ required: true }]}>
+
+                <Form.Item
+                    label="Curso a inscribir"
+                    name="curso_id"
+                    rules={[{ required: true, message: "Selecciona un curso" }]}
+                >
                     <Select 
+                        {...cursoSelectProps} 
                         placeholder="Selecciona el curso..."
-                        options={cursos.map(c => ({ 
-                            label: `${c.nombre} (${c.horario || 'Sin horario'})`, 
-                            value: c.id 
-                        }))}
+                        onChange={handleCursoChange}
+                        loading={checking}
+                        suffixIcon={<BookOutlined />}
                     />
                 </Form.Item>
-            </Col>
-        </Row>
-        
-        <Row gutter={24}>
-             <Col span={12}>
-                <Form.Item label="Fecha de Inicio" name="fecha_inicio" rules={[{ required: true }]}>
-                    <DatePicker style={{width:'100%'}} format="DD/MM/YYYY" />
+
+                <div style={{ display: 'flex', gap: 20 }}>
+                    <Form.Item
+                        label="Fecha de Inicio"
+                        name="fecha_inicio"
+                        initialValue={dayjs()}
+                        style={{ flex: 1 }}
+                    >
+                        <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                    </Form.Item>
+
+                    <Form.Item
+                        label="Estado de Matrícula"
+                        name="estado"
+                        initialValue="activa"
+                        style={{ flex: 1 }}
+                    >
+                        <Select options={[
+                            { label: 'Activa', value: 'activa' },
+                            { label: 'Pendiente Pago', value: 'pendiente' },
+                            { label: 'Congelada', value: 'congelada' }
+                        ]} />
+                    </Form.Item>
+                </div>
+
+                <Form.Item label="Observaciones / Notas" name="observaciones">
+                    <Input.TextArea rows={2} placeholder="Ej: Trae documentos pendientes..." />
                 </Form.Item>
-             </Col>
-        </Row>
-      </Form>
-    </Create>
-  );
+
+            </Form>
+        </Create>
+    );
 }
