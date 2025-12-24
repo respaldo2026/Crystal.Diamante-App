@@ -3,6 +3,7 @@
 import React from "react";
 import { Refine } from "@refinedev/core";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
+// CORRECCIÓN: Usamos los componentes clásicos que SÍ tienes instalados
 import { RefineThemes, ThemedLayout, ThemedTitle } from "@refinedev/antd";
 import { ConfigProvider, App as AntdApp } from "antd";
 import "@refinedev/antd/dist/reset.css";
@@ -24,9 +25,6 @@ import routerProvider from "@refinedev/nextjs-router";
 
 // PROVIDERS
 import { dataProvider } from "../providers/data-provider"; 
-
-// --- CORRECCIÓN DEFINITIVA ---
-// Usamos { } porque en el paso 1 definimos 'export const authProvider'
 import { authProvider } from "../providers/auth-provider/auth-provider.client"; 
 
 export default function RootLayout({
@@ -87,14 +85,6 @@ export default function RootLayout({
                     },
                   },
                   {
-                    name: "inventario",
-                    list: "/inventario",
-                    meta: {
-                      label: "Inventario",
-                      icon: <ShopOutlined />,
-                    },
-                  },
-                  {
                     name: "matriculas",
                     list: "/matriculas",
                     create: "/matriculas/create",
@@ -105,13 +95,24 @@ export default function RootLayout({
                     },
                   },
                   {
+                    name: "inventario",
+                    list: "/inventario",
+                    meta: {
+                      label: "Inventario",
+                      icon: <ShopOutlined />,
+                    },
+                  },
+                  // --- TESORERÍA ---
+                  {
                     name: "tesoreria",
                     list: "/tesoreria",
+                    create: "/tesoreria/create", // <--- ESTO ACTIVA EL BOTÓN
                     meta: {
                       label: "Tesorería",
                       icon: <DollarCircleOutlined />,
                     },
                   },
+                  // -----------------
                   {
                     name: "nomina",
                     list: "/nomina",
@@ -134,6 +135,7 @@ export default function RootLayout({
                   warnWhenUnsavedChanges: true,
                 }}
               >
+                {/* COMPONENTE CLÁSICO (Compatible con tu versión) */}
                 <ThemedLayout
                   initialSiderCollapsed={true}
                   Title={({ collapsed }) => (
