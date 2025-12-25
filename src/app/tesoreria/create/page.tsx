@@ -32,7 +32,7 @@ export default function PagoCreate() {
         // Hacemos la consulta a Supabase
         const { data, error } = await supabaseBrowserClient
             .from("matriculas")
-            .select("id, cursos(nombre, precio_curso, precio_mensualidad)") // Traemos info del curso
+            .select("id, cursos(nombre, precio_mensualidad)") // Traemos info del curso (precio_mensualidad)
             .eq("estudiante_id", estudianteId); // Quitamos filtro de estado para ver todo por ahora
         
         if (error) {

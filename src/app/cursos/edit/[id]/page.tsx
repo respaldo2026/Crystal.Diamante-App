@@ -2,17 +2,25 @@
 
 import React from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Select, InputNumber, Row, Col, DatePicker } from "antd";
+import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message } from "antd";
 import dayjs from "dayjs";
 
 export default function CursoEdit() {
-    const { formProps, saveButtonProps, queryResult } = useForm({
+    const { formProps, saveButtonProps, queryResult, onFinish } = useForm({
         redirect: "list"
     });
 
     return (
         <Edit saveButtonProps={saveButtonProps} title="Editar Curso">
-            <Form {...formProps} layout="vertical">
+            <Form {...formProps} layout="vertical" onFinish={async (values) => {
+                try {
+                    await onFinish?.(values);
+                } catch (err: any) {
+                    const msg = err?.message || (err && JSON.stringify(err)) || 'Error al guardar';
+                    message.error(msg);
+                    throw err;
+                }
+            }}>
                 
                 <Row gutter={24}>
                     <Col span={16}>
@@ -65,7 +73,7 @@ export default function CursoEdit() {
                     <Col span={8}>
                         <Form.Item
                             label="Valor Total / Mensualidad"
-                            name="precio_curso"
+                            name="precio_mensualidad"
                             rules={[{ required: true }]}
                         >
                             <InputNumber 
@@ -97,6 +105,14 @@ export default function CursoEdit() {
                             getValueProps={(value) => ({
                                 value: value ? dayjs(value) : "",
                             })}
+                            getValueFromEvent={(value) => {
+                                // Convert Dayjs to ISO date string before submit
+                                try {
+                                    return value ? (value as dayjs.Dayjs).format("YYYY-MM-DD") : null;
+                                } catch (e) {
+                                    return value;
+                                }
+                            }}
                          >
                             <DatePicker style={{width: '100%'}} format="YYYY-MM-DD" />
                          </Form.Item>

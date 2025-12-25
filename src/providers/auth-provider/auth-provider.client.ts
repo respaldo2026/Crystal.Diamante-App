@@ -7,10 +7,6 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-/**
- * Proveedor de Autenticación para el Lado del Cliente (Browser)
- * Este archivo controla la interfaz de usuario en Refine.
- */
 export const authProviderClient: AuthBindings = {
   login: async ({ email, password }) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -25,7 +21,7 @@ export const authProviderClient: AuthBindings = {
 
   // MODO DESARROLLO: Siempre permite el acceso en el navegador
   check: async () => {
-    // Intentamos refrescar la sesión pero siempre devolvemoms true
+    // Intentamos refrescar la sesión pero siempre devolvemos true
     await supabase.auth.getSession();
     return {
       authenticated: true,
@@ -37,12 +33,10 @@ export const authProviderClient: AuthBindings = {
   getIdentity: async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) return { ...user, name: user.email };
-    
-    // Identidad genérica para que la interfaz no se rompa si no hay sesión real
-    return { 
-      id: "dev-user", 
-      name: "Admin Academia", 
-      avatar: "https://i.pravatar.cc/150" 
+    return {
+      id: "dev-user",
+      name: "Admin Academia",
+      avatar: "https://i.pravatar.cc/150",
     };
   },
 
@@ -51,3 +45,6 @@ export const authProviderClient: AuthBindings = {
     return { error };
   },
 };
+
+// Backwards-compatible named export used by layout.tsx
+export const authProvider = authProviderClient;
