@@ -36,7 +36,7 @@ export default function TesoreriaList() {
             {/* Tarjeta de Resumen de Dinero */}
             <Row gutter={16} style={{ marginBottom: 20 }}>
                 <Col xs={24} sm={8}>
-                    <Card bordered={false} style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
+                    <Card variant="borderless" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
                         <Statistic
                             title="Total en esta página"
                             value={totalRecaudado}

@@ -9,7 +9,7 @@ import {
   CalendarOutlined, UserOutlined, SearchOutlined, HistoryOutlined, RocketOutlined, CheckCircleOutlined 
 } from "@ant-design/icons";
 import { useNavigation } from "@refinedev/core";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
 import 'dayjs/locale/es'; // Importante para fechas en español
 
@@ -17,10 +17,7 @@ dayjs.locale('es');
 
 const { Title, Text, Paragraph } = Typography;
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Usamos el cliente del proyecto para evitar múltiples instancias de auth
 
 export default function CursosList() {
   const { edit, create, show } = useNavigation();
@@ -34,7 +31,7 @@ export default function CursosList() {
 
   const cargarCursos = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+        const { data, error } = await supabaseBrowserClient
       .from("cursos")
       .select(`*, perfiles (nombre_completo)`)
       .order("fecha_inicio", { ascending: false }); // Los más nuevos primero

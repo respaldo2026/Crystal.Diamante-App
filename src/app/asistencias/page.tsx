@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { List, useTable, EditButton, DeleteButton, useSelect, CreateButton } from "@refinedev/antd";
-import { Table, Space, Tag, Card, Row, Col, Select, Progress, Typography, Statistic, Alert, Button } from "antd";
+import { Table, Space, Tag, Card, Row, Col, Select, Progress, Typography, Statistic, Alert, Button, FloatButton } from "antd";
 import { 
   CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, 
   InfoCircleOutlined, WarningOutlined, TrophyOutlined, UserOutlined,
-  ReloadOutlined
+  ReloadOutlined, CheckOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -107,10 +107,31 @@ export default function ListAsistencias() {
       title="Control de Asistencias"
       headerButtons={
         <Space>
-          <CreateButton type="primary">Tomar Asistencia</CreateButton>
+          <CreateButton type="primary" size="large" icon={<CheckOutlined />}>
+            Tomar Asistencia
+          </CreateButton>
         </Space>
       }
     >
+      {/* BOTÓN FLOTANTE LLAMATIVO */}
+      <FloatButton
+        icon={<CheckOutlined />}
+        type="primary"
+        style={{
+          position: 'fixed',
+          insetInlineEnd: 24,
+          bottom: 80,
+          width: 70,
+          height: 70,
+          fontSize: 32,
+          zIndex: 1000,
+          boxShadow: '0 4px 20px rgba(24, 144, 255, 0.45)'
+        }}
+        onClick={() => {
+          window.location.href = '/asistencias/create';
+        }}
+        tooltip="Registrar Llamado de Lista"
+      />
       {/* FILTROS Y SELECTOR DE CURSO */}
       <Card style={{ marginBottom: 20 }}>
         <Row gutter={16} align="middle">

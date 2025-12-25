@@ -6,12 +6,7 @@ import {
   SaveOutlined, ShopOutlined, InstagramOutlined, 
   GlobalOutlined, PhoneOutlined, SafetyCertificateOutlined 
 } from "@ant-design/icons";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function ConfiguracionPage() {
   const [loading, setLoading] = useState(true);
@@ -28,7 +23,7 @@ export default function ConfiguracionPage() {
     setLoading(true);
     try {
         // Traemos el primer registro que encontremos
-        const { data, error } = await supabase
+        const { data, error } = await supabaseBrowserClient
             .from("configuracion")
             .select("*")
             .limit(1)
@@ -54,14 +49,14 @@ export default function ConfiguracionPage() {
         
         if (configId) {
             // Actualizar existente
-            const response = await supabase
+            const response = await supabaseBrowserClient
                 .from("configuracion")
                 .update(values)
                 .eq("id", configId);
             error = response.error;
         } else {
             // Crear si no existía (raro porque hicimos el insert inicial, pero por seguridad)
-            const response = await supabase
+            const response = await supabaseBrowserClient
                 .from("configuracion")
                 .insert(values)
                 .select()
