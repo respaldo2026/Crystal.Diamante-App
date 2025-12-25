@@ -50,12 +50,13 @@ export default function DashboardPage() {
         const totalIngresos = pagosMes?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0;
 
         // 2. Egresos (Tabla 'pagos_nomina')
+        // Nota: la columna correcta es 'total_pagado' (no 'monto')
         const { data: nominaMes } = await supabaseBrowserClient
             .from("pagos_nomina")
-            .select("monto")
+            .select("total_pagado")
             .gte("fecha_pago", inicioMes);
             
-        const totalEgresos = nominaMes?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0;
+        const totalEgresos = nominaMes?.reduce((acc, curr) => acc + Number((curr as any).total_pagado || 0), 0) || 0;
 
         // 3. Contadores básicos
         const { count: countEstudiantes } = await supabaseBrowserClient

@@ -90,9 +90,11 @@ export default function NominaPage() {
         const { error: errPago } = await supabaseBrowserClient.from("pagos_nomina").insert({
             profesor_id: profesorSeleccionado.id,
             fecha_pago: dayjs().format("YYYY-MM-DD"),
-            monto: profesorSeleccionado.total_pagado, // Asegúrate que tu tabla use 'monto' o 'total_pagado'
-            periodo: `Del ${rangoFechas[0].format("DD/MM")} al ${rangoFechas[1].format("DD/MM")}`,
-            observaciones: `Pago por ${profesorSeleccionado.total_horas} horas trabajadas`
+            total_pagado: profesorSeleccionado.total_pagado,
+            total_horas: profesorSeleccionado.total_horas,
+            fecha_inicio_periodo: rangoFechas[0].format("YYYY-MM-DD"),
+            fecha_fin_periodo: rangoFechas[1].format("YYYY-MM-DD"),
+            observaciones: `Pago por ${profesorSeleccionado.total_horas} horas trabajadas del ${rangoFechas[0].format("DD/MM")} al ${rangoFechas[1].format("DD/MM")}`
         });
         if (errPago) throw errPago;
 

@@ -1,27 +1,33 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { List, useTable, EditButton, DeleteButton, CreateButton } from "@refinedev/antd";
-import { Table, Space, Tag, Typography, Button } from "antd";
+import { Table, Space, Tag, Typography, Button, Tooltip, Progress, message } from "antd";
 import { 
   FileTextOutlined, 
   CheckCircleOutlined, 
   SyncOutlined, 
   CloseCircleOutlined, 
-  DownloadOutlined 
+  DownloadOutlined,
+  WarningOutlined,
+  LockOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { PDFDownloadLink } from "@react-pdf/renderer";
-import { DiplomaPDF } from "@components/pdf/DiplomaPDF"; // Asegúrate que esta ruta coincida con donde creaste el archivo anterior
+import { DiplomaPDF } from "@components/pdf/DiplomaPDF";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 const { Text } = Typography;
 
 export default function MatriculasList() {
+    const [asistenciasPorMatricula, setAsistenciasPorMatricula] = useState<Record<number, any>>({});
+    const [loadingAsistencias, setLoadingAsistencias] = useState(false);
+
     // Traemos las matrículas junto con los datos del Estudiante (perfiles) y el Curso (cursos)
-    const { tableProps } = useTable({
+    const { tableProps, tableQueryResult } = useTable({
         resource: "matriculas",
         meta: {
-            select: "*, perfiles(nombre_completo, email), cursos(nombre)"
+            select: "*, perfiles(nombre_completo, email), cursos(nombre, porcentaje_minimo)"
         },
         sorters: {
             initial: [
@@ -33,12 +39,58 @@ export default function MatriculasList() {
         },
     });
 
+    const matriculas = tableQueryResult?.data?.data || [];
+
+    // Calcular asistencias cuando cambian las matrículas
+    useEffect(() => {
+        if (matriculas.length > 0) {
+            calcularAsistencias();
+        }
+    }, [matriculas.length]);
+
+    const calcularAsistencias = async () => {
+        setLoadingAsistencias(true);
+        try {
+            const matriculaIds = matriculas.map((m: any) => m.id);
+            
+            const { data: asistencias } = await supabaseBrowserClient
+                .from("asistencias")
+                .select("matricula_id, estado")
+                .in("matricula_id", matriculaIds);
+
+            const statsMap: Record<number, any> = {};
+            
+            matriculas.forEach((matricula: any) => {
+                const asistenciasAlumno = asistencias?.filter(a => a.matricula_id === matricula.id) || [];
+                const totalClases = asistenciasAlumno.length;
+                const presentes = asistenciasAlumno.filter(a => a.estado === 'presente').length;
+                const porcentaje = totalClases > 0 ? (presentes / totalClases) * 100 : 0;
+                const minimoRequerido = matricula.cursos?.porcentaje_minimo || 80;
+
+                statsMap[matricula.id] = {
+                    totalClases,
+                    presentes,
+                    porcentaje: Math.round(porcentaje),
+                    minimoRequerido,
+                    cumple: porcentaje >= minimoRequerido,
+                    tieneDatos: totalClases > 0
+                };
+            });
+
+            setAsistenciasPorMatricula(statsMap);
+        } catch (error) {
+            console.error("Error calculando asistencias:", error);
+        } finally {
+            setLoadingAsistencias(false);
+        }
+    };
+
     return (
         <List
             title="Gestión de Matrículas"
             headerButtons={<CreateButton type="primary" icon={<FileTextOutlined />}>Nueva Matrícula</CreateButton>}
         >
-            <Table {...tableProps} rowKey="id">
+            <Table {...tableProps} rowKey="id" loading={tableQueryResult?.isLoading || loadingAsistencias}>
                 
                 {/* COLUMNA 1: ESTUDIANTE */}
                 <Table.Column
@@ -59,15 +111,45 @@ export default function MatriculasList() {
                     render={(val) => <Tag color="blue">{val || "Curso General"}</Tag>}
                 />
 
-                {/* COLUMNA 3: ESTADO ACADÉMICO */}
+                {/* COLUMNA 3: ASISTENCIA */}
+                <Table.Column
+                    title="Asistencia"
+                    align="center"
+                    render={(_, record: any) => {
+                        const stats = asistenciasPorMatricula[record.id];
+                        
+                        if (!stats || !stats.tieneDatos) {
+                            return <Text type="secondary" style={{fontSize:11}}>Sin datos</Text>;
+                        }
+
+                        const { porcentaje, minimoRequerido, cumple } = stats;
+
+                        return (
+                            <Tooltip 
+                                title={`${stats.presentes}/${stats.totalClases} clases. Mínimo requerido: ${minimoRequerido}%`}
+                            >
+                                <div style={{ minWidth: 80 }}>
+                                    <Progress 
+                                        type="circle" 
+                                        percent={porcentaje} 
+                                        size={50}
+                                        status={cumple ? 'success' : 'exception'}
+                                        format={(percent) => `${percent}%`}
+                                    />
+                                </div>
+                            </Tooltip>
+                        );
+                    }}
+                />
+
+                {/* COLUMNA 4: ESTADO ACADÉMICO */}
                 <Table.Column
                     title="Estado"
                     dataIndex="estado"
-                    render={(val) => {
+                    render={(val, record: any) => {
                         let color = "default";
                         let icon = <SyncOutlined spin />;
                         
-                        // Normalizamos a minúsculas para comparar
                         const estado = (val || "").toLowerCase();
 
                         if (estado === "aprobado" || estado === "certificado") {
@@ -84,27 +166,39 @@ export default function MatriculasList() {
                     }}
                 />
 
-                {/* COLUMNA 4: FECHA INSCRIPCIÓN */}
+                {/* COLUMNA 5: FECHA INSCRIPCIÓN */}
                 <Table.Column
                     title="Fecha Inicio"
                     dataIndex="created_at"
                     render={(val) => dayjs(val).format("DD/MM/YYYY")}
                 />
 
-                {/* COLUMNA 5: DIPLOMA (LA MAGIA ✨) */}
+                {/* COLUMNA 6: DIPLOMA CON VALIDACIÓN */}
                 <Table.Column
-                    title="Diploma"
+                    title="Certificado"
                     align="center"
                     render={(_, record: any) => {
-                        // Verificamos si está aprobado
                         const estado = (record.estado || "").toLowerCase();
                         const esAprobado = estado === "aprobado" || estado === "certificado" || estado === "finalizado";
-
+                        const stats = asistenciasPorMatricula[record.id];
+                        
+                        // Si no está aprobado, mostrar mensaje
                         if (!esAprobado) {
                             return <Text type="secondary" style={{fontSize:11}}>En progreso...</Text>;
                         }
 
-                        // Si está aprobado, mostramos el botón de descarga
+                        // VALIDACIÓN: Verificar asistencia
+                        if (stats && stats.tieneDatos && !stats.cumple) {
+                            return (
+                                <Tooltip title={`No cumple el porcentaje mínimo de asistencia (${stats.porcentaje}% < ${stats.minimoRequerido}%)`}>
+                                    <Tag color="error" icon={<LockOutlined />}>
+                                        BLOQUEADO
+                                    </Tag>
+                                </Tooltip>
+                            );
+                        }
+
+                        // Si cumple todo, mostrar diploma
                         return (
                             <PDFDownloadLink
                                 document={
@@ -136,8 +230,9 @@ export default function MatriculasList() {
                         );
                     }}
                 />
+                
 
-                {/* COLUMNA 6: ACCIONES */}
+                {/* COLUMNA 7: ACCIONES */}
                 <Table.Column
                     title="Acciones"
                     render={(_, record: any) => (

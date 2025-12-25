@@ -15,9 +15,7 @@ const { Text } = Typography;
 export default function InventarioList() {
     const { tableProps, tableQueryResult } = useTable({
         resource: "inventario",
-        sorters: { initial: [{ field: "cantidad", order: "asc" }] }, // Muestra primero lo que se está acabando
-        // Si tu tabla usa 'unidad' en vez de 'cantidad' y no pudiste cambiarlo, 
-        // cambia aquí 'cantidad' por 'unidad' en el sorter y en las columnas de abajo.
+        sorters: { initial: [{ field: "cantidad_stock", order: "asc" }] }, // Muestra primero lo que se está acabando
     });
 
     // Cálculos para las tarjetas de arriba (Dashboard del inventario)
@@ -25,14 +23,14 @@ export default function InventarioList() {
     
     // Contamos cuántos productos tienen stock crítico
     const productosBajos = productos.filter((p: any) => {
-        const stock = p.cantidad || 0;
+        const stock = p.cantidad_stock || 0;
         const minimo = p.stock_minimo || 5;
         return stock <= minimo;
     }).length;
 
     // Calculamos cuánto dinero tienes invertido en bodega
     const valorTotalInventario = productos.reduce((acc: number, p: any) => {
-        const cantidad = p.cantidad || 0;
+        const cantidad = p.cantidad_stock || 0;
         const costo = p.costo_unitario || 0;
         return acc + (cantidad * costo);
     }, 0);
@@ -83,7 +81,7 @@ export default function InventarioList() {
                 {/* 1. PRODUCTO */}
                 <Table.Column 
                     title="Producto / Insumo"
-                    dataIndex="nombre"
+                    dataIndex="nombre_producto"
                     render={(value, record: any) => (
                         <div style={{display:'flex', flexDirection:'column'}}>
                             <Text strong style={{fontSize:15}}>{value}</Text>
@@ -110,7 +108,7 @@ export default function InventarioList() {
                 {/* 3. STOCK (SEMÁFORO) */}
                 <Table.Column 
                     title="Existencias"
-                    dataIndex="cantidad" // Asegúrate de que esto coincida con tu BD
+                    dataIndex="cantidad_stock"
                     render={(value, record: any) => {
                         const stock = value || 0;
                         const minimo = record.stock_minimo || 5;
