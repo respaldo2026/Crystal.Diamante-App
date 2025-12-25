@@ -1,11 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Refine } from "@refinedev/core";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
-// CORRECCIÓN: Usamos los componentes clásicos que SÍ tienes instalados
 import { RefineThemes, ThemedLayout, ThemedTitle } from "@refinedev/antd";
-import { ConfigProvider, App as AntdApp } from "antd";
+import { ConfigProvider, App as AntdApp, Spin } from "antd";
 import "@refinedev/antd/dist/reset.css";
 
 // ICONOS
@@ -32,6 +31,29 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // --- CORRECCIÓN DEL ERROR DE HIDRATACIÓN ---
+  // Estado para verificar si ya estamos en el navegador
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Si no está montado (aún es servidor), mostramos un loader simple o nada.
+  // Esto evita que el servidor genere IDs que luego choquen con el cliente.
+  if (!mounted) {
+    return (
+      <html lang="es">
+        <body>
+           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+             Cargando...
+           </div>
+        </body>
+      </html>
+    );
+  }
+  // --------------------------------------------
+
   return (
     <html lang="es">
       <body>
@@ -97,27 +119,27 @@ export default function RootLayout({
                   {
                     name: "inventario",
                     list: "/inventario",
+                    create: "/inventario/create",
                     meta: {
                       label: "Inventario",
                       icon: <ShopOutlined />,
                     },
                   },
-                  // --- TESORERÍA ---
                   {
                     name: "tesoreria",
                     list: "/tesoreria",
-                    create: "/tesoreria/create", // <--- ESTO ACTIVA EL BOTÓN
+                    create: "/tesoreria/create",
                     meta: {
                       label: "Tesorería",
                       icon: <DollarCircleOutlined />,
                     },
                   },
-                  // -----------------
                   {
                     name: "nomina",
                     list: "/nomina",
+                    create: "/nomina/create",
                     meta: {
-                      label: "Pago Profesores",
+                      label: "Nómina",
                       icon: <CalculatorOutlined />,
                     },
                   },
@@ -135,9 +157,8 @@ export default function RootLayout({
                   warnWhenUnsavedChanges: true,
                 }}
               >
-                {/* COMPONENTE CLÁSICO (Compatible con tu versión) */}
                 <ThemedLayout
-                  initialSiderCollapsed={true}
+                  initialSiderCollapsed={false}
                   Title={({ collapsed }) => (
                     <ThemedTitle
                       collapsed={collapsed}

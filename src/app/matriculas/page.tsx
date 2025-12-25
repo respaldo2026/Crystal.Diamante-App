@@ -1,157 +1,148 @@
 "use client";
 
 import React from "react";
+import { List, useTable, EditButton, DeleteButton, CreateButton } from "@refinedev/antd";
+import { Table, Space, Tag, Typography, Button } from "antd";
 import { 
-    List, 
-    useTable, 
-    EditButton, 
-    ShowButton, 
-    DeleteButton, 
-    CreateButton
-} from "@refinedev/antd";
-import { Table, Space, Tag, Avatar, Typography, Alert } from "antd";
-import { 
-    UserOutlined, 
-    BookOutlined, 
-    CalendarOutlined,
-    CheckCircleOutlined,
-    ClockCircleOutlined,
-    StopOutlined,
-    DollarCircleOutlined
+  FileTextOutlined, 
+  CheckCircleOutlined, 
+  SyncOutlined, 
+  CloseCircleOutlined, 
+  DownloadOutlined 
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import { DiplomaPDF } from "@components/pdf/DiplomaPDF"; // Asegúrate que esta ruta coincida con donde creaste el archivo anterior
 
 const { Text } = Typography;
 
 export default function MatriculasList() {
-    const { tableProps, tableQueryResult } = useTable({
+    // Traemos las matrículas junto con los datos del Estudiante (perfiles) y el Curso (cursos)
+    const { tableProps } = useTable({
         resource: "matriculas",
-        // CORRECCIÓN: Ahora usamos 'precio' (el nombre real en tu base de datos)
         meta: {
-            select: "*, perfiles(nombre_completo, email), cursos(nombre, precio)"
+            select: "*, perfiles(nombre_completo, email), cursos(nombre)"
         },
-        sorters: { initial: [{ field: "created_at", order: "desc" }] },
+        sorters: {
+            initial: [
+                {
+                    field: "created_at",
+                    order: "desc",
+                },
+            ],
+        },
     });
-
-    // Detectar errores de carga
-    const isError = tableQueryResult?.isError;
-    const errorMessage = tableQueryResult?.error?.message;
 
     return (
         <List
             title="Gestión de Matrículas"
-            headerButtons={<CreateButton />}
+            headerButtons={<CreateButton type="primary" icon={<FileTextOutlined />}>Nueva Matrícula</CreateButton>}
         >
-            {isError && (
-                <Alert 
-                    type="error" 
-                    message="Error cargando datos" 
-                    description={errorMessage} 
-                    showIcon 
-                    style={{ marginBottom: 20 }}
-                />
-            )}
-
             <Table {...tableProps} rowKey="id">
                 
-                {/* 1. ESTUDIANTE */}
-                <Table.Column 
+                {/* COLUMNA 1: ESTUDIANTE */}
+                <Table.Column
                     title="Estudiante"
-                    render={(_, record: any) => {
-                        const nombre = record.perfiles?.nombre_completo || "Desconocido";
-                        const email = record.perfiles?.email;
-                        return (
-                            <Space>
-                                <Avatar style={{ backgroundColor: '#722ed1' }} icon={<UserOutlined />} />
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    <Text strong>{nombre}</Text>
-                                    <Text type="secondary" style={{ fontSize: 12 }}>{email}</Text>
-                                </div>
-                            </Space>
-                        );
-                    }}
-                />
-
-                {/* 2. CURSO Y PRECIO */}
-                <Table.Column 
-                    title="Curso Inscrito"
-                    render={(_, record: any) => {
-                        const nombreCurso = record.cursos?.nombre || "Curso eliminado";
-                        const precio = record.cursos?.precio;
-
-                        return (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-                                <Tag icon={<BookOutlined />} color="purple">
-                                    {nombreCurso}
-                                </Tag>
-                                {/* Mostramos el precio pequeño debajo del nombre */}
-                                {precio && (
-                                    <span style={{ fontSize: '11px', color: '#888', marginLeft: 5 }}>
-                                        <DollarCircleOutlined style={{ marginRight: 2 }} />
-                                        ${Number(precio).toLocaleString()}
-                                    </span>
-                                )}
-                            </div>
-                        );
-                    }}
-                />
-
-                {/* 3. FECHA INICIO */}
-                <Table.Column 
-                    dataIndex="fecha_inicio" 
-                    title="Inicio"
-                    render={(value) => (
-                        <Space>
-                            <CalendarOutlined style={{ color: '#999' }} />
-                            <span>{value ? dayjs(value).format("DD MMM YYYY") : "-"}</span>
-                        </Space>
+                    dataIndex={["perfiles", "nombre_completo"]}
+                    render={(val, record: any) => (
+                        <div style={{display:'flex', flexDirection:'column'}}>
+                            <Text strong>{val || "Sin nombre"}</Text>
+                            <Text type="secondary" style={{fontSize:12}}>{record.perfiles?.email}</Text>
+                        </div>
                     )}
                 />
 
-                {/* 4. ESTADO */}
-                <Table.Column 
-                    dataIndex="estado" 
-                    title="Estado"
-                    render={(value) => {
-                        let color = "default";
-                        let icon = null;
+                {/* COLUMNA 2: CURSO */}
+                <Table.Column
+                    title="Curso Inscrito"
+                    dataIndex={["cursos", "nombre"]}
+                    render={(val) => <Tag color="blue">{val || "Curso General"}</Tag>}
+                />
 
-                        switch (value) {
-                            case "activa": 
-                                color = "success"; 
-                                icon = <CheckCircleOutlined />;
-                                break;
-                            case "pendiente": 
-                                color = "warning"; 
-                                icon = <ClockCircleOutlined />;
-                                break;
-                            case "congelada": 
-                            case "retirado":
-                                color = "error"; 
-                                icon = <StopOutlined />;
-                                break;
-                            case "finalizada":
-                                color = "blue";
-                                icon = <CheckCircleOutlined />;
-                                break;
+                {/* COLUMNA 3: ESTADO ACADÉMICO */}
+                <Table.Column
+                    title="Estado"
+                    dataIndex="estado"
+                    render={(val) => {
+                        let color = "default";
+                        let icon = <SyncOutlined spin />;
+                        
+                        // Normalizamos a minúsculas para comparar
+                        const estado = (val || "").toLowerCase();
+
+                        if (estado === "aprobado" || estado === "certificado") {
+                            color = "success";
+                            icon = <CheckCircleOutlined />;
+                        } else if (estado === "cancelado" || estado === "retirado") {
+                            color = "error";
+                            icon = <CloseCircleOutlined />;
+                        } else if (estado === "activo" || estado === "en curso") {
+                            color = "processing";
                         }
 
+                        return <Tag color={color} icon={icon}>{val?.toUpperCase()}</Tag>;
+                    }}
+                />
+
+                {/* COLUMNA 4: FECHA INSCRIPCIÓN */}
+                <Table.Column
+                    title="Fecha Inicio"
+                    dataIndex="created_at"
+                    render={(val) => dayjs(val).format("DD/MM/YYYY")}
+                />
+
+                {/* COLUMNA 5: DIPLOMA (LA MAGIA ✨) */}
+                <Table.Column
+                    title="Diploma"
+                    align="center"
+                    render={(_, record: any) => {
+                        // Verificamos si está aprobado
+                        const estado = (record.estado || "").toLowerCase();
+                        const esAprobado = estado === "aprobado" || estado === "certificado" || estado === "finalizado";
+
+                        if (!esAprobado) {
+                            return <Text type="secondary" style={{fontSize:11}}>En progreso...</Text>;
+                        }
+
+                        // Si está aprobado, mostramos el botón de descarga
                         return (
-                            <Tag color={color} icon={icon}>
-                                {(value || "INDEFINIDO").toUpperCase()}
-                            </Tag>
+                            <PDFDownloadLink
+                                document={
+                                    <DiplomaPDF 
+                                        estudiante={record.perfiles?.nombre_completo || "Estudiante"}
+                                        curso={record.cursos?.nombre || "Curso"}
+                                        fechaFin={record.updated_at || new Date().toISOString()} 
+                                        folio={record.id}
+                                    />
+                                }
+                                fileName={`Diploma_${record.perfiles?.nombre_completo || 'Alumno'}.pdf`}
+                            >
+                                {({ loading }) => 
+                                    loading ? (
+                                        <Button size="small" loading>...</Button>
+                                    ) : (
+                                        <Button 
+                                            type="primary" 
+                                            size="small" 
+                                            icon={<DownloadOutlined />} 
+                                            style={{ backgroundColor: '#D4AF37', borderColor: '#D4AF37', color: '#fff' }}
+                                            title="Descargar Diploma Oficial"
+                                        >
+                                            Diploma
+                                        </Button>
+                                    )
+                                }
+                            </PDFDownloadLink>
                         );
                     }}
                 />
 
-                {/* 5. ACCIONES */}
-                <Table.Column 
+                {/* COLUMNA 6: ACCIONES */}
+                <Table.Column
                     title="Acciones"
-                    fixed="right"
                     render={(_, record: any) => (
                         <Space>
                             <EditButton hideText size="small" recordItemId={record.id} />
-                            <ShowButton hideText size="small" recordItemId={record.id} />
                             <DeleteButton hideText size="small" recordItemId={record.id} />
                         </Space>
                     )}

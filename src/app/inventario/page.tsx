@@ -1,241 +1,164 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
+import { List, useTable, CreateButton, EditButton, DeleteButton } from "@refinedev/antd";
+import { Table, Space, Tag, Typography, Progress, Card, Row, Col, Statistic } from "antd";
 import { 
-    List, 
-    useTable, 
-    useModalForm 
-} from "@refinedev/antd";
-import { 
-    Table, 
-    Space, 
-    Tag, 
-    Button, 
-    Modal, 
-    Form, 
-    Input, 
-    InputNumber, 
-    message, 
-    Statistic, 
-    Typography,
-    Card,
-    Row,
-    Col
-} from "antd";
-import { 
-    PlusOutlined, 
-    ArrowUpOutlined, 
-    ArrowDownOutlined, 
-    WarningOutlined, // <--- CORREGIDO (Mayúscula)
-    ShopOutlined
+    ShopOutlined, 
+    WarningOutlined, 
+    TagOutlined,
+    AppstoreAddOutlined
 } from "@ant-design/icons";
-import { supabaseBrowserClient } from "@utils/supabase/client";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 export default function InventarioList() {
     const { tableProps, tableQueryResult } = useTable({
         resource: "inventario",
-        sorters: { initial: [{ field: "nombre", order: "asc" }] },
-        syncWithLocation: true,
+        sorters: { initial: [{ field: "cantidad", order: "asc" }] }, // Muestra primero lo que se está acabando
+        // Si tu tabla usa 'unidad' en vez de 'cantidad' y no pudiste cambiarlo, 
+        // cambia aquí 'cantidad' por 'unidad' en el sorter y en las columnas de abajo.
     });
 
+    // Cálculos para las tarjetas de arriba (Dashboard del inventario)
     const productos = tableQueryResult?.data?.data || [];
-    // CORRECCIÓN DE SEGURIDAD: Añadimos '|| 0' para evitar errores si viene nulo
-    const stockBajo = productos.filter((p: any) => (p.stock || 0) <= (p.stock_minimo || 5)).length;
-    const totalItems = productos.length;
+    
+    // Contamos cuántos productos tienen stock crítico
+    const productosBajos = productos.filter((p: any) => {
+        const stock = p.cantidad || 0;
+        const minimo = p.stock_minimo || 5;
+        return stock <= minimo;
+    }).length;
 
-    const { 
-        modalProps: createModalProps, 
-        formProps: createFormProps, 
-        show: showCreate 
-    } = useModalForm({
-        resource: "inventario",
-        action: "create",
-        redirect: false,
-        onMutationSuccess: () => {
-            message.success("Producto creado correctamente");
-        }
-    });
-
-    const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
-    const [selectedProduct, setSelectedProduct] = useState<any>(null);
-    const [moveType, setMoveType] = useState<'entrada' | 'salida'>('entrada');
-    const [cantidad, setCantidad] = useState<number | null>(1);
-    const [motivo, setMotivo] = useState("");
-    const [loadingMove, setLoadingMove] = useState(false);
-
-    const openMoveModal = (producto: any, tipo: 'entrada' | 'salida') => {
-        setSelectedProduct(producto);
-        setMoveType(tipo);
-        setCantidad(1);
-        setMotivo("");
-        setIsMoveModalOpen(true);
-    };
-
-    const handleMovimiento = async () => {
-        if (!selectedProduct || !cantidad) return;
-        setLoadingMove(true);
-
-        try {
-            const stockActual = selectedProduct.stock || 0;
-            const nuevoStock = moveType === 'entrada' 
-                ? stockActual + cantidad 
-                : stockActual - cantidad;
-            
-            if (nuevoStock < 0) {
-                message.error("⛔ Error: No puedes sacar más de lo que tienes.");
-                setLoadingMove(false);
-                return;
-            }
-
-            const supabase = supabaseBrowserClient;
-
-            const { error: moveError } = await supabase.from("movimientos_inventario").insert({
-                producto_id: selectedProduct.id,
-                tipo: moveType,
-                cantidad: cantidad,
-                motivo: motivo || (moveType === 'entrada' ? 'Compra material' : 'Consumo interno')
-            });
-
-            if (moveError) throw moveError;
-
-            const { error: stockError } = await supabase
-                .from("inventario")
-                .update({ stock: nuevoStock })
-                .eq("id", selectedProduct.id);
-
-            if (stockError) throw stockError;
-            
-            message.success(`✅ ${moveType === 'entrada' ? 'Entrada' : 'Salida'} registrada`);
-            setIsMoveModalOpen(false);
-            tableQueryResult.refetch(); 
-
-        } catch (error: any) {
-            console.error(error);
-            message.error("Error al guardar: " + error.message);
-        } finally {
-            setLoadingMove(false);
-        }
-    };
+    // Calculamos cuánto dinero tienes invertido en bodega
+    const valorTotalInventario = productos.reduce((acc: number, p: any) => {
+        const cantidad = p.cantidad || 0;
+        const costo = p.costo_unitario || 0;
+        return acc + (cantidad * costo);
+    }, 0);
 
     return (
         <List
-            title={<Title level={3}>📦 Gestión de Inventario</Title>}
-            headerButtons={
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => showCreate()}>
-                    Nuevo Producto
-                </Button>
-            }
+            title="Control de Inventario e Insumos"
+            headerButtons={<CreateButton type="primary" size="large" icon={<AppstoreAddOutlined />}>Nuevo Producto</CreateButton>}
         >
-            <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={12}>
-                    <Card variant="borderless" style={{ background: '#f0f5ff' }}>
-                        <Statistic 
-                            title="Total Productos" 
-                            value={totalItems} 
-                            prefix={<ShopOutlined />} 
+            {/* --- TARJETAS DE RESUMEN --- */}
+            <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+                {/* Tarjeta de Alerta de Stock */}
+                <Col xs={24} sm={12}>
+                    <Card style={{ background: '#fff1f0', borderColor: '#ffa39e', border: '1px solid #ffa39e' }}>
+                        <Statistic
+                            title="Productos con Stock Bajo"
+                            value={productosBajos}
+                            valueStyle={{ color: '#cf1322', fontWeight: 'bold' }}
+                            prefix={<WarningOutlined />}
                         />
+                        <div style={{fontSize:12, color:'#cf1322', marginTop: 5}}>
+                            Requieren reposición urgente
+                        </div>
                     </Card>
                 </Col>
-                <Col span={12}>
-                    <Card variant="borderless" style={{ background: '#fff1f0' }}>
-                        <Statistic 
-                            title="Stock Bajo" 
-                            value={stockBajo} 
-                            valueStyle={{ color: stockBajo > 0 ? '#cf1322' : '#3f8600' }}
-                            // CORRECCIÓN: Aquí estaba el error del icono
-                            prefix={<WarningOutlined />} 
+
+                {/* Tarjeta de Valor del Inventario */}
+                <Col xs={24} sm={12}>
+                    <Card style={{ background: '#f0f5ff', borderColor: '#adc6ff', border: '1px solid #adc6ff' }}>
+                        <Statistic
+                            title="Capital en Insumos"
+                            value={valorTotalInventario}
+                            precision={0}
+                            valueStyle={{ color: '#2f54eb', fontWeight: 'bold' }}
+                            prefix="$"
+                            suffix="COP"
                         />
-                        {stockBajo > 0 && <Text type="danger" style={{fontSize: 12}}>Requiere atención</Text>}
+                         <div style={{fontSize:12, color:'#2f54eb', marginTop: 5}}>
+                            Valor total de mercancía en bodega
+                         </div>
                     </Card>
                 </Col>
             </Row>
 
+            {/* --- TABLA DE PRODUCTOS --- */}
             <Table {...tableProps} rowKey="id">
+                
+                {/* 1. PRODUCTO */}
                 <Table.Column 
-                    dataIndex="nombre" 
-                    title="Producto" 
-                    render={(val, record: any) => (
-                        <div>
-                            <strong>{val}</strong>
-                            <div style={{ fontSize: '12px', color: '#888' }}>{record.descripcion}</div>
+                    title="Producto / Insumo"
+                    dataIndex="nombre"
+                    render={(value, record: any) => (
+                        <div style={{display:'flex', flexDirection:'column'}}>
+                            <Text strong style={{fontSize:15}}>{value}</Text>
+                            {record.descripcion && (
+                                <Text type="secondary" style={{fontSize:11}}>
+                                    {record.descripcion}
+                                </Text>
+                            )}
                         </div>
                     )}
                 />
-                
+
+                {/* 2. CATEGORÍA */}
                 <Table.Column 
-                    dataIndex="stock" 
-                    title="Stock" 
-                    render={(val, record: any) => {
-                        const valor = val || 0;
-                        const min = record.stock_minimo || 5;
-                        const isLow = valor <= min;
+                    dataIndex="categoria" 
+                    title="Categoría"
+                    render={(value) => (
+                        <Tag icon={<TagOutlined />} color="blue">
+                            {value || "General"}
+                        </Tag>
+                    )}
+                />
+
+                {/* 3. STOCK (SEMÁFORO) */}
+                <Table.Column 
+                    title="Existencias"
+                    dataIndex="cantidad" // Asegúrate de que esto coincida con tu BD
+                    render={(value, record: any) => {
+                        const stock = value || 0;
+                        const minimo = record.stock_minimo || 5;
+                        const esCritico = stock <= minimo;
+                        const porcentaje = Math.min((stock / (minimo * 3)) * 100, 100);
+
                         return (
-                            <Tag color={isLow ? "red" : "green"}>
-                                {valor} {record.unidad}
-                            </Tag>
+                            <div style={{ minWidth: 120 }}>
+                                <div style={{ display:'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                                    <Text strong style={{ color: esCritico ? '#cf1322' : '#3f8600' }}>
+                                        {stock} Unid.
+                                    </Text>
+                                    {esCritico && <Tag color="error" style={{marginRight:0}}>BAJO</Tag>}
+                                </div>
+                                <Progress 
+                                    percent={porcentaje} 
+                                    steps={5} 
+                                    size="small" 
+                                    strokeColor={esCritico ? '#ff4d4f' : '#52c41a'} 
+                                    showInfo={false}
+                                />
+                            </div>
                         );
                     }}
                 />
 
+                {/* 4. COSTO UNITARIO */}
+                <Table.Column 
+                    dataIndex="costo_unitario" 
+                    title="Costo Unit."
+                    render={(value) => (
+                        <Text type="secondary">
+                            $ {Number(value).toLocaleString()}
+                        </Text>
+                    )}
+                />
+
+                {/* 5. ACCIONES */}
                 <Table.Column 
                     title="Acciones"
-                    width={200}
                     render={(_, record: any) => (
                         <Space>
-                            <Button 
-                                size="small" 
-                                icon={<ArrowUpOutlined />} 
-                                onClick={() => openMoveModal(record, 'entrada')}
-                                style={{ color: '#389e0d', borderColor: '#b7eb8f' }}
-                            >
-                                Entrar
-                            </Button>
-                            <Button 
-                                size="small" 
-                                danger 
-                                icon={<ArrowDownOutlined />} 
-                                onClick={() => openMoveModal(record, 'salida')}
-                            >
-                                Sacar
-                            </Button>
+                            <EditButton hideText size="small" recordItemId={record.id} />
+                            <DeleteButton hideText size="small" recordItemId={record.id} />
                         </Space>
                     )}
                 />
             </Table>
-
-            <Modal {...createModalProps} title="Nuevo Material">
-                <Form {...createFormProps} layout="vertical">
-                    <Form.Item label="Nombre" name="nombre" rules={[{ required: true }]}><Input /></Form.Item>
-                    <Row gutter={16}>
-                        <Col span={12}><Form.Item label="Unidad" name="unidad" initialValue="und"><Input /></Form.Item></Col>
-                        <Col span={12}><Form.Item label="Stock Inicial" name="stock" initialValue={0}><InputNumber min={0} style={{width:'100%'}}/></Form.Item></Col>
-                    </Row>
-                    <Form.Item label="Alerta Mínimo" name="stock_minimo" initialValue={5}><InputNumber min={1} style={{width:'100%'}}/></Form.Item>
-                </Form>
-            </Modal>
-
-            <Modal 
-                open={isMoveModalOpen} 
-                onCancel={() => setIsMoveModalOpen(false)}
-                onOk={handleMovimiento}
-                confirmLoading={loadingMove}
-                title={`Registrar ${moveType.toUpperCase()}`}
-            >
-                <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                    <Title level={5}>{selectedProduct?.nombre}</Title>
-                    <Text>Stock actual: {selectedProduct?.stock}</Text>
-                </div>
-                <Form layout="vertical">
-                    <Form.Item label="Cantidad">
-                        <InputNumber min={1} value={cantidad} onChange={setCantidad} style={{ width: '100%' }} autoFocus />
-                    </Form.Item>
-                    <Form.Item label="Motivo">
-                        <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Opcional" />
-                    </Form.Item>
-                </Form>
-            </Modal>
         </List>
     );
 }

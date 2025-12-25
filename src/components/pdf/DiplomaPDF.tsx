@@ -1,45 +1,128 @@
-import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer';
+"use client";
 
-// Estilos del PDF
+import React from 'react';
+import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
+import dayjs from 'dayjs';
+import 'dayjs/locale/es';
+
+// Estilos del PDF (CSS-in-JS para PDFs)
 const styles = StyleSheet.create({
   page: {
     flexDirection: 'column',
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     padding: 40,
     alignItems: 'center',
-    justifyContent: 'center',
-    border: '5px solid #722ed1', // Borde morado Crystal
   },
-  title: { fontSize: 30, marginBottom: 10, color: '#722ed1', fontWeight: 'bold' },
-  subtitle: { fontSize: 18, marginBottom: 20 },
-  studentName: { fontSize: 28, marginVertical: 20, textDecoration: 'underline' },
-  courseName: { fontSize: 22, color: '#555', marginBottom: 30 },
-  footer: { position: 'absolute', bottom: 30, fontSize: 10, color: '#888' },
-  date: { fontSize: 12, marginTop: 20 },
+  border: {
+    border: '4px solid #D4AF37', // Color Dorado
+    width: '100%',
+    height: '100%',
+    padding: 20,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  header: {
+    fontSize: 30,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  subHeader: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 30,
+  },
+  studentName: {
+    fontSize: 28,
+    fontFamily: 'Helvetica-Bold', // Fuente estándar segura
+    color: '#000',
+    marginBottom: 10,
+    textDecoration: 'underline',
+  },
+  bodyText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 50,
+    lineHeight: 1.5,
+  },
+  courseName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1d39c4', // Azul institucional
+    marginBottom: 20,
+  },
+  footer: {
+    marginTop: 50,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '80%',
+  },
+  signatureLine: {
+    borderTop: '1px solid #000',
+    width: 200,
+    textAlign: 'center',
+    paddingTop: 5,
+    fontSize: 12,
+  },
+  verification: {
+    position: 'absolute',
+    bottom: 20,
+    fontSize: 8,
+    color: '#999',
+  },
 });
 
-// El Documento PDF
-export const DiplomaPDF = ({ alumno, curso, fecha }: any) => (
+interface DiplomaProps {
+  estudiante: string;
+  curso: string;
+  fechaFin: string;
+  folio: string; // El ID de la matrícula
+}
+
+export const DiplomaPDF = ({ estudiante, curso, fechaFin, folio }: DiplomaProps) => (
   <Document>
     <Page size="A4" orientation="landscape" style={styles.page}>
-      
-      {/* Encabezado */}
-      <Text style={styles.title}>ACADEMIA CRYSTAL DIAMANTE</Text>
-      <Text style={styles.subtitle}>Otorga el presente certificado a:</Text>
+      <View style={styles.border}>
+        
+        {/* TÍTULO */}
+        <Text style={styles.header}>CERTIFICADO DE EXCELENCIA</Text>
+        <Text style={styles.subHeader}>La Academia Crystal otorga el presente reconocimiento a:</Text>
 
-      {/* Nombre del Alumno */}
-      <Text style={styles.studentName}>{alumno}</Text>
+        {/* NOMBRE ESTUDIANTE */}
+        <Text style={styles.studentName}>{estudiante}</Text>
 
-      <Text style={styles.subtitle}>Por haber completado satisfactoriamente el curso de:</Text>
+        {/* CUERPO */}
+        <Text style={styles.bodyText}>
+          Por haber completado y aprobado satisfactoriamente los requisitos académicos del curso teórico-práctico de:
+        </Text>
 
-      {/* Nombre del Curso */}
-      <Text style={styles.courseName}>{curso}</Text>
+        {/* NOMBRE CURSO */}
+        <Text style={styles.courseName}>{curso}</Text>
 
-      <Text style={styles.date}>Dado el día: {fecha}</Text>
+        <Text style={styles.bodyText}>
+          Finalizado el día {dayjs(fechaFin).format('DD [de] MMMM [de] YYYY')}.
+        </Text>
 
-      {/* Pie de página */}
-      <Text style={styles.footer}>Certificado Oficial - Crystal App System</Text>
+        {/* FIRMAS */}
+        <View style={styles.footer}>
+          <View>
+            <Text style={styles.signatureLine}>Directora Académica</Text>
+          </View>
+          <View>
+            <Text style={styles.signatureLine}>Instructor Líder</Text>
+          </View>
+        </View>
+
+        {/* SEGURIDAD */}
+        <Text style={styles.verification}>
+          Folio de Verificación Único: {folio} | Generado digitalmente por Academia Crystal App
+        </Text>
+
+      </View>
     </Page>
   </Document>
 );
