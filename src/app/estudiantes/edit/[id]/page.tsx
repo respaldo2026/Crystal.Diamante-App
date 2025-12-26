@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Row, Col, Divider, Alert } from "antd";
+import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select } from "antd";
+import dayjs from "dayjs";
 
 export default function EditEstudiante() {
   const { formProps, saveButtonProps, queryResult } = useForm({
@@ -16,12 +17,14 @@ export default function EditEstudiante() {
 
   return (
     <Edit saveButtonProps={saveButtonProps} title={`Editar: ${estudiante?.nombre_completo || "Estudiante"}`}>
-      <Form {...formProps} layout="vertical">
+    <Form {...formProps} form={formProps.form} layout="vertical">
         
         {/* ROL OCULTO (Seguridad) */}
         <Form.Item name="rol" hidden><Input /></Form.Item>
 
-        <Alert message="Edita los datos personales del alumno aquí." type="info" showIcon style={{marginBottom: 20}} />
+        <Alert message="Edita los datos personales y académicos del alumno aquí." type="info" showIcon style={{marginBottom: 20}} />
+
+        <h3 style={{ color: '#722ed1' }}>Datos Personales</h3>
 
         <Row gutter={24}>
             <Col xs={24} md={12}>
@@ -36,20 +39,67 @@ export default function EditEstudiante() {
             </Col>
         </Row>
 
-        <Divider orientation="left" style={{color: '#722ed1'}}>Contacto</Divider>
+        <Row gutter={24}>
+            <Col xs={24} md={12}>
+                <Form.Item 
+                    label="Fecha de Nacimiento" 
+                    name="fecha_nacimiento"
+                    getValueProps={(value) => ({
+                        value: value ? dayjs(value) : undefined,
+                    })}
+                >
+                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+                <Form.Item label="Género" name="genero">
+                    <Select placeholder="Selecciona género">
+                        <Select.Option value="Masculino">Masculino</Select.Option>
+                        <Select.Option value="Femenino">Femenino</Select.Option>
+                        <Select.Option value="Otro">Otro</Select.Option>
+                    </Select>
+                </Form.Item>
+            </Col>
+        </Row>
+
+        <Divider orientation="left" style={{color: '#722ed1'}}>Información de Contacto</Divider>
 
         <Row gutter={24}>
             <Col xs={24} md={12}>
-                <Form.Item label="Email" name="email">
+                <Form.Item label="Email" name="email" rules={[{ type: 'email' }]}>
                     <Input />
                 </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-                <Form.Item label="Teléfono / WhatsApp" name="telefono">
+                <Form.Item label="Teléfono / WhatsApp" name="telefono" rules={[{ required: true }]}>
                     <Input />
                 </Form.Item>
             </Col>
         </Row>
+
+        <Form.Item label="Dirección de Residencia" name="direccion">
+            <Input.TextArea rows={2} />
+        </Form.Item>
+
+        <Divider orientation="left" style={{color: '#722ed1'}}>Datos del Acudiente</Divider>
+
+        <Row gutter={24}>
+            <Col xs={24} md={12}>
+                <Form.Item label="Nombre del Acudiente" name="acudiente_nombre">
+                    <Input placeholder="Contacto de emergencia" />
+                </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+                <Form.Item label="Teléfono del Acudiente" name="acudiente_telefono">
+                    <Input />
+                </Form.Item>
+            </Col>
+        </Row>
+
+        <Form.Item label="Observaciones / Notas Especiales" name="observaciones">
+            <Input.TextArea rows={3} placeholder="Alergias, condiciones, preferencias..." />
+        </Form.Item>
+
       </Form>
     </Edit>
   );

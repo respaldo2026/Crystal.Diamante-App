@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   Table, Card, Button, DatePicker, Row, Col, Typography, 
   Statistic, Tag, message, Modal 
@@ -26,6 +26,44 @@ export default function NominaPage() {
   // Modal Pagar
   const [modalVisible, setModalVisible] = useState(false);
   const [profesorSeleccionado, setProfesorSeleccionado] = useState<any>(null);
+
+    const columnasNomina = useMemo(
+        () => [
+            { title: 'Profesor', dataIndex: 'nombre_completo' },
+            {
+                title: 'Valor Hora',
+                dataIndex: 'valor_hora',
+                render: (val: number) => val ? `$ ${Number(val).toLocaleString()}` : <Tag color="red">Sin definir</Tag>,
+            },
+            {
+                title: 'Horas Trabajadas',
+                dataIndex: 'total_horas',
+                render: (val: number) => <Tag color="blue">{val} hrs</Tag>,
+            },
+            {
+                title: 'A Pagar',
+                dataIndex: 'total_pagado',
+                render: (val: number) => <Text strong type="success">$ {Number(val).toLocaleString()}</Text>,
+            },
+            {
+                title: 'Acción',
+                render: (_: any, record: any) => (
+                    <Button
+                        type="primary"
+                        icon={<PayCircleOutlined />}
+                        disabled={record.total_pagado <= 0}
+                        onClick={() => {
+                            setProfesorSeleccionado(record);
+                            setModalVisible(true);
+                        }}
+                    >
+                        Pagar
+                    </Button>
+                ),
+            },
+        ],
+        []
+    );
 
   useEffect(() => {
     calcularNomina();
@@ -153,40 +191,7 @@ export default function NominaPage() {
             rowKey="id"
             loading={loading}
             locale={{ emptyText: "No hay clases pendientes de pago en este rango de fechas" }}
-            columns={[
-                { title: 'Profesor', dataIndex: 'nombre_completo' },
-                { 
-                    title: 'Valor Hora', 
-                    dataIndex: 'valor_hora',
-                    render: (val) => val ? `$ ${Number(val).toLocaleString()}` : <Tag color="red">Sin definir</Tag>
-                },
-                { 
-                    title: 'Horas Trabajadas', 
-                    dataIndex: 'total_horas',
-                    render: (val) => <Tag color="blue">{val} hrs</Tag>
-                },
-                { 
-                    title: 'A Pagar', 
-                    dataIndex: 'total_pagado',
-                    render: (val) => <Text strong type="success">$ {Number(val).toLocaleString()}</Text>
-                },
-                {
-                    title: 'Acción',
-                    render: (_, record) => (
-                        <Button 
-                            type="primary" 
-                            icon={<PayCircleOutlined />} 
-                            disabled={record.total_pagado <= 0} // Deshabilitar si es 0
-                            onClick={() => {
-                                setProfesorSeleccionado(record);
-                                setModalVisible(true);
-                            }}
-                        >
-                            Pagar
-                        </Button>
-                    )
-                }
-            ]}
+            columns={columnasNomina}
         />
 
         <Modal

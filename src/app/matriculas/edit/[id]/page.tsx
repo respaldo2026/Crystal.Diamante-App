@@ -42,7 +42,7 @@ export default function MatriculaEdit() {
                 style={{ marginBottom: 20 }}
             />
 
-            <Form {...formProps} layout="vertical">
+            <Form {...formProps} form={formProps.form} layout="vertical">
                 
                 <Card title="Datos de la Matrícula" bordered={false}>
                     

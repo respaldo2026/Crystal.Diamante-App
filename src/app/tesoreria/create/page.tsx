@@ -75,6 +75,7 @@ export default function PagoCreate() {
         >
             <Form 
                 {...formProps} 
+                form={formProps.form}
                 layout="vertical" 
                 onFinish={handleOnFinish} 
                 initialValues={{ metodo_pago: 'Efectivo', fecha_pago: dayjs() }}

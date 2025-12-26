@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { 
     List, 
     useTable, 
@@ -21,7 +21,9 @@ import {
 import { enviarWhatsapp } from "@utils/whatsapp";
 
 export default function EstudiantesList() {
-    const { tableProps, searchFormProps } = useTable({
+    const [searchValue, setSearchValue] = useState("");
+
+    const { tableProps, searchFormProps, setFilters } = useTable({
         resource: "perfiles",
         // TRUCO AVANZADO: Traemos las matrículas y el nombre del curso en una sola petición
         meta: {
@@ -48,28 +50,38 @@ export default function EstudiantesList() {
         }
     });
 
+    // Búsqueda en tiempo real mientras se escribe
+    const handleSearchChange = (value: string) => {
+        setSearchValue(value);
+        if (value) {
+            setFilters([
+                {
+                    field: "nombre_completo",
+                    operator: "contains",
+                    value,
+                }
+            ], "replace");
+        } else {
+            setFilters([], "replace");
+        }
+    };
+
     return (
         <List
             title="Listado de Estudiantes"
             headerButtons={<CreateButton resource="estudiantes" />}
         >
-            {/* --- BARRA DE BÚSQUEDA --- */}
+            {/* --- BARRA DE BÚSQUEDA EN TIEMPO REAL --- */}
             <Card variant="borderless" style={{ marginBottom: 20, background: '#f9f9f9' }}>
-                <Form {...searchFormProps} layout="inline">
-                    <Form.Item name="q" style={{ width: '100%', maxWidth: '400px', marginRight: 0 }}>
-                        <Input 
-                            placeholder="🔍 Buscar por nombre..." 
-                            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                            allowClear
-                            size="large"
-                        />
-                    </Form.Item>
-                    <Form.Item>
-                        <Button type="primary" htmlType="submit" size="large">
-                            Buscar
-                        </Button>
-                    </Form.Item>
-                </Form>
+                <Input 
+                    placeholder="🔍 Buscar por nombre (escribe para filtrar en tiempo real)..." 
+                    prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                    allowClear
+                    size="large"
+                    value={searchValue}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    style={{ width: '100%', maxWidth: '500px' }}
+                />
             </Card>
 
             <Table {...tableProps} rowKey="id">
@@ -113,13 +125,10 @@ export default function EstudiantesList() {
                         return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 {matriculas.map((mat: any, index: number) => {
-                                    // Obtenemos el nombre desde la relación anidada
                                     const nombreCurso = mat.cursos?.nombre || "Curso sin nombre";
-                                    const estado = mat.estado;
-                                    
-                                    // Color según estado
-                                    const color = estado === 'activa' ? 'blue' : estado === 'finalizada' ? 'green' : 'default';
-                                    
+                                    const estadoRaw = mat.estado || "";
+                                    const estado = (typeof estadoRaw === "string" ? estadoRaw.toLowerCase() : estadoRaw);
+                                    const color = estado === 'activo' ? 'blue' : estado === 'finalizado' ? 'green' : 'default';
                                     return (
                                         <Tag key={index} color={color} style={{ margin: 0 }}>
                                             {nombreCurso}

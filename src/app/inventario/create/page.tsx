@@ -10,7 +10,7 @@ export default function InventarioCreate() {
 
     return (
         <Create saveButtonProps={saveButtonProps} title="Registrar Nuevo Insumo">
-            <Form {...formProps} layout="vertical">
+            <Form {...formProps} form={formProps.form} layout="vertical">
                 
                 <Row gutter={24}>
                     <Col span={12}>

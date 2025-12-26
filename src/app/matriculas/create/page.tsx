@@ -111,7 +111,7 @@ export default function MatriculaCreate() {
                 </div>
             )}
 
-            <Form {...formProps} layout="vertical" onFinish={handleOnFinish}>
+            <Form {...formProps} form={formProps.form} layout="vertical" onFinish={handleOnFinish}>
                 
                 <Form.Item
                     label="Estudiante"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Form, Select, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, message, Tag, Space, Statistic, Typography, Spin } from "antd";
 import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -75,13 +75,44 @@ export default function TomarAsistencia() {
   }, [cursoSeleccionado]);
 
   // Función para cambiar estado individual
-  const toggleEstado = (matriculaId: number) => {
+  const toggleEstado = useCallback((matriculaId: number) => {
     setAsistenciasMap((prev) => ({
       ...prev,
-      [matriculaId]:
-        prev[matriculaId] === "presente" ? "ausente" : "presente",
+      [matriculaId]: prev[matriculaId] === "presente" ? "ausente" : "presente",
     }));
-  };
+  }, []);
+  const columnasAlumnos = useMemo(
+    () => [
+      {
+        title: "Estudiante",
+        dataIndex: ["perfiles", "nombre_completo"],
+        render: (txt: string) => <Text strong>{txt || "Sin nombre"}</Text>,
+      },
+      { title: "Email", dataIndex: ["perfiles", "email"], ellipsis: true, width: 250 },
+      {
+        title: "Asistencia",
+        align: "center" as const,
+        width: 150,
+        render: (_: any, record: any) => {
+          const esPresente = asistenciasMap[record.id] === "presente";
+          return (
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <Switch
+                checked={esPresente}
+                onChange={() => toggleEstado(record.id)}
+                checkedChildren={<CheckOutlined />}
+                unCheckedChildren={<CloseOutlined />}
+              />
+              <Tag color={esPresente ? "success" : "error"} style={{ margin: 0 }}>
+                {esPresente ? "PRESENTE" : "AUSENTE"}
+              </Tag>
+            </div>
+          );
+        },
+      },
+    ],
+    [asistenciasMap, toggleEstado]
+  );
 
   // Marcar todos como presentes
   const marcarTodoPresente = () => {
@@ -308,45 +339,7 @@ export default function TomarAsistencia() {
                   rowKey="id"
                   pagination={{ pageSize: 15 }}
                   loading={loadingAlumnos}
-                  columns={[
-                    {
-                      title: "Estudiante",
-                      dataIndex: ["perfiles", "nombre_completo"],
-                      render: (txt) => (
-                        <Text strong>{txt || "Sin nombre"}</Text>
-                      ),
-                    },
-                    {
-                      title: "Email",
-                      dataIndex: ["perfiles", "email"],
-                      ellipsis: true,
-                      width: 250,
-                    },
-                    {
-                      title: "Asistencia",
-                      align: "center",
-                      width: 150,
-                      render: (_, record: any) => {
-                        const esPresente = asistenciasMap[record.id] === "presente";
-                        return (
-                          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                            <Switch
-                              checked={esPresente}
-                              onChange={() => toggleEstado(record.id)}
-                              checkedChildren={<CheckOutlined />}
-                              unCheckedChildren={<CloseOutlined />}
-                            />
-                            <Tag
-                              color={esPresente ? "success" : "error"}
-                              style={{ margin: 0 }}
-                            >
-                              {esPresente ? "PRESENTE" : "AUSENTE"}
-                            </Tag>
-                          </div>
-                        );
-                      },
-                    },
-                  ]}
+                  columns={columnasAlumnos}
                 />
               </>
             )}

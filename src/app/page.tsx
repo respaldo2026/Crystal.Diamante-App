@@ -59,10 +59,17 @@ export default function DashboardPage() {
         const totalEgresos = nominaMes?.reduce((acc, curr) => acc + Number((curr as any).total_pagado || 0), 0) || 0;
 
         // 3. Contadores básicos
-        const { count: countEstudiantes } = await supabaseBrowserClient
+        // Contar estudiantes únicos (desde perfiles con rol estudiante)
+        const { count: countEstudiantesTotales } = await supabaseBrowserClient
+            .from("perfiles")
+            .select("*", { count: 'exact', head: true })
+            .eq("rol", "estudiante");
+
+        // Contar matrículas activas
+        const { count: countMatriculasActivas } = await supabaseBrowserClient
             .from("matriculas")
             .select("*", { count: 'exact', head: true })
-            .eq("estado", "activa");
+            .eq("estado", "activo");
 
         const { count: countProfes } = await supabaseBrowserClient
             .from("perfiles")
@@ -87,7 +94,7 @@ export default function DashboardPage() {
         setStats({
             ingresosMes: totalIngresos,
             egresosMes: totalEgresos,
-            estudiantesActivos: countEstudiantes || 0,
+            estudiantesActivos: countEstudiantesTotales || 0,
             cursosActivos: countCursos || 0,
             profesores: countProfes || 0
         });

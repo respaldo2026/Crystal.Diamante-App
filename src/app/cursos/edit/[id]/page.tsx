@@ -12,7 +12,7 @@ export default function CursoEdit() {
 
     return (
         <Edit saveButtonProps={saveButtonProps} title="Editar Curso">
-            <Form {...formProps} layout="vertical" onFinish={async (values) => {
+            <Form {...formProps} form={formProps.form} layout="vertical" onFinish={async (values) => {
                 try {
                     await onFinish?.(values);
                 } catch (err: any) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty } from "antd";
 import {
   UserOutlined,
@@ -14,7 +14,9 @@ import {
   DeleteOutlined,
   BookOutlined,
   FileOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  CheckOutlined,
+  FormOutlined
 } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -63,6 +65,108 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
   const [formTema] = Form.useForm();
   const [formSesion] = Form.useForm();
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState("1");
+
+  // Memoized columns to avoid re-creation on every render
+  const columnasSesiones = useMemo(
+    () => [
+      {
+        title: "Fecha",
+        dataIndex: "fecha",
+        render: (fecha: string) => dayjs(fecha).format("DD MMM YYYY"),
+        sorter: (a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
+      },
+      {
+        title: "Tema",
+        dataIndex: "tema_visto",
+        render: (tema: string) => (tema ? <Tag>{tema}</Tag> : <Text type="secondary">-</Text>),
+      },
+      {
+        title: "Horas Dictadas",
+        dataIndex: "horas_dictadas",
+        align: "center" as const,
+        render: (horas: number) => <Tag color="blue">{horas}h</Tag>,
+      },
+      {
+        title: "Observaciones",
+        dataIndex: "observaciones",
+        ellipsis: true,
+        render: (obs: string) => (obs ? <Text type="secondary">{obs}</Text> : <Text type="secondary">-</Text>),
+      },
+    ],
+    []
+  );
+
+  const columnasEstudiantes = useMemo(
+    () => [
+      {
+        title: "Nombre",
+        dataIndex: "nombre_completo",
+        render: (text: string) => <Text strong>{text}</Text>,
+      },
+      { title: "Identificación", dataIndex: "identificacion", width: 150 },
+      { title: "Email", dataIndex: "email", ellipsis: true },
+      {
+        title: "Estado",
+        dataIndex: "estado",
+        render: (estado: string) => {
+          let color = "default";
+          if (estado === "activo") color = "success";
+          if (estado === "aprobado" || estado === "certificado") color = "blue";
+          if (estado === "cancelado") color = "error";
+          return <Tag color={color}>{estado?.toUpperCase()}</Tag>;
+        },
+        width: 120,
+      },
+      {
+        title: "Asistencia",
+        dataIndex: "asistencia_porcentaje",
+        render: (porcentaje: number) => {
+          let color = "success";
+          if (porcentaje < 80) color = "warning";
+          if (porcentaje < 70) color = "error";
+          return <Tag color={color}>{porcentaje}%</Tag>;
+        },
+        width: 100,
+        sorter: (a: any, b: any) => a.asistencia_porcentaje - b.asistencia_porcentaje,
+      },
+    ],
+    []
+  );
+
+  const columnasCalificaciones = useMemo(
+    () => [
+      {
+        title: "Nombre",
+        dataIndex: "nombre_completo",
+        render: (text: string) => <Text strong>{text}</Text>,
+      },
+      {
+        title: "Nota Final",
+        dataIndex: "nota_final",
+        render: (nota: number) => {
+          if (!nota) return <Text type="secondary">Pendiente</Text>;
+          let color = "success";
+          if (nota < 3) color = "error";
+          if (nota < 4) color = "warning";
+          return <Tag color={color}>{nota.toFixed(1)}/5.0</Tag>;
+        },
+        width: 120,
+      },
+      {
+        title: "Estado",
+        dataIndex: "estado",
+        render: (estado: string) => {
+          let color = "default";
+          if (estado === "aprobado" || estado === "certificado") color = "success";
+          if (estado === "activo") color = "processing";
+          return <Tag color={color}>{estado?.toUpperCase()}</Tag>;
+        },
+        width: 140,
+      },
+    ],
+    []
+  );
 
   useEffect(() => {
     const loadParams = async () => {
@@ -255,6 +359,21 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
               Volver
             </Button>
             <Title level={2} style={{ margin: 0, color: "white" }}>{curso.nombre}</Title>
+            <Space>
+              <Button icon={<BookOutlined />} onClick={() => setActiveTab("1")}>
+                Ver Temario
+              </Button>
+              <Button
+                type="primary"
+                icon={<CheckOutlined />}
+                onClick={() => router.push(`/asistencias/create?cursoId=${cursoId}`)}
+              >
+                Llamar Lista
+              </Button>
+              <Button icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
+                Calificar Tareas
+              </Button>
+            </Space>
           </Space>
           <div>
             <Text style={{ color: "rgba(255,255,255,0.9)" }}>
@@ -291,6 +410,8 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
       {/* TABS - OFICINA COMPLETA DEL PROFESOR */}
       <Tabs
         type="card"
+        activeKey={activeTab}
+        onChange={setActiveTab}
         items={[
           {
             key: "1",
@@ -371,31 +492,7 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
                   dataSource={sesiones}
                   rowKey="id"
                   pagination={{ pageSize: 15 }}
-                  columns={[
-                    {
-                      title: "Fecha",
-                      dataIndex: "fecha",
-                      render: (fecha) => dayjs(fecha).format("DD MMM YYYY"),
-                      sorter: (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
-                    },
-                    {
-                      title: "Tema",
-                      dataIndex: "tema_visto",
-                      render: (tema) => tema ? <Tag>{tema}</Tag> : <Text type="secondary">-</Text>
-                    },
-                    {
-                      title: "Horas Dictadas",
-                      dataIndex: "horas_dictadas",
-                      align: "center",
-                      render: (horas) => <Tag color="blue">{horas}h</Tag>
-                    },
-                    {
-                      title: "Observaciones",
-                      dataIndex: "observaciones",
-                      ellipsis: true,
-                      render: (obs) => obs ? <Text type="secondary">{obs}</Text> : <Text type="secondary">-</Text>
-                    }
-                  ]}
+                  columns={columnasSesiones}
                 />
               </Card>
             )
@@ -409,47 +506,7 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
                   dataSource={estudiantes}
                   rowKey="id"
                   pagination={{ pageSize: 20 }}
-                  columns={[
-                    {
-                      title: "Nombre",
-                      dataIndex: "nombre_completo",
-                      render: (text) => <Text strong>{text}</Text>
-                    },
-                    {
-                      title: "Identificación",
-                      dataIndex: "identificacion",
-                      width: 150
-                    },
-                    {
-                      title: "Email",
-                      dataIndex: "email",
-                      ellipsis: true
-                    },
-                    {
-                      title: "Estado",
-                      dataIndex: "estado",
-                      render: (estado) => {
-                        let color = "default";
-                        if (estado === "activo") color = "success";
-                        if (estado === "aprobado" || estado === "certificado") color = "blue";
-                        if (estado === "cancelado") color = "error";
-                        return <Tag color={color}>{estado?.toUpperCase()}</Tag>;
-                      },
-                      width: 120
-                    },
-                    {
-                      title: "Asistencia",
-                      dataIndex: "asistencia_porcentaje",
-                      render: (porcentaje) => {
-                        let color = "success";
-                        if (porcentaje < 80) color = "warning";
-                        if (porcentaje < 70) color = "error";
-                        return <Tag color={color}>{porcentaje}%</Tag>;
-                      },
-                      width: 100,
-                      sorter: (a, b) => a.asistencia_porcentaje - b.asistencia_porcentaje
-                    }
-                  ]}
+                  columns={columnasEstudiantes}
                 />
               </Card>
             )
@@ -463,36 +520,7 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
                   dataSource={estudiantes}
                   rowKey="id"
                   pagination={{ pageSize: 20 }}
-                  columns={[
-                    {
-                      title: "Nombre",
-                      dataIndex: "nombre_completo",
-                      render: (text) => <Text strong>{text}</Text>
-                    },
-                    {
-                      title: "Nota Final",
-                      dataIndex: "nota_final",
-                      render: (nota) => {
-                        if (!nota) return <Text type="secondary">Pendiente</Text>;
-                        let color = "success";
-                        if (nota < 3) color = "error";
-                        if (nota < 4) color = "warning";
-                        return <Tag color={color}>{nota.toFixed(1)}/5.0</Tag>;
-                      },
-                      width: 120
-                    },
-                    {
-                      title: "Estado",
-                      dataIndex: "estado",
-                      render: (estado) => {
-                        let color = "default";
-                        if (estado === "aprobado" || estado === "certificado") color = "success";
-                        if (estado === "activo") color = "processing";
-                        return <Tag color={color}>{estado?.toUpperCase()}</Tag>;
-                      },
-                      width: 140
-                    }
-                  ]}
+                  columns={columnasCalificaciones}
                 />
               </Card>
             )

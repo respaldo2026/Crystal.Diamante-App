@@ -9,7 +9,7 @@ export default function CreatePerfil() {
 
   return (
     <Create saveButtonProps={saveButtonProps} title="Registrar Persona">
-      <Form {...formProps} layout="vertical">
+      <Form {...formProps} form={formProps.form} layout="vertical">
         
         <h3 style={{ marginTop: 0, color: '#722ed1' }}>Datos Personales</h3>
         
