@@ -155,7 +155,7 @@ export default function ShowProfesorDashboard() {
           // A) Estudiantes
           const { data: dataAlumnos, error: errAlumnos } = await supabase
             .from("matriculas")
-            .select(`id, estudiante_id, perfiles ( nombre_completo )`)
+            .select(`id, estudiante_id, perfiles ( nombre_completo, telefono )`)
             .eq("curso_id", curso.id)
             .eq("estado", "activo");
 
@@ -313,6 +313,26 @@ export default function ShowProfesorDashboard() {
           });
 
           if (error) throw error;
+
+          // Notificación automática por nota baja
+          if (values.nota < 70) {
+            const nombre = estudianteACalificar?.perfiles?.nombre_completo || "Estudiante";
+            const telefono = estudianteACalificar?.perfiles?.telefono;
+            const cursoNombre = cursoActivo?.nombre || "tu curso";
+            const mensaje = `Hola ${nombre}, obtuviste ${values.nota} en ${cursoNombre}. Por favor revisa el tema y coordina con tu profesor.`;
+
+            if (telefono) {
+              enviarWhatsapp(telefono, mensaje);
+            }
+
+            await supabase.from("notificaciones").insert({
+              user_id: estudianteACalificar.estudiante_id,
+              titulo: "Nota baja registrada",
+              mensaje,
+              tipo: "calificacion",
+              leido: false,
+            });
+          }
 
           messageApi.success(`Nota guardada para ${estudianteACalificar.perfiles.nombre_completo}`);
           setModalNotasVisible(false);

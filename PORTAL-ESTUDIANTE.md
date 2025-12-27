@@ -93,8 +93,8 @@ http://localhost:3000/portal-estudiante
 
 ## 🚀 Próximas Mejoras
 
-- [ ] Descarga de certificado en PDF
-- [ ] Notificaciones automáticas por WhatsApp (bajas notas, ausencias)
+- [x] Descarga de certificado en PDF
+- [x] Notificaciones automáticas por WhatsApp (bajas notas, ausencias)
 - [ ] Chat en tiempo real con profesor
 - [ ] Tareas y entregas
 - [ ] Calendario de clases

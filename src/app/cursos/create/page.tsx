@@ -7,7 +7,7 @@ import { UserOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 export default function CursoCreate() {
-    const { formProps, saveButtonProps, onFinish } = useForm({
+    const { formProps, saveButtonProps } = useForm({
         redirect: "list",
     });
 
@@ -20,28 +20,24 @@ export default function CursoCreate() {
         ]
     });
 
-    const handleOnFinish = (values: any) => {
+    const handleOnFinish = async (values: any) => {
         // Convertir fecha a string simple 'YYYY-MM-DD' para evitar error en Supabase
         const datosLimpios = {
             ...values,
             fecha_inicio: values.fecha_inicio ? dayjs(values.fecha_inicio).format('YYYY-MM-DD') : null,
         };
-        onFinish(datosLimpios);
+        
+        // Llamar a la función onFinish de formProps (la que guarda en Refine/Supabase)
+        return formProps.onFinish?.(datosLimpios);
     };
 
     return (
         <Create 
-            saveButtonProps={{
-                ...saveButtonProps,
-                // CLAVE PARA QUE FUNCIONE: Forzamos el envío al hacer clic en el botón del encabezado
-                onClick: () => formProps.form?.submit() 
-            }} 
+            saveButtonProps={saveButtonProps}
             title="Crear Nuevo Curso"
         >
             <Form 
                 {...formProps}
-                // SOLUCIÓN DEFINITIVA AL ERROR "NOT CONNECTED":
-                form={formProps.form} 
                 layout="vertical" 
                 onFinish={handleOnFinish}
             >

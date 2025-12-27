@@ -1,26 +1,137 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message } from "antd";
+import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, Button, Modal, Space } from "antd";
+import { DeleteOutlined, ArrowLeftOutlined } from "@ant-design/icons";
+import { useRouter } from "next/navigation";
 import dayjs from "dayjs";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function CursoEdit() {
-    const { formProps, saveButtonProps, queryResult, onFinish } = useForm({
+    const { formProps, saveButtonProps, queryResult } = useForm({
         redirect: "list"
     });
+    const router = useRouter();
+    const [deleting, setDeleting] = useState(false);
+    const [modal, modalContextHolder] = Modal.useModal();
+    const cursoId = queryResult?.data?.data?.id;
+
+    const handleDeleteCurso = async () => {
+        setDeleting(true);
+        try {
+            // Validar dependencias antes de eliminar
+            const [matriculas, pagos, sesiones] = await Promise.all([
+                supabaseBrowserClient
+                    .from("matriculas")
+                    .select("id")
+                    .eq("curso_id", cursoId),
+                supabaseBrowserClient
+                    .from("pagos")
+                    .select("id, matriculas(curso_id)")
+                    .eq("matriculas.curso_id", cursoId),
+                supabaseBrowserClient
+                    .from("sesiones_clase")
+                    .select("id")
+                    .eq("curso_id", cursoId),
+            ]);
+
+            const matriculasCount = matriculas.data?.length || 0;
+            const pagosCount = pagos.data?.length || 0;
+            const sesionesCount = sesiones.data?.length || 0;
+
+            // Si hay dependencias, mostrar advertencia en lugar de permitir eliminación
+            if (matriculasCount > 0 || pagosCount > 0 || sesionesCount > 0) {
+                let mensaje = "⚠️ No se puede eliminar este curso porque contiene:\n\n";
+                if (matriculasCount > 0) mensaje += `• ${matriculasCount} matrícula(s) activa(s)\n`;
+                if (pagosCount > 0) mensaje += `• ${pagosCount} pago(s) registrado(s)\n`;
+                if (sesionesCount > 0) mensaje += `• ${sesionesCount} sesión(es) de clase\n`;
+                
+                mensaje += "\n✅ ALTERNATIVA: Cambiar el estado del curso a 'Finalizado' para archivarlo sin perder historial.";
+
+                modal.info({
+                    title: "No se puede eliminar el curso",
+                    content: mensaje,
+                    okText: "Entendido",
+                });
+                setDeleting(false);
+                return;
+            }
+
+            // Si no hay dependencias, proceder a eliminar
+            modal.confirm({
+                title: "⚠️ Eliminar Curso",
+                content: "Este curso no tiene datos asociados. ¿Estás seguro de que deseas eliminarlo? Esta acción no se puede deshacer.",
+                okText: "Sí, eliminar",
+                okType: "danger",
+                cancelText: "Cancelar",
+                onOk: async () => {
+                    try {
+                        const { error } = await supabaseBrowserClient
+                            .from("cursos")
+                            .delete()
+                            .eq("id", cursoId);
+
+                        if (error) throw error;
+
+                        message.success("Curso eliminado correctamente");
+                        router.push("/cursos");
+                    } catch (error: any) {
+                        console.error("Error eliminando curso:", error);
+                        message.error("Error al eliminar el curso: " + (error?.message || "Desconocido"));
+                        setDeleting(false);
+                    }
+                },
+                onCancel: () => {
+                    setDeleting(false);
+                }
+            });
+        } catch (error: any) {
+            console.error("Error validando dependencias:", error);
+            message.error("Error al validar datos: " + (error?.message || "Desconocido"));
+            setDeleting(false);
+        }
+    };
 
     return (
-        <Edit saveButtonProps={saveButtonProps} title="Editar Curso">
-            <Form {...formProps} form={formProps.form} layout="vertical" onFinish={async (values) => {
-                try {
-                    await onFinish?.(values);
-                } catch (err: any) {
-                    const msg = err?.message || (err && JSON.stringify(err)) || 'Error al guardar';
-                    message.error(msg);
-                    throw err;
-                }
-            }}>
+        <>
+            {modalContextHolder}
+            <Edit 
+                saveButtonProps={saveButtonProps} 
+                title="Editar Curso"
+                headerButtons={() => (
+                    <Space>
+                        <Button 
+                            icon={<ArrowLeftOutlined />} 
+                            onClick={() => router.push("/cursos")}
+                        >
+                            Volver
+                        </Button>
+                        <Button 
+                            danger 
+                            icon={<DeleteOutlined />} 
+                            onClick={handleDeleteCurso}
+                            loading={deleting}
+                            style={{ marginLeft: "auto" }}
+                        >
+                            Eliminar Curso
+                        </Button>
+                    </Space>
+                )}
+            >
+            <Form 
+                {...formProps} 
+                layout="vertical" 
+                onFinish={async (values) => {
+                    try {
+                        return await formProps.onFinish?.(values);
+                    } catch (err: any) {
+                        const msg = err?.message || (err && JSON.stringify(err)) || 'Error al guardar';
+                        message.error(msg);
+                        throw err;
+                    }
+                }}
+            >
                 
                 <Row gutter={24}>
                     <Col span={16}>
@@ -125,6 +236,7 @@ export default function CursoEdit() {
                 </Row>
 
             </Form>
-        </Edit>
+            </Edit>
+        </>
     );
 }

@@ -6,6 +6,7 @@ import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOu
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
+import { enviarWhatsapp } from "@utils/whatsapp";
 
 const { Title, Text } = Typography;
 
@@ -49,7 +50,7 @@ export default function TomarAsistencia() {
         // Buscamos matriculas ACTIVAS de este curso
         const { data, error } = await supabaseBrowserClient
           .from("matriculas")
-          .select(`id, estudiante_id, perfiles(nombre_completo, email)`)
+          .select(`id, estudiante_id, perfiles(nombre_completo, email, telefono)`) 
           .eq("curso_id", cursoSeleccionado)
           .eq("estado", "activo")
           .order("perfiles(nombre_completo)");
@@ -159,6 +160,31 @@ export default function TomarAsistencia() {
           message.error("Error guardando: " + error.message);
         }
       } else {
+        // Notificar automáticamente a ausentes
+        const ausentesInfo = alumnos.filter((alumno) => asistenciasMap[alumno.id] === "ausente");
+        if (ausentesInfo.length > 0) {
+          const fechaTexto = fecha.format("DD/MM/YYYY");
+          await Promise.all(
+            ausentesInfo.map(async (alumno) => {
+              const nombre = alumno.perfiles?.nombre_completo || "Estudiante";
+              const telefono = alumno.perfiles?.telefono;
+              const mensaje = `Hola ${nombre}, se registró una inasistencia en ${cursoNombre} el ${fechaTexto}. Si es un error o necesitas apoyo, responde este mensaje.`;
+
+              if (telefono) {
+                enviarWhatsapp(telefono, mensaje);
+              }
+
+              await supabaseBrowserClient.from("notificaciones").insert({
+                user_id: alumno.estudiante_id,
+                titulo: "Inasistencia registrada",
+                mensaje,
+                tipo: "asistencia",
+                leido: false,
+              });
+            })
+          );
+        }
+
         message.success("✅ ¡Asistencia guardada correctamente!");
         setTimeout(() => router.push("/asistencias"), 1500);
       }
