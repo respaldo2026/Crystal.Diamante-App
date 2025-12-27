@@ -4,15 +4,17 @@ import React, { useEffect, useState } from "react";
 import { Show } from "@refinedev/antd";
 import { 
   Typography, Row, Col, Card, Button, 
-  Modal, Form, Input, DatePicker, Avatar, List, Divider, Drawer, Switch, message, Spin, Select, InputNumber, Timeline, Alert,
-  Tabs, Tag
+  Modal, Form, Input, DatePicker, Avatar, List, Divider, Drawer, Switch, message, Spin, Select, InputNumber, Timeline, Alert, Space,
+  Tabs, Tag, Upload
 } from "antd";
 import { 
-  UserOutlined, BookOutlined, TeamOutlined, PlusOutlined, ExclamationCircleOutlined, StarOutlined
+  UserOutlined, BookOutlined, TeamOutlined, PlusOutlined, ExclamationCircleOutlined, StarOutlined,
+  WhatsAppOutlined, CameraOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation"; 
 import { createClient } from "@supabase/supabase-js";
+import { enviarWhatsapp } from "@utils/whatsapp";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -35,6 +37,9 @@ export default function ShowProfesorDashboard() {
   const [profesor, setProfesor] = useState<any>(null);
   const [misCursos, setMisCursos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewImage, setPreviewImage] = useState("");
 
   // GESTIÓN CLASE (DRAWER)
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -91,6 +96,51 @@ export default function ShowProfesorDashboard() {
     } finally {
         setLoading(false);
     }
+  };
+
+  const handleUploadPhoto = async (file: File) => {
+    try {
+      setUploadingPhoto(true);
+      
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${idProfesor}_${Date.now()}.${fileExt}`;
+      const filePath = `perfiles/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from("perfiles")
+        .update({ foto_url: urlData.publicUrl })
+        .eq("id", idProfesor);
+
+      if (updateError) throw updateError;
+
+      messageApi.success("Foto actualizada correctamente");
+      await cargarDashboard();
+    } catch (error: any) {
+      console.error("Error subiendo foto:", error);
+      messageApi.error("Error al subir la foto");
+    } finally {
+      setUploadingPhoto(false);
+    }
+    return false;
+  };
+
+  const handleWhatsAppClick = () => {
+    if (!profesor?.telefono) {
+      messageApi.warning("El profesor no tiene teléfono registrado");
+      return;
+    }
+    const mensaje = `Hola ${profesor.nombre_completo}, te contacto desde Academia Crystal.`;
+    enviarWhatsapp(profesor.telefono, mensaje);
   };
 
   // 2. ABRIR GESTIÓN DE CLASE
@@ -290,10 +340,79 @@ export default function ShowProfesorDashboard() {
       {profesor && (
         <Card style={{marginBottom: 20, borderLeft: '5px solid #722ed1'}}>
             <Row align="middle" gutter={16}>
-                <Col><Avatar size={64} style={{backgroundColor: '#87d068'}} icon={<UserOutlined />} /></Col>
                 <Col>
+                  <div style={{ position: "relative", display: "inline-block" }}>
+                    <Avatar 
+                      size={64} 
+                      style={{backgroundColor: '#87d068', cursor: profesor?.foto_url ? "pointer" : "default"}} 
+                      icon={<UserOutlined />} 
+                      src={profesor?.foto_url}
+                      onClick={() => {
+                        if (profesor?.foto_url) {
+                          setPreviewImage(profesor.foto_url);
+                          setPreviewVisible(true);
+                        }
+                      }}
+                    />
+                    <Upload
+                      showUploadList={false}
+                      beforeUpload={(file) => {
+                        handleUploadPhoto(file);
+                        return false;
+                      }}
+                      accept="image/*"
+                    >
+                      <Button
+                        icon={<CameraOutlined />}
+                        shape="circle"
+                        size="small"
+                        loading={uploadingPhoto}
+                        style={{
+                          position: "absolute",
+                          bottom: -5,
+                          right: -5,
+                          backgroundColor: "#fff",
+                          border: "2px solid #722ed1",
+                        }}
+                      />
+                    </Upload>
+                  </div>
+                </Col>
+                <Col flex="1">
                     <Title level={4} style={{margin:0}}>{profesor.nombre_completo}</Title>
                     <Text type="secondary">Panel Docente</Text>
+                    <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {profesor.telefono && (
+                          <Button
+                            type="primary"
+                            icon={<WhatsAppOutlined />}
+                            onClick={handleWhatsAppClick}
+                            style={{
+                              backgroundColor: "#25D366",
+                              borderColor: "#25D366",
+                            }}
+                            size="small"
+                          >
+                            WhatsApp
+                          </Button>
+                        )}
+                        <Button
+                          icon={<UserOutlined />}
+                          size="small"
+                          onClick={() => window.location.href = `/profesores/edit/${idProfesor}`}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          danger
+                          size="small"
+                          onClick={() => {
+                            messageApi.warning("Acciones de desactivar/eliminar están disponibles en la lista de profesores");
+                          }}
+                        >
+                          Acciones
+                        </Button>
+                    </div>
                 </Col>
             </Row>
         </Card>
@@ -344,14 +463,16 @@ export default function ShowProfesorDashboard() {
                                 </Col>
                                 <Col span={12}>
                                     <label>Horas Dictadas:</label>
-                                    <InputNumber 
-                                        min={1} 
-                                        max={8} 
-                                        value={horasClase} 
-                                        onChange={(val) => setHorasClase(val || 2)} 
-                                        style={{ width: '100%' }} 
-                                        addonAfter="Hrs"
-                                    />
+                                    <Space.Compact style={{ width: '100%' }}>
+                                        <InputNumber 
+                                            min={1} 
+                                            max={8} 
+                                            value={horasClase} 
+                                            onChange={(val) => setHorasClase(val || 2)} 
+                                            style={{ width: '85%' }} 
+                                        />
+                                        <Button disabled style={{ width: '15%' }}>Hrs</Button>
+                                    </Space.Compact>
                                 </Col>
                             </Row>
                             <Row style={{marginTop: 10}}>
@@ -363,7 +484,7 @@ export default function ShowProfesorDashboard() {
                                         value={temaSeleccionado}
                                         onChange={setTemaSeleccionado}
                                         options={temasCurso.map(t => ({label: `${t.orden}. ${t.titulo}`, value: t.id}))}
-                                        dropdownRender={(menu) => (
+                                        popupRender={(menu) => (
                                             <>
                                                 {menu}
                                                 <Divider style={{ margin: '8px 0' }} />
@@ -506,6 +627,14 @@ export default function ShowProfesorDashboard() {
                   <Input.TextArea rows={2} placeholder="Comentarios sobre el desempeño..." />
               </Form.Item>
           </Form>
+      </Modal>
+
+      <Modal
+        open={previewVisible}
+        footer={null}
+        onCancel={() => setPreviewVisible(false)}
+      >
+        <img alt="Foto de perfil" style={{ width: "100%" }} src={previewImage} />
       </Modal>
 
     </Show>

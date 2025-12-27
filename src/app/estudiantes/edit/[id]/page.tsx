@@ -6,17 +6,15 @@ import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select } from "antd"
 import dayjs from "dayjs";
 
 export default function EditEstudiante() {
-  const { formProps, saveButtonProps, queryResult } = useForm({
+  const { formProps, saveButtonProps, formLoading } = useForm({
     resource: "perfiles", // Guardamos en la tabla perfiles
     redirect: "list",     // Al terminar, volvemos a la lista
     // Si falla la carga automática, esto ayuda a depurar:
     meta: { select: "*" } 
   });
 
-  const estudiante = queryResult?.data?.data;
-
   return (
-    <Edit saveButtonProps={saveButtonProps} title={`Editar: ${estudiante?.nombre_completo || "Estudiante"}`}>
+    <Edit saveButtonProps={saveButtonProps} isLoading={formLoading} title="Editar Estudiante">
     <Form {...formProps} form={formProps.form} layout="vertical">
         
         {/* ROL OCULTO (Seguridad) */}

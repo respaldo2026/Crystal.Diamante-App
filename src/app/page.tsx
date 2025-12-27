@@ -120,7 +120,7 @@ export default function DashboardPage() {
   return (
     <div style={{ padding: 24 }}>
         <div style={{ marginBottom: 24 }}>
-            <Title level={2}>¡Hola, Directora! 👋</Title>
+            <Title level={2}>¡Hola, Director! 👋</Title>
             <Text type="secondary">Resumen interactivo. Haz clic en las tarjetas para ver más detalles.</Text>
         </div>
 

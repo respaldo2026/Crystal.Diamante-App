@@ -69,7 +69,7 @@ export default function EstudiantesList() {
     return (
         <List
             title="Listado de Estudiantes"
-            headerButtons={<CreateButton resource="estudiantes" />}
+            headerButtons={<CreateButton resource="perfiles" />}
         >
             {/* --- BARRA DE BÚSQUEDA EN TIEMPO REAL --- */}
             <Card variant="borderless" style={{ marginBottom: 20, background: '#f9f9f9' }}>
@@ -184,9 +184,9 @@ export default function EstudiantesList() {
                                 />
                             </Tooltip>
 
-                            <ShowButton hideText size="small" resource="estudiantes" recordItemId={record.id} />
-                            <EditButton hideText size="small" resource="estudiantes" recordItemId={record.id} />
-                            <DeleteButton hideText size="small" resource="estudiantes" recordItemId={record.id} />
+                            <ShowButton hideText size="small" resource="perfiles" recordItemId={record.id} />
+                            <EditButton hideText size="small" resource="perfiles" recordItemId={record.id} />
+                            <DeleteButton hideText size="small" resource="perfiles" recordItemId={record.id} />
                         </Space>
                     )}
                 />

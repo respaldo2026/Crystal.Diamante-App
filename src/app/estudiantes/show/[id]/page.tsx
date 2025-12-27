@@ -30,11 +30,16 @@ import {
   IdcardOutlined,
   HomeOutlined,
   TeamOutlined,
+  WhatsAppOutlined,
+  CameraOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
-import { message } from "antd";
+import { message, Upload, Modal } from "antd";
+import type { UploadFile } from "antd";
 import dayjs from "dayjs";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { enviarWhatsapp } from "@utils/whatsapp";
 
 type Matricula = {
   id: string;
@@ -89,6 +94,9 @@ export default function StudentDetailView() {
   const [perfil, setPerfil] = useState<any>(null);
   const [matriculas, setMatriculas] = useState<Matricula[]>([]);
   const [pagosHistorial, setPagosHistorial] = useState<Pago[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewImage, setPreviewImage] = useState("");
   const [estadisticasGlobales, setEstadisticasGlobales] = useState<Estadisticas>({
     totalCursos: 0,
     cursosActivos: 0,
@@ -129,7 +137,7 @@ export default function StudentDetailView() {
         setLoadError("No pudimos cargar las matrículas del estudiante.");
         throw errMat;
       }
-      const listaMats = (dataMatriculas as Matricula[] | null) ?? [];
+      const listaMats = (dataMatriculas as any[] | null) ?? [];
       setMatriculas(listaMats);
 
       const activas = listaMats.filter((m) => m.estado === "activo").length;
@@ -167,6 +175,57 @@ export default function StudentDetailView() {
   useEffect(() => {
     cargarDatosCompletos();
   }, [cargarDatosCompletos]);
+
+  const handleUploadPhoto = async (file: File) => {
+    try {
+      setUploadingPhoto(true);
+      
+      // Crear nombre único para el archivo
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${idEstudiante}_${Date.now()}.${fileExt}`;
+      const filePath = `perfiles/${fileName}`;
+
+      // Subir a Supabase Storage
+      const { error: uploadError } = await supabaseBrowserClient.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Obtener URL pública
+      const { data: urlData } = supabaseBrowserClient.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      // Actualizar perfil con la nueva URL
+      const { error: updateError } = await supabaseBrowserClient
+        .from("perfiles")
+        .update({ foto_url: urlData.publicUrl })
+        .eq("id", idEstudiante);
+
+      if (updateError) throw updateError;
+
+      message.success("Foto actualizada correctamente");
+      
+      // Recargar datos
+      await cargarDatosCompletos();
+    } catch (error: any) {
+      console.error("Error subiendo foto:", error);
+      message.error("Error al subir la foto");
+    } finally {
+      setUploadingPhoto(false);
+    }
+    return false; // Prevenir upload automático de antd
+  };
+
+  const handleWhatsAppClick = () => {
+    if (!perfil?.telefono) {
+      message.warning("El estudiante no tiene teléfono registrado");
+      return;
+    }
+    const mensaje = `Hola ${perfil.nombre_completo}, te contacto desde Academia Crystal.`;
+    enviarWhatsapp(perfil.telefono, mensaje);
+  };
 
   const columnasCursos = useMemo(
     () => [
@@ -353,11 +412,42 @@ export default function StudentDetailView() {
       >
         <Row align="middle" gutter={24}>
           <Col>
-            <Avatar
-              size={100}
-              style={{ backgroundColor: "#fff", color: "#667eea", fontSize: 40 }}
-              icon={<UserOutlined />}
-            />
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <Avatar
+                size={100}
+                style={{ backgroundColor: "#fff", color: "#667eea", fontSize: 40, cursor: perfil?.foto_url ? "pointer" : "default" }}
+                icon={<UserOutlined />}
+                src={perfil?.foto_url}
+                onClick={() => {
+                  if (perfil?.foto_url) {
+                    setPreviewImage(perfil.foto_url);
+                    setPreviewVisible(true);
+                  }
+                }}
+              />
+              <Upload
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  handleUploadPhoto(file);
+                  return false;
+                }}
+                accept="image/*"
+              >
+                <Button
+                  icon={<CameraOutlined />}
+                  shape="circle"
+                  size="small"
+                  loading={uploadingPhoto}
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    right: 0,
+                    backgroundColor: "#fff",
+                    border: "2px solid #667eea",
+                  }}
+                />
+              </Upload>
+            </div>
           </Col>
           <Col flex={1}>
             <Title level={2} style={{ color: "#fff", margin: 0 }}>
@@ -374,6 +464,21 @@ export default function StudentDetailView() {
                 <Tag icon={<PhoneOutlined />} color="purple" style={{ marginLeft: 8 }}>
                   {perfil.telefono}
                 </Tag>
+              )}
+              {perfil?.telefono && (
+                <Button
+                  type="primary"
+                  icon={<WhatsAppOutlined />}
+                  onClick={handleWhatsAppClick}
+                  style={{
+                    backgroundColor: "#25D366",
+                    borderColor: "#25D366",
+                    marginLeft: 8,
+                  }}
+                  size="small"
+                >
+                  WhatsApp
+                </Button>
               )}
             </div>
           </Col>
@@ -533,6 +638,13 @@ export default function StudentDetailView() {
           ]}
         />
       </Card>
+      <Modal
+        open={previewVisible}
+        footer={null}
+        onCancel={() => setPreviewVisible(false)}
+      >
+        <img alt="Foto de perfil" style={{ width: "100%" }} src={previewImage} />
+      </Modal>
     </Show>
   );
 }

@@ -2,19 +2,21 @@
 
 import React, { useEffect, useState } from "react";
 import { useNavigation, useDelete } from "@refinedev/core";
-import { Card, Avatar, Typography, Button, Spin, Alert, List, Badge } from "antd";
+import { Card, Avatar, Typography, Button, Spin, Alert, List, Badge, message, Modal, Form, Select, Input, Dropdown } from "antd";
 import { 
     UserOutlined, PhoneOutlined, MailOutlined, EditOutlined, 
-    DeleteOutlined, PlusOutlined, IdcardOutlined, ReloadOutlined 
+    DeleteOutlined, PlusOutlined, IdcardOutlined, ReloadOutlined, StopOutlined,
+    WhatsAppOutlined, MoreOutlined, BookOutlined
 } from "@ant-design/icons";
 
 // CORRECCIÓN: Usamos la misma ruta que funcionó en 'Inventario'
-import { supabaseBrowserClient } from "@utils/supabase/client"; 
+import { supabaseBrowserClient } from "@utils/supabase/client";
+import { enviarWhatsapp } from "@utils/whatsapp"; 
 
 const { Text, Title } = Typography;
 
 export default function ProfesoresCards() {
-    const { edit, create } = useNavigation();
+    const { edit, create, show } = useNavigation();
     const { mutate: deleteMutation } = useDelete();
     
     // ESTADOS
@@ -22,6 +24,11 @@ export default function ProfesoresCards() {
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState("");
     const [totalEncontrados, setTotalEncontrados] = useState(0);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [loadingDelete, setLoadingDelete] = useState(false);
+    const [profesorSeleccionado, setProfesorSeleccionado] = useState<any>(null);
+    const [reassignTo, setReassignTo] = useState<string | null>(null);
+    const [motivoBaja, setMotivoBaja] = useState("");
 
     // FUNCIÓN DE CARGA
     const cargarProfesores = async () => {
@@ -37,12 +44,26 @@ export default function ProfesoresCards() {
 
             setTotalEncontrados(data?.length || 0);
 
-            // Filtrado seguro
-            const soloProfes = (data || []).filter((p: any) => 
-                p.rol && String(p.rol).trim().toLowerCase() === 'profesor'
+            const soloProfes = (data || []).filter((p: any) => {
+                const esProfesor = p.rol && String(p.rol).trim().toLowerCase() === 'profesor';
+                const estaActivo = p.activo !== false; 
+                return esProfesor && estaActivo;
+            });
+
+            // Traer cursos activos para cada profesor
+            const profesoresConCursos = await Promise.all(
+                soloProfes.map(async (prof: any) => {
+                    const { data: cursos } = await supabaseBrowserClient
+                        .from("cursos")
+                        .select("id, nombre, estado")
+                        .eq("profesor_id", prof.id)
+                        .eq("estado", "activo");
+                    return { ...prof, cursos_activos: cursos || [] };
+                })
             );
             
-            setProfesores(soloProfes);
+            setProfesores(profesoresConCursos);
+                setProfesorSeleccionado(null);
 
         } catch (err: any) {
             console.error("Error cargando:", err);
@@ -56,10 +77,79 @@ export default function ProfesoresCards() {
         cargarProfesores();
     }, []);
 
-    const handleDelete = (id: string) => {
-        if(confirm("¿Estás seguro de borrar este profesor?")) {
-            deleteMutation({ resource: "perfiles", id });
-            setTimeout(cargarProfesores, 1000); 
+    const desactivarProfesor = async (id: string) => {
+        try {
+            setLoadingDelete(true);
+            const { error } = await supabaseBrowserClient
+                .from("perfiles")
+                .update({ activo: false, fecha_baja: new Date().toISOString(), motivo_baja: motivoBaja || null })
+                .eq("id", id);
+            if (error) throw error;
+            message.success("Profesor desactivado");
+            setModalVisible(false);
+            setMotivoBaja("");
+            cargarProfesores();
+        } catch (e: any) {
+            message.error(e?.message || "No se pudo desactivar");
+        } finally {
+            setLoadingDelete(false);
+        }
+    };
+
+    const eliminarProfesorDefinitivo = async (id: string) => {
+        try {
+            setLoadingDelete(true);
+
+            if (reassignTo) {
+                const { error: errReassignCursos } = await supabaseBrowserClient
+                    .from("cursos")
+                    .update({ profesor_id: reassignTo })
+                    .eq("profesor_id", id);
+                if (errReassignCursos) throw errReassignCursos;
+            } else {
+                const { error: errNullCursos } = await supabaseBrowserClient
+                    .from("cursos")
+                    .update({ profesor_id: null })
+                    .eq("profesor_id", id);
+                if (errNullCursos) throw errNullCursos;
+            }
+
+            const { error: errSesiones } = await supabaseBrowserClient
+                .from("sesiones_clase")
+                .update({ profesor_id: null })
+                .eq("profesor_id", id);
+            if (errSesiones) throw errSesiones;
+
+            const { error: errNomina } = await supabaseBrowserClient
+                .from("pagos_nomina")
+                .delete()
+                .eq("profesor_id", id);
+            if (errNomina) throw errNomina;
+
+            const { error: errPagosProf } = await supabaseBrowserClient
+                .from("pagos_profesores")
+                .delete()
+                .eq("profesor_id", id);
+            if (errPagosProf) throw errPagosProf;
+
+            await new Promise<void>((resolve, reject) => {
+                deleteMutation(
+                    { resource: "perfiles", id },
+                    {
+                        onSuccess: () => resolve(),
+                        onError: (e) => reject(e),
+                    }
+                );
+            });
+
+            message.success("Profesor eliminado");
+            setModalVisible(false);
+            setReassignTo(null);
+            cargarProfesores();
+        } catch (e: any) {
+            message.error(e?.message || "No se pudo eliminar");
+        } finally {
+            setLoadingDelete(false);
         }
     };
 
@@ -100,11 +190,8 @@ export default function ProfesoresCards() {
                         <List.Item>
                             <Card
                                 hoverable
-                                style={{ borderRadius: 10, borderTop: '3px solid #722ed1' }}
-                                actions={[
-                                    <EditOutlined key="edit" onClick={() => edit("profesores", profesor.id)} />,
-                                    <DeleteOutlined key="del" style={{ color: 'red' }} onClick={() => handleDelete(profesor.id)} />
-                                ]}
+                                style={{ borderRadius: 10, borderTop: '3px solid #722ed1', cursor: 'pointer' }}
+                                onClick={() => show("profesores", profesor.id)}
                             >
                                 <Card.Meta
                                     avatar={
@@ -115,19 +202,118 @@ export default function ProfesoresCards() {
                                     title={profesor.nombre_completo || "Sin Nombre"}
                                     description={
                                         <div style={{ marginTop: 8, fontSize: '13px' }}>
-                                            {profesor.telefono && <div><PhoneOutlined /> {profesor.telefono}</div>}
                                             {profesor.email && <div><MailOutlined /> {profesor.email}</div>}
+                                            {profesor.telefono && <div><PhoneOutlined /> {profesor.telefono}</div>}
+                                            {profesor.cursos_activos?.length > 0 && (
+                                                <div style={{ marginTop: 6, color: '#722ed1', fontWeight: 'bold' }}>
+                                                    <BookOutlined /> {profesor.cursos_activos.length} curso{profesor.cursos_activos.length !== 1 ? 's' : ''} activo{profesor.cursos_activos.length !== 1 ? 's' : ''}
+                                                </div>
+                                            )}
                                             <div style={{marginTop:5}}>
                                                 <Badge status="success" text="Activo" />
                                             </div>
                                         </div>
                                     }
                                 />
+                                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                                    {profesor.telefono && (
+                                        <Button
+                                            icon={<WhatsAppOutlined />}
+                                            size="small"
+                                            style={{ backgroundColor: '#25D366', color: '#fff', border: 'none', flex: 1 }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                enviarWhatsapp(profesor.telefono, `Hola ${profesor.nombre_completo}, te contacto desde Academia Crystal.`);
+                                            }}
+                                        >
+                                            WhatsApp
+                                        </Button>
+                                    )}
+                                    <Button
+                                        icon={<MoreOutlined />}
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setProfesorSeleccionado(profesor);
+                                            setModalVisible(true);
+                                        }}
+                                    >
+                                        Acciones
+                                    </Button>
+                                </div>
                             </Card>
                         </List.Item>
                     )}
                 />
             )}
+
+            <ReassignDeleteModal
+                open={modalVisible}
+                onCancel={() => {
+                    setModalVisible(false);
+                    setProfesorSeleccionado(null);
+                    setMotivoBaja("");
+                    setReassignTo(null);
+                }}
+                loading={loadingDelete}
+                profesor={profesorSeleccionado}
+                profesores={profesores}
+                onDesactivar={desactivarProfesor}
+                onEliminar={eliminarProfesorDefinitivo}
+                setReassignTo={setReassignTo}
+                motivoBaja={motivoBaja}
+                setMotivoBaja={setMotivoBaja}
+            />
         </div>
+    );
+}
+
+function ReassignDeleteModal({
+    open,
+    onCancel,
+    loading,
+    profesor,
+    profesores,
+    onDesactivar,
+    onEliminar,
+    setReassignTo,
+    motivoBaja,
+    setMotivoBaja,
+}: any) {
+    return (
+        <Modal
+            open={open}
+            title={profesor ? `Gestionar: ${profesor.nombre_completo}` : "Acción"}
+            onCancel={onCancel}
+            footer={null}
+        >
+            <Typography.Paragraph>
+                Selecciona una acción. Desactivar preserva el historial. Eliminar requiere reubicar cursos.
+            </Typography.Paragraph>
+            <div style={{ marginBottom: 16 }}>
+                <Typography.Text strong>Motivo de baja (opcional)</Typography.Text>
+                <Input value={motivoBaja} onChange={(e) => setMotivoBaja(e.target.value)} placeholder="Ej: Renuncia, contrato finalizado" />
+                <div style={{ marginTop: 8 }}>
+                    <Button icon={<StopOutlined />} onClick={() => onDesactivar(profesor.id)} loading={loading}>
+                        Desactivar profesor
+                    </Button>
+                </div>
+            </div>
+            <div>
+                <Typography.Text strong>Reasignar cursos (opcional)</Typography.Text>
+                <Select
+                    style={{ width: '100%', marginTop: 8 }}
+                    placeholder="Selecciona nuevo profesor o deja vacío para 'Sin profesor'"
+                    allowClear
+                    onChange={(val) => setReassignTo(val || null)}
+                    options={(profesores || []).filter((p: any) => p.id !== profesor?.id).map((p: any) => ({ label: p.nombre_completo, value: p.id }))}
+                />
+                <div style={{ marginTop: 8 }}>
+                    <Button danger icon={<DeleteOutlined />} onClick={() => onEliminar(profesor.id)} loading={loading}>
+                        Eliminar definitivamente
+                    </Button>
+                </div>
+            </div>
+        </Modal>
     );
 }

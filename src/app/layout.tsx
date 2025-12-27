@@ -74,7 +74,7 @@ export default function RootLayout({
                     },
                   },
                   {
-                    name: "estudiantes",
+                    name: "perfiles",
                     list: "/estudiantes",
                     create: "/estudiantes/create",
                     edit: "/estudiantes/edit/:id",
