@@ -20,30 +20,27 @@ import dayjs from "dayjs";
 
 export default function ShowPerfil() {
   // 1. Obtener datos del Profesor Actual
-  const { queryResult } = useShow({ 
+  const showResult: any = useShow({ 
       resource: "perfiles",
   });
 
-  // --- CORRECCIÓN CRÍTICA AQUÍ ---
-  // En lugar de { data } = queryResult, lo hacemos paso a paso con seguridad (?.)
-  const data = queryResult?.data;
-  const isLoading = queryResult?.isLoading;
-  const isError = queryResult?.isError;
-  const error = queryResult?.error;
-  
-  const profesor = data?.data;
+  const profesor = showResult?.data?.data ?? null;
+  const isLoading = showResult?.isLoading;
+  const isError = showResult?.isError;
+  const error = showResult?.error;
 
   // 2. Obtener Cursos
-  const { data: cursosData } = useList({
+  const cursosResult: any = useList({
     resource: "cursos",
     filters: [
         { field: "profesor_id", operator: "eq", value: profesor?.id }
     ],
     queryOptions: { enabled: !!profesor?.id }
   });
+  const cursosData = cursosResult?.result;
 
   // 3. Obtener Pagos
-  const { data: pagosData, refetch: refetchPagos } = useList({
+  const pagosResult: any = useList({
     resource: "pagos_profesores",
     filters: [
         { field: "profesor_id", operator: "eq", value: profesor?.id }
@@ -53,6 +50,8 @@ export default function ShowPerfil() {
     ],
     queryOptions: { enabled: !!profesor?.id }
   });
+  const pagosData = pagosResult?.result;
+  const refetchPagos = pagosResult?.query?.refetch;
 
   // --- LÓGICA DEL MODAL ---
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -70,7 +69,7 @@ export default function ShowPerfil() {
                 ...values,
                 profesor_id: profesor.id, 
             },
-            successNotification: { message: "Movimiento registrado" }
+            successNotification: { message: "Movimiento registrado", type: "success" }
         }, {
             onSuccess: () => {
                 setIsModalOpen(false);

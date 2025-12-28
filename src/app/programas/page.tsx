@@ -1,8 +1,9 @@
 "use client";
 
-import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, Popconfirm, App, Spin } from "antd";
+import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, Popconfirm, App, Spin, Checkbox } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined, BookOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";
+import type { CheckboxChangeEvent } from "antd/es/checkbox";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 const { Title, Text } = Typography;
@@ -15,6 +16,7 @@ export default function ProgramasPage() {
   const [editingPrograma, setEditingPrograma] = useState<any>(null);
   const [programas, setProgramas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mostrarInactivos, setMostrarInactivos] = useState(false);
 
   useEffect(() => {
     cargarProgramas();
@@ -23,10 +25,17 @@ export default function ProgramasPage() {
   const cargarProgramas = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabaseBrowserClient
+      let query = supabaseBrowserClient
         .from("programas")
         .select("*")
         .order("nombre", { ascending: true });
+      
+      // Filtrar por activos si no se quiere ver inactivos
+      if (!mostrarInactivos) {
+        query = query.eq("activo", true);
+      }
+      
+      const { data, error } = await query;
       
       if (!error && data) {
         setProgramas(data);
@@ -85,53 +94,85 @@ export default function ProgramasPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleToggleActivo = async (programa: any) => {
+    const nuevoEstado = !programa.activo;
+    const accion = nuevoEstado ? "activar" : "desactivar";
+    
     try {
-      // Verificar si hay grupos/cursos asociados a este programa
-      const { data: cursos, error: cursosError } = await supabaseBrowserClient
-        .from("cursos")
-        .select("id, nombre")
-        .eq("programa_id", id);
+      // Si está desactivando, verificar grupos activos
+      if (!nuevoEstado) {
+        const { data: gruposActivos, error: gruposError } = await supabaseBrowserClient
+          .from("cursos")
+          .select("id, nombre, estado")
+          .eq("programa_id", programa.id)
+          .eq("estado", "activo");
 
-      if (cursosError) throw cursosError;
+        if (gruposError) throw gruposError;
 
-      if (cursos && cursos.length > 0) {
-        modal.warning({
-          title: "No se puede eliminar el programa",
-          content: (
-            <div>
-              <p>Este programa tiene <strong>{cursos.length} grupo(s)/cohorte(s)</strong> asociados:</p>
-              <ul style={{ maxHeight: 200, overflow: 'auto', marginTop: 10 }}>
-                {cursos.map((c: any) => (
-                  <li key={c.id}>{c.nombre}</li>
-                ))}
-              </ul>
-              <p style={{ marginTop: 10 }}>
-                <strong>Solución:</strong> Elimina primero todos los grupos asociados o cambia su programa antes de eliminar este programa.
-              </p>
-            </div>
-          ),
-          okText: "Entendido",
-        });
-        return;
+        if (gruposActivos && gruposActivos.length > 0) {
+          modal.warning({
+            title: "No se puede desactivar el programa",
+            content: (
+              <div>
+                <p>Este programa tiene <strong>{gruposActivos.length} grupo(s) activo(s)</strong>:</p>
+                <ul style={{ maxHeight: 200, overflow: 'auto', marginTop: 10 }}>
+                  {gruposActivos.map((g: any) => (
+                    <li key={g.id}>{g.nombre}</li>
+                  ))}
+                </ul>
+                <p style={{ marginTop: 10 }}>
+                  <strong>Proceso recomendado:</strong>
+                </p>
+                <ol style={{ marginTop: 5 }}>
+                  <li>Finaliza los grupos activos cambiando su estado a Finalizado</li>
+                  <li>Luego podrás desactivar el programa</li>
+                </ol>
+                <p style={{ marginTop: 10, color: '#666', fontSize: 12 }}>
+                  💡 <em>Desactivar un programa lo oculta de la lista pero mantiene todo el historial.</em>
+                </p>
+              </div>
+            ),
+            okText: "Entendido",
+          });
+          return;
+        }
       }
 
-      // Si no hay grupos asociados, proceder a eliminar
-      const { error } = await supabaseBrowserClient
-        .from("programas")
-        .delete()
-        .eq("id", id);
-      
-      if (error) throw error;
-      message.success("Programa eliminado correctamente");
-      cargarProgramas();
+      // Confirmación antes de cambiar estado
+      modal.confirm({
+        title: nuevoEstado ? "Activar programa" : "Desactivar programa",
+        content: nuevoEstado ? (
+          <p>¿Deseas activar el programa <strong>{programa.nombre}</strong>?</p>
+        ) : (
+          <div>
+            <p>¿Deseas desactivar el programa <strong>{programa.nombre}</strong>?</p>
+            <p style={{ marginTop: 10 }}>Al desactivar:</p>
+            <ul style={{ marginTop: 5 }}>
+              <li>El programa desaparecerá de la lista principal</li>
+              <li>No podrás crear nuevos grupos de este programa</li>
+              <li>Los grupos existentes seguirán funcionando</li>
+              <li>Todo el historial se mantiene intacto</li>
+              <li>Podrás reactivarlo cuando quieras</li>
+            </ul>
+          </div>
+        ),
+        okText: nuevoEstado ? "Sí, activar" : "Sí, desactivar",
+        okType: nuevoEstado ? "primary" : "default",
+        cancelText: "Cancelar",
+        onOk: async () => {
+          const { error } = await supabaseBrowserClient
+            .from("programas")
+            .update({ activo: nuevoEstado })
+            .eq("id", programa.id);
+          
+          if (error) throw error;
+          message.success(`Programa ${nuevoEstado ? "activado" : "desactivado"} correctamente`);
+          cargarProgramas();
+        },
+      });
     } catch (error: any) {
-      console.error("Error al eliminar:", error);
-      if (error.code === '23503') {
-        message.error("No se puede eliminar: existen grupos/cohortes vinculados a este programa");
-      } else {
-        message.error("Error al eliminar: " + (error?.message || "Desconocido"));
-      }
+      message.error(`Error al ${accion}: ` + (error?.message || "Desconocido"));
+      console.error(error);
     }
   };
 
@@ -198,17 +239,13 @@ export default function ProgramasPage() {
           >
             Editar
           </Button>
-          <Popconfirm
-            title="¿Eliminar programa?"
-            description="Esto también eliminará todos los grupos asociados."
-            onConfirm={() => handleDelete(record.id)}
-            okText="Sí"
-            cancelText="No"
+          <Button
+            type="link"
+            danger={record.activo}
+            onClick={() => handleToggleActivo(record)}
           >
-            <Button type="link" danger icon={<DeleteOutlined />}>
-              Eliminar
-            </Button>
-          </Popconfirm>
+            {record.activo ? "Desactivar" : "Activar"}
+          </Button>
         </Space>
       ),
     },
@@ -222,9 +259,17 @@ export default function ProgramasPage() {
             <Title level={2} style={{ marginBottom: 4 }}>Programas Académicos</Title>
             <Text type="secondary">Gestiona los cursos/programas generales. Los grupos con horarios se crean dentro de cada programa.</Text>
           </div>
-          <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>
-            Nuevo Programa
-          </Button>
+          <Space>
+            <Checkbox
+              checked={mostrarInactivos}
+              onChange={(e: CheckboxChangeEvent) => setMostrarInactivos(e.target.checked)}
+            >
+              Mostrar inactivos {programas.filter(p => !p.activo).length > 0 && `(${programas.filter(p => !p.activo).length})`}
+            </Checkbox>
+            <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>
+              Nuevo Programa
+            </Button>
+          </Space>
         </div>
 
       <Card>

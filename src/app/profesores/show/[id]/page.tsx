@@ -444,8 +444,8 @@ export default function ShowProfesorDashboard() {
         {misCursos.map((curso) => (
             <Col xs={24} md={12} lg={8} key={curso.id}>
                 <Card 
-                    hoverable
-                    actions={[<Button type="primary" block onClick={() => abrirGestionClase(curso)}>Gestionar Clase</Button>]}
+                  hoverable
+                  actions={[<Button key="gestionar-clase" type="primary" block onClick={() => abrirGestionClase(curso)}>Gestionar Clase</Button>]}
                 >
                     <Card.Meta 
                         avatar={<Avatar style={{backgroundColor: '#722ed1'}} icon={<BookOutlined />} />}
@@ -521,9 +521,9 @@ export default function ShowProfesorDashboard() {
                         <List
                             itemLayout="horizontal"
                             dataSource={alumnosClase}
-                            renderItem={(alumno: any) => (
-                                <List.Item actions={[
-                                    <Switch 
+                          renderItem={(alumno: any) => (
+                            <List.Item key={alumno?.id} actions={[
+                              <Switch key={`asistencia-${alumno?.id}`}
                                         checkedChildren="Vino" 
                                         unCheckedChildren="Faltó"
                                         checked={asistenciaMap[alumno.id]}
@@ -550,9 +550,9 @@ export default function ShowProfesorDashboard() {
                         <List
                             itemLayout="horizontal"
                             dataSource={alumnosClase}
-                            renderItem={(alumno: any) => (
-                                <List.Item actions={[
-                                    <Button 
+                          renderItem={(alumno: any) => (
+                            <List.Item key={alumno?.id} actions={[
+                              <Button key={`calificar-${alumno?.id}`}
                                         type="dashed" 
                                         shape="round" 
                                         icon={<StarOutlined />} 
@@ -579,7 +579,7 @@ export default function ShowProfesorDashboard() {
                         <Button type="dashed" icon={<PlusOutlined />} block onClick={() => setModalPensumVisible(true)} style={{marginBottom: 20}}>
                             Agregar Tema al Pensum
                         </Button>
-                        <Timeline items={temasCurso.map(t => ({ children: <b>{t.titulo}</b>, color: 'blue' }))} />
+                        <Timeline items={temasCurso.map(t => ({ key: t?.id, children: <b>{t.titulo}</b>, color: 'blue' }))} />
                     </>
                 )
             }

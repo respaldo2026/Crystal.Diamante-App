@@ -28,7 +28,7 @@ export default function MatriculasList() {
     const [listFilter, setListFilter] = useState<'all' | 'sin_pagos' | 'con_pagos' | 'bajo_asistencia'>('all');
 
     // Traemos las matrículas junto con los datos del Estudiante (perfiles) y el Curso (cursos)
-    const { tableProps, tableQueryResult, setFilters } = useTable({
+    const { tableProps, setFilters } = useTable({
         resource: "matriculas",
         meta: {
             select: "*, perfiles(nombre_completo, email), cursos(nombre, porcentaje_minimo, precio_mensualidad)"
@@ -43,7 +43,7 @@ export default function MatriculasList() {
         },
     });
 
-    const matriculas = tableQueryResult?.data?.data || [];
+    const matriculas = (tableProps.dataSource as any[]) || [];
 
     // Calcular asistencias cuando cambian las matrículas
     useEffect(() => {
@@ -158,9 +158,9 @@ export default function MatriculasList() {
     });
 
     const onFilterCurso = (cursoId?: string) => {
-        setFilters([
-            ...(cursoId ? [{ field: "curso_id", operator: "eq", value: cursoId }] : [])
-        ]);
+        setFilters(
+            cursoId ? [{ field: "curso_id", operator: "eq" as const, value: cursoId }] : []
+        );
     };
 
     const handleEliminar = async (record: any) => {
@@ -342,11 +342,12 @@ export default function MatriculasList() {
                     <Space>
                         <CreateButton type="primary" size="large" icon={<FileTextOutlined />}>Crear nueva matrícula</CreateButton>
                         <Select
-                            {...cursoFilterSelect}
+                            options={cursoFilterSelect.options}
+                            loading={cursoFilterSelect.loading}
                             allowClear
                             placeholder="Filtrar por curso"
                             style={{ minWidth: 260 }}
-                            onChange={onFilterCurso}
+                            onChange={(val) => onFilterCurso(val as string)}
                         />
                     </Space>
                 </>
@@ -354,11 +355,12 @@ export default function MatriculasList() {
                 <>
                     <Space style={{ marginBottom: 12 }}>
                         <Select
-                            {...cursoFilterSelect}
+                            options={cursoFilterSelect.options}
+                            loading={cursoFilterSelect.loading}
                             allowClear
                             placeholder="Filtrar por curso"
                             style={{ minWidth: 260 }}
-                            onChange={onFilterCurso}
+                            onChange={(val) => onFilterCurso(val as string)}
                         />
                         <CreateButton type="primary" icon={<FileTextOutlined />}>Nueva Matrícula</CreateButton>
                     </Space>
@@ -372,7 +374,7 @@ export default function MatriculasList() {
                 </>
             )}
             {activeTab !== 'nuevo' && (
-            <Table {...tableProps} dataSource={filteredByQuick as any} rowKey="id" loading={tableQueryResult?.isLoading || loadingAsistencias}>
+            <Table {...tableProps} dataSource={filteredByQuick as any} rowKey="id" loading={loadingAsistencias}>
                 
                 {/* COLUMNA 1: ESTUDIANTE */}
                 <Table.Column

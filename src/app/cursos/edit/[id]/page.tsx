@@ -2,22 +2,132 @@
 
 import React, { useState, useEffect } from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
-import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, Button, Modal, Space, TimePicker } from "antd";
+import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, Button, Modal, Space, TimePicker, Typography, Tag } from "antd";
 import { DeleteOutlined, ArrowLeftOutlined, BookOutlined } from "@ant-design/icons";
 import { useRouter, useParams } from "next/navigation";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function CursoEdit() {
-    const { formProps, saveButtonProps, queryResult } = useForm({
+    const { formProps, saveButtonProps } = useForm({
         redirect: "list"
     });
     const router = useRouter();
     const params = useParams();
     const [deleting, setDeleting] = useState(false);
     const [modal, modalContextHolder] = Modal.useModal();
+    const [estadoActual, setEstadoActual] = useState<string | undefined>(undefined);
+    const [activosCount, setActivosCount] = useState<number>(0);
     const rawCursoId = params?.id as string;
     const cursoId = rawCursoId ? Number(rawCursoId) : undefined;
+        useEffect(() => {
+            const cargarEstado = async () => {
+                if (!cursoId || Number.isNaN(cursoId)) return;
+                const { data } = await supabaseBrowserClient
+                    .from("cursos")
+                    .select("estado")
+                    .eq("id", cursoId)
+                    .single();
+                setEstadoActual(data?.estado);
+
+                const { data: matriculas } = await supabaseBrowserClient
+                    .from("matriculas")
+                    .select("id")
+                    .eq("curso_id", cursoId)
+                    .eq("estado", "activo");
+                setActivosCount((matriculas || []).length);
+            };
+            cargarEstado();
+        }, [cursoId]);
+
+        const handleToggleEstadoGrupo = async () => {
+            if (!cursoId || Number.isNaN(cursoId)) {
+                message.error("No se pudo identificar el curso");
+                return;
+            }
+            const esActivo = (estadoActual || "activo") === "activo";
+            const nuevoEstado = esActivo ? "finalizado" : "activo";
+            const accion = esActivo ? "finalizar" : "reactivar";
+
+            try {
+                if (esActivo) {
+                    const { data: matriculasActivas, error: errorMatriculas } = await supabaseBrowserClient
+                        .from("matriculas")
+                        .select("id, estado, perfiles (nombre_completo)")
+                        .eq("curso_id", cursoId)
+                        .eq("estado", "activo");
+
+                    if (errorMatriculas) throw errorMatriculas;
+
+                    if (matriculasActivas && matriculasActivas.length > 0) {
+                        const lista = (
+                            <ul>
+                                {matriculasActivas.slice(0, 5).map((m: any) => (
+                                    <li key={m.id}>{m.perfiles?.nombre_completo || "Sin nombre"}</li>
+                                ))}
+                                {matriculasActivas.length > 5 && <li>... y {matriculasActivas.length - 5} más</li>}
+                            </ul>
+                        );
+
+                        modal.warning({
+                            title: "No se puede finalizar el grupo",
+                            content: (
+                                <div>
+                                    <Typography.Paragraph>
+                                        Este grupo tiene <strong>{matriculasActivas.length} estudiantes activos</strong>. Antes de finalizarlo debes:
+                                    </Typography.Paragraph>
+                                    <ol>
+                                        <li>Ir a Gestionar del grupo o a la lista de matrículas</li>
+                                        <li>Marcar cada matrícula como completada, cancelada o retirada</li>
+                                        <li>Cuando todas estén cerradas, podrás finalizar el grupo</li>
+                                    </ol>
+                                    <Typography.Paragraph><strong>Estudiantes activos:</strong></Typography.Paragraph>
+                                    {lista}
+                                </div>
+                            ),
+                            okText: "Entendido",
+                        });
+                        return;
+                    }
+                }
+
+                modal.confirm({
+                    title: esActivo ? "¿Finalizar este grupo/cohorte?" : "¿Reactivar este grupo/cohorte?",
+                    content: esActivo ? (
+                        <div>
+                            <p>Estás a punto de <strong>finalizar</strong> el grupo.</p>
+                            <ul>
+                                <li>Desaparecerá de la lista principal</li>
+                                <li>No estará disponible para nuevas matrículas</li>
+                                <li>Se mantiene todo el historial</li>
+                                <li>Podrás reactivarlo cuando lo necesites</li>
+                            </ul>
+                        </div>
+                    ) : (
+                        <div>
+                            <p>Estás a punto de <strong>reactivar</strong> el grupo.</p>
+                            <p>Volverá a estar disponible para nuevas inscripciones.</p>
+                        </div>
+                    ),
+                    okText: esActivo ? "Sí, finalizar" : "Sí, reactivar",
+                    okType: esActivo ? "default" : "primary",
+                    cancelText: "Cancelar",
+                    onOk: async () => {
+                        const { error } = await supabaseBrowserClient
+                            .from("cursos")
+                            .update({ estado: nuevoEstado })
+                            .eq("id", cursoId);
+                        if (error) throw error;
+                        message.success(`Grupo ${nuevoEstado === 'activo' ? 'reactivado' : 'finalizado'} correctamente`);
+                        router.push(`/cursos/show/${cursoId}`);
+                    },
+                });
+            } catch (error: any) {
+                message.error(`Error al ${accion} el grupo`);
+                console.error(error);
+            }
+        };
+    
 
     const { selectProps: programaSelectProps } = useSelect({
         resource: "programas",
@@ -127,6 +237,16 @@ export default function CursoEdit() {
                             Volver
                         </Button>
                         <Button 
+                            type={estadoActual === 'activo' ? 'default' : 'primary'}
+                            danger={estadoActual === 'activo'}
+                            onClick={handleToggleEstadoGrupo}
+                        >
+                            {estadoActual === 'activo' ? 'Finalizar Grupo' : 'Reactivar Grupo'}
+                        </Button>
+                        {estadoActual === 'activo' && (
+                            <Tag color="blue">{activosCount} activos</Tag>
+                        )}
+                        <Button 
                             danger 
                             icon={<DeleteOutlined />} 
                             onClick={handleDeleteCurso}
@@ -146,47 +266,48 @@ export default function CursoEdit() {
                     try {
                         // Construir objeto de actualización limpio
                         const datosActualizacion: any = {};
+                        const v: any = values;
                         
                         // Solo agregar campos que existen y tienen valor
-                        if (values.programa_id !== undefined) datosActualizacion.programa_id = values.programa_id;
-                        if (values.nombre !== undefined) datosActualizacion.nombre = values.nombre;
-                        if (values.estado !== undefined) datosActualizacion.estado = values.estado;
-                        if (values.profesor_id !== undefined) datosActualizacion.profesor_id = values.profesor_id;
-                        if (values.descripcion !== undefined) datosActualizacion.descripcion = values.descripcion;
-                        if (values.precio_inscripcion !== undefined) datosActualizacion.precio_inscripcion = values.precio_inscripcion;
-                        if (values.precio_mensualidad !== undefined) datosActualizacion.precio_mensualidad = values.precio_mensualidad;
-                        if (values.cupos !== undefined) datosActualizacion.cupos = values.cupos;
+                        if (v.programa_id !== undefined) datosActualizacion.programa_id = v.programa_id;
+                        if (v.nombre !== undefined) datosActualizacion.nombre = v.nombre;
+                        if (v.estado !== undefined) datosActualizacion.estado = v.estado;
+                        if (v.profesor_id !== undefined) datosActualizacion.profesor_id = v.profesor_id;
+                        if (v.descripcion !== undefined) datosActualizacion.descripcion = v.descripcion;
+                        if (v.precio_inscripcion !== undefined) datosActualizacion.precio_inscripcion = v.precio_inscripcion;
+                        if (v.precio_mensualidad !== undefined) datosActualizacion.precio_mensualidad = v.precio_mensualidad;
+                        if (v.cupos !== undefined) datosActualizacion.cupos = v.cupos;
                         
                         // Convertir fecha correctamente
-                        if (values.fecha_inicio !== undefined) {
-                            datosActualizacion.fecha_inicio = values.fecha_inicio 
-                                ? dayjs(values.fecha_inicio).format('YYYY-MM-DD') 
+                        if (v.fecha_inicio !== undefined) {
+                            datosActualizacion.fecha_inicio = v.fecha_inicio 
+                                ? dayjs(v.fecha_inicio).format('YYYY-MM-DD') 
                                 : null;
                         }
                         
-                        if (values.duracion !== undefined) datosActualizacion.duracion = values.duracion;
+                        if (v.duracion !== undefined) datosActualizacion.duracion = v.duracion;
                         
                         // Convertir días de array a string
-                        if (values.dias_semana !== undefined) {
-                            datosActualizacion.dias_semana = Array.isArray(values.dias_semana) 
-                                ? values.dias_semana.join(', ')
-                                : (values.dias_semana || '');
+                        if (v.dias_semana !== undefined) {
+                            datosActualizacion.dias_semana = Array.isArray(v.dias_semana) 
+                                ? v.dias_semana.join(', ')
+                                : (v.dias_semana || '');
                         }
                         
                         // Convertir horas correctamente
-                        if (values.hora_inicio !== undefined) {
-                            datosActualizacion.hora_inicio = values.hora_inicio 
-                                ? (dayjs.isDayjs(values.hora_inicio) 
-                                    ? values.hora_inicio.format('HH:mm:ss')
-                                    : values.hora_inicio)
+                        if (v.hora_inicio !== undefined) {
+                            datosActualizacion.hora_inicio = v.hora_inicio 
+                                ? (dayjs.isDayjs(v.hora_inicio) 
+                                    ? v.hora_inicio.format('HH:mm:ss')
+                                    : v.hora_inicio)
                                 : null;
                         }
                         
-                        if (values.hora_fin !== undefined) {
-                            datosActualizacion.hora_fin = values.hora_fin 
-                                ? (dayjs.isDayjs(values.hora_fin)
-                                    ? values.hora_fin.format('HH:mm:ss')
-                                    : values.hora_fin)
+                        if (v.hora_fin !== undefined) {
+                            datosActualizacion.hora_fin = v.hora_fin 
+                                ? (dayjs.isDayjs(v.hora_fin)
+                                    ? v.hora_fin.format('HH:mm:ss')
+                                    : v.hora_fin)
                                 : null;
                         }
                         
@@ -255,7 +376,6 @@ export default function CursoEdit() {
                             <Select
                                 options={[
                                     { label: "Activo", value: "activo" },
-                                    { label: "Cerrado", value: "cerrado" },
                                     { label: "Finalizado", value: "finalizado" },
                                 ]}
                             />

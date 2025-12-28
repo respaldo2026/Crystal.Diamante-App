@@ -13,21 +13,19 @@ import {
 import dayjs from "dayjs";
 
 export default function MatriculaEdit() {
-    const { formProps, saveButtonProps, queryResult } = useForm();
+    const { formProps, saveButtonProps } = useForm();
 
     // Obtenemos datos de las tablas relacionadas para los selectores (aunque sean solo lectura)
     const { selectProps: studentSelectProps } = useSelect({
         resource: "perfiles",
         optionLabel: "nombre_completo",
         optionValue: "id",
-        defaultValue: queryResult?.data?.data?.estudiante_id,
     });
 
     const { selectProps: courseSelectProps } = useSelect({
         resource: "cursos",
         optionLabel: "nombre",
         optionValue: "id",
-        defaultValue: queryResult?.data?.data?.curso_id,
     });
 
     return (

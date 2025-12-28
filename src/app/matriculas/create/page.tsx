@@ -271,10 +271,10 @@ export default function MatriculaCreate() {
                     rules={[{ required: true, message: "Selecciona un curso" }]}
                 >
                     <Select 
-                        {...cursoSelectProps} 
+                        options={cursoSelectProps.options}
+                        loading={cursoSelectProps.loading || checking}
                         placeholder="Selecciona el curso..."
-                        onChange={handleCursoChange}
-                        loading={checking}
+                        onChange={(val) => handleCursoChange(val as string)}
                         suffixIcon={<BookOutlined />}
                     />
                 </Form.Item>

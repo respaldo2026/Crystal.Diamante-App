@@ -9,7 +9,7 @@ import {
     DeleteButton, 
     CreateButton
 } from "@refinedev/antd";
-import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography } from "antd";
+import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography, App, Modal, message } from "antd";
 import { 
     WhatsAppOutlined, 
     UserOutlined, 
@@ -23,6 +23,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 const { Text } = Typography;
 
 export default function EstudiantesList() {
+    const { message, modal } = App.useApp();
     const [searchValue, setSearchValue] = useState("");
 
     const { tableProps, searchFormProps, setFilters } = useTable({
@@ -315,11 +316,91 @@ export default function EstudiantesList() {
 
                             <ShowButton hideText size="small" resource="perfiles" recordItemId={record.id} />
                             <EditButton hideText size="small" resource="perfiles" recordItemId={record.id} />
-                            <DeleteButton hideText size="small" resource="perfiles" recordItemId={record.id} />
+                            <Button 
+                                size="small" 
+                                danger
+                                onClick={() => handleArchivarEstudiante(record)}
+                            >
+                                Archivar
+                            </Button>
                         </Space>
                     )}
                 />
             </Table>
         </List>
     );
+}
+
+async function archivableCheck(estudianteId: string) {
+    const { data: mats, error } = await supabaseBrowserClient
+        .from("matriculas")
+        .select("id, estado, cursos(nombre)")
+        .eq("estudiante_id", estudianteId);
+    if (error) throw error;
+    return mats || [];
+}
+
+function handleArchivarEstudiante(record: any) {
+    const estudianteId = record.id;
+    archivableCheck(estudianteId)
+        .then((matriculas) => {
+            const activas = (matriculas || []).filter((m: any) => String(m.estado || '').toLowerCase() === 'activo');
+            if (activas.length > 0) {
+                Modal.warning({
+                    title: "No se puede eliminar el estudiante",
+                    content: (
+                        <div>
+                            <p>Este perfil está vinculado a <strong>{activas.length} matrícula(s) activa(s)</strong>. Para retirar correctamente:</p>
+                            <ol>
+                                <li>Abre Gestionar del curso y marca la matrícula como retirada o cancelada</li>
+                                <li>El estudiante quedará fuera del curso, preservando el historial</li>
+                                <li>Luego puedes archivar el perfil para ocultarlo de la lista</li>
+                            </ol>
+                            <p><strong>Matrículas activas:</strong></p>
+                            <ul>
+                                {activas.slice(0,5).map((m: any) => (
+                                    <li key={m.id}>{m.cursos?.nombre || 'Curso'}</li>
+                                ))}
+                                {activas.length > 5 && <li>... y {activas.length - 5} más</li>}
+                            </ul>
+                        </div>
+                    ),
+                    okText: "Entendido"
+                });
+                return;
+            }
+            
+            // Archivar perfil cambiando rol para que no aparezca en la lista
+            Modal.confirm({
+                title: "¿Archivar este estudiante?",
+                content: (
+                    <div>
+                        <p>Archivar oculta al estudiante de la lista, conserva todo el historial y no elimina datos.</p>
+                        <ul>
+                            <li>Desaparece de la pestaña de Estudiantes activos</li>
+                            <li>No será elegible para nuevas matrículas</li>
+                            <li>Podrás reactivarlo cambiando su rol nuevamente a estudiante</li>
+                        </ul>
+                    </div>
+                ),
+                okText: "Sí, archivar",
+                okType: "default",
+                cancelText: "Cancelar",
+                onOk: async () => {
+                    const { error } = await supabaseBrowserClient
+                        .from("perfiles")
+                        .update({ rol: "estudiante_inactivo" })
+                        .eq("id", estudianteId);
+                    if (error) {
+                        message.error("Error al archivar: " + (error.message || 'Desconocido'));
+                        return;
+                    }
+                    message.success("Estudiante archivado correctamente");
+                }
+            });
+        })
+        .catch((err) => {
+            console.error('Error validando matrículas:', err);
+            message.error('No se pudo validar el estado del estudiante');
+        });
 }

@@ -10,7 +10,7 @@ import {
 } from "@ant-design/icons";
 
 export default function ProfesorEdit() {
-    const { formProps, saveButtonProps, onFinish, mutationResult } = useForm({
+    const { formProps, saveButtonProps, onFinish } = useForm({
         redirect: "list",
         // ESTO EVITA LA PANTALLA BLANCA: Capturamos el error y lo mostramos como alerta
         onMutationError: (error: any) => {
@@ -34,8 +34,8 @@ export default function ProfesorEdit() {
     };
 
     // Si hay un error visible, lo mostramos arriba
-    const isError = mutationResult?.isError;
-    const errorMessage = mutationResult?.error?.message;
+    const isError = false;
+    const errorMessage = "";
 
     return (
         <Edit saveButtonProps={saveButtonProps} title="Editar Profesor">

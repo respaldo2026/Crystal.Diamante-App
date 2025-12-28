@@ -46,7 +46,8 @@ export default function PagoCreate() {
             if (data.length === 1) {
                 formProps.form?.setFieldValue("matricula_id", data[0].id);
                 // Sugerimos el precio mensualidad como monto a pagar
-                const precioSugerido = data[0].cursos?.precio_mensualidad || 0;
+                const cursoInfo = Array.isArray(data[0].cursos) ? data[0].cursos[0] : data[0].cursos;
+                const precioSugerido = (cursoInfo as any)?.precio_mensualidad || 0;
                 formProps.form?.setFieldValue("monto", precioSugerido);
             }
         }
@@ -56,8 +57,11 @@ export default function PagoCreate() {
     // Al seleccionar el curso, autocompletar el monto sugerido
     const handleCursoChange = (matriculaId: string) => {
         const matricula = cursosDelEstudiante.find(m => m.id === matriculaId);
-        if (matricula && matricula.cursos?.precio_mensualidad) {
-            formProps.form?.setFieldValue("monto", matricula.cursos.precio_mensualidad);
+        if (matricula) {
+            const cursoInfo = Array.isArray(matricula.cursos) ? matricula.cursos[0] : matricula.cursos;
+            if ((cursoInfo as any)?.precio_mensualidad) {
+                formProps.form?.setFieldValue("monto", (cursoInfo as any).precio_mensualidad);
+            }
         }
     };
 

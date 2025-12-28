@@ -13,13 +13,13 @@ import {
 const { Text } = Typography;
 
 export default function InventarioList() {
-    const { tableProps, tableQueryResult } = useTable({
+    const { tableProps } = useTable({
         resource: "inventario",
         sorters: { initial: [{ field: "cantidad_stock", order: "asc" }] }, // Muestra primero lo que se está acabando
     });
 
     // Cálculos para las tarjetas de arriba (Dashboard del inventario)
-    const productos = tableQueryResult?.data?.data || [];
+    const productos = (tableProps.dataSource as any[]) || [];
     
     // Contamos cuántos productos tienen stock crítico
     const productosBajos = productos.filter((p: any) => {

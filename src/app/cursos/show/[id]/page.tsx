@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty } from "antd";
+import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App } from "antd";
 import {
   UserOutlined,
   CheckCircleOutlined,
@@ -54,6 +54,7 @@ interface Sesion {
 }
 
 export default function CursoShowPage({ params }: { params: Promise<{ id: string }> }) {
+  const { message, modal } = App.useApp();
   const [cursoId, setCursoId] = useState<string>("");
   const [curso, setCurso] = useState<any>(null);
   const [estudiantes, setEstudiantes] = useState<Student[]>([]);
@@ -129,6 +130,21 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
         },
         width: 100,
         sorter: (a: any, b: any) => a.asistencia_porcentaje - b.asistencia_porcentaje,
+      },
+      {
+        title: "Acciones",
+        key: "acciones",
+        width: 260,
+        render: (_: any, record: any) => {
+          const esActivo = record.estado === "activo";
+          return (
+            <Space>
+              <Button size="small" type="primary" disabled={!esActivo} onClick={() => actualizarEstadoMatricula(record.id, "completada")}>Completada</Button>
+              <Button size="small" danger disabled={!esActivo} onClick={() => actualizarEstadoMatricula(record.id, "cancelada")}>Cancelar</Button>
+              <Button size="small" disabled={!esActivo} onClick={() => actualizarEstadoMatricula(record.id, "retirada")}>Retirar</Button>
+            </Space>
+          );
+        },
       },
     ],
     []
@@ -269,6 +285,96 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
     }
   };
 
+  const actualizarEstadoMatricula = async (matriculaId: number, nuevoEstado: string) => {
+    try {
+      const { error } = await supabaseBrowserClient
+        .from("matriculas")
+        .update({ estado: nuevoEstado })
+        .eq("id", matriculaId);
+      if (error) throw error;
+      message.success(`Matrícula marcada como ${nuevoEstado}`);
+      await cargarDatos(cursoId);
+    } catch (error: any) {
+      message.error("No se pudo actualizar la matrícula");
+      console.error(error);
+    }
+  };
+
+  const handleToggleEstadoGrupo = async () => {
+    const esActivo = curso.estado === "activo";
+    const nuevoEstado = esActivo ? "finalizado" : "activo";
+    const accion = esActivo ? "finalizar" : "reactivar";
+
+    try {
+      if (esActivo) {
+        const activos = estudiantes.filter(e => e.estado === "activo");
+        if (activos.length > 0) {
+          modal.warning({
+            title: "No se puede finalizar el grupo",
+            content: (
+              <div>
+                <p>Este grupo tiene <strong>{activos.length} estudiantes activos</strong>. Antes de finalizarlo debes:</p>
+                <ol>
+                  <li>En esta misma vista, usar los botones en la lista de estudiantes</li>
+                  <li>Marcar las matrículas como completada, cancelada o retirada según corresponda</li>
+                  <li>Una vez que todas las matrículas estén cerradas, podrás finalizar el grupo</li>
+                </ol>
+                <p><strong>Estudiantes activos:</strong></p>
+                <ul>
+                  {activos.slice(0, 5).map((m: any) => (
+                    <li key={m.id}>{m.nombre_completo}</li>
+                  ))}
+                  {activos.length > 5 && <li>... y {activos.length - 5} más</li>}
+                </ul>
+              </div>
+            ),
+            okText: "Entendido",
+          });
+          return;
+        }
+      }
+
+      modal.confirm({
+        title: esActivo ? "¿Finalizar este grupo/cohorte?" : "¿Reactivar este grupo/cohorte?",
+        content: esActivo ? (
+          <div>
+            <p>Estás a punto de <strong>finalizar</strong> el grupo:</p>
+            <p><strong>{curso.nombre}</strong></p>
+            <p>¿Qué sucede al finalizar?</p>
+            <ul>
+              <li>El grupo desaparecerá de la lista principal</li>
+              <li>No aparecerá al crear nuevas matrículas</li>
+              <li>Todo el historial se mantiene intacto</li>
+              <li>Las matrículas existentes se conservan</li>
+              <li>Podrás reactivarlo si es necesario</li>
+            </ul>
+          </div>
+        ) : (
+          <div>
+            <p>Estás a punto de <strong>reactivar</strong> el grupo:</p>
+            <p><strong>{curso.nombre}</strong></p>
+            <p>El grupo volverá a estar disponible para nuevas inscripciones.</p>
+          </div>
+        ),
+        okText: esActivo ? "Sí, finalizar" : "Sí, reactivar",
+        okType: esActivo ? "default" : "primary",
+        cancelText: "Cancelar",
+        onOk: async () => {
+          const { error } = await supabaseBrowserClient
+            .from("cursos")
+            .update({ estado: nuevoEstado })
+            .eq("id", parseInt(cursoId));
+          if (error) throw error;
+          message.success(`Grupo ${nuevoEstado === 'activo' ? 'reactivado' : 'finalizado'} correctamente`);
+          await cargarDatos(cursoId);
+        },
+      });
+    } catch (error: any) {
+      message.error(`Error al ${accion} el grupo`);
+      console.error(error);
+    }
+  };
+
   const onAddTema = async (values: any) => {
     try {
       const { error } = await supabaseBrowserClient
@@ -373,6 +479,16 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
               <Button icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
                 Calificar Tareas
               </Button>
+              {curso.estado === 'activo' && (
+                <Tag color="blue" style={{ marginLeft: 8 }}>{estudiantesActivos} activos</Tag>
+              )}
+              <Button 
+                type={curso.estado === 'activo' ? 'default' : 'primary'}
+                danger={curso.estado === 'activo'}
+                onClick={handleToggleEstadoGrupo}
+              >
+                {curso.estado === 'activo' ? 'Finalizar Grupo' : 'Reactivar Grupo'}
+              </Button>
             </Space>
           </Space>
           <div>
@@ -429,9 +545,9 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
                   <List
                     dataSource={temas}
                     renderItem={(tema, index) => (
-                      <List.Item
+                      <List.Item key={tema?.id ?? index}
                         actions={[
-                          <Button type="link" danger icon={<DeleteOutlined />} onClick={() => onDeleteTema(tema.id)}>
+                          <Button key={`eliminar-tema-${tema?.id ?? index}`} type="link" danger icon={<DeleteOutlined />} onClick={() => onDeleteTema(tema.id)}>
                             Eliminar
                           </Button>
                         ]}

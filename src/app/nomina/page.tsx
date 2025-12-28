@@ -210,7 +210,7 @@ export default function NominaPage() {
                         <li>Total: <b>$ {Number(profesorSeleccionado.total_pagado).toLocaleString()}</b></li>
                     </ul>
                     <p style={{fontSize: 12, color: '#888'}}>
-                        Al confirmar, las clases se marcarán como "pagadas".
+                        Al confirmar, las clases se marcarán como pagadas.
                     </p>
                 </div>
             )}
