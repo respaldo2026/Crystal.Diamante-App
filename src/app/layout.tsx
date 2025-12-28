@@ -96,14 +96,22 @@ export default function RootLayout({
                     },
                   },
                   {
+                    name: "programas",
+                    list: "/programas",
+                    meta: {
+                      label: "Programas",
+                      icon: <BookOutlined />,
+                    },
+                  },
+                  {
                     name: "cursos",
                     list: "/cursos",
                     create: "/cursos/create",
                     edit: "/cursos/edit/:id",
                     show: "/cursos/show/:id",
                     meta: {
-                      label: "Cursos",
-                      icon: <BookOutlined />,
+                      label: "Grupos/Cohortes",
+                      icon: <TeamOutlined />,
                     },
                   },
                   {

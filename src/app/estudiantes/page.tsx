@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { 
     List, 
     useTable, 
@@ -9,7 +9,7 @@ import {
     DeleteButton, 
     CreateButton
 } from "@refinedev/antd";
-import { Table, Space, Tag, Button, Tooltip, Avatar, Form, Input, Card, Row, Col } from "antd";
+import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography } from "antd";
 import { 
     WhatsAppOutlined, 
     UserOutlined, 
@@ -19,6 +19,8 @@ import {
     IdcardOutlined
 } from "@ant-design/icons";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { supabaseBrowserClient } from "@utils/supabase/client";
+const { Text } = Typography;
 
 export default function EstudiantesList() {
     const [searchValue, setSearchValue] = useState("");
@@ -27,7 +29,7 @@ export default function EstudiantesList() {
         resource: "perfiles",
         // TRUCO AVANZADO: Traemos las matrículas y el nombre del curso en una sola petición
         meta: {
-            select: "*, matriculas(estado, cursos(nombre))"
+            select: "*, matriculas(id, estado, cursos(nombre, porcentaje_minimo))"
         },
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
         // Filtro base: Solo estudiantes
@@ -66,13 +68,110 @@ export default function EstudiantesList() {
         }
     };
 
+    // Tabs: activos, graduados, desertores
+    const [activeTab, setActiveTab] = useState<string>('activos');
+    const [attFilter, setAttFilter] = useState<'all' | 'bajo' | 'sin'>('all');
+    const [asistStats, setAsistStats] = useState<Record<number, { total: number; present: number; porcentaje: number; minimo: number; cumple: boolean; tieneDatos: boolean }>>({});
+    const [loadingAsist, setLoadingAsist] = useState(false);
+    const activoEstados = ["activo", "en curso"];
+    const graduadoEstados = ["aprobado", "certificado", "finalizado"];
+
+    const dataSource = (tableProps.dataSource as any[]) || [];
+
+    // Calcular asistencia por matrícula para cada estudiante
+    useEffect(() => {
+        const matriculaIds: number[] = [];
+        dataSource.forEach((s: any) => {
+            (s.matriculas || []).forEach((m: any) => {
+                if (m?.id) matriculaIds.push(m.id);
+            });
+        });
+        if (matriculaIds.length === 0) {
+            setAsistStats({});
+            return;
+        }
+        const fetchAsist = async () => {
+            setLoadingAsist(true);
+            try {
+                const { data: asistencias } = await supabaseBrowserClient
+                    .from('asistencias')
+                    .select('matricula_id, estado')
+                    .in('matricula_id', matriculaIds);
+
+                const stats: Record<number, any> = {};
+                dataSource.forEach((s: any) => {
+                    (s.matriculas || []).forEach((m: any) => {
+                        const arr = asistencias?.filter(a => a.matricula_id === m.id) || [];
+                        const total = arr.length;
+                        const present = arr.filter(a => a.estado === 'presente').length;
+                        const pct = total > 0 ? (present / total) * 100 : 0;
+                        const minimo = m.cursos?.porcentaje_minimo ?? 80;
+                        stats[m.id] = {
+                            total,
+                            present,
+                            porcentaje: Math.round(pct),
+                            minimo,
+                            cumple: pct >= minimo,
+                            tieneDatos: total > 0,
+                        };
+                    });
+                });
+                setAsistStats(stats);
+            } catch (e) {
+                console.error('Error calculando asistencia estudiantes:', e);
+            } finally {
+                setLoadingAsist(false);
+            }
+        };
+        fetchAsist();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dataSource.length]);
+    const activos = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => activoEstados.includes(String(m.estado || '').toLowerCase()))), [dataSource]);
+    const graduados = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => graduadoEstados.includes(String(m.estado || '').toLowerCase()))), [dataSource]);
+    const desertores = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => {
+        const st = asistStats[m.id];
+        return st && st.tieneDatos && !st.cumple;
+    })), [dataSource, asistStats]);
+
+    let filteredDataSource = activeTab === 'activos' ? activos : activeTab === 'graduados' ? graduados : desertores;
+
+    // Apply attendance quick filters
+    if (attFilter === 'bajo') {
+        filteredDataSource = filteredDataSource.filter((s: any) => {
+            const mats = s.matriculas || [];
+            let worst: any = null;
+            mats.forEach((m: any) => {
+                const st = asistStats[m.id];
+                if (st && st.tieneDatos) {
+                    worst = worst ? (st.porcentaje < worst.porcentaje ? st : worst) : st;
+                }
+            });
+            return worst && !worst.cumple;
+        });
+    } else if (attFilter === 'sin') {
+        filteredDataSource = filteredDataSource.filter((s: any) => {
+            const mats = s.matriculas || [];
+            const anyDatos = mats.some((m: any) => {
+                const st = asistStats[m.id];
+                return st && st.tieneDatos;
+            });
+            return !anyDatos;
+        });
+    }
+
     return (
         <List
-            title="Listado de Estudiantes"
+            title="Estudiantes"
             headerButtons={<CreateButton resource="perfiles" />}
         >
+            <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
+                { key: 'activos', label: `Activos (${activos.length})` },
+                { key: 'graduados', label: `Graduados (${graduados.length})` },
+                { key: 'desertores', label: `Desertores (${desertores.length})` },
+            ]} />
+
             {/* --- BARRA DE BÚSQUEDA EN TIEMPO REAL --- */}
-            <Card variant="borderless" style={{ marginBottom: 20, background: '#f9f9f9' }}>
+            <Card variant="borderless" style={{ marginBottom: 12, background: '#f9f9f9' }}>
                 <Input 
                     placeholder="🔍 Buscar por nombre (escribe para filtrar en tiempo real)..." 
                     prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
@@ -84,7 +183,14 @@ export default function EstudiantesList() {
                 />
             </Card>
 
-            <Table {...tableProps} rowKey="id">
+            {/* Quick attendance filters */}
+            <Space style={{ marginBottom: 16 }}>
+                <Button type={attFilter === 'all' ? 'primary' : 'default'} size="small" onClick={() => setAttFilter('all')}>Todas</Button>
+                <Button type={attFilter === 'bajo' ? 'primary' : 'default'} size="small" onClick={() => setAttFilter('bajo')}>Bajo Asistencia</Button>
+                <Button type={attFilter === 'sin' ? 'primary' : 'default'} size="small" onClick={() => setAttFilter('sin')}>Sin Asistencia</Button>
+            </Space>
+
+            <Table {...tableProps} dataSource={filteredDataSource} rowKey="id" loading={tableProps.loading || loadingAsist}>
                 
                 {/* 1. Estudiante (Foto + Nombre) */}
                 <Table.Column 
@@ -95,7 +201,30 @@ export default function EstudiantesList() {
                             <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <span style={{ fontWeight: 600, fontSize: '15px' }}>{value || "Sin Nombre"}</span>
-                                {/* Mostramos el ID pequeño debajo del nombre también, para referencia rápida */}
+                                {/* Badge de asistencia (peor caso entre sus matrículas) */}
+                                {(() => {
+                                    const mats = record.matriculas || [];
+                                    let worst: any = null;
+                                    mats.forEach((m: any) => {
+                                        const st = asistStats[m.id];
+                                        if (st && st.tieneDatos) {
+                                            worst = worst ? (st.porcentaje < worst.porcentaje ? st : worst) : st;
+                                        }
+                                    });
+                                    if (!worst) {
+                                        return <span style={{ fontSize: '11px', color: '#999' }}>Asist: —</span>;
+                                    }
+                                    const ok = worst.cumple;
+                                    const color = ok ? 'green' : 'red';
+                                    return (
+                                        <Tooltip title={`Presentes: ${worst.present}/${worst.total} · Mínimo: ${worst.minimo}%`}>
+                                            <Tag color={color} style={{ marginTop: 4, width: 'fit-content' }}>
+                                                Asist: {worst.porcentaje}%
+                                            </Tag>
+                                        </Tooltip>
+                                    );
+                                })()}
+                                {/* ID de referencia rápida */}
                                 <span style={{ fontSize: '11px', color: '#999' }}>ID: {record.identificacion || 'N/A'}</span>
                             </div>
                         </Space>

@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
-import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, Button, Modal, Space } from "antd";
-import { DeleteOutlined, ArrowLeftOutlined } from "@ant-design/icons";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { Edit, useForm, useSelect } from "@refinedev/antd";
+import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, Button, Modal, Space, TimePicker } from "antd";
+import { DeleteOutlined, ArrowLeftOutlined, BookOutlined } from "@ant-design/icons";
+import { useRouter, useParams } from "next/navigation";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
@@ -13,23 +13,32 @@ export default function CursoEdit() {
         redirect: "list"
     });
     const router = useRouter();
+    const params = useParams();
     const [deleting, setDeleting] = useState(false);
     const [modal, modalContextHolder] = Modal.useModal();
-    const cursoId = queryResult?.data?.data?.id;
+    const rawCursoId = params?.id as string;
+    const cursoId = rawCursoId ? Number(rawCursoId) : undefined;
+
+    const { selectProps: programaSelectProps } = useSelect({
+        resource: "programas",
+        optionLabel: "nombre",
+        optionValue: "id",
+    });
 
     const handleDeleteCurso = async () => {
+        if (!cursoId || Number.isNaN(cursoId)) {
+            message.error("No se pudo identificar el curso a eliminar");
+            return;
+        }
+
         setDeleting(true);
         try {
             // Validar dependencias antes de eliminar
-            const [matriculas, pagos, sesiones] = await Promise.all([
+            const [matriculas, sesiones] = await Promise.all([
                 supabaseBrowserClient
                     .from("matriculas")
                     .select("id")
                     .eq("curso_id", cursoId),
-                supabaseBrowserClient
-                    .from("pagos")
-                    .select("id, matriculas(curso_id)")
-                    .eq("matriculas.curso_id", cursoId),
                 supabaseBrowserClient
                     .from("sesiones_clase")
                     .select("id")
@@ -37,8 +46,18 @@ export default function CursoEdit() {
             ]);
 
             const matriculasCount = matriculas.data?.length || 0;
-            const pagosCount = pagos.data?.length || 0;
             const sesionesCount = sesiones.data?.length || 0;
+
+            // Calcular pagos a partir de IDs de matrícula (evita falsos positivos)
+            let pagosCount = 0;
+            const matriculaIds = (matriculas.data || []).map((m: any) => m.id);
+            if (matriculaIds.length > 0) {
+                const pagosRes = await supabaseBrowserClient
+                    .from("pagos")
+                    .select("id")
+                    .in("matricula_id", matriculaIds);
+                pagosCount = pagosRes.data?.length || 0;
+            }
 
             // Si hay dependencias, mostrar advertencia en lugar de permitir eliminación
             if (matriculasCount > 0 || pagosCount > 0 || sesionesCount > 0) {
@@ -98,7 +117,7 @@ export default function CursoEdit() {
             {modalContextHolder}
             <Edit 
                 saveButtonProps={saveButtonProps} 
-                title="Editar Curso"
+                title="Editar Grupo/Cohorte"
                 headerButtons={() => (
                     <Space>
                         <Button 
@@ -112,6 +131,7 @@ export default function CursoEdit() {
                             icon={<DeleteOutlined />} 
                             onClick={handleDeleteCurso}
                             loading={deleting}
+                            disabled={!cursoId || deleting}
                             style={{ marginLeft: "auto" }}
                         >
                             Eliminar Curso
@@ -124,23 +144,106 @@ export default function CursoEdit() {
                 layout="vertical" 
                 onFinish={async (values) => {
                     try {
-                        return await formProps.onFinish?.(values);
+                        // Construir objeto de actualización limpio
+                        const datosActualizacion: any = {};
+                        
+                        // Solo agregar campos que existen y tienen valor
+                        if (values.programa_id !== undefined) datosActualizacion.programa_id = values.programa_id;
+                        if (values.nombre !== undefined) datosActualizacion.nombre = values.nombre;
+                        if (values.estado !== undefined) datosActualizacion.estado = values.estado;
+                        if (values.profesor_id !== undefined) datosActualizacion.profesor_id = values.profesor_id;
+                        if (values.descripcion !== undefined) datosActualizacion.descripcion = values.descripcion;
+                        if (values.precio_inscripcion !== undefined) datosActualizacion.precio_inscripcion = values.precio_inscripcion;
+                        if (values.precio_mensualidad !== undefined) datosActualizacion.precio_mensualidad = values.precio_mensualidad;
+                        if (values.cupos !== undefined) datosActualizacion.cupos = values.cupos;
+                        
+                        // Convertir fecha correctamente
+                        if (values.fecha_inicio !== undefined) {
+                            datosActualizacion.fecha_inicio = values.fecha_inicio 
+                                ? dayjs(values.fecha_inicio).format('YYYY-MM-DD') 
+                                : null;
+                        }
+                        
+                        if (values.duracion !== undefined) datosActualizacion.duracion = values.duracion;
+                        
+                        // Convertir días de array a string
+                        if (values.dias_semana !== undefined) {
+                            datosActualizacion.dias_semana = Array.isArray(values.dias_semana) 
+                                ? values.dias_semana.join(', ')
+                                : (values.dias_semana || '');
+                        }
+                        
+                        // Convertir horas correctamente
+                        if (values.hora_inicio !== undefined) {
+                            datosActualizacion.hora_inicio = values.hora_inicio 
+                                ? (dayjs.isDayjs(values.hora_inicio) 
+                                    ? values.hora_inicio.format('HH:mm:ss')
+                                    : values.hora_inicio)
+                                : null;
+                        }
+                        
+                        if (values.hora_fin !== undefined) {
+                            datosActualizacion.hora_fin = values.hora_fin 
+                                ? (dayjs.isDayjs(values.hora_fin)
+                                    ? values.hora_fin.format('HH:mm:ss')
+                                    : values.hora_fin)
+                                : null;
+                        }
+                        
+                        // Actualizar con Supabase (sin .select() para evitar triggers innecesarios)
+                        const { error } = await supabaseBrowserClient
+                            .from('cursos')
+                            .update(datosActualizacion)
+                            .eq('id', cursoId);
+                        
+                        if (error) {
+                            console.error('Error Supabase:', error);
+                            throw error;
+                        }
+                        
+                        message.success('Curso actualizado correctamente');
+                        router.push('/cursos');
                     } catch (err: any) {
-                        const msg = err?.message || (err && JSON.stringify(err)) || 'Error al guardar';
+                        console.error('Error completo:', err);
+                        const msg = err?.message || 'Error al guardar';
                         message.error(msg);
-                        throw err;
                     }
                 }}
             >
                 
                 <Row gutter={24}>
-                    <Col span={16}>
+                    <Col span={12}>
                         <Form.Item
-                            label="Nombre del Curso"
+                            label="Programa Académico"
+                            name="programa_id"
+                            rules={[{ required: true, message: "Selecciona el programa" }]}
+                        >
+                            <Select 
+                                {...programaSelectProps} 
+                                placeholder="Selecciona el programa"
+                                prefix={<BookOutlined />}
+                            />
+                        </Form.Item>
+                    </Col>
+                    
+                    <Col span={12}>
+                        <Form.Item
+                            label="Nombre del Grupo/Cohorte"
                             name="nombre"
                             rules={[{ required: true, message: "El nombre es obligatorio" }]}
                         >
-                            <Input />
+                            <Input placeholder="Ej: Grupo A, Cohorte Mañana" />
+                        </Form.Item>
+                    </Col>
+                </Row>
+
+                <Row gutter={24}>
+                    <Col span={16}>
+                        <Form.Item
+                            label="Descripción/Notas"
+                            name="descripcion"
+                        >
+                            <Input.TextArea rows={2} />
                         </Form.Item>
                     </Col>
                     
@@ -159,13 +262,6 @@ export default function CursoEdit() {
                         </Form.Item>
                     </Col>
                 </Row>
-
-                <Form.Item
-                    label="Descripción"
-                    name="descripcion"
-                >
-                    <Input.TextArea rows={3} />
-                </Form.Item>
 
                 <Row gutter={24}>
                     <Col span={8}>
@@ -214,24 +310,79 @@ export default function CursoEdit() {
                             label="Fecha Inicio" 
                             name="fecha_inicio"
                             getValueProps={(value) => ({
-                                value: value ? dayjs(value) : "",
+                                value: value ? dayjs(value) : null,
                             })}
-                            getValueFromEvent={(value) => {
-                                // Convert Dayjs to ISO date string before submit
-                                try {
-                                    return value ? (value as dayjs.Dayjs).format("YYYY-MM-DD") : null;
-                                } catch (e) {
-                                    return value;
-                                }
-                            }}
                          >
                             <DatePicker style={{width: '100%'}} format="YYYY-MM-DD" />
                          </Form.Item>
                     </Col>
                     <Col span={8}>
-                         <Form.Item label="Duración" name="duracion">
-                            <Input />
+                         <Form.Item 
+                            label="Fecha Fin" 
+                            name="fecha_fin"
+                            getValueProps={(value) => ({
+                                value: value ? dayjs(value) : null,
+                            })}
+                         >
+                            <DatePicker style={{width: '100%'}} format="YYYY-MM-DD" />
                          </Form.Item>
+                    </Col>
+                </Row>
+
+                <Row gutter={24}>
+                    <Col span={12}>
+                        <Form.Item
+                            label="Días de la Semana"
+                            name="dias_semana"
+                            help="Selecciona los días en que se dicta la clase"
+                            getValueProps={(value) => ({
+                                value: typeof value === 'string' && value
+                                    ? value.split(',').map((d: string) => d.trim())
+                                    : value || []
+                            })}
+                        >
+                            <Select 
+                                mode="multiple"
+                                placeholder="Selecciona días..."
+                                options={[
+                                    { label: 'Lunes', value: 'Lunes' },
+                                    { label: 'Martes', value: 'Martes' },
+                                    { label: 'Miércoles', value: 'Miércoles' },
+                                    { label: 'Jueves', value: 'Jueves' },
+                                    { label: 'Viernes', value: 'Viernes' },
+                                    { label: 'Sábado', value: 'Sábado' },
+                                    { label: 'Domingo', value: 'Domingo' },
+                                ]}
+                            />
+                        </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                        <Form.Item
+                            label="Hora Inicio"
+                            name="hora_inicio"
+                            getValueProps={(value) => ({
+                                value: value ? dayjs(value, "HH:mm:ss") : undefined,
+                            })}
+                            getValueFromEvent={(value) => {
+                                return value ? value.format("HH:mm:ss") : null;
+                            }}
+                        >
+                            <TimePicker style={{ width: '100%' }} format="HH:mm" />
+                        </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                        <Form.Item
+                            label="Hora Fin"
+                            name="hora_fin"
+                            getValueProps={(value) => ({
+                                value: value ? dayjs(value, "HH:mm:ss") : undefined,
+                            })}
+                            getValueFromEvent={(value) => {
+                                return value ? value.format("HH:mm:ss") : null;
+                            }}
+                        >
+                            <TimePicker style={{ width: '100%' }} format="HH:mm" />
+                        </Form.Item>
                     </Col>
                 </Row>
 

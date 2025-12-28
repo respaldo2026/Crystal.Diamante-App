@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Create, useForm, useSelect } from "@refinedev/antd";
 import { Form, Input, Select, InputNumber, DatePicker, Row, Col, Divider, message, Card, Alert } from "antd";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { UserOutlined, DollarCircleOutlined, SolutionOutlined } from "@ant-design/icons";
+import { useSearchParams } from "next/navigation";
 
 export default function PagoCreate() {
     const { formProps, saveButtonProps, onFinish } = useForm({ redirect: "list" });
+    const searchParams = useSearchParams();
     
     // Estado para guardar los cursos del estudiante seleccionado
     const [cursosDelEstudiante, setCursosDelEstudiante] = useState<any[]>([]);
@@ -67,6 +69,29 @@ export default function PagoCreate() {
         };
         onFinish(datos);
     };
+
+    // Prefill desde query params: estudiante_id y matricula_id
+    useEffect(() => {
+        const estudianteId = searchParams.get('estudiante_id');
+        const matriculaId = searchParams.get('matricula_id');
+        if (estudianteId) {
+            formProps.form?.setFieldValue('estudiante_id', estudianteId);
+            // Dispara búsqueda de matrículas y luego preselecciona
+            handleEstudianteChange(estudianteId);
+        }
+        if (matriculaId) {
+            // Intentamos setear después de que carguen los cursos
+            const timeout = setTimeout(() => {
+                formProps.form?.setFieldValue('matricula_id', matriculaId);
+                const m = cursosDelEstudiante.find(m => String(m.id) === String(matriculaId));
+                if (m?.cursos?.precio_mensualidad) {
+                    formProps.form?.setFieldValue('monto', m.cursos.precio_mensualidad);
+                }
+            }, 400);
+            return () => clearTimeout(timeout);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
 
     return (
         <Create 
