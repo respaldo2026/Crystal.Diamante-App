@@ -5,7 +5,7 @@ import { Show } from "@refinedev/antd";
 import { 
   Typography, Row, Col, Card, Button, 
   Modal, Form, Input, DatePicker, Avatar, List, Divider, Drawer, Switch, message, Spin, Select, InputNumber, Timeline, Alert, Space,
-  Tabs, Tag, Upload
+  Tabs, Tag, Upload, Tooltip
 } from "antd";
 import { 
   UserOutlined, BookOutlined, TeamOutlined, PlusOutlined, ExclamationCircleOutlined, StarOutlined,
@@ -143,6 +143,14 @@ export default function ShowProfesorDashboard() {
     enviarWhatsapp(profesor.telefono, mensaje);
   };
 
+  // Verificar si el estudiante está al día en pagos
+  const verificarPagoAlDia = (fechaPagoVencimiento: string | null): boolean => {
+    if (!fechaPagoVencimiento) return false;
+    const hoy = dayjs();
+    const fechaPago = dayjs(fechaPagoVencimiento);
+    return fechaPago.isAfter(hoy) || fechaPago.isSame(hoy, 'day');
+  };
+
   // 2. ABRIR GESTIÓN DE CLASE
   const abrirGestionClase = async (curso: any) => {
       try {
@@ -155,13 +163,19 @@ export default function ShowProfesorDashboard() {
           // A) Estudiantes
           const { data: dataAlumnos, error: errAlumnos } = await supabase
             .from("matriculas")
-            .select(`id, estudiante_id, perfiles ( nombre_completo, telefono )`)
+            .select(`id, estudiante_id, perfiles ( nombre_completo, telefono ), fecha_pago_vencimiento`)
             .eq("curso_id", curso.id)
             .eq("estado", "activo");
 
           if (errAlumnos) throw errAlumnos;
           
-          setAlumnosClase(dataAlumnos || []);
+          // Enriquecer cada alumno con estado de pago
+          const alumnosConPago = (dataAlumnos || []).map((alumno: any) => ({
+              ...alumno,
+              pagado: verificarPagoAlDia(alumno.fecha_pago_vencimiento)
+          }));
+          
+          setAlumnosClase(alumnosConPago);
           
           // B) Temas
           const { data: dataTemas, error: errTemas } = await supabase
@@ -180,7 +194,7 @@ export default function ShowProfesorDashboard() {
               .from("asistencias")
               .select("matricula_id, estado, tema_id")
               .eq("fecha", fechaHoyStr)
-              .in("matricula_id", dataAlumnos?.map((a: any) => a.id) || []);
+              .in("matricula_id", alumnosConPago?.map((a: any) => a.id) || []);
 
           const mapa: any = {};
           
@@ -191,7 +205,7 @@ export default function ShowProfesorDashboard() {
               if(asistenciasHoy[0].tema_id) setTemaSeleccionado(asistenciasHoy[0].tema_id);
               messageApi.success({ content: "Datos cargados", key: "loadingAula" });
           } else {
-              dataAlumnos?.forEach((a: any) => mapa[a.id] = true);
+              alumnosConPago?.forEach((a: any) => mapa[a.id] = true);
               messageApi.success({ content: "Aula lista", key: "loadingAula" });
           }
           
@@ -521,23 +535,34 @@ export default function ShowProfesorDashboard() {
                         <List
                             itemLayout="horizontal"
                             dataSource={alumnosClase}
-                          renderItem={(alumno: any) => (
+                          renderItem={(alumno: any) => {
+                              const pagado = alumno.pagado;
+                              return (
                             <List.Item key={alumno?.id} actions={[
-                              <Switch key={`asistencia-${alumno?.id}`}
+                              <Tooltip key={`asistencia-${alumno?.id}`} title={!pagado ? "Estudiante sin pagos al día" : ""}>
+                                <Switch
                                         checkedChildren="Vino" 
                                         unCheckedChildren="Faltó"
                                         checked={asistenciaMap[alumno.id]}
                                         onChange={(val) => setAsistenciaMap({...asistenciaMap, [alumno.id]: val})}
+                                        disabled={!pagado}
                                         style={{ backgroundColor: asistenciaMap[alumno.id] ? '#52c41a' : '#ff4d4f' }}
                                     />
+                              </Tooltip>
                                 ]}>
                                     <List.Item.Meta
                                         avatar={<Avatar>{alumno.perfiles.nombre_completo[0]}</Avatar>}
                                         title={alumno.perfiles.nombre_completo}
-                                        description={asistenciaMap[alumno.id] ? <Tag color="green">Presente</Tag> : <Tag color="red">Ausente</Tag>}
+                                        description={
+                                            <Space>
+                                                {asistenciaMap[alumno.id] ? <Tag color="green">Presente</Tag> : <Tag color="red">Ausente</Tag>}
+                                                {pagado ? <Tag color="success">Pagado</Tag> : <Tag color="error">Sin Pagar</Tag>}
+                                            </Space>
+                                        }
                                     />
                                 </List.Item>
-                            )}
+                            );
+                            }}
                         />
                     </>
                 )
@@ -550,24 +575,35 @@ export default function ShowProfesorDashboard() {
                         <List
                             itemLayout="horizontal"
                             dataSource={alumnosClase}
-                          renderItem={(alumno: any) => (
+                          renderItem={(alumno: any) => {
+                              const pagado = alumno.pagado;
+                              return (
                             <List.Item key={alumno?.id} actions={[
-                              <Button key={`calificar-${alumno?.id}`}
+                              <Tooltip key={`calificar-${alumno?.id}`} title={!pagado ? "Debe estar al día en pagos para calificar" : ""}>
+                                <Button
                                         type="dashed" 
                                         shape="round" 
                                         icon={<StarOutlined />} 
                                         onClick={() => abrirCalificar(alumno)}
+                                        disabled={!pagado}
                                     >
                                         Calificar
                                     </Button>
+                              </Tooltip>
                                 ]}>
                                     <List.Item.Meta
                                         avatar={<Avatar style={{backgroundColor: '#faad14'}}>{alumno.perfiles.nombre_completo[0]}</Avatar>}
                                         title={alumno.perfiles.nombre_completo}
-                                        description="Gestionar notas"
+                                        description={
+                                            <Space>
+                                                <span>Gestionar notas</span>
+                                                {pagado ? <Tag color="success">Pagado</Tag> : <Tag color="error">Sin Pagar</Tag>}
+                                            </Space>
+                                        }
                                     />
                                 </List.Item>
-                            )}
+                            );
+                            }}
                         />
                     </div>
                 )

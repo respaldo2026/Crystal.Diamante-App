@@ -1,4 +1,3 @@
-import { AuthBindings } from "@refinedev/core";
 import { createBrowserClient } from "@supabase/ssr";
 
 // Inicialización del cliente de Supabase para el navegador
@@ -7,8 +6,8 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export const authProviderClient: AuthBindings = {
-  login: async ({ email, password }) => {
+export const authProviderClient: any = {
+  login: async ({ email, password }: { email: string; password: string }) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { success: false, error };
     return { success: true, redirectTo: "/dashboard" };
@@ -40,7 +39,7 @@ export const authProviderClient: AuthBindings = {
     };
   },
 
-  onError: async (error) => {
+  onError: async (error: any) => {
     console.error("Client Auth Error:", error);
     return { error };
   },

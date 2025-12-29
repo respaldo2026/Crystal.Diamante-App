@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { List, useTable, EditButton, DeleteButton, useSelect, CreateButton } from "@refinedev/antd";
-import { Table, Space, Tag, Card, Row, Col, Select, Progress, Typography, Statistic, Alert, Button, FloatButton } from "antd";
+import { Table, Space, Tag, Card, Row, Col, Progress, Typography, Statistic, Alert, Button, FloatButton, Select } from "antd";
 import { 
   CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, 
   InfoCircleOutlined, WarningOutlined, TrophyOutlined, UserOutlined,
@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { useSearchParams } from "next/navigation";
 
 const { Text } = Typography;
 
@@ -17,6 +18,7 @@ export default function ListAsistencias() {
   const [cursoSeleccionado, setCursoSeleccionado] = useState<number | null>(null);
   const [estadisticas, setEstadisticas] = useState<any[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
+  const searchParams = useSearchParams();
 
   const { tableProps } = useTable({
     resource: "asistencias",
@@ -37,6 +39,21 @@ export default function ListAsistencias() {
     optionLabel: "nombre",
     optionValue: "id",
   });
+
+  // Curso fijo desde URL (dentro del grupo)
+  useEffect(() => {
+    const cursoId = searchParams.get("curso_id") || searchParams.get("cursoId");
+    if (cursoId) {
+      setCursoSeleccionado(Number(cursoId));
+    }
+  }, [searchParams]);
+
+  const cursoActualLabel = useMemo(() => {
+    const match = cursoSelect.options?.find((opt: any) => opt.value === cursoSeleccionado);
+    if (typeof match?.label === "string") return match.label;
+    const nombreParam = searchParams.get("curso_nombre") || searchParams.get("cursoNombre");
+    return nombreParam || "";
+  }, [cursoSeleccionado, cursoSelect.options, searchParams]);
 
   // Calcular estadísticas por estudiante
   const calcularEstadisticas = async () => {
@@ -109,59 +126,22 @@ export default function ListAsistencias() {
       title="Control de Asistencias"
       headerButtons={
         <Space>
-          <CreateButton type="primary" size="large" icon={<CheckOutlined />}>
+          <CreateButton
+            type="primary"
+            size="large"
+            icon={<CheckOutlined />}
+            onClick={() => {
+              const url = cursoSeleccionado
+                ? `/asistencias/create?curso_id=${cursoSeleccionado}${cursoActualLabel ? `&curso_nombre=${encodeURIComponent(cursoActualLabel)}` : ""}`
+                : '/asistencias/create';
+              window.location.href = url;
+            }}
+          >
             Tomar Asistencia
           </CreateButton>
         </Space>
       }
     >
-      {/* BOTÓN FLOTANTE LLAMATIVO */}
-      <FloatButton
-        icon={<CheckOutlined />}
-        type="primary"
-        style={{
-          position: 'fixed',
-          insetInlineEnd: 24,
-          bottom: 80,
-          width: 70,
-          height: 70,
-          fontSize: 32,
-          zIndex: 1000,
-          boxShadow: '0 4px 20px rgba(24, 144, 255, 0.45)'
-        }}
-        onClick={() => {
-          window.location.href = '/asistencias/create';
-        }}
-        tooltip="Registrar Llamado de Lista"
-      />
-      {/* FILTROS Y SELECTOR DE CURSO */}
-      <Card style={{ marginBottom: 20 }}>
-        <Row gutter={16} align="middle">
-          <Col xs={24} md={12}>
-            <Text strong>Filtrar por Curso:</Text>
-            <Select 
-              options={cursoSelect.options}
-              loading={cursoSelect.loading}
-              style={{ width: '100%', marginTop: 8 }}
-              placeholder="Selecciona un curso para ver estadísticas..."
-              onChange={(val) => setCursoSeleccionado(val as number)}
-              value={cursoSeleccionado}
-              allowClear
-            />
-          </Col>
-          <Col xs={24} md={12}>
-            {cursoSeleccionado && (
-              <Button 
-                icon={<ReloadOutlined />} 
-                onClick={calcularEstadisticas}
-                loading={loadingStats}
-              >
-                Actualizar Estadísticas
-              </Button>
-            )}
-          </Col>
-        </Row>
-      </Card>
 
       {/* TARJETAS DE RESUMEN */}
       {cursoSeleccionado && estadisticas.length > 0 && (

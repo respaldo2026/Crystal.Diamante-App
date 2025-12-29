@@ -472,7 +472,7 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
               <Button
                 type="primary"
                 icon={<CheckOutlined />}
-                onClick={() => router.push(`/asistencias/create?cursoId=${cursoId}`)}
+                onClick={() => router.push(`/asistencias/create?curso_id=${cursoId}&curso_nombre=${encodeURIComponent(curso.nombre)}`)}
               >
                 Llamar Lista
               </Button>

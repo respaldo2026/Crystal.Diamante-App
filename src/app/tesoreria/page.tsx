@@ -1,22 +1,23 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { List, useTable, CreateButton, EditButton, DeleteButton } from "@refinedev/antd";
-import { Table, Space, Tag, Typography, Card, Statistic, Row, Col } from "antd";
+import { Table, Space, Tag, Typography, Card, Statistic, Row, Col, Input, Button, DatePicker, Select } from "antd";
 import { 
     DollarCircleOutlined, 
     UserOutlined, 
     BankOutlined, 
     CalendarOutlined,
-    ShopOutlined
+    SearchOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 const { Text } = Typography;
+const { Search } = Input;
 
 export default function TesoreriaList() {
     // Traemos los pagos junto con el nombre del estudiante y el curso
-    const { tableProps, tableQueryResult } = useTable({
+    const { tableProps } = useTable({
         resource: "pagos",
         meta: {
             select: "*, perfiles(nombre_completo), matriculas(cursos(nombre))"
@@ -24,14 +25,80 @@ export default function TesoreriaList() {
         sorters: { initial: [{ field: "created_at", order: "desc" }] },
     });
 
+    const [busqueda, setBusqueda] = useState("");
+    const [filtroFecha, setFiltroFecha] = useState<[any, any] | null>(null);
+    const [filtroMetodo, setFiltroMetodo] = useState<string | null>(null);
+    const [filtroConcepto, setFiltroConcepto] = useState<string | null>(null);
+
     // Calcular el total de lo que se ve en pantalla
-    const pagos = tableQueryResult?.data?.data || [];
+    const pagos = tableProps.dataSource || [];
     const totalRecaudado = pagos.reduce((acc, curr: any) => acc + Number(curr.monto || 0), 0);
+
+    // Métodos únicos para el filtro
+    const metodosUnicos = useMemo(() => {
+        const metodos = new Set(pagos.map((p: any) => p.metodo_pago).filter(Boolean));
+        return Array.from(metodos).sort();
+    }, [pagos]);
+
+    // Conceptos únicos para el filtro
+    const conceptosUnicos = useMemo(() => {
+        const conceptos = new Set(pagos.map((p: any) => p.matriculas?.cursos?.nombre).filter(Boolean));
+        return Array.from(conceptos).sort();
+    }, [pagos]);
+
+    const dataFiltrada = useMemo(() => {
+        let resultado = pagos;
+
+        // Filtro por búsqueda
+        if (busqueda) {
+            const term = busqueda.toLowerCase();
+            resultado = resultado.filter((p: any) => {
+                const estudiante = (p.perfiles?.nombre_completo || "").toLowerCase();
+                const curso = (p.matriculas?.cursos?.nombre || "").toLowerCase();
+                const ref = (p.referencia || "").toLowerCase();
+                return estudiante.includes(term) || curso.includes(term) || ref.includes(term);
+            });
+        }
+
+        // Filtro por fecha
+        if (filtroFecha && filtroFecha[0] && filtroFecha[1]) {
+            const start = filtroFecha[0];
+            const end = filtroFecha[1];
+            resultado = resultado.filter((p: any) => {
+                const pFecha = dayjs(p.fecha_pago);
+                return pFecha.isAfter(start) && pFecha.isBefore(end.add(1, 'day'));
+            });
+        }
+
+        // Filtro por método
+        if (filtroMetodo) {
+            resultado = resultado.filter((p: any) => p.metodo_pago === filtroMetodo);
+        }
+
+        // Filtro por concepto
+        if (filtroConcepto) {
+            resultado = resultado.filter((p: any) => p.matriculas?.cursos?.nombre === filtroConcepto);
+        }
+
+        return resultado;
+    }, [busqueda, pagos, filtroFecha, filtroMetodo, filtroConcepto]);
 
     return (
         <List
             title="💰 Tesorería y Recaudo"
-            headerButtons={<CreateButton type="primary" size="large">Registrar Pago</CreateButton>}
+            headerButtons={
+                <Space>
+                    <Search
+                        placeholder="Buscar por estudiante, curso o referencia"
+                        allowClear
+                        enterButton={<Button icon={<SearchOutlined />} type="primary">Buscar</Button>}
+                        onSearch={(val) => setBusqueda(val)}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                        style={{ width: 380 }}
+                    />
+                    <CreateButton type="primary" size="large">Registrar Pago</CreateButton>
+                </Space>
+            }
         >
             {/* Tarjeta de Resumen de Dinero */}
             <Row gutter={16} style={{ marginBottom: 20 }}>
@@ -39,7 +106,7 @@ export default function TesoreriaList() {
                     <Card variant="borderless" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
                         <Statistic
                             title="Total en esta página"
-                            value={totalRecaudado}
+                            value={dataFiltrada.reduce((acc: number, curr: any) => acc + Number(curr.monto || 0), 0)}
                             precision={0}
                             valueStyle={{ color: '#3f8600' }}
                             prefix={<DollarCircleOutlined />}
@@ -49,7 +116,54 @@ export default function TesoreriaList() {
                 </Col>
             </Row>
 
-            <Table {...tableProps} rowKey="id">
+            {/* FILTROS */}
+            <Card style={{ marginBottom: 20 }}>
+                <Row gutter={16}>
+                    <Col xs={24} md={6}>
+                        <label style={{ fontSize: 12, fontWeight: 'bold' }}>Rango Fecha</label>
+                        <DatePicker.RangePicker
+                            style={{ width: '100%' }}
+                            onChange={(dates) => setFiltroFecha(dates as any)}
+                            allowClear
+                        />
+                    </Col>
+                    <Col xs={24} md={6}>
+                        <label style={{ fontSize: 12, fontWeight: 'bold' }}>Método de Pago</label>
+                        <Select
+                            style={{ width: '100%' }}
+                            placeholder="Todos"
+                            allowClear
+                            onChange={(val) => setFiltroMetodo(val || null)}
+                            options={metodosUnicos.map((m) => ({ label: m, value: m }))}
+                        />
+                    </Col>
+                    <Col xs={24} md={6}>
+                        <label style={{ fontSize: 12, fontWeight: 'bold' }}>Concepto (Curso)</label>
+                        <Select
+                            style={{ width: '100%' }}
+                            placeholder="Todos"
+                            allowClear
+                            onChange={(val) => setFiltroConcepto(val || null)}
+                            options={conceptosUnicos.map((c) => ({ label: c, value: c }))}
+                        />
+                    </Col>
+                    <Col xs={24} md={6} style={{ display: 'flex', alignItems: 'flex-end' }}>
+                        <Button
+                            onClick={() => {
+                                setBusqueda("");
+                                setFiltroFecha(null);
+                                setFiltroMetodo(null);
+                                setFiltroConcepto(null);
+                            }}
+                            style={{ width: '100%' }}
+                        >
+                            Limpiar Filtros
+                        </Button>
+                    </Col>
+                </Row>
+            </Card>
+
+            <Table {...tableProps} rowKey="id" dataSource={dataFiltrada}>
                 
                 {/* FECHA */}
                 <Table.Column 
@@ -108,7 +222,8 @@ export default function TesoreriaList() {
                     title="Acciones"
                     render={(_, record: any) => (
                         <Space>
-                            <DeleteButton hideText size="small" recordItemId={record.id} />
+                            <EditButton hideText size="small" recordItemId={record.id} resource="pagos" />
+                            <DeleteButton hideText size="small" recordItemId={record.id} resource="pagos" />
                         </Space>
                     )}
                 />

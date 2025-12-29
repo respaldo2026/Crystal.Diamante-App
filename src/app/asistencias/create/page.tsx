@@ -1,18 +1,20 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Form, Select, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, message, Tag, Space, Statistic, Typography, Spin } from "antd";
+import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, message, Tag, Space, Statistic, Typography, Spin } from "antd";
 import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { useSearchParams } from "next/navigation";
 
 const { Title, Text } = Typography;
 
 export default function TomarAsistencia() {
   const [form] = Form.useForm();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [cursoSeleccionado, setCursoSeleccionado] = useState<number | null>(null);
   const [fecha, setFecha] = useState(dayjs());
   const [alumnos, setAlumnos] = useState<any[]>([]);
@@ -36,6 +38,25 @@ export default function TomarAsistencia() {
     };
     cargarCursos();
   }, []);
+
+  // Preseleccionar curso desde la URL (dentro del grupo)
+  useEffect(() => {
+    const cursoIdParam = searchParams.get("curso_id") || searchParams.get("cursoId");
+    if (cursoIdParam) {
+      const id = Number(cursoIdParam);
+      setCursoSeleccionado(id);
+
+      const nombreParam = searchParams.get("curso_nombre") || searchParams.get("cursoNombre");
+      if (nombreParam) {
+        setCursoNombre(nombreParam);
+      } else {
+        const cursoInfo = cursos.find((c) => c.id === id);
+        if (cursoInfo?.nombre) {
+          setCursoNombre(cursoInfo.nombre);
+        }
+      }
+    }
+  }, [searchParams, cursos]);
 
   // Cargar Alumnos cuando cambia el curso
   useEffect(() => {
@@ -242,26 +263,20 @@ export default function TomarAsistencia() {
       {/* SELECCIÓN DE CURSO Y FECHA */}
       <Card
         style={{ marginBottom: 20 }}
-        title="📅 Paso 1: Selecciona Curso y Fecha"
+        title="📅 Paso 1: Curso y Fecha"
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>
-            <div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <Text strong>Curso:</Text>
-              <Select
-                style={{ width: "100%", marginTop: 8 }}
-                placeholder="Selecciona un curso activo..."
-                value={cursoSeleccionado}
-                onChange={(val) => {
-                  setCursoSeleccionado(val);
-                  const curso = cursos.find((c) => c.id === val);
-                  setCursoNombre(curso?.nombre || "");
-                }}
-                options={cursos.map((c) => ({
-                  label: c.nombre,
-                  value: c.id,
-                }))}
-              />
+              {cursoSeleccionado ? (
+                <Tag color="blue" style={{ width: "fit-content", padding: "6px 12px", fontSize: 14 }}>
+                  {cursoNombre || `Curso ${cursoSeleccionado}`}
+                </Tag>
+              ) : (
+                <Alert type="warning" message="Falta el curso. Esta pantalla se debe abrir desde un grupo." showIcon />
+              )}
+              <Text type="secondary">El curso está fijado por el grupo actual.</Text>
             </div>
           </Col>
           <Col xs={24} md={12}>

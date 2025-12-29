@@ -1,4 +1,3 @@
-import { AuthBindings } from "@refinedev/core";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -6,9 +5,9 @@ import { cookies } from "next/headers";
  * Proveedor de Autenticación para el Lado del Servidor
  * Este archivo se usa en Server Components y Middleware para validar acceso rápido.
  */
-export const authProviderServer: AuthBindings = {
+export const authProviderServer: any = {
   check: async () => {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
 
     // Creamos el cliente de servidor para gestionar las cookies de sesión
     const supabase = createServerClient(
@@ -35,5 +34,5 @@ export const authProviderServer: AuthBindings = {
   logout: async () => ({ success: true }),
   getPermissions: async () => null,
   getIdentity: async () => null,
-  onError: async (error) => ({ error }),
+  onError: async (error: any) => ({ error }),
 };

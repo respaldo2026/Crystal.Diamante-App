@@ -33,7 +33,7 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
     const fetchStats = async () => {
       try {
         setLoading(true);
-        const supabase = supabaseBrowserClient(); // Inicializa tu cliente
+        const supabase = supabaseBrowserClient; // Inicializa tu cliente
 
         // Llamada a la función RPC (Remote Procedure Call) que creamos en SQL
         const { data, error } = await supabase

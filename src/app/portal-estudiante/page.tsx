@@ -15,7 +15,7 @@ import dayjs from "dayjs";
 import { useParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
-import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
+import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate.tsx";
 
 const { Title, Text } = require("antd").Typography;
 
