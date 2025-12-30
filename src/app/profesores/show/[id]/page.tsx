@@ -36,6 +36,8 @@ export default function ShowProfesorDashboard() {
   // ESTADOS GENERALES
   const [profesor, setProfesor] = useState<any>(null);
   const [misCursos, setMisCursos] = useState<any[]>([]);
+  const [historialCursos, setHistorialCursos] = useState<any[]>([]);
+  const [pagosNomina, setPagosNomina] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -76,7 +78,7 @@ export default function ShowProfesorDashboard() {
         if (errProf) throw errProf;
         setProfesor(dataProf);
 
-        // Cursos
+        // Cursos activos
         const { data: dataCursos, error: errCursos } = await supabase
             .from("cursos")
             .select(`*, matriculas ( count )`)
@@ -91,6 +93,22 @@ export default function ShowProfesorDashboard() {
         })) || [];
 
         setMisCursos(cursosFmt);
+
+        // Historial de cursos (todos los estados)
+        const { data: dataCursosHist } = await supabase
+          .from("cursos")
+          .select("id, nombre, estado, fecha_inicio, fecha_fin")
+          .eq("profesor_id", idProfesor)
+          .order("fecha_inicio", { ascending: false });
+        setHistorialCursos(dataCursosHist || []);
+
+        // Pagos de nómina del profesor
+        const { data: dataPagos } = await supabase
+          .from("pagos_nomina")
+          .select("id, fecha_pago, total_pagado, total_horas, observaciones")
+          .eq("profesor_id", idProfesor)
+          .order("fecha_pago", { ascending: false });
+        setPagosNomina(dataPagos || []);
     } catch (error: any) {
         console.error("Error cargando dashboard:", error);
     } finally {
@@ -471,6 +489,63 @@ export default function ShowProfesorDashboard() {
         ))}
         {misCursos.length === 0 && <Alert message="No tienes cursos activos." type="info" />}
       </Row>
+
+      <Divider />
+
+      <Title level={4}>💼 Historial de Pagos</Title>
+      <List
+        itemLayout="horizontal"
+        dataSource={pagosNomina}
+        locale={{ emptyText: "Sin pagos registrados" }}
+        renderItem={(p: any) => (
+          <List.Item>
+            <List.Item.Meta
+              title={
+                <Space>
+                  <Tag color="blue">{dayjs(p.fecha_pago).format("DD MMM YYYY")}</Tag>
+                  <Text strong>$ {Number(p.total_pagado || 0).toLocaleString()}</Text>
+                </Space>
+              }
+              description={
+                <Space>
+                  <Tag color="purple">{p.total_horas || 0} horas</Tag>
+                  <Text type="secondary">{p.observaciones || "Sin observaciones"}</Text>
+                </Space>
+              }
+            />
+          </List.Item>
+        )}
+      />
+
+      <Divider />
+
+      <Title level={4}>📚 Historial de Grupos</Title>
+      <List
+        itemLayout="horizontal"
+        dataSource={historialCursos}
+        locale={{ emptyText: "Sin grupos registrados" }}
+        renderItem={(c: any) => (
+          <List.Item>
+            <List.Item.Meta
+              title={
+                <Space>
+                  <Text strong>{c.nombre}</Text>
+                  <Tag color={c.estado === 'activo' ? 'green' : c.estado === 'finalizado' ? 'volcano' : 'default'}>
+                    {c.estado || 'sin-estado'}
+                  </Tag>
+                </Space>
+              }
+              description={
+                <Space>
+                  <Tag>{c.fecha_inicio ? dayjs(c.fecha_inicio).format('DD/MM/YYYY') : '-'}</Tag>
+                  <span>→</span>
+                  <Tag>{c.fecha_fin ? dayjs(c.fecha_fin).format('DD/MM/YYYY') : '-'}</Tag>
+                </Space>
+              }
+            />
+          </List.Item>
+        )}
+      />
 
       <Drawer
         title={`Clase: ${cursoActivo?.nombre}`}

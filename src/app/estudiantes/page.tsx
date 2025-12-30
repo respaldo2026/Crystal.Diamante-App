@@ -127,7 +127,11 @@ export default function EstudiantesList() {
         fetchAsist();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dataSource.length]);
-    const activos = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => activoEstados.includes(String(m.estado || '').toLowerCase()))), [dataSource]);
+    const activos = useMemo(() => dataSource.filter(s => {
+        const mats = s.matriculas || [];
+        if (mats.length === 0) return true; // mostrar estudiantes sin matrícula aún
+        return mats.some((m: any) => activoEstados.includes(String(m.estado || '').toLowerCase()));
+    }), [dataSource]);
     const graduados = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => graduadoEstados.includes(String(m.estado || '').toLowerCase()))), [dataSource]);
     const desertores = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => {
         const st = asistStats[m.id];

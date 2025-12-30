@@ -18,8 +18,27 @@ export default function CursoEdit() {
     const [modal, modalContextHolder] = Modal.useModal();
     const [estadoActual, setEstadoActual] = useState<string | undefined>(undefined);
     const [activosCount, setActivosCount] = useState<number>(0);
+    const [valorClase, setValorClase] = useState<number | null>(null);
     const rawCursoId = params?.id as string;
     const cursoId = rawCursoId ? Number(rawCursoId) : undefined;
+    
+    // Función para calcular el valor por clase
+    const calcularValorClase = (precioMensual: number | undefined, totalClases: number | undefined) => {
+        if (!precioMensual || !totalClases || totalClases === 0) {
+            setValorClase(null);
+            return;
+        }
+        setValorClase(Math.round(precioMensual / totalClases));
+    };
+
+    // Recalcular cuando el formulario ya tiene valores iniciales cargados
+    useEffect(() => {
+        const precioMensual = formProps.initialValues?.precio_mensualidad;
+        const totalClases = formProps.initialValues?.total_clases;
+        if (precioMensual !== undefined && totalClases !== undefined) {
+            calcularValorClase(precioMensual, totalClases);
+        }
+    }, [formProps.initialValues]);
         useEffect(() => {
             const cargarEstado = async () => {
                 if (!cursoId || Number.isNaN(cursoId)) return;
@@ -262,6 +281,9 @@ export default function CursoEdit() {
             <Form 
                 {...formProps} 
                 layout="vertical" 
+                onValuesChange={(changed, allValues) => {
+                    calcularValorClase(allValues.precio_mensualidad, allValues.total_clases);
+                }}
                 onFinish={async (values) => {
                     try {
                         // Construir objeto de actualización limpio
@@ -276,6 +298,7 @@ export default function CursoEdit() {
                         if (v.descripcion !== undefined) datosActualizacion.descripcion = v.descripcion;
                         if (v.precio_inscripcion !== undefined) datosActualizacion.precio_inscripcion = v.precio_inscripcion;
                         if (v.precio_mensualidad !== undefined) datosActualizacion.precio_mensualidad = v.precio_mensualidad;
+                        if (v.total_clases !== undefined) datosActualizacion.total_clases = v.total_clases;
                         if (v.cupos !== undefined) datosActualizacion.cupos = v.cupos;
                         
                         // Convertir fecha correctamente
@@ -407,11 +430,63 @@ export default function CursoEdit() {
                                 style={{ width: "100%" }}
                                 formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                                 parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
+                                onChange={() => {
+                                    const precioMensual = formProps.form?.getFieldValue('precio_mensualidad');
+                                    const totalClases = formProps.form?.getFieldValue('total_clases');
+                                    calcularValorClase(precioMensual, totalClases);
+                                }}
                             />
                         </Form.Item>
                     </Col>
 
-                    {/* --- AQUÍ SE MODIFICA EL CUPO --- */}
+                    <Col span={8}>
+                        <Form.Item
+                            label="Total de Clases"
+                            name="total_clases"
+                            rules={[{ required: true, message: "Ingresa el número de clases" }]}
+                        >
+                            <InputNumber 
+                                min={1}
+                                style={{ width: "100%" }}
+                                onChange={() => {
+                                    const precioMensual = formProps.form?.getFieldValue('precio_mensualidad');
+                                    const totalClases = formProps.form?.getFieldValue('total_clases');
+                                    calcularValorClase(precioMensual, totalClases);
+                                }}
+                            />
+                        </Form.Item>
+                    </Col>
+                </Row>
+
+                {/* Fila de visualización de valor por clase */}
+                <Row gutter={24}>
+                    <Col span={8} offset={16}>
+                        <div style={{
+                            padding: '12px',
+                            backgroundColor: '#f0f5ff',
+                            border: '1px solid #b6c8db',
+                            borderRadius: '4px',
+                            textAlign: 'center'
+                        }}>
+                            <Typography.Text style={{ fontSize: '12px', color: '#666' }}>
+                                Valor por Clase
+                            </Typography.Text>
+                            <div style={{
+                                fontSize: '18px',
+                                fontWeight: 'bold',
+                                color: '#1890ff',
+                                marginTop: '4px'
+                            }}>
+                                {valorClase !== null 
+                                    ? `$ ${valorClase.toLocaleString('es-CO')}`
+                                    : '—'
+                                }
+                            </div>
+                        </div>
+                    </Col>
+                </Row>
+
+                <Row gutter={24}>
                     <Col span={8}>
                         <Form.Item
                             label="Cupos Totales"

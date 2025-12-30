@@ -124,6 +124,9 @@ export default function CursosList() {
     const cupos = cohorte.cupos || 20;
     const disponibles = Math.max(0, cupos - inscritos);
     const lleno = disponibles === 0;
+    const mensualidad = Number(cohorte.precio_mensualidad) || 0;
+    const totalClases = Number(cohorte.total_clases) || 0;
+    const valorClase = totalClases > 0 ? Math.round(mensualidad / totalClases) : null;
 
   const handleToggleEstado = async (grupo: any) => {
     const esActivo = grupo.estado === 'activo';
@@ -246,6 +249,13 @@ export default function CursosList() {
                   <UserOutlined /> {cohorte.perfiles.nombre_completo}
                 </Text>
               )}
+
+              <Text type="secondary">
+                <BookOutlined /> Clases: {totalClases || '—'}
+                {valorClase !== null && (
+                  <> • Valor/clase: ${valorClase.toLocaleString('es-CO')}</>
+                )}
+              </Text>
             </Space>
           </Col>
           

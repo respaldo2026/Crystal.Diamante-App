@@ -169,9 +169,9 @@ export default function PagoEdit() {
                         <Form.Item label="Método de Pago" name="metodo_pago">
                             <Select options={[
                                 { label: 'Efectivo', value: 'Efectivo' },
-                                { label: 'Nequi / Daviplata', value: 'Nequi' },
+                                { label: 'Nequi', value: 'Nequi' },
                                 { label: 'Bancolombia', value: 'Bancolombia' },
-                                { label: 'Tarjeta Crédito/Débito', value: 'Tarjeta' }
+                                { label: 'Sistecredito', value: 'Sistecredito' }
                             ]} />
                         </Form.Item>
                     </Col>

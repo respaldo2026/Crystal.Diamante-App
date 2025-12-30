@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { 
-  Table, Card, Button, DatePicker, Row, Col, Typography, 
+  Table, Card, Button, DatePicker, Row, Col, Typography, Select,
   Statistic, Tag, message, Modal 
 } from "antd";
 import { 
@@ -22,6 +22,7 @@ export default function NominaPage() {
   // Iniciamos con el mes actual por defecto
   const [rangoFechas, setRangoFechas] = useState<any>([dayjs().startOf('month'), dayjs().endOf('month')]);
   const [totalAPagar, setTotalAPagar] = useState(0);
+  const [metodoNomina, setMetodoNomina] = useState<string>('Efectivo');
 
   // Modal Pagar
   const [modalVisible, setModalVisible] = useState(false);
@@ -132,7 +133,7 @@ export default function NominaPage() {
             total_horas: profesorSeleccionado.total_horas,
             fecha_inicio_periodo: rangoFechas[0].format("YYYY-MM-DD"),
             fecha_fin_periodo: rangoFechas[1].format("YYYY-MM-DD"),
-            observaciones: `Pago por ${profesorSeleccionado.total_horas} horas trabajadas del ${rangoFechas[0].format("DD/MM")} al ${rangoFechas[1].format("DD/MM")}`
+            observaciones: `Pago por ${profesorSeleccionado.total_horas} horas trabajadas del ${rangoFechas[0].format("DD/MM")} al ${rangoFechas[1].format("DD/MM")} - Método: ${metodoNomina}`
         });
         if (errPago) throw errPago;
 
@@ -209,7 +210,21 @@ export default function NominaPage() {
                         <li>Horas: {profesorSeleccionado.total_horas}</li>
                         <li>Total: <b>$ {Number(profesorSeleccionado.total_pagado).toLocaleString()}</b></li>
                     </ul>
-                    <p style={{fontSize: 12, color: '#888'}}>
+                    <div style={{marginTop: 16}}>
+                        <Text strong>Método de Pago:</Text><br/>
+                        <Select
+                            value={metodoNomina}
+                            onChange={(val) => setMetodoNomina(val)}
+                            style={{width: '100%', marginTop: 8}}
+                            options={[
+                                { label: 'Efectivo', value: 'Efectivo' },
+                                { label: 'Nequi', value: 'Nequi' },
+                                { label: 'Bancolombia', value: 'Bancolombia' },
+                                { label: 'Sistecredito', value: 'Sistecredito' }
+                            ]}
+                        />
+                    </div>
+                    <p style={{fontSize: 12, color: '#888', marginTop: 12}}>
                         Al confirmar, las clases se marcarán como pagadas.
                     </p>
                 </div>

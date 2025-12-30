@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Create, useForm, useSelect } from "@refinedev/antd";
 import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, TimePicker } from "antd";
 import { UserOutlined, BookOutlined } from "@ant-design/icons";
@@ -10,6 +10,15 @@ export default function CursoCreate() {
     const { formProps, saveButtonProps } = useForm({
         redirect: "list",
     });
+    const [valorClase, setValorClase] = useState<number | null>(null);
+
+    const calcularValorClase = (mensualidad?: number, total?: number) => {
+        if (!mensualidad || !total || total === 0) {
+            setValorClase(null);
+            return;
+        }
+        setValorClase(Math.round(mensualidad / total));
+    };
 
     const { selectProps: professorSelectProps } = useSelect({
         resource: "perfiles",
@@ -44,6 +53,7 @@ export default function CursoCreate() {
                     ? values.hora_fin.format('HH:mm:ss')
                     : values.hora_fin)
                 : null,
+            total_clases: values.total_clases ?? null,
         };
         
         // Llamar a la función onFinish de formProps (la que guarda en Refine/Supabase)
@@ -58,6 +68,9 @@ export default function CursoCreate() {
             <Form 
                 {...formProps}
                 layout="vertical" 
+                onValuesChange={(changed, all) => {
+                    calcularValorClase(all.precio_mensualidad, all.total_clases);
+                }}
                 onFinish={handleOnFinish}
             >
                 
@@ -72,6 +85,13 @@ export default function CursoCreate() {
                                 {...programaSelectProps} 
                                 placeholder="Selecciona el programa al que pertenece este grupo"
                                 prefix={<BookOutlined />}
+                                onChange={(value, option: any) => {
+                                    const nombrePrograma = option?.label ?? "";
+                                    // Prefija el nombre del grupo con el nombre del programa
+                                    if (nombrePrograma) {
+                                        formProps.form?.setFieldValue("nombre", nombrePrograma);
+                                    }
+                                }}
                             />
                         </Form.Item>
                     </Col>
@@ -84,6 +104,65 @@ export default function CursoCreate() {
                         >
                             <Input placeholder="Ej: Grupo A, Cohorte Mañana, Fin de Semana" />
                         </Form.Item>
+                    </Col>
+                </Row>
+
+                <Row gutter={24}>
+                    <Col span={8}>
+                        <Form.Item
+                            label="Precio Inscripción"
+                            name="precio_inscripcion"
+                        >
+                            <InputNumber
+                                style={{ width: "100%" }}
+                                formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
+                            />
+                        </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                        <Form.Item
+                            label="Mensualidad"
+                            name="precio_mensualidad"
+                            rules={[{ required: true, message: "Ingresa la mensualidad" }]}
+                        >
+                            <InputNumber
+                                style={{ width: "100%" }}
+                                formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
+                            />
+                        </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                        <Form.Item
+                            label="Total de Clases"
+                            name="total_clases"
+                            rules={[{ required: true, message: "Ingresa el número de clases" }]}
+                        >
+                            <InputNumber min={1} style={{ width: "100%" }} />
+                        </Form.Item>
+                    </Col>
+                </Row>
+
+                <Row gutter={24}>
+                    <Col span={8} offset={16}>
+                        <div style={{
+                            padding: '12px',
+                            backgroundColor: '#f0f5ff',
+                            border: '1px solid #b6c8db',
+                            borderRadius: '4px',
+                            textAlign: 'center'
+                        }}>
+                            <span style={{ fontSize: 12, color: '#666' }}>Valor por Clase</span>
+                            <div style={{
+                                fontSize: 18,
+                                fontWeight: 'bold',
+                                color: '#1890ff',
+                                marginTop: 4
+                            }}>
+                                {valorClase !== null ? `$ ${valorClase.toLocaleString('es-CO')}` : '—'}
+                            </div>
+                        </div>
                     </Col>
                 </Row>
 

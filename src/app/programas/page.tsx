@@ -22,6 +22,11 @@ export default function ProgramasPage() {
     cargarProgramas();
   }, []);
 
+  // Refrescar cuando cambia el filtro de inactivos
+  useEffect(() => {
+    cargarProgramas();
+  }, [mostrarInactivos]);
+
   const cargarProgramas = async () => {
     setLoading(true);
     try {
@@ -176,6 +181,18 @@ export default function ProgramasPage() {
     }
   };
 
+  // Función para calcular el precio total: (mensualidad * meses) + inscripción
+  const calcularPrecioTotal = (programa: any): number => {
+    const precio_mensualidad = Number(programa.precio_mensualidad || 0);
+    const precio_inscripcion = Number(programa.precio_inscripcion || 0);
+    
+    // Extraer número de meses de la cadena "duracion" (ej: "4 meses" -> 4)
+    const duracionStr = String(programa.duracion || "0 meses");
+    const meses = parseInt(duracionStr.match(/\d+/)?.[0] || "0", 10);
+    
+    return (precio_mensualidad * meses) + precio_inscripcion;
+  };
+
   const columns = [
     {
       title: "Programa Académico",
@@ -195,11 +212,13 @@ export default function ProgramasPage() {
       width: 150,
     },
     {
-      title: "Precio",
-      dataIndex: "precio",
-      key: "precio",
-      width: 120,
-      render: (precio: number) => precio ? `$${Number(precio).toLocaleString()}` : "-",
+      title: "Valor Total",
+      key: "precio_total",
+      width: 150,
+      render: (_: any, record: any) => {
+        const total = calcularPrecioTotal(record);
+        return total ? <Text strong style={{ color: '#3f8600' }}>$ {Number(total).toLocaleString()}</Text> : "-";
+      },
     },
     {
       title: "Inscripción",
@@ -349,41 +368,52 @@ export default function ProgramasPage() {
 
           <Space style={{ width: "100%" }} size="large">
             <Form.Item
-              name="precio"
-              label="Precio Total"
-              style={{ marginBottom: 0 }}
+              label="Valor Total Calculado"
+              style={{ marginBottom: 0, flex: 1 }}
             >
-              <InputNumber
-                style={{ width: 200 }}
-                min={0}
-                formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
-              />
+              <div style={{
+                padding: '8px 12px',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                background: '#f0f2f5',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: '#3f8600'
+              }}>
+                $ {Number(calcularPrecioTotal(form.getFieldsValue())).toLocaleString()}
+              </div>
             </Form.Item>
+          </Space>
 
+          <Space style={{ width: "100%" }} size="large" direction="vertical">
+            <Text type="secondary" style={{fontSize: 12}}>Configura Inscripción y Mensualidad para calcular el total automáticamente</Text>
             <Form.Item
               name="precio_inscripcion"
-              label="Inscripción"
+              label="Valor Inscripción"
               style={{ marginBottom: 0 }}
             >
               <InputNumber
-                style={{ width: 200 }}
+                style={{ width: '100%' }}
                 min={0}
+                placeholder="0"
                 formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                 parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
+                onChange={() => form.validateFields()}
               />
             </Form.Item>
 
             <Form.Item
               name="precio_mensualidad"
-              label="Mensualidad"
+              label="Valor Mensualidad"
               style={{ marginBottom: 0 }}
             >
               <InputNumber
-                style={{ width: 200 }}
+                style={{ width: '100%' }}
                 min={0}
+                placeholder="0"
                 formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                 parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
+                onChange={() => form.validateFields()}
               />
             </Form.Item>
           </Space>

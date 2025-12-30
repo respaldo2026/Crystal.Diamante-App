@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Select, DatePicker, Row, Col, Divider, message, Alert } from "antd";
+import { Form, Input, Select, DatePicker, Row, Col, Divider, message, Alert, InputNumber } from "antd";
 import dayjs from "dayjs";
 import { 
     UserOutlined, PhoneOutlined, MailOutlined, HomeOutlined, 
@@ -101,6 +101,27 @@ export default function ProfesorEdit() {
                     <Col span={24}>
                         <Form.Item label="Dirección" name="direccion">
                             <Input prefix={<HomeOutlined style={{color:'rgba(0,0,0,.25)'}}/>} />
+                        </Form.Item>
+                    </Col>
+                </Row>
+
+                <Divider orientation="left" style={{ borderColor: '#722ed1', color: '#722ed1' }}>💸 Valor Hora</Divider>
+                <Row gutter={24}>
+                    <Col span={12}>
+                        <Form.Item
+                            label="Valor por Hora Dictada"
+                            name="valor_hora"
+                            tooltip="Este valor se usa para calcular la nómina (Horas dictadas x Valor hora)."
+                        >
+                            <InputNumber
+                                min={0}
+                                style={{ width: '100%' }}
+                                formatter={(value: any) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                parser={((value: string | undefined): number => {
+                                    const parsed = value?.replace(/\$\s?|(,*)/g, '');
+                                    return parsed ? parseInt(parsed, 10) : 0;
+                                }) as any}
+                            />
                         </Form.Item>
                     </Col>
                 </Row>
