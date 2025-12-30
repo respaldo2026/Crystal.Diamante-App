@@ -1,10 +1,11 @@
 "use client";
 
-import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, Popconfirm, App, Spin, Checkbox } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, BookOutlined } from "@ant-design/icons";
+import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, Popconfirm, App, Spin, Checkbox, Dropdown } from "antd";
+import { PlusOutlined, EditOutlined, DeleteOutlined, BookOutlined, EllipsisOutlined, SendOutlined, LinkOutlined, PhoneOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";
 import type { CheckboxChangeEvent } from "antd/es/checkbox";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { enviarWhatsapp } from "@utils/whatsapp";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -14,9 +15,13 @@ export default function ProgramasPage() {
   const [form] = Form.useForm();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPrograma, setEditingPrograma] = useState<any>(null);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [sharePrograma, setSharePrograma] = useState<any>(null);
   const [programas, setProgramas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
+
+  const [shareForm] = Form.useForm();
 
   useEffect(() => {
     cargarProgramas();
@@ -97,6 +102,40 @@ export default function ProgramasPage() {
       message.error("Error al guardar: " + (error?.message || "Desconocido"));
       console.error(error);
     }
+  };
+
+  const buildMensajePrograma = (programa: any, linkPdf?: string, notaPersonal?: string) => {
+    const precioInscripcion = programa?.precio_inscripcion ? `$${Number(programa.precio_inscripcion).toLocaleString('es-CO')}` : "N/A";
+    const mensualidad = programa?.precio_mensualidad ? `$${Number(programa.precio_mensualidad).toLocaleString('es-CO')}` : "N/A";
+    const totalClases = programa?.total_clases || "N/A";
+    const horasPorClase = programa?.horas_por_clase || "N/A";
+    const totalHoras = calcularTotalHoras(programa) || "N/A";
+    const valorClase = calcularValorPorClase(programa);
+    const valorClaseFmt = valorClase ? `$${valorClase.toLocaleString('es-CO')}` : "N/A";
+
+    let mensaje = `Hola! Te comparto la información del programa "${programa?.nombre || ''}":\n\n` +
+      `• Duración: ${programa?.duracion || 'N/A'}\n` +
+      `• Total clases: ${totalClases}\n` +
+      `• Horas por clase: ${horasPorClase}\n` +
+      `• Total de horas: ${totalHoras}\n` +
+      `• Mensualidad: ${mensualidad}\n` +
+      `• Valor por clase: ${valorClaseFmt}\n` +
+      `• Valor inscripción: ${precioInscripcion}`;
+
+    if (programa?.descripcion) {
+      mensaje += `\n\nDescripción: ${programa.descripcion}`;
+    }
+
+    if (notaPersonal) {
+      mensaje += `\n\nNota: ${notaPersonal}`;
+    }
+
+    if (linkPdf) {
+      mensaje += `\n\n📎 PDF del programa: ${linkPdf}`;
+    }
+
+    mensaje += `\n\nSi tienes preguntas, avísame y con gusto te ayudo.`;
+    return mensaje;
   };
 
   const handleToggleActivo = async (programa: any) => {
@@ -210,6 +249,28 @@ export default function ProgramasPage() {
     return horasPorClase * totalClases;
   };
 
+  const handleAction = (key: string, programa: any) => {
+    if (key === "edit") {
+      handleOpenModal(programa);
+      return;
+    }
+    if (key === "toggle") {
+      handleToggleActivo(programa);
+      return;
+    }
+    if (key === "share") {
+      setSharePrograma(programa);
+      const presetMensaje = buildMensajePrograma(programa, shareForm.getFieldValue('linkPdf'), shareForm.getFieldValue('nota'));
+      shareForm.setFieldsValue({
+        telefono: "",
+        linkPdf: "",
+        nota: "",
+        mensaje: presetMensaje,
+      });
+      setShareModalVisible(true);
+    }
+  };
+
   const columns = [
     {
       title: "Programa Académico",
@@ -290,25 +351,38 @@ export default function ProgramasPage() {
     {
       title: "Acciones",
       key: "acciones",
-      width: 150,
-      render: (_: any, record: any) => (
-        <Space>
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => handleOpenModal(record)}
+      width: 90,
+      render: (_: any, record: any) => {
+        const items = [
+          {
+            key: "edit",
+            label: "Editar",
+            icon: <EditOutlined />,
+          },
+          {
+            key: "toggle",
+            label: record.activo ? "Desactivar" : "Activar",
+            danger: record.activo,
+          },
+          {
+            key: "share",
+            label: "Enviar info",
+            icon: <SendOutlined />,
+          },
+        ];
+
+        return (
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items,
+              onClick: ({ key }) => handleAction(key, record),
+            }}
           >
-            Editar
-          </Button>
-          <Button
-            type="link"
-            danger={record.activo}
-            onClick={() => handleToggleActivo(record)}
-          >
-            {record.activo ? "Desactivar" : "Activar"}
-          </Button>
-        </Space>
-      ),
+            <Button icon={<EllipsisOutlined />} />
+          </Dropdown>
+        );
+      },
     },
   ];
 
@@ -535,6 +609,57 @@ export default function ProgramasPage() {
             label="Certificación"
           >
             <Input placeholder="Tipo de certificación que se otorga" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`Enviar info: ${sharePrograma?.nombre || ''}`}
+        open={shareModalVisible}
+        onCancel={() => setShareModalVisible(false)}
+        onOk={() => {
+          shareForm
+            .validateFields()
+            .then((values) => {
+              const mensaje = values.mensaje?.trim() || buildMensajePrograma(sharePrograma, values.linkPdf, values.nota);
+              enviarWhatsapp(values.telefono, mensaje);
+              setShareModalVisible(false);
+            })
+            .catch(() => {});
+        }}
+        okText="Enviar por WhatsApp"
+        cancelText="Cancelar"
+      >
+        <Form layout="vertical" form={shareForm}>
+          <Form.Item
+            label="Teléfono de contacto"
+            name="telefono"
+            rules={[{ required: true, message: "Ingresa un número" }]}
+          >
+            <Input prefix={<PhoneOutlined />} placeholder="Ej: 3001234567" />
+          </Form.Item>
+
+          <Form.Item
+            label="Link de PDF (opcional)"
+            name="linkPdf"
+            extra="Sube el PDF previamente a tu storage y pega aquí el enlace público"
+          >
+            <Input prefix={<LinkOutlined />} placeholder="https://.../programa.pdf" />
+          </Form.Item>
+
+          <Form.Item
+            label="Nota personal (opcional)"
+            name="nota"
+          >
+            <Input placeholder="Mensaje adicional para el interesado" />
+          </Form.Item>
+
+          <Form.Item
+            label="Mensaje a enviar"
+            name="mensaje"
+            extra="Puedes editar antes de enviar"
+          >
+            <Input.TextArea rows={6} />
           </Form.Item>
         </Form>
       </Modal>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App } from "antd";
+import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Dropdown } from "antd";
 import {
   UserOutlined,
   CheckCircleOutlined,
@@ -16,7 +16,8 @@ import {
   FileOutlined,
   ClockCircleOutlined,
   CheckOutlined,
-  FormOutlined
+  FormOutlined,
+  EllipsisOutlined
 } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -134,15 +135,24 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
       {
         title: "Acciones",
         key: "acciones",
-        width: 260,
+        width: 120,
         render: (_: any, record: any) => {
           const esActivo = record.estado === "activo";
+          const items = [
+            { key: "completada", label: "Marcar completada", disabled: !esActivo },
+            { key: "cancelada", label: "Cancelar", disabled: !esActivo },
+            { key: "retirada", label: "Retirar", disabled: !esActivo },
+          ];
           return (
-            <Space>
-              <Button size="small" type="primary" disabled={!esActivo} onClick={() => actualizarEstadoMatricula(record.id, "completada")}>Completada</Button>
-              <Button size="small" danger disabled={!esActivo} onClick={() => actualizarEstadoMatricula(record.id, "cancelada")}>Cancelar</Button>
-              <Button size="small" disabled={!esActivo} onClick={() => actualizarEstadoMatricula(record.id, "retirada")}>Retirar</Button>
-            </Space>
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items,
+                onClick: ({ key }) => handleAccionMatricula(key, record),
+              }}
+            >
+              <Button icon={<EllipsisOutlined />} />
+            </Dropdown>
           );
         },
       },
@@ -297,6 +307,12 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
     } catch (error: any) {
       message.error("No se pudo actualizar la matrícula");
       console.error(error);
+    }
+  };
+
+  const handleAccionMatricula = (key: string, record: any) => {
+    if (key === "completada" || key === "cancelada" || key === "retirada") {
+      actualizarEstadoMatricula(record.id, key);
     }
   };
 

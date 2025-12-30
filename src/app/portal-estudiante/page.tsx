@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Tabs, Card, Table, Row, Col, Statistic, Spin, Alert, Progress, Button, Empty, message, Modal } from "antd";
+import { Tabs, Card, Table, Row, Col, Statistic, Spin, Alert, Progress, Button, Empty, message, Modal, Dropdown } from "antd";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -10,6 +10,7 @@ import {
   TrophyOutlined,
   DownloadOutlined,
   WhatsAppOutlined,
+  EllipsisOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation";
@@ -332,14 +333,25 @@ export default function PortalEstudiante() {
                       },
                       {
                         title: "Acciones",
-                        render: (_, record: any) => (
-                          <Button
-                            icon={<DownloadOutlined />}
-                            onClick={() => descargarCertificado(record)}
-                          >
-                            Descargar
-                          </Button>
-                        ),
+                        width: 90,
+                        render: (_, record: any) => {
+                          const items = [
+                            { key: "descargar", label: "Descargar", icon: <DownloadOutlined /> },
+                          ];
+                          return (
+                            <Dropdown
+                              trigger={["click"]}
+                              menu={{
+                                items,
+                                onClick: ({ key }) => {
+                                  if (key === "descargar") descargarCertificado(record);
+                                }
+                              }}
+                            >
+                              <Button icon={<EllipsisOutlined />} />
+                            </Dropdown>
+                          );
+                        },
                       },
                     ]}
                   />
