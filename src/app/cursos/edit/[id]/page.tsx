@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Edit, useForm, useSelect } from "@refinedev/antd";
+import { Edit, useForm } from "@refinedev/antd";
 import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, Button, Modal, Space, TimePicker, Typography, Tag } from "antd";
 import { DeleteOutlined, ArrowLeftOutlined, BookOutlined } from "@ant-design/icons";
 import { useRouter, useParams } from "next/navigation";
@@ -18,27 +18,8 @@ export default function CursoEdit() {
     const [modal, modalContextHolder] = Modal.useModal();
     const [estadoActual, setEstadoActual] = useState<string | undefined>(undefined);
     const [activosCount, setActivosCount] = useState<number>(0);
-    const [valorClase, setValorClase] = useState<number | null>(null);
     const rawCursoId = params?.id as string;
     const cursoId = rawCursoId ? Number(rawCursoId) : undefined;
-    
-    // Función para calcular el valor por clase
-    const calcularValorClase = (precioMensual: number | undefined, totalClases: number | undefined) => {
-        if (!precioMensual || !totalClases || totalClases === 0) {
-            setValorClase(null);
-            return;
-        }
-        setValorClase(Math.round(precioMensual / totalClases));
-    };
-
-    // Recalcular cuando el formulario ya tiene valores iniciales cargados
-    useEffect(() => {
-        const precioMensual = formProps.initialValues?.precio_mensualidad;
-        const totalClases = formProps.initialValues?.total_clases;
-        if (precioMensual !== undefined && totalClases !== undefined) {
-            calcularValorClase(precioMensual, totalClases);
-        }
-    }, [formProps.initialValues]);
         useEffect(() => {
             const cargarEstado = async () => {
                 if (!cursoId || Number.isNaN(cursoId)) return;
@@ -148,11 +129,22 @@ export default function CursoEdit() {
         };
     
 
-    const { selectProps: programaSelectProps } = useSelect({
-        resource: "programas",
-        optionLabel: "nombre",
-        optionValue: "id",
-    });
+    const [programas, setProgramas] = useState<any[]>([]);
+    
+    useEffect(() => {
+        const cargarProgramas = async () => {
+            const { data, error } = await supabaseBrowserClient
+                .from("programas")
+                .select("id, nombre")
+                .eq("activo", true)
+                .order("nombre");
+            
+            if (!error && data) {
+                setProgramas(data);
+            }
+        };
+        cargarProgramas();
+    }, []);
 
     const handleDeleteCurso = async () => {
         if (!cursoId || Number.isNaN(cursoId)) {
@@ -281,9 +273,7 @@ export default function CursoEdit() {
             <Form 
                 {...formProps} 
                 layout="vertical" 
-                onValuesChange={(changed, allValues) => {
-                    calcularValorClase(allValues.precio_mensualidad, allValues.total_clases);
-                }}
+
                 onFinish={async (values) => {
                     try {
                         // Construir objeto de actualización limpio
@@ -296,9 +286,6 @@ export default function CursoEdit() {
                         if (v.estado !== undefined) datosActualizacion.estado = v.estado;
                         if (v.profesor_id !== undefined) datosActualizacion.profesor_id = v.profesor_id;
                         if (v.descripcion !== undefined) datosActualizacion.descripcion = v.descripcion;
-                        if (v.precio_inscripcion !== undefined) datosActualizacion.precio_inscripcion = v.precio_inscripcion;
-                        if (v.precio_mensualidad !== undefined) datosActualizacion.precio_mensualidad = v.precio_mensualidad;
-                        if (v.total_clases !== undefined) datosActualizacion.total_clases = v.total_clases;
                         if (v.cupos !== undefined) datosActualizacion.cupos = v.cupos;
                         
                         // Convertir fecha correctamente
@@ -363,9 +350,15 @@ export default function CursoEdit() {
                             rules={[{ required: true, message: "Selecciona el programa" }]}
                         >
                             <Select 
-                                {...programaSelectProps} 
                                 placeholder="Selecciona el programa"
-                                prefix={<BookOutlined />}
+                                showSearch
+                                filterOption={(input, option) =>
+                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                options={programas.map(p => ({ 
+                                    label: p.nombre, 
+                                    value: p.id 
+                                }))}
                             />
                         </Form.Item>
                     </Col>
@@ -403,86 +396,6 @@ export default function CursoEdit() {
                                 ]}
                             />
                         </Form.Item>
-                    </Col>
-                </Row>
-
-                <Row gutter={24}>
-                    <Col span={8}>
-                        <Form.Item
-                            label="Precio Inscripción"
-                            name="precio_inscripcion"
-                        >
-                            <InputNumber 
-                                style={{ width: "100%" }} 
-                                formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
-                            />
-                        </Form.Item>
-                    </Col>
-                    
-                    <Col span={8}>
-                        <Form.Item
-                            label="Valor Total / Mensualidad"
-                            name="precio_mensualidad"
-                            rules={[{ required: true }]}
-                        >
-                            <InputNumber 
-                                style={{ width: "100%" }}
-                                formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
-                                onChange={() => {
-                                    const precioMensual = formProps.form?.getFieldValue('precio_mensualidad');
-                                    const totalClases = formProps.form?.getFieldValue('total_clases');
-                                    calcularValorClase(precioMensual, totalClases);
-                                }}
-                            />
-                        </Form.Item>
-                    </Col>
-
-                    <Col span={8}>
-                        <Form.Item
-                            label="Total de Clases"
-                            name="total_clases"
-                            rules={[{ required: true, message: "Ingresa el número de clases" }]}
-                        >
-                            <InputNumber 
-                                min={1}
-                                style={{ width: "100%" }}
-                                onChange={() => {
-                                    const precioMensual = formProps.form?.getFieldValue('precio_mensualidad');
-                                    const totalClases = formProps.form?.getFieldValue('total_clases');
-                                    calcularValorClase(precioMensual, totalClases);
-                                }}
-                            />
-                        </Form.Item>
-                    </Col>
-                </Row>
-
-                {/* Fila de visualización de valor por clase */}
-                <Row gutter={24}>
-                    <Col span={8} offset={16}>
-                        <div style={{
-                            padding: '12px',
-                            backgroundColor: '#f0f5ff',
-                            border: '1px solid #b6c8db',
-                            borderRadius: '4px',
-                            textAlign: 'center'
-                        }}>
-                            <Typography.Text style={{ fontSize: '12px', color: '#666' }}>
-                                Valor por Clase
-                            </Typography.Text>
-                            <div style={{
-                                fontSize: '18px',
-                                fontWeight: 'bold',
-                                color: '#1890ff',
-                                marginTop: '4px'
-                            }}>
-                                {valorClase !== null 
-                                    ? `$ ${valorClase.toLocaleString('es-CO')}`
-                                    : '—'
-                                }
-                            </div>
-                        </div>
                     </Col>
                 </Row>
 

@@ -17,7 +17,8 @@ import {
   DollarCircleOutlined, 
   SettingOutlined, 
   CalculatorOutlined,
-  ShopOutlined 
+  ShopOutlined,
+  CalendarOutlined
 } from "@ant-design/icons";
 
 import routerProvider from "@refinedev/nextjs-router";
@@ -112,6 +113,14 @@ export default function RootLayout({
                     meta: {
                       label: "Grupos/Cohortes",
                       icon: <TeamOutlined />,
+                    },
+                  },
+                  {
+                    name: "planificador",
+                    list: "/planificador",
+                    meta: {
+                      label: "Planificador",
+                      icon: <CalendarOutlined />,
                     },
                   },
                   {

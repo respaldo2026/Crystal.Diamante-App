@@ -1,39 +1,40 @@
 "use client";
 
-import React, { useState } from "react";
-import { Create, useForm, useSelect } from "@refinedev/antd";
+import React, { useState, useEffect } from "react";
+import { Create, useForm } from "@refinedev/antd";
 import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, TimePicker } from "antd";
 import { UserOutlined, BookOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function CursoCreate() {
     const { formProps, saveButtonProps } = useForm({
         redirect: "list",
     });
-    const [valorClase, setValorClase] = useState<number | null>(null);
-
-    const calcularValorClase = (mensualidad?: number, total?: number) => {
-        if (!mensualidad || !total || total === 0) {
-            setValorClase(null);
-            return;
-        }
-        setValorClase(Math.round(mensualidad / total));
-    };
-
-    const { selectProps: professorSelectProps } = useSelect({
-        resource: "perfiles",
-        optionLabel: "nombre_completo",
-        optionValue: "id",
-        filters: [
-            { field: "rol", operator: "eq", value: "profesor" }
-        ]
-    });
-
-    const { selectProps: programaSelectProps } = useSelect({
-        resource: "programas",
-        optionLabel: "nombre",
-        optionValue: "id",
-    });
+    
+    const [profesores, setProfesores] = useState<any[]>([]);
+    const [programas, setProgramas] = useState<any[]>([]);
+    
+    useEffect(() => {
+        const cargarDatos = async () => {
+            const [profesoresRes, programasRes] = await Promise.all([
+                supabaseBrowserClient
+                    .from("perfiles")
+                    .select("id, nombre_completo")
+                    .eq("rol", "profesor")
+                    .order("nombre_completo"),
+                supabaseBrowserClient
+                    .from("programas")
+                    .select("id, nombre")
+                    .eq("activo", true)
+                    .order("nombre")
+            ]);
+            
+            if (profesoresRes.data) setProfesores(profesoresRes.data);
+            if (programasRes.data) setProgramas(programasRes.data);
+        };
+        cargarDatos();
+    }, []);
 
     const handleOnFinish = async (values: any) => {
         // Convertir valores correctamente
@@ -53,7 +54,6 @@ export default function CursoCreate() {
                     ? values.hora_fin.format('HH:mm:ss')
                     : values.hora_fin)
                 : null,
-            total_clases: values.total_clases ?? null,
         };
         
         // Llamar a la función onFinish de formProps (la que guarda en Refine/Supabase)
@@ -68,9 +68,6 @@ export default function CursoCreate() {
             <Form 
                 {...formProps}
                 layout="vertical" 
-                onValuesChange={(changed, all) => {
-                    calcularValorClase(all.precio_mensualidad, all.total_clases);
-                }}
                 onFinish={handleOnFinish}
             >
                 
@@ -82,14 +79,19 @@ export default function CursoCreate() {
                             rules={[{ required: true, message: "Selecciona el programa" }]}
                         >
                             <Select 
-                                {...programaSelectProps} 
                                 placeholder="Selecciona el programa al que pertenece este grupo"
-                                prefix={<BookOutlined />}
-                                onChange={(value, option: any) => {
-                                    const nombrePrograma = option?.label ?? "";
-                                    // Prefija el nombre del grupo con el nombre del programa
-                                    if (nombrePrograma) {
-                                        formProps.form?.setFieldValue("nombre", nombrePrograma);
+                                showSearch
+                                filterOption={(input, option) =>
+                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                options={programas.map(p => ({ 
+                                    label: p.nombre, 
+                                    value: p.id 
+                                }))}
+                                onChange={(value) => {
+                                    const programa = programas.find(p => p.id === value);
+                                    if (programa) {
+                                        formProps.form?.setFieldValue("nombre", programa.nombre);
                                     }
                                 }}
                             />
@@ -104,65 +106,6 @@ export default function CursoCreate() {
                         >
                             <Input placeholder="Ej: Grupo A, Cohorte Mañana, Fin de Semana" />
                         </Form.Item>
-                    </Col>
-                </Row>
-
-                <Row gutter={24}>
-                    <Col span={8}>
-                        <Form.Item
-                            label="Precio Inscripción"
-                            name="precio_inscripcion"
-                        >
-                            <InputNumber
-                                style={{ width: "100%" }}
-                                formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
-                            />
-                        </Form.Item>
-                    </Col>
-                    <Col span={8}>
-                        <Form.Item
-                            label="Mensualidad"
-                            name="precio_mensualidad"
-                            rules={[{ required: true, message: "Ingresa la mensualidad" }]}
-                        >
-                            <InputNumber
-                                style={{ width: "100%" }}
-                                formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
-                            />
-                        </Form.Item>
-                    </Col>
-                    <Col span={8}>
-                        <Form.Item
-                            label="Total de Clases"
-                            name="total_clases"
-                            rules={[{ required: true, message: "Ingresa el número de clases" }]}
-                        >
-                            <InputNumber min={1} style={{ width: "100%" }} />
-                        </Form.Item>
-                    </Col>
-                </Row>
-
-                <Row gutter={24}>
-                    <Col span={8} offset={16}>
-                        <div style={{
-                            padding: '12px',
-                            backgroundColor: '#f0f5ff',
-                            border: '1px solid #b6c8db',
-                            borderRadius: '4px',
-                            textAlign: 'center'
-                        }}>
-                            <span style={{ fontSize: 12, color: '#666' }}>Valor por Clase</span>
-                            <div style={{
-                                fontSize: 18,
-                                fontWeight: 'bold',
-                                color: '#1890ff',
-                                marginTop: 4
-                            }}>
-                                {valorClase !== null ? `$ ${valorClase.toLocaleString('es-CO')}` : '—'}
-                            </div>
-                        </div>
                     </Col>
                 </Row>
 
@@ -199,11 +142,15 @@ export default function CursoCreate() {
                     rules={[{ required: true, message: "Asigna un profesor" }]}
                 >
                     <Select 
-                        {...professorSelectProps}
                         placeholder="Buscar profesor..."
-                        suffixIcon={<UserOutlined />}
                         showSearch
-                        optionFilterProp="label"
+                        filterOption={(input, option) =>
+                            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
+                        options={profesores.map(p => ({ 
+                            label: p.nombre_completo, 
+                            value: p.id 
+                        }))}
                     />
                 </Form.Item>
 

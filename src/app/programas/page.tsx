@@ -193,6 +193,23 @@ export default function ProgramasPage() {
     return (precio_mensualidad * meses) + precio_inscripcion;
   };
 
+  // Función para calcular el valor por clase
+  const calcularValorPorClase = (programa: any): number | null => {
+    const mensualidad = Number(programa.precio_mensualidad || 0);
+    const totalClases = Number(programa.total_clases || 0);
+
+    if (mensualidad > 0 && totalClases > 0) {
+      return Math.round(mensualidad / totalClases);
+    }
+    return null;
+  };
+
+  const calcularTotalHoras = (programa: any): number => {
+    const horasPorClase = Number(programa.horas_por_clase || 0);
+    const totalClases = Number(programa.total_clases || 0);
+    return horasPorClase * totalClases;
+  };
+
   const columns = [
     {
       title: "Programa Académico",
@@ -209,12 +226,37 @@ export default function ProgramasPage() {
       title: "Duración",
       dataIndex: "duracion",
       key: "duracion",
-      width: 150,
+      width: 120,
+    },
+    {
+      title: "N° Clases",
+      dataIndex: "total_clases",
+      key: "total_clases",
+      width: 100,
+      render: (clases: number) => clases || "-",
+    },
+    {
+      title: "Total Horas",
+      key: "total_horas",
+      width: 110,
+      render: (_: any, record: any) => {
+        const totalHoras = calcularTotalHoras(record);
+        return totalHoras > 0 ? <Text style={{ color: '#722ed1' }}>{totalHoras} hrs</Text> : "-";
+      },
+    },
+    {
+      title: "Valor/Clase",
+      key: "valor_clase",
+      width: 120,
+      render: (_: any, record: any) => {
+        const valorClase = calcularValorPorClase(record);
+        return valorClase ? <Text style={{ color: '#1890ff' }}>$ {valorClase.toLocaleString()}</Text> : "-";
+      },
     },
     {
       title: "Valor Total",
       key: "precio_total",
-      width: 150,
+      width: 130,
       render: (_: any, record: any) => {
         const total = calcularPrecioTotal(record);
         return total ? <Text strong style={{ color: '#3f8600' }}>$ {Number(total).toLocaleString()}</Text> : "-";
@@ -366,7 +408,63 @@ export default function ProgramasPage() {
             <InputNumber style={{ width: "100%" }} min={0} placeholder="120" />
           </Form.Item>
 
-          <Space style={{ width: "100%" }} size="large">
+          <Form.Item
+            name="horas_por_clase"
+            label="Horas por Clase/Sesión"
+            rules={[{ required: true, message: "Ingresa las horas por clase" }]}
+          >
+            <InputNumber 
+              style={{ width: "100%" }} 
+              min={0.5} 
+              step={0.5}
+              placeholder="Ej: 2 o 2.5" 
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="total_clases"
+            label="Total de Clases/Sesiones"
+            rules={[{ required: true, message: "Ingresa el número de clases" }]}
+          >
+            <InputNumber style={{ width: "100%" }} min={1} placeholder="Ej: 24" />
+          </Form.Item>
+
+          <Space style={{ width: "100%" }} size="large" direction="horizontal">
+            <Form.Item
+              label="Total Horas Programa"
+              style={{ marginBottom: 0, flex: 1 }}
+            >
+              <div style={{
+                padding: '8px 12px',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                background: '#f9f0ff',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: '#722ed1'
+              }}>
+                {calcularTotalHoras(form.getFieldsValue())} horas
+              </div>
+            </Form.Item>
+            <Form.Item
+              label="Valor por Clase"
+              style={{ marginBottom: 0, flex: 1 }}
+            >
+              <div style={{
+                padding: '8px 12px',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                background: '#e6f7ff',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: '#1890ff'
+              }}>
+                $ {(calcularValorPorClase(form.getFieldsValue()) || 0).toLocaleString()}
+              </div>
+            </Form.Item>
+          </Space>
+
+          <Space style={{ width: "100%" }} size="large" direction="horizontal">
             <Form.Item
               label="Valor Total Calculado"
               style={{ marginBottom: 0, flex: 1 }}

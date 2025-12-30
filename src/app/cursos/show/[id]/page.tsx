@@ -449,9 +449,6 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
     ? Math.round(estudiantes.reduce((sum, e) => sum + e.asistencia_porcentaje, 0) / estudiantes.length)
     : 0;
   const estudiantesEnRiesgo = estudiantes.filter(e => e.asistencia_porcentaje < (curso.porcentaje_minimo || 80)).length;
-  const mensualidad = Number(curso?.precio_mensualidad) || 0;
-  const totalClases = Number(curso?.total_clases) || 0;
-  const valorClase = totalClases > 0 ? Math.round(mensualidad / totalClases) : null;
 
   return (
     <div style={{ padding: 24 }}>
@@ -496,7 +493,7 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
           </Space>
           <div>
             <Text style={{ color: "rgba(255,255,255,0.9)" }}>
-              👨‍🏫 Profesor: <strong>{curso.perfiles?.nombre_completo || "Sin asignar"}</strong> • 📅 Inicio: {dayjs(curso.fecha_inicio).format("DD MMM YYYY")} • ⏱️ Duración: {curso.duracion} • 📚 Clases: {totalClases || "—"} • 💰 Valor/clase: {valorClase !== null ? `$ ${valorClase.toLocaleString("es-CO")}` : "—"}
+              👨‍🏫 Profesor: <strong>{curso.perfiles?.nombre_completo || "Sin asignar"}</strong> • 📅 Inicio: {dayjs(curso.fecha_inicio).format("DD MMM YYYY")} • ⏱️ Duración: {curso.duracion}
             </Text>
           </div>
         </Space>
@@ -522,35 +519,6 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic title="En Riesgo" value={estudiantesEnRiesgo} valueStyle={{ color: estudiantesEnRiesgo > 0 ? "#ff4d4f" : "#52c41a" }} />
-          </Card>
-        </Col>
-      </Row>
-
-      {/* INFO DE PRECIOS, DURACIÓN Y CLASES */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} md={5}>
-          <Card>
-            <Statistic title="Duración" value={curso?.duracion || "-"} prefix={<ClockCircleOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={5}>
-          <Card>
-            <Statistic title="Mensualidad" value={mensualidad} prefix="$" valueStyle={{ color: "#1890ff" }} formatter={(v) => Number(v).toLocaleString("es-CO")}/>
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={5}>
-          <Card>
-            <Statistic title="Total de Clases" value={totalClases || 0} prefix={<BookOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={5}>
-          <Card>
-            <Statistic title="Valor por Clase" value={valorClase || 0} prefix="$" valueStyle={{ color: "#3f8600" }} formatter={(v) => Number(v).toLocaleString("es-CO")}/>
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={4}>
-          <Card>
-            <Statistic title="Inscripción" value={Number(curso?.precio_inscripcion) || 0} prefix="$" formatter={(v) => Number(v).toLocaleString("es-CO")}/>
           </Card>
         </Col>
       </Row>
