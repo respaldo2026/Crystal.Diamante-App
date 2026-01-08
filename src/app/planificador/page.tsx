@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { 
   Card, Typography, Spin, Tag, Button, Space, Select, DatePicker, Row, Col, Badge, Divider, Tooltip
 } from "antd";
@@ -45,6 +45,23 @@ interface Curso {
   };
 }
 
+interface Clase {
+  id: number;
+  curso_id: number;
+  fecha_hora: string;
+  estado?: string | null;
+  profesor_id?: string | null;
+  perfiles?: {
+    nombre_completo?: string | null;
+  };
+}
+
+interface EventoCalendario {
+  curso: Curso;
+  clase?: Clase;
+  estadoClase?: string;
+}
+
 export default function PlanificadorPage() {
   const { show } = useNavigation();
   const [cursos, setCursos] = useState<Curso[]>([]);
@@ -53,27 +70,83 @@ export default function PlanificadorPage() {
   const [currentDate, setCurrentDate] = useState<Dayjs>(dayjs());
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [inscritosPorCurso, setInscritosPorCurso] = useState<Record<number, number>>({});
+  const [clases, setClases] = useState<Clase[]>([]);
+  const [profesores, setProfesores] = useState<{ id: string; nombre_completo: string }[]>([]);
+  const [profesorFiltro, setProfesorFiltro] = useState<string | null>(null);
+
+  useEffect(() => {
+    cargarProfesores();
+  }, []);
 
   useEffect(() => {
     cargarCursos();
-  }, []);
+  }, [viewMode, currentDate, customRange, profesorFiltro]);
 
   const cargarCursos = async () => {
     setLoading(true);
-    const { data, error } = await supabaseBrowserClient
-      .from("cursos")
-      .select(`*, perfiles (nombre_completo), programas (nombre, duracion)`)
-      .in('estado', ['activo', 'proximo'])
-      .order("fecha_inicio", { ascending: true });
+    const rango = getDateRange();
+    try {
+      let query = supabaseBrowserClient
+        .from("cursos")
+        .select(`*, perfiles (nombre_completo), programas (nombre, duracion)`)
+        .in('estado', ['activo', 'proximo'])
+        .order("fecha_inicio", { ascending: true });
 
-    if (!error && data) {
-      setCursos(data || []);
-      cargarInscritosPorCurso(data.map((c: any) => c.id));
+      if (profesorFiltro) {
+        query = query.eq("profesor_id", profesorFiltro);
+      }
+
+      const { data, error } = await query;
+
+      if (!error && data) {
+        setCursos(data || []);
+        const cursoIds = data.map((c: any) => c.id);
+
+        if (cursoIds.length) {
+          await Promise.all([
+            cargarInscritosPorCurso(cursoIds),
+            cargarClases(cursoIds, rango.start, rango.end),
+          ]);
+        } else {
+          setInscritosPorCurso({});
+          setClases([]);
+        }
+      } else {
+        setCursos([]);
+        setClases([]);
+        setInscritosPorCurso({});
+      }
+    } catch (err) {
+      console.error("Error cargando cursos:", err);
+      setCursos([]);
+      setClases([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const cargarProfesores = async () => {
+    try {
+      const { data, error } = await supabaseBrowserClient
+        .from("perfiles")
+        .select("id, nombre_completo")
+        .eq("rol", "profesor")
+        .order("nombre_completo");
+
+      if (!error && data) {
+        setProfesores(data as { id: string; nombre_completo: string }[]);
+      }
+    } catch (err) {
+      console.error("Error cargando profesores:", err);
+    }
   };
 
   const cargarInscritosPorCurso = async (cursoIds: number[]) => {
+    if (!cursoIds.length) {
+      setInscritosPorCurso({});
+      return;
+    }
+
     try {
       const { data } = await supabaseBrowserClient
         .from("matriculas")
@@ -87,6 +160,37 @@ export default function PlanificadorPage() {
       setInscritosPorCurso(conteos);
     } catch (error) {
       console.error("Error cargando inscritos:", error);
+    }
+  };
+
+  const cargarClases = async (cursoIds: number[], start: Dayjs, end: Dayjs) => {
+    if (!cursoIds.length) {
+      setClases([]);
+      return;
+    }
+
+    try {
+      let query = supabaseBrowserClient
+        .from("clases")
+        .select("id, curso_id, fecha_hora, estado, profesor_id, perfiles:profesor_id (nombre_completo)")
+        .in("curso_id", cursoIds)
+        .gte("fecha_hora", start.startOf('day').toISOString())
+        .lte("fecha_hora", end.endOf('day').toISOString());
+
+      if (profesorFiltro) {
+        query = query.eq("profesor_id", profesorFiltro);
+      }
+
+      const { data, error } = await query;
+
+      if (!error && data) {
+        setClases(data as unknown as Clase[]);
+      } else {
+        setClases([]);
+      }
+    } catch (err) {
+      console.error("Error cargando clases:", err);
+      setClases([]);
     }
   };
 
@@ -190,16 +294,94 @@ export default function PlanificadorPage() {
   };
 
   const daysArray = getDaysArray();
-  const horas = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+
+  const cursosPorId = useMemo(() => {
+    const map: Record<number, Curso> = {};
+    cursos.forEach((c) => {
+      map[c.id] = c;
+    });
+    return map;
+  }, [cursos]);
+
+  const clasesPorFecha = useMemo(() => {
+    const map: Record<string, Clase[]> = {};
+    clases.forEach((clase) => {
+      const fecha = dayjs(clase.fecha_hora).format('YYYY-MM-DD');
+      if (!map[fecha]) map[fecha] = [];
+      map[fecha].push(clase);
+    });
+    return map;
+  }, [clases]);
+
+  const getEstadoClaseProps = (estado?: string) => {
+    const normalized = (estado || 'programada').toLowerCase();
+    switch (normalized) {
+      case 'cancelada':
+        return { color: 'red', label: 'Cancelada', border: '#ff4d4f' };
+      case 'reprogramada':
+        return { color: 'orange', label: 'Reprogramada', border: '#fa8c16' };
+      case 'dictada':
+      case 'completada':
+        return { color: 'green', label: 'Dictada', border: '#52c41a' };
+      default:
+        return { color: 'blue', label: 'Programada', border: '#1890ff' };
+    }
+  };
+
+  const getHoraEvento = (evento: EventoCalendario) => {
+    if (evento.clase?.fecha_hora) {
+      return dayjs(evento.clase.fecha_hora);
+    }
+
+    if (evento.curso.hora_inicio) {
+      return dayjs(evento.curso.hora_inicio, 'HH:mm:ss');
+    }
+
+    return dayjs().hour(23).minute(59);
+  };
+
+  const obtenerEventosDelDia = (dia: Dayjs): EventoCalendario[] => {
+    const fechaClave = dia.format('YYYY-MM-DD');
+    const clasesDelDia = (clasesPorFecha[fechaClave] || [])
+      .map((clase) => {
+        const curso = cursosPorId[clase.curso_id];
+        if (!curso) return null;
+        return {
+          curso,
+          clase,
+          estadoClase: (clase.estado || 'programada').toLowerCase(),
+        } as EventoCalendario;
+      })
+      .filter(Boolean) as EventoCalendario[];
+
+    const cursosConClaseEnFecha = new Set(clasesDelDia.map((e) => e.curso.id));
+    const cursosCanceladosEnFecha = new Set(
+      clasesDelDia
+        .filter((e) => e.estadoClase === 'cancelada')
+        .map((e) => e.curso.id)
+    );
+
+    const eventosAuto = cursosEnRango
+      .filter((curso) =>
+        !cursosCanceladosEnFecha.has(curso.id) &&
+        cursoTieneClaseEnDia(curso, dia) &&
+        !cursosConClaseEnFecha.has(curso.id)
+      )
+      .map((curso) => ({ curso, estadoClase: 'programada' as const }));
+
+    return [...clasesDelDia, ...eventosAuto];
+  };
 
   // Vista de lista agrupada por día
   const renderListView = () => {
+    let hayEventos = false;
     return (
       <div>
         {daysArray.map(dia => {
-          const cursosDelDia = cursosEnRango.filter(curso => cursoTieneClaseEnDia(curso, dia));
+          const eventosDelDia = obtenerEventosDelDia(dia).sort((a, b) => getHoraEvento(a).diff(getHoraEvento(b)));
           
-          if (cursosDelDia.length === 0) return null;
+          if (eventosDelDia.length === 0) return null;
+          hayEventos = true;
           
           return (
             <Card 
@@ -209,67 +391,79 @@ export default function PlanificadorPage() {
                 <Space>
                   <CalendarOutlined />
                   <Text strong>{dia.format('dddd DD [de] MMMM YYYY').toUpperCase()}</Text>
-                  <Badge count={cursosDelDia.length} style={{ backgroundColor: '#52c41a' }} />
+                  <Badge count={eventosDelDia.length} style={{ backgroundColor: '#52c41a' }} />
                 </Space>
               }
             >
               <Row gutter={[16, 16]}>
-                {cursosDelDia.sort((a, b) => {
-                  const horaA = a.hora_inicio ? dayjs(a.hora_inicio, 'HH:mm:ss') : dayjs();
-                  const horaB = b.hora_inicio ? dayjs(b.hora_inicio, 'HH:mm:ss') : dayjs();
-                  return horaA.diff(horaB);
-                }).map(curso => {
-                  const inscritos = inscritosPorCurso[curso.id] || 0;
-                  const disponibles = Math.max(0, curso.cupos - inscritos);
-                  
+                {eventosDelDia.map((evento) => {
+                  const inscritos = inscritosPorCurso[evento.curso.id] || 0;
+                  const disponibles = Math.max(0, evento.curso.cupos - inscritos);
+                  const estadoClaseProps = getEstadoClaseProps(evento.estadoClase);
+                  const esCancelada = estadoClaseProps.label === 'Cancelada';
+                  const horaInicio = getHoraEvento(evento);
+                  const horaFin = evento.curso.hora_fin ? dayjs(evento.curso.hora_fin, 'HH:mm:ss') : null;
+                  const profesorNombre = evento.clase?.perfiles?.nombre_completo || evento.curso.perfiles?.nombre_completo;
+
                   return (
-                    <Col xs={24} sm={12} md={8} lg={6} key={curso.id}>
+                    <Col xs={24} sm={12} md={8} lg={6} key={`${evento.curso.id}-${evento.clase?.id || horaInicio.valueOf()}`}>
                       <Card
                         size="small"
-                        hoverable
-                        onClick={() => show("cursos", curso.id)}
+                        hoverable={!esCancelada}
+                        onClick={esCancelada ? undefined : () => show("cursos", evento.curso.id)}
                         style={{ 
-                          borderLeft: `4px solid ${curso.estado === 'activo' ? '#52c41a' : '#1890ff'}`,
-                          height: '100%'
+                          borderLeft: `4px solid ${estadoClaseProps.border || '#1890ff'}`,
+                          height: '100%',
+                          opacity: esCancelada ? 0.75 : 1,
+                          background: esCancelada ? '#fff1f0' : undefined
                         }}
                       >
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                          <Text strong ellipsis={{ tooltip: true }}>
-                            {curso.programas?.nombre || curso.nombre}
-                          </Text>
-                          
-                          {curso.hora_inicio && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text strong ellipsis={{ tooltip: true }}>
+                              {evento.curso.programas?.nombre || evento.curso.nombre}
+                            </Text>
+                            {evento.clase && evento.estadoClase !== 'programada' && (
+                              <Tooltip title="Clase reprogramada/registrada manualmente">
+                                <Tag color={estadoClaseProps.color} style={{ fontSize: 10 }}>
+                                  {estadoClaseProps.label}
+                                </Tag>
+                              </Tooltip>
+                            )}
+                          </div>
+
+                          {(evento.clase || evento.curso.hora_inicio) && (
                             <div>
                               <ClockCircleOutlined style={{ marginRight: 4 }} />
                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                {dayjs(curso.hora_inicio, 'HH:mm:ss').format('HH:mm')}
-                                {curso.hora_fin && ` - ${dayjs(curso.hora_fin, 'HH:mm:ss').format('HH:mm')}`}
+                                {horaInicio.format('HH:mm')}
+                                {horaFin && ` - ${horaFin.format('HH:mm')}`}
                               </Text>
                             </div>
                           )}
                           
-                          {curso.perfiles && (
+                          {profesorNombre && (
                             <div>
                               <UserOutlined style={{ marginRight: 4 }} />
                               <Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: true }}>
-                                {curso.perfiles.nombre_completo}
+                                {profesorNombre}
                               </Text>
                             </div>
                           )}
                           
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Tag color={getEstadoColor(curso.estado)} style={{ fontSize: 11 }}>
-                              {curso.estado}
+                            <Tag color={getEstadoColor(evento.curso.estado)} style={{ fontSize: 11 }}>
+                              {evento.curso.estado}
                             </Tag>
                             <Text type="secondary" style={{ fontSize: 11 }}>
-                              <TeamOutlined /> {inscritos}/{curso.cupos}
+                              <TeamOutlined /> {inscritos}/{evento.curso.cupos}
                             </Text>
                           </div>
                           
                           <div style={{ fontSize: 11, color: '#999' }}>
-                            Inicia: {dayjs(curso.fecha_inicio).format('DD MMM YYYY')}
-                            {curso.fecha_fin && (
-                              <><br/>Termina: {dayjs(curso.fecha_fin).format('DD MMM YYYY')}</>
+                            Inicia: {dayjs(evento.curso.fecha_inicio).format('DD MMM YYYY')}
+                            {evento.curso.fecha_fin && (
+                              <><br/>Termina: {dayjs(evento.curso.fecha_fin).format('DD MMM YYYY')}</>
                             )}
                           </div>
                         </Space>
@@ -282,7 +476,7 @@ export default function PlanificadorPage() {
           );
         })}
         
-        {cursosEnRango.length === 0 && (
+        {!hayEventos && (
           <Card>
             <div style={{ textAlign: 'center', padding: 40 }}>
               <CalendarOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
@@ -322,7 +516,7 @@ export default function PlanificadorPage() {
               {viewMode === 'custom' ? (
                 <RangePicker
                   value={customRange}
-                  onChange={(dates) => setCustomRange(dates as [Dayjs, Dayjs])}
+                  onChange={(dates) => setCustomRange(dates ? (dates as [Dayjs, Dayjs]) : null)}
                   format="DD MMM YYYY"
                 />
               ) : (
@@ -332,6 +526,17 @@ export default function PlanificadorPage() {
                   <Button icon={<RightOutlined />} onClick={() => navigatePeriod('next')} />
                 </Space.Compact>
               )}
+
+              <Select
+                allowClear
+                showSearch
+                placeholder="Todos los profesores"
+                optionFilterProp="label"
+                value={profesorFiltro || undefined}
+                onChange={(value) => setProfesorFiltro(value || null)}
+                style={{ minWidth: 220 }}
+                options={profesores.map((p) => ({ value: p.id, label: p.nombre_completo }))}
+              />
             </Space>
           </Col>
         </Row>

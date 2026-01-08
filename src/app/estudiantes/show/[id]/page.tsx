@@ -72,6 +72,7 @@ type Pago = {
   metodo_pago: string | null;
   referencia: string | null;
   observaciones: string | null;
+  estado?: string | null;
 };
 
 type Estadisticas = {
@@ -329,6 +330,20 @@ export default function StudentDetailView() {
         render: (val: string | null) => (val ? dayjs(val).format("DD/MM/YYYY HH:mm") : "-"),
       },
       {
+        title: "Estado",
+        dataIndex: "estado",
+        key: "estado",
+        render: (val: string | null) => {
+          const estado = (val || "pendiente").toLowerCase();
+          let color: string = "default";
+          if (estado === "pagado") color = "success";
+          else if (estado === "pendiente") color = "warning";
+          else if (estado === "en_revision") color = "processing";
+          else if (estado === "vencido") color = "error";
+          return <Tag color={color}>{estado.replace("_", " ")}</Tag>;
+        },
+      },
+      {
         title: "Curso",
         dataIndex: ["matriculas", "cursos", "nombre"],
         key: "curso",
@@ -361,6 +376,29 @@ export default function StudentDetailView() {
         dataIndex: "observaciones",
         key: "obs",
         render: (text: string | null) => text || "-",
+      },
+      {
+        title: "Recordatorio",
+        key: "acciones",
+        render: (_: any, record: Pago) => (
+          <Button
+            icon={<WhatsAppOutlined />}
+            size="small"
+            type="default"
+            onClick={() => {
+              const telefono = perfil?.telefono || perfil?.whatsapp || "";
+              if (!telefono) {
+                message.warning("El estudiante no tiene teléfono registrado");
+                return;
+              }
+              const curso = record.matriculas?.cursos?.nombre || "tu curso";
+              const estado = record.estado || "pendiente";
+              const monto = record.monto ? `$${record.monto.toLocaleString('es-CO')}` : "(monto no indicado)";
+              const msg = `Hola ${perfil?.nombre_completo || ''}, te recuerdo el pago de ${monto} para ${curso}. Estado: ${estado.replace('_',' ')}. Por favor confirma el pago o envía el soporte. Gracias!`;
+              enviarWhatsapp(telefono, msg);
+            }}
+          />
+        ),
       },
     ],
     []

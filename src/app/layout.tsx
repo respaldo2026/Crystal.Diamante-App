@@ -18,7 +18,8 @@ import {
   SettingOutlined, 
   CalculatorOutlined,
   ShopOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  CustomerServiceOutlined
 } from "@ant-design/icons";
 
 import routerProvider from "@refinedev/nextjs-router";
@@ -113,6 +114,14 @@ export default function RootLayout({
                     meta: {
                       label: "Grupos/Cohortes",
                       icon: <TeamOutlined />,
+                    },
+                  },
+                  {
+                    name: "leads",
+                    list: "/leads",
+                    meta: {
+                      label: "Leads",
+                      icon: <CustomerServiceOutlined />,
                     },
                   },
                   {

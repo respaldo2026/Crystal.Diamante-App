@@ -1,11 +1,10 @@
 "use client";
 
-import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, Popconfirm, App, Spin, Checkbox, Dropdown } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, BookOutlined, EllipsisOutlined, SendOutlined, LinkOutlined, PhoneOutlined } from "@ant-design/icons";
+import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Dropdown } from "antd";
+import { PlusOutlined, EditOutlined, BookOutlined, EllipsisOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";
 import type { CheckboxChangeEvent } from "antd/es/checkbox";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { enviarWhatsapp } from "@utils/whatsapp";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -15,13 +14,9 @@ export default function ProgramasPage() {
   const [form] = Form.useForm();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPrograma, setEditingPrograma] = useState<any>(null);
-  const [shareModalVisible, setShareModalVisible] = useState(false);
-  const [sharePrograma, setSharePrograma] = useState<any>(null);
   const [programas, setProgramas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
-
-  const [shareForm] = Form.useForm();
 
   useEffect(() => {
     cargarProgramas();
@@ -54,45 +49,6 @@ export default function ProgramasPage() {
       message.error("Error al cargar programas");
       console.error(error);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOpenModal = (programa?: any) => {
-    if (programa) {
-      setEditingPrograma(programa);
-      form.setFieldsValue(programa);
-    } else {
-      setEditingPrograma(null);
-      form.resetFields();
-    }
-    setModalVisible(true);
-  };
-
-  const handleCloseModal = () => {
-    setModalVisible(false);
-    setEditingPrograma(null);
-    form.resetFields();
-  };
-
-  const handleSubmit = async () => {
-    try {
-      const values = await form.validateFields();
-      
-      if (editingPrograma) {
-        const { error } = await supabaseBrowserClient
-          .from("programas")
-          .update(values)
-          .eq("id", editingPrograma.id);
-        
-        if (error) throw error;
-        message.success("Programa actualizado correctamente");
-      } else {
-        const { error } = await supabaseBrowserClient
-          .from("programas")
-          .insert([values]);
-        
-        if (error) throw error;
         message.success("Programa creado correctamente");
       }
       
@@ -102,40 +58,6 @@ export default function ProgramasPage() {
       message.error("Error al guardar: " + (error?.message || "Desconocido"));
       console.error(error);
     }
-  };
-
-  const buildMensajePrograma = (programa: any, linkPdf?: string, notaPersonal?: string) => {
-    const precioInscripcion = programa?.precio_inscripcion ? `$${Number(programa.precio_inscripcion).toLocaleString('es-CO')}` : "N/A";
-    const mensualidad = programa?.precio_mensualidad ? `$${Number(programa.precio_mensualidad).toLocaleString('es-CO')}` : "N/A";
-    const totalClases = programa?.total_clases || "N/A";
-    const horasPorClase = programa?.horas_por_clase || "N/A";
-    const totalHoras = calcularTotalHoras(programa) || "N/A";
-    const valorClase = calcularValorPorClase(programa);
-    const valorClaseFmt = valorClase ? `$${valorClase.toLocaleString('es-CO')}` : "N/A";
-
-    let mensaje = `Hola! Te comparto la información del programa "${programa?.nombre || ''}":\n\n` +
-      `• Duración: ${programa?.duracion || 'N/A'}\n` +
-      `• Total clases: ${totalClases}\n` +
-      `• Horas por clase: ${horasPorClase}\n` +
-      `• Total de horas: ${totalHoras}\n` +
-      `• Mensualidad: ${mensualidad}\n` +
-      `• Valor por clase: ${valorClaseFmt}\n` +
-      `• Valor inscripción: ${precioInscripcion}`;
-
-    if (programa?.descripcion) {
-      mensaje += `\n\nDescripción: ${programa.descripcion}`;
-    }
-
-    if (notaPersonal) {
-      mensaje += `\n\nNota: ${notaPersonal}`;
-    }
-
-    if (linkPdf) {
-      mensaje += `\n\n📎 PDF del programa: ${linkPdf}`;
-    }
-
-    mensaje += `\n\nSi tienes preguntas, avísame y con gusto te ayudo.`;
-    return mensaje;
   };
 
   const handleToggleActivo = async (programa: any) => {
@@ -232,13 +154,18 @@ export default function ProgramasPage() {
     return (precio_mensualidad * meses) + precio_inscripcion;
   };
 
-  // Función para calcular el valor por clase
+  // Función para calcular el valor por clase: (meses * mensualidad) / total_clases
   const calcularValorPorClase = (programa: any): number | null => {
     const mensualidad = Number(programa.precio_mensualidad || 0);
     const totalClases = Number(programa.total_clases || 0);
-
-    if (mensualidad > 0 && totalClases > 0) {
-      return Math.round(mensualidad / totalClases);
+    
+    // Extraer número de meses de la duración (ej: "5 meses" -> 5)
+    const duracionStr = String(programa.duracion || "0 meses");
+    const meses = parseInt(duracionStr.match(/\d+/)?.[0] || "0", 10);
+    
+    if (mensualidad > 0 && totalClases > 0 && meses > 0) {
+      const totalAPagar = mensualidad * meses;
+      return Math.round(totalAPagar / totalClases);
     }
     return null;
   };
@@ -257,17 +184,6 @@ export default function ProgramasPage() {
     if (key === "toggle") {
       handleToggleActivo(programa);
       return;
-    }
-    if (key === "share") {
-      setSharePrograma(programa);
-      const presetMensaje = buildMensajePrograma(programa, shareForm.getFieldValue('linkPdf'), shareForm.getFieldValue('nota'));
-      shareForm.setFieldsValue({
-        telefono: "",
-        linkPdf: "",
-        nota: "",
-        mensaje: presetMensaje,
-      });
-      setShareModalVisible(true);
     }
   };
 
@@ -351,7 +267,7 @@ export default function ProgramasPage() {
     {
       title: "Acciones",
       key: "acciones",
-      width: 90,
+      width: 140,
       render: (_: any, record: any) => {
         const items = [
           {
@@ -363,11 +279,6 @@ export default function ProgramasPage() {
             key: "toggle",
             label: record.activo ? "Desactivar" : "Activar",
             danger: record.activo,
-          },
-          {
-            key: "share",
-            label: "Enviar info",
-            icon: <SendOutlined />,
           },
         ];
 
@@ -473,13 +384,6 @@ export default function ProgramasPage() {
             label="Duración"
           >
             <Input placeholder="Ej: 3 meses, 120 horas" />
-          </Form.Item>
-
-          <Form.Item
-            name="duracion_horas"
-            label="Duración en Horas"
-          >
-            <InputNumber style={{ width: "100%" }} min={0} placeholder="120" />
           </Form.Item>
 
           <Form.Item
@@ -613,56 +517,6 @@ export default function ProgramasPage() {
         </Form>
       </Modal>
 
-      <Modal
-        title={`Enviar info: ${sharePrograma?.nombre || ''}`}
-        open={shareModalVisible}
-        onCancel={() => setShareModalVisible(false)}
-        onOk={() => {
-          shareForm
-            .validateFields()
-            .then((values) => {
-              const mensaje = values.mensaje?.trim() || buildMensajePrograma(sharePrograma, values.linkPdf, values.nota);
-              enviarWhatsapp(values.telefono, mensaje);
-              setShareModalVisible(false);
-            })
-            .catch(() => {});
-        }}
-        okText="Enviar por WhatsApp"
-        cancelText="Cancelar"
-      >
-        <Form layout="vertical" form={shareForm}>
-          <Form.Item
-            label="Teléfono de contacto"
-            name="telefono"
-            rules={[{ required: true, message: "Ingresa un número" }]}
-          >
-            <Input prefix={<PhoneOutlined />} placeholder="Ej: 3001234567" />
-          </Form.Item>
-
-          <Form.Item
-            label="Link de PDF (opcional)"
-            name="linkPdf"
-            extra="Sube el PDF previamente a tu storage y pega aquí el enlace público"
-          >
-            <Input prefix={<LinkOutlined />} placeholder="https://.../programa.pdf" />
-          </Form.Item>
-
-          <Form.Item
-            label="Nota personal (opcional)"
-            name="nota"
-          >
-            <Input placeholder="Mensaje adicional para el interesado" />
-          </Form.Item>
-
-          <Form.Item
-            label="Mensaje a enviar"
-            name="mensaje"
-            extra="Puedes editar antes de enviar"
-          >
-            <Input.TextArea rows={6} />
-          </Form.Item>
-        </Form>
-      </Modal>
       </div>
     </App>
   );
