@@ -340,6 +340,31 @@ export default function PlanificadorPage() {
     return dayjs().hour(23).minute(59);
   };
 
+  const getRangoEvento = (evento: EventoCalendario) => {
+    const inicio = getHoraEvento(evento);
+    // Usamos hora_fin del curso o 1 hora por defecto
+    const fin = evento.curso.hora_fin
+      ? dayjs(evento.curso.hora_fin, 'HH:mm:ss')
+      : inicio.add(1, 'hour');
+    return { inicio, fin };
+  };
+
+  const marcarConflictos = (eventos: EventoCalendario[]) => {
+    const conflictivos = new Set<string>();
+    for (let i = 0; i < eventos.length; i++) {
+      for (let j = i + 1; j < eventos.length; j++) {
+        const { inicio: aIni, fin: aFin } = getRangoEvento(eventos[i]);
+        const { inicio: bIni, fin: bFin } = getRangoEvento(eventos[j]);
+        const seSolapan = aIni.isBefore(bFin) && bIni.isBefore(aFin);
+        if (seSolapan) {
+          conflictivos.add(`${i}`);
+          conflictivos.add(`${j}`);
+        }
+      }
+    }
+    return conflictivos;
+  };
+
   const obtenerEventosDelDia = (dia: Dayjs): EventoCalendario[] => {
     const fechaClave = dia.format('YYYY-MM-DD');
     const clasesDelDia = (clasesPorFecha[fechaClave] || [])
@@ -379,6 +404,7 @@ export default function PlanificadorPage() {
       <div>
         {daysArray.map(dia => {
           const eventosDelDia = obtenerEventosDelDia(dia).sort((a, b) => getHoraEvento(a).diff(getHoraEvento(b)));
+          const conflictos = marcarConflictos(eventosDelDia);
           
           if (eventosDelDia.length === 0) return null;
           hayEventos = true;
@@ -396,7 +422,7 @@ export default function PlanificadorPage() {
               }
             >
               <Row gutter={[16, 16]}>
-                {eventosDelDia.map((evento) => {
+                {eventosDelDia.map((evento, idx) => {
                   const inscritos = inscritosPorCurso[evento.curso.id] || 0;
                   const disponibles = Math.max(0, evento.curso.cupos - inscritos);
                   const estadoClaseProps = getEstadoClaseProps(evento.estadoClase);
@@ -404,6 +430,7 @@ export default function PlanificadorPage() {
                   const horaInicio = getHoraEvento(evento);
                   const horaFin = evento.curso.hora_fin ? dayjs(evento.curso.hora_fin, 'HH:mm:ss') : null;
                   const profesorNombre = evento.clase?.perfiles?.nombre_completo || evento.curso.perfiles?.nombre_completo;
+                  const enConflicto = conflictos.has(`${idx}`);
 
                   return (
                     <Col xs={24} sm={12} md={8} lg={6} key={`${evento.curso.id}-${evento.clase?.id || horaInicio.valueOf()}`}>
@@ -412,10 +439,10 @@ export default function PlanificadorPage() {
                         hoverable={!esCancelada}
                         onClick={esCancelada ? undefined : () => show("cursos", evento.curso.id)}
                         style={{ 
-                          borderLeft: `4px solid ${estadoClaseProps.border || '#1890ff'}`,
+                          borderLeft: `4px solid ${enConflicto ? '#ff4d4f' : estadoClaseProps.border || '#1890ff'}`,
                           height: '100%',
                           opacity: esCancelada ? 0.75 : 1,
-                          background: esCancelada ? '#fff1f0' : undefined
+                          background: esCancelada ? '#fff1f0' : enConflicto ? '#fff2f0' : undefined
                         }}
                       >
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -423,6 +450,9 @@ export default function PlanificadorPage() {
                             <Text strong ellipsis={{ tooltip: true }}>
                               {evento.curso.programas?.nombre || evento.curso.nombre}
                             </Text>
+                            {enConflicto && (
+                              <Tag color="red" style={{ fontSize: 10 }}>Conflicto</Tag>
+                            )}
                             {evento.clase && evento.estadoClase !== 'programada' && (
                               <Tooltip title="Clase reprogramada/registrada manualmente">
                                 <Tag color={estadoClaseProps.color} style={{ fontSize: 10 }}>

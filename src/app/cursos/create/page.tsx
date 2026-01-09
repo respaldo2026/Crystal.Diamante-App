@@ -36,6 +36,60 @@ export default function CursoCreate() {
         cargarDatos();
     }, []);
 
+    const seSolapanHoras = (inicioA: string | null, finA: string | null, inicioB: string | null, finB: string | null) => {
+        const startA = inicioA ? dayjs(inicioA, "HH:mm:ss") : null;
+        const endA = finA ? dayjs(finA, "HH:mm:ss") : startA ? startA.add(1, "hour") : null;
+        const startB = inicioB ? dayjs(inicioB, "HH:mm:ss") : null;
+        const endB = finB ? dayjs(finB, "HH:mm:ss") : startB ? startB.add(1, "hour") : null;
+
+        if (!startA || !startB || !endA || !endB) return false; // sin horarios definidos no validamos choque
+        return startA.isBefore(endB) && startB.isBefore(endA);
+    };
+
+    const hayInterseccionDias = (diasA?: string[] | string | null, diasB?: string[] | string | null) => {
+        const a = Array.isArray(diasA)
+            ? diasA
+            : (diasA ? diasA.split(",").map((d) => d.trim()) : []);
+        const b = Array.isArray(diasB)
+            ? diasB
+            : (diasB ? diasB.split(",").map((d) => d.trim()) : []);
+        const setA = new Set(a.map((d) => d.toLowerCase()));
+        return b.some((d) => setA.has(d.toLowerCase()));
+    };
+
+    const validarConflictos = async (datos: any) => {
+        if (!datos.fecha_inicio || !datos.dias_semana || !datos.hora_inicio) return; // sin info, no validamos
+
+        const fechaInicio = dayjs(datos.fecha_inicio);
+        const fechaFin = datos.fecha_fin ? dayjs(datos.fecha_fin) : fechaInicio.add(6, "month");
+
+        const { data, error } = await supabaseBrowserClient
+            .from("cursos")
+            .select("id, nombre, fecha_inicio, fecha_fin, dias_semana, hora_inicio, hora_fin, estado")
+            .in("estado", ["activo", "proximo"]);
+
+        if (error) return;
+
+        const conflicto = (data || []).find((c: any) => {
+            // Rango de fechas se solapa
+            const cInicio = c.fecha_inicio ? dayjs(c.fecha_inicio) : null;
+            const cFin = c.fecha_fin ? dayjs(c.fecha_fin) : cInicio ? cInicio.add(6, "month") : null;
+            if (!cInicio || !cFin) return false;
+            const solapaFecha = cInicio.isBefore(fechaFin) && fechaInicio.isBefore(cFin);
+            if (!solapaFecha) return false;
+
+            // Días comparten
+            if (!hayInterseccionDias(datos.dias_semana, c.dias_semana)) return false;
+
+            // Horarios se solapan
+            return seSolapanHoras(datos.hora_inicio, datos.hora_fin, c.hora_inicio, c.hora_fin);
+        });
+
+        if (conflicto) {
+            throw new Error(`Conflicto con el grupo "${conflicto.nombre}" en horario y día. Ajusta la franja horaria o los días.`);
+        }
+    };
+
     const handleOnFinish = async (values: any) => {
         // Convertir valores correctamente
         const datosLimpios = {
@@ -55,6 +109,13 @@ export default function CursoCreate() {
                     : values.hora_fin)
                 : null,
         };
+
+        try {
+            await validarConflictos(datosLimpios);
+        } catch (err: any) {
+            message.error(err?.message || "Conflicto de horario detectado");
+            throw err;
+        }
         
         // Llamar a la función onFinish de formProps (la que guarda en Refine/Supabase)
         return formProps.onFinish?.(datosLimpios);

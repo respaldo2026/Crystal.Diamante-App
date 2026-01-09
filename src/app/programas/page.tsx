@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Dropdown } from "antd";
+import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Dropdown, Tooltip } from "antd";
 import { PlusOutlined, EditOutlined, BookOutlined, EllipsisOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";
 import type { CheckboxChangeEvent } from "antd/es/checkbox";
@@ -49,15 +49,58 @@ export default function ProgramasPage() {
       message.error("Error al cargar programas");
       console.error(error);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      const payload = {
+        ...values,
+        emoji: values.emoji ? String(values.emoji).trim() : null,
+      };
+
+      if (editingPrograma) {
+        const { error } = await supabaseBrowserClient
+          .from("programas")
+          .update(payload)
+          .eq("id", editingPrograma.id);
+
+        if (error) throw error;
+        message.success("Programa actualizado correctamente");
+      } else {
+        const { error } = await supabaseBrowserClient
+          .from("programas")
+          .insert([payload]);
+
+        if (error) throw error;
         message.success("Programa creado correctamente");
       }
-      
+
       handleCloseModal();
       cargarProgramas();
     } catch (error: any) {
       message.error("Error al guardar: " + (error?.message || "Desconocido"));
       console.error(error);
     }
+  };
+
+  const handleOpenModal = (programa?: any) => {
+    if (programa) {
+      setEditingPrograma(programa);
+      form.setFieldsValue(programa);
+    } else {
+      setEditingPrograma(null);
+      form.resetFields();
+    }
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setEditingPrograma(null);
+    form.resetFields();
   };
 
   const handleToggleActivo = async (programa: any) => {
@@ -192,12 +235,42 @@ export default function ProgramasPage() {
       title: "Programa Académico",
       dataIndex: "nombre",
       key: "nombre",
-      render: (text: string) => (
-        <Space>
-          <BookOutlined style={{ color: "#1890ff" }} />
-          <Text strong>{text}</Text>
-        </Space>
-      ),
+      render: (text: string, record: any) => {
+        const nombre = text || "Programa";
+        const inicial = nombre.trim().charAt(0).toUpperCase() || "?";
+        const customEmoji = (record?.emoji || "").trim();
+
+        const icono = customEmoji || (() => {
+          const lower = nombre.toLowerCase();
+          if (lower.includes("uña")) return "💅"; // cursos de uñas
+          if (lower.includes("maquill")) return "💄"; // maquillaje
+          if (lower.includes("ceja") || lower.includes("micro") || lower.includes("cejas")) return "👁️"; // cejas/microblading
+          if (lower.includes("pesta") || lower.includes("miradas perfectas") || lower.includes("mirada")) return "👀"; // pestañas / miradas perfectas
+          return "📘"; // genérico
+        })();
+
+        return (
+          <Tooltip title={nombre}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  background: '#fff7e6',
+                  display: 'grid',
+                  placeItems: 'center',
+                  border: '1px solid #ffd591',
+                  fontSize: 18,
+                }}
+              >
+                {icono}
+              </div>
+              <Tag color="blue" style={{ margin: 0 }}>{inicial}</Tag>
+            </div>
+          </Tooltip>
+        );
+      },
     },
     {
       title: "Duración",
@@ -370,6 +443,14 @@ export default function ProgramasPage() {
             rules={[{ required: true, message: "Ingresa el nombre del programa" }]}
           >
             <Input placeholder="Ej: Micropigmentación Profesional" />
+          </Form.Item>
+
+          <Form.Item
+            name="emoji"
+            label="Emoji representativo (opcional)"
+            tooltip="Se mostrará en la lista de programas"
+          >
+            <Input placeholder="Ej: 💅" maxLength={4} />
           </Form.Item>
 
           <Form.Item
