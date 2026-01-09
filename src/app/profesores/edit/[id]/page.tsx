@@ -1,18 +1,24 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Select, DatePicker, Row, Col, Divider, message, Alert, InputNumber } from "antd";
+import { Form, Input, Select, DatePicker, Row, Col, Divider, message, Alert, InputNumber, Spin } from "antd";
 import dayjs from "dayjs";
+import { useParams } from "next/navigation";
 import { 
     UserOutlined, PhoneOutlined, MailOutlined, HomeOutlined, 
     IdcardOutlined, FileTextOutlined
 } from "@ant-design/icons";
 
 export default function ProfesorEdit() {
-    const { formProps, saveButtonProps, onFinish } = useForm({
+    const params = useParams();
+    const id = params?.id as string;
+
+    const { formProps, saveButtonProps, onFinish, formLoading } = useForm({
+        resource: "perfiles",
+        action: "edit",
+        id: id,
         redirect: "list",
-        // ESTO EVITA LA PANTALLA BLANCA: Capturamos el error y lo mostramos como alerta
         onMutationError: (error: any) => {
             console.error("Error al guardar:", error);
             message.error(error?.message || "No se pudo guardar los cambios");
@@ -21,36 +27,30 @@ export default function ProfesorEdit() {
 
     const handleOnFinish = (values: any) => {
         try {
-            // Limpiamos los datos antes de enviar
             const datosListos = {
                 ...values,
-                // Si la fecha existe, la convertimos a texto. Si no, enviamos null.
                 fecha_nacimiento: values.fecha_nacimiento ? dayjs(values.fecha_nacimiento).format("YYYY-MM-DD") : null,
             };
+            // Remover campos que no deben actualizarse
+            delete datosListos.created_at;
+            delete datosListos.updated_at;
             onFinish(datosListos);
         } catch (err) {
             message.error("Error procesando el formulario");
         }
     };
 
-    // Si hay un error visible, lo mostramos arriba
-    const isError = false;
-    const errorMessage = "";
-
     return (
-        <Edit saveButtonProps={saveButtonProps} title="Editar Profesor">
+        <Edit saveButtonProps={saveButtonProps} title="Editar Profesor" isLoading={formLoading}>
             
-            {/* Mensaje de error amigable si falla el guardado */}
-            {isError && (
-                <Alert 
-                    type="error" 
-                    message="Error al Guardar" 
-                    description={errorMessage || "Verifica que las columnas (direccion, telefono_2...) existan en Supabase."} 
-                    showIcon 
-                    style={{ marginBottom: 20 }} 
-                />
+            {/* Mensaje de error amigable si falla la carga */}
+            {formLoading && (
+                <div style={{ textAlign: 'center', padding: '50px 0' }}>
+                    <Spin size="large" />
+                </div>
             )}
 
+            {!formLoading && (
             <Form 
                 {...formProps} 
                 layout="vertical" 
@@ -135,6 +135,7 @@ export default function ProfesorEdit() {
                     </Col>
                 </Row>
             </Form>
+            )}
         </Edit>
     );
 }

@@ -368,38 +368,31 @@ export default function DashboardPage() {
                     style={{ height: 240 }}
                     bodyStyle={{ padding: 8, maxHeight: 190, overflow: 'auto' }}
                 >
-                    <List
-                        itemLayout="horizontal"
-                        dataSource={proximosCursos.slice(0, 3)}
-                        renderItem={(curso) => {
-                            const inscritos = inscritosPorCurso[curso.id] || 0;
-                            const cuposDisponibles = curso.cupos !== null && curso.cupos !== undefined
-                                ? Math.max(curso.cupos - inscritos, 0)
-                                : null;
+                        <List
+                            itemLayout="horizontal"
+                            dataSource={proximosCursos.slice(0, 3)}
+                            renderItem={(curso) => {
+                                const inscritos = inscritosPorCurso[curso.id] || 0;
+                                const cuposDisponibles = curso.cupos !== null && curso.cupos !== undefined
+                                    ? Math.max(curso.cupos - inscritos, 0)
+                                    : null;
 
-                            return (
-                                <List.Item
-                                    style={{ padding: '4px 0' }}
-                                    actions={[
-                                        <Button key="ver" type="link" size="small" onClick={() => irA(`/cursos/show/${curso.id}`)}>
-                                            Ver
-                                        </Button>
-                                    ]}
-                                >
-                                    <List.Item.Meta
-                                        avatar={<Avatar size="small" style={{ backgroundColor: '#e6f7ff', color: '#1890ff' }} icon={<CalendarOutlined />} />}
-                                        title={<Text strong>{curso.nombre}</Text>}
-                                        description={
-                                            <span>
-                                                Inicio: {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format("DD MMM") : "Sin fecha"}
-                                                {cuposDisponibles !== null ? ` • Cupos libres: ${cuposDisponibles}/${curso.cupos}` : ''}
-                                            </span>
-                                        }
-                                    />
-                                </List.Item>
-                            );
-                        }}
-                    />
+                                return (
+                                <List.Item style={{ padding: '4px 0' }}>
+                                        <List.Item.Meta
+                                            avatar={<Avatar size="small" style={{ backgroundColor: '#e6f7ff', color: '#1890ff' }} icon={<CalendarOutlined />} />}
+                                            title={<Text strong>{curso.nombre}</Text>}
+                                            description={
+                                                <span>
+                                                    Inicio: {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format("DD MMM") : "Sin fecha"}
+                                                    {cuposDisponibles !== null ? ` • Cupos libres: ${cuposDisponibles}/${curso.cupos}` : ''}
+                                                </span>
+                                            }
+                                        />
+                                    </List.Item>
+                                );
+                            }}
+                        />
                     {proximosCursos.length === 0 && <div style={{ padding: 8, textAlign: 'center', color: '#999' }}>No hay grupos próximos registrados.</div>}
                 </Card>
             );
@@ -423,22 +416,31 @@ export default function DashboardPage() {
                                     <List.Item.Meta
                                         title={<Text strong>{prog.programaNombre}</Text>}
                                         description={
-                                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                                                {prog.cursos.map((curso) => {
-                                                    const cuposInfo =
-                                                        curso.cuposDisponibles !== null && curso.cuposTotales !== null
-                                                            ? `Cupos ${curso.cuposDisponibles}/${curso.cuposTotales}`
-                                                            : "Cupos N/D";
-                                                    const fecha = curso.fecha_inicio
-                                                        ? dayjs(curso.fecha_inicio).format("DD/MM")
-                                                        : "Sin fecha";
-                                                    return (
-                                                        <Tag key={curso.id} color={curso.cuposDisponibles && curso.cuposDisponibles <= 5 ? "orange" : "blue"}>
-                                                            {curso.nombre} · {fecha} · {cuposInfo}
-                                                        </Tag>
-                                                    );
-                                                })}
-                                            </div>
+                                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                                        {prog.cursos.map((curso) => {
+                                                            const cuposInfo =
+                                                                curso.cuposDisponibles !== null && curso.cuposTotales !== null
+                                                                    ? `Cupos ${curso.cuposDisponibles}/${curso.cuposTotales}`
+                                                                    : "Cupos N/D";
+                                                            const fecha = curso.fecha_inicio
+                                                                ? dayjs(curso.fecha_inicio).format("DD/MM")
+                                                                : "Sin fecha";
+                                                            return (
+                                                                <div key={curso.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid #f0f0f0", borderRadius: 6, padding: "4px 8px", background: "#fafafa" }}>
+                                                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                                                        <Tag color={curso.cuposDisponibles && curso.cuposDisponibles <= 5 ? "orange" : "blue"} style={{ margin: 0 }}>
+                                                                            {curso.nombre}
+                                                                        </Tag>
+                                                                        <Text type="secondary" style={{ fontSize: 12 }}>
+                                                                            {fecha} · {cuposInfo}
+                                                                        </Text>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
                                         }
                                     />
                                 </List.Item>

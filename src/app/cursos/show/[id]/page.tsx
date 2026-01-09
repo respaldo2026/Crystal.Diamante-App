@@ -54,7 +54,9 @@ interface Sesion {
   observaciones?: string;
 }
 
-export default function CursoShowPage({ params }: { params: Promise<{ id: string }> }) {
+type ParamsLike = { id: string } | Promise<{ id: string }>;
+
+export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const { message, modal } = App.useApp();
   const [cursoId, setCursoId] = useState<string>("");
   const [curso, setCurso] = useState<any>(null);
@@ -195,12 +197,14 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
   );
 
   useEffect(() => {
-    const loadParams = async () => {
-      const { id } = await params;
-      setCursoId(id);
-      await cargarDatos(id);
+    const resolveParams = async () => {
+      const resolved = await params;
+      if (resolved?.id) {
+        setCursoId(resolved.id);
+        cargarDatos(resolved.id);
+      }
     };
-    loadParams();
+    resolveParams();
   }, [params]);
 
   const cargarDatos = async (id: string) => {
@@ -211,10 +215,11 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
         .from("cursos")
         .select("*")
         .eq("id", parseInt(id))
-        .single();
+        .maybeSingle();
       
-      if (errorCurso) {
-        console.error("Error cargando curso:", errorCurso);
+      if (errorCurso || !cursoData) {
+        console.error("Error cargando curso:", errorCurso || { message: "Curso no encontrado" });
+        setLoading(false);
         return;
       }
 
@@ -314,6 +319,40 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
     if (key === "completada" || key === "cancelada" || key === "retirada") {
       actualizarEstadoMatricula(record.id, key);
     }
+  };
+
+  const handleDeleteCurso = async () => {
+    modal.confirm({
+      title: "¿Ocultar este grupo?",
+      content: (
+        <div>
+          <p>Se quitará el grupo de las vistas, pero se conservará todo el historial:</p>
+          <ul>
+            <li>Pagos y matrículas</li>
+            <li>Horas dictadas</li>
+            <li>Asistencias y notas</li>
+          </ul>
+          <p>Recomendado cuando no quieres que aparezca en listados pero necesitas mantener los datos.</p>
+        </div>
+      ),
+      okText: "Sí, ocultar",
+      okType: "danger",
+      cancelText: "Cancelar",
+      onOk: async () => {
+        try {
+          const { error } = await supabaseBrowserClient
+            .from("cursos")
+            .update({ estado: "eliminado" })
+            .eq("id", parseInt(cursoId));
+          if (error) throw error;
+          message.success("Grupo ocultado. El historial se mantiene.");
+          router.push("/cursos");
+        } catch (error: any) {
+          message.error("No se pudo ocultar el grupo");
+          console.error(error);
+        }
+      }
+    });
   };
 
   const handleToggleEstadoGrupo = async () => {
@@ -465,13 +504,19 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
     ? Math.round(estudiantes.reduce((sum, e) => sum + e.asistencia_porcentaje, 0) / estudiantes.length)
     : 0;
   const estudiantesEnRiesgo = estudiantes.filter(e => e.asistencia_porcentaje < (curso.porcentaje_minimo || 80)).length;
+  const notas = estudiantes.filter((e) => e.nota_final !== null && e.nota_final !== undefined);
+  const promedioNota = notas.length > 0
+    ? (notas.reduce((sum, e) => sum + (e.nota_final || 0), 0) / notas.length)
+    : 0;
+  const cuposTotales = curso.cupos || 0;
+  const cuposOcupados = totalEstudiantes;
 
   return (
     <div style={{ padding: 24 }}>
       {/* ENCABEZADO - OFICINA DEL PROFESOR */}
       <div style={{ marginBottom: 24, background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white", padding: 20, borderRadius: 8 }}>
         <Space direction="vertical" style={{ width: "100%" }}>
-          <Space>
+          <Space wrap>
             <Button
               type="primary"
               icon={<ArrowLeftOutlined />}
@@ -481,7 +526,7 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
               Volver
             </Button>
             <Title level={2} style={{ margin: 0, color: "white" }}>{curso.nombre}</Title>
-            <Space>
+            <Space wrap>
               <Button icon={<BookOutlined />} onClick={() => setActiveTab("1")}>
                 Ver Temario
               </Button>
@@ -494,6 +539,12 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
               </Button>
               <Button icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
                 Calificar Tareas
+              </Button>
+              <Button icon={<EditOutlined />} onClick={() => router.push(`/cursos/edit/${cursoId}`)}>
+                Editar curso
+              </Button>
+              <Button danger icon={<DeleteOutlined />} onClick={handleDeleteCurso}>
+                Eliminar curso
               </Button>
               {curso.estado === 'activo' && (
                 <Tag color="blue" style={{ marginLeft: 8 }}>{estudiantesActivos} activos</Tag>
@@ -509,6 +560,38 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
           </Space>
           <div>
             <Text style={{ color: "rgba(255,255,255,0.9)" }}>
+
+          {/* RESUMEN RÁPIDO DEL CURSO */}
+          <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+            <Col xs={12} md={6}>
+              <Card size="small">
+                <Statistic title="Estudiantes" value={`${estudiantesActivos}/${totalEstudiantes}`} suffix="activos" />
+              </Card>
+            </Col>
+            <Col xs={12} md={6}>
+              <Card size="small">
+                <Statistic title="Promedio asistencia" value={promedioAsistencia} suffix="%" />
+              </Card>
+            </Col>
+            <Col xs={12} md={6}>
+              <Card size="small">
+                <Statistic title="Promedio nota" value={promedioNota} precision={1} suffix="/5" />
+              </Card>
+            </Col>
+            <Col xs={12} md={6}>
+              <Card size="small">
+                <Statistic title="Cupos" value={cuposOcupados} suffix={cuposTotales ? `/ ${cuposTotales}` : ""} />
+              </Card>
+            </Col>
+          </Row>
+
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Space direction="vertical">
+              <Text><strong>Horario:</strong> {curso.dias_semana || "-"} {curso.hora_inicio && `• ${dayjs(curso.hora_inicio, 'HH:mm:ss').format('h:mm a')}`} {curso.hora_fin && ` - ${dayjs(curso.hora_fin, 'HH:mm:ss').format('h:mm a')}`}</Text>
+              <Text><strong>Fecha de inicio:</strong> {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format('DD MMM YYYY') : "-"}</Text>
+              <Text><strong>Fecha de fin:</strong> {curso.fecha_fin ? dayjs(curso.fecha_fin).format('DD MMM YYYY') : "No definida"}</Text>
+            </Space>
+          </Card>
               👨‍🏫 Profesor: <strong>{curso.perfiles?.nombre_completo || "Sin asignar"}</strong> • 📅 Inicio: {dayjs(curso.fecha_inicio).format("DD MMM YYYY")} • ⏱️ Duración: {curso.duracion}
             </Text>
           </div>

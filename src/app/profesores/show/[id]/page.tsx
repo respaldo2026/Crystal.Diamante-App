@@ -53,7 +53,9 @@ export default function ShowProfesorDashboard() {
   // Asistencia y Horas (NÓMINA)
   const [asistenciaMap, setAsistenciaMap] = useState<Record<string, boolean>>({});
   const [fechaAsistencia, setFechaAsistencia] = useState(dayjs());
-  const [horasClase, setHorasClase] = useState<number>(2); // <--- NUEVO: Por defecto 2 horas
+  const [horaInicioclase, setHoraInicioClase] = useState<dayjs.Dayjs | null>(null);
+  const [horaFinClase, setHoraFinClase] = useState<dayjs.Dayjs | null>(null);
+  const [horasCalculadas, setHorasCalculadas] = useState<number>(0);
   const [guardandoAsistencia, setGuardandoAsistencia] = useState(false);
 
   // Pensum
@@ -64,6 +66,15 @@ export default function ShowProfesorDashboard() {
   const [modalNotasVisible, setModalNotasVisible] = useState(false);
   const [estudianteACalificar, setEstudianteACalificar] = useState<any>(null);
   const [guardandoNota, setGuardandoNota] = useState(false);
+
+  // Efecto para calcular horas cuando la clase termina
+  useEffect(() => {
+    if (horaInicioclase && horaFinClase) {
+      const duracion = horaFinClase.diff(horaInicioclase, 'hour', true);
+      const horasRedondeadas = Math.round(duracion);
+      setHorasCalculadas(Math.max(horasRedondeadas, 1));
+    }
+  }, [horaInicioclase, horaFinClase]);
 
   // 1. CARGAR DATOS INICIALES
   useEffect(() => {
@@ -176,22 +187,28 @@ export default function ShowProfesorDashboard() {
           setCursoActivo(curso);
           setAlumnosClase([]);
           setTemaSeleccionado(null);
-          setHorasClase(2); // Reiniciar horas a 2
           
           // A) Estudiantes
           const { data: dataAlumnos, error: errAlumnos } = await supabase
             .from("matriculas")
-            .select(`id, estudiante_id, perfiles ( nombre_completo, telefono ), fecha_pago_vencimiento`)
+            .select(`id, estudiante_id, perfiles ( nombre_completo, telefono ), pagos ( fecha_pago )`)
             .eq("curso_id", curso.id)
             .eq("estado", "activo");
 
           if (errAlumnos) throw errAlumnos;
           
           // Enriquecer cada alumno con estado de pago
-          const alumnosConPago = (dataAlumnos || []).map((alumno: any) => ({
-              ...alumno,
-              pagado: verificarPagoAlDia(alumno.fecha_pago_vencimiento)
-          }));
+          const alumnosConPago = (dataAlumnos || []).map((alumno: any) => {
+              // Obtener la fecha más reciente de pago
+              const fechaPagoReciente = alumno.pagos && alumno.pagos.length > 0
+                ? alumno.pagos[0].fecha_pago
+                : null;
+              
+              return {
+                  ...alumno,
+                  pagado: verificarPagoAlDia(fechaPagoReciente)
+              };
+          });
           
           setAlumnosClase(alumnosConPago);
           
@@ -228,6 +245,10 @@ export default function ShowProfesorDashboard() {
           }
           
           setAsistenciaMap(mapa);
+          // Registrar hora de inicio
+          setHoraInicioClase(dayjs());
+          setHoraFinClase(null);
+          setHorasCalculadas(0);
           setDrawerVisible(true);
       } catch (error: any) {
           messageApi.error({ content: "Error: " + error.message, key: "loadingAula" });
@@ -241,22 +262,37 @@ export default function ShowProfesorDashboard() {
           return;
       }
 
+      if(!horaInicioclase) {
+          messageApi.warning("⚠️ No se registró la hora de inicio.");
+          return;
+      }
+
+      // Capturar hora de fin (ahora)
+      const horaFin = dayjs();
+
+      // Calcular horas
+      const duracion = horaFin.diff(horaInicioclase, 'hour', true);
+      const horasRedondeadas = Math.round(duracion);
+      const horasFinal = Math.max(horasRedondeadas, 1);
+
       modal.confirm({
           title: '¿Registrar Clase?',
           icon: <ExclamationCircleOutlined />,
           content: (
               <div>
+                  <p>Hora inicio: <b>{horaInicioclase.format('h:mm A')}</b></p>
+                  <p>Hora fin: <b>{horaFin.format('h:mm A')}</b></p>
                   <p>Se guardará la asistencia de los alumnos.</p>
-                  <p>Además, se registrarán <b>{horasClase} horas</b> trabajadas para tu pago de nómina.</p>
+                  <p>Horas a pagar: <b>{horasFinal} {horasFinal === 1 ? 'hora' : 'horas'}</b></p>
               </div>
           ),
           okText: 'Confirmar y Guardar',
           cancelText: 'Cancelar',
-          onOk: ejecutarGuardadoReal
+          onOk: () => ejecutarGuardadoReal(horasFinal)
       });
   };
 
-  const ejecutarGuardadoReal = async () => {
+  const ejecutarGuardadoReal = async (horasARegistrar: number) => {
       setGuardandoAsistencia(true);
       try {
           // 1. Guardar Asistencia ALUMNOS
@@ -283,7 +319,7 @@ export default function ShowProfesorDashboard() {
                 curso_id: cursoActivo.id,
                 profesor_id: idProfesor,
                 fecha: fechaAsistencia.format("YYYY-MM-DD"),
-                horas_dictadas: horasClase,
+                horas_dictadas: horasARegistrar,
                 tema_visto: temaTxt,
                 estado_pago: 'pendiente'
             }, { onConflict: 'curso_id, profesor_id, fecha' }); // Evita duplicados el mismo día
@@ -576,12 +612,15 @@ export default function ShowProfesorDashboard() {
                                         <InputNumber 
                                             min={1} 
                                             max={8} 
-                                            value={horasClase} 
-                                            onChange={(val) => setHorasClase(val || 2)} 
+                                            value={horasCalculadas} 
+                                            disabled
                                             style={{ width: '85%' }} 
                                         />
                                         <Button disabled style={{ width: '15%' }}>Hrs</Button>
                                     </Space.Compact>
+                                    <p style={{fontSize: '12px', color: '#999', marginTop: 5}}>
+                                        {horaInicioclase && `Inicio: ${horaInicioclase.format('h:mm A')}`}
+                                    </p>
                                 </Col>
                             </Row>
                             <Row style={{marginTop: 10}}>
