@@ -124,7 +124,7 @@ export default function CursoCreate() {
     return (
         <Create 
             saveButtonProps={saveButtonProps}
-            title="Crear Nuevo Grupo/Cohorte"
+            title="Crear nuevo grupo"
         >
             <Form 
                 {...formProps}
@@ -161,11 +161,11 @@ export default function CursoCreate() {
                     
                     <Col span={12}>
                         <Form.Item
-                            label="Nombre del Grupo/Cohorte"
+                            label="Nombre del grupo"
                             name="nombre" 
                             rules={[{ required: true, message: "El nombre es obligatorio" }]}
                         >
-                            <Input placeholder="Ej: Grupo A, Cohorte Mañana, Fin de Semana" />
+                            <Input placeholder="Ej: Grupo A, Grupo Mañana, Fin de Semana" />
                         </Form.Item>
                     </Col>
                 </Row>

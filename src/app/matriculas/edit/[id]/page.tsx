@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
 import { Form, Input, Select, DatePicker, Card, Alert } from "antd";
 import { 
@@ -11,9 +11,11 @@ import {
     CloseCircleOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function MatriculaEdit() {
     const { formProps, saveButtonProps } = useForm();
+    const [programaId, setProgramaId] = useState<string | undefined>(undefined);
 
     // Obtenemos datos de las tablas relacionadas para los selectores (aunque sean solo lectura)
     const { selectProps: studentSelectProps } = useSelect({
@@ -27,6 +29,35 @@ export default function MatriculaEdit() {
         optionLabel: "nombre",
         optionValue: "id",
     });
+
+    const { selectProps: programaSelectProps } = useSelect({
+        resource: "programas",
+        optionLabel: "nombre",
+        optionValue: "id",
+    });
+
+    useEffect(() => {
+        const cursoId = formProps.form?.getFieldValue('curso_id');
+        if (cursoId) {
+            supabaseFetchPrograma(cursoId);
+        }
+    }, [formProps.form]);
+
+    const supabaseFetchPrograma = async (cursoId: string) => {
+        try {
+            const { data } = await supabaseBrowserClient
+                .from('cursos')
+                .select('programa_id')
+                .eq('id', cursoId)
+                .maybeSingle();
+            if (data?.programa_id) {
+                setProgramaId(String(data.programa_id));
+                formProps.form?.setFieldValue('programa_id', data.programa_id);
+            }
+        } catch (e) {
+            console.warn('No se pudo cargar el programa del curso', e);
+        }
+    };
 
     return (
         <Edit saveButtonProps={saveButtonProps} title="Actualizar Matrícula">
@@ -47,6 +78,11 @@ export default function MatriculaEdit() {
                     {/* ESTUDIANTE (Deshabilitado para no cambiarlo por error) */}
                     <Form.Item label="Estudiante" name="estudiante_id">
                         <Select {...studentSelectProps} disabled suffixIcon={<UserOutlined />} />
+                    </Form.Item>
+
+                    {/* PROGRAMA (solo lectura) */}
+                    <Form.Item label="Programa" name="programa_id">
+                        <Select {...programaSelectProps} disabled placeholder="Programa del curso" value={programaId} />
                     </Form.Item>
 
                     {/* CURSO (Deshabilitado) */}

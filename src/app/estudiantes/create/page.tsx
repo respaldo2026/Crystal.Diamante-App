@@ -79,6 +79,25 @@ export default function CreateEstudiante() {
             </Col>
         </Row>
 
+        <Row gutter={24}>
+            <Col xs={24} md={12}>
+                <Form.Item 
+                    label="Talla de camiseta" 
+                    name="talla_camiseta"
+                    help="Para uniformes o dotación"
+                >
+                    <Select placeholder="Selecciona talla">
+                        <Select.Option value="XS">XS</Select.Option>
+                        <Select.Option value="S">S</Select.Option>
+                        <Select.Option value="M">M</Select.Option>
+                        <Select.Option value="L">L</Select.Option>
+                        <Select.Option value="XL">XL</Select.Option>
+                        <Select.Option value="XXL">XXL</Select.Option>
+                    </Select>
+                </Form.Item>
+            </Col>
+        </Row>
+
         <Divider />
 
         <h3 style={{ color: '#722ed1' }}>Información de Contacto</h3>

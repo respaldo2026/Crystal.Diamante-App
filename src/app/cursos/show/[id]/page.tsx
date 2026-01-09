@@ -351,7 +351,7 @@ export default function CursoShowPage({ params }: { params: Promise<{ id: string
       }
 
       modal.confirm({
-        title: esActivo ? "¿Finalizar este grupo/cohorte?" : "¿Reactivar este grupo/cohorte?",
+        title: esActivo ? "¿Finalizar este grupo?" : "¿Reactivar este grupo?",
         content: esActivo ? (
           <div>
             <p>Estás a punto de <strong>finalizar</strong> el grupo:</p>

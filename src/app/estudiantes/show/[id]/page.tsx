@@ -42,7 +42,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 
 type Matricula = {
-  id: string;
+  id: number;
   fecha_inicio: string | null;
   estado: string | null;
   monto_pagado: number | null;
@@ -63,6 +63,7 @@ type Matricula = {
 type Pago = {
   id: string;
   fecha_pago: string | null;
+  matricula_id: number | null;
   matriculas: {
     cursos: {
       nombre: string | null;
@@ -72,6 +73,7 @@ type Pago = {
   metodo_pago: string | null;
   referencia: string | null;
   observaciones: string | null;
+  periodo_pagado: string | null;
   estado?: string | null;
 };
 
@@ -105,6 +107,7 @@ export default function StudentDetailView() {
     totalPagado: 0,
     deudaTotal: 0,
   });
+  const [ciclosPorMatricula, setCiclosPorMatricula] = useState<Record<number, { total: number; pagados: number; faltantes: number; periodos: string[]; inscripcionPagada: boolean }>>({});
 
   const cargarDatosCompletos = useCallback(async () => {
     if (!idEstudiante) return;
@@ -129,7 +132,7 @@ export default function StudentDetailView() {
         .select(
           `
             id, fecha_inicio, estado, monto_pagado, deuda_pendiente, nota_final, estado_academico,
-            cursos ( id, nombre, descripcion, precio, precio_mensualidad, perfiles(nombre_completo) )
+            cursos ( id, nombre, descripcion, precio, precio_mensualidad, duracion, perfiles(nombre_completo) )
           `
         )
         .eq("estudiante_id", idEstudiante)
@@ -156,14 +159,28 @@ export default function StudentDetailView() {
 
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
-        .select("*, matriculas(cursos(nombre))")
+        .select("id, fecha_pago, matricula_id, periodo_pagado, monto, metodo_pago, referencia, observaciones, estado, matriculas(cursos(nombre))")
         .eq("estudiante_id", idEstudiante)
         .order("fecha_pago", { ascending: false });
       if (errPagos) {
         setLoadError("No pudimos cargar el historial de pagos.");
         throw errPagos;
       }
-      setPagosHistorial((dataPagos as Pago[] | null) ?? []);
+      const pagosList = (dataPagos as Pago[] | null) ?? [];
+      setPagosHistorial(pagosList);
+
+      // Ciclos/meses: se toma la duración declarada del curso como total de ciclos y se cuenta los pagos asociados a la matrícula
+      const ciclosMap: Record<number, { total: number; pagados: number; faltantes: number; periodos: string[]; inscripcionPagada: boolean }> = {};
+      listaMats.forEach((m: any) => {
+        const total = Number(m?.cursos?.duracion) || 0;
+        const pagosMat = pagosList.filter((p) => p.matricula_id === m.id);
+        const pagados = pagosMat.length;
+        const faltantes = total > 0 ? Math.max(total - pagados, 0) : 0;
+        const periodos = pagosMat.map((p) => p.periodo_pagado).filter(Boolean) as string[];
+        const inscripcionPagada = pagosMat.some((p) => (p.periodo_pagado || "").toLowerCase().includes("matric"));
+        ciclosMap[m.id] = { total, pagados, faltantes, periodos, inscripcionPagada };
+      });
+      setCiclosPorMatricula(ciclosMap);
     } catch (error) {
       console.error(error);
       setLoadError((prev) => prev ?? "Ocurrió un error cargando el expediente del estudiante.");
@@ -404,6 +421,35 @@ export default function StudentDetailView() {
     []
   );
 
+  const renderCiclos = (record: any) => {
+    const info = ciclosPorMatricula[record.id] || { total: 0, pagados: 0, periodos: [] };
+    const total = Number(info.total) || 0;
+    if (total === 0) return <Text type="secondary">Sin ciclos definidos</Text>;
+
+    const periodos = info.periodos.length === total ? info.periodos : Array.from({ length: total }, (_, i) => info.periodos[i] || `Ciclo ${i + 1}`);
+    return (
+      <Space wrap>
+        {periodos.map((etiqueta, idx) => {
+          const pagado = idx < info.pagados;
+          return (
+            <Button
+              key={`${record.id}-ciclo-${idx}`}
+              size="small"
+              type={pagado ? "primary" : "default"}
+              ghost={pagado}
+              style={{ minWidth: 90 }}
+            >
+              {etiqueta}
+              <div style={{ fontSize: 11, color: pagado ? '#52c41a' : '#ff4d4f' }}>
+                {pagado ? "Pagado" : "Pendiente"}
+              </div>
+            </Button>
+          );
+        })}
+      </Space>
+    );
+  };
+
   if (loading) {
     return (
       <div style={{ padding: 50, textAlign: "center" }}>
@@ -589,6 +635,9 @@ export default function StudentDetailView() {
                   <Descriptions.Item label="Género">
                     {perfil?.genero || "N/A"}
                   </Descriptions.Item>
+                  <Descriptions.Item label="Talla camiseta">
+                    {perfil?.talla_camiseta || "N/A"}
+                  </Descriptions.Item>
                   <Descriptions.Item label="Email">
                     {perfil?.email || "N/A"}
                   </Descriptions.Item>
@@ -643,6 +692,45 @@ export default function StudentDetailView() {
               ),
               children: (
                 <>
+                  <Title level={5}>Ciclos / Meses</Title>
+                  <Table
+                    dataSource={matriculas}
+                    rowKey="id"
+                    pagination={false}
+                    style={{ marginBottom: 16 }}
+                    columns={[
+                      {
+                        title: "Curso",
+                        dataIndex: ["cursos", "nombre"],
+                        render: (text: string) => text || "Curso no asociado",
+                      },
+                      {
+                        title: "Matrícula",
+                        render: (_: any, record: any) => {
+                          const info = ciclosPorMatricula[record.id];
+                          if (info?.inscripcionPagada) return <Tag color="green">Matrícula pagada</Tag>;
+                          return <Tag color="red">Matrícula pendiente</Tag>;
+                        },
+                      },
+                      {
+                        title: "Ciclos totales",
+                        render: (_: any, record: any) => ciclosPorMatricula[record.id]?.total ?? record.cursos?.duracion ?? "-",
+                      },
+                      {
+                        title: "Pagados",
+                        render: (_: any, record: any) => ciclosPorMatricula[record.id]?.pagados ?? 0,
+                      },
+                      {
+                        title: "Pendientes",
+                        render: (_: any, record: any) => ciclosPorMatricula[record.id]?.faltantes ?? "-",
+                      },
+                      {
+                        title: "Periodos pagados",
+                        render: (_: any, record: any) => renderCiclos(record),
+                      },
+                    ]}
+                  />
+
                   <Alert
                     message={`Balance General: $${estadisticasGlobales.totalPagado.toLocaleString()} pagados / $${estadisticasGlobales.deudaTotal.toLocaleString()} pendientes`}
                     type={estadisticasGlobales.deudaTotal > 0 ? "warning" : "success"}

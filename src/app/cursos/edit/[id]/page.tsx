@@ -92,7 +92,7 @@ export default function CursoEdit() {
                 }
 
                 modal.confirm({
-                    title: esActivo ? "¿Finalizar este grupo/cohorte?" : "¿Reactivar este grupo/cohorte?",
+                    title: esActivo ? "¿Finalizar este grupo?" : "¿Reactivar este grupo?",
                     content: esActivo ? (
                         <div>
                             <p>Estás a punto de <strong>finalizar</strong> el grupo.</p>
@@ -323,7 +323,7 @@ export default function CursoEdit() {
                         }
                     },
                 }} 
-                title="Editar Grupo/Cohorte"
+                title="Editar grupo"
                 headerButtons={() => (
                     <Space>
                         <Button 
@@ -350,7 +350,7 @@ export default function CursoEdit() {
                             disabled={!cursoId || deleting}
                             style={{ marginLeft: "auto" }}
                         >
-                            Eliminar Curso
+                            Eliminar Grupo
                         </Button>
                     </Space>
                 )}
@@ -417,7 +417,7 @@ export default function CursoEdit() {
                             throw error;
                         }
                         
-                        message.success('Curso actualizado correctamente');
+                        message.success('Grupo actualizado correctamente');
                         router.push('/cursos');
                     } catch (err: any) {
                         console.error('Error completo:', err);
@@ -450,11 +450,11 @@ export default function CursoEdit() {
                     
                     <Col span={12}>
                         <Form.Item
-                            label="Nombre del Grupo/Cohorte"
+                            label="Nombre del grupo"
                             name="nombre"
                             rules={[{ required: true, message: "El nombre es obligatorio" }]}
                         >
-                            <Input placeholder="Ej: Grupo A, Cohorte Mañana" />
+                            <Input placeholder="Ej: Grupo A, Grupo Mañana" />
                         </Form.Item>
                     </Col>
                 </Row>

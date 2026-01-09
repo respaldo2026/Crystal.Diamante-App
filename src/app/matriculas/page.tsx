@@ -31,7 +31,7 @@ export default function MatriculasList() {
     const { tableProps, setFilters } = useTable({
         resource: "matriculas",
         meta: {
-            select: "*, perfiles(nombre_completo, email), cursos(nombre, porcentaje_minimo, precio_mensualidad)"
+            select: "*, perfiles(nombre_completo, email), cursos(nombre, porcentaje_minimo, precio_mensualidad, programas(nombre))"
         },
         sorters: {
             initial: [
@@ -157,10 +157,20 @@ export default function MatriculasList() {
         optionValue: "id",
     });
 
+    const { selectProps: programaFilterSelect } = useSelect({
+        resource: "programas",
+        optionLabel: "nombre",
+        optionValue: "id",
+    });
+
     const onFilterCurso = (cursoId?: string) => {
         setFilters(
             cursoId ? [{ field: "curso_id", operator: "eq" as const, value: cursoId }] : []
         );
+    };
+
+    const onFilterPrograma = (programaId?: string) => {
+        setFilters(programaId ? [{ field: "cursos.programa_id", operator: "eq" as const, value: programaId }] : []);
     };
 
     const handleEliminar = async (record: any) => {
@@ -342,6 +352,14 @@ export default function MatriculasList() {
                     <Space>
                         <CreateButton type="primary" size="large" icon={<FileTextOutlined />}>Crear nueva matrícula</CreateButton>
                         <Select
+                            options={programaFilterSelect.options}
+                            loading={programaFilterSelect.loading}
+                            allowClear
+                            placeholder="Filtrar por programa"
+                            style={{ minWidth: 240 }}
+                            onChange={(val) => onFilterPrograma(val as string)}
+                        />
+                        <Select
                             options={cursoFilterSelect.options}
                             loading={cursoFilterSelect.loading}
                             allowClear
@@ -354,6 +372,14 @@ export default function MatriculasList() {
             ) : (
                 <>
                     <Space style={{ marginBottom: 12 }}>
+                        <Select
+                            options={programaFilterSelect.options}
+                            loading={programaFilterSelect.loading}
+                            allowClear
+                            placeholder="Filtrar por programa"
+                            style={{ minWidth: 240 }}
+                            onChange={(val) => onFilterPrograma(val as string)}
+                        />
                         <Select
                             options={cursoFilterSelect.options}
                             loading={cursoFilterSelect.loading}
@@ -393,6 +419,12 @@ export default function MatriculasList() {
                     title="Curso Inscrito"
                     dataIndex={["cursos", "nombre"]}
                     render={(val) => <Tag color="blue">{val || "Curso General"}</Tag>}
+                />
+
+                <Table.Column
+                    title="Programa"
+                    dataIndex={["cursos", "programas", "nombre"]}
+                    render={(val) => <Tag color="purple">{val || "Sin programa"}</Tag>}
                 />
 
                 {/* COLUMNA 3: ASISTENCIA */}

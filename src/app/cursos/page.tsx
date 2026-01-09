@@ -170,7 +170,7 @@ export default function CursosList() {
       
       // Confirmación
       modal.confirm({
-        title: esActivo ? "¿Finalizar este grupo/cohorte?" : "¿Reactivar este grupo/cohorte?",
+        title: esActivo ? "¿Finalizar este grupo?" : "¿Reactivar este grupo?",
         content: esActivo ? (
           <div>
             <p>Estás a punto de <strong>finalizar</strong> el grupo:</p>
@@ -224,7 +224,7 @@ export default function CursosList() {
           <Col flex="auto">
             <Space direction="vertical" size={2}>
               <Text strong style={{ fontSize: 15 }}>
-                {cohorte.cohorte || 'Cohorte'} 
+                {cohorte.cohorte || 'Grupo'} 
                 {cohorte.fecha_inicio && ` - ${dayjs(cohorte.fecha_inicio).format('MMM YYYY')}`}
               </Text>
               
@@ -295,8 +295,8 @@ export default function CursosList() {
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, alignItems: 'center' }}>
         <div>
-          <Title level={2} style={{ marginBottom: 4 }}>Oferta Académica</Title>
-          <Text type="secondary">Programas con múltiples cohortes y horarios</Text>
+          <Title level={2} style={{ marginBottom: 4 }}>Cursos (programas) y sus grupos</Title>
+          <Text type="secondary">Cada curso académico puede tener múltiples grupos/horarios</Text>
         </div>
         <Space>
           <Input 
@@ -315,7 +315,7 @@ export default function CursosList() {
           <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => create("cursos")}>
               <App>
               </App>
-            Nueva Cohorte
+            Nuevo Grupo
           </Button>
         </Space>
       </div>
@@ -376,7 +376,7 @@ export default function CursosList() {
                 {activos.length > 0 && (
                   <div style={{ marginBottom: 24 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Title level={5} style={{ color: '#52c41a', margin: 0 }}>Cohortes Activas</Title>
+                      <Title level={5} style={{ color: '#52c41a', margin: 0 }}>Grupos activos</Title>
                       <Tag color="green" style={{ margin: 0 }}>Activos: {activos.length}</Tag>
                     </div>
                     {activos.map((cohorte: any) => (
@@ -388,7 +388,7 @@ export default function CursosList() {
                 {proximos.length > 0 && (
                   <div style={{ marginBottom: 24 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Title level={5} style={{ color: '#1890ff', margin: 0 }}>Próximos Inicios</Title>
+                      <Title level={5} style={{ color: '#1890ff', margin: 0 }}>Grupos próximos</Title>
                       <Tag color="blue" style={{ margin: 0 }}>Próximos: {proximos.length}</Tag>
                     </div>
                     {proximos.map((cohorte: any) => (
@@ -400,7 +400,7 @@ export default function CursosList() {
                 {terminados.length > 0 && (
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Title level={5} style={{ color: '#8c8c8c', margin: 0 }}>Terminados</Title>
+                      <Title level={5} style={{ color: '#8c8c8c', margin: 0 }}>Grupos terminados</Title>
                       <Tag style={{ margin: 0 }}>Terminados: {terminados.length}</Tag>
                     </div>
                     {terminados.map((cohorte: any) => (

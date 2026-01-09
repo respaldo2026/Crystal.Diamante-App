@@ -112,7 +112,7 @@ export default function RootLayout({
                     edit: "/cursos/edit/:id",
                     show: "/cursos/show/:id",
                     meta: {
-                      label: "Grupos/Cohortes",
+                      label: "Grupos",
                       icon: <TeamOutlined />,
                     },
                   },
