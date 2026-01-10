@@ -10,12 +10,27 @@ import {
     CalendarOutlined,
     SearchOutlined
 } from "@ant-design/icons";
+import { useCurrentUser } from "@hooks/useCurrentUser";
 import dayjs from "dayjs";
 
 const { Text } = Typography;
 const { Search } = Input;
 
 export default function TesoreriaList() {
+    const { user } = useCurrentUser();
+
+    // Construcción de filtros según rol
+    const permanentFilters = () => {
+        const filters: any[] = [];
+        
+        // Profesor solo ve sus pagos
+        if (user?.rol === "profesor") {
+            filters.push({ field: "perfiles.id", operator: "eq", value: user.id });
+        }
+        
+        return filters;
+    };
+
     // Traemos los pagos junto con el nombre del estudiante y el curso
     const { tableProps } = useTable({
         resource: "pagos",
@@ -23,6 +38,9 @@ export default function TesoreriaList() {
             select: "*, perfiles(nombre_completo), matriculas(cursos(nombre))"
         },
         sorters: { initial: [{ field: "created_at", order: "desc" }] },
+        filters: {
+            permanent: permanentFilters()
+        }
     });
 
     const [busqueda, setBusqueda] = useState("");

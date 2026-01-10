@@ -6,6 +6,7 @@ import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
 import { RefineThemes, ThemedLayout, ThemedTitle } from "@refinedev/antd";
 import { ConfigProvider, App as AntdApp, Spin } from "antd";
 import "@refinedev/antd/dist/reset.css";
+import "@utils/suppress-warnings";
 
 // ICONOS
 import { 
@@ -19,7 +20,8 @@ import {
   CalculatorOutlined,
   ShopOutlined,
   CalendarOutlined,
-  CustomerServiceOutlined
+  CustomerServiceOutlined,
+  HomeOutlined
 } from "@ant-design/icons";
 
 import routerProvider from "@refinedev/nextjs-router";
@@ -67,6 +69,14 @@ export default function RootLayout({
                 dataProvider={dataProvider}
                 authProvider={authProvider}
                 resources={[
+                  {
+                    name: "mi-oficina",
+                    list: "/mi-oficina",
+                    meta: {
+                      label: "Mi Oficina",
+                      icon: <HomeOutlined />,
+                    },
+                  },
                   {
                     name: "dashboard",
                     list: "/",

@@ -18,6 +18,7 @@ import {
   Divider,
   Descriptions,
   Result,
+  Space,
 } from "antd";
 import {
   UserOutlined,
@@ -166,7 +167,7 @@ export default function StudentDetailView() {
         setLoadError("No pudimos cargar el historial de pagos.");
         throw errPagos;
       }
-      const pagosList = (dataPagos as Pago[] | null) ?? [];
+      const pagosList = (dataPagos as unknown as Pago[] | null) ?? [];
       setPagosHistorial(pagosList);
 
       // Ciclos/meses: se toma la duración declarada del curso como total de ciclos y se cuenta los pagos asociados a la matrícula

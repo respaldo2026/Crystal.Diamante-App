@@ -8,9 +8,24 @@ const supabase = createBrowserClient(
 
 export const authProviderClient: any = {
   login: async ({ email, password }: { email: string; password: string }) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { success: false, error };
-    return { success: true, redirectTo: "/dashboard" };
+    
+    // Verificar el rol del usuario
+    if (data.user) {
+      const { data: perfil } = await supabase
+        .from("perfiles")
+        .select("rol")
+        .eq("id", data.user.id)
+        .single();
+      
+      // Redirigir según el rol
+      if (perfil?.rol === "profesor") {
+        return { success: true, redirectTo: "/mi-oficina" };
+      }
+    }
+    
+    return { success: true, redirectTo: "/" };
   },
 
   logout: async () => {

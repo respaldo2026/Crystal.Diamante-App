@@ -145,7 +145,8 @@ export default function DashboardPage() {
             .limit(5);
 
         // 5. Cumpleaños del día (estudiantes activos)
-        const { data: dataCumples } = await supabaseBrowserClient
+        // No podemos hacer LIKE en fecha directamente, traemos todos y filtramos
+        const { data: dataCumplesRaw } = await supabaseBrowserClient
             .from("perfiles")
             .select(`
               id,
@@ -157,7 +158,16 @@ export default function DashboardPage() {
             `)
             .eq("rol", "estudiante")
             .eq("matriculas.estado", "activo")
-            .like("fecha_nacimiento", `%-${hoy.format('MM-DD')}`);
+            .not("fecha_nacimiento", "is", null);
+
+        // Filtrar por mes y día actual
+        const mesHoy = hoy.format('MM');
+        const diaHoy = hoy.format('DD');
+        const dataCumples = dataCumplesRaw?.filter(perfil => {
+            if (!perfil.fecha_nacimiento) return false;
+            const fecha = dayjs(perfil.fecha_nacimiento);
+            return fecha.format('MM-DD') === `${mesHoy}-${diaHoy}`;
+        }) || [];
 
         // Evitamos duplicados si un estudiante tiene más de una matrícula activa
         const cumpleUnicos = Array.from(
@@ -366,7 +376,7 @@ export default function DashboardPage() {
                     title={<Space size={6}><HolderOutlined style={{ fontSize: 12, color: '#999' }} />📅 Próximos grupos</Space>}
                     extra={<Tag color="blue">{proximosCursos.length} grupo(s)</Tag>}
                     style={{ height: 240 }}
-                    bodyStyle={{ padding: 8, maxHeight: 190, overflow: 'auto' }}
+                    styles={{ body: { padding: 8, maxHeight: 190, overflow: 'auto' } }}
                 >
                         <List
                             itemLayout="horizontal"
@@ -404,7 +414,7 @@ export default function DashboardPage() {
                     title={<Space size={6}><HolderOutlined style={{ fontSize: 12, color: '#999' }} />🏷️ Grupos activos por programa</Space>}
                     extra={<Tag color="green">{cursosActivosPorPrograma.length} programa(s)</Tag>}
                     style={{ height: 240 }}
-                    bodyStyle={{ padding: 8, maxHeight: 190, overflow: 'auto' }}
+                    styles={{ body: { padding: 8, maxHeight: 190, overflow: 'auto' } }}
                 >
                     {cursosActivosPorPrograma.length === 0 ? (
                         <div style={{ padding: 10, textAlign: "center", color: "#999" }}>No hay grupos activos</div>
@@ -457,7 +467,7 @@ export default function DashboardPage() {
                     title={<Space size={6}><HolderOutlined style={{ fontSize: 12, color: '#999' }} />🎂 Cumpleaños hoy</Space>}
                     extra={<Tag color="magenta">{cumplesHoy.length}</Tag>}
                     style={{ height: 240 }}
-                    bodyStyle={{ padding: 8, maxHeight: 190, overflow: 'auto' }}
+                    styles={{ body: { padding: 8, maxHeight: 190, overflow: 'auto' } }}
                 >
                     <List
                         itemLayout="horizontal"
@@ -500,7 +510,7 @@ export default function DashboardPage() {
                     title={<Space size={6}><HolderOutlined style={{ fontSize: 12, color: '#999' }} />💰 Ingresos Recientes</Space>}
                     extra={<Button type="link" size="small" onClick={() => irA('/tesoreria')}>Ver todo</Button>}
                     style={{ height: 240 }}
-                    bodyStyle={{ padding: 8, maxHeight: 190, overflow: 'auto' }}
+                    styles={{ body: { padding: 8, maxHeight: 190, overflow: 'auto' } }}
                 >
                     <List
                         itemLayout="horizontal"
@@ -538,7 +548,7 @@ export default function DashboardPage() {
                             <Button size="small" onClick={resetLayout}>Reset</Button>
                         </Space>
                     }
-                    bodyStyle={{ padding: 10 }}
+                    styles={{ body: { padding: 10 } }}
                     style={{ height: 240 }}
                 >
                     <Space direction="vertical" style={{ width: "100%" }} size={6}>

@@ -11,12 +11,14 @@ import {
 import dayjs from "dayjs";
 
 // CORRECCIÓN: Usamos tu cliente configurado en utils, no creamos uno nuevo
+import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 export default function NominaPage() {
+  const { user } = useCurrentUser();
   const [loading, setLoading] = useState(false);
   const [profesores, setProfesores] = useState<any[]>([]);
   // Iniciamos con el mes actual por defecto
@@ -79,10 +81,17 @@ export default function NominaPage() {
 
     try {
         // 1. Obtener profesores y su valor hora
-        const { data: dataProfes } = await supabaseBrowserClient
+        let query = supabaseBrowserClient
             .from("perfiles")
             .select("id, nombre_completo, valor_hora")
-            .eq("rol", "profesor"); // Filtramos solo profesores
+            .eq("rol", "profesor");
+
+        // Si es profesor, solo ve su propia información
+        if (user?.rol === "profesor") {
+            query = query.eq("id", user.id);
+        }
+
+        const { data: dataProfes } = await query;
 
         // 2. Obtener sesiones trabajadas en ese rango
         const { data: sesiones } = await supabaseBrowserClient

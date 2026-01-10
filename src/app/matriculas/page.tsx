@@ -15,17 +15,31 @@ import {
 import dayjs from "dayjs";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { DiplomaPDF } from "@components/pdf/DiplomaPDF";
+import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 
 const { Text } = Typography;
 
 export default function MatriculasList() {
+    const { user } = useCurrentUser();
     const [asistenciasPorMatricula, setAsistenciasPorMatricula] = useState<Record<number, any>>({});
     const [loadingAsistencias, setLoadingAsistencias] = useState(false);
     const [modal, modalContextHolder] = Modal.useModal();
     const [activeTab, setActiveTab] = useState<string>('nuevo');
     const [listFilter, setListFilter] = useState<'all' | 'sin_pagos' | 'con_pagos' | 'bajo_asistencia'>('all');
+
+    // Construcción de filtros según rol
+    const permanentFilters = () => {
+        const filters: any[] = [];
+        
+        // Profesor solo ve sus matrículas (de sus cursos)
+        if (user?.rol === "profesor") {
+            filters.push({ field: "cursos.profesor_id", operator: "eq", value: user.id });
+        }
+        
+        return filters;
+    };
 
     // Traemos las matrículas junto con los datos del Estudiante (perfiles) y el Curso (cursos)
     const { tableProps, setFilters } = useTable({
@@ -41,6 +55,9 @@ export default function MatriculasList() {
                 },
             ],
         },
+        filters: {
+            permanent: permanentFilters()
+        }
     });
 
     const matriculas = (tableProps.dataSource as any[]) || [];

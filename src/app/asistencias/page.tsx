@@ -9,12 +9,14 @@ import {
   ReloadOutlined, CheckOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useSearchParams } from "next/navigation";
 
 const { Text } = Typography;
 
 export default function ListAsistencias() {
+  const { user } = useCurrentUser();
   const [cursoSeleccionado, setCursoSeleccionado] = useState<number | null>(null);
   const [estadisticas, setEstadisticas] = useState<any[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
@@ -33,11 +35,16 @@ export default function ListAsistencias() {
     }
   });
 
-  // Selector de cursos
+  // Selector de cursos: filtrar por rol
+  const cursoSelectMeta = user?.rol === "profesor" 
+    ? { filters: [{ field: "profesor_id", operator: "eq", value: user.id }] }
+    : {};
+
   const { selectProps: cursoSelect } = useSelect({
     resource: "cursos",
     optionLabel: "nombre",
     optionValue: "id",
+    meta: cursoSelectMeta
   });
 
   // Curso fijo desde URL (dentro del grupo)

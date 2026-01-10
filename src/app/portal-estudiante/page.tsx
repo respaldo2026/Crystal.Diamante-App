@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Tabs, Card, Table, Row, Col, Statistic, Spin, Alert, Progress, Button, Empty, message, Modal, Dropdown } from "antd";
+import { Tabs, Card, Table, Row, Col, Statistic, Spin, Alert, Progress, Button, Empty, message, Modal, Dropdown, Tag, Divider } from "antd";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -11,6 +11,7 @@ import {
   DownloadOutlined,
   WhatsAppOutlined,
   EllipsisOutlined,
+  DollarCircleOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation";
@@ -27,6 +28,7 @@ export default function PortalEstudiante() {
   const [calificaciones, setCalificaciones] = useState<any[]>([]);
   const [avancePorCurso, setAvancePorCurso] = useState<any[]>([]);
   const [certificados, setCertificados] = useState<any[]>([]);
+  const [pagos, setPagos] = useState<any[]>([]);
 
   useEffect(() => {
     cargarDatosEstudiante();
@@ -104,6 +106,17 @@ export default function PortalEstudiante() {
 
       if (dataCertificados) {
         setCertificados(dataCertificados);
+      }
+
+      // Cargar pagos (realizados y pendientes)
+      const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
+        .from("pagos")
+        .select("*, matriculas(cursos(nombre))")
+        .eq("perfiles_id", user.id)
+        .order("fecha_pago", { ascending: false });
+
+      if (!errPagos && dataPagos) {
+        setPagos(dataPagos);
       }
     } catch (error) {
       console.error("Error:", error);
@@ -308,6 +321,81 @@ export default function PortalEstudiante() {
           },
           {
             key: "4",
+            label: <span><DollarCircleOutlined /> Pagos</span>,
+            children: (
+              <>
+                {pagos.length === 0 ? (
+                  <Empty description="No hay registros de pago" />
+                ) : (
+                  <>
+                    <Row gutter={16} style={{ marginBottom: 20 }}>
+                      <Col xs={24} sm={12}>
+                        <Card>
+                          <Statistic
+                            title="Total Pagado"
+                            value={pagos.filter((p: any) => p.estado === "confirmado").reduce((sum: number, p: any) => sum + Number(p.monto || 0), 0)}
+                            prefix="$"
+                            valueStyle={{ color: "#52c41a" }}
+                            formatter={(value) => `$ ${Number(value).toLocaleString()}`}
+                          />
+                        </Card>
+                      </Col>
+                      <Col xs={24} sm={12}>
+                        <Card>
+                          <Statistic
+                            title="Pagos Pendientes"
+                            value={pagos.filter((p: any) => p.estado === "pendiente").length}
+                            valueStyle={{ color: "#faad14" }}
+                          />
+                        </Card>
+                      </Col>
+                    </Row>
+                    <Table
+                      dataSource={pagos}
+                      rowKey="id"
+                      columns={[
+                        {
+                          title: "Fecha",
+                          dataIndex: "fecha_pago",
+                          render: (fecha) => dayjs(fecha).format("DD/MM/YYYY"),
+                        },
+                        {
+                          title: "Curso",
+                          render: (_, record: any) => record.matriculas?.cursos?.nombre,
+                        },
+                        {
+                          title: "Monto",
+                          dataIndex: "monto",
+                          render: (monto) => `$ ${Number(monto || 0).toLocaleString()}`,
+                        },
+                        {
+                          title: "Método",
+                          dataIndex: "metodo_pago",
+                          render: (metodo) => <Tag color="blue">{metodo}</Tag>,
+                        },
+                        {
+                          title: "Estado",
+                          dataIndex: "estado",
+                          render: (estado) => (
+                            <Tag color={estado === "confirmado" ? "success" : "warning"}>
+                              {estado?.charAt(0).toUpperCase() + estado?.slice(1)}
+                            </Tag>
+                          ),
+                        },
+                        {
+                          title: "Referencia",
+                          dataIndex: "referencia",
+                        },
+                      ]}
+                      pagination={{ pageSize: 10 }}
+                    />
+                  </>
+                )}
+              </>
+            ),
+          },
+          {
+            key: "5",
             label: <span><TrophyOutlined /> Certificados</span>,
             children: (
               <>

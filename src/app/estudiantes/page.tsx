@@ -18,13 +18,29 @@ import {
     SearchOutlined,
     IdcardOutlined
 } from "@ant-design/icons";
+import { useCurrentUser } from "@hooks/useCurrentUser";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 const { Text } = Typography;
 
 export default function EstudiantesList() {
     const { message, modal } = App.useApp();
+    const { user } = useCurrentUser();
     const [searchValue, setSearchValue] = useState("");
+
+    // Construcción dinámica de filtros según rol
+    const permanentFilters = () => {
+        const filters: any[] = [
+            { field: "rol", operator: "eq", value: "estudiante" }
+        ];
+        
+        // Si es profesor, solo ve estudiantes de sus cursos
+        if (user?.rol === "profesor") {
+            filters.push({ field: "perfiles.profesor_id", operator: "eq", value: user.id });
+        }
+        
+        return filters;
+    };
 
     const { tableProps, searchFormProps, setFilters } = useTable({
         resource: "perfiles",
@@ -35,9 +51,7 @@ export default function EstudiantesList() {
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
         // Filtro base: Solo estudiantes
         filters: {
-            permanent: [
-                { field: "rol", operator: "eq", value: "estudiante" }
-            ]
+            permanent: permanentFilters()
         },
         // Lógica del Buscador
         onSearch: (values: any) => {

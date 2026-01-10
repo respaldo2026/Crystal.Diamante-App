@@ -1,18 +1,22 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Form, Input, Button, Card, Row, Col, message, Divider, Spin } from "antd";
+import { Form, Input, Button, Card, Row, Col, message, Divider, Spin, Tabs, Checkbox, Tag, Empty } from "antd";
 import { 
   SaveOutlined, ShopOutlined, InstagramOutlined, 
-  GlobalOutlined, PhoneOutlined, SafetyCertificateOutlined 
+  GlobalOutlined, PhoneOutlined, SafetyCertificateOutlined,
+  LockOutlined
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { useRolePermissions, ROLES_DISPONIBLES, MODULOS_DISPONIBLES } from "@hooks/useRolePermissions";
 
 export default function ConfiguracionPage() {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [configId, setConfigId] = useState<string | null>(null);
   const [form] = Form.useForm();
+  const { permisos, loading: permisosLoading, guardarPermisos } = useRolePermissions();
+  const [tab, setTab] = useState("academia");
 
   // 1. Cargar la configuración actual
   useEffect(() => {
@@ -41,7 +45,7 @@ export default function ConfiguracionPage() {
     }
   };
 
-  // 2. Guardar cambios
+  // 2. Guardar cambios de configuración general
   const onFinish = async (values: any) => {
     setGuardando(true);
     try {
@@ -55,7 +59,7 @@ export default function ConfiguracionPage() {
                 .eq("id", configId);
             error = response.error;
         } else {
-            // Crear si no existía (raro porque hicimos el insert inicial, pero por seguridad)
+            // Crear si no existía
             const response = await supabaseBrowserClient
                 .from("configuracion")
                 .insert(values)
@@ -75,88 +79,157 @@ export default function ConfiguracionPage() {
     }
   };
 
-  if (loading) return <div style={{padding: 50, textAlign: 'center'}}><Spin size="large" /></div>;
+  // 3. Guardar permisos por rol
+  const handlePermisosChange = async (rol: string, modulo: string, value: boolean) => {
+    const permisosActuales = permisos[rol] || {};
+    const nuevoPermisos = {
+      ...permisosActuales,
+      [modulo]: value
+    };
+    
+    const resultado = await guardarPermisos(rol, nuevoPermisos);
+    if (resultado.success) {
+      message.success(`Permiso actualizado para ${rol}`);
+    } else {
+      message.error(`Error: ${resultado.error}`);
+    }
+  };
+
+  if (loading || permisosLoading) return <div style={{padding: 50, textAlign: 'center'}}><Spin size="large" /></div>;
 
   return (
-    <div style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
-        <Card 
-            title={<span><ShopOutlined /> Configuración de la Academia</span>}
-            extra={
-                <Button type="primary" icon={<SaveOutlined />} onClick={form.submit} loading={guardando}>
-                    Guardar Cambios
-                </Button>
-            }
-        >
-            <Form form={form} layout="vertical" onFinish={onFinish}>
+    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+      <Tabs 
+        activeKey={tab}
+        onChange={setTab}
+        items={[
+          {
+            key: "academia",
+            label: "Datos de la Academia",
+            children: (
+              <Card 
+                title={<span><ShopOutlined /> Configuración de la Academia</span>}
+                extra={
+                    <Button type="primary" icon={<SaveOutlined />} onClick={form.submit} loading={guardando}>
+                        Guardar Cambios
+                    </Button>
+                }
+              >
+                <Form form={form} layout="vertical" onFinish={onFinish}>
+                    
+                    {/* SECCIÓN 1: DATOS LEGALES */}
+                    <Divider orientation="left" style={{borderColor: '#722ed1'}}>
+                        <SafetyCertificateOutlined /> Información Legal
+                    </Divider>
+                    <Row gutter={24}>
+                        <Col xs={24} md={12}>
+                            <Form.Item label="Nombre de la Academia" name="nombre_academia" rules={[{required: true}]}>
+                                <Input size="large" placeholder="Ej: Academia Crystal Diamante" />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                            <Form.Item label="NIT / Documento Tributario" name="nit">
+                                <Input placeholder="Ej: 900.123.456-7" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={24}>
+                        <Col xs={24} md={12}>
+                            <Form.Item label="Dirección Física" name="direccion">
+                                <Input placeholder="Ej: Calle 5 # 40-12, Cali" />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                            <Form.Item label="Ciudad / País" name="ciudad">
+                                <Input placeholder="Ej: Cali, Colombia" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    {/* SECCIÓN 2: CONTACTO Y REDES */}
+                    <Divider orientation="left" style={{borderColor: '#722ed1'}}>
+                        <PhoneOutlined /> Contacto y Redes
+                    </Divider>
+                    <Row gutter={24}>
+                        <Col xs={24} md={8}>
+                            <Form.Item label="Teléfono / WhatsApp" name="telefono">
+                                <Input prefix={<PhoneOutlined />} placeholder="+57 300 123 4567" />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={8}>
+                            <Form.Item label="Email de Contacto" name="email">
+                                <Input placeholder="contacto@crystaldiamante.com" />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={8}>
+                            <Form.Item label="Sitio Web" name="sitio_web">
+                                <Input prefix={<GlobalOutlined />} placeholder="www.tuacademia.com" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={24}>
+                        <Col xs={24} md={12}>
+                            <Form.Item label="Instagram / Facebook" name="instagram">
+                                <Input prefix={<InstagramOutlined />} placeholder="@crystaldiamante_oficial" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    {/* SECCIÓN 3: IMPRESIÓN Y FACTURACIÓN */}
+                    <Divider orientation="left" style={{borderColor: '#722ed1'}}>
+                        <SaveOutlined /> Pie de Página (Recibos)
+                    </Divider>
+                    <Form.Item label="Mensaje en Facturas/Recibos" name="mensaje_factura" help="Este texto saldrá al final de los recibos de pago.">
+                        <Input.TextArea rows={2} placeholder="Ej: Gracias por confiar en nosotros. Conserve este recibo." />
+                    </Form.Item>
+
+                </Form>
+              </Card>
+            )
+          },
+          {
+            key: "permisos",
+            label: "Permisos por Rol",
+            children: (
+              <Card 
+                title={<span><LockOutlined /> Gestionar Permisos por Rol</span>}
+              >
+                <p style={{ marginBottom: 24, color: '#666' }}>
+                  Configura qué módulos y pestañas puede ver cada rol en la aplicación.
+                </p>
                 
-                {/* SECCIÓN 1: DATOS LEGALES */}
-                <Divider orientation="left" style={{borderColor: '#722ed1'}}>
-                    <SafetyCertificateOutlined /> Información Legal
-                </Divider>
-                <Row gutter={24}>
-                    <Col xs={24} md={12}>
-                        <Form.Item label="Nombre de la Academia" name="nombre_academia" rules={[{required: true}]}>
-                            <Input size="large" placeholder="Ej: Academia Crystal Diamante" />
-                        </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12}>
-                        <Form.Item label="NIT / Documento Tributario" name="nit">
-                            <Input placeholder="Ej: 900.123.456-7" />
-                        </Form.Item>
-                    </Col>
-                </Row>
-                <Row gutter={24}>
-                    <Col xs={24} md={12}>
-                        <Form.Item label="Dirección Física" name="direccion">
-                            <Input placeholder="Ej: Calle 5 # 40-12, Cali" />
-                        </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12}>
-                        <Form.Item label="Ciudad / País" name="ciudad">
-                            <Input placeholder="Ej: Cali, Colombia" />
-                        </Form.Item>
-                    </Col>
-                </Row>
-
-                {/* SECCIÓN 2: CONTACTO Y REDES */}
-                <Divider orientation="left" style={{borderColor: '#722ed1'}}>
-                    <PhoneOutlined /> Contacto y Redes
-                </Divider>
-                <Row gutter={24}>
-                    <Col xs={24} md={8}>
-                        <Form.Item label="Teléfono / WhatsApp" name="telefono">
-                            <Input prefix={<PhoneOutlined />} placeholder="+57 300 123 4567" />
-                        </Form.Item>
-                    </Col>
-                    <Col xs={24} md={8}>
-                        <Form.Item label="Email de Contacto" name="email">
-                            <Input placeholder="contacto@crystaldiamante.com" />
-                        </Form.Item>
-                    </Col>
-                    <Col xs={24} md={8}>
-                        <Form.Item label="Sitio Web" name="sitio_web">
-                            <Input prefix={<GlobalOutlined />} placeholder="www.tuacademia.com" />
-                        </Form.Item>
-                    </Col>
-                </Row>
-                <Row gutter={24}>
-                    <Col xs={24} md={12}>
-                        <Form.Item label="Instagram / Facebook" name="instagram">
-                            <Input prefix={<InstagramOutlined />} placeholder="@crystaldiamante_oficial" />
-                        </Form.Item>
-                    </Col>
-                </Row>
-
-                {/* SECCIÓN 3: IMPRESIÓN Y FACTURACIÓN */}
-                <Divider orientation="left" style={{borderColor: '#722ed1'}}>
-                    <SaveOutlined /> Pie de Página (Recibos)
-                </Divider>
-                <Form.Item label="Mensaje en Facturas/Recibos" name="mensaje_factura" help="Este texto saldrá al final de los recibos de pago.">
-                    <Input.TextArea rows={2} placeholder="Ej: Gracias por confiar en nosotros. Conserve este recibo." />
-                </Form.Item>
-
-            </Form>
-        </Card>
+                {ROLES_DISPONIBLES.length === 0 ? (
+                  <Empty description="No hay roles configurados" />
+                ) : (
+                  <Row gutter={[24, 24]}>
+                    {ROLES_DISPONIBLES.map((rol) => (
+                      <Col xs={24} md={12} lg={8} key={rol.key}>
+                        <Card
+                          title={<Tag color="blue">{rol.label}</Tag>}
+                          size="small"
+                          style={{ height: '100%' }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {MODULOS_DISPONIBLES.map((modulo) => (
+                              <Checkbox
+                                key={modulo.key}
+                                checked={permisos[rol.key]?.[modulo.key] ?? false}
+                                onChange={(e) => handlePermisosChange(rol.key, modulo.key, e.target.checked)}
+                              >
+                                {modulo.label}
+                              </Checkbox>
+                            ))}
+                          </div>
+                        </Card>
+                      </Col>
+                    ))}
+                  </Row>
+                )}
+              </Card>
+            )
+          }
+        ]}
+      />
     </div>
   );
 }

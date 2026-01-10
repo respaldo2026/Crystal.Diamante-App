@@ -15,6 +15,7 @@ import {
 } from "@ant-design/icons";
 import { useNavigation } from "@refinedev/core";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { useCurrentUser } from "@hooks/useCurrentUser";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 
@@ -34,6 +35,7 @@ type ProgramaAgrupado = {
 export default function CursosList() {
   const { message, modal } = App.useApp();
   const { edit, create, show } = useNavigation();
+  const { user } = useCurrentUser();
   const [cursos, setCursos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [mostrarFinalizados, setMostrarFinalizados] = useState(false);
@@ -41,8 +43,9 @@ export default function CursosList() {
   const [inscritosPorCurso, setInscritosPorCurso] = useState<Record<number, number>>({});
 
   useEffect(() => {
+    // Cargar inmediatamente, aplicar filtros cuando user esté disponible
     cargarCursos();
-  }, [mostrarFinalizados]);
+  }, [mostrarFinalizados, user]);
 
   const cargarCursos = async () => {
     setLoading(true);
@@ -50,6 +53,14 @@ export default function CursosList() {
       .from("cursos")
       .select(`*, perfiles (nombre_completo), programas (*)`)
       .neq("estado", "eliminado");
+
+    // Filtrar por rol solo si user está disponible
+    if (user && user.rol === "estudiante") {
+      query = query.eq("perfiles.id", user.id);
+    } else if (user && user.rol === "profesor") {
+      query = query.eq("profesor_id", user.id);
+    }
+    // Admin/Director/Administrativo o sin user ven todos
 
     if (!mostrarFinalizados) {
       query = query.neq("estado", "finalizado");
