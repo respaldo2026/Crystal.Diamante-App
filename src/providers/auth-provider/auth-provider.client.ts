@@ -1,10 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
-
-// Inicialización del cliente de Supabase para el navegador
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabaseBrowserClient as supabase } from "@utils/supabase/client";
 
 export const authProviderClient: any = {
   login: async ({ email, password }: { email: string; password: string }) => {
@@ -35,11 +29,8 @@ export const authProviderClient: any = {
 
   // MODO DESARROLLO: Siempre permite el acceso en el navegador
   check: async () => {
-    // Intentamos refrescar la sesión pero siempre devolvemos true
-    await supabase.auth.getSession();
-    return {
-      authenticated: true,
-    };
+    const { data: { session } } = await supabase.auth.getSession();
+    return { authenticated: !!session };
   },
 
   getPermissions: async () => null,
@@ -47,11 +38,7 @@ export const authProviderClient: any = {
   getIdentity: async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) return { ...user, name: user.email };
-    return {
-      id: "dev-user",
-      name: "Admin Academia",
-      avatar: "https://i.pravatar.cc/150",
-    };
+    return null;
   },
 
   onError: async (error: any) => {

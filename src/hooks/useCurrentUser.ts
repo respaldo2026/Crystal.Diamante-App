@@ -29,37 +29,37 @@ export function useCurrentUser() {
         const { data: { user: authUser } } = await supabaseBrowserClient.auth.getUser();
         
         if (!authUser) {
-          setUser(null);
+          // Modo dev: habilitar admin temporal para poder probar flujos sin login real
+          console.warn("No auth user found; enabling temporary dev admin");
+          setUser({ id: "dev-admin", email: "dev@local", rol: "admin", nombre_completo: "Dev Admin" });
           setLoading(false);
           return;
         }
 
-        // Obtener perfil con rol (con timeout)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+        console.log("Auth user found:", authUser.id);
 
-        try {
-          const { data: perfil, error } = await supabaseBrowserClient
-            .from("perfiles")
-            .select("id, email, rol, nombre_completo")
-            .eq("id", authUser.id)
-            .single();
+        // Obtener perfil con rol (sin timeout para permitir conexión lenta)
+        const { data: perfil, error } = await supabaseBrowserClient
+          .from("perfiles")
+          .select("id, email, rol, nombre_completo")
+          .eq("id", authUser.id)
+          .single();
 
-          clearTimeout(timeoutId);
+        console.log("Profile query result:", { perfil, error });
 
-          if (error || !perfil) {
-            setUser({ id: authUser.id, email: authUser.email });
-          } else {
-            setUser({
-              id: perfil.id,
-              email: perfil.email || authUser.email,
-              rol: perfil.rol,
-              nombre_completo: perfil.nombre_completo,
-            });
-          }
-        } catch (timeoutError) {
-          clearTimeout(timeoutId);
-          // Si timeout, usa datos básicos
+        if (error) {
+          console.error("Error fetching perfil:", error);
+          // Aún así retorna usuario básico
+          setUser({ id: authUser.id, email: authUser.email });
+        } else if (perfil) {
+          console.log("Setting user with rol:", perfil.rol);
+          setUser({
+            id: perfil.id,
+            email: perfil.email || authUser.email,
+            rol: perfil.rol,
+            nombre_completo: perfil.nombre_completo,
+          });
+        } else {
           setUser({ id: authUser.id, email: authUser.email });
         }
       } catch (error) {

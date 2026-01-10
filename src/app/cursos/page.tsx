@@ -315,10 +315,15 @@ export default function CursosList() {
           </Col>
           <Col>
             <Space wrap>
-              <Button size="small" onClick={() => show("cursos", cohorte.id)}>
-                Ver grupo
+              <Button 
+                size="small" 
+                type="primary"
+                icon={<TeamOutlined />}
+                onClick={() => window.location.href = `/cursos/salon/${cohorte.id}`}
+              >
+                Entrar al Salón
               </Button>
-              <Button size="small" type="primary" icon={<EditOutlined />} onClick={() => edit("cursos", cohorte.id)}>
+              <Button size="small" icon={<EditOutlined />} onClick={() => edit("cursos", cohorte.id)}>
                 Editar
               </Button>
               <Button size="small" danger onClick={() => handleSoftDelete(cohorte)}>
@@ -420,9 +425,6 @@ export default function CursosList() {
                   <Space wrap>
                     <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => create("cursos")}>
                       Crear grupo
-                    </Button>
-                    <Button size="small" onClick={() => show("cursos", programa.id)}>
-                      Ver programa
                     </Button>
                   </Space>
 

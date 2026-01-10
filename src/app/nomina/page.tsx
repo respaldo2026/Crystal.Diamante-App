@@ -9,6 +9,7 @@ import {
   CalculatorOutlined, DollarCircleOutlined, PayCircleOutlined 
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { formatDate } from "@utils/date";
 
 // CORRECCIÓN: Usamos tu cliente configurado en utils, no creamos uno nuevo
 import { useCurrentUser } from "@hooks/useCurrentUser";
@@ -142,7 +143,7 @@ export default function NominaPage() {
             total_horas: profesorSeleccionado.total_horas,
             fecha_inicio_periodo: rangoFechas[0].format("YYYY-MM-DD"),
             fecha_fin_periodo: rangoFechas[1].format("YYYY-MM-DD"),
-            observaciones: `Pago por ${profesorSeleccionado.total_horas} horas trabajadas del ${rangoFechas[0].format("DD/MM")} al ${rangoFechas[1].format("DD/MM")} - Método: ${metodoNomina}`
+            observaciones: `Pago por ${profesorSeleccionado.total_horas} horas trabajadas del ${formatDate(rangoFechas[0])} al ${formatDate(rangoFechas[1])} - Método: ${metodoNomina}`
         });
         if (errPago) throw errPago;
 
@@ -181,7 +182,7 @@ export default function NominaPage() {
                         style={{ width: '100%', marginTop: 5 }} 
                         value={rangoFechas}
                         onChange={(dates) => setRangoFechas(dates)}
-                        format="DD/MM/YYYY"
+                        format="DD-MMM-YYYY"
                     />
                 </Col>
                 <Col span={12}>
@@ -215,7 +216,7 @@ export default function NominaPage() {
                 <div>
                     <p>Vas a registrar el pago para: <b>{profesorSeleccionado.nombre_completo}</b></p>
                     <ul>
-                        <li>Periodo: {rangoFechas[0].format("DD/MM")} al {rangoFechas[1].format("DD/MM")}</li>
+                        <li>Periodo: {formatDate(rangoFechas[0])} al {formatDate(rangoFechas[1])}</li>
                         <li>Horas: {profesorSeleccionado.total_horas}</li>
                         <li>Total: <b>$ {Number(profesorSeleccionado.total_pagado).toLocaleString()}</b></li>
                     </ul>

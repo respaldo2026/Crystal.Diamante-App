@@ -6,7 +6,6 @@ import {
     useTable, 
     EditButton, 
     ShowButton, 
-    DeleteButton, 
     CreateButton
 } from "@refinedev/antd";
 import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography, App, Modal, message } from "antd";
@@ -16,7 +15,8 @@ import {
     MailOutlined,
     PhoneOutlined,
     SearchOutlined,
-    IdcardOutlined
+    IdcardOutlined,
+    DeleteOutlined
 } from "@ant-design/icons";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { enviarWhatsapp } from "@utils/whatsapp";
@@ -24,9 +24,16 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 const { Text } = Typography;
 
 export default function EstudiantesList() {
-    const { message, modal } = App.useApp();
+    const { message: antMessage } = App.useApp();
     const { user } = useCurrentUser();
     const [searchValue, setSearchValue] = useState("");
+    
+    // Debug: Verificar que el usuario está siendo cargado
+    useEffect(() => {
+        console.log("Usuario actual:", user);
+        console.log("Usuario rol:", user?.rol);
+        console.log("Es admin?", user?.rol === "admin");
+    }, [user]);
 
     // Construcción dinámica de filtros según rol
     const permanentFilters = () => {
@@ -313,7 +320,7 @@ export default function EstudiantesList() {
                 <Table.Column 
                     title="Acciones"
                     fixed="right"
-                    width={180}
+                    width={200}
                     render={(_, record: any) => (
                         <Space>
                             <Tooltip title="Enviar WhatsApp">
@@ -334,10 +341,22 @@ export default function EstudiantesList() {
 
                             <ShowButton hideText size="small" resource="perfiles" recordItemId={record.id} />
                             <EditButton hideText size="small" resource="perfiles" recordItemId={record.id} />
+                            
+                            <Tooltip title={user?.rol === "admin" ? "Eliminar estudiante - Primero borra pagos en Tesorería" : "Solo admin puede eliminar"}>
+                                <Button 
+                                    danger
+                                    type="text"
+                                    size="small"
+                                    disabled={user?.rol !== "admin"}
+                                    onClick={() => handleEliminarEstudiante(record, antMessage)}
+                                    icon={<DeleteOutlined />}
+                                />
+                            </Tooltip>
+                            
                             <Button 
                                 size="small" 
                                 danger
-                                onClick={() => handleArchivarEstudiante(record)}
+                                onClick={() => handleArchivarEstudiante(record, antMessage)}
                             >
                                 Archivar
                             </Button>
@@ -358,7 +377,203 @@ async function archivableCheck(estudianteId: string) {
     return mats || [];
 }
 
-function handleArchivarEstudiante(record: any) {
+async function checkDatosRelacionados(estudianteId: string) {
+    // Verificar todas las tablas relacionadas
+    const [matriculas, pagos, asistencias] = await Promise.all([
+        supabaseBrowserClient
+            .from("matriculas")
+            .select("id, cursos(nombre)")
+            .eq("estudiante_id", estudianteId),
+        supabaseBrowserClient
+            .from("pagos")
+            .select("id, monto")
+            .eq("estudiante_id", estudianteId),
+        supabaseBrowserClient
+            .from("asistencias")
+            .select("id")
+            .eq("estudiante_id", estudianteId)
+    ]);
+
+    return {
+        matriculas: matriculas.data || [],
+        pagos: pagos.data || [],
+        asistencias: asistencias.data || [],
+        tieneDatos: (matriculas.data?.length || 0) > 0 || 
+                    (pagos.data?.length || 0) > 0 || 
+                    (asistencias.data?.length || 0) > 0
+    };
+}
+
+function handleEliminarEstudiante(record: any, msg: any) {
+    const estudianteId = record.id;
+    
+    // Verificar datos relacionados antes de intentar eliminar
+    checkDatosRelacionados(estudianteId)
+        .then((datos) => {
+            console.log("Datos relacionados encontrados:", datos);
+            
+            // Si hay pagos, mostrar opción para admin de borrarlos
+            if (datos.pagos.length > 0) {
+                Modal.confirm({
+                    title: "Este estudiante tiene pagos registrados",
+                    width: 600,
+                    content: (
+                        <div>
+                            <p><strong>{record.nombre_completo}</strong> tiene <strong>{datos.pagos.length} registro(s) de pagos</strong>.</p>
+                            <div style={{ marginTop: 16, padding: 12, background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 4 }}>
+                                <strong>📋 Opciones:</strong>
+                                <ul style={{ margin: '8px 0 0 0' }}>
+                                    <li><strong>Admin:</strong> Puedes eliminar los pagos en Tesorería y luego borrar el estudiante</li>
+                                    <li><strong>Todos:</strong> Usa "Archivar" para ocultar sin eliminar datos</li>
+                                </ul>
+                            </div>
+                        </div>
+                    ),
+                    okText: "Reintentar",
+                    okType: "default",
+                    cancelText: "Ir a Tesorería",
+                    onOk: () => {
+                        // Reintentar: volver a verificar datos (en caso de que ya haya borrado los pagos)
+                        handleEliminarEstudiante(record, msg);
+                    },
+                    onCancel: () => {
+                        window.location.href = "/tesoreria";
+                    }
+                });
+                return;
+            }
+
+            // Si tiene matrículas o asistencias, ofrecer borrar todo en cascada (solo admin)
+            if (datos.matriculas.length > 0 || datos.asistencias.length > 0) {
+                const tieneMatriculas = datos.matriculas.length > 0;
+                const tieneAsistencias = datos.asistencias.length > 0;
+                
+                Modal.confirm({
+                    title: "¿Eliminar estudiante y todo su historial?",
+                    width: 600,
+                    content: (
+                        <div>
+                            <p><strong>{record.nombre_completo}</strong> tiene datos relacionados que serán eliminados:</p>
+                            <ul>
+                                {tieneMatriculas && (
+                                    <li><strong>{datos.matriculas.length} matrícula(s)</strong>
+                                        <ul>
+                                            {datos.matriculas.slice(0, 3).map((m: any) => (
+                                                <li key={m.id}>{m.cursos?.nombre || 'Curso'}</li>
+                                            ))}
+                                            {datos.matriculas.length > 3 && <li>... y {datos.matriculas.length - 3} más</li>}
+                                        </ul>
+                                    </li>
+                                )}
+                                {tieneAsistencias && (
+                                    <li><strong>{datos.asistencias.length} registro(s) de asistencia</strong></li>
+                                )}
+                            </ul>
+                            <div style={{ marginTop: 16, padding: 12, background: '#fff0f0', border: '1px solid #ffccc7', borderRadius: 4 }}>
+                                <strong>⚠️ Advertencia:</strong>
+                                <p style={{ margin: '8px 0 0 0' }}>Esta acción es <strong>permanente e irreversible</strong>. Se eliminarán:</p>
+                                <ul style={{ marginBottom: 0 }}>
+                                    <li>✋ Todas las matrículas</li>
+                                    <li>📊 Todos los registros de asistencia</li>
+                                    <li>👤 El perfil del estudiante completo</li>
+                                </ul>
+                            </div>
+                        </div>
+                    ),
+                    okText: "Sí, eliminar PERMANENTEMENTE",
+                    okType: "danger",
+                    cancelText: "Cancelar",
+                    onOk: async () => {
+                        try {
+                            await eliminarEstudianteEnCascada(estudianteId, datos);
+                            msg.success("Estudiante y todo su historial eliminados correctamente");
+                            setTimeout(() => window.location.reload(), 1000);
+                        } catch (err: any) {
+                            console.error('Error al eliminar:', err);
+                            msg.error("Error: " + (err?.message || 'No se pudo eliminar'));
+                        }
+                    }
+                });
+                return;
+            }
+            
+            // No tiene datos relacionados, se puede eliminar directamente
+            Modal.confirm({
+                title: "¿Eliminar este estudiante?",
+                content: (
+                    <div>
+                        <p>Estás a punto de eliminar permanentemente a:</p>
+                        <p><strong>{record.nombre_completo}</strong></p>
+                        <p>ID: {record.identificacion || 'N/A'}</p>
+                        <div style={{ marginTop: 16, padding: 12, background: '#fff2f0', border: '1px solid #ffccc7', borderRadius: 4 }}>
+                            <strong>⚠️ Advertencia:</strong>
+                            <p style={{ margin: '8px 0 0 0' }}>Esta acción es <strong>permanente</strong> y no se puede deshacer. Solo elimina si el estudiante fue creado por error.</p>
+                        </div>
+                    </div>
+                ),
+                okText: "Sí, eliminar permanentemente",
+                okType: "danger",
+                cancelText: "Cancelar",
+                onOk: async () => {
+                    try {
+                        const { error } = await supabaseBrowserClient
+                            .from("perfiles")
+                            .delete()
+                            .eq("id", estudianteId);
+                        
+                        if (error) {
+                            console.error('Error al eliminar:', error);
+                            msg.error("Error al eliminar: " + (error.message || 'Desconocido'));
+                            return;
+                        }
+                        
+                        msg.success("Estudiante eliminado correctamente");
+                        setTimeout(() => window.location.reload(), 1000);
+                    } catch (err) {
+                        console.error('Error inesperado:', err);
+                        msg.error('Error inesperado al eliminar el estudiante');
+                    }
+                }
+            });
+        })
+        .catch((err) => {
+            console.error('Error verificando datos relacionados:', err);
+            msg.error('No se pudo verificar el estado del estudiante');
+        });
+}
+
+async function eliminarEstudianteEnCascada(estudianteId: string, datos: any) {
+    // Eliminar en orden: asistencias → matrículas → estudiante
+    
+    // 1. Eliminar asistencias
+    if (datos.asistencias.length > 0) {
+        const asistenciaIds = datos.asistencias.map((a: any) => a.id);
+        const { error: errAsist } = await supabaseBrowserClient
+            .from("asistencias")
+            .delete()
+            .in("id", asistenciaIds);
+        if (errAsist) throw errAsist;
+    }
+    
+    // 2. Eliminar matrículas
+    if (datos.matriculas.length > 0) {
+        const matriculaIds = datos.matriculas.map((m: any) => m.id);
+        const { error: errMat } = await supabaseBrowserClient
+            .from("matriculas")
+            .delete()
+            .in("id", matriculaIds);
+        if (errMat) throw errMat;
+    }
+    
+    // 3. Eliminar estudiante
+    const { error: errPerf } = await supabaseBrowserClient
+        .from("perfiles")
+        .delete()
+        .eq("id", estudianteId);
+    if (errPerf) throw errPerf;
+}
+
+function handleArchivarEstudiante(record: any, msg: any) {
     const estudianteId = record.id;
     archivableCheck(estudianteId)
         .then((matriculas) => {
@@ -410,15 +625,17 @@ function handleArchivarEstudiante(record: any) {
                         .update({ rol: "estudiante_inactivo" })
                         .eq("id", estudianteId);
                     if (error) {
-                        message.error("Error al archivar: " + (error.message || 'Desconocido'));
+                        msg.error("Error al archivar: " + (error.message || 'Desconocido'));
                         return;
                     }
-                    message.success("Estudiante archivado correctamente");
+                    msg.success("Estudiante archivado correctamente");
+                    // Recargar la página para reflejar los cambios
+                    setTimeout(() => window.location.reload(), 1000);
                 }
             });
         })
         .catch((err) => {
             console.error('Error validando matrículas:', err);
-            message.error('No se pudo validar el estado del estudiante');
+            msg.error('No se pudo validar el estado del estudiante');
         });
 }

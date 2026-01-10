@@ -8,6 +8,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { useSearchParams } from "next/navigation";
+import { formatDate } from "@utils/date";
 
 const { Title, Text } = Typography;
 
@@ -184,7 +185,7 @@ export default function TomarAsistencia() {
         // Notificar automáticamente a ausentes
         const ausentesInfo = alumnos.filter((alumno) => asistenciasMap[alumno.id] === "ausente");
         if (ausentesInfo.length > 0) {
-          const fechaTexto = fecha.format("DD/MM/YYYY");
+          const fechaTexto = formatDate(fecha);
           await Promise.all(
             ausentesInfo.map(async (alumno) => {
               const nombre = alumno.perfiles?.nombre_completo || "Estudiante";
@@ -286,7 +287,7 @@ export default function TomarAsistencia() {
                 style={{ width: "100%", marginTop: 8 }}
                 value={fecha}
                 onChange={(val) => setFecha(val || dayjs())}
-                format="DD/MM/YYYY"
+                format="DD-MMM-YYYY"
               />
             </div>
           </Col>

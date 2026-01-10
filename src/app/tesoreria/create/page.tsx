@@ -15,6 +15,8 @@ export default function PagoCreate() {
     // Estado para guardar los cursos del estudiante seleccionado
     const [cursosDelEstudiante, setCursosDelEstudiante] = useState<any[]>([]);
     const [buscandoCursos, setBuscandoCursos] = useState(false);
+    const [cuotasPendientes, setCuotasPendientes] = useState<any[]>([]);
+    const [cargandoCuotas, setCargandoCuotas] = useState(false);
 
     // 1. Selector de Estudiantes (Buscamos en Perfiles donde rol = estudiante)
     const { selectProps: allEstudianteSelectProps } = useSelect({
@@ -30,53 +32,101 @@ export default function PagoCreate() {
         loading: allEstudianteSelectProps.loading
     };
 
-    // 2. Cuando eliges un estudiante, buscamos sus matrículas activas
+    // 2. Cuando eliges un estudiante, buscamos sus matrículas activas y cuotas pendientes
     const handleEstudianteChange = async (estudianteId: string) => {
         if (!estudianteId) return;
         setBuscandoCursos(true);
         setCursosDelEstudiante([]); // Limpiar anterior
+        setCuotasPendientes([]);
         
-        // Hacemos la consulta a Supabase
+        // Hacemos la consulta a Supabase para traer las matrículas
         const { data, error } = await supabaseBrowserClient
             .from("matriculas")
-            .select("id, cursos(nombre, precio_mensualidad)") // Traemos info del curso (precio_mensualidad)
-            .eq("estudiante_id", estudianteId); // Quitamos filtro de estado para ver todo por ahora
+            .select("id, cursos(nombre, precio_mensualidad)") 
+            .eq("estudiante_id", estudianteId);
         
         if (error) {
             message.error("Error buscando cursos del estudiante");
         } else if (data) {
             setCursosDelEstudiante(data);
             
-            // Si tiene solo un curso, lo pre-seleccionamos para agilizar
+            // Si tiene solo un curso, lo pre-seleccionamos
             if (data.length === 1) {
                 formProps.form?.setFieldValue("matricula_id", data[0].id);
-                // Sugerimos el precio mensualidad como monto a pagar
-                const cursoInfo = Array.isArray(data[0].cursos) ? data[0].cursos[0] : data[0].cursos;
-                const precioSugerido = (cursoInfo as any)?.precio_mensualidad || 0;
-                formProps.form?.setFieldValue("monto", precioSugerido);
+                await cargarCuotasPendientes(data[0].id);
             }
         }
         setBuscandoCursos(false);
     };
 
-    // Al seleccionar el curso, autocompletar el monto sugerido
-    const handleCursoChange = (matriculaId: string) => {
-        const matricula = cursosDelEstudiante.find(m => m.id === matriculaId);
-        if (matricula) {
-            const cursoInfo = Array.isArray(matricula.cursos) ? matricula.cursos[0] : matricula.cursos;
-            if ((cursoInfo as any)?.precio_mensualidad) {
-                formProps.form?.setFieldValue("monto", (cursoInfo as any).precio_mensualidad);
+    // 3. Cuando se selecciona una matrícula, cargar sus cuotas pendientes
+    const cargarCuotasPendientes = async (matriculaId: string) => {
+        if (!matriculaId) return;
+        setCargandoCuotas(true);
+        
+        const { data, error } = await supabaseBrowserClient
+            .from("pagos")
+            .select("*")
+            .eq("matricula_id", matriculaId)
+            .in("estado", ["pendiente", "vencido"]) // Solo cuotas no pagadas
+            .order("numero_cuota", { ascending: true });
+        
+        if (error) {
+            message.error("Error cargando cuotas pendientes");
+            setCuotasPendientes([]);
+        } else {
+            setCuotasPendientes(data || []);
+            // Pre-seleccionar la primera cuota pendiente
+            if (data && data.length > 0) {
+                formProps.form?.setFieldValue("cuota_id", data[0].id);
+                formProps.form?.setFieldValue("monto", data[0].monto);
             }
+        }
+        setCargandoCuotas(false);
+    };
+
+    // Al seleccionar el curso, cargar sus cuotas pendientes
+    const handleCursoChange = (matriculaId: string) => {
+        cargarCuotasPendientes(matriculaId);
+    };
+
+    // Al seleccionar una cuota específica, autocompletar el monto
+    const handleCuotaChange = (cuotaId: string) => {
+        const cuota = cuotasPendientes.find(c => c.id === cuotaId);
+        if (cuota) {
+            formProps.form?.setFieldValue("monto", cuota.monto);
         }
     };
 
-    const handleOnFinish = (values: any) => {
-        // Preparamos datos finales
-        const datos = {
-            ...values,
-            fecha_pago: values.fecha_pago ? values.fecha_pago.format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
-        };
-        onFinish(datos);
+    const handleOnFinish = async (values: any) => {
+        try {
+            // En lugar de crear un nuevo pago, actualizamos la cuota existente
+            const { cuota_id, monto, metodo_pago, fecha_pago, referencia } = values;
+            
+            if (!cuota_id) {
+                message.error("Debes seleccionar una cuota a pagar");
+                return;
+            }
+
+                        const { error } = await supabaseBrowserClient
+                            .from("pagos")
+                            .update({
+                                estado: "pagado",
+                                fecha_pago: fecha_pago ? fecha_pago.format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
+                                monto: monto, // Por si hubo ajuste en el monto
+                                metodo_pago: metodo_pago,
+                                referencia: referencia,
+                                observaciones: `Pago registrado el ${formatDate(dayjs())} ${formatTime(dayjs())}`
+                            })
+                            .eq("id", cuota_id);
+
+            if (error) throw error;
+
+            message.success("Pago registrado exitosamente");
+            window.location.href = "/tesoreria";
+        } catch (e: any) {
+            message.error(e?.message || "Error registrando el pago");
+        }
     };
 
     // Prefill desde query params: estudiante_id y matricula_id
@@ -130,7 +180,7 @@ export default function PagoCreate() {
                     </Col>
                     <Col span={12}>
                         <Form.Item 
-                            label="Curso a Pagar (Matrícula)" 
+                            label="Curso (Matrícula)" 
                             name="matricula_id" 
                             rules={[{ required: true, message: "Selecciona el curso" }]}
                             help={cursosDelEstudiante.length === 0 && !buscandoCursos ? "Selecciona un estudiante primero" : ""}
@@ -153,6 +203,37 @@ export default function PagoCreate() {
 
                 {cursosDelEstudiante.length === 0 && !buscandoCursos && (
                      <Alert style={{marginBottom: 20}} type="info" message="Nota: Selecciona un estudiante para ver sus cursos inscritos." />
+                )}
+
+                {cuotasPendientes.length === 0 && !cargandoCuotas && cursosDelEstudiante.length > 0 && (
+                     <Alert style={{marginBottom: 20}} type="warning" message="Este estudiante no tiene cuotas pendientes de pago." />
+                )}
+
+                {cuotasPendientes.length > 0 && (
+                    <Card style={{ marginBottom: 20, background: '#f0f5ff' }}>
+                        <Form.Item 
+                            label="Cuota a Pagar" 
+                            name="cuota_id" 
+                            rules={[{ required: true, message: "Selecciona la cuota a pagar" }]}
+                        >
+                            <Select 
+                                placeholder="Selecciona la cuota a pagar"
+                                loading={cargandoCuotas}
+                                onChange={handleCuotaChange}
+                            >
+                                {cuotasPendientes.map((cuota: any) => {
+                                    const esVencida = cuota.estado === 'vencido';
+                                    const labelEstado = esVencida ? ' 🔴 VENCIDA' : '';
+                                       const vencimiento = cuota.fecha_vencimiento ? ` - Vence: ${formatDate(cuota.fecha_vencimiento)}` : '';
+                                    return (
+                                        <Select.Option key={cuota.id} value={cuota.id}>
+                                            {cuota.periodo_pagado} - ${cuota.monto?.toLocaleString() || 0}{vencimiento}{labelEstado}
+                                        </Select.Option>
+                                    );
+                                })}
+                            </Select>
+                        </Form.Item>
+                    </Card>
                 )}
 
                 <Divider orientation="left">Detalles del Pago</Divider>

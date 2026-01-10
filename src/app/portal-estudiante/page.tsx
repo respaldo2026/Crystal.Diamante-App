@@ -14,6 +14,7 @@ import {
   DollarCircleOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { formatDate } from "@utils/date";
 import { useParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
@@ -224,7 +225,7 @@ export default function PortalEstudiante() {
                         {
                           title: "Fecha",
                           dataIndex: "fecha",
-                          render: (fecha) => dayjs(fecha).format("DD/MM/YYYY"),
+                          render: (fecha) => formatDate(fecha),
                         },
                         {
                           title: "Curso",
@@ -283,7 +284,7 @@ export default function PortalEstudiante() {
                       {
                         title: "Fecha",
                         dataIndex: "fecha_evaluacion",
-                        render: (fecha) => dayjs(fecha).format("DD/MM/YYYY"),
+                        render: (fecha) => formatDate(fecha),
                       },
                     ]}
                   />
@@ -357,7 +358,7 @@ export default function PortalEstudiante() {
                         {
                           title: "Fecha",
                           dataIndex: "fecha_pago",
-                          render: (fecha) => dayjs(fecha).format("DD/MM/YYYY"),
+                          render: (fecha) => formatDate(fecha),
                         },
                         {
                           title: "Curso",
@@ -417,7 +418,7 @@ export default function PortalEstudiante() {
                       },
                       {
                         title: "Fecha Finalización",
-                        render: (_, record: any) => dayjs(record.cursos?.fecha_fin).format("DD/MM/YYYY"),
+                        render: (_, record: any) => formatDate(record.cursos?.fecha_fin),
                       },
                       {
                         title: "Acciones",

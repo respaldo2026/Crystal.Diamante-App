@@ -7,6 +7,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { BookOutlined, SearchOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { formatDate } from "@utils/date";
 
 export default function MatriculaCreate() {
     const { formProps, saveButtonProps, onFinish } = useForm({ redirect: "list" });
@@ -37,13 +38,13 @@ export default function MatriculaCreate() {
 
             setCursosLoading(true);
             try {
-                const today = dayjs().format("YYYY-MM-DD");
+                const todayString = dayjs().format("YYYY-MM-DD");
                 const { data, error } = await supabaseBrowserClient
                     .from("cursos")
                     .select("id, nombre, cupos, fecha_inicio, estado, programa_id, matriculas(count)")
                     .eq("programa_id", programaSeleccionado)
                     .in("estado", ["activo", "proximo"])
-                    .or(`fecha_inicio.is.null,fecha_inicio.gte.${today}`)
+                    .or(`fecha_inicio.is.null,fecha_inicio.gte.${todayString}`)
                     .order("fecha_inicio", { ascending: true, nullsFirst: true });
 
                 if (error) throw error;
@@ -56,7 +57,7 @@ export default function MatriculaCreate() {
                         const disponibles = cupos - inscritos;
                         if (disponibles <= 0) return null;
 
-                        const fechaLabel = curso?.fecha_inicio ? dayjs(curso.fecha_inicio).format("DD/MM") : "Sin fecha";
+                        const fechaLabel = curso?.fecha_inicio ? formatDate(curso.fecha_inicio) : "Sin fecha";
                         const esProximo = curso?.fecha_inicio && dayjs(curso.fecha_inicio).diff(today, "day") <= 14;
                         const badge = esProximo ? "[Próximo] " : "";
                         return {
@@ -192,7 +193,7 @@ export default function MatriculaCreate() {
     };
 
     const handleOnFinish = async (values: any) => {
-        const { estudiante_id, curso_id } = values || {};
+        const { estudiante_id, curso_id, fecha_inicio, estado, observaciones } = values || {};
 
         if (cuposInfo && cuposInfo.ocupados >= cuposInfo.total) {
             message.error("⛔ ¡El curso está lleno! No se puede matricular.");
@@ -202,7 +203,7 @@ export default function MatriculaCreate() {
         if (estudiante_id && curso_id) {
             const { count } = await supabaseBrowserClient
                 .from("matriculas")
-                .select("*", { count: "exact", head: true })
+                .select("id", { count: "exact", head: true })
                 .eq("estudiante_id", estudiante_id)
                 .eq("curso_id", curso_id);
 
@@ -212,7 +213,10 @@ export default function MatriculaCreate() {
             }
         }
 
-        await onFinish(values);
+        // Solo enviar los campos que existen en la tabla matriculas
+        const payload = { estudiante_id, curso_id, fecha_inicio, estado, observaciones };
+        
+        await onFinish(payload);
 
         try {
             const { data: perfil } = await supabaseBrowserClient
@@ -327,8 +331,13 @@ export default function MatriculaCreate() {
                                     placeholder={programaSeleccionado ? "Selecciona el curso..." : "Primero elige un programa"}
                                     notFoundContent={programaSeleccionado ? "No hay cursos activos o próximos disponibles" : "Primero elige un programa"}
                                     disabled={!programaSeleccionado}
-                                    onChange={(val) => handleCursoChange(val as string)}
+                                    onChange={(val) => {
+                                        formProps.form?.setFieldValue("curso_id", val);
+                                        handleCursoChange(val as string);
+                                    }}
                                     suffixIcon={<BookOutlined />}
+                                    showSearch
+                                    optionFilterProp="label"
                                 />
                             </Form.Item>
                         </Col>

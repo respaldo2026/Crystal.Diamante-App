@@ -2,13 +2,14 @@
 
 import React, { useMemo, useState } from "react";
 import { List, useTable, CreateButton, EditButton, DeleteButton } from "@refinedev/antd";
-import { Table, Space, Tag, Typography, Card, Statistic, Row, Col, Input, Button, DatePicker, Select } from "antd";
+import { Table, Space, Tag, Typography, Card, Statistic, Row, Col, Input, Button, DatePicker, Select, Alert } from "antd";
 import { 
     DollarCircleOutlined, 
     UserOutlined, 
     BankOutlined, 
     CalendarOutlined,
-    SearchOutlined
+    SearchOutlined,
+    DeleteOutlined
 } from "@ant-design/icons";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import dayjs from "dayjs";
@@ -28,6 +29,10 @@ export default function TesoreriaList() {
             filters.push({ field: "perfiles.id", operator: "eq", value: user.id });
         }
         
+        // IMPORTANTE: Solo mostrar pagos efectivamente realizados (con estado 'pagado')
+        // Las cuotas pendientes solo aparecen en el perfil del estudiante
+        filters.push({ field: "estado", operator: "eq", value: "pagado" });
+        
         return filters;
     };
 
@@ -37,7 +42,7 @@ export default function TesoreriaList() {
         meta: {
             select: "*, perfiles(nombre_completo), matriculas(cursos(nombre))"
         },
-        sorters: { initial: [{ field: "created_at", order: "desc" }] },
+        sorters: { initial: [{ field: "fecha_pago", order: "desc" }] },
         filters: {
             permanent: permanentFilters()
         }
@@ -118,6 +123,17 @@ export default function TesoreriaList() {
                 </Space>
             }
         >
+            {/* AVISO PARA ADMINISTRADOR */}
+            {user?.rol === "admin" && (
+                <Alert
+                    message="🔓 Modo Administrador"
+                    description="Tienes permisos para eliminar pagos. Recuerda que esta acción es irreversible. Los pagos eliminados permitirán borrar estudiantes y su historial completo."
+                    type="warning"
+                    showIcon
+                    closable
+                    style={{ marginBottom: 20 }}
+                />
+            )}
             {/* Tarjeta de Resumen de Dinero */}
             <Row gutter={16} style={{ marginBottom: 20 }}>
                 <Col xs={24} sm={8}>
@@ -241,7 +257,17 @@ export default function TesoreriaList() {
                     render={(_, record: any) => (
                         <Space>
                             <EditButton hideText size="small" recordItemId={record.id} resource="pagos" />
-                            <DeleteButton hideText size="small" recordItemId={record.id} resource="pagos" />
+                            {user?.rol === "admin" && (
+                                <DeleteButton 
+                                    hideText 
+                                    size="small" 
+                                    recordItemId={record.id} 
+                                    resource="pagos"
+                                    confirmTitle="¿Eliminar este pago?"
+                                    confirmOkText="Sí, eliminar"
+                                    confirmCancelText="Cancelar"
+                                />
+                            )}
                         </Space>
                     )}
                 />

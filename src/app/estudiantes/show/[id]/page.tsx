@@ -19,6 +19,8 @@ import {
   Descriptions,
   Result,
   Space,
+  Tooltip,
+  Modal,
 } from "antd";
 import {
   UserOutlined,
@@ -35,9 +37,10 @@ import {
   CameraOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { message, Upload, Modal } from "antd";
+import { message, Upload } from "antd";
 import type { UploadFile } from "antd";
 import dayjs from "dayjs";
+import { formatDate } from "@utils/date";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
@@ -64,6 +67,8 @@ type Matricula = {
 type Pago = {
   id: string;
   fecha_pago: string | null;
+  fecha_vencimiento?: string | null;
+  numero_cuota?: number | null;
   matricula_id: number | null;
   matriculas: {
     cursos: {
@@ -160,9 +165,9 @@ export default function StudentDetailView() {
 
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
-        .select("id, fecha_pago, matricula_id, periodo_pagado, monto, metodo_pago, referencia, observaciones, estado, matriculas(cursos(nombre))")
+        .select("id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, matriculas(cursos(nombre))")
         .eq("estudiante_id", idEstudiante)
-        .order("fecha_pago", { ascending: false });
+        .order("numero_cuota", { ascending: true });
       if (errPagos) {
         setLoadError("No pudimos cargar el historial de pagos.");
         throw errPagos;
@@ -258,7 +263,7 @@ export default function StudentDetailView() {
         title: "Fecha Inicio",
         dataIndex: "fecha_inicio",
         key: "inicio",
-        render: (val: string) => (val ? dayjs(val).format("DD/MM/YYYY") : "Sin fecha"),
+        render: (val: string) => (val ? formatDate(val) : "Sin fecha"),
       },
       {
         title: "Estado",
@@ -345,7 +350,7 @@ export default function StudentDetailView() {
         title: "Fecha",
         dataIndex: "fecha_pago",
         key: "fecha",
-        render: (val: string | null) => (val ? dayjs(val).format("DD/MM/YYYY HH:mm") : "-"),
+        render: (val: string | null) => (val ? `${formatDate(val)} ${dayjs(val).format("HH:mm")}` : "-"),
       },
       {
         title: "Estado",
@@ -422,29 +427,107 @@ export default function StudentDetailView() {
     []
   );
 
-  const renderCiclos = (record: any) => {
-    const info = ciclosPorMatricula[record.id] || { total: 0, pagados: 0, periodos: [] };
-    const total = Number(info.total) || 0;
-    if (total === 0) return <Text type="secondary">Sin ciclos definidos</Text>;
+  const renderCuotasPorMatricula = (record: any) => {
+    // Obtener todas las cuotas de esta matrícula
+    const cuotasMatricula = pagosHistorial.filter(p => p.matricula_id === record.id).sort((a, b) => (a.numero_cuota || 0) - (b.numero_cuota || 0));
+    
+    if (cuotasMatricula.length === 0) {
+      return <Text type="secondary">No hay cuotas generadas</Text>;
+    }
 
-    const periodos = info.periodos.length === total ? info.periodos : Array.from({ length: total }, (_, i) => info.periodos[i] || `Ciclo ${i + 1}`);
     return (
-      <Space wrap>
-        {periodos.map((etiqueta, idx) => {
-          const pagado = idx < info.pagados;
+      <Space wrap size="small">
+        {cuotasMatricula.map((cuota) => {
+          const estado = (cuota.estado || 'pendiente').toLowerCase();
+          const isPagado = estado === 'pagado';
+          const isVencido = estado === 'vencido' || (cuota.fecha_vencimiento && dayjs(cuota.fecha_vencimiento).isBefore(dayjs(), 'day') && !isPagado);
+          const isPorVencer = cuota.fecha_vencimiento && dayjs(cuota.fecha_vencimiento).diff(dayjs(), 'day') <= 7 && !isPagado && !isVencido;
+          
+          let buttonType: "primary" | "default" | "dashed" = "default";
+          let buttonColor = "";
+          let statusText = "";
+          let statusColor = "";
+
+          if (isPagado) {
+            buttonType = "primary";
+            statusText = "Pagado";
+            statusColor = "#52c41a";
+          } else if (isVencido) {
+            buttonColor = "#ff4d4f";
+            statusText = "Vencido";
+            statusColor = "#ff4d4f";
+          } else if (isPorVencer) {
+            buttonColor = "#faad14";
+            statusText = "Por vencer";
+            statusColor = "#faad14";
+          } else {
+            statusText = "Pendiente";
+            statusColor = "#1890ff";
+          }
+
           return (
-            <Button
-              key={`${record.id}-ciclo-${idx}`}
-              size="small"
-              type={pagado ? "primary" : "default"}
-              ghost={pagado}
-              style={{ minWidth: 90 }}
+            <Tooltip
+              key={cuota.id}
+              title={
+                <div>
+                  <div><strong>{cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}</strong></div>
+                  <div>Monto: ${(cuota.monto || 0).toLocaleString()}</div>
+                  {cuota.fecha_vencimiento && (
+                    <div>Vence: {formatDate(cuota.fecha_vencimiento)}</div>
+                  )}
+                  {cuota.fecha_pago && (
+                    <div>Pagado: {formatDate(cuota.fecha_pago)}</div>
+                  )}
+                  <div>Estado: {statusText}</div>
+                </div>
+              }
             >
-              {etiqueta}
-              <div style={{ fontSize: 11, color: pagado ? '#52c41a' : '#ff4d4f' }}>
-                {pagado ? "Pagado" : "Pendiente"}
-              </div>
-            </Button>
+              <Button
+                size="small"
+                type={buttonType}
+                style={{
+                  minWidth: 100,
+                  borderColor: buttonColor || undefined,
+                  color: isPagado ? '#fff' : buttonColor || undefined,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: 'auto',
+                  padding: '4px 8px',
+                  alignItems: 'flex-start'
+                }}
+                onClick={() => {
+                  if (!isPagado) {
+                    Modal.confirm({
+                      title: `Registrar pago de ${cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}`,
+                      content: (
+                        <div>
+                          <p>Monto: <strong>${(cuota.monto || 0).toLocaleString()}</strong></p>
+                          {cuota.fecha_vencimiento && (
+                            <p>Vencimiento: {formatDate(cuota.fecha_vencimiento)}</p>
+                          )}
+                          <p>¿Deseas redirigir a tesorería para registrar este pago?</p>
+                        </div>
+                      ),
+                      onOk: () => {
+                        window.location.href = `/tesoreria/create?estudiante_id=${idEstudiante}&matricula_id=${record.id}&monto=${cuota.monto || 0}&periodo=${cuota.periodo_pagado || ''}`;
+                      },
+                    });
+                  }
+                }}
+              >
+                <span style={{ fontSize: 11, fontWeight: 500 }}>
+                  {cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}
+                </span>
+                <span style={{ fontSize: 10, color: statusColor, marginTop: 2 }}>
+                  {statusText}
+                </span>
+                {cuota.fecha_vencimiento && !isPagado && (
+                  <span style={{ fontSize: 9, color: '#8c8c8c', marginTop: 1 }}>
+                    {dayjs(cuota.fecha_vencimiento).format("DD-MMM")} 
+                  </span>
+                )}
+              </Button>
+            </Tooltip>
           );
         })}
       </Space>
@@ -630,7 +713,7 @@ export default function StudentDetailView() {
                   </Descriptions.Item>
                   <Descriptions.Item label="Fecha de Nacimiento">
                     {perfil?.fecha_nacimiento
-                      ? dayjs(perfil.fecha_nacimiento).format("DD/MM/YYYY")
+                      ? formatDate(perfil.fecha_nacimiento)
                       : "N/A"}
                   </Descriptions.Item>
                   <Descriptions.Item label="Género">
@@ -726,8 +809,9 @@ export default function StudentDetailView() {
                         render: (_: any, record: any) => ciclosPorMatricula[record.id]?.faltantes ?? "-",
                       },
                       {
-                        title: "Periodos pagados",
-                        render: (_: any, record: any) => renderCiclos(record),
+                        title: "Cuotas de Pago",
+                        render: (_: any, record: any) => renderCuotasPorMatricula(record),
+                        width: 500,
                       },
                     ]}
                   />

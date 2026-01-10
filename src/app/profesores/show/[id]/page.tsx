@@ -15,6 +15,7 @@ import dayjs from "dayjs";
 import { useParams } from "next/navigation"; 
 import { createClient } from "@supabase/supabase-js";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { formatDate } from "@utils/date";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -573,9 +574,9 @@ export default function ShowProfesorDashboard() {
               }
               description={
                 <Space>
-                  <Tag>{c.fecha_inicio ? dayjs(c.fecha_inicio).format('DD/MM/YYYY') : '-'}</Tag>
+                  <Tag>{c.fecha_inicio ? formatDate(c.fecha_inicio) : '-'}</Tag>
                   <span>→</span>
-                  <Tag>{c.fecha_fin ? dayjs(c.fecha_fin).format('DD/MM/YYYY') : '-'}</Tag>
+                  <Tag>{c.fecha_fin ? formatDate(c.fecha_fin) : '-'}</Tag>
                 </Space>
               }
             />

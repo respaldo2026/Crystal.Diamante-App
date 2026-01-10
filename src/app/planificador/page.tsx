@@ -200,7 +200,7 @@ export default function PlanificadorPage() {
       return {
         start: customRange[0].startOf('day'),
         end: customRange[1].endOf('day'),
-        title: `${customRange[0].format('DD MMM YYYY')} - ${customRange[1].format('DD MMM YYYY')}`
+        title: `${customRange[0].format('DD-MMM-YYYY')} - ${customRange[1].format('DD-MMM-YYYY')}`
       };
     }
 
@@ -208,7 +208,7 @@ export default function PlanificadorPage() {
       return {
         start: currentDate.startOf('isoWeek'),
         end: currentDate.endOf('isoWeek'),
-        title: `Semana del ${currentDate.startOf('isoWeek').format('DD MMM')} al ${currentDate.endOf('isoWeek').format('DD MMM YYYY')}`
+        title: `Semana del ${currentDate.startOf('isoWeek').format('DD-MMM')} al ${currentDate.endOf('isoWeek').format('DD-MMM-YYYY')}`
       };
     }
 
@@ -216,7 +216,7 @@ export default function PlanificadorPage() {
     return {
       start: currentDate.startOf('month'),
       end: currentDate.endOf('month'),
-      title: currentDate.format('MMMM YYYY').toUpperCase()
+      title: currentDate.format('MMM YYYY').toUpperCase()
     };
   };
 
@@ -416,7 +416,7 @@ export default function PlanificadorPage() {
               title={
                 <Space>
                   <CalendarOutlined />
-                  <Text strong>{dia.format('dddd DD [de] MMMM YYYY').toUpperCase()}</Text>
+                  <Text strong>{dia.format('dddd DD-MMM-YYYY').toUpperCase()}</Text>
                   <Badge count={eventosDelDia.length} style={{ backgroundColor: '#52c41a' }} />
                 </Space>
               }
@@ -491,9 +491,9 @@ export default function PlanificadorPage() {
                           </div>
                           
                           <div style={{ fontSize: 11, color: '#999' }}>
-                            Inicia: {dayjs(evento.curso.fecha_inicio).format('DD MMM YYYY')}
+                            Inicia: {dayjs(evento.curso.fecha_inicio).format('DD-MMM-YYYY')}
                             {evento.curso.fecha_fin && (
-                              <><br/>Termina: {dayjs(evento.curso.fecha_fin).format('DD MMM YYYY')}</>
+                              <><br/>Termina: {dayjs(evento.curso.fecha_fin).format('DD-MMM-YYYY')}</>
                             )}
                           </div>
                         </Space>

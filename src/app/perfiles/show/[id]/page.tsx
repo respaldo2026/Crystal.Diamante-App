@@ -17,6 +17,7 @@ import {
   WalletOutlined 
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { formatDate } from "@utils/date";
 
 export default function ShowPerfil() {
   // 1. Obtener datos del Profesor Actual
@@ -160,7 +161,7 @@ export default function ShowPerfil() {
                 <Card variant="borderless">
                     <p><b>Cédula:</b> {profesor.identificacion}</p>
                     <p><b>Email:</b> {profesor.email}</p>
-                    <p><b>Registro:</b> {dayjs(profesor.created_at).format("DD/MM/YYYY")}</p>
+                    <p><b>Registro:</b> {formatDate(profesor.created_at)}</p>
                 </Card>
             ),
           },
@@ -184,7 +185,7 @@ export default function ShowPerfil() {
             label: <span><DollarCircleOutlined />Pagos</span>,
             children: (
                 <Table dataSource={pagosData?.data || []} rowKey="id">
-                    <Table.Column title="Fecha" dataIndex="fecha_pago" render={(v)=> dayjs(v).format("DD/MM/YYYY")}/>
+                  <Table.Column title="Fecha" dataIndex="fecha_pago" render={(v)=> formatDate(v)}/>
                     <Table.Column title="Tipo" dataIndex="tipo" render={(v) => <Tag>{v}</Tag>} />
                     <Table.Column title="Nota" dataIndex="nota" />
                     <Table.Column title="Monto" dataIndex="monto" render={(v)=> <b>$ {Number(v).toLocaleString()}</b>} />
@@ -206,7 +207,7 @@ export default function ShowPerfil() {
             <Row gutter={16}>
                 <Col span={12}>
                     <Form.Item name="fecha_pago" label="Fecha" initialValue={dayjs()}>
-                        <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY"/>
+                      <DatePicker style={{ width: '100%' }} format="DD-MMM-YYYY"/>
                     </Form.Item>
                 </Col>
                 <Col span={12}>

@@ -10,6 +10,7 @@ import {
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useNavigation } from "@refinedev/core"; // Usamos la navegación de Refine
 import dayjs from "dayjs";
+import { formatDate } from "@utils/date";
 import 'dayjs/locale/es';
 import { enviarWhatsapp } from "@utils/whatsapp";
 
@@ -434,7 +435,7 @@ export default function DashboardPage() {
                                                                     ? `Cupos ${curso.cuposDisponibles}/${curso.cuposTotales}`
                                                                     : "Cupos N/D";
                                                             const fecha = curso.fecha_inicio
-                                                                ? dayjs(curso.fecha_inicio).format("DD/MM")
+                                                                ? formatDate(curso.fecha_inicio)
                                                                 : "Sin fecha";
                                                             return (
                                                                 <div key={curso.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid #f0f0f0", borderRadius: 6, padding: "4px 8px", background: "#fafafa" }}>

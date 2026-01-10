@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { List, useTable, EditButton, DeleteButton, CreateButton, useSelect } from "@refinedev/antd";
-import { Table, Space, Tag, Typography, Button, Tooltip, Progress, Select, Modal, message, Tabs, Card, Row, Col } from "antd";
+import { Table, Space, Tag, Typography, Button, Tooltip, Progress, Select, Modal, message, Tabs, Card, Row, Col, App } from "antd";
 import { 
   FileTextOutlined, 
   CheckCircleOutlined, 
@@ -18,14 +18,15 @@ import { DiplomaPDF } from "@components/pdf/DiplomaPDF";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { formatDate } from "@utils/date";
 
 const { Text } = Typography;
 
 export default function MatriculasList() {
     const { user } = useCurrentUser();
+    const { modal, message: antMessage } = App.useApp();
     const [asistenciasPorMatricula, setAsistenciasPorMatricula] = useState<Record<number, any>>({});
     const [loadingAsistencias, setLoadingAsistencias] = useState(false);
-    const [modal, modalContextHolder] = Modal.useModal();
     const [activeTab, setActiveTab] = useState<string>('nuevo');
     const [listFilter, setListFilter] = useState<'all' | 'sin_pagos' | 'con_pagos' | 'bajo_asistencia'>('all');
 
@@ -193,23 +194,120 @@ export default function MatriculasList() {
     const handleEliminar = async (record: any) => {
         try {
             const supabase = supabaseBrowserClient;
-            const [asist, pagos] = await Promise.all([
-                supabase.from('asistencias').select('id', { count: 'exact', head: true }).eq('matricula_id', record.id),
-                supabase.from('pagos').select('id', { count: 'exact', head: true }).eq('matricula_id', record.id),
-            ]);
+            
+            // Verificar con más detalle qué pagos existen
+            const { data: pagosData, error: pagosError } = await supabase
+                .from('pagos')
+                .select('*')
+                .eq('matricula_id', record.id);
+            
+            const { data: asistData, error: asistError } = await supabase
+                .from('asistencias')
+                .select('id')
+                .eq('matricula_id', record.id);
+            
+            console.log('Verificación de datos relacionados:', {
+                matricula_id: record.id,
+                pagos: pagosData,
+                pagosError,
+                asistencias: asistData,
+                asistError
+            });
 
-            const asistCount = asist.count || 0;
-            const pagosCount = pagos.count || 0;
+            const asistCount = asistData?.length || 0;
+            const pagosCount = pagosData?.length || 0;
 
             if (asistCount > 0 || pagosCount > 0) {
-                let msg = 'No se puede eliminar porque existen registros asociados:\n\n';
-                if (asistCount > 0) msg += `• ${asistCount} asistencia(s)\n`;
-                if (pagosCount > 0) msg += `• ${pagosCount} pago(s)\n`;
-                msg += '\nSugerencia: usa "Cancelar Matrícula" para preservar el historial.';
-                modal.info({ title: 'Eliminación bloqueada', content: msg.replaceAll('\n', '\n') });
+                const pagosPendientes = pagosData?.filter(p => p.estado === 'pendiente').length || 0;
+                const pagosPagados = pagosData?.filter(p => p.estado === 'pagado').length || 0;
+                
+                modal.confirm({
+                    title: 'Esta matrícula tiene registros asociados',
+                    width: 600,
+                    content: (
+                        <div>
+                            <p>No se puede eliminar porque existen registros relacionados:</p>
+                            <ul>
+                                {asistCount > 0 && <li><strong>{asistCount} asistencia(s)</strong></li>}
+                                {pagosCount > 0 && (
+                                    <li>
+                                        <strong>{pagosCount} pago(s):</strong>
+                                        <ul>
+                                            {pagosPendientes > 0 && <li>{pagosPendientes} pendientes (cuotas generadas automáticamente)</li>}
+                                            {pagosPagados > 0 && <li style={{color: '#cf1322'}}>{pagosPagados} pagados (ingresos reales)</li>}
+                                        </ul>
+                                    </li>
+                                )}
+                            </ul>
+                            <div style={{ marginTop: 16, padding: 12, background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 4 }}>
+                                <strong>💡 Opciones:</strong>
+                                <ul style={{ margin: '8px 0 0 0' }}>
+                                    <li><strong>"Eliminar pagos y continuar":</strong> Borra todos los pagos (pendientes y pagados) {asistCount > 0 && 'y asistencias'} y luego elimina la matrícula</li>
+                                    <li><strong>"Cancelar Matrícula":</strong> Marca como cancelada sin eliminar datos (recomendado si hay pagos reales)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    ),
+                    okText: pagosCount > 0 ? 'Eliminar pagos y continuar' : 'Eliminar asistencias y continuar',
+                    okType: 'danger',
+                    cancelText: 'Cancelar Matrícula',
+                    onOk: async () => {
+                        try {
+                            // Primero eliminar todos los pagos
+                            if (pagosCount > 0) {
+                                const { error: errorPagos } = await supabase
+                                    .from('pagos')
+                                    .delete()
+                                    .eq('matricula_id', record.id);
+                                
+                                if (errorPagos) {
+                                    antMessage.error('Error eliminando pagos: ' + errorPagos.message);
+                                    console.error('Error deleting pagos:', errorPagos);
+                                    return;
+                                }
+                            }
+                            
+                            // Luego eliminar asistencias si hay
+                            if (asistCount > 0) {
+                                const { error: errorAsist } = await supabase
+                                    .from('asistencias')
+                                    .delete()
+                                    .eq('matricula_id', record.id);
+                                
+                                if (errorAsist) {
+                                    antMessage.error('Error eliminando asistencias: ' + errorAsist.message);
+                                    console.error('Error deleting asistencias:', errorAsist);
+                                    return;
+                                }
+                            }
+                            
+                            // Finalmente eliminar la matrícula
+                            const { error: errorMatricula } = await supabase
+                                .from('matriculas')
+                                .delete()
+                                .eq('id', record.id);
+                            
+                            if (errorMatricula) {
+                                antMessage.error('Error eliminando matrícula: ' + errorMatricula.message);
+                                console.error('Error deleting matricula:', errorMatricula);
+                            } else {
+                                antMessage.success('Matrícula y todos sus registros eliminados correctamente');
+                                setTimeout(() => window.location.reload(), 1000);
+                            }
+                        } catch (err: any) {
+                            antMessage.error(err?.message || 'Error en eliminación en cascada');
+                            console.error('Cascade delete exception:', err);
+                        }
+                    },
+                    onCancel: () => {
+                        // Cambiar a cancelado en lugar de cerrar
+                        handleCancelar(record);
+                    }
+                });
                 return;
             }
 
+            // No hay datos relacionados, eliminar directamente
             modal.confirm({
                 title: 'Eliminar Matrícula',
                 content: 'Esta acción no se puede deshacer. ¿Deseas continuar?',
@@ -217,17 +315,23 @@ export default function MatriculasList() {
                 okType: 'danger',
                 cancelText: 'Cancelar',
                 async onOk() {
-                    const { error } = await supabase.from('matriculas').delete().eq('id', record.id);
-                    if (error) {
-                        message.error(error.message || 'No se pudo eliminar');
-                    } else {
-                        message.success('Matrícula eliminada');
-                        window.location.reload();
+                    try {
+                        const { error } = await supabase.from('matriculas').delete().eq('id', record.id);
+                        if (error) {
+                            antMessage.error(error.message || 'No se pudo eliminar');
+                            console.error('Delete error:', error);
+                        } else {
+                            antMessage.success('Matrícula eliminada');
+                            setTimeout(() => window.location.reload(), 1000);
+                        }
+                    } catch (err: any) {
+                        antMessage.error(err?.message || 'Error al eliminar');
+                        console.error('Delete exception:', err);
                     }
                 },
             });
         } catch (e: any) {
-            message.error(e?.message || 'Error validando dependencias');
+            antMessage.error(e?.message || 'Error validando dependencias');
         }
     };
 
@@ -238,40 +342,50 @@ export default function MatriculasList() {
             okText: 'Cancelar matrícula',
             cancelText: 'Volver',
             async onOk() {
-                const { error } = await supabaseBrowserClient
-                    .from('matriculas')
-                    .update({ estado: 'cancelado' })
-                    .eq('id', record.id);
-                if (error) {
-                    message.error(error.message || 'No se pudo cancelar');
-                } else {
-                    message.success('Matrícula cancelada');
-                    // Notificar por WhatsApp si el estudiante lo permite
-                    try {
-                        const { data: perfil } = await supabaseBrowserClient
-                            .from('perfiles')
-                            .select('nombre_completo, telefono, notif_whatsapp')
-                            .eq('id', record.estudiante_id)
-                            .single();
-                        const { data: curso } = await supabaseBrowserClient
-                            .from('cursos')
-                            .select('nombre')
-                            .eq('id', record.curso_id)
-                            .single();
-                        if (perfil?.telefono && (perfil?.notif_whatsapp ?? true)) {
-                            enviarWhatsapp(
-                                perfil.telefono,
-                                `Hola ${perfil.nombre_completo}, tu matrícula en "${curso?.nombre ?? 'Curso'}" fue cancelada. Si fue un error, contáctanos.`
-                            );
+                try {
+                    const { error } = await supabaseBrowserClient
+                        .from('matriculas')
+                        .update({ estado: 'cancelado' })
+                        .eq('id', record.id);
+                    
+                    if (error) {
+                        antMessage.error(error.message || 'No se pudo cancelar');
+                        console.error('Cancel error:', error);
+                    } else {
+                        antMessage.success('Matrícula cancelada');
+                        
+                        // Notificar por WhatsApp si el estudiante lo permite
+                        try {
+                            const { data: perfil } = await supabaseBrowserClient
+                                .from('perfiles')
+                                .select('nombre_completo, telefono, notif_whatsapp')
+                                .eq('id', record.estudiante_id)
+                                .single();
+                            const { data: curso } = await supabaseBrowserClient
+                                .from('cursos')
+                                .select('nombre')
+                                .eq('id', record.curso_id)
+                                .single();
+                            if (perfil?.telefono && (perfil?.notif_whatsapp ?? true)) {
+                                enviarWhatsapp(
+                                    perfil.telefono,
+                                    `Hola ${perfil.nombre_completo}, tu matrícula en "${curso?.nombre ?? 'Curso'}" fue cancelada. Si fue un error, contáctanos.`
+                                );
+                            }
+                        } catch (e) {
+                            console.warn('No se pudo enviar WhatsApp de cancelación:', e);
                         }
-                    } catch (e) {
-                        console.warn('No se pudo enviar WhatsApp de cancelación:', e);
+                        
+                        // Recargar para reflejar cambio de estado
+                        setTimeout(() => window.location.reload(), 1000);
                     }
-                    window.location.reload();
+                } catch (err: any) {
+                    antMessage.error(err?.message || 'Error al cancelar');
+                    console.error('Cancel exception:', err);
                 }
             },
         });
-    };
+    };;
                 {/* COLUMNA 6: PAGOS */}
                 <Table.Column
                     title="Pagos"
@@ -326,7 +440,6 @@ export default function MatriculasList() {
 
     return (
         <>
-        {modalContextHolder}
         <List title="Gestión de Matrículas">
             <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
                 { key: 'nuevo', label: 'Nueva Matrícula' },
@@ -503,7 +616,7 @@ export default function MatriculasList() {
                 <Table.Column
                     title="Fecha Matrícula"
                     dataIndex="created_at"
-                    render={(val) => dayjs(val).format("DD/MM/YYYY")}
+                    render={(val) => formatDate(val)}
                 />
 
                 {/* COLUMNA 6: DIPLOMA CON VALIDACIÓN */}

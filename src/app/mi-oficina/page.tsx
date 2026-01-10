@@ -13,6 +13,7 @@ import {
 import dayjs from "dayjs";
 import { createClient } from "@supabase/supabase-js";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { formatDate } from "@utils/date";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -430,7 +431,16 @@ export default function MiOficinaProfesor() {
             <Col xs={24} md={12} lg={8} key={curso.id}>
                 <Card 
                   hoverable
-                  actions={[<Button key="gestionar-clase" type="primary" block onClick={() => abrirGestionClase(curso)}>Gestionar Clase</Button>]}
+                  actions={[
+                    <Button 
+                      key="entrar-salon" 
+                      type="primary" 
+                      block 
+                      onClick={() => window.location.href = `/cursos/salon/${curso.id}`}
+                    >
+                      Entrar al Salón
+                    </Button>
+                  ]}
                 >
                     <Card.Meta 
                         avatar={<Avatar style={{backgroundColor: '#722ed1'}} icon={<BookOutlined />} />}
@@ -490,9 +500,9 @@ export default function MiOficinaProfesor() {
               }
               description={
                 <Space>
-                  <Tag>{c.fecha_inicio ? dayjs(c.fecha_inicio).format('DD/MM/YYYY') : '-'}</Tag>
+                  <Tag>{c.fecha_inicio ? formatDate(c.fecha_inicio) : '-'}</Tag>
                   <span>→</span>
-                  <Tag>{c.fecha_fin ? dayjs(c.fecha_fin).format('DD/MM/YYYY') : '-'}</Tag>
+                  <Tag>{c.fecha_fin ? formatDate(c.fecha_fin) : '-'}</Tag>
                 </Space>
               }
             />
