@@ -115,7 +115,10 @@ export default function CursoCreate() {
     const calcularFechaFin = (fechaInicioValue: Dayjs | null, dias: string[], totalClases?: number | null) => {
         if (!fechaInicioValue || !dias.length || !totalClases || totalClases <= 0) return null;
 
-        const normalize = (text: string) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+        const normalize = (text: string) => {
+            // Remover acentos sin usar flag 'u'
+            return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        };
         const diasValidos = dias.map((d) => normalize(d));
 
         let sesionesPendientes = totalClases;
@@ -276,7 +279,7 @@ export default function CursoCreate() {
                                 style={{ width: '100%' }} 
                                 format="h:mm A"
                                 use12Hours
-                                minuteStep={60}
+                                minuteStep={30}
                                 showNow={false}
                                 onChange={(time) => {
                                     setHoraInicio(time);
@@ -303,7 +306,7 @@ export default function CursoCreate() {
                                 style={{ width: '100%' }} 
                                 format="h:mm A"
                                 use12Hours
-                                minuteStep={60}
+                                minuteStep={30}
                                 showNow={false}
                                 disabledTime={() => ({
                                     disabledHours: () => {

@@ -86,7 +86,7 @@ export default function SalonVirtualPage() {
   const calcularEstadisticas = () => {
     const totalEstudiantes = estudiantes.length;
     const totalClases = asistencias.length > 0 
-      ? [...new Set(asistencias.map(a => a.fecha))].length 
+      ? new Set(asistencias.map(a => a.fecha)).size
       : 0;
 
     return { totalEstudiantes, totalClases };
@@ -289,7 +289,7 @@ export default function SalonVirtualPage() {
               renderItem={(item: any) => (
                 <List.Item
                   actions={[
-                    <Button icon={<DownloadOutlined />} size="small">
+                    <Button key="download" icon={<DownloadOutlined />} size="small">
                       Descargar
                     </Button>,
                   ]}

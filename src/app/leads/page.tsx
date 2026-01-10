@@ -394,7 +394,7 @@ export default function LeadsPage() {
             message="Crea la tabla 'leads' en Supabase"
             description={
               <div>
-                La vista intentó consultar la tabla "leads" pero no existe. Crea una tabla con campos:
+                La vista intentó consultar la tabla &quot;leads&quot; pero no existe. Crea una tabla con campos:
                 <ul style={{ paddingLeft: 20, marginTop: 8 }}>
                   <li>id (uuid) primary key default uuid_generate_v4()</li>
                   <li>nombre text</li>
@@ -406,7 +406,7 @@ export default function LeadsPage() {
                   <li>notas text</li>
                   <li>created_at timestamp with time zone default now()</li>
                 </ul>
-                Una vez creada, pulsa "Recargar".
+                Una vez creada, pulsa &quot;Recargar&quot;.
               </div>
             }
             style={{ background: "#fffbe6" }}

@@ -242,8 +242,8 @@ export default function MatriculasList() {
                             <div style={{ marginTop: 16, padding: 12, background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 4 }}>
                                 <strong>💡 Opciones:</strong>
                                 <ul style={{ margin: '8px 0 0 0' }}>
-                                    <li><strong>"Eliminar pagos y continuar":</strong> Borra todos los pagos (pendientes y pagados) {asistCount > 0 && 'y asistencias'} y luego elimina la matrícula</li>
-                                    <li><strong>"Cancelar Matrícula":</strong> Marca como cancelada sin eliminar datos (recomendado si hay pagos reales)</li>
+                                    <li><strong>&quot;Eliminar pagos y continuar&quot;:</strong> Borra todos los pagos (pendientes y pagados) {asistCount > 0 && 'y asistencias'} y luego elimina la matrícula</li>
+                                    <li><strong>&quot;Cancelar Matrícula&quot;:</strong> Marca como cancelada sin eliminar datos (recomendado si hay pagos reales)</li>
                                 </ul>
                             </div>
                         </div>

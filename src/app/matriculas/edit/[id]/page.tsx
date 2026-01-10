@@ -82,7 +82,7 @@ export default function MatriculaEdit() {
 
                     {/* PROGRAMA (solo lectura) */}
                     <Form.Item label="Programa" name="programa_id">
-                        <Select {...programaSelectProps} disabled placeholder="Programa del curso" value={programaId} />
+                        <Select {...programaSelectProps} disabled placeholder="Programa del curso" />
                     </Form.Item>
 
                     {/* CURSO (Deshabilitado) */}

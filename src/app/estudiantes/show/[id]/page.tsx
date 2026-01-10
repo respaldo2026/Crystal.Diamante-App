@@ -350,7 +350,7 @@ export default function StudentDetailView() {
         title: "Fecha",
         dataIndex: "fecha_pago",
         key: "fecha",
-        render: (val: string | null) => (val ? `${formatDate(val)} ${dayjs(val).format("HH:mm")}` : "-"),
+        render: (val: string | null) => (val ? `${formatDate(val)} ${dayjs(val).format("h:mm A")}` : "-"),
       },
       {
         title: "Estado",

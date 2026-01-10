@@ -466,8 +466,8 @@ export default function PlanificadorPage() {
                             <div>
                               <ClockCircleOutlined style={{ marginRight: 4 }} />
                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                {horaInicio.format('HH:mm')}
-                                {horaFin && ` - ${horaFin.format('HH:mm')}`}
+                                {horaInicio.format('h:mm A')}
+                                {horaFin && ` - ${horaFin.format('h:mm A')}`}
                               </Text>
                             </div>
                           )}

@@ -523,7 +523,7 @@ export default function DashboardPage() {
                                     title={<Text strong>{item.perfiles?.nombre_completo || "Estudiante"}</Text>}
                                     description={
                                         <span>
-                                            {dayjs(item.created_at).format("DD MMM HH:mm")} • 
+                                            {dayjs(item.created_at).format("DD MMM h:mm A")} • 
                                             {item.matriculas?.cursos?.nombre ? ` Grupo: ${item.matriculas.cursos.nombre}` : ' Pago general'}
                                         </span>
                                     }

@@ -311,7 +311,7 @@ export default function MatriculaCreate() {
                                     placeholder="Selecciona el programa..."
                                     notFoundContent="No hay programas activos o próximos"
                                     onChange={(value) => {
-                                        setProgramaSeleccionado(value as string);
+                                        setProgramaSeleccionado(value as unknown as string);
                                         setCuposInfo(null);
                                         formProps.form?.setFieldValue("curso_id", undefined);
                                         programaSelectProps?.onChange?.(value);

@@ -560,7 +560,7 @@ export default function CursoEdit() {
                                 return value ? value.format("HH:mm:ss") : null;
                             }}
                         >
-                            <TimePicker style={{ width: '100%' }} format="HH:mm" />
+                            <TimePicker style={{ width: '100%' }} format="h:mm A" use12Hours />
                         </Form.Item>
                     </Col>
                     <Col span={6}>
@@ -574,7 +574,7 @@ export default function CursoEdit() {
                                 return value ? value.format("HH:mm:ss") : null;
                             }}
                         >
-                            <TimePicker style={{ width: '100%' }} format="HH:mm" />
+                            <TimePicker style={{ width: '100%' }} format="h:mm A" use12Hours />
                         </Form.Item>
                     </Col>
                 </Row>

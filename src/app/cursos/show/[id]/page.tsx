@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Dropdown } from "antd";
+import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App } from "antd";
 import {
   UserOutlined,
   CheckCircleOutlined,
@@ -17,7 +17,6 @@ import {
   ClockCircleOutlined,
   CheckOutlined,
   FormOutlined,
-  EllipsisOutlined
 } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -54,7 +53,7 @@ interface Sesion {
   observaciones?: string;
 }
 
-type ParamsLike = { id: string } | Promise<{ id: string }>;
+type ParamsLike = Promise<{ id: string }>;
 
 export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const { message, modal } = App.useApp();
@@ -69,6 +68,18 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [formTema] = Form.useForm();
   const [formSesion] = Form.useForm();
   const router = useRouter();
+
+  // Resolver params si es una Promise
+  useEffect(() => {
+    (async () => {
+      if (params instanceof Promise) {
+        const resolvedParams = await params;
+        setCursoId(resolvedParams.id);
+      } else {
+        setCursoId((params as any).id);
+      }
+    })();
+  }, [params]);
   const [activeTab, setActiveTab] = useState("1");
 
   // Memoized columns to avoid re-creation on every render
@@ -137,24 +148,35 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       {
         title: "Acciones",
         key: "acciones",
-        width: 120,
+        width: 280,
         render: (_: any, record: any) => {
           const esActivo = record.estado === "activo";
-          const items = [
-            { key: "completada", label: "Marcar completada", disabled: !esActivo },
-            { key: "cancelada", label: "Cancelar", disabled: !esActivo },
-            { key: "retirada", label: "Retirar", disabled: !esActivo },
-          ];
           return (
-            <Dropdown
-              trigger={["click"]}
-              menu={{
-                items,
-                onClick: ({ key }) => handleAccionMatricula(key, record),
-              }}
-            >
-              <Button icon={<EllipsisOutlined />} />
-            </Dropdown>
+            <Space wrap size="small">
+              <Button 
+                size="small" 
+                type="primary"
+                disabled={!esActivo}
+                onClick={() => handleAccionMatricula("completada", record)}
+              >
+                Completar
+              </Button>
+              <Button 
+                size="small" 
+                disabled={!esActivo}
+                onClick={() => handleAccionMatricula("cancelada", record)}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                size="small" 
+                danger
+                disabled={!esActivo}
+                onClick={() => handleAccionMatricula("retirada", record)}
+              >
+                Retirar
+              </Button>
+            </Space>
           );
         },
       },
@@ -587,7 +609,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
           <Card size="small" style={{ marginBottom: 16 }}>
             <Space direction="vertical">
-              <Text><strong>Horario:</strong> {curso.dias_semana || "-"} {curso.hora_inicio && `• ${dayjs(curso.hora_inicio, 'HH:mm:ss').format('h:mm a')}`} {curso.hora_fin && ` - ${dayjs(curso.hora_fin, 'HH:mm:ss').format('h:mm a')}`}</Text>
+              <Text><strong>Horario:</strong> {curso.dias_semana || "-"} {curso.hora_inicio && `• ${dayjs(curso.hora_inicio, 'HH:mm:ss').format('h:mm A')}`} {curso.hora_fin && ` - ${dayjs(curso.hora_fin, 'HH:mm:ss').format('h:mm A')}`}</Text>
               <Text><strong>Fecha de inicio:</strong> {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format('DD MMM YYYY') : "-"}</Text>
               <Text><strong>Fecha de fin:</strong> {curso.fecha_fin ? dayjs(curso.fecha_fin).format('DD MMM YYYY') : "No definida"}</Text>
             </Space>

@@ -378,28 +378,49 @@ async function archivableCheck(estudianteId: string) {
 }
 
 async function checkDatosRelacionados(estudianteId: string) {
-    // Verificar todas las tablas relacionadas
-    const [matriculas, pagos, asistencias] = await Promise.all([
-        supabaseBrowserClient
-            .from("matriculas")
-            .select("id, cursos(nombre)")
-            .eq("estudiante_id", estudianteId),
+    // Primero obtener las matrículas
+    const matriculasResp = await supabaseBrowserClient
+        .from("matriculas")
+        .select("id, cursos(nombre)")
+        .eq("estudiante_id", estudianteId);
+    
+    const matriculaIds = matriculasResp.data?.map((m: any) => m.id) || [];
+
+    // Luego verificar pagos (directos e indirectos)
+    const [pagosEstudiante, pagosMatriculas, asistencias] = await Promise.all([
         supabaseBrowserClient
             .from("pagos")
-            .select("id, monto")
+            .select("id, monto, matricula_id, estudiante_id")
             .eq("estudiante_id", estudianteId),
-        supabaseBrowserClient
-            .from("asistencias")
-            .select("id")
-            .eq("estudiante_id", estudianteId)
+        matriculaIds.length > 0
+            ? supabaseBrowserClient
+                .from("pagos")
+                .select("id, monto, matricula_id, estudiante_id")
+                .in("matricula_id", matriculaIds)
+            : Promise.resolve({ data: [], error: null }),
+        matriculaIds.length > 0
+            ? supabaseBrowserClient
+                .from("asistencias")
+                .select("id")
+                .in("matricula_id", matriculaIds)
+            : Promise.resolve({ data: [], error: null })
     ]);
 
+    // Combinar todos los pagos encontrados (sin duplicados)
+    const pagosMap = new Map();
+    [...(pagosEstudiante.data || []), ...(pagosMatriculas.data || [])].forEach((pago: any) => {
+        if (pago.id && !pagosMap.has(pago.id)) {
+            pagosMap.set(pago.id, pago);
+        }
+    });
+    const todosPagos = Array.from(pagosMap.values());
+
     return {
-        matriculas: matriculas.data || [],
-        pagos: pagos.data || [],
+        matriculas: matriculasResp.data || [],
+        pagos: todosPagos,
         asistencias: asistencias.data || [],
-        tieneDatos: (matriculas.data?.length || 0) > 0 || 
-                    (pagos.data?.length || 0) > 0 || 
+        tieneDatos: (matriculasResp.data?.length || 0) > 0 || 
+                    (todosPagos.length) > 0 || 
                     (asistencias.data?.length || 0) > 0
     };
 }
@@ -424,17 +445,50 @@ function handleEliminarEstudiante(record: any, msg: any) {
                                 <strong>📋 Opciones:</strong>
                                 <ul style={{ margin: '8px 0 0 0' }}>
                                     <li><strong>Admin:</strong> Puedes eliminar los pagos en Tesorería y luego borrar el estudiante</li>
-                                    <li><strong>Todos:</strong> Usa "Archivar" para ocultar sin eliminar datos</li>
+                                    <li><strong>Todos:</strong> Usa &quot;Archivar&quot; para ocultar sin eliminar datos</li>
                                 </ul>
                             </div>
                         </div>
                     ),
-                    okText: "Reintentar",
-                    okType: "default",
+                    okText: "Eliminar pagos ahora",
+                    okType: "primary",
                     cancelText: "Ir a Tesorería",
-                    onOk: () => {
-                        // Reintentar: volver a verificar datos (en caso de que ya haya borrado los pagos)
-                        handleEliminarEstudiante(record, msg);
+                    onOk: async () => {
+                        try {
+                            // Intenta eliminar de ambas formas: directa e indirecta
+                            const matriculaIds = datos.matriculas.map((m: any) => m.id);
+                            
+                            // 1. Eliminar pagos asociados directamente al estudiante
+                            const { error: errorDirecto } = await supabaseBrowserClient
+                                .from("pagos")
+                                .delete()
+                                .eq("estudiante_id", estudianteId);
+
+                            // 2. Eliminar pagos asociados indirectamente (a través de matrículas)
+                            let errorIndirecto = null;
+                            if (matriculaIds.length > 0) {
+                                const result = await supabaseBrowserClient
+                                    .from("pagos")
+                                    .delete()
+                                    .in("matricula_id", matriculaIds);
+                                errorIndirecto = result.error;
+                            }
+
+                            if (errorDirecto || errorIndirecto) {
+                                const errorMsg = errorDirecto?.message || errorIndirecto?.message;
+                                msg.error("Hubo un problema al limpiar los pagos: " + errorMsg);
+                                return;
+                            }
+
+                            msg.success("Pagos eliminados correctamente. Ahora borrando estudiante...");
+                            
+                            // Reintentar eliminación después de limpiar pagos
+                            setTimeout(() => {
+                                handleEliminarEstudiante(record, msg);
+                            }, 500);
+                        } catch (e: any) {
+                            msg.error(e?.message || "Error al eliminar pagos");
+                        }
                     },
                     onCancel: () => {
                         window.location.href = "/tesoreria";

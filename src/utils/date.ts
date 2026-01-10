@@ -13,11 +13,11 @@ export function formatDate(date: dayjs.ConfigType): string {
 }
 
 /**
- * Format a time to HH:mm (24h)
+ * Format a time to h:mm A (12h AM-PM)
  */
 export function formatTime(date: dayjs.ConfigType): string {
   if (!date) return "";
-  return dayjs(date).format("HH:mm");
+  return dayjs(date).format("h:mm A");
 }
 
 /**

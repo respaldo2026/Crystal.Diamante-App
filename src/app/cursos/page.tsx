@@ -262,8 +262,8 @@ export default function CursosList() {
           .filter(Boolean)
           .join(" / ");
 
-    const horaInicio = cohorte.hora_inicio ? dayjs(cohorte.hora_inicio, "HH:mm:ss").format("HH:mm") : "";
-    const horaFin = cohorte.hora_fin ? dayjs(cohorte.hora_fin, "HH:mm:ss").format("HH:mm") : "";
+    const horaInicio = cohorte.hora_inicio ? dayjs(cohorte.hora_inicio, "HH:mm:ss").format("h:mm A") : "";
+    const horaFin = cohorte.hora_fin ? dayjs(cohorte.hora_fin, "HH:mm:ss").format("h:mm A") : "";
     const horario = [horaInicio, horaFin].filter(Boolean).join(" - ");
 
     return (
