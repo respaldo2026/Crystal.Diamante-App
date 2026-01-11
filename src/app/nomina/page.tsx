@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { 
-  Table, Card, Button, DatePicker, Row, Col, Typography, Select,
-  Statistic, Tag, message, Modal 
+    Table, Card, Button, DatePicker, Row, Col, Typography, Select,
+    Statistic, Tag, message, Modal, Space
 } from "antd";
 import { 
   CalculatorOutlined, DollarCircleOutlined, PayCircleOutlined 
@@ -26,6 +26,8 @@ export default function NominaPage() {
   const [rangoFechas, setRangoFechas] = useState<any>([dayjs().startOf('month'), dayjs().endOf('month')]);
   const [totalAPagar, setTotalAPagar] = useState(0);
   const [metodoNomina, setMetodoNomina] = useState<string>('Efectivo');
+    const [clasesPendientes, setClasesPendientes] = useState<any[]>([]);
+    const [pagandoClaseId, setPagandoClaseId] = useState<string | null>(null);
 
   // Modal Pagar
   const [modalVisible, setModalVisible] = useState(false);
@@ -69,6 +71,61 @@ export default function NominaPage() {
         []
     );
 
+    const columnasClases = useMemo(
+        () => [
+            {
+                title: 'Fecha',
+                dataIndex: 'fecha',
+                render: (val: string) => formatDate(val),
+            },
+            {
+                title: 'Profesor',
+                dataIndex: 'profesor_id',
+                render: (_: any, record: any) => record.perfiles?.nombre_completo || 'Sin nombre',
+            },
+            {
+                title: 'Curso',
+                dataIndex: 'curso_id',
+                render: (_: any, record: any) => record.cursos?.nombre || '—',
+            },
+            {
+                title: 'Tema',
+                dataIndex: 'tema_visto',
+                render: (val: string | null) => val || 'Sin tema',
+            },
+            {
+                title: 'Horas',
+                dataIndex: 'horas_dictadas',
+                render: (val: number) => <Tag color="blue">{val} hrs</Tag>,
+            },
+            {
+                title: 'Valor Hora',
+                dataIndex: 'valor_hora',
+                render: (val: number) => val ? `$ ${Number(val).toLocaleString()}` : <Tag color="red">Sin definir</Tag>,
+            },
+            {
+                title: 'A Pagar',
+                dataIndex: 'total_estimado',
+                render: (val: number) => <Text strong type="success">$ {Number(val || 0).toLocaleString()}</Text>,
+            },
+            {
+                title: 'Acción',
+                render: (_: any, record: any) => (
+                    <Button
+                        type="default"
+                        size="small"
+                        disabled={!record.total_estimado}
+                        loading={pagandoClaseId === record.id}
+                        onClick={() => pagarClaseIndividual(record)}
+                    >
+                        Pagar solo esta clase
+                    </Button>
+                ),
+            },
+        ],
+        [pagandoClaseId]
+    );
+
   useEffect(() => {
     calcularNomina();
   }, [rangoFechas]);
@@ -97,26 +154,41 @@ export default function NominaPage() {
         // 2. Obtener sesiones trabajadas en ese rango
         const { data: sesiones } = await supabaseBrowserClient
             .from("sesiones_clase")
-            .select("profesor_id, horas_dictadas, fecha")
+            .select("id, profesor_id, curso_id, fecha, horas_dictadas, tema_visto, cursos(nombre), perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora)")
             .gte("fecha", inicio)
             .lte("fecha", fin)
-            .eq("estado_pago", "pendiente");
+            .eq("estado_pago", "pendiente")
+            .order("fecha", { ascending: true });
 
-        // 3. Cruzar información (Matemática de Nómina)
-        const reporte = dataProfes?.map((prof: any) => {
-            const susClases = sesiones?.filter((s: any) => s.profesor_id === prof.id) || [];
-            // Sumar horas
-            const totalHoras = susClases.reduce((sum: number, item: any) => sum + Number(item.horas_dictadas || 0), 0);
-            // Calcular pago (Horas * Valor)
-            const aPagar = totalHoras * (prof.valor_hora || 0);
+                // 3. Cruzar información (Matemática de Nómina)
+                const reporte = dataProfes?.map((prof: any) => {
+                        const susClases = sesiones?.filter((s: any) => s.profesor_id === prof.id) || [];
+                        const totalHoras = susClases.reduce((sum: number, item: any) => sum + Number(item.horas_dictadas || 0), 0);
+                        const aPagar = totalHoras * (prof.valor_hora || 0);
 
-            return {
-                ...prof,
-                total_horas: totalHoras,
-                total_pagado: aPagar,
-                detalles: susClases
-            };
-        }).filter((p: any) => p.total_horas > 0 || true); // (Opcional: Quita el || true si quieres ocultar a los que no trabajaron)
+                        return {
+                                ...prof,
+                                total_horas: totalHoras,
+                                total_pagado: aPagar,
+                                detalles: susClases
+                        };
+                }).filter((p: any) => p.total_horas > 0 || true);
+
+                const sesionesEnriquecidas = (sesiones || []).map((s: any) => {
+                    const valorHora = Number(
+                        s?.perfiles?.valor_hora ??
+                        dataProfes?.find((p: any) => p.id === s.profesor_id)?.valor_hora ??
+                        0
+                    );
+                    const totalEstimado = Number(s.horas_dictadas || 0) * (valorHora || 0);
+                    return {
+                        ...s,
+                        valor_hora: valorHora,
+                        total_estimado: totalEstimado,
+                    };
+                });
+
+                setClasesPendientes(sesionesEnriquecidas);
 
         setProfesores(reporte || []);
         
@@ -170,6 +242,52 @@ export default function NominaPage() {
       }
   };
 
+    const pagarClaseIndividual = async (clase: any) => {
+        Modal.confirm({
+            title: '¿Pagar esta clase?',
+            content: (
+                <div>
+                    <p>Profesor: <b>{clase.perfiles?.nombre_completo}</b></p>
+                    <p>Curso: <b>{clase.cursos?.nombre || '—'}</b></p>
+                    <p>Fecha: <b>{formatDate(clase.fecha)}</b></p>
+                    <p>Horas: <b>{clase.horas_dictadas}</b> | Total: <b>$ {Number(clase.total_estimado || 0).toLocaleString()}</b></p>
+                </div>
+            ),
+            okText: 'Pagar clase',
+            cancelText: 'Cancelar',
+            onOk: async () => {
+                try {
+                    setPagandoClaseId(clase.id);
+                    const valorHora = Number(clase.valor_hora || 0);
+                    const monto = Number(clase.horas_dictadas || 0) * (valorHora || 0);
+
+                    await supabaseBrowserClient.from("pagos_nomina").insert({
+                        profesor_id: clase.profesor_id,
+                        fecha_pago: dayjs().format("YYYY-MM-DD"),
+                        total_pagado: monto,
+                        total_horas: clase.horas_dictadas,
+                        fecha_inicio_periodo: clase.fecha,
+                        fecha_fin_periodo: clase.fecha,
+                        observaciones: `Pago clase individual - ${clase.cursos?.nombre || 'Clase'} (${metodoNomina})`
+                    });
+
+                    await supabaseBrowserClient
+                        .from("sesiones_clase")
+                        .update({ estado_pago: 'pagado' })
+                        .eq("id", clase.id)
+                        .eq("estado_pago", "pendiente");
+
+                    message.success("Clase pagada y descontada del pendiente");
+                    calcularNomina();
+                } catch (error: any) {
+                    message.error("Error pagando clase: " + error.message);
+                } finally {
+                    setPagandoClaseId(null);
+                }
+            }
+        });
+    };
+
   return (
     <div style={{ padding: 24 }}>
         <Title level={3}><CalculatorOutlined /> Liquidación de Profesores</Title>
@@ -204,6 +322,20 @@ export default function NominaPage() {
             locale={{ emptyText: "No hay clases pendientes de pago en este rango de fechas" }}
             columns={columnasNomina}
         />
+
+                <Card style={{ marginTop: 20 }} title="Clases pendientes por pagar">
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                        <Text type="secondary">Cada clase registrada por el profesor aparece aquí para permitir pagos individuales antes de la fecha de corte.</Text>
+                        <Table
+                            dataSource={clasesPendientes}
+                            rowKey="id"
+                            loading={loading}
+                            locale={{ emptyText: "No hay clases pendientes en este rango" }}
+                            columns={columnasClases}
+                            pagination={{ pageSize: 10 }}
+                        />
+                    </Space>
+                </Card>
 
         <Modal
             title="Confirmar Pago de Nómina"

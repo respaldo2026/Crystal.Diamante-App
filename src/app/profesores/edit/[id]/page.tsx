@@ -105,13 +105,13 @@ export default function ProfesorEdit() {
                     </Col>
                 </Row>
 
-                <Divider orientation="left" style={{ borderColor: '#722ed1', color: '#722ed1' }}>💸 Valor Hora</Divider>
+                <Divider orientation="left" style={{ borderColor: '#722ed1', color: '#722ed1' }}>💸 Valor por Hora</Divider>
                 <Row gutter={24}>
                     <Col span={12}>
                         <Form.Item
                             label="Valor por Hora Dictada"
                             name="valor_hora"
-                            tooltip="Este valor se usa para calcular la nómina (Horas dictadas x Valor hora)."
+                            tooltip="Este valor se usa para calcular la nómina (horas dictadas x valor hora)."
                         >
                             <InputNumber
                                 min={0}

@@ -46,7 +46,7 @@ export default function MatriculasList() {
     const { tableProps, setFilters } = useTable({
         resource: "matriculas",
         meta: {
-            select: "*, perfiles(nombre_completo, email), cursos(nombre, porcentaje_minimo, precio_mensualidad, programas(nombre))"
+            select: "*, perfiles!matriculas_estudiante_id_fkey(nombre_completo, email), cursos(nombre, porcentaje_minimo, precio_mensualidad, programas(nombre))"
         },
         sorters: {
             initial: [

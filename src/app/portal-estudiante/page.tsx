@@ -62,21 +62,25 @@ export default function PortalEstudiante() {
       // Cargar asistencias
       const { data: dataAsistencias, error: errAsistencias } = await supabaseBrowserClient
         .from("asistencias")
-        .select("*, matriculas(cursos(nombre))")
-        .eq("matriculas.perfiles_id", user.id);
+        .select("*, matriculas(id, estudiante_id, cursos(nombre))")
+        .order("fecha", { ascending: false });
 
       if (!errAsistencias && dataAsistencias) {
-        setAsistencias(dataAsistencias);
+        // Filtrar solo las del estudiante actual
+        const miasistencias = dataAsistencias.filter((a: any) => a.matriculas?.estudiante_id === user.id);
+        setAsistencias(miasistencias);
       }
 
       // Cargar calificaciones
       const { data: dataCalificaciones, error: errCalificaciones } = await supabaseBrowserClient
         .from("calificaciones")
-        .select("*, matriculas(cursos(nombre))")
-        .eq("matriculas.perfiles_id", user.id);
+        .select("*, matriculas(id, estudiante_id, cursos(nombre))")
+        .order("fecha_evaluacion", { ascending: false });
 
       if (!errCalificaciones && dataCalificaciones) {
-        setCalificaciones(dataCalificaciones);
+        // Filtrar solo las del estudiante actual
+        const miscalificaciones = dataCalificaciones.filter((c: any) => c.matriculas?.estudiante_id === user.id);
+        setCalificaciones(miscalificaciones);
       }
 
       // Calcular avance por curso
@@ -111,8 +115,8 @@ export default function PortalEstudiante() {
       // Cargar pagos (realizados y pendientes)
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
-        .select("*, matriculas(cursos(nombre))")
-        .eq("perfiles_id", user.id)
+        .select("*, matriculas(id, estudiante_id, cursos(nombre))")
+        .eq("estudiante_id", user.id)
         .order("fecha_pago", { ascending: false });
 
       if (!errPagos && dataPagos) {
@@ -179,6 +183,55 @@ export default function PortalEstudiante() {
         items={[
           {
             key: "1",
+            label: <span><BookOutlined /> Mis Cursos</span>,
+            children: (
+              <>
+                {avancePorCurso.length === 0 ? (
+                  <Empty description="No estás inscrito en ningún curso activo" />
+                ) : (
+                  <>
+                    <Row gutter={16} style={{ marginBottom: 20 }}>
+                      <Col xs={24} sm={8}>
+                        <Card>
+                          <Statistic
+                            title="Cursos Activos"
+                            value={avancePorCurso.length}
+                            prefix={<BookOutlined />}
+                            valueStyle={{ color: "#1890ff" }}
+                          />
+                        </Card>
+                      </Col>
+                    </Row>
+                    <Row gutter={16}>
+                      {avancePorCurso.map((curso: any, idx: number) => (
+                        <Col xs={24} sm={12} lg={8} key={idx}>
+                          <Card 
+                            title={curso.curso}
+                            extra={
+                              <Tag color={curso.porcentaje >= 70 ? "green" : "orange"}>
+                                {curso.porcentaje.toFixed(1)}/100
+                              </Tag>
+                            }
+                          >
+                            <Progress
+                              type="circle"
+                              percent={Math.min(curso.porcentaje, 100)}
+                              strokeColor={curso.porcentaje >= 70 ? "#52c41a" : "#faad14"}
+                            />
+                            <div style={{ marginTop: 16, textAlign: "center" }}>
+                              <Text type="secondary">Progreso del curso</Text>
+                            </div>
+                          </Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  </>
+                )}
+              </>
+            ),
+          },
+          {
+            key: "2",
             label: <span><CheckCircleOutlined /> Asistencia</span>,
             children: (
               <>
@@ -234,9 +287,9 @@ export default function PortalEstudiante() {
                           title: "Estado",
                           dataIndex: "estado",
                           render: (estado) => (
-                            <span style={{ color: estado === "presente" ? "green" : "red" }}>
-                              {estado.charAt(0).toUpperCase() + estado.slice(1)}
-                            </span>
+                            <Tag color={estado === "presente" ? "green" : "red"}>
+                              {estado?.charAt(0).toUpperCase() + estado?.slice(1)}
+                            </Tag>
                           ),
                         },
                         {
@@ -244,6 +297,7 @@ export default function PortalEstudiante() {
                           dataIndex: "observaciones",
                         },
                       ]}
+                      pagination={{ pageSize: 10 }}
                     />
                   </>
                 )}
@@ -251,7 +305,7 @@ export default function PortalEstudiante() {
             ),
           },
           {
-            key: "2",
+            key: "3",
             label: <span><FileTextOutlined /> Calificaciones</span>,
             children: (
               <>
@@ -275,9 +329,9 @@ export default function PortalEstudiante() {
                         title: "Calificación",
                         dataIndex: "calificacion",
                         render: (cal) => (
-                          <span style={{ fontWeight: "bold", color: cal >= 70 ? "green" : "red" }}>
+                          <Tag color={cal >= 70 ? "green" : "red"}>
                             {cal}/100
-                          </span>
+                          </Tag>
                         ),
                       },
                       {
@@ -286,42 +340,15 @@ export default function PortalEstudiante() {
                         render: (fecha) => formatDate(fecha),
                       },
                     ]}
+                    pagination={{ pageSize: 10 }}
                   />
                 )}
               </>
             ),
           },
           {
-            key: "3",
-            label: <span><BookOutlined /> Avance</span>,
-            children: (
-              <>
-                {avancePorCurso.length === 0 ? (
-                  <Empty description="No hay cursos activos" />
-                ) : (
-                  <Row gutter={16}>
-                    {avancePorCurso.map((curso: any, idx: number) => (
-                      <Col xs={24} sm={12} lg={8} key={idx}>
-                        <Card title={curso.curso}>
-                          <Progress
-                            type="circle"
-                            percent={Math.min(curso.porcentaje, 100)}
-                            strokeColor={curso.porcentaje >= 70 ? "#52c41a" : "#faad14"}
-                          />
-                          <div style={{ marginTop: 10 }}>
-                            <Text>Calificación: {curso.porcentaje.toFixed(1)}/100</Text>
-                          </div>
-                        </Card>
-                      </Col>
-                    ))}
-                  </Row>
-                )}
-              </>
-            ),
-          },
-          {
             key: "4",
-            label: <span><DollarCircleOutlined /> Pagos</span>,
+            label: <span><DollarCircleOutlined /> Mis Pagos</span>,
             children: (
               <>
                 {pagos.length === 0 ? (
@@ -333,7 +360,7 @@ export default function PortalEstudiante() {
                         <Card>
                           <Statistic
                             title="Total Pagado"
-                            value={pagos.filter((p: any) => p.estado === "confirmado").reduce((sum: number, p: any) => sum + Number(p.monto || 0), 0)}
+                            value={pagos.filter((p: any) => p.estado === "pagado").reduce((sum: number, p: any) => sum + Number(p.monto || 0), 0)}
                             prefix="$"
                             valueStyle={{ color: "#52c41a" }}
                             formatter={(value) => `$ ${Number(value).toLocaleString()}`}
@@ -350,6 +377,12 @@ export default function PortalEstudiante() {
                         </Card>
                       </Col>
                     </Row>
+                    <Alert 
+                      message="Para realizar pagos, por favor contacta a la academia o usa el sistema de pagos desde Matrícula" 
+                      type="info" 
+                      showIcon 
+                      style={{ marginBottom: 16 }}
+                    />
                     <Table
                       dataSource={pagos}
                       rowKey="id"
@@ -357,7 +390,7 @@ export default function PortalEstudiante() {
                         {
                           title: "Fecha",
                           dataIndex: "fecha_pago",
-                          render: (fecha) => formatDate(fecha),
+                          render: (fecha) => fecha ? formatDate(fecha) : "-",
                         },
                         {
                           title: "Curso",
@@ -371,20 +404,16 @@ export default function PortalEstudiante() {
                         {
                           title: "Método",
                           dataIndex: "metodo_pago",
-                          render: (metodo) => <Tag color="blue">{metodo}</Tag>,
+                          render: (metodo) => <Tag color="blue">{metodo || "Por especificar"}</Tag>,
                         },
                         {
                           title: "Estado",
                           dataIndex: "estado",
                           render: (estado) => (
-                            <Tag color={estado === "confirmado" ? "success" : "warning"}>
+                            <Tag color={estado === "pagado" ? "success" : "warning"}>
                               {estado?.charAt(0).toUpperCase() + estado?.slice(1)}
                             </Tag>
                           ),
-                        },
-                        {
-                          title: "Referencia",
-                          dataIndex: "referencia",
                         },
                       ]}
                       pagination={{ pageSize: 10 }}
@@ -400,7 +429,7 @@ export default function PortalEstudiante() {
             children: (
               <>
                 {certificados.length === 0 ? (
-                  <Alert message="Completa tus cursos para descargar certificados" type="info" showIcon />
+                  <Alert message="Completa tus cursos con calificación >= 70 para descargar certificados" type="info" showIcon />
                 ) : (
                   <Table
                     dataSource={certificados}
@@ -413,7 +442,7 @@ export default function PortalEstudiante() {
                       {
                         title: "Calificación",
                         dataIndex: "nota_final",
-                        render: (nota) => <span style={{ fontWeight: "bold", color: "green" }}>{nota}/100</span>,
+                        render: (nota) => <Tag color="green">{nota}/100</Tag>,
                       },
                       {
                         title: "Fecha Finalización",

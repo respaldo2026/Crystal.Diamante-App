@@ -187,6 +187,15 @@ export default function RootLayout({
                       icon: <SettingOutlined />,
                     },
                   },
+                  {
+                    name: "portal-estudiante",
+                    list: "/portal-estudiante",
+                    meta: {
+                      label: "Mi Portal",
+                      icon: <BookOutlined />,
+                      hide: true, // No mostrar en sidebar
+                    },
+                  },
                 ]}
                 options={{
                   syncWithLocation: true,

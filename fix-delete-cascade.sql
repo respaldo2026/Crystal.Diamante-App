@@ -8,9 +8,12 @@
 -- 1. MATRICULAS → Eliminar en cascada cuando se borra estudiante
 -- =============================================
 
--- Primero eliminar el constraint actual
+-- Primero eliminar los constraints actuales
 ALTER TABLE matriculas 
 DROP CONSTRAINT IF EXISTS matriculas_estudiante_id_fkey;
+
+ALTER TABLE matriculas 
+DROP CONSTRAINT IF EXISTS fk_matriculas_perfiles_v2;
 
 -- Crear nuevo constraint con ON DELETE CASCADE
 ALTER TABLE matriculas

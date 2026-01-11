@@ -10,7 +10,11 @@ import {
   Switch,
   theme,
   Typography,
+  Button,
 } from "antd";
+import { BookOutlined } from "@ant-design/icons";
+import { useRouter } from "next/navigation";
+import { useCurrentUser } from "@hooks/useCurrentUser";
 import React, { useContext } from "react";
 
 const { Text } = Typography;
@@ -28,6 +32,8 @@ export const Header: React.FC<RefineThemedLayoutHeaderProps> = ({
   const { token } = useToken();
   const { data: user } = useGetIdentity<IUser>();
   const { mode, setMode } = useContext(ColorModeContext);
+  const router = useRouter();
+  const { user: currentUser } = useCurrentUser();
 
   const headerStyles: React.CSSProperties = {
     backgroundColor: token.colorBgElevated,
@@ -44,9 +50,39 @@ export const Header: React.FC<RefineThemedLayoutHeaderProps> = ({
     headerStyles.zIndex = 1;
   }
 
+  const getPortalRoute = () => {
+    if (currentUser?.rol === "estudiante") {
+      return "/portal-estudiante";
+    } else if (currentUser?.rol === "profesor") {
+      return "/mi-oficina";
+    }
+    return null;
+  };
+
+  const getPortalLabel = () => {
+    if (currentUser?.rol === "estudiante") {
+      return "Mi Portal";
+    } else if (currentUser?.rol === "profesor") {
+      return "Mi Oficina";
+    }
+    return null;
+  };
+
+  const portalRoute = getPortalRoute();
+  const portalLabel = getPortalLabel();
+
   return (
     <AntdLayout.Header style={headerStyles}>
       <Space>
+        {portalRoute && portalLabel && (
+          <Button
+            type="primary"
+            icon={<BookOutlined />}
+            onClick={() => router.push(portalRoute)}
+          >
+            {portalLabel}
+          </Button>
+        )}
         <Switch
           checkedChildren="🌛"
           unCheckedChildren="🔆"

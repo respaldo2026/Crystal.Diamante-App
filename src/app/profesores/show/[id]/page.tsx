@@ -189,29 +189,62 @@ export default function ShowProfesorDashboard() {
           setAlumnosClase([]);
           setTemaSeleccionado(null);
           
-          // A) Estudiantes
-          const { data: dataAlumnos, error: errAlumnos } = await supabase
+          // A) Estudiantes - Simplificado para evitar errores de join
+          const { data: dataMatriculas, error: errMatriculas } = await supabase
             .from("matriculas")
-            .select(`id, estudiante_id, perfiles ( nombre_completo, telefono ), pagos ( fecha_pago )`)
+            .select(`id, estudiante_id`)
             .eq("curso_id", curso.id)
             .eq("estado", "activo");
 
-          if (errAlumnos) throw errAlumnos;
+          if (errMatriculas) throw errMatriculas;
+
+          // Ahora traemos los perfiles y pagos por separado
+          let alumnosConPago: any[] = [];
           
-          // Enriquecer cada alumno con estado de pago
-          const alumnosConPago = (dataAlumnos || []).map((alumno: any) => {
-              // Obtener la fecha más reciente de pago
-              const fechaPagoReciente = alumno.pagos && alumno.pagos.length > 0
-                ? alumno.pagos[0].fecha_pago
-                : null;
+          if (dataMatriculas && dataMatriculas.length > 0) {
+              const estudianteIds = dataMatriculas.map((m: any) => m.estudiante_id);
               
-              return {
-                  ...alumno,
-                  pagado: verificarPagoAlDia(fechaPagoReciente)
-              };
-          });
+              // Traer perfiles
+              const { data: perfiles } = await supabase
+                  .from("perfiles")
+                  .select("id, nombre_completo, telefono")
+                  .in("id", estudianteIds);
+              
+              const perfilesMap = (perfiles || []).reduce((acc: any, p: any) => {
+                  acc[p.id] = p;
+                  return acc;
+              }, {});
+              
+              // Traer pagos
+              const { data: pagosData } = await supabase
+                  .from("pagos")
+                  .select("estudiante_id, fecha_pago")
+                  .in("estudiante_id", estudianteIds)
+                  .order("fecha_pago", { ascending: false });
+              
+              const pagosMap = (pagosData || []).reduce((acc: any, p: any) => {
+                  if (!acc[p.estudiante_id]) acc[p.estudiante_id] = [];
+                  acc[p.estudiante_id].push(p);
+                  return acc;
+              }, {});
+              
+              // Combinar todo
+              alumnosConPago = dataMatriculas.map((mat: any) => {
+                  const perfil = perfilesMap[mat.estudiante_id] || {};
+                  const pagos = pagosMap[mat.estudiante_id] || [];
+                  const fechaPagoReciente = pagos.length > 0 ? pagos[0].fecha_pago : null;
+                  
+                  return {
+                      id: mat.id,
+                      estudiante_id: mat.estudiante_id,
+                      perfiles: perfil,
+                      pagado: verificarPagoAlDia(fechaPagoReciente)
+                  };
+              });
+          }
           
           setAlumnosClase(alumnosConPago);
+
           
           // B) Temas
           const { data: dataTemas, error: errTemas } = await supabase
@@ -226,11 +259,18 @@ export default function ShowProfesorDashboard() {
 
           // C) BUSCAR ASISTENCIA PREVIA
           const fechaHoyStr = dayjs().format("YYYY-MM-DD");
-          const { data: asistenciasHoy } = await supabase
-              .from("asistencias")
-              .select("matricula_id, estado, tema_id")
-              .eq("fecha", fechaHoyStr)
-              .in("matricula_id", alumnosConPago?.map((a: any) => a.id) || []);
+          const matriculaIds = alumnosConPago?.map((a: any) => a.id) || [];
+          
+          let asistenciasHoy: any[] = [];
+          // Solo hacer la búsqueda si hay alumnos
+          if (matriculaIds.length > 0) {
+              const { data } = await supabase
+                  .from("asistencias")
+                  .select("matricula_id, estado, tema_id")
+                  .eq("fecha", fechaHoyStr)
+                  .in("matricula_id", matriculaIds);
+              asistenciasHoy = data || [];
+          }
 
           const mapa: any = {};
           
