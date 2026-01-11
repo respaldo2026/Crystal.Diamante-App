@@ -165,7 +165,7 @@ export default function StudentDetailView() {
 
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
-        .select("id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, matriculas(cursos(nombre))")
+        .select("id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, matriculas!pagos_matricula_fkey(cursos(nombre))")
         .eq("estudiante_id", idEstudiante)
         .order("numero_cuota", { ascending: true });
       if (errPagos) {
@@ -653,6 +653,39 @@ export default function StudentDetailView() {
         </Row>
       </Card>
 
+      {/* Alerta de matrículas pendientes de pago */}
+      {matriculas.some(m => m.estado === "pendiente") && (
+        <Alert
+          message="⚠️ Inscripciones Pendientes de Pago"
+          description={
+            <div>
+              <p>Este estudiante tiene inscripciones académicas registradas pero pendientes de pago:</p>
+              <ul>
+                {matriculas
+                  .filter(m => m.estado === "pendiente")
+                  .map(m => (
+                    <li key={m.id}>
+                      <strong>{m.cursos?.nombre}</strong>
+                      {" - "}
+                      <Button 
+                        type="link" 
+                        size="small"
+                        onClick={() => router.push(`/matriculas/pago-inscripcion/${m.id}`)}
+                      >
+                        Ir a completar pago
+                      </Button>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          }
+          type="warning"
+          showIcon
+          closable
+          style={{ marginBottom: 24 }}
+        />
+      )}
+
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
           <Card>
@@ -776,65 +809,62 @@ export default function StudentDetailView() {
               ),
               children: (
                 <>
-                  <Title level={5}>Ciclos / Meses</Title>
-                  <Table
-                    dataSource={matriculas}
-                    rowKey="id"
-                    pagination={false}
-                    style={{ marginBottom: 16 }}
-                    columns={[
-                      {
-                        title: "Curso",
-                        dataIndex: ["cursos", "nombre"],
-                        render: (text: string) => text || "Curso no asociado",
-                      },
-                      {
-                        title: "Matrícula",
-                        render: (_: any, record: any) => {
-                          const info = ciclosPorMatricula[record.id];
-                          if (info?.inscripcionPagada) return <Tag color="green">Matrícula pagada</Tag>;
-                          return <Tag color="red">Matrícula pendiente</Tag>;
-                        },
-                      },
-                      {
-                        title: "Ciclos totales",
-                        render: (_: any, record: any) => ciclosPorMatricula[record.id]?.total ?? record.cursos?.duracion ?? "-",
-                      },
-                      {
-                        title: "Pagados",
-                        render: (_: any, record: any) => ciclosPorMatricula[record.id]?.pagados ?? 0,
-                      },
-                      {
-                        title: "Pendientes",
-                        render: (_: any, record: any) => ciclosPorMatricula[record.id]?.faltantes ?? "-",
-                      },
-                      {
-                        title: "Cuotas de Pago",
-                        render: (_: any, record: any) => renderCuotasPorMatricula(record),
-                        width: 500,
-                      },
-                    ]}
-                  />
+                  <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                    <Col xs={24} sm={8}>
+                      <Card>
+                        <Statistic
+                          title="Total Pagado"
+                          value={estadisticasGlobales.totalPagado}
+                          prefix="$"
+                          valueStyle={{ color: "#52c41a" }}
+                        />
+                      </Card>
+                    </Col>
+                    <Col xs={24} sm={8}>
+                      <Card>
+                        <Statistic
+                          title="Deuda Pendiente"
+                          value={estadisticasGlobales.deudaTotal}
+                          prefix="$"
+                          valueStyle={{ color: estadisticasGlobales.deudaTotal > 0 ? "#ff4d4f" : "#52c41a" }}
+                        />
+                      </Card>
+                    </Col>
+                    <Col xs={24} sm={8}>
+                      <Card>
+                        <Statistic
+                          title="Total a Pagar"
+                          value={estadisticasGlobales.totalPagado + estadisticasGlobales.deudaTotal}
+                          prefix="$"
+                          valueStyle={{ color: "#1890ff" }}
+                        />
+                      </Card>
+                    </Col>
+                  </Row>
 
-                  <Alert
-                    message={`Balance General: $${estadisticasGlobales.totalPagado.toLocaleString()} pagados / $${estadisticasGlobales.deudaTotal.toLocaleString()} pendientes`}
-                    type={estadisticasGlobales.deudaTotal > 0 ? "warning" : "success"}
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                  />
-
-                  <Title level={5}>Detalle por Matrícula</Title>
+                  <Title level={5}>Estado de Pagos por Curso</Title>
                   <Table
                     dataSource={matriculas}
                     rowKey="id"
                     pagination={false}
                     style={{ marginBottom: 24 }}
-                    columns={columnasFinanciero}
+                    columns={[
+                      {
+                        title: "Curso",
+                        dataIndex: ["cursos", "nombre"],
+                        render: (text: string) => <Text strong>{text || "Curso no asociado"}</Text>,
+                      },
+                      {
+                        title: "Cuotas de Pago",
+                        render: (_: any, record: any) => renderCuotasPorMatricula(record),
+                        width: 600,
+                      },
+                    ]}
                   />
 
-                  <Divider orientation="left">Historial de Pagos</Divider>
+                  <Divider orientation="left">Historial Completo de Transacciones</Divider>
                   {pagosHistorial.length === 0 ? (
-                    <Alert message="No hay pagos registrados" type="info" />
+                    <Alert message="No hay pagos registrados para este estudiante" type="info" showIcon />
                   ) : (
                     <Table
                       dataSource={pagosHistorial}

@@ -19,12 +19,15 @@ export default function PagoCreate() {
     const [cuotasPendientes, setCuotasPendientes] = useState<any[]>([]);
     const [cargandoCuotas, setCargandoCuotas] = useState(false);
 
-    // 1. Selector de Estudiantes (Buscamos en Perfiles donde rol = estudiante)
+    // 1. Selector de Estudiantes (Buscamos en Perfiles donde rol = estudiante Y activo = true)
     const { selectProps: allEstudianteSelectProps } = useSelect({
         resource: "perfiles",
         optionLabel: "nombre_completo",
         optionValue: "id",
-        filters: [{ field: "rol", operator: "eq", value: "estudiante" }],
+        filters: [
+            { field: "rol", operator: "eq", value: "estudiante" },
+            { field: "activo", operator: "eq", value: true }
+        ],
         sorters: [{ field: "nombre_completo", order: "asc" }]
     });
 
@@ -101,25 +104,43 @@ export default function PagoCreate() {
 
     const handleOnFinish = async (values: any) => {
         try {
-            // En lugar de crear un nuevo pago, actualizamos la cuota existente
             const { cuota_id, monto, metodo_pago, fecha_pago, referencia } = values;
-            
+
             if (!cuota_id) {
                 message.error("Debes seleccionar una cuota a pagar");
                 return;
             }
 
-                        const { error } = await supabaseBrowserClient
-                            .from("pagos")
-                            .update({
-                                estado: "pagado",
-                                fecha_pago: fecha_pago ? fecha_pago.format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
-                                monto: monto, // Por si hubo ajuste en el monto
-                                metodo_pago: metodo_pago,
-                                referencia: referencia,
-                                observaciones: `Pago registrado el ${formatDate(dayjs())} ${formatTime(dayjs())}`
-                            })
-                            .eq("id", cuota_id);
+            const montoNumero = Number(monto || 0);
+            if (Number.isNaN(montoNumero) || montoNumero <= 0) {
+                message.error("El monto debe ser mayor a 0");
+                return;
+            }
+            if (montoNumero > 999999999) {
+                message.error("El monto es demasiado alto");
+                return;
+            }
+
+            // Normalizar método de pago a los valores permitidos por el check de la tabla
+            const metodoPagoNormalizado = (() => {
+                const valor = String(metodo_pago || "").toLowerCase();
+                if (["efectivo", "transferencia", "tarjeta", "otro"].includes(valor)) return valor;
+                // Mapear alias comunes a transferencia
+                if (["nequi", "bancolombia", "sistecredito", "pse", "banco"].includes(valor)) return "transferencia";
+                return "otro";
+            })();
+
+            const { error } = await supabaseBrowserClient
+                .from("pagos")
+                .update({
+                    estado: "pagado",
+                    fecha_pago: fecha_pago ? fecha_pago.format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
+                    monto: montoNumero,
+                    metodo_pago: metodoPagoNormalizado,
+                    referencia,
+                    observaciones: `Pago registrado el ${formatDate(dayjs())} ${formatTime(dayjs())}`
+                })
+                .eq("id", cuota_id);
 
             if (error) throw error;
 
@@ -163,7 +184,7 @@ export default function PagoCreate() {
                 form={formProps.form}
                 layout="vertical" 
                 onFinish={handleOnFinish} 
-                initialValues={{ metodo_pago: 'Efectivo', fecha_pago: dayjs() }}
+                initialValues={{ metodo_pago: 'efectivo', fecha_pago: dayjs() }}
             >
                 
                 <Row gutter={24}>
@@ -256,12 +277,14 @@ export default function PagoCreate() {
                     </Col>
                     <Col span={8}>
                         <Form.Item label="Método de Pago" name="metodo_pago">
-                            <Select options={[
-                                { label: 'Efectivo', value: 'Efectivo' },
-                                { label: 'Nequi', value: 'Nequi' },
-                                { label: 'Bancolombia', value: 'Bancolombia' },
-                                { label: 'Sistecredito', value: 'Sistecredito' }
-                            ]} />
+                            <Select 
+                                options={[
+                                    { label: 'Efectivo', value: 'efectivo' },
+                                    { label: 'Transferencia (Nequi/Banco)', value: 'transferencia' },
+                                    { label: 'Tarjeta', value: 'tarjeta' },
+                                    { label: 'Otro', value: 'otro' }
+                                ]}
+                            />
                         </Form.Item>
                     </Col>
                     <Col span={8}>

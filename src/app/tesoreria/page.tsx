@@ -29,9 +29,8 @@ export default function TesoreriaList() {
             filters.push({ field: "perfiles.id", operator: "eq", value: user.id });
         }
         
-        // IMPORTANTE: Solo mostrar pagos efectivamente realizados (con estado 'pagado')
-        // Las cuotas pendientes solo aparecen en el perfil del estudiante
-        filters.push({ field: "estado", operator: "eq", value: "pagado" });
+        // MOSTRAR TODOS LOS PAGOS: tanto pendientes como pagados
+        // Esto permite ver el flujo completo de pagos en tesorería
         
         return filters;
     };
@@ -250,6 +249,22 @@ export default function TesoreriaList() {
                             $ {Number(value).toLocaleString()}
                         </Text>
                     )}
+                />
+
+                {/* ESTADO */}
+                <Table.Column 
+                    dataIndex="estado" 
+                    title="Estado"
+                    render={(value) => {
+                        const estado = (value || 'pendiente').toLowerCase();
+                        const colorMap: Record<string, string> = {
+                            'pagado': 'green',
+                            'pendiente': 'orange',
+                            'vencido': 'red',
+                            'cancelado': 'red'
+                        };
+                        return <Tag color={colorMap[estado] || 'blue'}>{estado.toUpperCase()}</Tag>;
+                    }}
                 />
 
                 <Table.Column 

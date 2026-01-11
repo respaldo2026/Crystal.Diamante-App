@@ -98,7 +98,8 @@ CREATE TABLE IF NOT EXISTS pagos (
     estudiante_id UUID REFERENCES perfiles(id),
     matricula_id INTEGER REFERENCES matriculas(id),
     monto NUMERIC(10,2) NOT NULL,
-    metodo_pago TEXT CHECK (metodo_pago IN ('efectivo', 'transferencia', 'tarjeta', 'otro')),
+    metodo_pago TEXT CHECK (metodo_pago IS NULL OR LOWER(metodo_pago) IN ('efectivo', 'transferencia', 'tarjeta', 'nequi', 'sistecredito', 'otro')),
+    estado TEXT DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'pagado', 'vencido', 'cancelado')),
     fecha_pago TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     observaciones TEXT,
     referencia TEXT,
@@ -239,6 +240,33 @@ CREATE TRIGGER update_inventario_updated_at
     BEFORE UPDATE ON inventario
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- Validación de montos y método de pago en tabla pagos
+CREATE OR REPLACE FUNCTION validar_monto_pago()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.monto IS NULL OR NEW.monto <= 0 THEN
+        RAISE EXCEPTION 'El monto debe ser mayor a 0';
+    END IF;
+
+    IF NEW.monto > 999999999 THEN
+        RAISE EXCEPTION 'El monto es demasiado alto';
+    END IF;
+
+    -- Solo validar método de pago si no es NULL (permitir NULL para pagos pendientes)
+    IF NEW.metodo_pago IS NOT NULL AND LOWER(NEW.metodo_pago) NOT IN ('efectivo', 'transferencia', 'tarjeta', 'nequi', 'sistecredito', 'otro') THEN
+        RAISE EXCEPTION 'Método de pago no permitido: %', NEW.metodo_pago;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS check_monto_pago ON pagos;
+CREATE TRIGGER check_monto_pago
+    BEFORE INSERT OR UPDATE ON pagos
+    FOR EACH ROW
+    EXECUTE FUNCTION validar_monto_pago();
 
 -- NOTA: Las siguientes tablas NO tienen updated_at:
 -- profesores_info, pagos, temas_curso, sesiones_clase, asistencias, pagos_nomina, pagos_profesores
