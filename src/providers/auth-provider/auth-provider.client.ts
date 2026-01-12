@@ -2,7 +2,12 @@ import { supabaseBrowserClient as supabase } from "@utils/supabase/client";
 
 export const authProviderClient: any = {
   login: async ({ email, password }: { email: string; password: string }) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // Email es el correo del usuario, password es la cédula
+    const { data, error } = await supabase.auth.signInWithPassword({ 
+      email: email,
+      password: password // La contraseña es la cédula
+    });
+    
     if (error) return { success: false, error };
     
     // Verificar el rol del usuario
@@ -23,7 +28,11 @@ export const authProviderClient: any = {
   },
 
   logout: async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
     return { success: true, redirectTo: "/login" };
   },
 

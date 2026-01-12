@@ -24,10 +24,10 @@ export default function TesoreriaList() {
     const permanentFilters = () => {
         const filters: any[] = [];
         
-        // Profesor solo ve sus pagos
-        if (user?.rol === "profesor") {
-            filters.push({ field: "perfiles.id", operator: "eq", value: user.id });
-        }
+        // COMENTADO: Profesor solo ve sus pagos - DESACTIVADO para debug
+        // if (user?.rol === "profesor") {
+        //     filters.push({ field: "perfiles.id", operator: "eq", value: user.id });
+        // }
         
         // MOSTRAR TODOS LOS PAGOS: tanto pendientes como pagados
         // Esto permite ver el flujo completo de pagos en tesorería
@@ -54,6 +54,7 @@ export default function TesoreriaList() {
 
     // Calcular el total de lo que se ve en pantalla
     const pagos = tableProps.dataSource || [];
+    console.log("🔍 Tesorería - Pagos en tabla:", pagos.length, "registros", pagos);
     const totalRecaudado = pagos.reduce((acc, curr: any) => acc + Number(curr.monto || 0), 0);
 
     // Métodos únicos para el filtro

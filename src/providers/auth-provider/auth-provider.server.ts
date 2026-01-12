@@ -22,8 +22,18 @@ export const authProviderServer: any = {
       }
     );
 
-    // MODO DESARROLLO: El servidor siempre dice que el usuario está "autenticado"
-    // para evitar redirecciones infinitas al login.
+    // Verificar si hay una sesión activa
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    // Si no hay sesión, redirigir a login
+    if (!session) {
+      return {
+        authenticated: false,
+        redirectTo: "/login",
+      };
+    }
+
+    // Si hay sesión, usuario está autenticado
     return {
       authenticated: true,
     };

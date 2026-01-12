@@ -188,6 +188,15 @@ export default function RootLayout({
                     },
                   },
                   {
+                    name: "administradores",
+                    list: "/configuracion/administradores",
+                    meta: {
+                      label: "Administradores",
+                      icon: <SettingOutlined />,
+                      parent: "configuracion",
+                    },
+                  },
+                  {
                     name: "portal-estudiante",
                     list: "/portal-estudiante",
                     meta: {
@@ -200,6 +209,9 @@ export default function RootLayout({
                 options={{
                   syncWithLocation: true,
                   warnWhenUnsavedChanges: true,
+                  redirect: {
+                    afterLogout: "/login",
+                  },
                 }}
               >
                 <ThemedLayout

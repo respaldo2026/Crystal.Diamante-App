@@ -104,87 +104,6 @@ export default function MiOficinaProfesor() {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         
         if (userError || !user) {
-          // En desarrollo, permitir acceso con datos de demostración
-          if (process.env.NODE_ENV === 'development') {
-            console.warn("Modo desarrollo: usando profesor de demostración");
-            setIdProfesor("dev-profesor-123");
-            setProfesor({
-              id: "dev-profesor-123",
-              nombre_completo: "María González García",
-              email: "maria@academy.com",
-              telefono: "+57 3001234567",
-              rol: "profesor",
-              foto_url: null,
-              identificacion: "1234567890",
-              valor_hora: 20000
-            });
-
-            // Datos de demostración
-            setMisCursos([
-              {
-                id: 1,
-                nombre: "Manicure Ruso Avanzado",
-                profesor_id: "dev-profesor-123",
-                estado: "activo",
-                total_estudiantes: 8,
-                descripcion: "Técnica de manicure ruso con resultados profesionales"
-              },
-              {
-                id: 2,
-                nombre: "Diseño de Uñas",
-                profesor_id: "dev-profesor-123",
-                estado: "activo",
-                total_estudiantes: 12,
-                descripcion: "Diseño creativo y personalizado"
-              },
-              {
-                id: 3,
-                nombre: "Extensiones en Gel",
-                profesor_id: "dev-profesor-123",
-                estado: "activo",
-                total_estudiantes: 6,
-                descripcion: "Técnica de extensiones con gel profesional"
-              }
-            ]);
-
-            setHistorialCursos([
-              {
-                id: 4,
-                nombre: "Spa de Pies",
-                estado: "finalizado",
-                fecha_inicio: "2024-01-15",
-                fecha_fin: "2024-02-15"
-              }
-            ]);
-
-            // Horas pendientes por curso (demo)
-            setHorasPendientesMap({
-              1: 6,
-              2: 4,
-              3: 3,
-            });
-
-            setPagosNomina([
-              {
-                id: 1,
-                fecha_pago: dayjs().subtract(5, 'days').toISOString(),
-                total_pagado: 500000,
-                total_horas: 30,
-                observaciones: "Pago enero"
-              },
-              {
-                id: 2,
-                fecha_pago: dayjs().subtract(35, 'days').toISOString(),
-                total_pagado: 450000,
-                total_horas: 27,
-                observaciones: "Pago diciembre"
-              }
-            ]);
-
-            setLoading(false);
-            return;
-          }
-
           messageApi.error("Debes iniciar sesión para ver tu oficina");
           window.location.href = "/login";
           return;
@@ -269,47 +188,6 @@ export default function MiOficinaProfesor() {
           setCursoActivo(curso);
           setAlumnosClase([]);
           setTemaSeleccionado(null);
-          
-          // En modo desarrollo, usar datos de demostración
-          if (process.env.NODE_ENV === 'development' && idProfesor?.includes('dev-profesor')) {
-            // Datos de demostración de estudiantes
-            const estudiantesDemo = [
-              { id: 1, estudiante_id: 101, perfiles: { nombre_completo: "Ana García López", telefono: "+573001234567" }, pagos: [{ fecha_pago: dayjs().toISOString() }] },
-              { id: 2, estudiante_id: 102, perfiles: { nombre_completo: "María Rodríguez Pérez", telefono: "+573002345678" }, pagos: [{ fecha_pago: dayjs().toISOString() }] },
-              { id: 3, estudiante_id: 103, perfiles: { nombre_completo: "Sofía Martínez González", telefono: "+573003456789" }, pagos: [{ fecha_pago: dayjs().toISOString() }] },
-              { id: 4, estudiante_id: 104, perfiles: { nombre_completo: "Catalina Flores Ruiz", telefono: "+573004567890" }, pagos: [{ fecha_pago: dayjs().subtract(5, 'days').toISOString() }] },
-            ];
-
-            const alumnosConPago = estudiantesDemo.map((alumno: any) => {
-              const fechaPagoReciente = alumno.pagos && alumno.pagos.length > 0
-                ? alumno.pagos[0].fecha_pago
-                : null;
-              
-              return {
-                  ...alumno,
-                  pagado: verificarPagoAlDia(fechaPagoReciente)
-              };
-            });
-
-            setAlumnosClase(alumnosConPago);
-
-            // Datos de demostración de temas
-            const temasDemo = [
-              { id: 1, titulo: "Introducción a la técnica", orden: 1, descripcion: "Conceptos básicos" },
-              { id: 2, titulo: "Preparación de uñas", orden: 2, descripcion: "Limpieza y desinfección" },
-              { id: 3, titulo: "Aplicación de color", orden: 3, descripcion: "Técnicas de pigmentación" },
-            ];
-            setTemasCurso(temasDemo);
-
-            // Marcar hora de inicio para permitir guardar asistencia
-            setHoraInicioClase(dayjs());
-            setHoraFinClase(null);
-            setHorasCalculadas(0);
-
-            messageApi.success({ content: "Aula lista (datos de demostración)", key: "loadingAula" });
-            setDrawerVisible(true);
-            return;
-          }
           
           // A) Estudiantes del curso (desde BD real)
           const { data: dataAlumnos, error: errAlumnos } = await supabase
@@ -410,14 +288,6 @@ export default function MiOficinaProfesor() {
   const ejecutarGuardadoReal = async (horasARegistrar: number) => {
       setGuardandoAsistencia(true);
       try {
-        // En modo demo no guardamos en BD real
-        if (process.env.NODE_ENV === 'development' && idProfesor?.includes('dev-profesor')) {
-          messageApi.success("Asistencia guardada (modo demostración)");
-          setDrawerVisible(false);
-          setGuardandoAsistencia(false);
-          return;
-        }
-
           const profesorIdSesion = cursoActivo?.profesor_id || idProfesor; // asegura que la sesión se asigne al profesor dueño del curso
 
           const registros = alumnosClase.map(alumno => ({
@@ -460,44 +330,60 @@ export default function MiOficinaProfesor() {
       }
   };
 
-  // Generar pago quincenal manual (admin/tesorería)
-  const generarPagoQuincenal = async () => {
+  // Generar pago quincenal con separación por ciclo (1-15 y 16-30/31)
+  const generarPagoQuincenal = async (ciclo?: 'primera' | 'segunda') => {
     if (!idProfesor) {
       messageApi.error("No hay profesor cargado");
-      return;
-    }
-
-    // Demo mode: simular
-    if (process.env.NODE_ENV === 'development' && idProfesor.includes('dev-profesor')) {
-      messageApi.success("Pago generado (demo) y horas puestas en cero");
-      setHorasPendientesMap({});
       return;
     }
 
     try {
       setGenerandoPago(true);
 
-      // Traer sesiones pendientes
+      const hoy = dayjs();
+      const anioMes = hoy.format('YYYY-MM');
+      
+      // Determinar automáticamente el ciclo si no se especifica
+      let cicloAuto = ciclo;
+      if (!cicloAuto) {
+        cicloAuto = hoy.date() <= 15 ? 'primera' : 'segunda';
+      }
+
+      // Definir rangos de fecha según ciclo
+      let fechaInicio, fechaFin;
+      if (cicloAuto === 'primera') {
+        fechaInicio = dayjs(`${anioMes}-01`).format('YYYY-MM-DD');
+        fechaFin = dayjs(`${anioMes}-15`).format('YYYY-MM-DD');
+      } else {
+        fechaInicio = dayjs(`${anioMes}-16`).format('YYYY-MM-DD');
+        fechaFin = dayjs(`${anioMes}`).endOf('month').format('YYYY-MM-DD');
+      }
+
+      // Traer SOLO sesiones del ciclo correspondiente
       const { data: sesionesPend, error } = await supabase
         .from("sesiones_clase")
-        .select("id, curso_id, horas_dictadas")
+        .select("id, curso_id, horas_dictadas, fecha, tema_visto")
         .eq("profesor_id", idProfesor)
-        .eq("estado_pago", "pendiente");
+        .eq("estado_pago", "pendiente")
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin)
+        .order("fecha", { ascending: true });
 
       if (error) throw error;
 
-      const horasTotales = (sesionesPend || []).reduce((sum: number, s: any) => sum + (s.horas_dictadas || 0), 0);
-      if (horasTotales === 0) {
-        messageApi.info("No hay horas pendientes para pagar");
+      if (!sesionesPend || sesionesPend.length === 0) {
+        messageApi.info(`No hay horas pendientes en la ${cicloAuto === 'primera' ? 'primera' : 'segunda'} quincena para pagar`);
         return;
       }
 
+      const horasTotales = sesionesPend.reduce((sum: number, s: any) => sum + (s.horas_dictadas || 0), 0);
       const valorHora = Number(profesor?.valor_hora || 0);
       const monto = valorHora > 0 ? horasTotales * valorHora : 0;
-      const hoy = dayjs();
-      const corteLabel = hoy.date() <= 15 ? "Primera quincena" : "Segunda quincena";
 
-      // Insertar pago en pagos_nomina
+      const cicloLabel = cicloAuto === 'primera' ? 'Primera quincena' : 'Segunda quincena';
+      const detalleClases = sesionesPend.map((s: any) => `${s.fecha}: ${s.horas_dictadas}h (${s.tema_visto || 'Sin tema'})`).join('\n');
+
+      // Insertar pago en pagos_nomina CON DETALLE DE SESIONES
       const { data: pagoIns, error: errPago } = await supabase
         .from("pagos_nomina")
         .insert({
@@ -505,30 +391,39 @@ export default function MiOficinaProfesor() {
           fecha_pago: hoy.toISOString(),
           total_pagado: monto,
           total_horas: horasTotales,
-          observaciones: `${corteLabel} ${hoy.format('YYYY-MM')}`
+          fecha_inicio_periodo: fechaInicio,
+          fecha_fin_periodo: fechaFin,
+          observaciones: `${cicloLabel} ${hoy.format('YYYY-MM')} - ${horasTotales} horas × $${Number(valorHora).toLocaleString()} = $${Number(monto).toLocaleString()}`
         })
         .select("id")
         .single();
 
       if (errPago) throw errPago;
 
-      // Marcar sesiones como pagadas
+      // Marcar sesiones del ciclo como pagadas
       const { error: errUpdate } = await supabase
         .from("sesiones_clase")
-        .update({ estado_pago: 'pagado' })
+        .update({ estado_pago: 'pagado', pago_nomina_id: pagoIns.data?.id })
         .eq("profesor_id", idProfesor)
-        .eq("estado_pago", "pendiente");
+        .eq("estado_pago", "pendiente")
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin);
 
       if (errUpdate) throw errUpdate;
 
-      messageApi.success("Pago quincenal generado y horas puestas en cero");
+      messageApi.success(`✅ ${cicloLabel} pagada correctamente. ${horasTotales} horas × $${Number(valorHora).toLocaleString()} = $${Number(monto).toLocaleString()}`);
 
-      await refrescarHorasPendientes(idProfesor);
+      // Limpiar horas pendientes de oficina (solo del ciclo pagado)
+      const nuevasHoras = { ...horasPendientesMap };
+      sesionesPend.forEach((s: any) => {
+        nuevasHoras[s.curso_id] = Math.max(0, (nuevasHoras[s.curso_id] || 0) - (s.horas_dictadas || 0));
+      });
+      setHorasPendientesMap(nuevasHoras);
 
-      // refrescar pagos
+      // Refrescar pagos de nómina
       const { data: dataPagos } = await supabase
         .from("pagos_nomina")
-        .select("id, fecha_pago, total_pagado, total_horas, observaciones")
+        .select("id, fecha_pago, total_pagado, total_horas, observaciones, fecha_inicio_periodo, fecha_fin_periodo")
         .eq("profesor_id", idProfesor)
         .order("fecha_pago", { ascending: false });
       setPagosNomina(dataPagos || []);

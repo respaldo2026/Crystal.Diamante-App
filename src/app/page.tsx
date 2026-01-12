@@ -68,71 +68,125 @@ export default function DashboardPage() {
     const [linkForm] = Form.useForm();
 
   useEffect(() => {
-    cargarDashboardGeneral();
+    // Limpiar localStorage para forzar recarga de datos
     if (typeof window !== "undefined") {
-        const storedKpis = window.localStorage.getItem("dashboardKpiOrder_v1");
-        const storedLinks = window.localStorage.getItem("dashboardQuickLinks_v1");
-        const storedVisibility = window.localStorage.getItem("dashboardVisibility_v1");
-        const storedCards = window.localStorage.getItem("dashboardCardOrder_v1");
-        if (storedKpis) {
-            try { setKpiOrder(JSON.parse(storedKpis)); } catch {}
-        }
-        if (storedLinks) {
-            try { setQuickLinks(JSON.parse(storedLinks)); } catch {}
-        }
-        if (storedVisibility) {
-            try { setCardVisibility(JSON.parse(storedVisibility)); } catch {}
-        }
-        if (storedCards) {
-            try { setCardOrder(JSON.parse(storedCards)); } catch {}
-        }
+        window.localStorage.removeItem("dashboardKpiOrder_v1");
+        window.localStorage.removeItem("dashboardQuickLinks_v1");
+        window.localStorage.removeItem("dashboardVisibility_v1");
+        window.localStorage.removeItem("dashboardCardOrder_v1");
     }
+    
+    // Cargar datos iniciales
+    cargarDashboardGeneral();
+    
+    // Suscribirse a cambios en tiempo real de las tablas críticas
+    const subscriptionPagos = supabaseBrowserClient
+        .channel('pagos-changes')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'pagos' },
+            () => {
+                console.log('📡 Cambio detectado en pagos - actualizando dashboard');
+                cargarDashboardGeneral();
+            }
+        )
+        .subscribe();
+
+    const subscriptionNomina = supabaseBrowserClient
+        .channel('nomina-changes')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'pagos_nomina' },
+            () => {
+                console.log('📡 Cambio detectado en nómina - actualizando dashboard');
+                cargarDashboardGeneral();
+            }
+        )
+        .subscribe();
+
+    const subscriptionMatriculas = supabaseBrowserClient
+        .channel('matriculas-changes')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'matriculas' },
+            () => {
+                console.log('📡 Cambio detectado en matrículas - actualizando dashboard');
+                cargarDashboardGeneral();
+            }
+        )
+        .subscribe();
+
+    const subscriptionCursos = supabaseBrowserClient
+        .channel('cursos-changes')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'cursos' },
+            () => {
+                console.log('📡 Cambio detectado en cursos - actualizando dashboard');
+                cargarDashboardGeneral();
+            }
+        )
+        .subscribe();
+    
+    return () => {
+        subscriptionPagos.unsubscribe();
+        subscriptionNomina.unsubscribe();
+        subscriptionMatriculas.unsubscribe();
+        subscriptionCursos.unsubscribe();
+    };
   }, []);
 
   const cargarDashboardGeneral = async () => {
     setLoading(true);
     try {
+        // Definir la fecha de hoy
         const hoy = dayjs();
-        const inicioMes = hoy.startOf('month').format('YYYY-MM-DD');
-
-        // 1. Ingresos (Tabla 'pagos')
-        const { data: pagosMes } = await supabaseBrowserClient
-            .from("pagos")
-            .select("monto")
-            .gte("fecha_pago", inicioMes);
         
-        const totalIngresos = pagosMes?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0;
+        // Forzar queries sin caché agregando timestamp único
+        const timestamp = new Date().getTime();
+        
+        // 1. Ingresos (Tabla 'pagos'): SIN FILTRO, SIN CACHÉ
+        const { data: pagosMes, error: errorPagos } = await supabaseBrowserClient
+            .from("pagos")
+            .select("monto");
+        
+        // Si el dummy filter falla, hacer query normal
+        const { data: pagosMesReal } = !pagosMes ? await supabaseBrowserClient
+            .from("pagos")
+            .select("monto") : { data: pagosMes };
+        
+        console.log("🔍 Dashboard - Pagos traídos:", pagosMesReal?.length || 0, "registros, Total COP:", pagosMesReal?.reduce((acc, curr) => acc + Number(curr.monto || 0), 0) || 0);
+        
+        const totalIngresos = pagosMesReal?.reduce((acc, curr) => acc + Number(curr.monto || 0), 0) || 0;
 
-        // 2. Egresos (Tabla 'pagos_nomina')
-        // Nota: la columna correcta es 'total_pagado' (no 'monto')
-        const { data: nominaMes } = await supabaseBrowserClient
+        // 2. Egresos (Tabla 'pagos_nomina'): SIN FILTRO, SIN CACHÉ
+        const { data: nominaMesReal } = await supabaseBrowserClient
             .from("pagos_nomina")
-            .select("total_pagado")
-            .gte("fecha_pago", inicioMes);
+            .select("total_pagado");
+        
+        console.log("🔍 Dashboard - Nóminas traídas:", nominaMesReal?.length || 0, "registros");
             
-        const totalEgresos = nominaMes?.reduce((acc, curr) => acc + Number((curr as any).total_pagado || 0), 0) || 0;
+        const totalEgresos = nominaMesReal?.reduce((acc, curr) => acc + Number((curr as any).total_pagado || 0), 0) || 0;
 
-        // 3. Contadores básicos
-        // Contar estudiantes únicos (desde perfiles con rol estudiante)
-        const { count: countEstudiantesTotales } = await supabaseBrowserClient
-            .from("perfiles")
-            .select("*", { count: 'exact', head: true })
-            .eq("rol", "estudiante");
-
-        // Contar matrículas activas
-        const { count: countMatriculasActivas } = await supabaseBrowserClient
+        // 3. Contadores básicos alineados a datos reales
+        const { data: matriculasActivas } = await supabaseBrowserClient
             .from("matriculas")
-            .select("*", { count: 'exact', head: true })
+            .select("estudiante_id")
             .eq("estado", "activo");
+
+        const estudiantesActivosUnicos = new Set(
+            (matriculasActivas || []).map((m: any) => m.estudiante_id)
+        ).size;
 
         const { count: countProfes } = await supabaseBrowserClient
             .from("perfiles")
             .select("*", { count: 'exact', head: true })
             .eq("rol", "profesor");
 
-        const { count: countCursos } = await supabaseBrowserClient
+        const { count: countCursosActivos } = await supabaseBrowserClient
             .from("cursos")
-            .select("*", { count: 'exact', head: true });
+            .select("*", { count: 'exact', head: true })
+            .eq("estado", "activo");
 
         // 4. Últimos Pagos
         const { data: dataUltimosPagos } = await supabaseBrowserClient
@@ -248,8 +302,8 @@ export default function DashboardPage() {
         setStats({
             ingresosMes: totalIngresos,
             egresosMes: totalEgresos,
-            estudiantesActivos: countEstudiantesTotales || 0,
-            cursosActivos: countCursos || 0,
+            estudiantesActivos: estudiantesActivosUnicos,
+            cursosActivos: countCursosActivos || 0,
             profesores: countProfes || 0
         });
 
@@ -258,6 +312,15 @@ export default function DashboardPage() {
         setProximosCursos(proximos);
         setInscritosPorCurso(ocupados);
         setCursosActivosPorPrograma(agrupadoLista);
+
+        // Ocultar tarjetas vacías automáticamente
+        setCardVisibility({
+            proximos: (proximos || []).length > 0,
+            activos: (agrupadoLista || []).length > 0,
+            cumple: (cumpleUnicos || []).length > 0,
+            ingresosRecientes: (dataUltimosPagos || []).length > 0,
+            accesos: true,
+        });
 
     } catch (error) {
         console.error("Error cargando dashboard:", error);
@@ -607,7 +670,7 @@ export default function DashboardPage() {
             <div style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <div>
                     <Title level={4} style={{ margin: 0 }}>¡Hola, Director! 👋</Title>
-                    <Text type="secondary">Todo a la vista sin scroll.</Text>
+                    <Text type="secondary">Datos en tiempo real {loading && <Spin size="small" style={{ marginLeft: 8 }} />}</Text>
                 </div>
                 <Space size={8} wrap>
                     <Text type="secondary" style={{ fontSize: 12 }}>Mostrar</Text>

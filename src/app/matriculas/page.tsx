@@ -657,7 +657,7 @@ export default function MatriculasList() {
                                 }
                                 fileName={`Diploma_${record.perfiles?.nombre_completo || 'Alumno'}.pdf`}
                             >
-                                {({ loading }) => 
+                                {({ loading }: { loading: boolean }) => 
                                     loading ? (
                                         <Button size="small" loading>...</Button>
                                     ) : (

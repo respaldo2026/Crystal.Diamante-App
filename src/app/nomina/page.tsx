@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { 
     Table, Card, Button, DatePicker, Row, Col, Typography, Select,
-    Statistic, Tag, message, Modal, Space
+    Statistic, Tag, message, Modal, Space, Alert
 } from "antd";
 import { 
   CalculatorOutlined, DollarCircleOutlined, PayCircleOutlined 
@@ -99,6 +99,18 @@ export default function NominaPage() {
                 render: (val: number) => <Tag color="blue">{val} hrs</Tag>,
             },
             {
+                title: 'Estado',
+                dataIndex: 'estado_pago',
+                render: (val: string) => {
+                    if (val === 'pendiente') {
+                        return <Tag color="orange">PENDIENTE</Tag>;
+                    } else if (val === 'pagado') {
+                        return <Tag color="green">✓ PAGADO</Tag>;
+                    }
+                    return <Tag>{val}</Tag>;
+                },
+            },
+            {
                 title: 'Valor Hora',
                 dataIndex: 'valor_hora',
                 render: (val: number) => val ? `$ ${Number(val).toLocaleString()}` : <Tag color="red">Sin definir</Tag>,
@@ -110,17 +122,20 @@ export default function NominaPage() {
             },
             {
                 title: 'Acción',
-                render: (_: any, record: any) => (
-                    <Button
-                        type="default"
-                        size="small"
-                        disabled={!record.total_estimado}
-                        loading={pagandoClaseId === record.id}
-                        onClick={() => pagarClaseIndividual(record)}
-                    >
-                        Pagar solo esta clase
-                    </Button>
-                ),
+                render: (_: any, record: any) => {
+                    const estaPagado = record.estado_pago === 'pagado';
+                    return (
+                        <Button
+                            type={estaPagado ? "text" : "default"}
+                            size="small"
+                            disabled={estaPagado || !record.total_estimado}
+                            loading={pagandoClaseId === record.id}
+                            onClick={() => pagarClaseIndividual(record)}
+                        >
+                            {estaPagado ? '✓ Pagado' : 'Pagar'}
+                        </Button>
+                    );
+                },
             },
         ],
         [pagandoClaseId]
@@ -151,18 +166,19 @@ export default function NominaPage() {
 
         const { data: dataProfes } = await query;
 
-        // 2. Obtener sesiones trabajadas en ese rango
+        // 2. Obtener sesiones trabajadas en ese rango (AMBAS: pendiente y pagado)
         const { data: sesiones } = await supabaseBrowserClient
             .from("sesiones_clase")
-            .select("id, profesor_id, curso_id, fecha, horas_dictadas, tema_visto, cursos(nombre), perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora)")
+            .select("id, profesor_id, curso_id, fecha, horas_dictadas, tema_visto, estado_pago, cursos(nombre), perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora)")
             .gte("fecha", inicio)
             .lte("fecha", fin)
-            .eq("estado_pago", "pendiente")
             .order("fecha", { ascending: true });
 
                 // 3. Cruzar información (Matemática de Nómina)
+                // IMPORTANTE: Los profesores solo ven clases PENDIENTES para pagar
+                const sesionesPendientes = sesiones?.filter((s: any) => s.estado_pago === 'pendiente') || [];
                 const reporte = dataProfes?.map((prof: any) => {
-                        const susClases = sesiones?.filter((s: any) => s.profesor_id === prof.id) || [];
+                        const susClases = sesionesPendientes.filter((s: any) => s.profesor_id === prof.id) || [];
                         const totalHoras = susClases.reduce((sum: number, item: any) => sum + Number(item.horas_dictadas || 0), 0);
                         const aPagar = totalHoras * (prof.valor_hora || 0);
 
@@ -174,6 +190,7 @@ export default function NominaPage() {
                         };
                 }).filter((p: any) => p.total_horas > 0 || true);
 
+                // Enriquecer TODAS las sesiones (pendientes Y pagadas) para la tabla detallada
                 const sesionesEnriquecidas = (sesiones || []).map((s: any) => {
                     const valorHora = Number(
                         s?.perfiles?.valor_hora ??
@@ -323,9 +340,15 @@ export default function NominaPage() {
             columns={columnasNomina}
         />
 
-                <Card style={{ marginTop: 20 }} title="Clases pendientes por pagar">
+                <Card style={{ marginTop: 20 }} title="📋 Registro Diario Detallado de Clases Trabajadas">
                     <Space direction="vertical" style={{ width: '100%' }}>
-                        <Text type="secondary">Cada clase registrada por el profesor aparece aquí para permitir pagos individuales antes de la fecha de corte.</Text>
+                        <Alert
+                            message="Este es el registro DIARIO DETALLADO de cada clase dictada"
+                            description="Cada fila representa una clase trabajada con fecha específica, profesor, curso, horas y tema. Este historial permanece incluso después de pagar."
+                            type="info"
+                            showIcon
+                            style={{ marginBottom: 16 }}
+                        />
                         <Table
                             dataSource={clasesPendientes}
                             rowKey="id"

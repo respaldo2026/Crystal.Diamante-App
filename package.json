@@ -6,7 +6,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--max_old_space_size=4096 refine dev -p 3001",
+    "dev": "cross-env NODE_OPTIONS=--max_old_space_size=4096 refine dev --port 3001",
     "build": "refine build",
     "start": "refine start",
     "lint": "next lint",
@@ -15,7 +15,7 @@
   "dependencies": {
     "@ant-design/icons": "^5.5.1",
     "@ant-design/nextjs-registry": "^1.0.0",
-    "@react-pdf/renderer": "^4.3.1",
+    "@react-pdf/renderer": "^4.3.2",
     "@refinedev/antd": "^6.0.3",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "^5.0.7",

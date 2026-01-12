@@ -2,13 +2,56 @@
 
 import React from "react";
 import { Create, useForm } from "@refinedev/antd";
-import { Form, Input, Select, Divider } from "antd";
+import { Form, Input, Select, Divider, message } from "antd";
 
 export default function CreatePerfil() {
-  const { formProps, saveButtonProps } = useForm();
+  const { formProps, saveButtonProps, onFinish } = useForm({
+    onMutationSuccess: async (data, variables) => {
+      const perfil = variables as any;
+      
+      if (!perfil.identificacion || !perfil.email) {
+        message.warning("Falta identificación o email");
+        return;
+      }
+
+      const passwordAuth = perfil.identificacion.replace(/\./g, '');
+      
+      try {
+        const response = await fetch('/api/auth/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: perfil.email,
+            password: passwordAuth,
+            metadata: {
+              nombre_completo: perfil.nombre_completo,
+              rol: perfil.rol,
+              cedula: perfil.identificacion
+            }
+          })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          message.success(`✅ Usuario creado. Ya puede hacer login`);
+        } else {
+          message.info(`Perfil guardado. Login: ${perfil.email} / ${passwordAuth}`);
+        }
+      } catch (error) {
+        message.info(`Perfil guardado. Credenciales: ${perfil.email} / ${passwordAuth}`);
+      }
+    }
+  });
 
   return (
     <Create saveButtonProps={saveButtonProps} title="Registrar Persona">
+      <div style={{ padding: '12px', background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: '4px', marginBottom: '16px' }}>
+        <strong>🔑 Sistema de Login:</strong> El <strong>usuario es el correo</strong> y la <strong>contraseña es la cédula</strong>.
+        <br />
+        <small>Ejemplo: Usuario: <code>usuario@correo.com</code> / Contraseña: <code>1234567890</code></small>
+      </div>
+      
       <Form {...formProps} form={formProps.form} layout="vertical">
         
         <h3 style={{ marginTop: 0, color: '#722ed1' }}>Datos Personales</h3>

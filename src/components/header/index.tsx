@@ -2,7 +2,7 @@
 
 import { ColorModeContext } from "@contexts/color-mode";
 import type { RefineThemedLayoutHeaderProps } from "@refinedev/antd";
-import { useGetIdentity } from "@refinedev/core";
+import { useGetIdentity, useLogout } from "@refinedev/core";
 import {
   Layout as AntdLayout,
   Avatar,
@@ -12,7 +12,7 @@ import {
   Typography,
   Button,
 } from "antd";
-import { BookOutlined } from "@ant-design/icons";
+import { BookOutlined, LogoutOutlined } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import React, { useContext } from "react";
@@ -31,6 +31,7 @@ export const Header: React.FC<RefineThemedLayoutHeaderProps> = ({
 }) => {
   const { token } = useToken();
   const { data: user } = useGetIdentity<IUser>();
+  const { mutate: logout } = useLogout();
   const { mode, setMode } = useContext(ColorModeContext);
   const router = useRouter();
   const { user: currentUser } = useCurrentUser();
@@ -93,6 +94,13 @@ export const Header: React.FC<RefineThemedLayoutHeaderProps> = ({
           <Space style={{ marginLeft: "8px" }} size="middle">
             {user?.name && <Text strong>{user.name}</Text>}
             {user?.avatar && <Avatar src={user?.avatar} alt={user?.name} />}
+            <Button 
+              danger 
+              icon={<LogoutOutlined />} 
+              onClick={() => logout()}
+            >
+              Logout
+            </Button>
           </Space>
         )}
       </Space>
