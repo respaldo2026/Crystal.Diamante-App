@@ -30,22 +30,28 @@ export default function TesoreriaList() {
         // }
         
         // MOSTRAR TODOS LOS PAGOS: tanto pendientes como pagados
-        // Esto permite ver el flujo completo de pagos en tesorería
+        // Ajuste: solo mostrar pagos confirmados (estado = pagado)
+        filters.push({ field: "estado", operator: "eq", value: "pagado" });
         
         return filters;
     };
 
     // Traemos los pagos junto con el nombre del estudiante y el curso
-    const { tableProps } = useTable({
+    const { tableProps, tableQuery } = useTable({
         resource: "pagos",
         meta: {
-            select: "*, perfiles(nombre_completo), matriculas(cursos(nombre))"
+            // Desambiguamos las relaciones usando el nombre exacto del FK
+            select: "*, perfiles!pagos_estudiante_id_fkey(nombre_completo,id), matriculas!pagos_matricula_id_fkey(cursos(nombre))"
         },
-        sorters: { initial: [{ field: "fecha_pago", order: "desc" }] },
+        sorters: { initial: [{ field: "created_at", order: "desc" }] },
         filters: {
             permanent: permanentFilters()
         }
     });
+
+    console.log("🔍 Tesorería - tableQuery:", tableQuery);
+    console.log("🔍 Tesorería - data:", tableQuery?.data);
+    console.log("🔍 Tesorería - error:", tableQuery?.error);
 
     const [busqueda, setBusqueda] = useState("");
     const [filtroFecha, setFiltroFecha] = useState<[any, any] | null>(null);
@@ -55,7 +61,6 @@ export default function TesoreriaList() {
     // Calcular el total de lo que se ve en pantalla
     const pagos = tableProps.dataSource || [];
     console.log("🔍 Tesorería - Pagos en tabla:", pagos.length, "registros", pagos);
-    const totalRecaudado = pagos.reduce((acc, curr: any) => acc + Number(curr.monto || 0), 0);
 
     // Métodos únicos para el filtro
     const metodosUnicos = useMemo(() => {
@@ -106,6 +111,12 @@ export default function TesoreriaList() {
         return resultado;
     }, [busqueda, pagos, filtroFecha, filtroMetodo, filtroConcepto]);
 
+    const totalPagadoEnPantalla = useMemo(() => {
+        return dataFiltrada
+            .filter((p: any) => (p.estado || "").toLowerCase() === "pagado")
+            .reduce((acc: number, curr: any) => acc + Number(curr.monto || 0), 0);
+    }, [dataFiltrada]);
+
     return (
         <List
             title="💰 Tesorería y Recaudo"
@@ -139,8 +150,8 @@ export default function TesoreriaList() {
                 <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
                         <Statistic
-                            title="Total en esta página"
-                            value={dataFiltrada.reduce((acc: number, curr: any) => acc + Number(curr.monto || 0), 0)}
+                            title="Total pagado en esta página"
+                            value={totalPagadoEnPantalla}
                             precision={0}
                             valueStyle={{ color: '#3f8600' }}
                             prefix={<DollarCircleOutlined />}

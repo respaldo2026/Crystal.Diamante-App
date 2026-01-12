@@ -165,26 +165,50 @@ export default function StudentDetailView() {
 
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
-        .select("id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, matriculas!pagos_matricula_fkey(cursos(nombre))")
+        .select(
+          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, matriculas!pagos_matricula_id_fkey(cursos(nombre))"
+        )
         .eq("estudiante_id", idEstudiante)
-        .order("numero_cuota", { ascending: true });
+        .order("created_at", { ascending: false });
       if (errPagos) {
         setLoadError("No pudimos cargar el historial de pagos.");
         throw errPagos;
       }
       const pagosList = (dataPagos as unknown as Pago[] | null) ?? [];
+      console.log("🔍 Pagos estudiante:", pagosList.length, pagosList);
       setPagosHistorial(pagosList);
 
-      // Ciclos/meses: se toma la duración declarada del curso como total de ciclos y se cuenta los pagos asociados a la matrícula
+      const totalPagadoReal = pagosList
+        .filter((p) => (p.estado || "").toLowerCase() === "pagado")
+        .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+      console.log("💰 Total Pagado Real calculado:", totalPagadoReal);
+      
+      const deudaPendienteReal = pagosList
+        .filter((p) => (p.estado || "").toLowerCase() !== "pagado")
+        .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+      console.log("📊 Deuda Pendiente Real calculada:", deudaPendienteReal);
+
+      setEstadisticasGlobales((prev) => ({
+        ...prev,
+        totalPagado: totalPagadoReal,
+        deudaTotal: deudaPendienteReal,
+      }));
+      console.log("✅ Actualizando estadisticasGlobales con:", {
+        totalPagado: totalPagadoReal,
+        deudaTotal: deudaPendienteReal
+      });
+
+      // Ciclos/meses: duración + 1 inscripción. Ej: 5 ciclos = 6 pagos (1 inscripción + 5 cuotas)
       const ciclosMap: Record<number, { total: number; pagados: number; faltantes: number; periodos: string[]; inscripcionPagada: boolean }> = {};
       listaMats.forEach((m: any) => {
-        const total = Number(m?.cursos?.duracion) || 0;
+        const duracionMeses = Number(m?.cursos?.duracion) || 0;
+        const totalPagosEsperados = duracionMeses + 1; // inscripción + cuotas mensuales
         const pagosMat = pagosList.filter((p) => p.matricula_id === m.id);
-        const pagados = pagosMat.length;
-        const faltantes = total > 0 ? Math.max(total - pagados, 0) : 0;
+        const pagados = pagosMat.filter((p) => (p.estado || "").toLowerCase() === "pagado").length;
+        const faltantes = totalPagosEsperados > 0 ? Math.max(totalPagosEsperados - pagados, 0) : 0;
         const periodos = pagosMat.map((p) => p.periodo_pagado).filter(Boolean) as string[];
-        const inscripcionPagada = pagosMat.some((p) => (p.periodo_pagado || "").toLowerCase().includes("matric"));
-        ciclosMap[m.id] = { total, pagados, faltantes, periodos, inscripcionPagada };
+        const inscripcionPagada = pagosMat.some((p) => (p.periodo_pagado || "").toLowerCase().includes("matric") || (p.numero_cuota === 0 && (p.estado || "").toLowerCase() === "pagado"));
+        ciclosMap[m.id] = { total: totalPagosEsperados, pagados, faltantes, periodos, inscripcionPagada };
       });
       setCiclosPorMatricula(ciclosMap);
     } catch (error) {

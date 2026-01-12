@@ -145,17 +145,19 @@ export default function DashboardPage() {
         // Forzar queries sin caché agregando timestamp único
         const timestamp = new Date().getTime();
         
-        // 1. Ingresos (Tabla 'pagos'): SIN FILTRO, SIN CACHÉ
+        // 1. Ingresos (Tabla 'pagos'): SOLO PAGOS CON ESTADO "pagado"
         const { data: pagosMes, error: errorPagos } = await supabaseBrowserClient
             .from("pagos")
-            .select("monto");
+            .select("monto, estado")
+            .eq("estado", "pagado");
         
         // Si el dummy filter falla, hacer query normal
         const { data: pagosMesReal } = !pagosMes ? await supabaseBrowserClient
             .from("pagos")
-            .select("monto") : { data: pagosMes };
+            .select("monto, estado")
+            .eq("estado", "pagado") : { data: pagosMes };
         
-        console.log("🔍 Dashboard - Pagos traídos:", pagosMesReal?.length || 0, "registros, Total COP:", pagosMesReal?.reduce((acc, curr) => acc + Number(curr.monto || 0), 0) || 0);
+        console.log("🔍 Dashboard - Pagos PAGADOS traídos:", pagosMesReal?.length || 0, "registros, Total COP:", pagosMesReal?.reduce((acc, curr) => acc + Number(curr.monto || 0), 0) || 0);
         
         const totalIngresos = pagosMesReal?.reduce((acc, curr) => acc + Number(curr.monto || 0), 0) || 0;
 
@@ -188,14 +190,15 @@ export default function DashboardPage() {
             .select("*", { count: 'exact', head: true })
             .eq("estado", "activo");
 
-        // 4. Últimos Pagos
+        // 4. Últimos Pagos (solo pagados)
         const { data: dataUltimosPagos } = await supabaseBrowserClient
             .from("pagos")
             .select(`
-                id, monto, created_at,
+                id, monto, created_at, estado,
                 perfiles (nombre_completo),
                 matriculas ( cursos (nombre) )
             `)
+            .eq("estado", "pagado")
             .order("created_at", { ascending: false })
             .limit(5);
 
