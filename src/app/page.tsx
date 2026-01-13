@@ -1,18 +1,22 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Typography, Row, Col, Card, Statistic, List, Avatar, Button, Spin, Tag, Divider, Modal, Form, Input, Space, Switch } from "antd";
+import { 
+  Typography, Row, Col, Card, Statistic, Button, Spin, Tag, Progress, 
+  Empty, Space, Segmented, Tooltip, Badge
+} from "antd";
 import {
-    DollarCircleOutlined, TeamOutlined, BookOutlined,
-    UserOutlined, RiseOutlined, FallOutlined, WalletOutlined,
-    GiftOutlined, WhatsAppOutlined, CalendarOutlined, PlusOutlined, DeleteOutlined, HolderOutlined
+  DollarCircleOutlined, TeamOutlined, BookOutlined, RiseOutlined,
+  FallOutlined, CalendarOutlined, TrophyOutlined, ClockCircleOutlined,
+  UserAddOutlined, WalletOutlined, FileTextOutlined, BankOutlined,
+  GiftOutlined, WarningOutlined, CheckCircleOutlined, SyncOutlined
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { useNavigation } from "@refinedev/core"; // Usamos la navegación de Refine
+import { useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import { formatDate } from "@utils/date";
+import { Line, Column } from "@ant-design/plots";
 import 'dayjs/locale/es';
-import { enviarWhatsapp } from "@utils/whatsapp";
 
 dayjs.locale('es');
 
@@ -20,824 +24,589 @@ const { Title, Text } = Typography;
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const { list } = useNavigation(); // Hook para navegar
+  const router = useRouter();
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
   
-  // Estadísticas
+  // Estadísticas principales
   const [stats, setStats] = useState({
     ingresosMes: 0,
+    ingresosMesAnterior: 0,
     egresosMes: 0,
     estudiantesActivos: 0,
+    estudiantesNuevos: 0,
     cursosActivos: 0,
-    profesores: 0
+    profesores: 0,
+    balanceNeto: 0,
+    tasaConversion: 0
   });
 
-    // Listas recientes
-    const [ultimosPagos, setUltimosPagos] = useState<any[]>([]);
-    const [cumplesHoy, setCumplesHoy] = useState<any[]>([]);
-    const [proximosCursos, setProximosCursos] = useState<any[]>([]);
-    const [inscritosPorCurso, setInscritosPorCurso] = useState<Record<number, number>>({});
-    const [cursosActivosPorPrograma, setCursosActivosPorPrograma] = useState<{
-        programaId: number;
-        programaNombre: string;
-        cursos: { id: number; nombre: string; cuposDisponibles: number | null; cuposTotales: number | null; fecha_inicio: string | null }[];
-    }[]>([]);
-
-    const defaultKpiOrder = ["ingresos", "egresos", "balance", "estudiantes", "cursos", "profesores"];
-    const [kpiOrder, setKpiOrder] = useState<string[]>(defaultKpiOrder);
-
-    const defaultCardOrder = ["proximos", "activos", "cumple", "ingresosRecientes", "accesos"];
-    const [cardOrder, setCardOrder] = useState<string[]>(defaultCardOrder);
-
-    const defaultVisibility = {
-        proximos: true,
-        activos: true,
-        cumple: true,
-        ingresosRecientes: true,
-        accesos: true,
-    };
-    const [cardVisibility, setCardVisibility] = useState(defaultVisibility);
-
-    type QuickLink = { id: string; label: string; href: string; danger?: boolean; primary?: boolean };
-    const defaultQuickLinks: QuickLink[] = [
-        { id: "matriculas", label: "Matricular Estudiante", href: "/matriculas", primary: true },
-        { id: "ingreso", label: "Registrar Ingreso", href: "/tesoreria/create" },
-        { id: "nomina", label: "Pagar Nómina", href: "/nomina", danger: true },
-    ];
-    const [quickLinks, setQuickLinks] = useState<QuickLink[]>(defaultQuickLinks);
-    const [linkModalOpen, setLinkModalOpen] = useState(false);
-    const [linkForm] = Form.useForm();
+  // Datos para gráficos
+  const [ingresosChart, setIngresosChart] = useState<any[]>([]);
+  const [distribucionPagos, setDistribucionPagos] = useState<any[]>([]);
+  
+  // Listas
+  const [pagosRecientes, setPagosRecientes] = useState<any[]>([]);
+  const [cumplesHoy, setCumplesHoy] = useState<any[]>([]);
+  const [proximosCursos, setProximosCursos] = useState<any[]>([]);
+  const [pagosVencidos, setPagosVencidos] = useState<any[]>([]);
 
   useEffect(() => {
-    // Limpiar localStorage para forzar recarga de datos
-    if (typeof window !== "undefined") {
-        window.localStorage.removeItem("dashboardKpiOrder_v1");
-        window.localStorage.removeItem("dashboardQuickLinks_v1");
-        window.localStorage.removeItem("dashboardVisibility_v1");
-        window.localStorage.removeItem("dashboardCardOrder_v1");
-    }
+    cargarDashboard();
     
-    // Cargar datos iniciales
-    cargarDashboardGeneral();
-    
-    // Suscribirse a cambios en tiempo real de las tablas críticas
-    const subscriptionPagos = supabaseBrowserClient
-        .channel('pagos-changes')
-        .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'pagos' },
-            () => {
-                console.log('📡 Cambio detectado en pagos - actualizando dashboard');
-                cargarDashboardGeneral();
-            }
-        )
-        .subscribe();
+    // Actualización en tiempo real
+    const subscription = supabaseBrowserClient
+      .channel('dashboard-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pagos' }, () => cargarDashboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculas' }, () => cargarDashboard())
+      .subscribe();
 
-    const subscriptionNomina = supabaseBrowserClient
-        .channel('nomina-changes')
-        .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'pagos_nomina' },
-            () => {
-                console.log('📡 Cambio detectado en nómina - actualizando dashboard');
-                cargarDashboardGeneral();
-            }
-        )
-        .subscribe();
+    return () => { subscription.unsubscribe(); };
+  }, [timeRange]);
 
-    const subscriptionMatriculas = supabaseBrowserClient
-        .channel('matriculas-changes')
-        .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'matriculas' },
-            () => {
-                console.log('📡 Cambio detectado en matrículas - actualizando dashboard');
-                cargarDashboardGeneral();
-            }
-        )
-        .subscribe();
-
-    const subscriptionCursos = supabaseBrowserClient
-        .channel('cursos-changes')
-        .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'cursos' },
-            () => {
-                console.log('📡 Cambio detectado en cursos - actualizando dashboard');
-                cargarDashboardGeneral();
-            }
-        )
-        .subscribe();
-    
-    return () => {
-        subscriptionPagos.unsubscribe();
-        subscriptionNomina.unsubscribe();
-        subscriptionMatriculas.unsubscribe();
-        subscriptionCursos.unsubscribe();
-    };
-  }, []);
-
-  const cargarDashboardGeneral = async () => {
+  const cargarDashboard = async () => {
     setLoading(true);
     try {
-        // Definir la fecha de hoy
-        const hoy = dayjs();
-        
-        // Forzar queries sin caché agregando timestamp único
-        const timestamp = new Date().getTime();
-        
-        // 1. Ingresos (Tabla 'pagos'): SOLO PAGOS CON ESTADO "pagado"
-        const { data: pagosMes, error: errorPagos } = await supabaseBrowserClient
-            .from("pagos")
-            .select("monto, estado")
-            .eq("estado", "pagado");
-        
-        // Si el dummy filter falla, hacer query normal
-        const { data: pagosMesReal } = !pagosMes ? await supabaseBrowserClient
-            .from("pagos")
-            .select("monto, estado")
-            .eq("estado", "pagado") : { data: pagosMes };
-        
-        console.log("🔍 Dashboard - Pagos PAGADOS traídos:", pagosMesReal?.length || 0, "registros, Total COP:", pagosMesReal?.reduce((acc, curr) => acc + Number(curr.monto || 0), 0) || 0);
-        
-        const totalIngresos = pagosMesReal?.reduce((acc, curr) => acc + Number(curr.monto || 0), 0) || 0;
+      const hoy = dayjs();
+      const inicioMes = hoy.startOf('month').format('YYYY-MM-DD');
+      const finMes = hoy.endOf('month').format('YYYY-MM-DD');
+      const mesAnterior = hoy.subtract(1, 'month');
 
-        // 2. Egresos (Tabla 'pagos_nomina'): SIN FILTRO, SIN CACHÉ
-        const { data: nominaMesReal } = await supabaseBrowserClient
-            .from("pagos_nomina")
-            .select("total_pagado");
-        
-        console.log("🔍 Dashboard - Nóminas traídas:", nominaMesReal?.length || 0, "registros");
-            
-        const totalEgresos = nominaMesReal?.reduce((acc, curr) => acc + Number((curr as any).total_pagado || 0), 0) || 0;
+      // 1. INGRESOS DEL MES ACTUAL
+      const { data: pagosMes } = await supabaseBrowserClient
+        .from("pagos")
+        .select("monto, fecha_pago, estado, metodo_pago")
+        .eq("estado", "pagado")
+        .gte("fecha_pago", inicioMes)
+        .lte("fecha_pago", finMes);
 
-        // 3. Contadores básicos alineados a datos reales
-        const { data: matriculasActivas } = await supabaseBrowserClient
-            .from("matriculas")
-            .select("estudiante_id")
-            .eq("estado", "activo");
+      const totalIngresos = pagosMes?.reduce((sum, p) => sum + Number(p.monto || 0), 0) || 0;
 
-        const estudiantesActivosUnicos = new Set(
-            (matriculasActivas || []).map((m: any) => m.estudiante_id)
-        ).size;
+      // 2. INGRESOS MES ANTERIOR (para comparación)
+      const { data: pagosMesAnterior } = await supabaseBrowserClient
+        .from("pagos")
+        .select("monto")
+        .eq("estado", "pagado")
+        .gte("fecha_pago", mesAnterior.startOf('month').format('YYYY-MM-DD'))
+        .lte("fecha_pago", mesAnterior.endOf('month').format('YYYY-MM-DD'));
 
-        const { count: countProfes } = await supabaseBrowserClient
-            .from("perfiles")
-            .select("*", { count: 'exact', head: true })
-            .eq("rol", "profesor");
+      const ingresosMesAnterior = pagosMesAnterior?.reduce((sum, p) => sum + Number(p.monto || 0), 0) || 0;
 
-        const { count: countCursosActivos } = await supabaseBrowserClient
-            .from("cursos")
-            .select("*", { count: 'exact', head: true })
-            .eq("estado", "activo");
+      // 3. EGRESOS (NÓMINA)
+      const { data: nomina } = await supabaseBrowserClient
+        .from("pagos_nomina")
+        .select("total_pagado")
+        .gte("fecha_pago", inicioMes)
+        .lte("fecha_pago", finMes);
 
-        // 4. Últimos Pagos (solo pagados)
-        const { data: dataUltimosPagos } = await supabaseBrowserClient
-            .from("pagos")
-            .select(`
-                id, monto, created_at, estado,
-                perfiles (nombre_completo),
-                matriculas ( cursos (nombre) )
-            `)
-            .eq("estado", "pagado")
-            .order("created_at", { ascending: false })
-            .limit(5);
+      const totalEgresos = nomina?.reduce((sum, n) => sum + Number(n.total_pagado || 0), 0) || 0;
 
-        // 5. Cumpleaños del día (estudiantes activos)
-        // No podemos hacer LIKE en fecha directamente, traemos todos y filtramos
-        const { data: dataCumplesRaw } = await supabaseBrowserClient
-            .from("perfiles")
-            .select(`
-              id,
-              nombre_completo,
-              telefono,
-              telefono_2,
-              fecha_nacimiento,
-              matriculas!inner(estado)
-            `)
-            .eq("rol", "estudiante")
-            .eq("matriculas.estado", "activo")
-            .not("fecha_nacimiento", "is", null);
+      // 4. ESTUDIANTES ACTIVOS
+      const { data: matriculasActivas } = await supabaseBrowserClient
+        .from("matriculas")
+        .select("estudiante_id, created_at")
+        .eq("estado", "activo");
 
-        // Filtrar por mes y día actual
-        const mesHoy = hoy.format('MM');
-        const diaHoy = hoy.format('DD');
-        const dataCumples = dataCumplesRaw?.filter(perfil => {
-            if (!perfil.fecha_nacimiento) return false;
-            const fecha = dayjs(perfil.fecha_nacimiento);
-            return fecha.format('MM-DD') === `${mesHoy}-${diaHoy}`;
-        }) || [];
+      const estudiantesUnicos = new Set(matriculasActivas?.map(m => m.estudiante_id) || []);
+      const estudiantesNuevosMes = matriculasActivas?.filter(m => 
+        dayjs(m.created_at).isAfter(inicioMes)
+      ).length || 0;
 
-        // Evitamos duplicados si un estudiante tiene más de una matrícula activa
-        const cumpleUnicos = Array.from(
-            new Map((dataCumples || []).map((item) => [item.id, item])).values()
-        );
+      // 5. CURSOS Y PROFESORES
+      const { count: cursosActivos } = await supabaseBrowserClient
+        .from("cursos")
+        .select("*", { count: 'exact', head: true })
+        .eq("estado", "activo");
 
-        // 6. Próximos cursos a iniciar
-        const { data: dataProximosCursos } = await supabaseBrowserClient
-            .from("cursos")
-            .select("id, nombre, fecha_inicio, cupos, estado")
-            .gte("fecha_inicio", hoy.format('YYYY-MM-DD'))
-            .in("estado", ["proximo", "activo"])
-            .order("fecha_inicio", { ascending: true })
-            .limit(5);
+      const { count: profesores } = await supabaseBrowserClient
+        .from("perfiles")
+        .select("*", { count: 'exact', head: true })
+        .eq("rol", "profesor");
 
-        const proximos = dataProximosCursos || [];
-        let ocupados: Record<number, number> = {};
+      // 6. PAGOS RECIENTES (últimos 8)
+      const { data: pagosRec } = await supabaseBrowserClient
+        .from("pagos")
+        .select("id, monto, fecha_pago, metodo_pago, estado, perfiles(nombre_completo)")
+        .eq("estado", "pagado")
+        .order("fecha_pago", { ascending: false })
+        .limit(8);
 
-        if (proximos.length) {
-            const cursoIds = proximos.map((c: any) => c.id);
-            const { data: dataMatriculas } = await supabaseBrowserClient
-                .from("matriculas")
-                .select("curso_id")
-                .in("curso_id", cursoIds)
-                .eq("estado", "activo");
+      // 7. CUMPLEAÑOS HOY
+      const { data: perfilesEstudiantes } = await supabaseBrowserClient
+        .from("perfiles")
+        .select("id, nombre_completo, telefono, fecha_nacimiento, matriculas!inner(estado)")
+        .eq("rol", "estudiante")
+        .eq("matriculas.estado", "activo")
+        .not("fecha_nacimiento", "is", null);
 
-            const conteo: Record<number, number> = {};
-            (dataMatriculas || []).forEach((m: any) => {
-                const id = Number(m.curso_id);
-                conteo[id] = (conteo[id] || 0) + 1;
-            });
-            ocupados = conteo;
-        }
+      const cumples = perfilesEstudiantes?.filter(p => {
+        const fecha = dayjs(p.fecha_nacimiento);
+        return fecha.format('MM-DD') === hoy.format('MM-DD');
+      }) || [];
 
-        // 7. Cursos activos agrupados por programa
-        const { data: dataCursosActivos } = await supabaseBrowserClient
-            .from("cursos")
-            .select("id, nombre, cupos, fecha_inicio, programa_id, matriculas(count)")
-            .eq("estado", "activo");
+      // 8. PRÓXIMOS CURSOS
+      const { data: proxCursos } = await supabaseBrowserClient
+        .from("cursos")
+        .select("id, nombre, fecha_inicio, cupos, estado, matriculas(count)")
+        .gte("fecha_inicio", hoy.format('YYYY-MM-DD'))
+        .in("estado", ["proximo", "activo"])
+        .order("fecha_inicio", { ascending: true })
+        .limit(6);
 
-        const { data: dataProgramas } = await supabaseBrowserClient
-            .from("programas")
-            .select("id, nombre");
+      // 9. PAGOS VENCIDOS
+      const { data: vencidos } = await supabaseBrowserClient
+        .from("pagos")
+        .select("id, monto, fecha_vencimiento, perfiles(nombre_completo), periodo_pagado")
+        .eq("estado", "pendiente")
+        .lt("fecha_vencimiento", hoy.format('YYYY-MM-DD'))
+        .order("fecha_vencimiento", { ascending: true })
+        .limit(5);
 
-        const programasMap = new Map<number, string>();
-        (dataProgramas || []).forEach((p: any) => {
-            programasMap.set(Number(p.id), p.nombre);
+      // 10. DATOS PARA GRÁFICO DE INGRESOS (últimos 7 días)
+      const chartData = [];
+      for (let i = 6; i >= 0; i--) {
+        const fecha = hoy.subtract(i, 'day');
+        const fechaStr = fecha.format('YYYY-MM-DD');
+        const pagos = pagosMes?.filter(p => 
+          dayjs(p.fecha_pago).format('YYYY-MM-DD') === fechaStr
+        ) || [];
+        const total = pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0);
+        chartData.push({
+          fecha: fecha.format('DD MMM'),
+          monto: total,
+          cantidad: pagos.length
         });
+      }
 
-        const agrupadoPorPrograma: Record<number, { id: number; nombre: string; cuposDisponibles: number | null; cuposTotales: number | null; fecha_inicio: string | null }[]> = {};
+      // 11. DISTRIBUCIÓN POR MÉTODO DE PAGO
+      const metodos: Record<string, number> = {};
+      pagosMes?.forEach(p => {
+        const metodo = p.metodo_pago || 'Efectivo';
+        metodos[metodo] = (metodos[metodo] || 0) + Number(p.monto || 0);
+      });
+      const distribucion = Object.entries(metodos).map(([metodo, monto]) => ({
+        metodo,
+        monto
+      }));
 
-        (dataCursosActivos || []).forEach((curso: any) => {
-            const inscritos = curso?.matriculas?.[0]?.count ?? 0;
-            const cuposTotales = curso?.cupos ?? null;
-            const cuposDisponibles = cuposTotales !== null ? Math.max(cuposTotales - inscritos, 0) : null;
-            const key = Number(curso.programa_id);
-            if (!agrupadoPorPrograma[key]) agrupadoPorPrograma[key] = [];
-            agrupadoPorPrograma[key].push({
-                id: curso.id,
-                nombre: curso.nombre,
-                cuposDisponibles,
-                cuposTotales,
-                fecha_inicio: curso.fecha_inicio || null,
-            });
-        });
+      setStats({
+        ingresosMes: totalIngresos,
+        ingresosMesAnterior,
+        egresosMes: totalEgresos,
+        estudiantesActivos: estudiantesUnicos.size,
+        estudiantesNuevos: estudiantesNuevosMes,
+        cursosActivos: cursosActivos || 0,
+        profesores: profesores || 0,
+        balanceNeto: totalIngresos - totalEgresos,
+        tasaConversion: ((estudiantesNuevosMes / (proximosCursos?.length || 1)) * 100)
+      });
 
-        const agrupadoLista = Object.entries(agrupadoPorPrograma).map(([programaId, cursos]) => ({
-            programaId: Number(programaId),
-            programaNombre: programasMap.get(Number(programaId)) || "Programa",
-            cursos: cursos.sort((a, b) => {
-                if (!a.fecha_inicio) return 1;
-                if (!b.fecha_inicio) return -1;
-                return dayjs(a.fecha_inicio).diff(dayjs(b.fecha_inicio));
-            })
-        }));
-
-        setStats({
-            ingresosMes: totalIngresos,
-            egresosMes: totalEgresos,
-            estudiantesActivos: estudiantesActivosUnicos,
-            cursosActivos: countCursosActivos || 0,
-            profesores: countProfes || 0
-        });
-
-        setUltimosPagos(dataUltimosPagos || []);
-        setCumplesHoy(cumpleUnicos);
-        setProximosCursos(proximos);
-        setInscritosPorCurso(ocupados);
-        setCursosActivosPorPrograma(agrupadoLista);
-
-        // Ocultar tarjetas vacías automáticamente
-        setCardVisibility({
-            proximos: (proximos || []).length > 0,
-            activos: (agrupadoLista || []).length > 0,
-            cumple: (cumpleUnicos || []).length > 0,
-            ingresosRecientes: (dataUltimosPagos || []).length > 0,
-            accesos: true,
-        });
+      setIngresosChart(chartData);
+      setDistribucionPagos(distribucion);
+      setPagosRecientes(pagosRec || []);
+      setCumplesHoy(cumples);
+      setProximosCursos(proxCursos || []);
+      setPagosVencidos(vencidos || []);
 
     } catch (error) {
-        console.error("Error cargando dashboard:", error);
+      console.error("Error cargando dashboard:", error);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
-    const persistKpis = (order: string[]) => {
-        setKpiOrder(order);
-        if (typeof window !== "undefined") {
-                window.localStorage.setItem("dashboardKpiOrder_v1", JSON.stringify(order));
-        }
-    };
-
-    const persistLinks = (links: QuickLink[]) => {
-        setQuickLinks(links);
-        if (typeof window !== "undefined") {
-                window.localStorage.setItem("dashboardQuickLinks_v1", JSON.stringify(links));
-        }
-    };
-
-    const persistVisibility = (vis: typeof defaultVisibility) => {
-        setCardVisibility(vis);
-        if (typeof window !== "undefined") {
-                window.localStorage.setItem("dashboardVisibility_v1", JSON.stringify(vis));
-        }
-    };
-
-    const persistCards = (order: string[]) => {
-        setCardOrder(order);
-        if (typeof window !== "undefined") {
-                window.localStorage.setItem("dashboardCardOrder_v1", JSON.stringify(order));
-        }
-    };
-
-    const handleKpiDrop = (fromId: string, toId: string) => {
-        if (fromId === toId) return;
-        const current = [...kpiOrder];
-        const fromIndex = current.indexOf(fromId);
-        const toIndex = current.indexOf(toId);
-        if (fromIndex === -1 || toIndex === -1) return;
-        current.splice(fromIndex, 1);
-        current.splice(toIndex, 0, fromId);
-        persistKpis(current);
-    };
-
-    const handleLinkDrop = (fromId: string, toId: string) => {
-        if (fromId === toId) return;
-        const current = [...quickLinks];
-        const fromIndex = current.findIndex((l) => l.id === fromId);
-        const toIndex = current.findIndex((l) => l.id === toId);
-        if (fromIndex === -1 || toIndex === -1) return;
-        const [item] = current.splice(fromIndex, 1);
-        current.splice(toIndex, 0, item);
-        persistLinks(current);
-    };
-
-    const handleCardDrop = (fromId: string, toId: string) => {
-        if (fromId === toId) return;
-        const current = [...cardOrder];
-        const fromIndex = current.indexOf(fromId);
-        const toIndex = current.indexOf(toId);
-        if (fromIndex === -1 || toIndex === -1) return;
-        current.splice(fromIndex, 1);
-        current.splice(toIndex, 0, fromId);
-        persistCards(current);
-    };
-
-    const handleAddLink = () => {
-        linkForm.validateFields().then((values) => {
-                const href = values.href.startsWith("/") ? values.href : `/${values.href}`;
-                const newLink: QuickLink = {
-                        id: `${values.label}-${Date.now()}`,
-                        label: values.label,
-                        href,
-                };
-                const updated = [...quickLinks, newLink];
-                persistLinks(updated);
-                linkForm.resetFields();
-                setLinkModalOpen(false);
-        });
-    };
-
-    const handleRemoveLink = (id: string) => {
-        const filtered = quickLinks.filter((l) => l.id !== id);
-        persistLinks(filtered);
-    };
-
-    const resetLayout = () => {
-        persistKpis(defaultKpiOrder);
-        persistLinks(defaultQuickLinks);
-        persistVisibility(defaultVisibility);
-        persistCards(defaultCardOrder);
-    };
-
-  const balanceNeto = stats.ingresosMes - stats.egresosMes;
-
-    const felicitar = (estudiante: any) => {
-        const telefono = estudiante.telefono || estudiante.telefono_2;
-        const primerNombre = estudiante.nombre_completo?.split(" ")[0] || "";
-        const edad = estudiante.fecha_nacimiento ? dayjs().diff(dayjs(estudiante.fecha_nacimiento), 'year') : undefined;
-        const mensajeBase = `Hola ${primerNombre}! 🎉 Desde Crystal queremos desearte un feliz cumpleaños. Que este nuevo año esté lleno de logros y aprendizaje.`;
-        const mensaje = edad ? `${mensajeBase} ¡Felices ${edad}!` : mensajeBase;
-        enviarWhatsapp(telefono, mensaje);
-    };
-
-  // Función genérica para navegar
-  const irA = (ruta: string) => {
-      window.location.href = ruta;
-  };
-
-  const renderCard = (cardId: string) => {
-        if (cardId === "proximos") {
-            return (
-                <Card
-                    title={<Space size={6}><HolderOutlined style={{ fontSize: 12, color: '#999' }} />📅 Próximos grupos</Space>}
-                    extra={<Tag color="blue">{proximosCursos.length} grupo(s)</Tag>}
-                    style={{ height: 240 }}
-                    styles={{ body: { padding: 8, maxHeight: 190, overflow: 'auto' } }}
-                >
-                        <List
-                            itemLayout="horizontal"
-                            dataSource={proximosCursos.slice(0, 3)}
-                            renderItem={(curso) => {
-                                const inscritos = inscritosPorCurso[curso.id] || 0;
-                                const cuposDisponibles = curso.cupos !== null && curso.cupos !== undefined
-                                    ? Math.max(curso.cupos - inscritos, 0)
-                                    : null;
-
-                                return (
-                                <List.Item style={{ padding: '4px 0' }}>
-                                        <List.Item.Meta
-                                            avatar={<Avatar size="small" style={{ backgroundColor: '#e6f7ff', color: '#1890ff' }} icon={<CalendarOutlined />} />}
-                                            title={<Text strong>{curso.nombre}</Text>}
-                                            description={
-                                                <span>
-                                                    Inicio: {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format("DD MMM") : "Sin fecha"}
-                                                    {cuposDisponibles !== null ? ` • Cupos libres: ${cuposDisponibles}/${curso.cupos}` : ''}
-                                                </span>
-                                            }
-                                        />
-                                    </List.Item>
-                                );
-                            }}
-                        />
-                    {proximosCursos.length === 0 && <div style={{ padding: 8, textAlign: 'center', color: '#999' }}>No hay grupos próximos registrados.</div>}
-                </Card>
-            );
-        }
-
-        if (cardId === "activos") {
-            return (
-                <Card
-                    title={<Space size={6}><HolderOutlined style={{ fontSize: 12, color: '#999' }} />🏷️ Grupos activos por programa</Space>}
-                    extra={<Tag color="green">{cursosActivosPorPrograma.length} programa(s)</Tag>}
-                    style={{ height: 240 }}
-                    styles={{ body: { padding: 8, maxHeight: 190, overflow: 'auto' } }}
-                >
-                    {cursosActivosPorPrograma.length === 0 ? (
-                        <div style={{ padding: 10, textAlign: "center", color: "#999" }}>No hay grupos activos</div>
-                    ) : (
-                        <List
-                            dataSource={cursosActivosPorPrograma}
-                            renderItem={(prog) => (
-                                <List.Item style={{ padding: '3px 0' }}>
-                                    <List.Item.Meta
-                                        title={<Text strong>{prog.programaNombre}</Text>}
-                                        description={
-                                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                                        {prog.cursos.map((curso) => {
-                                                            const cuposInfo =
-                                                                curso.cuposDisponibles !== null && curso.cuposTotales !== null
-                                                                    ? `Cupos ${curso.cuposDisponibles}/${curso.cuposTotales}`
-                                                                    : "Cupos N/D";
-                                                            const fecha = curso.fecha_inicio
-                                                                ? formatDate(curso.fecha_inicio)
-                                                                : "Sin fecha";
-                                                            return (
-                                                                <div key={curso.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid #f0f0f0", borderRadius: 6, padding: "4px 8px", background: "#fafafa" }}>
-                                                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                                                                        <Tag color={curso.cuposDisponibles && curso.cuposDisponibles <= 5 ? "orange" : "blue"} style={{ margin: 0 }}>
-                                                                            {curso.nombre}
-                                                                        </Tag>
-                                                                        <Text type="secondary" style={{ fontSize: 12 }}>
-                                                                            {fecha} · {cuposInfo}
-                                                                        </Text>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                        }
-                                    />
-                                </List.Item>
-                            )}
-                        />
-                    )}
-                </Card>
-            );
-        }
-
-        if (cardId === "cumple") {
-            return (
-                <Card
-                    title={<Space size={6}><HolderOutlined style={{ fontSize: 12, color: '#999' }} />🎂 Cumpleaños hoy</Space>}
-                    extra={<Tag color="magenta">{cumplesHoy.length}</Tag>}
-                    style={{ height: 240 }}
-                    styles={{ body: { padding: 8, maxHeight: 190, overflow: 'auto' } }}
-                >
-                    <List
-                        itemLayout="horizontal"
-                        dataSource={cumplesHoy.slice(0, 3)}
-                        renderItem={(item) => (
-                            <List.Item
-                                style={{ padding: '4px 0' }}
-                                actions={[
-                                    <Button
-                                        key="felicitar"
-                                        type="primary"
-                                        icon={<WhatsAppOutlined />}
-                                        size="small"
-                                        onClick={() => felicitar(item)}
-                                    />
-                                ]}
-                            >
-                                <List.Item.Meta
-                                    avatar={<Avatar size="small" style={{ backgroundColor: '#fff1f0', color: '#d4380d' }} icon={<GiftOutlined />} />}
-                                    title={<Text strong>{item.nombre_completo || "Estudiante"}</Text>}
-                                    description={
-                                        <span>
-                                            {item.fecha_nacimiento ? dayjs(item.fecha_nacimiento).format("DD MMM") : "Sin fecha"}
-                                            {item.telefono && ` • ${item.telefono}`}
-                                            {!item.telefono && item.telefono_2 && ` • ${item.telefono_2}`}
-                                        </span>
-                                    }
-                                />
-                            </List.Item>
-                        )}
-                    />
-                    {cumplesHoy.length === 0 && <div style={{ padding: 8, textAlign: 'center', color: '#999' }}>No hay estudiantes de cumpleaños hoy.</div>}
-                </Card>
-            );
-        }
-
-        if (cardId === "ingresosRecientes") {
-            return (
-                <Card
-                    title={<Space size={6}><HolderOutlined style={{ fontSize: 12, color: '#999' }} />💰 Ingresos Recientes</Space>}
-                    extra={<Button type="link" size="small" onClick={() => irA('/tesoreria')}>Ver todo</Button>}
-                    style={{ height: 240 }}
-                    styles={{ body: { padding: 8, maxHeight: 190, overflow: 'auto' } }}
-                >
-                    <List
-                        itemLayout="horizontal"
-                        dataSource={ultimosPagos.slice(0, 5)}
-                        renderItem={(item) => (
-                            <List.Item style={{ padding: '4px 0' }}>
-                                <List.Item.Meta
-                                    avatar={<Avatar style={{backgroundColor: '#f6ffed', color: '#52c41a'}} icon={<DollarCircleOutlined />} />}
-                                    title={<Text strong>{item.perfiles?.nombre_completo || "Estudiante"}</Text>}
-                                    description={
-                                        <span>
-                                            {dayjs(item.created_at).format("DD MMM h:mm A")} • 
-                                            {item.matriculas?.cursos?.nombre ? ` Grupo: ${item.matriculas.cursos.nombre}` : ' Pago general'}
-                                        </span>
-                                    }
-                                />
-                                <div style={{fontWeight: 'bold', color: '#3f8600'}}>
-                                    + ${Number(item.monto).toLocaleString()}
-                                </div>
-                            </List.Item>
-                        )}
-                    />
-                    {ultimosPagos.length === 0 && <div style={{padding:20, textAlign:'center', color:'#999'}}>No hay pagos recientes</div>}
-                </Card>
-            );
-        }
-
-        if (cardId === "accesos") {
-            return (
-                <Card
-                    title={<Space size={6}><HolderOutlined style={{ fontSize: 12, color: '#999' }} />⚡ Accesos Directos</Space>}
-                    extra={
-                        <Space size={6}>
-                            <Button size="small" icon={<PlusOutlined />} onClick={() => setLinkModalOpen(true)} />
-                            <Button size="small" onClick={resetLayout}>Reset</Button>
-                        </Space>
-                    }
-                    styles={{ body: { padding: 10 } }}
-                    style={{ height: 240 }}
-                >
-                    <Space direction="vertical" style={{ width: "100%" }} size={6}>
-                        {quickLinks.map((link) => (
-                            <div
-                                key={link.id}
-                                draggable
-                                onDragStart={(e) => e.dataTransfer.setData("quicklink", link.id)}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                    const from = e.dataTransfer.getData("quicklink");
-                                    handleLinkDrop(from, link.id);
-                                }}
-                            >
-                                <Button
-                                    block
-                                    size="middle"
-                                    type={link.primary ? "primary" : "default"}
-                                    danger={link.danger}
-                                    icon={<HolderOutlined />}
-                                    onClick={() => irA(link.href)}
-                                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                                >
-                                    <span>{link.label}</span>
-                                    <DeleteOutlined
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleRemoveLink(link.id);
-                                        }}
-                                    />
-                                </Button>
-                            </div>
-                        ))}
-                    </Space>
-
-                    <Divider />
-                    
-                    <div style={{ background: '#fff7e6', padding: 10, borderRadius: 8, border: '1px solid #ffd591' }}>
-                        <Text strong style={{ color: '#d46b08' }}>💡 Tip:</Text>
-                        <p style={{ marginTop: 4, fontSize: 12, color: '#874d00' }}>
-                           Arrastra para reordenar accesos. Usa “+” para agregar uno propio.
-                        </p>
-                    </div>
-                </Card>
-            );
-        }
-
-        return null;
-  };
-
-  if (loading) return <div style={{padding: 50, textAlign: 'center'}}><Spin size="large"/></div>;
-
+  if (loading) {
     return (
-        <div style={{ padding: 8 }}>
-            <div style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                <div>
-                    <Title level={4} style={{ margin: 0 }}>¡Hola, Director! 👋</Title>
-                    <Text type="secondary">Datos en tiempo real {loading && <Spin size="small" style={{ marginLeft: 8 }} />}</Text>
-                </div>
-                <Space size={8} wrap>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Mostrar</Text>
-                    <Switch size="small" checked={cardVisibility.proximos} onChange={(v) => persistVisibility({ ...cardVisibility, proximos: v })} checkedChildren="Próx" unCheckedChildren="Próx" />
-                    <Switch size="small" checked={cardVisibility.activos} onChange={(v) => persistVisibility({ ...cardVisibility, activos: v })} checkedChildren="Activos" unCheckedChildren="Activos" />
-                    <Switch size="small" checked={cardVisibility.cumple} onChange={(v) => persistVisibility({ ...cardVisibility, cumple: v })} checkedChildren="Cumple" unCheckedChildren="Cumple" />
-                    <Switch size="small" checked={cardVisibility.ingresosRecientes} onChange={(v) => persistVisibility({ ...cardVisibility, ingresosRecientes: v })} checkedChildren="Ingresos" unCheckedChildren="Ingresos" />
-                    <Switch size="small" checked={cardVisibility.accesos} onChange={(v) => persistVisibility({ ...cardVisibility, accesos: v })} checkedChildren="Accesos" unCheckedChildren="Accesos" />
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  const cambioIngresos = stats.ingresosMesAnterior > 0 
+    ? ((stats.ingresosMes - stats.ingresosMesAnterior) / stats.ingresosMesAnterior * 100).toFixed(1)
+    : 0;
+
+  const lineConfig = {
+    data: ingresosChart,
+    xField: 'fecha',
+    yField: 'monto',
+    smooth: true,
+    color: '#52c41a',
+    point: {
+      size: 5,
+      shape: 'circle',
+    },
+    label: {
+      style: {
+        fill: '#aaa',
+      },
+    },
+  };
+
+  const columnConfig = {
+    data: distribucionPagos,
+    xField: 'metodo',
+    yField: 'monto',
+    seriesField: 'metodo',
+    color: ({ metodo }: any) => {
+      const colors: Record<string, string> = {
+        'efectivo': '#52c41a',
+        'transferencia': '#1890ff',
+        'tarjeta': '#722ed1',
+        'nequi': '#fa8c16',
+        'otro': '#8c8c8c'
+      };
+      return colors[metodo?.toLowerCase()] || '#8c8c8c';
+    },
+    label: {
+      position: 'top',
+      style: {
+        fill: '#000',
+        opacity: 0.6,
+      },
+    },
+  };
+
+  return (
+    <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
+      {/* Header */}
+      <div style={{ 
+        marginBottom: 24, 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16
+      }}>
+        <div>
+          <Title level={2} style={{ margin: 0, color: '#262626' }}>
+            Dashboard Ejecutivo
+          </Title>
+          <Text type="secondary">{dayjs().format('dddd, D [de] MMMM [de] YYYY')}</Text>
+        </div>
+        <Space>
+          <Segmented
+            options={[
+              { label: 'Semana', value: 'week' },
+              { label: 'Mes', value: 'month' },
+              { label: 'Año', value: 'year' },
+            ]}
+            value={timeRange}
+            onChange={(value: any) => setTimeRange(value)}
+          />
+          <Button 
+            icon={<SyncOutlined />} 
+            onClick={cargarDashboard}
+            type="primary"
+          >
+            Actualizar
+          </Button>
+        </Space>
+      </div>
+
+      {/* KPIs Principales */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} lg={6}>
+          <Card variant="borderless" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', boxShadow: '0 4px 12px rgba(30, 58, 138, 0.2)' }}>
+            <Statistic
+              title={<span style={{ color: '#fff', fontWeight: 600 }}>Ingresos del Mes</span>}
+              value={stats.ingresosMes}
+              precision={0}
+              valueStyle={{ color: '#fff', fontWeight: 'bold' }}
+              prefix={<DollarCircleOutlined style={{ color: '#fff' }} />}
+              suffix={
+                <Tag color={Number(cambioIngresos) >= 0 ? 'success' : 'error'} icon={Number(cambioIngresos) >= 0 ? <RiseOutlined /> : <FallOutlined />}>
+                  {cambioIngresos}%
+                </Tag>
+              }
+            />
+          </Card>
+        </Col>
+        
+        <Col xs={24} sm={12} lg={6}>
+          <Card variant="borderless" style={{ background: 'linear-gradient(135deg, #be123c 0%, #f43f5e 100%)', boxShadow: '0 4px 12px rgba(190, 18, 60, 0.2)' }}>
+            <Statistic
+              title={<span style={{ color: '#fff', fontWeight: 600 }}>Egresos (Nómina)</span>}
+              value={stats.egresosMes}
+              precision={0}
+              valueStyle={{ color: '#fff', fontWeight: 'bold' }}
+              prefix={<WalletOutlined style={{ color: '#fff' }} />}
+            />
+          </Card>
+        </Col>
+
+        <Col xs={24} sm={12} lg={6}>
+          <Card variant="borderless" style={{ background: 'linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)', boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)' }}>
+            <Statistic
+              title={<span style={{ color: '#fff', fontWeight: 600 }}>Balance Neto</span>}
+              value={stats.balanceNeto}
+              precision={0}
+              valueStyle={{ color: '#fff', fontWeight: 'bold' }}
+              prefix={<BankOutlined style={{ color: '#fff' }} />}
+            />
+          </Card>
+        </Col>
+
+        <Col xs={24} sm={12} lg={6}>
+          <Card variant="borderless" style={{ background: 'linear-gradient(135deg, #15803d 0%, #22c55e 100%)', boxShadow: '0 4px 12px rgba(21, 128, 61, 0.2)' }}>
+            <Statistic
+              title={<span style={{ color: '#fff', fontWeight: 600 }}>Estudiantes Activos</span>}
+              value={stats.estudiantesActivos}
+              valueStyle={{ color: '#fff', fontWeight: 'bold' }}
+              prefix={<TeamOutlined style={{ color: '#fff' }} />}
+              suffix={
+                <Badge count={`+${stats.estudiantesNuevos} nuevos`} style={{ backgroundColor: '#dcfce7', color: '#15803d', fontWeight: 600 }} />
+              }
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Accesos Rápidos */}
+      <Card 
+        title="Acciones Rápidas" 
+        variant="outlined"
+        style={{ marginBottom: 24 }}
+      >
+        <Space size="middle" wrap>
+          <Button 
+            type="primary" 
+            size="large"
+            icon={<UserAddOutlined />}
+            onClick={() => router.push('/matriculas/create')}
+          >
+            Nueva Matrícula
+          </Button>
+          <Button 
+            size="large"
+            icon={<DollarCircleOutlined />}
+            onClick={() => router.push('/tesoreria/create')}
+          >
+            Registrar Pago
+          </Button>
+          <Button 
+            size="large"
+            icon={<BookOutlined />}
+            onClick={() => router.push('/cursos/create')}
+          >
+            Nuevo Grupo
+          </Button>
+          <Button 
+            size="large"
+            icon={<FileTextOutlined />}
+            onClick={() => router.push('/nomina')}
+          >
+            Ver Nómina
+          </Button>
+        </Space>
+      </Card>
+
+      {/* Gráficos */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} lg={16}>
+          <Card title="Ingresos de los últimos 7 días" variant="borderless">
+            <Line {...lineConfig} height={300} />
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={8}>
+          <Card title="Distribución por Método de Pago" variant="borderless">
+            <Column {...columnConfig} height={300} />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Alertas y Acciones Importantes */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        {pagosVencidos.length > 0 && (
+          <Col xs={24} lg={12}>
+            <Card 
+              title={
+                <Space>
+                  <WarningOutlined style={{ color: '#ff4d4f' }} />
+                  Pagos Vencidos ({pagosVencidos.length})
                 </Space>
-            </div>
-
-            {/* --- KPIs RÁPIDOS --- */}
-            <Row gutter={[6, 6]} style={{ marginBottom: 8 }}>
-                {kpiOrder.map((kpiId) => {
-                    const commonProps = {
-                        size: "small" as const,
-                        hoverable: true,
-                        style: { cursor: "grab" as const },
-                        draggable: true,
-                        onDragStart: (e: React.DragEvent) => e.dataTransfer.setData("kpi", kpiId),
-                        onDragOver: (e: React.DragEvent) => e.preventDefault(),
-                        onDrop: (e: React.DragEvent) => {
-                            const from = e.dataTransfer.getData("kpi");
-                            handleKpiDrop(from, kpiId);
-                        },
-                    };
-
-                    if (kpiId === "ingresos") {
-                        return (
-                            <Col key={kpiId} xs={12} md={8} lg={6}>
-                                <Card {...commonProps} onClick={() => irA('/tesoreria')} style={{ ...commonProps.style, background: '#f6ffed', borderColor: '#b7eb8f' }}>
-                                    <Statistic 
-                                        title={<div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><span>Ingresos</span> <HolderOutlined style={{fontSize:10}}/></div>}
-                                        value={stats.ingresosMes}
-                                        precision={0}
-                                        prefix={<DollarCircleOutlined style={{color: '#52c41a'}}/>}
-                                        valueStyle={{ color: '#3f8600', fontWeight: 700 }}
-                                        suffix="COP"
-                                    />
-                                </Card>
-                            </Col>
-                        );
-                    }
-                    if (kpiId === "egresos") {
-                        return (
-                            <Col key={kpiId} xs={12} md={8} lg={6}>
-                                <Card {...commonProps} onClick={() => irA('/nomina')} style={{ ...commonProps.style, background: '#fff1f0', borderColor: '#ffa39e' }}>
-                                    <Statistic 
-                                        title={<div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><span>Nómina</span> <HolderOutlined style={{fontSize:10}}/></div>}
-                                        value={stats.egresosMes}
-                                        precision={0}
-                                        prefix={<FallOutlined style={{color: '#cf1322'}}/>}
-                                        valueStyle={{ color: '#cf1322', fontWeight: 700 }}
-                                        suffix="COP"
-                                    />
-                                </Card>
-                            </Col>
-                        );
-                    }
-                    if (kpiId === "balance") {
-                        return (
-                            <Col key={kpiId} xs={12} md={8} lg={6}>
-                                <Card {...commonProps} onClick={() => irA('/tesoreria')} style={{ ...commonProps.style, background: '#f0f5ff', borderColor: '#adc6ff' }}>
-                                    <Statistic 
-                                        title={<div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><span>Balance</span> <HolderOutlined style={{fontSize:10}}/></div>}
-                                        value={balanceNeto}
-                                        precision={0}
-                                        prefix={<WalletOutlined style={{color: '#2f54eb'}}/>}
-                                        valueStyle={{ color: balanceNeto >= 0 ? '#1d39c4' : '#cf1322', fontWeight: 700 }}
-                                        suffix="COP"
-                                    />
-                                </Card>
-                            </Col>
-                        );
-                    }
-                    if (kpiId === "estudiantes") {
-                        return (
-                            <Col key={kpiId} xs={12} md={8} lg={6}>
-                                <Card {...commonProps} onClick={() => irA('/estudiantes')}>
-                                    <Statistic 
-                                        title={<div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><span>Estudiantes</span> <HolderOutlined style={{fontSize:10}}/></div>}
-                                        value={stats.estudiantesActivos} 
-                                        prefix={<UserOutlined style={{color: '#1890ff'}} />} 
-                                    />
-                                </Card>
-                            </Col>
-                        );
-                    }
-                    if (kpiId === "cursos") {
-                        return (
-                            <Col key={kpiId} xs={12} md={8} lg={6}>
-                                <Card {...commonProps} onClick={() => irA('/cursos')}>
-                                    <Statistic 
-                                        title={<div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><span>Grupos</span> <HolderOutlined style={{fontSize:10}}/></div>}
-                                        value={stats.cursosActivos} 
-                                        prefix={<BookOutlined style={{color: '#fa8c16'}} />} 
-                                    />
-                                </Card>
-                            </Col>
-                        );
-                    }
-                    if (kpiId === "profesores") {
-                        return (
-                            <Col key={kpiId} xs={12} md={8} lg={6}>
-                                <Card {...commonProps} onClick={() => irA('/profesores')}>
-                                    <Statistic 
-                                        title={<div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><span>Profesores</span> <HolderOutlined style={{fontSize:10}}/></div>}
-                                        value={stats.profesores} 
-                                        prefix={<TeamOutlined style={{color: '#eb2f96'}} />} 
-                                    />
-                                </Card>
-                            </Col>
-                        );
-                    }
-                    return null;
-                })}
-            </Row>
-
-        {/* --- BLOQUE DE TARJETAS REORDENABLES --- */}
-        <Row gutter={[8, 8]}>
-            {cardOrder
-                .filter((cardId) => {
-                    if (cardId === "ingresosRecientes") return cardVisibility.ingresosRecientes;
-                    if (cardId === "accesos") return cardVisibility.accesos;
-                    if (cardId === "proximos") return cardVisibility.proximos;
-                    if (cardId === "activos") return cardVisibility.activos;
-                    if (cardId === "cumple") return cardVisibility.cumple;
-                    return true;
-                })
-                .map((cardId) => (
-                    <Col key={cardId} xs={24} lg={12}>
-                        <div
-                            draggable
-                            onDragStart={(e) => e.dataTransfer.setData("card", cardId)}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                                const from = e.dataTransfer.getData("card");
-                                handleCardDrop(from, cardId);
-                            }}
-                            style={{ cursor: 'grab' }}
-                        >
-                            {renderCard(cardId)}
-                        </div>
-                    </Col>
+              } 
+              variant="borderless"
+            >
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {pagosVencidos.slice(0, 5).map((pago: any) => (
+                  <Card key={pago.id} size="small" style={{ background: '#fff1f0', borderColor: '#ffccc7' }}>
+                    <Space direction="vertical" size={0}>
+                      <Text strong>{pago.perfiles?.nombre_completo || 'Estudiante'}</Text>
+                      <Text type="secondary">{pago.periodo_pagado}</Text>
+                      <Space>
+                        <Tag color="red">Vencido: {formatDate(pago.fecha_vencimiento)}</Tag>
+                        <Text strong style={{ color: '#ff4d4f' }}>${Number(pago.monto).toLocaleString()}</Text>
+                      </Space>
+                    </Space>
+                  </Card>
                 ))}
-        </Row>
+                <Button type="link" onClick={() => router.push('/tesoreria')}>Ver todos los pagos</Button>
+              </Space>
+            </Card>
+          </Col>
+        )}
 
-        <Modal
-            title="Agregar acceso rápido"
-            open={linkModalOpen}
-            onCancel={() => { setLinkModalOpen(false); linkForm.resetFields(); }}
-            onOk={handleAddLink}
-            okText="Agregar"
-            cancelText="Cancelar"
-        >
-            <Form layout="vertical" form={linkForm}>
-                <Form.Item name="label" label="Nombre" rules={[{ required: true, message: "Ingresa un nombre" }]}> 
-                    <Input maxLength={40} />
-                </Form.Item>
-                <Form.Item name="href" label="Ruta" rules={[{ required: true, message: "Ingresa la ruta, ej: /cursos" }]}> 
-                    <Input placeholder="/cursos" />
-                </Form.Item>
-            </Form>
-        </Modal>
+        {cumplesHoy.length > 0 && (
+          <Col xs={24} lg={pagosVencidos.length > 0 ? 12 : 24}>
+            <Card 
+              title={
+                <Space>
+                  <GiftOutlined style={{ color: '#52c41a' }} />
+                  Cumpleaños Hoy ({cumplesHoy.length})
+                </Space>
+              } 
+              variant="borderless"
+            >
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {cumplesHoy.map((estudiante: any) => (
+                  <Card key={estudiante.id} size="small" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
+                    <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                      <Space>
+                        <TrophyOutlined style={{ fontSize: 20, color: '#52c41a' }} />
+                        <div>
+                          <Text strong>{estudiante.nombre_completo}</Text>
+                          <br />
+                          <Text type="secondary">{estudiante.telefono}</Text>
+                        </div>
+                      </Space>
+                      <Button 
+                        type="primary" 
+                        size="small" 
+                        style={{ background: '#25D366', borderColor: '#25D366' }}
+                        onClick={() => window.open(`https://wa.me/${estudiante.telefono}?text=¡Feliz cumpleaños ${estudiante.nombre_completo}! 🎉`, '_blank')}
+                      >
+                        Felicitar
+                      </Button>
+                    </Space>
+                  </Card>
+                ))}
+              </Space>
+            </Card>
+          </Col>
+        )}
+      </Row>
+
+      {/* Información Adicional */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
+          <Card title="Pagos Recientes" variant="borderless">
+            {pagosRecientes.length === 0 ? (
+              <Empty description="No hay pagos recientes" />
+            ) : (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {pagosRecientes.map((pago: any) => (
+                  <div key={pago.id} style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    padding: '8px 0',
+                    borderBottom: '1px solid #f0f0f0'
+                  }}>
+                    <Space>
+                      <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                      <div>
+                        <Text strong>{pago.perfiles?.nombre_completo || 'Estudiante'}</Text>
+                        <br />
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {formatDate(pago.fecha_pago)} • {pago.metodo_pago || 'Efectivo'}
+                        </Text>
+                      </div>
+                    </Space>
+                    <Text strong style={{ color: '#52c41a' }}>
+                      ${Number(pago.monto).toLocaleString()}
+                    </Text>
+                  </div>
+                ))}
+              </Space>
+            )}
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={12}>
+          <Card title="Próximos Grupos a Iniciar" variant="borderless">
+            {proximosCursos.length === 0 ? (
+              <Empty description="No hay grupos próximos" />
+            ) : (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {proximosCursos.map((curso: any) => {
+                  const inscritos = curso.matriculas?.[0]?.count || 0;
+                  const cupos = curso.cupos || 20;
+                  const porcentaje = (inscritos / cupos) * 100;
+                  
+                  return (
+                    <Card key={curso.id} size="small" hoverable onClick={() => router.push(`/cursos/salon/${curso.id}`)}>
+                      <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text strong>{curso.nombre}</Text>
+                          <Tag color="blue">{formatDate(curso.fecha_inicio)}</Tag>
+                        </div>
+                        <Progress 
+                          percent={porcentaje} 
+                          format={() => `${inscritos}/${cupos}`}
+                          strokeColor={porcentaje >= 80 ? '#ff4d4f' : '#52c41a'}
+                        />
+                      </Space>
+                    </Card>
+                  );
+                })}
+              </Space>
+            )}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Stats adicionales */}
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col xs={12} sm={6}>
+          <Card variant="borderless" style={{ textAlign: 'center' }}>
+            <Statistic
+              title="Cursos Activos"
+              value={stats.cursosActivos}
+              prefix={<BookOutlined />}
+              valueStyle={{ color: '#1890ff' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card variant="borderless" style={{ textAlign: 'center' }}>
+            <Statistic
+              title="Profesores"
+              value={stats.profesores}
+              prefix={<TeamOutlined />}
+              valueStyle={{ color: '#722ed1' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card variant="borderless" style={{ textAlign: 'center' }}>
+            <Statistic
+              title="Tasa Conversión"
+              value={stats.tasaConversion}
+              suffix="%"
+              precision={1}
+              prefix={<TrophyOutlined />}
+              valueStyle={{ color: '#52c41a' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card variant="borderless" style={{ textAlign: 'center' }}>
+            <Statistic
+              title="Nuevos Este Mes"
+              value={stats.estudiantesNuevos}
+              prefix={<UserAddOutlined />}
+              valueStyle={{ color: '#fa8c16' }}
+            />
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 }

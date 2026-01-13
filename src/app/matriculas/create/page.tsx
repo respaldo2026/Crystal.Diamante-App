@@ -503,6 +503,9 @@ export default function MatriculaCreate() {
                                     label="Fecha de Inicio"
                                     name="fecha_inicio"
                                     initialValue={dayjs()}
+                                    getValueProps={(value) => ({
+                                        value: value ? dayjs(value) : null,
+                                    })}
                                     getValueFromEvent={(value) => value ? dayjs(value).format("YYYY-MM-DD") : null}
                                 >
                                     <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />

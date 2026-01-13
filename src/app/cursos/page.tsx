@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { App, Card, Typography, Tag, Button, Spin, Input, Space, Row, Col, Checkbox, Alert } from "antd";
+import { App, Card, Typography, Tag, Button, Spin, Input, Space, Row, Col, Checkbox, Alert, Dropdown } from "antd";
 import {
   PlusOutlined,
   EditOutlined,
@@ -12,6 +12,10 @@ import {
   DollarOutlined,
   BookOutlined,
   TeamOutlined,
+  DownOutlined,
+  DeleteOutlined,
+  StopOutlined,
+  CheckCircleOutlined,
 } from "@ant-design/icons";
 import { useNavigation } from "@refinedev/core";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -323,15 +327,40 @@ export default function CursosList() {
               >
                 Entrar al Salón
               </Button>
-              <Button size="small" icon={<EditOutlined />} onClick={() => edit("cursos", cohorte.id)}>
-                Editar
-              </Button>
-              <Button size="small" danger onClick={() => handleSoftDelete(cohorte)}>
-                Eliminar
-              </Button>
-              <Button size="small" danger={esActivo} onClick={() => handleToggleEstado(cohorte)}>
-                {esActivo ? "Finalizar" : "Reactivar"}
-              </Button>
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'editar',
+                      label: 'Editar',
+                      icon: <EditOutlined />,
+                      onClick: () => edit("cursos", cohorte.id),
+                    },
+                    {
+                      key: 'finalizar',
+                      label: esActivo ? 'Finalizar' : 'Reactivar',
+                      icon: esActivo ? <StopOutlined /> : <CheckCircleOutlined />,
+                      onClick: () => handleToggleEstado(cohorte),
+                      danger: esActivo,
+                    },
+                    {
+                      type: 'divider',
+                    },
+                    {
+                      key: 'eliminar',
+                      label: 'Eliminar',
+                      icon: <DeleteOutlined />,
+                      onClick: () => handleSoftDelete(cohorte),
+                      danger: true,
+                    },
+                  ],
+                }}
+                placement="bottomRight"
+              >
+                <Button size="small" icon={<EditOutlined />}>
+                  Editar <DownOutlined />
+                </Button>
+              </Dropdown>
             </Space>
           </Col>
         </Row>
@@ -407,11 +436,6 @@ export default function CursosList() {
                 <Space direction="vertical" style={{ width: "100%" }} size="small">
                   <Space size="small" wrap>
                     {programa.duracion && <Tag icon={<ClockCircleOutlined />}>{programa.duracion}</Tag>}
-                    {programa.precio && (
-                      <Tag icon={<DollarOutlined />} color="gold">
-                        ${Number(programa.precio).toLocaleString()}
-                      </Tag>
-                    )}
                     <Tag icon={<TeamOutlined />} color="blue">
                       {totalInscritos} estudiantes
                     </Tag>

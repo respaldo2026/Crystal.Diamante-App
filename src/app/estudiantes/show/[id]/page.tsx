@@ -36,6 +36,7 @@ import {
   WhatsAppOutlined,
   CameraOutlined,
   UploadOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import { message, Upload } from "antd";
 import type { UploadFile } from "antd";
@@ -592,7 +593,16 @@ export default function StudentDetailView() {
     <Show
       title={`Expediente Completo: ${perfil?.nombre_completo ?? "Estudiante"}`}
       headerButtons={() => (
-        <Button onClick={() => router.push("/estudiantes")}>← Volver a Lista</Button>
+        <Space>
+          <Button 
+            icon={<ReloadOutlined />} 
+            onClick={cargarDatosCompletos}
+            title="Refrescar datos"
+          >
+            Actualizar
+          </Button>
+          <Button onClick={() => router.push("/estudiantes")}>← Volver a Lista</Button>
+        </Space>
       )}
     >
       <Card
