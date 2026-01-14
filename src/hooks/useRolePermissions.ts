@@ -24,14 +24,14 @@ export const MODULOS_DISPONIBLES = [
   { key: "portal-estudiante", label: "Portal Estudiante" },
 ];
 
-// Roles disponibles
-export const ROLES_DISPONIBLES = [
-  { key: "admin", label: "Admin" },
-  { key: "director", label: "Director" },
-  { key: "administrativo", label: "Administrativo" },
-  { key: "profesor", label: "Profesor" },
-  { key: "estudiante", label: "Estudiante" },
-];
+// Roles disponibles - JERARQUÍA ACTUALIZADA
+export const ROLES_DISPONIBLES = {
+  director: { label: "🏆 Director", color: "gold", nivel: 5, descripcion: "Propietario de la academia" },
+  administrador: { label: "👔 Administrador", color: "blue", nivel: 4, descripcion: "Apoyo operativo" },
+  asesor: { label: "📞 Asesor", color: "cyan", nivel: 3, descripcion: "Gestión de leads" },
+  profesor: { label: "🎓 Profesor", color: "green", nivel: 2, descripcion: "Docente" },
+  estudiante: { label: "👨‍🎓 Estudiante", color: "default", nivel: 1, descripcion: "Aprendiz" },
+};
 
 /**
  * Hook para obtener y gestionar permisos por rol

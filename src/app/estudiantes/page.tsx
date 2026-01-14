@@ -8,7 +8,7 @@ import {
     ShowButton, 
     CreateButton
 } from "@refinedev/antd";
-import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography, App, Modal, message } from "antd";
+import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography, App, message } from "antd";
 import { 
     WhatsAppOutlined, 
     UserOutlined, 
@@ -351,7 +351,7 @@ export default function EstudiantesList() {
                                     type="text"
                                     size="small"
                                     disabled={user?.rol !== "admin"}
-                                    onClick={() => handleEliminarEstudiante(record, antMessage, modal)}
+                                    onClick={() => confirmarEliminarEstudiante(record, antMessage, modal)}
                                     icon={<DeleteOutlined />}
                                 />
                             </Tooltip>
@@ -359,7 +359,7 @@ export default function EstudiantesList() {
                             <Button 
                                 size="small" 
                                 danger
-                                onClick={() => handleArchivarEstudiante(record, antMessage)}
+                                onClick={() => handleArchivarEstudiante(record, antMessage, modal)}
                             >
                                 Archivar
                             </Button>
@@ -428,12 +428,77 @@ async function checkDatosRelacionados(estudianteId: string) {
     };
 }
 
-function handleEliminarEstudiante(record: any, msg: any, modal: any) {
+async function handleEliminarEstudiante(record: any, msg: any, modalInstance: any) {
     const estudianteId = record.id;
     
-    // Con CASCADE habilitado, podemos eliminar directamente
-    // La BD se encarga de eliminar pagos, matrículas, asistencias, etc.
-    modal.confirm({
+    // Primero, eliminar todas las relaciones de forma segura
+    try {
+        // 1. Eliminar asistencias relacionadas con matrículas del estudiante
+        const { data: matriculas } = await supabaseBrowserClient
+            .from("matriculas")
+            .select("id")
+            .eq("estudiante_id", estudianteId);
+        
+        if (matriculas && matriculas.length > 0) {
+            const matriculaIds = matriculas.map(m => m.id);
+            
+            // Eliminar asistencias
+            await supabaseBrowserClient
+                .from("asistencias")
+                .delete()
+                .in("matricula_id", matriculaIds);
+            
+            // Eliminar calificaciones
+            await supabaseBrowserClient
+                .from("calificaciones")
+                .delete()
+                .in("matricula_id", matriculaIds);
+            
+            // Eliminar pagos de matrículas
+            await supabaseBrowserClient
+                .from("pagos")
+                .delete()
+                .in("matricula_id", matriculaIds);
+        }
+        
+        // 2. Eliminar pagos directos del estudiante
+        await supabaseBrowserClient
+            .from("pagos")
+            .delete()
+            .eq("estudiante_id", estudianteId);
+        
+        // 3. Eliminar matrículas
+        await supabaseBrowserClient
+            .from("matriculas")
+            .delete()
+            .eq("estudiante_id", estudianteId);
+        
+        // 4. Finalmente eliminar el perfil
+        const { error } = await supabaseBrowserClient
+            .from("perfiles")
+            .delete()
+            .eq("id", estudianteId);
+        
+        if (error) {
+            console.error('Error al eliminar perfil:', error);
+            msg.error("Error al eliminar: " + (error.message || 'Desconocido'));
+            return;
+        }
+        
+        msg.success("✅ Estudiante y todos sus datos eliminados correctamente");
+        setTimeout(() => window.location.reload(), 1000);
+        
+    } catch (err: any) {
+        console.error('Error inesperado:', err);
+        msg.error('Error inesperado: ' + (err?.message || 'Desconocido'));
+    }
+}
+
+function confirmarEliminarEstudiante(record: any, msg: any, modalInstance: any) {
+    const estudianteId = record.id;
+    
+    // Usar el modal desde el contexto de App correctamente
+    modalInstance.confirm({
         title: "¿Eliminar este estudiante?",
         width: 600,
         content: (
@@ -465,63 +530,15 @@ function handleEliminarEstudiante(record: any, msg: any, modal: any) {
         okType: "danger",
         cancelText: "Cancelar",
         onOk: async () => {
-            try {
-                const { error } = await supabaseBrowserClient
-                    .from("perfiles")
-                    .delete()
-                    .eq("id", estudianteId);
-                
-                if (error) {
-                    console.error('Error al eliminar:', error);
-                    msg.error("Error al eliminar: " + (error.message || 'Desconocido'));
-                    return;
-                }
-                
-                msg.success("✅ Estudiante y todos sus datos eliminados correctamente");
-                setTimeout(() => window.location.reload(), 1000);
-            } catch (err: any) {
-                console.error('Error inesperado:', err);
-                msg.error('Error inesperado: ' + (err?.message || 'Desconocido'));
-            }
+            await handleEliminarEstudiante(record, msg, modalInstance);
         }
     });
 }
 
-async function eliminarEstudianteEnCascada(estudianteId: string, datos: any) {
-    // Eliminar en orden: asistencias → matrículas → estudiante
-    
-    // 1. Eliminar asistencias
-    if (datos.asistencias.length > 0) {
-        const asistenciaIds = datos.asistencias.map((a: any) => a.id);
-        const { error: errAsist } = await supabaseBrowserClient
-            .from("asistencias")
-            .delete()
-            .in("id", asistenciaIds);
-        if (errAsist) throw errAsist;
-    }
-    
-    // 2. Eliminar matrículas
-    if (datos.matriculas.length > 0) {
-        const matriculaIds = datos.matriculas.map((m: any) => m.id);
-        const { error: errMat } = await supabaseBrowserClient
-            .from("matriculas")
-            .delete()
-            .in("id", matriculaIds);
-        if (errMat) throw errMat;
-    }
-    
-    // 3. Eliminar estudiante
-    const { error: errPerf } = await supabaseBrowserClient
-        .from("perfiles")
-        .delete()
-        .eq("id", estudianteId);
-    if (errPerf) throw errPerf;
-}
-
-function handleArchivarEstudiante(record: any, msg: any) {
+function handleArchivarEstudiante(record: any, msg: any, modalInstance: any) {
     const estudianteId = record.id;
     
-    Modal.confirm({
+    modalInstance.confirm({
         title: "¿Archivar este estudiante?",
         content: (
             <div>

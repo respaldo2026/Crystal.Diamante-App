@@ -43,7 +43,7 @@ export function useCurrentUser() {
           .from("perfiles")
           .select("id, email, rol, nombre_completo")
           .eq("id", authUser.id)
-          .single();
+          .maybeSingle();
 
         console.log("Profile query result:", { perfil, error });
 

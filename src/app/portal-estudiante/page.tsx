@@ -50,10 +50,15 @@ export default function PortalEstudiante() {
         .from("perfiles")
         .select("*")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (errPerfil || !perfil) {
+      if (errPerfil) {
         message.error("Error cargando perfil");
+        return;
+      }
+      
+      if (!perfil) {
+        message.error("Perfil no encontrado");
         return;
       }
 

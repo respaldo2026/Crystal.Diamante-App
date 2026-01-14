@@ -14,10 +14,12 @@ import {
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
 import dayjs from "dayjs";
+import isBetween from 'dayjs/plugin/isBetween';
 import { formatDate } from "@utils/date";
 import { Line, Column } from "@ant-design/plots";
 import 'dayjs/locale/es';
 
+dayjs.extend(isBetween);
 dayjs.locale('es');
 
 const { Title, Text } = Typography;
@@ -37,7 +39,13 @@ export default function DashboardPage() {
     cursosActivos: 0,
     profesores: 0,
     balanceNeto: 0,
-    tasaConversion: 0
+    tasaConversion: 0,
+    // Métricas estratégicas
+    tasaDesercion: 0,
+    tasaOcupacion: 0,
+    moraPromedio: 0,
+    ingresosPorEstudiante: 0,
+    rentabilidadPorPrograma: [] as any[]
   });
 
   // Datos para gráficos
@@ -67,27 +75,52 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const hoy = dayjs();
-      const inicioMes = hoy.startOf('month').format('YYYY-MM-DD');
-      const finMes = hoy.endOf('month').format('YYYY-MM-DD');
-      const mesAnterior = hoy.subtract(1, 'month');
+      
+      // Determinar rango según filtro
+      let inicioPeriodo: string;
+      let finPeriodo: string;
+      let periodoAnteriorInicio: string;
+      let periodoAnteriorFin: string;
+      
+      switch (timeRange) {
+        case 'week':
+          inicioPeriodo = hoy.startOf('week').format('YYYY-MM-DD');
+          finPeriodo = hoy.endOf('week').format('YYYY-MM-DD');
+          periodoAnteriorInicio = hoy.subtract(1, 'week').startOf('week').format('YYYY-MM-DD');
+          periodoAnteriorFin = hoy.subtract(1, 'week').endOf('week').format('YYYY-MM-DD');
+          break;
+        case 'year':
+          inicioPeriodo = hoy.startOf('year').format('YYYY-MM-DD');
+          finPeriodo = hoy.endOf('year').format('YYYY-MM-DD');
+          periodoAnteriorInicio = hoy.subtract(1, 'year').startOf('year').format('YYYY-MM-DD');
+          periodoAnteriorFin = hoy.subtract(1, 'year').endOf('year').format('YYYY-MM-DD');
+          break;
+        case 'month':
+        default:
+          inicioPeriodo = hoy.startOf('month').format('YYYY-MM-DD');
+          finPeriodo = hoy.endOf('month').format('YYYY-MM-DD');
+          periodoAnteriorInicio = hoy.subtract(1, 'month').startOf('month').format('YYYY-MM-DD');
+          periodoAnteriorFin = hoy.subtract(1, 'month').endOf('month').format('YYYY-MM-DD');
+          break;
+      }
 
-      // 1. INGRESOS DEL MES ACTUAL
+      // 1. INGRESOS DEL PERÍODO ACTUAL
       const { data: pagosMes } = await supabaseBrowserClient
         .from("pagos")
         .select("monto, fecha_pago, estado, metodo_pago")
         .eq("estado", "pagado")
-        .gte("fecha_pago", inicioMes)
-        .lte("fecha_pago", finMes);
+        .gte("fecha_pago", inicioPeriodo)
+        .lte("fecha_pago", finPeriodo);
 
       const totalIngresos = pagosMes?.reduce((sum, p) => sum + Number(p.monto || 0), 0) || 0;
 
-      // 2. INGRESOS MES ANTERIOR (para comparación)
+      // 2. INGRESOS PERÍODO ANTERIOR (para comparación)
       const { data: pagosMesAnterior } = await supabaseBrowserClient
         .from("pagos")
         .select("monto")
         .eq("estado", "pagado")
-        .gte("fecha_pago", mesAnterior.startOf('month').format('YYYY-MM-DD'))
-        .lte("fecha_pago", mesAnterior.endOf('month').format('YYYY-MM-DD'));
+        .gte("fecha_pago", periodoAnteriorInicio)
+        .lte("fecha_pago", periodoAnteriorFin);
 
       const ingresosMesAnterior = pagosMesAnterior?.reduce((sum, p) => sum + Number(p.monto || 0), 0) || 0;
 
@@ -95,8 +128,8 @@ export default function DashboardPage() {
       const { data: nomina } = await supabaseBrowserClient
         .from("pagos_nomina")
         .select("total_pagado")
-        .gte("fecha_pago", inicioMes)
-        .lte("fecha_pago", finMes);
+        .gte("fecha_pago", inicioPeriodo)
+        .lte("fecha_pago", finPeriodo);
 
       const totalEgresos = nomina?.reduce((sum, n) => sum + Number(n.total_pagado || 0), 0) || 0;
 
@@ -108,7 +141,7 @@ export default function DashboardPage() {
 
       const estudiantesUnicos = new Set(matriculasActivas?.map(m => m.estudiante_id) || []);
       const estudiantesNuevosMes = matriculasActivas?.filter(m => 
-        dayjs(m.created_at).isAfter(inicioMes)
+        dayjs(m.created_at).isBetween(inicioPeriodo, finPeriodo, null, '[]')
       ).length || 0;
 
       // 5. CURSOS Y PROFESORES
@@ -161,17 +194,37 @@ export default function DashboardPage() {
         .order("fecha_vencimiento", { ascending: true })
         .limit(5);
 
-      // 10. DATOS PARA GRÁFICO DE INGRESOS (últimos 7 días)
+      // 10. DATOS PARA GRÁFICO DE INGRESOS (dinámico según período)
       const chartData = [];
-      for (let i = 6; i >= 0; i--) {
-        const fecha = hoy.subtract(i, 'day');
-        const fechaStr = fecha.format('YYYY-MM-DD');
-        const pagos = pagosMes?.filter(p => 
-          dayjs(p.fecha_pago).format('YYYY-MM-DD') === fechaStr
-        ) || [];
+      let iteraciones = 7; // Por defecto 7 días
+      let unidad: 'day' | 'week' | 'month' = 'day';
+      let formato = 'DD MMM';
+      
+      if (timeRange === 'week') {
+        iteraciones = 7;
+        unidad = 'day';
+        formato = 'DD MMM';
+      } else if (timeRange === 'year') {
+        iteraciones = 12;
+        unidad = 'month';
+        formato = 'MMM';
+      } else { // month
+        iteraciones = 30;
+        unidad = 'day';
+        formato = 'DD';
+      }
+      
+      for (let i = iteraciones - 1; i >= 0; i--) {
+        const fecha = hoy.subtract(i, unidad);
+        const fechaInicio = fecha.startOf(unidad).format('YYYY-MM-DD');
+        const fechaFin = fecha.endOf(unidad).format('YYYY-MM-DD');
+        const pagos = pagosMes?.filter(p => {
+          const fechaPago = dayjs(p.fecha_pago);
+          return fechaPago.isBetween(fechaInicio, fechaFin, null, '[]');
+        }) || [];
         const total = pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0);
         chartData.push({
-          fecha: fecha.format('DD MMM'),
+          fecha: fecha.format(formato),
           monto: total,
           cantidad: pagos.length
         });
@@ -188,6 +241,86 @@ export default function DashboardPage() {
         monto
       }));
 
+      // 12. TASA DE DESERCIÓN (estudiantes que abandonaron en los últimos 3 meses)
+      const hace3Meses = hoy.subtract(3, 'month').format('YYYY-MM-DD');
+      const { data: matriculasRetiradas } = await supabaseBrowserClient
+        .from("matriculas")
+        .select("id")
+        .eq("estado", "retirado")
+        .gte("updated_at", hace3Meses);
+
+      const totalMatriculasTrimestre = (matriculasActivas?.length || 0) + (matriculasRetiradas?.length || 0);
+      const tasaDesercion = totalMatriculasTrimestre > 0 
+        ? ((matriculasRetiradas?.length || 0) / totalMatriculasTrimestre * 100) 
+        : 0;
+
+      // 13. TASA DE OCUPACIÓN (cupos ocupados vs disponibles)
+      const { data: cursosConCupos } = await supabaseBrowserClient
+        .from("cursos")
+        .select("cupos, matriculas(count)")
+        .eq("estado", "activo");
+
+      const totalCuposDisponibles = cursosConCupos?.reduce((sum, c) => sum + (Number(c.cupos) || 0), 0) || 1;
+      const totalCuposOcupados = cursosConCupos?.reduce((sum, c) => sum + (c.matriculas?.length || 0), 0) || 0;
+      const tasaOcupacion = (totalCuposOcupados / totalCuposDisponibles * 100);
+
+      // 14. MORA PROMEDIO (días promedio de retraso en pagos vencidos)
+      const { data: pagosVencidosCompletos } = await supabaseBrowserClient
+        .from("pagos")
+        .select("fecha_vencimiento")
+        .eq("estado", "pendiente")
+        .lt("fecha_vencimiento", hoy.format('YYYY-MM-DD'));
+
+      const diasMoraTotal = pagosVencidosCompletos?.reduce((sum, p) => {
+        return sum + hoy.diff(dayjs(p.fecha_vencimiento), 'day');
+      }, 0) || 0;
+      const moraPromedio = pagosVencidosCompletos?.length 
+        ? Math.round(diasMoraTotal / pagosVencidosCompletos.length)
+        : 0;
+
+      // 15. INGRESOS POR ESTUDIANTE (LTV promedio)
+      const ingresosPorEstudiante = estudiantesUnicos.size > 0 
+        ? Math.round(totalIngresos / estudiantesUnicos.size)
+        : 0;
+
+      // 16. RENTABILIDAD POR PROGRAMA
+      const { data: programasConIngresos } = await supabaseBrowserClient
+        .from("programas")
+        .select(`
+          id, 
+          nombre,
+          cursos(
+            id,
+            matriculas(
+              id,
+              pagos(monto, estado)
+            )
+          )
+        `);
+
+      const rentabilidadPorPrograma = programasConIngresos?.map(programa => {
+        const totalIngresosProg = programa.cursos?.reduce((sum: number, curso: any) => {
+          const ingresosCurso = curso.matriculas?.reduce((sumMat: number, mat: any) => {
+            const ingresosMat = mat.pagos
+              ?.filter((p: any) => p.estado === 'pagado')
+              ?.reduce((sumPago: number, pago: any) => sumPago + Number(pago.monto || 0), 0) || 0;
+            return sumMat + ingresosMat;
+          }, 0) || 0;
+          return sum + ingresosCurso;
+        }, 0) || 0;
+
+        const totalEstudiantes = programa.cursos?.reduce((sum: number, curso: any) => {
+          return sum + (curso.matriculas?.length || 0);
+        }, 0) || 0;
+
+        return {
+          nombre: programa.nombre,
+          ingresos: totalIngresosProg,
+          estudiantes: totalEstudiantes,
+          promedioPorEstudiante: totalEstudiantes > 0 ? Math.round(totalIngresosProg / totalEstudiantes) : 0
+        };
+      }).filter(p => p.ingresos > 0).sort((a, b) => b.ingresos - a.ingresos) || [];
+
       setStats({
         ingresosMes: totalIngresos,
         ingresosMesAnterior,
@@ -197,7 +330,12 @@ export default function DashboardPage() {
         cursosActivos: cursosActivos || 0,
         profesores: profesores || 0,
         balanceNeto: totalIngresos - totalEgresos,
-        tasaConversion: ((estudiantesNuevosMes / (proximosCursos?.length || 1)) * 100)
+        tasaConversion: ((estudiantesNuevosMes / (proximosCursos?.length || 1)) * 100),
+        tasaDesercion,
+        tasaOcupacion,
+        moraPromedio,
+        ingresosPorEstudiante,
+        rentabilidadPorPrograma
       });
 
       setIngresosChart(chartData);
@@ -273,6 +411,10 @@ export default function DashboardPage() {
     },
   };
 
+  // Texto del período seleccionado
+  const periodoTexto = timeRange === 'week' ? 'de la Semana' : timeRange === 'year' ? 'del Año' : 'del Mes';
+  const periodoAnteriorTexto = timeRange === 'week' ? 'Semana Anterior' : timeRange === 'year' ? 'Año Anterior' : 'Mes Anterior';
+
   return (
     <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
       {/* Header */}
@@ -315,7 +457,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card variant="borderless" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', boxShadow: '0 4px 12px rgba(30, 58, 138, 0.2)' }}>
             <Statistic
-              title={<span style={{ color: '#fff', fontWeight: 600 }}>Ingresos del Mes</span>}
+              title={<span style={{ color: '#fff', fontWeight: 600 }}>Ingresos {periodoTexto}</span>}
               value={stats.ingresosMes}
               precision={0}
               valueStyle={{ color: '#fff', fontWeight: 'bold' }}
@@ -326,30 +468,33 @@ export default function DashboardPage() {
                 </Tag>
               }
             />
+            <Text style={{ color: '#e0e7ff', fontSize: 11 }}>vs. {periodoAnteriorTexto}</Text>
           </Card>
         </Col>
         
         <Col xs={24} sm={12} lg={6}>
           <Card variant="borderless" style={{ background: 'linear-gradient(135deg, #be123c 0%, #f43f5e 100%)', boxShadow: '0 4px 12px rgba(190, 18, 60, 0.2)' }}>
             <Statistic
-              title={<span style={{ color: '#fff', fontWeight: 600 }}>Egresos (Nómina)</span>}
+              title={<span style={{ color: '#fff', fontWeight: 600 }}>Egresos {periodoTexto}</span>}
               value={stats.egresosMes}
               precision={0}
               valueStyle={{ color: '#fff', fontWeight: 'bold' }}
               prefix={<WalletOutlined style={{ color: '#fff' }} />}
             />
+            <Text style={{ color: '#ffe4e6', fontSize: 11 }}>Nómina y gastos</Text>
           </Card>
         </Col>
 
         <Col xs={24} sm={12} lg={6}>
           <Card variant="borderless" style={{ background: 'linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)', boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)' }}>
             <Statistic
-              title={<span style={{ color: '#fff', fontWeight: 600 }}>Balance Neto</span>}
+              title={<span style={{ color: '#fff', fontWeight: 600 }}>Balance Neto {periodoTexto}</span>}
               value={stats.balanceNeto}
               precision={0}
               valueStyle={{ color: '#fff', fontWeight: 'bold' }}
               prefix={<BankOutlined style={{ color: '#fff' }} />}
             />
+            <Text style={{ color: '#cffafe', fontSize: 11 }}>Ingresos - Egresos</Text>
           </Card>
         </Col>
 
@@ -367,6 +512,80 @@ export default function DashboardPage() {
           </Card>
         </Col>
       </Row>
+
+      {/* MÉTRICAS ESTRATÉGICAS */}
+      <Card 
+        title={
+          <Space>
+            <TrophyOutlined style={{ color: '#faad14' }} />
+            <span>Indicadores Estratégicos</span>
+          </Space>
+        }
+        variant="outlined"
+        style={{ marginBottom: 24 }}
+      >
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={12} md={6}>
+            <Card size="small" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
+              <Statistic
+                title="Tasa de Ocupación"
+                value={stats.tasaOcupacion}
+                precision={1}
+                suffix="%"
+                valueStyle={{ color: stats.tasaOcupacion >= 80 ? '#52c41a' : stats.tasaOcupacion >= 60 ? '#faad14' : '#ff4d4f' }}
+                prefix={<CheckCircleOutlined />}
+              />
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {stats.tasaOcupacion >= 80 ? 'Excelente capacidad' : stats.tasaOcupacion >= 60 ? 'Buena ocupación' : 'Mejorar captación'}
+              </Text>
+            </Card>
+          </Col>
+
+          <Col xs={24} sm={12} md={6}>
+            <Card size="small" style={{ background: stats.tasaDesercion >= 15 ? '#fff1f0' : '#f6ffed', borderColor: stats.tasaDesercion >= 15 ? '#ffccc7' : '#b7eb8f' }}>
+              <Statistic
+                title="Tasa de Deserción"
+                value={stats.tasaDesercion}
+                precision={1}
+                suffix="%"
+                valueStyle={{ color: stats.tasaDesercion < 10 ? '#52c41a' : stats.tasaDesercion < 15 ? '#faad14' : '#ff4d4f' }}
+                prefix={<FallOutlined />}
+              />
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {stats.tasaDesercion < 10 ? 'Retención excelente' : stats.tasaDesercion < 15 ? 'Retención normal' : 'Requiere atención'}
+              </Text>
+            </Card>
+          </Col>
+
+          <Col xs={24} sm={12} md={6}>
+            <Card size="small" style={{ background: '#fff7e6', borderColor: '#ffd591' }}>
+              <Statistic
+                title="Mora Promedio"
+                value={stats.moraPromedio}
+                suffix="días"
+                valueStyle={{ color: stats.moraPromedio <= 7 ? '#52c41a' : stats.moraPromedio <= 15 ? '#faad14' : '#ff4d4f' }}
+                prefix={<ClockCircleOutlined />}
+              />
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {stats.moraPromedio <= 7 ? 'Cobranza efectiva' : stats.moraPromedio <= 15 ? 'Revisar procesos' : 'Acción inmediata'}
+              </Text>
+            </Card>
+          </Col>
+
+          <Col xs={24} sm={12} md={6}>
+            <Card size="small" style={{ background: '#e6f4ff', borderColor: '#91caff' }}>
+              <Statistic
+                title="Ingreso por Estudiante"
+                value={stats.ingresosPorEstudiante}
+                precision={0}
+                prefix="$"
+                valueStyle={{ color: '#1890ff' }}
+              />
+              <Text type="secondary" style={{ fontSize: 11 }}>LTV promedio mensual</Text>
+            </Card>
+          </Col>
+        </Row>
+      </Card>
 
       {/* Accesos Rápidos */}
       <Card 
@@ -410,13 +629,22 @@ export default function DashboardPage() {
       {/* Gráficos */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} lg={16}>
-          <Card title="Ingresos de los últimos 7 días" variant="borderless">
+          <Card 
+            title={
+              timeRange === 'week' 
+                ? 'Ingresos de la Semana (Últimos 7 días)' 
+                : timeRange === 'year' 
+                  ? 'Ingresos del Año (Por mes)' 
+                  : 'Ingresos del Mes (Por día)'
+            } 
+            variant="borderless"
+          >
             <Line {...lineConfig} height={300} />
           </Card>
         </Col>
 
         <Col xs={24} lg={8}>
-          <Card title="Distribución por Método de Pago" variant="borderless">
+          <Card title={`Métodos de Pago ${periodoTexto}`} variant="borderless">
             <Column {...columnConfig} height={300} />
           </Card>
         </Col>
@@ -561,6 +789,58 @@ export default function DashboardPage() {
           </Card>
         </Col>
       </Row>
+
+      {/* RENTABILIDAD POR PROGRAMA - Decisión Estratégica */}
+      {stats.rentabilidadPorPrograma.length > 0 && (
+        <Card 
+          title={
+            <Space>
+              <RiseOutlined style={{ color: '#52c41a' }} />
+              <span>Rentabilidad por Programa</span>
+              <Tag color="blue">Decisión Estratégica</Tag>
+            </Space>
+          }
+          variant="borderless"
+          style={{ marginBottom: 24, marginTop: 24 }}
+        >
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            {stats.rentabilidadPorPrograma.map((programa: any, index: number) => (
+              <div key={index}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Space>
+                    <Badge 
+                      count={index + 1} 
+                      style={{ backgroundColor: index === 0 ? '#52c41a' : index === 1 ? '#1890ff' : '#8c8c8c' }} 
+                    />
+                    <Text strong>{programa.nombre}</Text>
+                    <Tag>{programa.estudiantes} estudiantes</Tag>
+                  </Space>
+                  <Space>
+                    <Text type="secondary">Promedio/estudiante:</Text>
+                    <Text strong style={{ color: '#1890ff' }}>
+                      ${programa.promedioPorEstudiante.toLocaleString()}
+                    </Text>
+                  </Space>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Progress 
+                    percent={Math.round((programa.ingresos / (stats.rentabilidadPorPrograma[0]?.ingresos || 1)) * 100)}
+                    strokeColor={index === 0 ? '#52c41a' : index === 1 ? '#1890ff' : '#faad14'}
+                    style={{ flex: 1 }}
+                  />
+                  <Text strong style={{ color: '#52c41a', minWidth: 120, textAlign: 'right' }}>
+                    ${programa.ingresos.toLocaleString()}
+                  </Text>
+                </div>
+              </div>
+            ))}
+          </Space>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 16 }}>
+            💡 Los programas con mayor promedio por estudiante tienen mejor rentabilidad. 
+            Considera expandir o replicar los más exitosos.
+          </Text>
+        </Card>
+      )}
 
       {/* Stats adicionales */}
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>

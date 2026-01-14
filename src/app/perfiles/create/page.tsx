@@ -2,9 +2,11 @@
 
 import React from "react";
 import { Create, useForm } from "@refinedev/antd";
-import { Form, Input, Select, Divider, message } from "antd";
+import { Form, Input, Select, Divider, App } from "antd";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function CreatePerfil() {
+  const { message } = App.useApp();
   const { formProps, saveButtonProps, onFinish } = useForm({
     onMutationSuccess: async (data, variables) => {
       const perfil = variables as any;
@@ -17,28 +19,28 @@ export default function CreatePerfil() {
       const passwordAuth = perfil.identificacion.replace(/\./g, '');
       
       try {
-        const response = await fetch('/api/auth/create-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: perfil.email,
-            password: passwordAuth,
-            metadata: {
+        // Crear usuario en Auth directamente
+        const { data: authData, error: authError } = await supabaseBrowserClient.auth.signUp({
+          email: perfil.email,
+          password: passwordAuth,
+          options: {
+            data: {
               nombre_completo: perfil.nombre_completo,
               rol: perfil.rol,
-              cedula: perfil.identificacion
-            }
-          })
+            },
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
         });
 
-        const result = await response.json();
-        
-        if (result.success) {
-          message.success(`✅ Usuario creado. Ya puede hacer login`);
-        } else {
-          message.info(`Perfil guardado. Login: ${perfil.email} / ${passwordAuth}`);
+        if (authError) {
+          message.warning(`Perfil guardado. Error en Auth: ${authError.message}`);
+          return;
         }
-      } catch (error) {
+
+        if (authData.user) {
+          message.success(`✅ Usuario creado. Ya puede hacer login con:\nEmail: ${perfil.email}\nContraseña: ${passwordAuth}`);
+        }
+      } catch (error: any) {
         message.info(`Perfil guardado. Credenciales: ${perfil.email} / ${passwordAuth}`);
       }
     }

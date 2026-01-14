@@ -86,8 +86,12 @@ export default function ShowProfesorDashboard() {
     try {
         setLoading(true);
         // Perfil
-        const { data: dataProf, error: errProf } = await supabase.from("perfiles").select("*").eq("id", idProfesor).single();
+        const { data: dataProf, error: errProf } = await supabase.from("perfiles").select("*").eq("id", idProfesor).maybeSingle();
         if (errProf) throw errProf;
+        if (!dataProf) {
+          console.error("Profesor no encontrado");
+          return;
+        }
         setProfesor(dataProf);
 
         // Cursos activos

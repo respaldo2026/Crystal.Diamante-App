@@ -12,10 +12,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Crear cliente con service_role para acceso admin
+    // Usar createBrowserClient para signUp (no requiere SERVICE_KEY)
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         auth: {
           autoRefreshToken: false,
@@ -24,24 +24,46 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const { data, error } = await supabase.auth.admin.createUser({
+    // Registrar el usuario con signUp
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      email_confirm: true,
-      user_metadata: metadata || {},
+      options: {
+        data: metadata || {},
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/auth/callback`,
+      },
     });
 
     if (error) {
+      console.error('🔴 Error en signUp:', error);
       return NextResponse.json(
         { success: false, error: error.message },
         { status: 400 }
       );
     }
 
-    return NextResponse.json({ success: true, data });
+    if (!data.user) {
+      return NextResponse.json(
+        { success: false, error: "Usuario no creado" },
+        { status: 400 }
+      );
+    }
+
+    // Si se creó correctamente, retornar éxito
+    return NextResponse.json({ 
+      success: true, 
+      data: {
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+        },
+        message: "Usuario creado exitosamente. Verifica tu email para confirmar."
+      }
+    });
   } catch (error: any) {
+    console.error('🔴 Error en create-user:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error.message || 'Error desconocido' },
       { status: 500 }
     );
   }

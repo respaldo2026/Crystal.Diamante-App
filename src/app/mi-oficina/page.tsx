@@ -115,9 +115,14 @@ export default function MiOficinaProfesor() {
           .select("id, nombre_completo, email, telefono, rol, foto_url, identificacion, valor_hora")
           .eq("id", user.id)
           .eq("rol", "profesor")
-          .single();
+          .maybeSingle();
         
-        if (errProf || !dataProf) {
+        if (errProf) {
+          messageApi.error("Error cargando perfil");
+          return;
+        }
+        
+        if (!dataProf) {
           messageApi.error("No tienes permisos de profesor");
           return;
         }

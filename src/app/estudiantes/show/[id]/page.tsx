@@ -127,10 +127,14 @@ export default function StudentDetailView() {
         .from("perfiles")
         .select("*")
         .eq("id", idEstudiante)
-        .single();
-      if (errPerfil || !dataPerfil) {
+        .maybeSingle();
+      if (errPerfil) {
+        setLoadError("Error cargando información del estudiante.");
+        throw errPerfil;
+      }
+      if (!dataPerfil) {
         setLoadError("No encontramos información para este estudiante.");
-        throw errPerfil ?? new Error("Perfil no encontrado");
+        return;
       }
       setPerfil(dataPerfil);
 

@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { Form, Input, Row, Col, message, Alert, Button, Card, Table, Space, Popconfirm, Spin } from "antd";
+import { Form, Input, Row, Col, Alert, Button, Card, Table, Space, Popconfirm, Spin, App } from "antd";
 import { DeleteOutlined, PlusOutlined, UserOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function AdministradoresPage() {
+    const { message } = App.useApp();
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [adminsList, setAdminsList] = useState<any[]>([]);
@@ -20,16 +21,27 @@ export default function AdministradoresPage() {
     const cargarAdministradores = async () => {
         setListLoading(true);
         try {
+            console.log("📋 Cargando administradores...");
+            
             const { data, error } = await supabaseBrowserClient
                 .from("perfiles")
                 .select("id, nombre_completo, identificacion, email, telefono, rol, created_at")
                 .eq("rol", "admin")
                 .order("created_at", { ascending: false });
 
-            if (error) throw error;
+            console.log("✅ Respuesta de BD:", { data, error });
+
+            if (error) {
+                console.error("❌ Error en query:", error);
+                throw error;
+            }
+            
+            console.log("📊 Total de admins encontrados:", data?.length || 0);
             setAdminsList(data || []);
         } catch (error: any) {
-            console.error("Error cargando admins:", error);
+            console.error("❌ Error cargando admins:", error);
+            message.error("Error cargando administradores: " + error.message);
+            setAdminsList([]);
         } finally {
             setListLoading(false);
         }
@@ -38,58 +50,71 @@ export default function AdministradoresPage() {
     const handleGuardarAdmin = async (values: any) => {
         setLoading(true);
         try {
-            const datosParaEnviar = {
-                nombre_completo: values.nombre_completo,
-                identificacion: values.identificacion,
+            const passwordAuth = values.identificacion.replace(/\./g, '');
+
+            // 1. PRIMERO: Crear usuario en Auth vía signUp
+            console.log('📝 Creando usuario en Auth...');
+            const { data: authData, error: authError } = await supabaseBrowserClient.auth.signUp({
                 email: values.email,
-                telefono: values.telefono || null,
-                rol: 'admin',
-                direccion: values.direccion || null,
-                observaciones: values.observaciones || null,
-            };
+                password: passwordAuth,
+                options: {
+                    data: {
+                        nombre_completo: values.nombre_completo,
+                        rol: 'admin',
+                    },
+                    emailRedirectTo: `${window.location.origin}/auth/callback`,
+                },
+            });
 
-            // 1. Insertar en Supabase (Tabla PERFILES)
-            const { error: perfilError } = await supabaseBrowserClient
-                .from("perfiles")
-                .insert([datosParaEnviar]);
-
-            if (perfilError) {
-                console.error("Error Supabase:", perfilError);
-                throw perfilError;
+            if (authError) {
+                console.error('❌ Error en signUp:', authError.message);
+                message.error(`Error creando usuario en Auth: ${authError.message}`);
+                setLoading(false);
+                return;
             }
 
-            // 2. Crear usuario en Auth vía API
-            const passwordAuth = values.identificacion.replace(/\./g, '');
-            
-            try {
-                const response = await fetch('/api/auth/create-user', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: values.email,
-                        password: passwordAuth,
-                        metadata: {
-                            nombre_completo: values.nombre_completo,
-                            rol: 'admin',
-                            cedula: values.identificacion
-                        }
-                    })
-                });
+            const authUserId = authData.user?.id;
+            if (!authUserId) {
+                message.error('No se pudo obtener el ID del usuario');
+                setLoading(false);
+                return;
+            }
 
-                const result = await response.json();
-                
-                if (result.success) {
-                    message.success(`✅ Administrador creado. Ya puede hacer login`);
-                } else {
-                    message.warning(`Admin creado en BD. Login: ${values.email} / ${passwordAuth}`);
-                }
-            } catch (error) {
-                message.info(`Admin creado. Credenciales: ${values.email} / ${passwordAuth}`);
+            console.log('✅ Usuario creado en Auth con ID:', authUserId);
+
+            // 2. LUEGO: Actualizar el perfil creado por el trigger
+            console.log('📝 Actualizando perfil...');
+            const { error: updateError } = await supabaseBrowserClient
+                .from("perfiles")
+                .update({
+                    nombre_completo: values.nombre_completo,
+                    identificacion: values.identificacion,
+                    email: values.email,
+                    telefono: values.telefono || null,
+                    rol: 'admin',
+                    direccion: values.direccion || null,
+                    observaciones: values.observaciones || null,
+                })
+                .eq('id', authUserId);
+
+            if (updateError) {
+                console.error("Error actualizando perfil:", updateError);
+                // No es crítico si falla la actualización, el usuario ya existe
+                message.warning('Usuario creado pero no se pudieron guardar todos los datos');
+            } else {
+                console.log('✅ Perfil actualizado');
+                message.success(`✅ Administrador creado correctamente.\nEmail: ${values.email}\nContraseña: ${passwordAuth}`);
             }
 
             // 3. Limpiar formulario y recargar lista
             form.resetFields();
             setShowForm(false);
+            
+            // Esperar un poco para que el trigger se procese completamente
+            console.log('⏳ Esperando a que se procese el trigger...');
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            console.log('🔄 Recargando lista de administradores...');
             await cargarAdministradores();
 
         } catch (error: any) {
