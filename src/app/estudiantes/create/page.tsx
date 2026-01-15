@@ -1,33 +1,125 @@
 "use client";
 
-import React from "react";
-import { Create, useForm } from "@refinedev/antd";
+import React, { useState } from "react";
+import { Create } from "@refinedev/antd";
 import { useNavigation } from "@refinedev/core";
-import { Form, Input, Row, Col, Divider, DatePicker, Select } from "antd";
+import { Form, Input, Row, Col, Divider, DatePicker, Select, message, Alert } from "antd";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function CreateEstudiante() {
   const { list } = useNavigation();
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
 
-  const { formProps, saveButtonProps } = useForm({
-    resource: "perfiles", // Guardamos en la tabla real de la base de datos
-    redirect: false, // Desactivamos la redirección automática para controlarla nosotros
-    onMutationSuccess: () => {
-      // Al guardar con éxito, volvemos a la lista de Estudiantes
+  const handleGuardarManual = async (values: any) => {
+    setLoading(true);
+    try {
+      // Validar que tenga email para poder crear el usuario
+      if (!values.email || !values.email.includes('@')) {
+        throw new Error("El correo electrónico es obligatorio y debe ser válido para crear el acceso al portal");
+      }
+
+      // 1. Generar contraseña temporal (identificación)
+      const passwordTemporal = values.identificacion || 'estudiante123';
+
+      // 2. Crear usuario en auth.users
+      const { data: authData, error: authError } = await supabaseBrowserClient.auth.admin.createUser({
+        email: values.email,
+        password: passwordTemporal,
+        email_confirm: true,
+        user_metadata: {
+          nombre_completo: values.nombre_completo,
+          rol: 'estudiante'
+        }
+      });
+
+      if (authError) {
+        console.error("Error creando usuario auth:", authError);
+        throw new Error("No se pudo crear el usuario de acceso: " + authError.message);
+      }
+
+      if (!authData.user) {
+        throw new Error("No se recibió el ID del usuario creado");
+      }
+
+      const userId = authData.user.id;
+
+      // 3. Crear perfil con el ID del usuario
+      const datosParaEnviar = {
+        id: userId,
+        nombre_completo: values.nombre_completo,
+        identificacion: values.identificacion,
+        email: values.email,
+        telefono: values.telefono,
+        rol: 'estudiante',
+        fecha_nacimiento: values.fecha_nacimiento ? values.fecha_nacimiento.format("YYYY-MM-DD") : null,
+        genero: values.genero || null,
+        talla_camiseta: values.talla_camiseta || null,
+        direccion: values.direccion || null,
+        acudiente_nombre: values.acudiente_nombre || null,
+        acudiente_telefono: values.acudiente_telefono || null,
+        observaciones: values.observaciones || null,
+      };
+
+      const { error: perfilError } = await supabaseBrowserClient
+        .from("perfiles")
+        .insert(datosParaEnviar);
+
+      if (perfilError) {
+        console.error("Error creando perfil:", perfilError);
+        // Intentar eliminar el usuario de auth si falla el perfil
+        await supabaseBrowserClient.auth.admin.deleteUser(userId);
+        throw new Error("Error al crear el perfil: " + perfilError.message);
+      }
+
+      // 4. Éxito
+      message.success({
+        content: (
+          <div>
+            <div>¡Estudiante matriculado correctamente!</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>
+              Email: <strong>{values.email}</strong><br/>
+              Contraseña temporal: <strong>{passwordTemporal}</strong>
+            </div>
+          </div>
+        ),
+        duration: 8
+      });
+      
       list("estudiantes");
-    },
-  });
+
+    } catch (error: any) {
+      console.error("Error creando estudiante:", error);
+      message.error(error.message || "Error al crear el estudiante");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <Create saveButtonProps={saveButtonProps} title="Matricular Nuevo Estudiante">
-    <Form {...formProps} form={formProps.form} layout="vertical">
-        
-        {/* --- CAMPO OCULTO: ROL AUTOMÁTICO --- */}
-        {/* Esto asegura que se cree como estudiante y no como otra cosa */}
-        <Form.Item name="rol" initialValue="estudiante" hidden>
-            <Input />
-        </Form.Item>
+    <Create 
+      title="Matricular Nuevo Estudiante"
+      isLoading={loading}
+      saveButtonProps={{
+        onClick: () => form.submit(),
+        disabled: loading
+      }}
+    >
+      <Form 
+        form={form}
+        layout="vertical" 
+        onFinish={handleGuardarManual}
+      >
 
-        <h3 style={{ color: '#722ed1', marginTop: 0 }}>Datos Personales del Alumno</h3>
+        <Alert 
+          message="Acceso al Portal Estudiantil" 
+          description="El correo electrónico es obligatorio para crear las credenciales de acceso al portal. Se usará la identificación como contraseña temporal."
+          type="info" 
+          showIcon 
+          style={{ marginBottom: 16 }}
+        />
+
+        <h3 style={{ color: '#5B21B6', marginTop: 0 }}>Datos Personales del Alumno</h3>
         <p style={{ color: '#888', marginBottom: 20 }}>
             Ingresa los datos completos para crear el expediente académico.
         </p>
@@ -92,14 +184,15 @@ export default function CreateEstudiante() {
                         <Select.Option value="M">M</Select.Option>
                         <Select.Option value="L">L</Select.Option>
                         <Select.Option value="XL">XL</Select.Option>
-                        <Select.Option value="XXL">XXL</Select.Option>
-                    </Select>
-                </Form.Item>
-            </Col>
-        </Row>
-
-        <Divider />
-
+                        <Selec5B21B6' }}>Información de Contacto</h3>
+        
+        <Row gutter={24}>
+            <Col xs={24} md={12}>
+                <Form.Item 
+                    label="Correo Electrónico" 
+                    name="email"
+                    rules={[
+                        { required: true, message: "Correo obligatorio" },
         <h3 style={{ color: '#722ed1' }}>Información de Contacto</h3>
         
         <Row gutter={24}>
@@ -135,7 +228,7 @@ export default function CreateEstudiante() {
         </Form.Item>
 
         <Divider />
-
+5B21B6
         <h3 style={{ color: '#722ed1' }}>Información Adicional</h3>
 
         <Row gutter={24}>

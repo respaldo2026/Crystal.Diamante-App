@@ -1,7 +1,7 @@
 "use client";
 
-import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Tooltip } from "antd";
-import { PlusOutlined, EditOutlined, BookOutlined } from "@ant-design/icons";
+import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Tooltip, Dropdown } from "antd";
+import { PlusOutlined, EditOutlined, BookOutlined, MoreOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";
 import type { CheckboxChangeEvent } from "antd/es/checkbox";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -340,26 +340,27 @@ export default function ProgramasPage() {
     {
       title: "Acciones",
       key: "acciones",
-      width: 200,
+      width: 80,
       render: (_: any, record: any) => {
+        const menuItems = [
+          {
+            key: "edit",
+            label: "Editar",
+            icon: <EditOutlined />,
+            onClick: () => handleAction("edit", record),
+          },
+          {
+            key: "toggle",
+            label: record.activo ? "Desactivar" : "Activar",
+            danger: record.activo,
+            onClick: () => handleAction("toggle", record),
+          },
+        ];
+
         return (
-          <Space wrap size="small">
-            <Button 
-              size="small" 
-              type="primary"
-              icon={<EditOutlined />}
-              onClick={() => handleAction("edit", record)}
-            >
-              Editar
-            </Button>
-            <Button 
-              size="small" 
-              danger={record.activo}
-              onClick={() => handleAction("toggle", record)}
-            >
-              {record.activo ? "Desactivar" : "Activar"}
-            </Button>
-          </Space>
+          <Dropdown menu={{ items: menuItems }} trigger={["click"]}>
+            <Button icon={<MoreOutlined />} size="small" />
+          </Dropdown>
         );
       },
     },

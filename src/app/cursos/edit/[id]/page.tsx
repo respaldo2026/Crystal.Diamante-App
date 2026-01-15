@@ -130,20 +130,33 @@ export default function CursoEdit() {
     
 
     const [programas, setProgramas] = useState<any[]>([]);
+    const [profesores, setProfesores] = useState<any[]>([]);
     
     useEffect(() => {
-        const cargarProgramas = async () => {
-            const { data, error } = await supabaseBrowserClient
+        const cargarDatos = async () => {
+            // Cargar programas
+            const { data: dataProgramas, error: errorProgramas } = await supabaseBrowserClient
                 .from("programas")
                 .select("id, nombre")
                 .eq("activo", true)
                 .order("nombre");
             
-            if (!error && data) {
-                setProgramas(data);
+            if (!errorProgramas && dataProgramas) {
+                setProgramas(dataProgramas);
+            }
+
+            // Cargar profesores
+            const { data: dataProfesores, error: errorProfesores } = await supabaseBrowserClient
+                .from("perfiles")
+                .select("id, nombre_completo, email")
+                .eq("rol", "profesor")
+                .order("nombre_completo");
+            
+            if (!errorProfesores && dataProfesores) {
+                setProfesores(dataProfesores);
             }
         };
-        cargarProgramas();
+        cargarDatos();
     }, []);
 
     const seSolapanHoras = (inicioA: string | null, finA: string | null, inicioB: string | null, finB: string | null) => {
@@ -428,7 +441,7 @@ export default function CursoEdit() {
             >
                 
                 <Row gutter={24}>
-                    <Col span={12}>
+                    <Col span={8}>
                         <Form.Item
                             label="Programa Académico"
                             name="programa_id"
@@ -448,13 +461,34 @@ export default function CursoEdit() {
                         </Form.Item>
                     </Col>
                     
-                    <Col span={12}>
+                    <Col span={8}>
                         <Form.Item
                             label="Nombre del grupo"
                             name="nombre"
                             rules={[{ required: true, message: "El nombre es obligatorio" }]}
                         >
                             <Input placeholder="Ej: Grupo A, Grupo Mañana" />
+                        </Form.Item>
+                    </Col>
+
+                    <Col span={8}>
+                        <Form.Item
+                            label="Profesor Asignado"
+                            name="profesor_id"
+                            rules={[{ required: true, message: "Selecciona el profesor" }]}
+                        >
+                            <Select 
+                                placeholder="Selecciona un profesor"
+                                showSearch
+                                allowClear
+                                filterOption={(input, option) =>
+                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                options={profesores.map(p => ({ 
+                                    label: p.nombre_completo, 
+                                    value: p.id 
+                                }))}
+                            />
                         </Form.Item>
                     </Col>
                 </Row>

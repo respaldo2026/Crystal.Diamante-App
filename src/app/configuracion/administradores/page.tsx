@@ -1,17 +1,22 @@
 "use client";
 
 import React, { useState } from "react";
-import { Form, Input, Row, Col, Alert, Button, Card, Table, Space, Popconfirm, Spin, App } from "antd";
-import { DeleteOutlined, PlusOutlined, UserOutlined } from "@ant-design/icons";
+import { Form, Input, Row, Col, Alert, Button, Card, Table, Space, Popconfirm, Spin, App, Modal, Dropdown, Checkbox, Divider, Tag } from "antd";
+import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined, MoreOutlined, LockOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { MODULOS_DISPONIBLES } from "@hooks/useRolePermissions";
 
 export default function AdministradoresPage() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [form] = Form.useForm();
+    const [editForm] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [adminsList, setAdminsList] = useState<any[]>([]);
     const [listLoading, setListLoading] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [editModalVisible, setEditModalVisible] = useState(false);
+    const [editingAdmin, setEditingAdmin] = useState<any>(null);
+    const [permisos, setPermisos] = useState<Record<string, boolean>>({});
 
     // Cargar lista de administradores al montar
     React.useEffect(() => {
@@ -22,6 +27,7 @@ export default function AdministradoresPage() {
         setListLoading(true);
         try {
             console.log("📋 Cargando administradores...");
+            console.log("🔑 Usuario actual:", await supabaseBrowserClient.auth.getUser());
             
             const { data, error } = await supabaseBrowserClient
                 .from("perfiles")
@@ -30,13 +36,22 @@ export default function AdministradoresPage() {
                 .order("created_at", { ascending: false });
 
             console.log("✅ Respuesta de BD:", { data, error });
+            console.log("📊 Total de admins encontrados:", data?.length || 0);
+            
+            if (data && data.length > 0) {
+                console.log("👥 Administradores:", data);
+            } else {
+                console.warn("⚠️ No se encontraron administradores. Verifica:");
+                console.warn("   1. ¿Hay registros en 'perfiles' con rol='admin'?");
+                console.warn("   2. ¿RLS está bloqueando la consulta?");
+                console.warn("   3. ¿Los emails están confirmados en auth.users?");
+            }
 
             if (error) {
                 console.error("❌ Error en query:", error);
                 throw error;
             }
             
-            console.log("📊 Total de admins encontrados:", data?.length || 0);
             setAdminsList(data || []);
         } catch (error: any) {
             console.error("❌ Error cargando admins:", error);
@@ -99,23 +114,25 @@ export default function AdministradoresPage() {
 
             if (updateError) {
                 console.error("Error actualizando perfil:", updateError);
-                // No es crítico si falla la actualización, el usuario ya existe
                 message.warning('Usuario creado pero no se pudieron guardar todos los datos');
             } else {
                 console.log('✅ Perfil actualizado');
                 message.success(`✅ Administrador creado correctamente.\nEmail: ${values.email}\nContraseña: ${passwordAuth}`);
             }
 
-            // 3. Limpiar formulario y recargar lista
+            // 3. Limpiar formulario
             form.resetFields();
             setShowForm(false);
             
-            // Esperar un poco para que el trigger se procese completamente
-            console.log('⏳ Esperando a que se procese el trigger...');
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
+            // Recargar inmediatamente y varias veces para asegurar
             console.log('🔄 Recargando lista de administradores...');
             await cargarAdministradores();
+            
+            // Esperar y recargar una vez más por si acaso
+            setTimeout(async () => {
+                console.log('🔄 Segunda recarga...');
+                await cargarAdministradores();
+            }, 2000);
 
         } catch (error: any) {
             console.error("Error creando admin:", error);
@@ -140,7 +157,95 @@ export default function AdministradoresPage() {
             message.error("Error al eliminar: " + error.message);
         }
     };
+    const abrirModalEditar = async (admin: any) => {
+        setEditingAdmin(admin);
+        editForm.setFieldsValue({
+            nombre_completo: admin.nombre_completo,
+            identificacion: admin.identificacion,
+            email: admin.email,
+            telefono: admin.telefono,
+            direccion: admin.direccion,
+            observaciones: admin.observaciones,
+        });
 
+        // Cargar permisos del admin
+        try {
+            const { data } = await supabaseBrowserClient
+                .from("admin_permissions")
+                .select("modulo")
+                .eq("admin_id", admin.id);
+
+            const permisosMap: Record<string, boolean> = {};
+            data?.forEach((p: any) => {
+                permisosMap[p.modulo] = true;
+            });
+            setPermisos(permisosMap);
+        } catch (error) {
+            console.error("Error cargando permisos:", error);
+        }
+
+        setEditModalVisible(true);
+    };
+
+    const handleGuardarEdicion = async (values: any) => {
+        setLoading(true);
+        try {
+            // 1. Actualizar perfil
+            const { error: updateError } = await supabaseBrowserClient
+                .from("perfiles")
+                .update({
+                    nombre_completo: values.nombre_completo,
+                    identificacion: values.identificacion,
+                    email: values.email,
+                    telefono: values.telefono || null,
+                    direccion: values.direccion || null,
+                    observaciones: values.observaciones || null,
+                })
+                .eq("id", editingAdmin.id);
+
+            if (updateError) throw updateError;
+
+            // 2. Actualizar permisos
+            // Eliminar permisos existentes
+            await supabaseBrowserClient
+                .from("admin_permissions")
+                .delete()
+                .eq("admin_id", editingAdmin.id);
+
+            // Insertar nuevos permisos
+            const permisosArray = Object.keys(permisos)
+                .filter(key => permisos[key])
+                .map(modulo => ({
+                    admin_id: editingAdmin.id,
+                    modulo: modulo,
+                }));
+
+            if (permisosArray.length > 0) {
+                await supabaseBrowserClient
+                    .from("admin_permissions")
+                    .insert(permisosArray);
+            }
+
+            message.success("✅ Administrador actualizado correctamente");
+            setEditModalVisible(false);
+            editForm.resetFields();
+            setEditingAdmin(null);
+            setPermisos({});
+            await cargarAdministradores();
+        } catch (error: any) {
+            console.error("Error actualizando:", error);
+            message.error("Error actualizando: " + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handlePermisoChange = (modulo: string, checked: boolean) => {
+        setPermisos(prev => ({
+            ...prev,
+            [modulo]: checked
+        }));
+    };
     return (
         <div style={{ padding: '24px' }}>
             <Card>
@@ -246,11 +351,11 @@ export default function AdministradoresPage() {
                         Administradores Registrados ({adminsList.length})
                     </h3>
 
-                    {adminsList.length === 0 ? (
+                    {adminsList.length === 0 && !listLoading ? (
                         <Alert
-                            message="No hay administradores creados"
-                            description="Crea el primer administrador usando el botón de arriba"
-                            type="warning"
+                            message="No hay administradores registrados"
+                            description="Crea el primer administrador usando el botón 'Nuevo Administrador'"
+                            type="info"
                             style={{ marginBottom: '16px' }}
                         />
                     ) : (
@@ -288,24 +393,162 @@ export default function AdministradoresPage() {
                                 {
                                     title: 'Acciones',
                                     key: 'acciones',
-                                    render: (text, record) => (
-                                        <Popconfirm
-                                            title="Eliminar administrador"
-                                            description="¿Estás seguro de que deseas eliminar este administrador?"
-                                            onConfirm={() => handleEliminarAdmin(record.id)}
-                                            okText="Sí, eliminar"
-                                            cancelText="Cancelar"
-                                        >
-                                            <Button danger size="small" icon={<DeleteOutlined />}>
-                                                Eliminar
-                                            </Button>
-                                        </Popconfirm>
-                                    )
+                                    width: 80,
+                                    render: (text, record) => {
+                                        const menuItems = [
+                                            {
+                                                key: 'edit',
+                                                label: 'Editar Perfil',
+                                                icon: <EditOutlined />,
+                                                onClick: () => abrirModalEditar(record),
+                                            },
+                                            {
+                                                key: 'delete',
+                                                label: 'Eliminar',
+                                                icon: <DeleteOutlined />,
+                                                danger: true,
+                                                onClick: () => {
+                                                    modal.confirm({
+                                                        title: 'Eliminar administrador',
+                                                        content: '¿Estás seguro de que deseas eliminar este administrador?',
+                                                        okText: 'Sí, eliminar',
+                                                        cancelText: 'Cancelar',
+                                                        okButtonProps: { danger: true },
+                                                        onOk: () => handleEliminarAdmin(record.id),
+                                                    });
+                                                },
+                                            },
+                                        ];
+
+                                        return (
+                                            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+                                                <Button icon={<MoreOutlined />} size="small" />
+                                            </Dropdown>
+                                        );
+                                    }
                                 }
                             ]}
                         />
                     )}
                 </Spin>
+
+                {/* MODAL DE EDICIÓN */}
+                <Modal
+                    title={<span><EditOutlined /> Editar Administrador</span>}
+                    open={editModalVisible}
+                    onCancel={() => {
+                        setEditModalVisible(false);
+                        editForm.resetFields();
+                        setEditingAdmin(null);
+                        setPermisos({});
+                    }}
+                    footer={null}
+                    width={800}
+                >
+                    <Form
+                        form={editForm}
+                        layout="vertical"
+                        onFinish={handleGuardarEdicion}
+                    >
+                        <Divider>Información Personal</Divider>
+                        <Row gutter={16}>
+                            <Col span={12}>
+                                <Form.Item
+                                    label="Nombre Completo"
+                                    name="nombre_completo"
+                                    rules={[{ required: true, message: 'Requerido' }]}
+                                >
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item
+                                    label="Cédula"
+                                    name="identificacion"
+                                    rules={[{ required: true, message: 'Requerido' }]}
+                                >
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+
+                        <Row gutter={16}>
+                            <Col span={12}>
+                                <Form.Item
+                                    label="Email"
+                                    name="email"
+                                    rules={[
+                                        { required: true, message: 'Requerido' },
+                                        { type: 'email', message: 'Email inválido' }
+                                    ]}
+                                >
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item
+                                    label="Teléfono"
+                                    name="telefono"
+                                >
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+
+                        <Form.Item
+                            label="Dirección"
+                            name="direccion"
+                        >
+                            <Input />
+                        </Form.Item>
+
+                        <Form.Item
+                            label="Observaciones"
+                            name="observaciones"
+                        >
+                            <Input.TextArea rows={2} />
+                        </Form.Item>
+
+                        <Divider><LockOutlined /> Permisos de Acceso</Divider>
+                        <Alert
+                            message="Selecciona los módulos a los que este administrador tendrá acceso"
+                            type="info"
+                            style={{ marginBottom: 16 }}
+                            showIcon
+                        />
+
+                        <Row gutter={[16, 16]}>
+                            {MODULOS_DISPONIBLES.map((modulo) => (
+                                <Col span={12} key={modulo.key}>
+                                    <Checkbox
+                                        checked={permisos[modulo.key] || false}
+                                        onChange={(e) => handlePermisoChange(modulo.key, e.target.checked)}
+                                    >
+                                        <Tag color="blue">{modulo.label}</Tag>
+                                    </Checkbox>
+                                </Col>
+                            ))}
+                        </Row>
+
+                        <Divider />
+
+                        <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
+                            <Space>
+                                <Button type="primary" htmlType="submit" loading={loading}>
+                                    Guardar Cambios
+                                </Button>
+                                <Button onClick={() => {
+                                    setEditModalVisible(false);
+                                    editForm.resetFields();
+                                    setEditingAdmin(null);
+                                    setPermisos({});
+                                }}>
+                                    Cancelar
+                                </Button>
+                            </Space>
+                        </Form.Item>
+                    </Form>
+                </Modal>
             </Card>
         </div>
     );

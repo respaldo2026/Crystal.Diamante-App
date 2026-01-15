@@ -6,7 +6,7 @@ import {
 } from "antd";
 import { 
   CalendarOutlined, ClockCircleOutlined, UserOutlined, TeamOutlined,
-  LeftOutlined, RightOutlined, EyeOutlined
+  LeftOutlined, RightOutlined, EyeOutlined, BarChartOutlined, UnorderedListOutlined
 } from "@ant-design/icons";
 import { useNavigation } from "@refinedev/core";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -22,7 +22,7 @@ dayjs.locale('es');
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
-type ViewMode = 'week' | 'month' | 'custom';
+type ViewMode = 'timeline' | 'week' | 'month' | 'custom';
 
 interface Curso {
   id: number;
@@ -66,7 +66,7 @@ export default function PlanificadorPage() {
   const { show } = useNavigation();
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [viewMode, setViewMode] = useState<ViewMode>('timeline');
   const [currentDate, setCurrentDate] = useState<Dayjs>(dayjs());
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [inscritosPorCurso, setInscritosPorCurso] = useState<Record<number, number>>({});
@@ -286,10 +286,10 @@ export default function PlanificadorPage() {
   // Obtener color del tag según estado
   const getEstadoColor = (estado: string) => {
     switch (estado) {
-      case 'activo': return 'green';
-      case 'proximo': return 'blue';
-      case 'finalizado': return 'default';
-      default: return 'default';
+      case 'activo': return '#059669';
+      case 'proximo': return '#0284C7';
+      case 'finalizado': return '#6B7280';
+      default: return '#6B7280';
     }
   };
 
@@ -317,14 +317,14 @@ export default function PlanificadorPage() {
     const normalized = (estado || 'programada').toLowerCase();
     switch (normalized) {
       case 'cancelada':
-        return { color: 'red', label: 'Cancelada', border: '#ff4d4f' };
+        return { color: '#DC2626', label: 'Cancelada', border: '#DC2626' };
       case 'reprogramada':
-        return { color: 'orange', label: 'Reprogramada', border: '#fa8c16' };
+        return { color: '#D97706', label: 'Reprogramada', border: '#D97706' };
       case 'dictada':
       case 'completada':
-        return { color: 'green', label: 'Dictada', border: '#52c41a' };
+        return { color: '#059669', label: 'Dictada', border: '#059669' };
       default:
-        return { color: 'blue', label: 'Programada', border: '#1890ff' };
+        return { color: '#0284C7', label: 'Programada', border: '#0284C7' };
     }
   };
 
@@ -417,7 +417,7 @@ export default function PlanificadorPage() {
                 <Space>
                   <CalendarOutlined />
                   <Text strong>{dia.format('dddd DD-MMM-YYYY').toUpperCase()}</Text>
-                  <Badge count={eventosDelDia.length} style={{ backgroundColor: '#52c41a' }} />
+                  <Badge count={eventosDelDia.length} style={{ backgroundColor: '#059669' }} />
                 </Space>
               }
             >
@@ -439,10 +439,10 @@ export default function PlanificadorPage() {
                         hoverable={!esCancelada}
                         onClick={esCancelada ? undefined : () => show("cursos", evento.curso.id)}
                         style={{ 
-                          borderLeft: `4px solid ${enConflicto ? '#ff4d4f' : estadoClaseProps.border || '#1890ff'}`,
+                          borderLeft: `4px solid ${enConflicto ? '#DC2626' : estadoClaseProps.border || '#0284C7'}`,
                           height: '100%',
-                          opacity: esCancelada ? 0.75 : 1,
-                          background: esCancelada ? '#fff1f0' : enConflicto ? '#fff2f0' : undefined
+                          opacity: esCancelada ? 0.85 : 1,
+                          background: esCancelada ? '#FEE2E2' : enConflicto ? '#FEF2F2' : undefined
                         }}
                       >
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -518,6 +518,291 @@ export default function PlanificadorPage() {
     );
   };
 
+  // Vista Timeline: muestra todos los cursos como barras horizontales con su duración completa
+  const renderTimelineView = () => {
+    const cursosOrdenados = [...cursos].sort((a, b) => {
+      return dayjs(a.fecha_inicio).valueOf() - dayjs(b.fecha_inicio).valueOf();
+    });
+
+    if (cursosOrdenados.length === 0) {
+      return (
+        <Card>
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <CalendarOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
+            <Text type="secondary">No hay cursos activos</Text>
+          </div>
+        </Card>
+      );
+    }
+
+    // Calcular el rango total de fechas
+    const fechaMasAntigua = cursosOrdenados.reduce((min, c) => {
+      const fecha = dayjs(c.fecha_inicio);
+      return fecha.isBefore(min) ? fecha : min;
+    }, dayjs(cursosOrdenados[0].fecha_inicio));
+
+    const fechaMasLejana = cursosOrdenados.reduce((max, c) => {
+      const fechaFin = c.fecha_fin 
+        ? dayjs(c.fecha_fin)
+        : dayjs(c.fecha_inicio).add(
+            c.programas?.duracion ? parseInt(c.programas.duracion) : 6,
+            'month'
+          );
+      return fechaFin.isAfter(max) ? fechaFin : max;
+    }, dayjs(cursosOrdenados[0].fecha_inicio));
+
+    const totalDias = fechaMasLejana.diff(fechaMasAntigua, 'day');
+    const totalMeses = Math.ceil(fechaMasLejana.diff(fechaMasAntigua, 'month', true));
+
+    // Colores para diferenciar cursos - Paleta profesional con buen contraste
+    const colores = [
+      '#5B21B6', // Púrpura oscuro
+      '#059669', // Verde esmeralda
+      '#0284C7', // Azul cyan
+      '#DC2626', // Rojo
+      '#7C3AED', // Violeta
+      '#0891B2', // Cyan
+      '#D97706', // Ámbar
+      '#DB2777', // Rosa
+      '#2563EB', // Azul
+      '#16A34A', // Verde
+    ];
+
+    const getCursoColor = (index: number) => colores[index % colores.length];
+
+    // Generar marcadores de meses en el eje X
+    const mesesArray: Dayjs[] = [];
+    let mesActual = fechaMasAntigua.startOf('month');
+    while (mesActual.isBefore(fechaMasLejana) || mesActual.isSame(fechaMasLejana, 'month')) {
+      mesesArray.push(mesActual);
+      mesActual = mesActual.add(1, 'month');
+    }
+
+    return (
+      <Card>
+        <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
+          {/* Encabezado de meses */}
+          <div style={{ 
+            display: 'flex', 
+            borderBottom: '2px solid #d9d9d9',
+            marginBottom: 16,
+            position: 'sticky',
+            top: 0,
+            background: 'white',
+            zIndex: 10,
+            paddingTop: 8
+          }}>
+            <div style={{ width: 250, flexShrink: 0, paddingRight: 16 }}>
+              <Text strong>Curso / Programa</Text>
+            </div>
+            <div style={{ display: 'flex', flex: 1, minWidth: Math.max(800, totalMeses * 100) }}>
+              {mesesArray.map(mes => {
+                const porcentajeInicio = mes.diff(fechaMasAntigua, 'day') / totalDias * 100;
+                const diasEnMes = mes.daysInMonth();
+                const porcentajeAncho = diasEnMes / totalDias * 100;
+                
+                return (
+                  <div 
+                    key={mes.format('YYYY-MM')}
+                    style={{
+                      width: `${porcentajeAncho}%`,
+                      textAlign: 'center',
+                      borderRight: '1px solid #f0f0f0',
+                      padding: '4px 0',
+                      fontSize: 12
+                    }}
+                  >
+                    <Text strong>{mes.format('MMM YYYY')}</Text>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Barras de cursos */}
+          <div>
+            {cursosOrdenados.map((curso, index) => {
+              const fechaInicio = dayjs(curso.fecha_inicio);
+              const fechaFin = curso.fecha_fin 
+                ? dayjs(curso.fecha_fin)
+                : fechaInicio.add(
+                    curso.programas?.duracion ? parseInt(curso.programas.duracion) : 6,
+                    'month'
+                  );
+
+              const diasDesdeinicio = fechaInicio.diff(fechaMasAntigua, 'day');
+              const duracionDias = fechaFin.diff(fechaInicio, 'day');
+              
+              const porcentajeLeft = (diasDesdeinicio / totalDias) * 100;
+              const porcentajeWidth = (duracionDias / totalDias) * 100;
+
+              const inscritos = inscritosPorCurso[curso.id] || 0;
+              const color = getCursoColor(index);
+
+              // Obtener días de clase
+              const diasClase = curso.dias_semana 
+                ? curso.dias_semana.split(',').map(d => d.trim()).join(', ')
+                : 'No especificado';
+
+              const horario = curso.hora_inicio && curso.hora_fin
+                ? `${dayjs(curso.hora_inicio, 'HH:mm:ss').format('h:mm A')} - ${dayjs(curso.hora_fin, 'HH:mm:ss').format('h:mm A')}`
+                : 'No especificado';
+
+              return (
+                <div 
+                  key={curso.id}
+                  style={{ 
+                    display: 'flex',
+                    marginBottom: 12,
+                    alignItems: 'center',
+                    minHeight: 60
+                  }}
+                >
+                  {/* Información del curso (columna izquierda) */}
+                  <div style={{ 
+                    width: 250, 
+                    flexShrink: 0, 
+                    paddingRight: 16
+                  }}>
+                    <Tooltip title="Ver detalles del curso">
+                      <div 
+                        onClick={() => show("cursos", curso.id)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <Text strong ellipsis style={{ display: 'block' }}>
+                          {curso.programas?.nombre || curso.nombre}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+                          <UserOutlined /> {curso.perfiles?.nombre_completo || 'Sin profesor'}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+                          <TeamOutlined /> {inscritos}/{curso.cupos} estudiantes
+                        </Text>
+                        <Tag color={getEstadoColor(curso.estado)} style={{ fontSize: 10, marginTop: 4 }}>
+                          {curso.estado}
+                        </Tag>
+                      </div>
+                    </Tooltip>
+                  </div>
+
+                  {/* Barra de tiempo */}
+                  <div style={{ 
+                    flex: 1, 
+                    position: 'relative',
+                    minWidth: Math.max(800, totalMeses * 100),
+                    height: 50
+                  }}>
+                    <Tooltip
+                      title={
+                        <div>
+                          <div><strong>{curso.programas?.nombre || curso.nombre}</strong></div>
+                          <Divider style={{ margin: '8px 0', borderColor: 'rgba(255,255,255,0.3)' }} />
+                          <div>Inicio: {fechaInicio.format('DD/MMM/YYYY')}</div>
+                          <div>Fin: {fechaFin.format('DD/MMM/YYYY')}</div>
+                          <div>Duración: {Math.ceil(fechaFin.diff(fechaInicio, 'month', true))} meses</div>
+                          <Divider style={{ margin: '8px 0', borderColor: 'rgba(255,255,255,0.3)' }} />
+                          <div><ClockCircleOutlined /> {diasClase}</div>
+                          <div>{horario}</div>
+                        </div>
+                      }
+                    >
+                      <div
+                        onClick={() => show("cursos", curso.id)}
+                        style={{
+                          position: 'absolute',
+                          left: `${porcentajeLeft}%`,
+                          width: `${porcentajeWidth}%`,
+                          height: 40,
+                          backgroundColor: color,
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                          transition: 'all 0.3s',
+                          overflow: 'hidden',
+                          padding: '0 8px'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.25)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                        }}
+                      >
+                        <div style={{ 
+                          color: 'white', 
+                          fontSize: 11,
+                          fontWeight: 600,
+                          textAlign: 'center',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {diasClase} • {horario}
+                        </div>
+                      </div>
+                    </Tooltip>
+
+                    {/* Marcador de inicio */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: `${porcentajeLeft}%`,
+                        top: -8,
+                        fontSize: 10,
+                        color: '#6B7280',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {fechaInicio.format('DD/MMM')}
+                    </div>
+
+                    {/* Marcador de fin */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: `${porcentajeLeft + porcentajeWidth}%`,
+                        top: -8,
+                        fontSize: 10,
+                        color: '#6B7280',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        transform: 'translateX(-100%)'
+                      }}
+                    >
+                      {fechaFin.format('DD/MMM')}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Leyenda */}
+          <Divider />
+          <div style={{ textAlign: 'center', paddingTop: 16 }}>
+            <Space wrap>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                <strong>Total:</strong> {cursosOrdenados.length} curso(s)
+              </Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                <strong>Período:</strong> {fechaMasAntigua.format('DD/MMM/YYYY')} - {fechaMasLejana.format('DD/MMM/YYYY')}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                <strong>Duración total:</strong> {totalMeses} meses
+              </Text>
+            </Space>
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
   return (
     <div style={{ padding: 24 }}>
       <Card style={{ marginBottom: 24 }}>
@@ -536,11 +821,20 @@ export default function PlanificadorPage() {
                   setViewMode(value);
                   setCustomRange(null);
                 }}
-                style={{ width: 120 }}
+                style={{ width: 150 }}
               >
-                <Select.Option value="week">Semana</Select.Option>
-                <Select.Option value="month">Mes</Select.Option>
-                <Select.Option value="custom">Rango</Select.Option>
+                <Select.Option value="timeline">
+                  <BarChartOutlined /> Timeline
+                </Select.Option>
+                <Select.Option value="week">
+                  <UnorderedListOutlined /> Semana
+                </Select.Option>
+                <Select.Option value="month">
+                  <UnorderedListOutlined /> Mes
+                </Select.Option>
+                <Select.Option value="custom">
+                  <UnorderedListOutlined /> Rango
+                </Select.Option>
               </Select>
               
               {viewMode === 'custom' ? (
@@ -549,13 +843,13 @@ export default function PlanificadorPage() {
                   onChange={(dates) => setCustomRange(dates ? (dates as [Dayjs, Dayjs]) : null)}
                   format="DD MMM YYYY"
                 />
-              ) : (
+              ) : viewMode !== 'timeline' ? (
                 <Space.Compact>
                   <Button icon={<LeftOutlined />} onClick={() => navigatePeriod('prev')} />
                   <Button onClick={() => setCurrentDate(dayjs())}>Hoy</Button>
                   <Button icon={<RightOutlined />} onClick={() => navigatePeriod('next')} />
                 </Space.Compact>
-              )}
+              ) : null}
 
               <Select
                 allowClear
@@ -573,19 +867,23 @@ export default function PlanificadorPage() {
         
         <Divider />
         
-        <Row justify="center">
-          <Col>
-            <Title level={4} style={{ margin: 0, textAlign: 'center' }}>
-              {dateRange.title}
-            </Title>
-          </Col>
-        </Row>
+        {viewMode !== 'timeline' && (
+          <Row justify="center">
+            <Col>
+              <Title level={4} style={{ margin: 0, textAlign: 'center' }}>
+                {dateRange.title}
+              </Title>
+            </Col>
+          </Row>
+        )}
       </Card>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60 }}>
           <Spin size="large" tip="Cargando cursos..." />
         </div>
+      ) : viewMode === 'timeline' ? (
+        renderTimelineView()
       ) : (
         renderListView()
       )}

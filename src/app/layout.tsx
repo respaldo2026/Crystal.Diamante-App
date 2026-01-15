@@ -18,6 +18,7 @@ import {
   DollarCircleOutlined, 
   SettingOutlined, 
   CalculatorOutlined,
+  UserAddOutlined,
   ShopOutlined,
   CalendarOutlined,
   CustomerServiceOutlined,
@@ -62,7 +63,38 @@ export default function RootLayout({
     <html lang="es">
       <body>
         <RefineKbarProvider>
-          <ConfigProvider theme={RefineThemes.Purple}>
+          <ConfigProvider 
+            theme={{
+              token: {
+                colorPrimary: '#5B21B6', // Púrpura profesional más oscuro
+                colorSuccess: '#059669', // Verde esmeralda
+                colorWarning: '#D97706', // Ámbar
+                colorError: '#DC2626', // Rojo más profesional
+                colorInfo: '#0284C7', // Azul cyan profesional
+                colorTextBase: '#1F2937', // Gris oscuro para texto
+                colorBgBase: '#FFFFFF',
+                borderRadius: 8,
+                fontSize: 14,
+              },
+              components: {
+                Button: {
+                  controlHeight: 36,
+                  fontWeight: 500,
+                },
+                Card: {
+                  borderRadiusLG: 12,
+                },
+                Tag: {
+                  borderRadiusSM: 6,
+                },
+                Table: {
+                  headerBg: '#F9FAFB',
+                  headerColor: '#374151',
+                  rowHoverBg: '#F3F4F6',
+                },
+              },
+            }}
+          >
             <AntdApp>
               <Refine
                 routerProvider={routerProvider}
@@ -185,15 +217,6 @@ export default function RootLayout({
                     meta: {
                       label: "Configuración",
                       icon: <SettingOutlined />,
-                    },
-                  },
-                  {
-                    name: "administradores",
-                    list: "/configuracion/administradores",
-                    meta: {
-                      label: "Administradores",
-                      icon: <SettingOutlined />,
-                      parent: "configuracion",
                     },
                   },
                   {

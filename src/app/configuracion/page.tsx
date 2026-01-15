@@ -1,17 +1,25 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Form, Input, Button, Card, Row, Col, message, Divider, Spin, Tabs, Checkbox, Tag, Empty, Table, Modal, Space, Switch, Tooltip } from "antd";
+import { Form, Input, Button, Card, Row, Col, Divider, Spin, Tabs, Checkbox, Tag, Empty, Table, Modal, Space, Switch, Tooltip, App } from "antd";
 import { 
   SaveOutlined, ShopOutlined, InstagramOutlined, 
   GlobalOutlined, PhoneOutlined, SafetyCertificateOutlined,
   LockOutlined, MessageOutlined, PlusOutlined, EditOutlined, DeleteOutlined, InfoCircleOutlined,
-  DollarOutlined, SortAscendingOutlined
+  DollarOutlined, SortAscendingOutlined, UserAddOutlined
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRolePermissions, ROLES_DISPONIBLES, MODULOS_DISPONIBLES } from "@hooks/useRolePermissions";
+import dynamic from "next/dynamic";
+
+// Importar la página de administradores de forma dinámica
+const AdministradoresContent = dynamic(() => import("./administradores/page"), {
+  ssr: false,
+  loading: () => <Spin size="large" style={{ display: 'block', margin: '50px auto' }} />
+});
 
 export default function ConfiguracionPage() {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [configId, setConfigId] = useState<string | null>(null);
@@ -573,14 +581,14 @@ export default function ConfiguracionPage() {
                   Configura qué módulos y pestañas puede ver cada rol en la aplicación.
                 </p>
                 
-                {ROLES_DISPONIBLES.length === 0 ? (
+                {Object.keys(ROLES_DISPONIBLES).length === 0 ? (
                   <Empty description="No hay roles configurados" />
                 ) : (
                   <Row gutter={[24, 24]}>
-                    {ROLES_DISPONIBLES.map((rol) => (
-                      <Col xs={24} md={12} lg={8} key={rol.key}>
+                    {Object.entries(ROLES_DISPONIBLES).map(([key, rol]) => (
+                      <Col xs={24} md={12} lg={8} key={key}>
                         <Card
-                          title={<Tag color="blue">{rol.label}</Tag>}
+                          title={<Tag color={rol.color}>{rol.label}</Tag>}
                           size="small"
                           style={{ height: '100%' }}
                         >
@@ -588,8 +596,8 @@ export default function ConfiguracionPage() {
                             {MODULOS_DISPONIBLES.map((modulo) => (
                               <Checkbox
                                 key={modulo.key}
-                                checked={permisos[rol.key]?.[modulo.key] ?? false}
-                                onChange={(e) => handlePermisosChange(rol.key, modulo.key, e.target.checked)}
+                                checked={permisos[key]?.[modulo.key] ?? false}
+                                onChange={(e) => handlePermisosChange(key, modulo.key, e.target.checked)}
                               >
                                 {modulo.label}
                               </Checkbox>
@@ -843,6 +851,11 @@ export default function ConfiguracionPage() {
                 </Modal>
               </Card>
             )
+          },
+          {
+            key: "administradores",
+            label: <span><UserAddOutlined /> Administradores</span>,
+            children: <AdministradoresContent />
           }
         ]}
       />

@@ -97,9 +97,10 @@ export default function ShowProfesorDashboard() {
         // Cursos activos
         const { data: dataCursos, error: errCursos } = await supabase
             .from("cursos")
-            .select(`*, matriculas ( count )`)
+            .select(`*, matriculas!inner ( count )`)
             .eq("profesor_id", idProfesor)
-            .eq("estado", "activo");
+            .eq("estado", "activo")
+            .eq("matriculas.estado", "activo");
         
         if (errCursos) throw errCursos;
 

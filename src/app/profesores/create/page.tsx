@@ -18,14 +18,43 @@ export default function ProfesorCreate() {
     const handleGuardarManual = async (values: any) => {
         setLoading(true);
         try {
-            // 1. Preparar datos para la tabla 'perfiles'
+            // Validar que tenga email para poder crear el usuario
+            if (!values.email || !values.email.includes('@')) {
+                throw new Error("El correo electrónico es obligatorio y debe ser válido para crear el acceso");
+            }
+
+            // 1. Generar contraseña temporal (identificación o nombre)
+            const passwordTemporal = values.identificacion || values.nombre_completo.replace(/\s+/g, '').toLowerCase();
+
+            // 2. Crear usuario en auth.users usando Supabase Admin API
+            const { data: authData, error: authError } = await supabaseBrowserClient.auth.admin.createUser({
+                email: values.email,
+                password: passwordTemporal,
+                email_confirm: true,
+                user_metadata: {
+                    nombre_completo: values.nombre_completo,
+                    rol: 'profesor'
+                }
+            });
+
+            if (authError) {
+                console.error("Error creando usuario auth:", authError);
+                throw new Error("No se pudo crear el usuario de acceso: " + authError.message);
+            }
+
+            if (!authData.user) {
+                throw new Error("No se recibió el ID del usuario creado");
+            }
+
+            const userId = authData.user.id;
+
+            // 3. Crear perfil con el ID del usuario
             const datosParaEnviar = {
+                id: userId, // Usamos el ID del usuario de auth
                 nombre_completo: values.nombre_completo,
                 identificacion: values.identificacion,
                 email: values.email,
                 telefono: values.telefono,
-                
-                // Campos nuevos (nos aseguramos que no sean undefined)
                 rol: 'profesor',
                 direccion: values.direccion || null,
                 telefono_2: values.telefono_2 || null,
@@ -33,20 +62,36 @@ export default function ProfesorCreate() {
                 fecha_nacimiento: values.fecha_nacimiento ? values.fecha_nacimiento.format("YYYY-MM-DD") : null,
             };
 
-            // 2. Insertar directamente en Supabase (Tabla PERFILES)
-            const { error } = await supabaseBrowserClient
+            const { error: perfilError } = await supabaseBrowserClient
                 .from("perfiles")
                 .insert(datosParaEnviar);
 
-            if (error) throw error;
+            if (perfilError) {
+                console.error("Error creando perfil:", perfilError);
+                // Intentar eliminar el usuario de auth si falla el perfil
+                await supabaseBrowserClient.auth.admin.deleteUser(userId);
+                throw new Error("Error al crear el perfil: " + perfilError.message);
+            }
 
-            // 3. Éxito: Avisar y Redirigir
-            message.success("¡Profesor creado correctamente!");
-            list("profesores"); // Nos devuelve a la lista
+            // 4. Éxito
+            message.success({
+                content: (
+                    <div>
+                        <div>¡Profesor creado correctamente!</div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                            Email: <strong>{values.email}</strong><br/>
+                            Contraseña temporal: <strong>{passwordTemporal}</strong>
+                        </div>
+                    </div>
+                ),
+                duration: 8
+            });
+            
+            list("profesores");
 
         } catch (error: any) {
-            console.error("Error creando:", error);
-            message.error("Error: " + (error.message || "No se pudo guardar"));
+            console.error("Error creando profesor:", error);
+            message.error(error.message || "Error al crear el profesor");
         } finally {
             setLoading(false);
         }
@@ -104,11 +149,23 @@ export default function ProfesorCreate() {
                     <PhoneOutlined /> Contacto
                 </Divider>
 
+                <Alert 
+                    message="Acceso al Sistema" 
+                    description="El correo electrónico es obligatorio para crear las credenciales de acceso. Se usará la identificación como contraseña temporal."
+                    type="info" 
+                    showIcon 
+                    style={{ marginBottom: 16 }}
+                />
+
                 <Row gutter={24}>
                     <Col span={8}>
                         <Form.Item
                             label="Correo Electrónico"
                             name="email"
+                            rules={[
+                                { required: true, message: "Correo obligatorio" },
+                                { type: 'email', message: "Ingresa un correo válido" }
+                            ]}
                         >
                             <Input prefix={<MailOutlined style={{color:'rgba(0,0,0,.25)'}}/>} placeholder="correo@ejemplo.com" />
                         </Form.Item>
