@@ -8,17 +8,12 @@ import {
 } from "antd";
 import { 
   UserOutlined, BookOutlined, TeamOutlined, PlusOutlined, ExclamationCircleOutlined, StarOutlined,
-  WhatsAppOutlined
+  WhatsAppOutlined, ClockCircleOutlined, DollarCircleOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 const { Title, Text } = Typography;
 
@@ -77,7 +72,7 @@ export default function MiOficinaProfesor() {
   }, []);
 
   const refrescarHorasPendientes = async (profesorId: string) => {
-    const { data: dataSesionesPend, error } = await supabase
+    const { data: dataSesionesPend, error } = await supabaseBrowserClient
       .from("sesiones_clase")
       .select("curso_id, horas_dictadas, estado_pago")
       .eq("profesor_id", profesorId)
@@ -101,7 +96,7 @@ export default function MiOficinaProfesor() {
         setLoading(true);
         
         // Obtener usuario actual
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const { data: { user }, error: userError } = await supabaseBrowserClient.auth.getUser();
         
         if (userError || !user) {
           messageApi.error("Debes iniciar sesión para ver tu oficina");
@@ -110,11 +105,10 @@ export default function MiOficinaProfesor() {
         }
 
         // Buscar perfil del usuario
-        const { data: dataProf, error: errProf } = await supabase
+        const { data: dataProf, error: errProf } = await supabaseBrowserClient
           .from("perfiles")
           .select("id, nombre_completo, email, telefono, rol, foto_url, identificacion, valor_hora")
           .eq("id", user.id)
-          .eq("rol", "profesor")
           .maybeSingle();
         
         if (errProf) {
@@ -123,7 +117,20 @@ export default function MiOficinaProfesor() {
         }
         
         if (!dataProf) {
-          messageApi.error("No tienes permisos de profesor");
+          messageApi.error("Perfil no encontrado");
+          window.location.href = "/login";
+          return;
+        }
+
+        // Verificar que sea profesor
+        if (dataProf.rol !== "profesor") {
+          messageApi.warning("Esta área es solo para profesores");
+          // Redirigir según su rol
+          if (dataProf.rol === "estudiante") {
+            window.location.href = "/portal-estudiante";
+          } else {
+            window.location.href = "/";
+          }
           return;
         }
         
@@ -131,7 +138,7 @@ export default function MiOficinaProfesor() {
         setProfesor(dataProf);
 
         // Cursos activos DEL PROFESOR
-        const { data: dataCursos, error: errCursos } = await supabase
+        const { data: dataCursos, error: errCursos } = await supabaseBrowserClient
             .from("cursos")
             .select(`*, matriculas ( count )`)
             .eq("profesor_id", user.id)
@@ -149,7 +156,7 @@ export default function MiOficinaProfesor() {
         await refrescarHorasPendientes(user.id);
 
         // Historial de cursos DEL PROFESOR
-        const { data: dataCursosHist } = await supabase
+        const { data: dataCursosHist } = await supabaseBrowserClient
           .from("cursos")
           .select("id, nombre, estado, fecha_inicio, fecha_fin")
           .eq("profesor_id", user.id)
@@ -157,7 +164,7 @@ export default function MiOficinaProfesor() {
         setHistorialCursos(dataCursosHist || []);
 
         // Pagos de nómina DEL PROFESOR
-        const { data: dataPagos } = await supabase
+        const { data: dataPagos } = await supabaseBrowserClient
           .from("pagos_nomina")
           .select("id, fecha_pago, total_pagado, total_horas, observaciones")
           .eq("profesor_id", user.id)
@@ -195,7 +202,7 @@ export default function MiOficinaProfesor() {
           setTemaSeleccionado(null);
           
           // A) Estudiantes del curso (desde BD real)
-          const { data: dataAlumnos, error: errAlumnos } = await supabase
+          const { data: dataAlumnos, error: errAlumnos } = await supabaseBrowserClient
             .from("matriculas")
             .select(`id, estudiante_id, perfiles!matriculas_estudiante_id_fkey ( nombre_completo, telefono ), pagos!pagos_matricula_id_fkey ( fecha_pago )`)
             .eq("curso_id", curso.id)
@@ -217,7 +224,7 @@ export default function MiOficinaProfesor() {
           setAlumnosClase(alumnosConPago);
           
           // B) Temas
-          const { data: dataTemas, error: errTemas } = await supabase
+          const { data: dataTemas, error: errTemas } = await supabaseBrowserClient
             .from("temas_curso")
             .select("*")
             .eq("curso_id", curso.id)
@@ -228,7 +235,7 @@ export default function MiOficinaProfesor() {
 
           // C) BUSCAR ASISTENCIA PREVIA
           const fechaHoyStr = dayjs().format("YYYY-MM-DD");
-          const { data: asistenciasHoy } = await supabase
+          const { data: asistenciasHoy } = await supabaseBrowserClient
               .from("asistencias")
               .select("matricula_id, estado, tema_id")
               .eq("fecha", fechaHoyStr)
@@ -303,7 +310,7 @@ export default function MiOficinaProfesor() {
               observaciones: asistenciaMap[alumno.id] ? 'Tema completado' : 'Tema pendiente'
           }));
 
-          const { error: errAsis } = await supabase
+          const { error: errAsis } = await supabaseBrowserClient
             .from("asistencias")
             .upsert(registros, { onConflict: 'matricula_id, fecha' });
 
@@ -311,7 +318,7 @@ export default function MiOficinaProfesor() {
 
           const temaTxt = temasCurso.find(t => t.id === temaSeleccionado)?.titulo || 'Tema del día';
           
-          const { error: errSesion } = await supabase
+          const { error: errSesion } = await supabaseBrowserClient
             .from("sesiones_clase")
             .upsert({
                 curso_id: cursoActivo.id,
@@ -365,7 +372,7 @@ export default function MiOficinaProfesor() {
       }
 
       // Traer SOLO sesiones del ciclo correspondiente
-      const { data: sesionesPend, error } = await supabase
+      const { data: sesionesPend, error } = await supabaseBrowserClient
         .from("sesiones_clase")
         .select("id, curso_id, horas_dictadas, fecha, tema_visto")
         .eq("profesor_id", idProfesor)
@@ -389,7 +396,7 @@ export default function MiOficinaProfesor() {
       const detalleClases = sesionesPend.map((s: any) => `${s.fecha}: ${s.horas_dictadas}h (${s.tema_visto || 'Sin tema'})`).join('\n');
 
       // Insertar pago en pagos_nomina CON DETALLE DE SESIONES
-      const { data: pagoIns, error: errPago } = await supabase
+      const { data: pagoIns, error: errPago } = await supabaseBrowserClient
         .from("pagos_nomina")
         .insert({
           profesor_id: idProfesor,
@@ -406,7 +413,7 @@ export default function MiOficinaProfesor() {
       if (errPago) throw errPago;
 
       // Marcar sesiones del ciclo como pagadas
-      const { error: errUpdate } = await supabase
+      const { error: errUpdate } = await supabaseBrowserClient
         .from("sesiones_clase")
         .update({ estado_pago: 'pagado', pago_nomina_id: pagoIns.data?.id })
         .eq("profesor_id", idProfesor)
@@ -426,7 +433,7 @@ export default function MiOficinaProfesor() {
       setHorasPendientesMap(nuevasHoras);
 
       // Refrescar pagos de nómina
-      const { data: dataPagos } = await supabase
+      const { data: dataPagos } = await supabaseBrowserClient
         .from("pagos_nomina")
         .select("id, fecha_pago, total_pagado, total_horas, observaciones, fecha_inicio_periodo, fecha_fin_periodo")
         .eq("profesor_id", idProfesor)
@@ -444,7 +451,7 @@ export default function MiOficinaProfesor() {
       setGuardandoTema(true);
       try {
           const values = await formPensum.validateFields();
-          const { error } = await supabase.from("temas_curso").insert({
+          const { error } = await supabaseBrowserClient.from("temas_curso").insert({
               ...values,
               curso_id: cursoActivo.id
           });
@@ -455,7 +462,7 @@ export default function MiOficinaProfesor() {
           formPensum.resetFields();
           setModalPensumVisible(false);
           
-          const { data } = await supabase.from("temas_curso").select("*").eq("curso_id", cursoActivo.id).order("orden");
+          const { data } = await supabaseBrowserClient.from("temas_curso").select("*").eq("curso_id", cursoActivo.id).order("orden");
           setTemasCurso(data || []);
 
       } catch (error: any) {
@@ -476,7 +483,7 @@ export default function MiOficinaProfesor() {
       try {
           const values = await formNotas.validateFields();
           
-          const { error } = await supabase.from("calificaciones").insert({
+          const { error } = await supabaseBrowserClient.from("calificaciones").insert({
              matricula_id: estudianteACalificar.id,
              concepto: values.concepto,
              nota: values.nota,
@@ -495,7 +502,7 @@ export default function MiOficinaProfesor() {
               enviarWhatsapp(telefono, mensaje);
             }
 
-            await supabase.from("notificaciones").insert({
+            await supabaseBrowserClient.from("notificaciones").insert({
               user_id: estudianteACalificar.estudiante_id,
               titulo: "Nota baja registrada",
               mensaje,
@@ -539,158 +546,378 @@ export default function MiOficinaProfesor() {
       )}
       
       {profesor && (
-        <Card style={{marginBottom: 20, borderLeft: '5px solid #722ed1'}}>
-            <Row align="middle" gutter={16}>
+        <>
+          {/* HEADER PROFESIONAL */}
+          <Card 
+            style={{
+              marginBottom: 24, 
+              background: 'linear-gradient(135deg, #5B21B6 0%, #7C3AED 100%)',
+              border: 'none',
+              color: 'white'
+            }}
+          >
+            <Row align="middle" gutter={24}>
                 <Col>
                   <Avatar 
-                    size={64} 
-                    style={{backgroundColor: '#87d068'}} 
+                    size={80} 
+                    style={{backgroundColor: '#FFF', color: '#5B21B6'}} 
                     icon={<UserOutlined />} 
                     src={profesor?.foto_url}
                   />
                 </Col>
-                <Col flex="1">
-                    <Title level={4} style={{margin:0}}>{profesor.nombre_completo}</Title>
-                    <Text type="secondary">Mi Oficina Virtual</Text>
-                    <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        {profesor.telefono && (
-                          <Button
-                            type="primary"
-                            icon={<WhatsAppOutlined />}
-                            onClick={handleWhatsAppClick}
-                            style={{
-                              backgroundColor: "#25D366",
-                              borderColor: "#25D366",
-                            }}
-                            size="small"
-                          >
-                            WhatsApp
-                          </Button>
-                        )}
-                    </div>
+                <Col flex="auto">
+                    <Title level={2} style={{margin: 0, color: 'white'}}>Bienvenido, {profesor.nombre_completo.split(' ')[0]}</Title>
+                    <Text style={{color: 'rgba(255,255,255,0.8)', fontSize: 14}}>Gestor de Clases y Calificaciones</Text>
+                </Col>
+                <Col>
+                  <Space direction="vertical" align="end" style={{color: 'white'}}>
+                    <div><strong>Cédula:</strong> {profesor.identificacion}</div>
+                    <div><strong>Email:</strong> {profesor.email}</div>
+                    {profesor.telefono && (
+                      <Button 
+                        icon={<WhatsAppOutlined />} 
+                        onClick={handleWhatsAppClick}
+                        style={{marginTop: 8, backgroundColor: '#25D366', border: 'none', color: 'white'}}
+                      >
+                        WhatsApp
+                      </Button>
+                    )}
+                  </Space>
                 </Col>
             </Row>
+          </Card>
+
+          {/* ESTADÍSTICAS PRINCIPALES */}
+          <Row gutter={[16, 16]} style={{marginBottom: 24}}>
+            <Col xs={24} sm={12} lg={6}>
+              <Card hoverable style={{textAlign: 'center', borderTop: '4px solid #5B21B6'}}>
+                <Statistic 
+                  title="Cursos Activos" 
+                  value={misCursos.length}
+                  valueStyle={{color: '#5B21B6', fontSize: 28}}
+                  prefix={<BookOutlined style={{marginRight: 8}}/>}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card hoverable style={{textAlign: 'center', borderTop: '4px solid #059669'}}>
+                <Statistic 
+                  title="Total Estudiantes" 
+                  value={misCursos.reduce((sum, c) => sum + (c.total_estudiantes || 0), 0)}
+                  valueStyle={{color: '#059669', fontSize: 28}}
+                  prefix={<TeamOutlined style={{marginRight: 8}}/>}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card hoverable style={{textAlign: 'center', borderTop: '4px solid #D97706'}}>
+                <Statistic 
+                  title="Horas Pendientes" 
+                  value={Object.values(horasPendientesMap).reduce((a, b) => a + (b || 0), 0)}
+                  valueStyle={{color: '#D97706', fontSize: 28}}
+                  prefix={<ClockCircleOutlined style={{marginRight: 8}}/>}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card hoverable style={{textAlign: 'center', borderTop: '4px solid #DC2626'}}>
+                <Statistic 
+                  title="Pagos Pendientes" 
+                  value={pagosNomina.filter(p => !p.fecha_pago).length}
+                  valueStyle={{color: '#DC2626', fontSize: 28}}
+                  prefix={<DollarCircleOutlined style={{marginRight: 8}}/>}
+                />
+              </Card>
+            </Col>
+          </Row>
+        </>
+      )}
+      
+      <Title level={3} style={{marginTop: 30, marginBottom: 20}}>📚 Mis Cursos Activos</Title>
+      
+      {misCursos.length === 0 ? (
+        <Card style={{textAlign: 'center', padding: 40}}>
+          <BookOutlined style={{fontSize: 48, color: '#999', marginBottom: 16}} />
+          <p style={{color: '#999', fontSize: 16}}>No tienes cursos activos asignados.</p>
         </Card>
+      ) : (
+        <Row gutter={[16, 16]}>
+          {misCursos.map((curso) => (
+              <Col xs={24} md={12} lg={8} key={curso.id}>
+                  <Card 
+                    hoverable
+                    style={{borderTop: '5px solid #5B21B6', height: '100%'}}
+                    actions={[
+                      <Button 
+                        key="gestionar-clase" 
+                        type="primary" 
+                        block 
+                        onClick={() => abrirGestionClase(curso)}
+                      >
+                        Gestionar Clase
+                      </Button>
+                    ]}
+                  >
+                    <Row gutter={16}>
+                      <Col span={24}>
+                        <Title level={5} style={{marginBottom: 8, color: '#5B21B6'}}>
+                          {curso.nombre}
+                        </Title>
+                      </Col>
+                      <Col xs={12}>
+                        <div style={{marginBottom: 12}}>
+                          <Text type="secondary" style={{fontSize: 12}}>ESTUDIANTES</Text>
+                          <div style={{fontSize: 18, fontWeight: 'bold', color: '#059669'}}>
+                            {curso.total_estudiantes || 0}
+                          </div>
+                        </div>
+                      </Col>
+                      <Col xs={12}>
+                        <div style={{marginBottom: 12}}>
+                          <Text type="secondary" style={{fontSize: 12}}>HORAS PENDIENTES</Text>
+                          <div style={{fontSize: 18, fontWeight: 'bold', color: '#D97706'}}>
+                            {horasPendientesMap[String(curso.id)] || 0}
+                          </div>
+                        </div>
+                      </Col>
+                      <Col span={24}>
+                        <Space size="small">
+                          {curso.estado === 'activo' && (
+                            <Tag color="green">Activo</Tag>
+                          )}
+                          <Tag color="blue">{curso.estado}</Tag>
+                        </Space>
+                      </Col>
+                    </Row>
+                  </Card>
+              </Col>
+          ))}
+        </Row>
       )}
 
-      <Title level={4}><BookOutlined /> Mis Cursos</Title>
-      
-      <Row gutter={[16, 16]}>
-        {misCursos.map((curso) => (
-            <Col xs={24} md={12} lg={8} key={curso.id}>
-                <Card 
-                  hoverable
-                  actions={[
-                    <Button 
-                      key="gestionar-clase" 
-                      type="primary" 
-                      block 
-                      onClick={() => abrirGestionClase(curso)}
-                    >
-                      Gestionar Clase
-                    </Button>
-                  ]}
-                >
-                    <Card.Meta 
-                        avatar={<Avatar style={{backgroundColor: '#722ed1'}} icon={<BookOutlined />} />}
-                        title={curso.nombre}
-                        description={<span><TeamOutlined /> {curso.total_estudiantes} Alumnos</span>}
-                    />
-                </Card>
-            </Col>
-        ))}
-        {misCursos.length === 0 && <Alert message="No tienes cursos activos asignados." type="info" />}
-      </Row>
+      <Divider style={{margin: '32px 0'}} />
 
-      <Divider />
+      <Card style={{background: 'linear-gradient(135deg, #f8f4ff 0%, #f3e8ff 100%)', border: 'none', marginBottom: 24}}>
+        <Row align="middle" gutter={16}>
+          <Col>
+            <ClockCircleOutlined style={{fontSize: 24, color: '#7C3AED'}} />
+          </Col>
+          <Col flex="auto">
+            <Title level={3} style={{margin: 0, color: '#5B21B6'}}>Horas Trabajadas por Curso</Title>
+            <Text type="secondary" style={{fontSize: 13}}>Control de horas pendientes de pago por curso</Text>
+          </Col>
+          <Col>
+            <Button
+              type="primary"
+              onClick={generarPagoQuincenal}
+              loading={generandoPago}
+              style={{backgroundColor: '#7C3AED', borderColor: '#7C3AED'}}
+            >
+              Generar Pago Quincenal
+            </Button>
+          </Col>
+        </Row>
+      </Card>
 
-      <Title level={4}>⏱️ Horas Trabajadas por Curso</Title>
-      <div style={{ marginBottom: 12 }}>
-        <Button
-          type="primary"
-          onClick={generarPagoQuincenal}
-          loading={generandoPago}
-        >
-          Generar pago quincenal (zero horas)
-        </Button>
-      </div>
       <Row gutter={[16, 16]}>
         {misCursos.map((curso) => {
           const horasTotalesCurso = horasPendientesMap[String(curso.id)] || 0;
           
           return (
             <Col xs={24} sm={12} lg={8} key={curso.id}>
-              <Card>
-                <Title level={5}>{curso.nombre}</Title>
+              <Card hoverable style={{borderLeft: '4px solid #D97706', height: '100%'}}>
+                <Title level={5} style={{marginBottom: 4, color: '#5B21B6'}}>{curso.nombre}</Title>
+                <Text type="secondary" style={{fontSize: 12, color: '#6B7280'}}>Horas Pendientes</Text>
                 <Statistic
-                  title="Horas pendientes de pago"
                   value={horasTotalesCurso}
                   suffix="hrs"
-                  valueStyle={{ color: '#1890ff' }}
+                  valueStyle={{ color: '#D97706', fontSize: 28, fontWeight: 'bold' }}
+                  style={{marginTop: 12}}
                 />
+                <Text type="secondary" style={{fontSize: 12, marginTop: 8, display: 'block'}}>
+                  {horasTotalesCurso > 0 ? '✓ Pendiente de pago' : '✓ Al día'}
+                </Text>
               </Card>
             </Col>
           );
         })}
-        {misCursos.length === 0 && <Col xs={24}><Alert message="Sin datos de horas" type="info" /></Col>}
+        {misCursos.length === 0 && (
+          <Col xs={24}>
+            <Alert 
+              message="Sin datos de horas" 
+              type="info"
+              icon={<ClockCircleOutlined />}
+              style={{marginTop: 12}}
+            />
+          </Col>
+        )}
       </Row>
 
-      <Divider />
+      <Divider style={{margin: '32px 0'}} />
 
-      <Title level={4}>💼 Mis Pagos</Title>
-      <List
-        itemLayout="horizontal"
-        dataSource={pagosNomina}
-        locale={{ emptyText: "Sin pagos registrados" }}
-        renderItem={(p: any) => (
-          <List.Item>
-            <List.Item.Meta
-              title={
-                <Space>
-                  <Tag color="blue">{dayjs(p.fecha_pago).format("DD MMM YYYY")}</Tag>
-                  <Text strong>$ {Number(p.total_pagado || 0).toLocaleString()}</Text>
-                </Space>
-              }
-              description={
-                <Space>
-                  <Tag color="purple">{p.total_horas || 0} horas</Tag>
-                  <Text type="secondary">{p.observaciones || "Sin observaciones"}</Text>
-                </Space>
-              }
-            />
-          </List.Item>
-        )}
-      />
+      <Card style={{background: 'linear-gradient(135deg, #f0fdf4 0%, #f0fef9 100%)', border: 'none', marginBottom: 24}}>
+        <Row align="middle" gutter={16}>
+          <Col>
+            <DollarCircleOutlined style={{fontSize: 24, color: '#059669'}} />
+          </Col>
+          <Col flex="auto">
+            <Title level={3} style={{margin: 0, color: '#047857'}}>Registro de Pagos</Title>
+            <Text type="secondary" style={{fontSize: 13}}>Historial de nóminas procesadas</Text>
+          </Col>
+        </Row>
+      </Card>
 
-      <Divider />
+      {pagosNomina.length === 0 ? (
+        <Alert 
+          message="No tienes pagos registrados" 
+          type="info"
+          icon={<DollarCircleOutlined />}
+          style={{marginBottom: 24}}
+        />
+      ) : (
+        <Card style={{marginBottom: 24}}>
+          <List
+            itemLayout="horizontal"
+            dataSource={pagosNomina}
+            renderItem={(p: any) => (
+              <List.Item style={{borderBottom: '1px solid #f0f0f0', padding: '16px 0'}}>
+                <List.Item.Meta
+                  avatar={
+                    <div style={{
+                      background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                      color: 'white',
+                      width: 40,
+                      height: 40,
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      fontSize: 14
+                    }}>
+                      $
+                    </div>
+                  }
+                  title={
+                    <Row gutter={8}>
+                      <Col>
+                        <Text strong style={{fontSize: 15, color: '#059669'}}>
+                          $ {Number(p.total_pagado || 0).toLocaleString('es-ES', {minimumFractionDigits: 2})}
+                        </Text>
+                      </Col>
+                      <Col>
+                        <Tag color="green">{p.total_horas || 0} horas</Tag>
+                      </Col>
+                    </Row>
+                  }
+                  description={
+                    <Row gutter={16}>
+                      <Col>
+                        <Tag color="blue">
+                          {dayjs(p.fecha_pago).format("DD/MMM/YYYY")}
+                        </Tag>
+                      </Col>
+                      <Col>
+                        <Text type="secondary" style={{fontSize: 12}}>
+                          {p.observaciones || "Sin observaciones"}
+                        </Text>
+                      </Col>
+                    </Row>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+      )}
 
-      <Title level={4}>📚 Historial de Mis Grupos</Title>
-      <List
-        itemLayout="horizontal"
-        dataSource={historialCursos}
-        locale={{ emptyText: "Sin grupos registrados" }}
-        renderItem={(c: any) => (
-          <List.Item>
-            <List.Item.Meta
-              title={
-                <Space>
-                  <Text strong>{c.nombre}</Text>
-                  <Tag color={c.estado === 'activo' ? 'green' : c.estado === 'finalizado' ? 'volcano' : 'default'}>
-                    {c.estado || 'sin-estado'}
-                  </Tag>
-                </Space>
-              }
-              description={
-                <Space>
-                  <Tag>{c.fecha_inicio ? formatDate(c.fecha_inicio) : '-'}</Tag>
-                  <span>→</span>
-                  <Tag>{c.fecha_fin ? formatDate(c.fecha_fin) : '-'}</Tag>
-                </Space>
-              }
-            />
-          </List.Item>
-        )}
-      />
+      <Divider style={{margin: '32px 0'}} />
+
+      <Card style={{background: 'linear-gradient(135deg, #f3f0ff 0%, #fef3f2 100%)', border: 'none', marginBottom: 24}}>
+        <Row align="middle" gutter={16}>
+          <Col>
+            <BookOutlined style={{fontSize: 24, color: '#dc2626'}} />
+          </Col>
+          <Col flex="auto">
+            <Title level={3} style={{margin: 0, color: '#b91c1c'}}>Historial de Mis Grupos</Title>
+            <Text type="secondary" style={{fontSize: 13}}>Todos los cursos asignados históricos</Text>
+          </Col>
+        </Row>
+      </Card>
+
+      {historialCursos.length === 0 ? (
+        <Alert 
+          message="Sin grupos registrados" 
+          type="info"
+          icon={<BookOutlined />}
+          style={{marginBottom: 24}}
+        />
+      ) : (
+        <Card style={{marginBottom: 24}}>
+          <List
+            itemLayout="horizontal"
+            dataSource={historialCursos}
+            renderItem={(c: any) => (
+              <List.Item style={{borderBottom: '1px solid #f0f0f0', padding: '16px 0'}}>
+                <List.Item.Meta
+                  avatar={
+                    <div style={{
+                      background: c.estado === 'activo' ? 'linear-gradient(135deg, #059669 0%, #10b981 100%)' 
+                             : c.estado === 'finalizado' ? 'linear-gradient(135deg, #6b7280 0%, #9ca3af 100%)' 
+                             : 'linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)',
+                      color: 'white',
+                      width: 40,
+                      height: 40,
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold'
+                    }}>
+                      <BookOutlined style={{fontSize: 18}} />
+                    </div>
+                  }
+                  title={
+                    <Row gutter={12} align="middle">
+                      <Col flex="auto">
+                        <Text strong style={{fontSize: 14}}>
+                          {c.nombre}
+                        </Text>
+                      </Col>
+                      <Col>
+                        <Tag color={
+                          c.estado === 'activo' ? 'green' 
+                          : c.estado === 'finalizado' ? 'default' 
+                          : 'blue'
+                        }>
+                          {c.estado ? c.estado.toUpperCase() : 'SIN-ESTADO'}
+                        </Tag>
+                      </Col>
+                    </Row>
+                  }
+                  description={
+                    <Row gutter={8} style={{marginTop: 8}}>
+                      <Col>
+                        <Tag icon={<ClockCircleOutlined />}>
+                          {c.fecha_inicio ? dayjs(c.fecha_inicio).format('DD/MMM/YY') : '-'}
+                        </Tag>
+                      </Col>
+                      <Col>
+                        <Text type="secondary">→</Text>
+                      </Col>
+                      <Col>
+                        <Tag icon={<ClockCircleOutlined />}>
+                          {c.fecha_fin ? dayjs(c.fecha_fin).format('DD/MMM/YY') : '-'}
+                        </Tag>
+                      </Col>
+                    </Row>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+      )}
 
       {/* DRAWER GESTIÓN DE CLASE */}
       <Drawer

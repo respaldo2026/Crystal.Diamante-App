@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Form, Input, Row, Col, Alert, Button, Card, Table, Space, Popconfirm, Spin, App, Modal, Dropdown, Checkbox, Divider, Tag } from "antd";
-import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined, MoreOutlined, LockOutlined } from "@ant-design/icons";
+import { Form, Input, Row, Col, Alert, Button, Card, Table, Space, Popconfirm, Spin, App, Modal, Dropdown, Checkbox, Divider, Tag, Upload, Avatar } from "antd";
+import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined, MoreOutlined, LockOutlined, CameraOutlined, UploadOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { MODULOS_DISPONIBLES } from "@hooks/useRolePermissions";
 
@@ -17,11 +17,89 @@ export default function AdministradoresPage() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editingAdmin, setEditingAdmin] = useState<any>(null);
     const [permisos, setPermisos] = useState<Record<string, boolean>>({});
+    const [fotoUrl, setFotoUrl] = useState<string>("");
+    const [fotoEditUrl, setFotoEditUrl] = useState<string>("");
 
     // Cargar lista de administradores al montar
     React.useEffect(() => {
         cargarAdministradores();
     }, []);
+
+    const handleFotoUpload = async (file: any) => {
+        try {
+            if (!file) return false;
+
+            // Validar tamaño (máximo 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                message.error("La imagen no debe exceder 5MB");
+                return false;
+            }
+
+            // Crear nombre único para el archivo
+            const fileExt = file.name.split('.').pop();
+            const fileName = `admin_${Date.now()}.${fileExt}`;
+            const filePath = `administradores/${fileName}`;
+
+            // Subir a Supabase Storage
+            const { data, error } = await supabaseBrowserClient.storage
+                .from('fotos')
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (error) throw error;
+
+            // Obtener URL pública
+            const { data: publicData } = supabaseBrowserClient.storage
+                .from('fotos')
+                .getPublicUrl(filePath);
+
+            setFotoUrl(publicData.publicUrl);
+            message.success("Foto cargada correctamente");
+            return false;
+        } catch (error: any) {
+            console.error("Error cargando foto:", error);
+            message.error("Error al cargar la foto: " + error.message);
+            return false;
+        }
+    };
+
+    const handleFotoEditUpload = async (file: any) => {
+        try {
+            if (!file) return false;
+
+            if (file.size > 5 * 1024 * 1024) {
+                message.error("La imagen no debe exceder 5MB");
+                return false;
+            }
+
+            const fileExt = file.name.split('.').pop();
+            const fileName = `admin_${editingAdmin.id}_${Date.now()}.${fileExt}`;
+            const filePath = `administradores/${fileName}`;
+
+            const { data, error } = await supabaseBrowserClient.storage
+                .from('fotos')
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (error) throw error;
+
+            const { data: publicData } = supabaseBrowserClient.storage
+                .from('fotos')
+                .getPublicUrl(filePath);
+
+            setFotoEditUrl(publicData.publicUrl);
+            message.success("Foto cargada correctamente");
+            return false;
+        } catch (error: any) {
+            console.error("Error cargando foto:", error);
+            message.error("Error al cargar la foto: " + error.message);
+            return false;
+        }
+    };
 
     const cargarAdministradores = async () => {
         setListLoading(true);
@@ -109,6 +187,7 @@ export default function AdministradoresPage() {
                     rol: 'admin',
                     direccion: values.direccion || null,
                     observaciones: values.observaciones || null,
+                    foto_url: fotoUrl || null,
                 })
                 .eq('id', authUserId);
 
@@ -159,6 +238,7 @@ export default function AdministradoresPage() {
     };
     const abrirModalEditar = async (admin: any) => {
         setEditingAdmin(admin);
+        setFotoEditUrl(admin.foto_url || "");
         editForm.setFieldsValue({
             nombre_completo: admin.nombre_completo,
             identificacion: admin.identificacion,
@@ -200,6 +280,7 @@ export default function AdministradoresPage() {
                     telefono: values.telefono || null,
                     direccion: values.direccion || null,
                     observaciones: values.observaciones || null,
+                    foto_url: fotoEditUrl || null,
                 })
                 .eq("id", editingAdmin.id);
 
@@ -231,6 +312,7 @@ export default function AdministradoresPage() {
             editForm.resetFields();
             setEditingAdmin(null);
             setPermisos({});
+            setFotoEditUrl("");
             await cargarAdministradores();
         } catch (error: any) {
             console.error("Error actualizando:", error);
@@ -333,11 +415,31 @@ export default function AdministradoresPage() {
                                 <Input.TextArea placeholder="Notas adicionales..." rows={3} />
                             </Form.Item>
 
+                            <Divider />
+
+                            <Form.Item label="Foto de Perfil">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                    <Upload
+                                        accept="image/*"
+                                        beforeUpload={handleFotoUpload}
+                                        maxCount={1}
+                                        showUploadList={false}
+                                    >
+                                        <Button icon={<UploadOutlined />}>
+                                            Subir Foto
+                                        </Button>
+                                    </Upload>
+                                    {fotoUrl && (
+                                        <Avatar size={64} src={fotoUrl} />
+                                    )}
+                                </div>
+                            </Form.Item>
+
                             <Space>
                                 <Button type="primary" htmlType="submit" loading={loading}>
                                     Crear Administrador
                                 </Button>
-                                <Button onClick={() => setShowForm(false)}>
+                                <Button onClick={() => { setShowForm(false); setFotoUrl(""); }}>
                                     Cancelar
                                 </Button>
                             </Space>
@@ -441,6 +543,7 @@ export default function AdministradoresPage() {
                         editForm.resetFields();
                         setEditingAdmin(null);
                         setPermisos({});
+                        setFotoEditUrl("");
                     }}
                     footer={null}
                     width={800}
@@ -507,6 +610,25 @@ export default function AdministradoresPage() {
                             name="observaciones"
                         >
                             <Input.TextArea rows={2} />
+                        </Form.Item>
+
+                        <Divider>📷 Foto de Perfil</Divider>
+                        <Form.Item label=" ">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <Upload
+                                    accept="image/*"
+                                    beforeUpload={handleFotoEditUpload}
+                                    maxCount={1}
+                                    showUploadList={false}
+                                >
+                                    <Button icon={<UploadOutlined />}>
+                                        Cambiar Foto
+                                    </Button>
+                                </Upload>
+                                {fotoEditUrl && (
+                                    <Avatar size={64} src={fotoEditUrl} />
+                                )}
+                            </div>
                         </Form.Item>
 
                         <Divider><LockOutlined /> Permisos de Acceso</Divider>

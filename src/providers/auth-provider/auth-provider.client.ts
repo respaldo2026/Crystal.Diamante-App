@@ -39,14 +39,14 @@ export const authProviderClient: any = {
         return { success: true, redirectTo: "/mi-oficina" };
       }
       
-      if (perfil?.rol === "administrativo") {
-        console.log("🏢 Redirigiendo a / (Administrativo - Dashboard)");
+      if (perfil?.rol === "admin" || perfil?.rol === "administrativo") {
+        console.log("🏢 Redirigiendo a / (Admin/Administrativo - Dashboard)");
         return { success: true, redirectTo: "/" };
       }
       
       if (perfil?.rol === "estudiante") {
-        console.log("📚 Redirigiendo a /estudiantes/show (Estudiante)");
-        return { success: true, redirectTo: `/estudiantes/show/${data.user.id}` };
+        console.log("📚 Redirigiendo a /portal-estudiante (Estudiante)");
+        return { success: true, redirectTo: "/portal-estudiante" };
       }
     }
     

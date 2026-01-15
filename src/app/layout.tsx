@@ -18,11 +18,11 @@ import {
   DollarCircleOutlined, 
   SettingOutlined, 
   CalculatorOutlined,
-  UserAddOutlined,
-  ShopOutlined,
   CalendarOutlined,
   CustomerServiceOutlined,
-  HomeOutlined
+  HomeOutlined,
+  UsergroupAddOutlined,
+  SolutionOutlined
 } from "@ant-design/icons";
 
 import routerProvider from "@refinedev/nextjs-router";
@@ -30,7 +30,9 @@ import routerProvider from "@refinedev/nextjs-router";
 // PROVIDERS
 import { dataProvider } from "../providers/data-provider"; 
 import { authProvider } from "../providers/auth-provider/auth-provider.client";
-import { QueryProvider } from "../providers/query-provider"; 
+import { QueryProvider } from "../providers/query-provider";
+import { supabaseBrowserClient } from "@utils/supabase/client";
+import { useCurrentUser } from "@hooks/useCurrentUser"; 
 
 export default function RootLayout({
   children,
@@ -40,14 +42,166 @@ export default function RootLayout({
   // --- CORRECCIÓN DEL ERROR DE HIDRATACIÓN ---
   // Estado para verificar si ya estamos en el navegador
   const [mounted, setMounted] = useState(false);
+  const { user, loading: userLoading } = useCurrentUser();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Función para determinar qué recursos mostrar según el rol
+  const getResourcesByRole = () => {
+    const userRole = user?.rol;
+    
+    // Recursos para profesores: solo Mi Oficina
+    if (userRole === "profesor") {
+      return [
+        {
+          name: "mi-oficina",
+          list: "/mi-oficina",
+          meta: {
+            label: "Mi Oficina",
+            icon: <HomeOutlined />,
+          },
+        },
+      ];
+    }
+
+    // Recursos para estudiantes: solo Mi Portal
+    if (userRole === "estudiante") {
+      return [
+        {
+          name: "portal-estudiante",
+          list: "/portal-estudiante",
+          meta: {
+            label: "Mi Portal",
+            icon: <BookOutlined />,
+          },
+        },
+      ];
+    }
+
+    // Recursos completos para admin y administrativo (o null mientras carga)
+    // Si userRole es null, admin o administrativo, mostrar todo
+    return [
+      {
+        name: "dashboard",
+        list: "/",
+        meta: {
+          label: "Dashboard",
+          icon: <DashboardOutlined />,
+        },
+      },
+      {
+        name: "perfiles",
+        list: "/estudiantes",
+        create: "/estudiantes/create",
+        edit: "/estudiantes/edit/:id",
+        show: "/estudiantes/show/:id",
+        meta: {
+          label: "Estudiantes",
+          icon: <UserOutlined />,
+        },
+      },
+      {
+        name: "profesores",
+        list: "/profesores",
+        create: "/profesores/create",
+        edit: "/profesores/edit/:id",
+        show: "/profesores/show/:id",
+        meta: {
+          label: "Profesores",
+          icon: <SolutionOutlined />,
+        },
+      },
+      {
+        name: "programas",
+        list: "/programas",
+        meta: {
+          label: "Programas",
+          icon: <BookOutlined />,
+        },
+      },
+      {
+        name: "cursos",
+        list: "/cursos",
+        create: "/cursos/create",
+        edit: "/cursos/edit/:id",
+        show: "/cursos/show/:id",
+        meta: {
+          label: "Grupos",
+          icon: <UsergroupAddOutlined />,
+        },
+      },
+      {
+        name: "leads",
+        list: "/leads",
+        meta: {
+          label: "Leads",
+          icon: <CustomerServiceOutlined />,
+        },
+      },
+      {
+        name: "planificador",
+        list: "/planificador",
+        meta: {
+          label: "Planificador",
+          icon: <CalendarOutlined />,
+        },
+      },
+      {
+        name: "matriculas",
+        list: "/matriculas",
+        create: "/matriculas/create",
+        edit: "/matriculas/edit/:id",
+        show: "/matriculas/show/:id",
+        meta: {
+          label: "Matrículas",
+          icon: <FileTextOutlined />,
+        },
+      },
+      {
+        name: "pagos",
+        list: "/pagos",
+        create: "/pagos/create",
+        edit: "/pagos/edit/:id",
+        show: "/pagos/show/:id",
+        meta: {
+          label: "Pagos",
+          icon: <DollarCircleOutlined />,
+        },
+      },
+      {
+        name: "nomina",
+        list: "/nomina",
+        create: "/nomina/create",
+        meta: {
+          label: "Nómina",
+          icon: <CalculatorOutlined />,
+        },
+      },
+      {
+        name: "tesoreria",
+        list: "/tesoreria",
+        create: "/tesoreria/create",
+        meta: {
+          label: "Tesorería",
+          icon: <DollarCircleOutlined />,
+        },
+      },
+      {
+        name: "configuracion",
+        list: "/configuracion",
+        meta: {
+          label: "Configuración",
+          icon: <SettingOutlined />,
+        },
+      },
+    ];
+  };
+
   // Si no está montado (aún es servidor), mostramos un loader simple o nada.
   // Esto evita que el servidor genere IDs que luego choquen con el cliente.
-  if (!mounted) {
+  if (!mounted || userLoading) {
     return (
       <html lang="es">
         <body>
@@ -102,135 +256,7 @@ export default function RootLayout({
                 routerProvider={routerProvider}
                 dataProvider={dataProvider}
                 authProvider={authProvider}
-                resources={[
-                  {
-                    name: "mi-oficina",
-                    list: "/mi-oficina",
-                    meta: {
-                      label: "Mi Oficina",
-                      icon: <HomeOutlined />,
-                    },
-                  },
-                  {
-                    name: "dashboard",
-                    list: "/",
-                    meta: {
-                      label: "Dashboard",
-                      icon: <DashboardOutlined />,
-                    },
-                  },
-                  {
-                    name: "perfiles",
-                    list: "/estudiantes",
-                    create: "/estudiantes/create",
-                    edit: "/estudiantes/edit/:id",
-                    show: "/estudiantes/show/:id",
-                    meta: {
-                      label: "Estudiantes",
-                      icon: <UserOutlined />,
-                    },
-                  },
-                  {
-                    name: "profesores",
-                    list: "/profesores",
-                    create: "/profesores/create",
-                    edit: "/profesores/edit/:id",
-                    show: "/profesores/show/:id",
-                    meta: {
-                      label: "Profesores",
-                      icon: <TeamOutlined />,
-                    },
-                  },
-                  {
-                    name: "programas",
-                    list: "/programas",
-                    meta: {
-                      label: "Programas",
-                      icon: <BookOutlined />,
-                    },
-                  },
-                  {
-                    name: "cursos",
-                    list: "/cursos",
-                    create: "/cursos/create",
-                    edit: "/cursos/edit/:id",
-                    show: "/cursos/show/:id",
-                    meta: {
-                      label: "Grupos",
-                      icon: <TeamOutlined />,
-                    },
-                  },
-                  {
-                    name: "leads",
-                    list: "/leads",
-                    meta: {
-                      label: "Leads",
-                      icon: <CustomerServiceOutlined />,
-                    },
-                  },
-                  {
-                    name: "planificador",
-                    list: "/planificador",
-                    meta: {
-                      label: "Planificador",
-                      icon: <CalendarOutlined />,
-                    },
-                  },
-                  {
-                    name: "matriculas",
-                    list: "/matriculas",
-                    create: "/matriculas/create",
-                    edit: "/matriculas/edit/:id",
-                    meta: {
-                      label: "Matrículas",
-                      icon: <FileTextOutlined />,
-                    },
-                  },
-                  {
-                    name: "inventario",
-                    list: "/inventario",
-                    create: "/inventario/create",
-                    meta: {
-                      label: "Inventario",
-                      icon: <ShopOutlined />,
-                    },
-                  },
-                  {
-                    name: "tesoreria",
-                    list: "/tesoreria",
-                    create: "/tesoreria/create",
-                    meta: {
-                      label: "Tesorería",
-                      icon: <DollarCircleOutlined />,
-                    },
-                  },
-                  {
-                    name: "nomina",
-                    list: "/nomina",
-                    create: "/nomina/create",
-                    meta: {
-                      label: "Nómina",
-                      icon: <CalculatorOutlined />,
-                    },
-                  },
-                  {
-                    name: "configuracion",
-                    list: "/configuracion",
-                    meta: {
-                      label: "Configuración",
-                      icon: <SettingOutlined />,
-                    },
-                  },
-                  {
-                    name: "portal-estudiante",
-                    list: "/portal-estudiante",
-                    meta: {
-                      label: "Mi Portal",
-                      icon: <BookOutlined />,
-                      hide: true, // No mostrar en sidebar
-                    },
-                  },
-                ]}
+                resources={getResourcesByRole()}
                 options={{
                   syncWithLocation: true,
                   warnWhenUnsavedChanges: true,

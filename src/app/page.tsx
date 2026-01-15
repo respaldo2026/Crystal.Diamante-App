@@ -13,6 +13,7 @@ import {
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
+import { useCurrentUser } from "@hooks/useCurrentUser";
 import dayjs from "dayjs";
 import isBetween from 'dayjs/plugin/isBetween';
 import { formatDate } from "@utils/date";
@@ -29,7 +30,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
-  
+  const { user, loading: userLoading } = useCurrentUser();
+
   // Estadísticas principales
   const [stats, setStats] = useState({
     ingresosMes: 0,
@@ -58,6 +60,20 @@ export default function DashboardPage() {
   const [cumplesHoy, setCumplesHoy] = useState<any[]>([]);
   const [proximosCursos, setProximosCursos] = useState<any[]>([]);
   const [pagosVencidos, setPagosVencidos] = useState<any[]>([]);
+
+  // Redirigir no autorizados - USAR EFFECT PARA EVITAR CONDICIONALES
+  useEffect(() => {
+    if (!userLoading && user) {
+      if (user.rol === "profesor") {
+        router.push("/mi-oficina");
+        return;
+      }
+      if (user.rol === "estudiante") {
+        router.push("/portal-estudiante");
+        return;
+      }
+    }
+  }, [user, userLoading, router]);
 
   useEffect(() => {
     cargarDashboard();
@@ -282,7 +298,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) {
+  if (loading || userLoading) {
     return (
       <div style={{ 
         display: 'flex', 

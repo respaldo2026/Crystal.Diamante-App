@@ -22,57 +22,38 @@ export default function CreateEstudiante() {
       // 1. Generar contraseña temporal (identificación)
       const passwordTemporal = values.identificacion || 'estudiante123';
 
-      // 2. Crear usuario en auth.users
-      const { data: authData, error: authError } = await supabaseBrowserClient.auth.admin.createUser({
-        email: values.email,
-        password: passwordTemporal,
-        email_confirm: true,
-        user_metadata: {
-          nombre_completo: values.nombre_completo,
-          rol: 'estudiante'
-        }
+      // 2. Llamar al API route seguro para crear usuario
+      const response = await fetch('/api/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: values.email,
+          password: passwordTemporal,
+          rol: 'estudiante',
+          user_metadata: {
+            nombre_completo: values.nombre_completo,
+            identificacion: values.identificacion,
+            telefono: values.telefono,
+            fecha_nacimiento: values.fecha_nacimiento ? values.fecha_nacimiento.format("YYYY-MM-DD") : null,
+            genero: values.genero || null,
+            talla_camiseta: values.talla_camiseta || null,
+            direccion: values.direccion || null,
+            acudiente_nombre: values.acudiente_nombre || null,
+            acudiente_telefono: values.acudiente_telefono || null,
+            observaciones: values.observaciones || null,
+          }
+        }),
       });
 
-      if (authError) {
-        console.error("Error creando usuario auth:", authError);
-        throw new Error("No se pudo crear el usuario de acceso: " + authError.message);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Error al crear el usuario");
       }
 
-      if (!authData.user) {
-        throw new Error("No se recibió el ID del usuario creado");
-      }
-
-      const userId = authData.user.id;
-
-      // 3. Crear perfil con el ID del usuario
-      const datosParaEnviar = {
-        id: userId,
-        nombre_completo: values.nombre_completo,
-        identificacion: values.identificacion,
-        email: values.email,
-        telefono: values.telefono,
-        rol: 'estudiante',
-        fecha_nacimiento: values.fecha_nacimiento ? values.fecha_nacimiento.format("YYYY-MM-DD") : null,
-        genero: values.genero || null,
-        talla_camiseta: values.talla_camiseta || null,
-        direccion: values.direccion || null,
-        acudiente_nombre: values.acudiente_nombre || null,
-        acudiente_telefono: values.acudiente_telefono || null,
-        observaciones: values.observaciones || null,
-      };
-
-      const { error: perfilError } = await supabaseBrowserClient
-        .from("perfiles")
-        .insert(datosParaEnviar);
-
-      if (perfilError) {
-        console.error("Error creando perfil:", perfilError);
-        // Intentar eliminar el usuario de auth si falla el perfil
-        await supabaseBrowserClient.auth.admin.deleteUser(userId);
-        throw new Error("Error al crear el perfil: " + perfilError.message);
-      }
-
-      // 4. Éxito
+      // 3. Éxito
       message.success({
         content: (
           <div>
