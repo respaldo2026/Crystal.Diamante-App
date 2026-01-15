@@ -45,6 +45,7 @@ import { formatDate } from "@utils/date";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { HistorialEntregas } from "@components/EntregaMaterialModal";
 
 type Matricula = {
   id: number;
@@ -912,6 +913,17 @@ export default function StudentDetailView() {
                     />
                   )}
                 </>
+              ),
+            },
+            {
+              key: "4",
+              label: (
+                <span>
+                  <BookOutlined /> Materiales Entregados
+                </span>
+              ),
+              children: (
+                <HistorialEntregas estudianteId={idEstudiante} />
               ),
             },
           ]}

@@ -18,6 +18,7 @@ import { useParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
+import { HistorialEntregas } from "@components/EntregaMaterialModal";
 
 const { Title, Text } = require("antd").Typography;
 
@@ -473,6 +474,13 @@ export default function PortalEstudiante() {
                   />
                 )}
               </>
+            ),
+          },
+          {
+            key: "6",
+            label: <span><BookOutlined /> Materiales</span>,
+            children: (
+              <HistorialEntregas estudianteId={estudiante?.id} />
             ),
           },
         ]}

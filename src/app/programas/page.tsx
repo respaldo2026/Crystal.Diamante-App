@@ -1,10 +1,11 @@
 "use client";
 
 import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Tooltip, Dropdown } from "antd";
-import { PlusOutlined, EditOutlined, BookOutlined, MoreOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, BookOutlined, MoreOutlined, FolderOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";
 import type { CheckboxChangeEvent } from "antd/es/checkbox";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import GestorPensum from "@components/GestorPensum";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -17,6 +18,8 @@ export default function ProgramasPage() {
   const [programas, setProgramas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
+  const [gestorPensumVisible, setGestorPensumVisible] = useState(false);
+  const [programaSeleccionado, setProgramaSeleccionado] = useState<any>(null);
 
   useEffect(() => {
     cargarProgramas();
@@ -228,6 +231,11 @@ export default function ProgramasPage() {
       handleToggleActivo(programa);
       return;
     }
+    if (key === "gestor") {
+      setProgramaSeleccionado(programa);
+      setGestorPensumVisible(true);
+      return;
+    }
   };
 
   const columns = [
@@ -343,6 +351,12 @@ export default function ProgramasPage() {
       width: 80,
       render: (_: any, record: any) => {
         const menuItems = [
+          {
+            key: "gestor",
+            label: "Gestionar Pensum/Material",
+            icon: <BookOutlined />,
+            onClick: () => handleAction("gestor", record),
+          },
           {
             key: "edit",
             label: "Editar",
@@ -593,6 +607,18 @@ export default function ProgramasPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* GESTOR DE PENSUM Y MATERIAL */}
+      {programaSeleccionado && (
+        <GestorPensum
+          programaId={programaSeleccionado.id}
+          programaNombre={programaSeleccionado.nombre}
+          onClose={() => {
+            setGestorPensumVisible(false);
+            setProgramaSeleccionado(null);
+          }}
+        />
+      )}
 
       </div>
     </App>

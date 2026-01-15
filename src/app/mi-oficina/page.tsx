@@ -8,12 +8,13 @@ import {
 } from "antd";
 import { 
   UserOutlined, BookOutlined, TeamOutlined, PlusOutlined, ExclamationCircleOutlined, StarOutlined,
-  WhatsAppOutlined, ClockCircleOutlined, DollarCircleOutlined
+  WhatsAppOutlined, ClockCircleOutlined, DollarCircleOutlined, GiftOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
+import { EntregaMaterialModal } from "@components/EntregaMaterialModal";
 
 const { Title, Text } = Typography;
 
@@ -47,6 +48,10 @@ export default function MiOficinaProfesor() {
   const [horasCalculadas, setHorasCalculadas] = useState<number>(0);
   const [guardandoAsistencia, setGuardandoAsistencia] = useState(false);
   const [generandoPago, setGenerandoPago] = useState(false);
+
+  // Entrega de materiales
+  const [modalEntregaVisible, setModalEntregaVisible] = useState(false);
+  const [estudianteSeleccionado, setEstudianteSeleccionado] = useState<any>(null);
 
   // Pensum
   const [modalPensumVisible, setModalPensumVisible] = useState(false);
@@ -1001,6 +1006,21 @@ export default function MiOficinaProfesor() {
                                     >
                                     </Button>
                               </Tooltip>,
+                              <Tooltip key={`entrega-${alumno?.id}`} title="Entregar camiseta o kit">
+                                <Button
+                                        type="default"
+                                        shape="circle"
+                                        icon={<GiftOutlined />}
+                                        onClick={() => {
+                                          setEstudianteSeleccionado({
+                                            id: alumno.estudiante_id,
+                                            nombre_completo: alumno.perfiles.nombre_completo
+                                          });
+                                          setModalEntregaVisible(true);
+                                        }}
+                                        style={{ color: '#722ed1', borderColor: '#722ed1' }}
+                                    />
+                              </Tooltip>,
                               <Tooltip key={`asistencia-${alumno?.id}`} title={!pagado ? "Estudiante sin pagos al día" : ""}>
                                 <Switch
                                         checkedChildren="Vino" 
@@ -1147,6 +1167,20 @@ export default function MiOficinaProfesor() {
                       >
                           <Input placeholder="Ej: Examen Teórico, Práctica Gel..." />
                       </Form.Item>
+
+      {/* MODAL ENTREGA DE MATERIALES */}
+      {estudianteSeleccionado && (
+        <EntregaMaterialModal
+          visible={modalEntregaVisible}
+          onCancel={() => setModalEntregaVisible(false)}
+          onSuccess={() => {
+            messageApi.success("Material registrado correctamente");
+          }}
+          estudianteId={estudianteSeleccionado.id}
+          estudianteNombre={estudianteSeleccionado.nombre_completo}
+          profesorId={idProfesor || ''}
+        />
+      )}
                   </Col>
                   <Col span={8}>
                       <Form.Item 

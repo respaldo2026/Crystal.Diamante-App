@@ -1,9 +1,24 @@
 "use client";
 import { AuthPage as AuthPageBase } from "@refinedev/antd";
 import type { AuthPageProps } from "@refinedev/core";
-import { Alert } from "antd";
+import { Alert, Button, Divider, Space } from "antd";
+import { GoogleOutlined } from "@ant-design/icons";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export const AuthPage = (props: AuthPageProps) => {
+  const handleGoogleLogin = async () => {
+    const redirectTo = `${window.location.origin}/auth/callback`;
+    await supabaseBrowserClient.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        queryParams: {
+          prompt: "select_account",
+        },
+      },
+    });
+  };
+
   return (
     <div>
       {props.type === "login" && (
@@ -26,6 +41,21 @@ export const AuthPage = (props: AuthPageProps) => {
           },
         }}
       />
+
+      {props.type === "login" && (
+        <div style={{ maxWidth: 400, margin: "16px auto 0", textAlign: "center" }}>
+          <Divider plain>o continúa con</Divider>
+          <Space direction="vertical" style={{ width: "100%" }}>
+            <Button
+              onClick={handleGoogleLogin}
+              icon={<GoogleOutlined />}
+              block
+            >
+              Ingresar con Google
+            </Button>
+          </Space>
+        </div>
+      )}
     </div>
   );
 };
