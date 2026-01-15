@@ -57,6 +57,10 @@ export default function EstudiantesList() {
             select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, cursos(nombre, porcentaje_minimo))"
         },
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
+        pagination: {
+            current: 1,
+            pageSize: 50 // Limitar a 50 por página para mejor rendimiento
+        },
         // Filtro base: Solo estudiantes
         filters: {
             permanent: permanentFilters()
@@ -96,13 +100,16 @@ export default function EstudiantesList() {
     const [attFilter, setAttFilter] = useState<'all' | 'bajo' | 'sin'>('all');
     const [asistStats, setAsistStats] = useState<Record<number, { total: number; present: number; porcentaje: number; minimo: number; cumple: boolean; tieneDatos: boolean }>>({});
     const [loadingAsist, setLoadingAsist] = useState(false);
+    const [calcularAsistencia, setCalcularAsistencia] = useState(false);
     const activoEstados = ["activo", "en curso", "pendiente"];
     const graduadoEstados = ["aprobado", "certificado", "finalizado"];
 
     const dataSource = (tableProps.dataSource as any[]) || [];
 
-    // Calcular asistencia por matrícula para cada estudiante
+    // Calcular asistencia por matrícula para cada estudiante (SOLO cuando se solicite)
     useEffect(() => {
+        if (!calcularAsistencia) return;
+        
         const matriculaIds: number[] = [];
         dataSource.forEach((s: any) => {
             (s.matriculas || []).forEach((m: any) => {
@@ -111,6 +118,7 @@ export default function EstudiantesList() {
         });
         if (matriculaIds.length === 0) {
             setAsistStats({});
+            setLoadingAsist(false);
             return;
         }
         const fetchAsist = async () => {
@@ -148,7 +156,7 @@ export default function EstudiantesList() {
         };
         fetchAsist();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dataSource.length]);
+    }, [calcularAsistencia, dataSource.length]);
     const activos = useMemo(() => dataSource.filter(s => {
         // Mostrar todos los estudiantes que tienen activo=true O no tienen el campo
         // Si tienen matrículas, verificar que al menos una esté activa
