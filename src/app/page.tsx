@@ -18,6 +18,7 @@ import isBetween from 'dayjs/plugin/isBetween';
 import { formatDate } from "@utils/date";
 import { Line, Column } from "@ant-design/plots";
 import 'dayjs/locale/es';
+import { useQuery } from "@tanstack/react-query";
 
 dayjs.extend(isBetween);
 dayjs.locale('es');

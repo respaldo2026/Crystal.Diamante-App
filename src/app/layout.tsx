@@ -29,7 +29,8 @@ import routerProvider from "@refinedev/nextjs-router";
 
 // PROVIDERS
 import { dataProvider } from "../providers/data-provider"; 
-import { authProvider } from "../providers/auth-provider/auth-provider.client"; 
+import { authProvider } from "../providers/auth-provider/auth-provider.client";
+import { QueryProvider } from "../providers/query-provider"; 
 
 export default function RootLayout({
   children,
@@ -62,8 +63,9 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        <RefineKbarProvider>
-          <ConfigProvider 
+        <QueryProvider>
+          <RefineKbarProvider>
+            <ConfigProvider 
             theme={{
               token: {
                 colorPrimary: '#5B21B6', // Púrpura profesional más oscuro
@@ -254,6 +256,7 @@ export default function RootLayout({
             </AntdApp>
           </ConfigProvider>
         </RefineKbarProvider>
+        </QueryProvider>
       </body>
     </html>
   );
