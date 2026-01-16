@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Create } from "@refinedev/antd";
 import { useNavigation } from "@refinedev/core";
-import { Form, Input, DatePicker, Row, Col, Divider, message, Alert } from "antd";
+import { Form, Input, DatePicker, Row, Col, Divider, App, Alert } from "antd";
 import { 
     UserOutlined, PhoneOutlined, MailOutlined, HomeOutlined, 
     IdcardOutlined, FileTextOutlined
@@ -12,6 +12,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function ProfesorCreate() {
     const { list } = useNavigation(); // Para redirigir manualmente
+    const { message } = App.useApp(); // Usar hook para mensajes
     const [form] = Form.useForm();    // Controlamos el formulario nosotros mismos
     const [loading, setLoading] = useState(false);
 

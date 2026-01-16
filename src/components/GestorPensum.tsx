@@ -23,6 +23,7 @@ import {
   Tooltip,
   List,
   Alert,
+  Radio,
 } from "antd";
 import {
   PlusOutlined,
@@ -33,6 +34,7 @@ import {
   FileOutlined,
   GiftOutlined,
   CheckCircleOutlined,
+  LinkOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import type { UploadFile } from "antd";
@@ -89,6 +91,7 @@ export default function GestorPensum({
   const [form] = Form.useForm();
   const [formCurso] = Form.useForm();
   const [formMaterial] = Form.useForm();
+  const [formCiclo] = Form.useForm();
 
   // Estados para pensum
   const [pensums, setPensums] = useState<Pensum[]>([]);
@@ -101,12 +104,17 @@ export default function GestorPensum({
   const [modalCursoVisible, setModalCursoVisible] = useState(false);
   const [editingCurso, setEditingCurso] = useState<PensumCurso | null>(null);
 
+  // Estados para editar ciclo
+  const [modalCicloVisible, setModalCicloVisible] = useState(false);
+  const [editingCiclo, setEditingCiclo] = useState<Pensum | null>(null);
+
   // Estados para material didáctico
   const [materiales, setMateriales] = useState<MaterialDidactico[]>([]);
   const [loadingMateriales, setLoadingMateriales] = useState(false);
   const [drawerMaterialesVisible, setDrawerMaterialesVisible] = useState(false);
   const [uploadingMaterial, setUploadingMaterial] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace'>('archivo');
 
   // Estados para navegación
   const [selectedCicloId, setSelectedCicloId] = useState<string | null>(null);
@@ -250,6 +258,53 @@ export default function GestorPensum({
     }
   };
 
+  const handleEditarCiclo = (e: React.MouseEvent, pensum: Pensum) => {
+    e.stopPropagation();
+    setEditingCiclo(pensum);
+    formCiclo.setFieldsValue({
+      nombre_ciclo: pensum.nombre_ciclo,
+      descripcion: pensum.descripcion
+    });
+    setModalCicloVisible(true);
+  };
+
+  const handleGuardarCiclo = async () => {
+    try {
+      const values = await formCiclo.validateFields();
+      if (!editingCiclo) return;
+
+      // Actualización optimista: Actualizar el estado local inmediatamente para ver el cambio
+      setPensums(prev => prev.map(p => 
+        p.id === editingCiclo.id 
+          ? { ...p, nombre_ciclo: values.nombre_ciclo, descripcion: values.descripcion }
+          : p
+      ));
+
+      const { data, error } = await supabaseBrowserClient
+        .from("pensum")
+        .update({
+          nombre_ciclo: values.nombre_ciclo,
+          descripcion: values.descripcion,
+        })
+        .eq("id", editingCiclo.id)
+        .select();
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        throw new Error("No se pudieron guardar los cambios. Verifica permisos.");
+      }
+
+      message.success("Ciclo actualizado");
+      setModalCicloVisible(false);
+      setEditingCiclo(null);
+      cargarPensums();
+    } catch (error: any) {
+      message.error(error?.message || "Error al actualizar ciclo");
+      cargarPensums(); // Si falla, recargamos para revertir el cambio visual
+    }
+  };
+
   // ==================== CURSOS DEL PENSUM ====================
 
   const cargarCursosPensum = async (pensumId: string) => {
@@ -369,7 +424,7 @@ export default function GestorPensum({
   };
 
   const formatearTamano = (bytes: number) => {
-    if (bytes === 0) return "0 B";
+    if (bytes === 0) return "Enlace";
     const k = 1024;
     const sizes = ["B", "KB", "MB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -381,28 +436,48 @@ export default function GestorPensum({
     try {
       const values = await formMaterial.validateFields();
 
-      if (fileList.length === 0) {
-        message.error("Debes seleccionar un archivo");
-        return;
-      }
+      let urlArchivo = "";
+      let nombreArchivo = "";
+      let tamanoBytes = 0;
+      let mimeType = "";
 
       setUploadingMaterial(true);
-      const file = fileList[0].originFileObj as File;
 
-      // Subir archivo a Supabase Storage
-      const fileName = `${Date.now()}-${file.name}`;
-      const { data: uploadData, error: uploadError } =
-        await supabaseBrowserClient.storage
-          .from("material_didactico")
-          .upload(`${programaId}/${fileName}`, file);
+      if (tipoOrigen === 'archivo') {
+        if (fileList.length === 0) {
+          message.error("Debes seleccionar un archivo");
+          setUploadingMaterial(false);
+          return;
+        }
 
-      if (uploadError) throw uploadError;
+        const file = fileList[0].originFileObj as File;
 
-      // Obtener URL pública
-      const { data: urlData } =
-        supabaseBrowserClient.storage
-          .from("material_didactico")
-          .getPublicUrl(`${programaId}/${fileName}`);
+        // Subir archivo a Supabase Storage
+        const fileName = `${Date.now()}-${file.name}`;
+        const { data: uploadData, error: uploadError } =
+          await supabaseBrowserClient.storage
+            .from("material_didactico")
+            .upload(`${programaId}/${fileName}`, file);
+
+        if (uploadError) throw uploadError;
+
+        // Obtener URL pública
+        const { data: urlData } =
+          supabaseBrowserClient.storage
+            .from("material_didactico")
+            .getPublicUrl(`${programaId}/${fileName}`);
+        
+        urlArchivo = urlData.publicUrl;
+        nombreArchivo = file.name;
+        tamanoBytes = file.size;
+        mimeType = file.type;
+      } else {
+        // Es un enlace
+        urlArchivo = values.url_externa;
+        nombreArchivo = "Enlace Externo";
+        tamanoBytes = 0;
+        mimeType = "link";
+      }
 
       // Obtener usuario actual
       const { data: { user } } = await supabaseBrowserClient.auth.getUser();
@@ -414,10 +489,10 @@ export default function GestorPensum({
         titulo: values.titulo,
         descripcion: values.descripcion,
         tipo_material: values.tipo_material,
-        nombre_archivo: file.name,
-        url_archivo: urlData.publicUrl,
-        tamano_bytes: file.size,
-        mime_type: file.type,
+        nombre_archivo: nombreArchivo,
+        url_archivo: urlArchivo,
+        tamano_bytes: tamanoBytes,
+        mime_type: mimeType,
         subido_por: user?.id,
         visible: true,
       };
@@ -431,6 +506,7 @@ export default function GestorPensum({
       message.success("Material subido correctamente");
       formMaterial.resetFields();
       setFileList([]);
+      setTipoOrigen('archivo');
       cargarMateriales();
     } catch (error: any) {
       message.error(error?.message || "Error al subir material");
@@ -487,15 +563,27 @@ export default function GestorPensum({
                     textAlign: "center",
                     borderRadius: 8,
                     boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                    position: "relative",
                   }}
                 >
+                  <Button 
+                    type="text" 
+                    icon={<EditOutlined />} 
+                    style={{ position: 'absolute', top: 8, right: 8, zIndex: 1, color: '#1890ff' }}
+                    onClick={(e) => handleEditarCiclo(e, pensum)}
+                  />
                   <div style={{ fontSize: 48, marginBottom: 12 }}>📚</div>
                   <Text strong style={{ fontSize: 18, display: "block" }}>
-                    Ciclo {pensum.numero_ciclo}
+                    {pensum.nombre_ciclo || `Ciclo ${pensum.numero_ciclo}`}
                   </Text>
                   {pensum.nombre_ciclo && (
-                    <div style={{ fontSize: 13, color: "#666", marginTop: 4, fontWeight: 500 }}>
-                      {pensum.nombre_ciclo}
+                    <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>
+                      Ciclo {pensum.numero_ciclo}
+                    </div>
+                  )}
+                  {pensum.descripcion && (
+                    <div style={{ fontSize: 12, color: "#888", marginTop: 8, fontStyle: 'italic', padding: '0 10px' }}>
+                      {pensum.descripcion}
                     </div>
                   )}
                   <Divider style={{ margin: "12px 0" }} />
@@ -640,7 +728,8 @@ export default function GestorPensum({
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
-                                <DownloadOutlined /> Descargar
+                                {material.mime_type === 'link' ? <LinkOutlined /> : <DownloadOutlined />} 
+                                {material.mime_type === 'link' ? " Abrir Enlace" : " Descargar"}
                               </a>,
                               <Button
                                 icon={<DeleteOutlined />}
@@ -735,6 +824,27 @@ export default function GestorPensum({
         </Form>
       </Modal>
 
+      {/* MODAL: Editar Ciclo */}
+      <Modal
+        title={`Editar Ciclo ${editingCiclo?.numero_ciclo}`}
+        open={modalCicloVisible}
+        onOk={handleGuardarCiclo}
+        onCancel={() => setModalCicloVisible(false)}
+      >
+        <Form form={formCiclo} layout="vertical">
+          <Form.Item 
+            name="nombre_ciclo" 
+            label="Nombre del Ciclo / Título"
+            help="Ej: Introducción, Técnicas Avanzadas, etc."
+          >
+            <Input placeholder="Nombre descriptivo del ciclo" />
+          </Form.Item>
+          <Form.Item name="descripcion" label="Descripción">
+            <Input.TextArea rows={3} placeholder="¿Qué se aprenderá en este ciclo?" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
       {/* DRAWER: Subir Material Didáctico */}
       <Drawer
         title="Subir Material Didáctico"
@@ -770,7 +880,7 @@ export default function GestorPensum({
           >
             <Select
               options={[
-                { label: "📄 Documento", value: "documento" },
+                { label: "📄 Documento (PDF, Word)", value: "documento" },
                 { label: "🎥 Video", value: "video" },
                 { label: "🖼️ Imagen", value: "imagen" },
                 { label: "📊 Presentación", value: "presentacion" },
@@ -780,20 +890,44 @@ export default function GestorPensum({
             />
           </Form.Item>
 
-          <Form.Item
-            name="archivo"
-            label="Archivo"
-            rules={[{ required: true, message: "Selecciona un archivo" }]}
-          >
-            <Upload
-              beforeUpload={() => false}
-              fileList={fileList}
-              onChange={(info) => setFileList(info.fileList)}
-              maxCount={1}
-            >
-              <Button icon={<UploadOutlined />}>Seleccionar Archivo</Button>
-            </Upload>
+          <Form.Item label="Origen del Contenido" style={{ marginBottom: 12 }}>
+             <Radio.Group 
+               value={tipoOrigen} 
+               onChange={(e) => setTipoOrigen(e.target.value)}
+               buttonStyle="solid"
+             >
+               <Radio.Button value="archivo">Subir Archivo</Radio.Button>
+               <Radio.Button value="enlace">Enlace (YouTube, Drive, etc.)</Radio.Button>
+             </Radio.Group>
           </Form.Item>
+
+          {tipoOrigen === 'archivo' ? (
+            <Form.Item
+              name="archivo"
+              label="Archivo"
+              rules={[{ required: true, message: "Selecciona un archivo" }]}
+            >
+              <Upload
+                beforeUpload={() => false}
+                fileList={fileList}
+                onChange={(info) => setFileList(info.fileList)}
+                maxCount={1}
+              >
+                <Button icon={<UploadOutlined />}>Seleccionar Archivo</Button>
+              </Upload>
+            </Form.Item>
+          ) : (
+            <Form.Item
+              name="url_externa"
+              label="URL del Enlace"
+              rules={[
+                { required: true, message: "Ingresa la URL" },
+                { type: 'url', message: "Ingresa una URL válida (https://...)" }
+              ]}
+            >
+              <Input prefix={<LinkOutlined />} placeholder="https://youtube.com/..." />
+            </Form.Item>
+          )}
 
           <Space style={{ width: "100%" }}>
             <Button
@@ -809,6 +943,7 @@ export default function GestorPensum({
                 setDrawerMaterialesVisible(false);
                 formMaterial.resetFields();
                 setFileList([]);
+                setTipoOrigen('archivo');
               }}
               block
             >
