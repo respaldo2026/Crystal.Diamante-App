@@ -22,6 +22,7 @@ export const MODULOS_DISPONIBLES = [
   { key: "inventario", label: "Inventario" },
   { key: "planificador", label: "Planificador" },
   { key: "portal-estudiante", label: "Portal Estudiante" },
+  { key: "configuracion", label: "Configuración" },
 ];
 
 // Roles disponibles - JERARQUÍA ACTUALIZADA

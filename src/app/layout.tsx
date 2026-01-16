@@ -33,6 +33,7 @@ import { authProvider } from "../providers/auth-provider/auth-provider.client";
 import { QueryProvider } from "../providers/query-provider";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useCurrentUser } from "@hooks/useCurrentUser"; 
+import { useRolePermissions } from "@hooks/useRolePermissions";
 
 export default function RootLayout({
   children,
@@ -43,6 +44,7 @@ export default function RootLayout({
   // Estado para verificar si ya estamos en el navegador
   const [mounted, setMounted] = useState(false);
   const { user, loading: userLoading } = useCurrentUser();
+  const { permisos, loading: permisosLoading } = useRolePermissions();
 
   useEffect(() => {
     setMounted(true);
@@ -50,6 +52,7 @@ export default function RootLayout({
 
   // Función para determinar qué recursos mostrar según el rol
   const getResourcesByRole = () => {
+    if (permisosLoading) return []; // Esperar a que carguen los permisos
     const userRole = user?.rol;
     
     // Recursos para profesores: solo Mi Oficina
@@ -80,10 +83,10 @@ export default function RootLayout({
       ];
     }
 
-    // Recursos completos para admin y administrativo (o null mientras carga)
-    // Si userRole es null, admin o administrativo, mostrar todo
-    return [
+    // Definición de TODOS los recursos posibles del panel administrativo
+    const allResources = [
       {
+        key: "dashboard",
         name: "dashboard",
         list: "/",
         meta: {
@@ -92,6 +95,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "estudiantes", // Clave debe coincidir con el módulo en permisos
         name: "perfiles",
         list: "/estudiantes",
         create: "/estudiantes/create",
@@ -103,6 +107,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "profesores",
         name: "profesores",
         list: "/profesores",
         create: "/profesores/create",
@@ -114,6 +119,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "cursos", // Programas suele ir junto con cursos
         name: "programas",
         list: "/programas",
         meta: {
@@ -122,6 +128,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "cursos",
         name: "cursos",
         list: "/cursos",
         create: "/cursos/create",
@@ -133,6 +140,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "leads",
         name: "leads",
         list: "/leads",
         meta: {
@@ -141,6 +149,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "planificador",
         name: "planificador",
         list: "/planificador",
         meta: {
@@ -149,6 +158,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "matriculas",
         name: "matriculas",
         list: "/matriculas",
         create: "/matriculas/create",
@@ -160,6 +170,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "tesoreria", // Pagos es parte de tesorería
         name: "pagos",
         list: "/pagos",
         create: "/pagos/create",
@@ -171,6 +182,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "nomina",
         name: "nomina",
         list: "/nomina",
         create: "/nomina/create",
@@ -180,6 +192,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "tesoreria",
         name: "tesoreria",
         list: "/tesoreria",
         create: "/tesoreria/create",
@@ -189,6 +202,7 @@ export default function RootLayout({
         },
       },
       {
+        key: "configuracion", // Usualmente solo admin, o configurable
         name: "configuracion",
         list: "/configuracion",
         meta: {
@@ -197,6 +211,22 @@ export default function RootLayout({
         },
       },
     ];
+
+    // Si es admin, mostrar todo (o filtrar también si quieres que el admin se auto-restrinja)
+    if (userRole === 'admin' || userRole === 'director') {
+       return allResources;
+    }
+
+    // Para otros roles (ej: administrativo), filtrar según la tabla de permisos
+    const userPermisos = permisos[userRole || ''] || {};
+    
+    return allResources.filter(resource => {
+      // Si el recurso no tiene key (ej: dashboard), se muestra siempre
+      if (!resource.key || resource.key === 'dashboard') return true;
+      
+      // Verificar si tiene permiso true en el objeto de permisos
+      return userPermisos[resource.key] === true;
+    });
   };
 
   // Si no está montado (aún es servidor), mostramos un loader simple o nada.
