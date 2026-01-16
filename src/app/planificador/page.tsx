@@ -151,7 +151,8 @@ export default function PlanificadorPage() {
       const { data } = await supabaseBrowserClient
         .from("matriculas")
         .select("curso_id")
-        .in("curso_id", cursoIds);
+        .in("curso_id", cursoIds)
+        .neq("estado", "cancelado");
       
       const conteos: Record<number, number> = {};
       cursoIds.forEach(id => {

@@ -65,19 +65,30 @@ export default function SalonVirtualPage() {
       .eq("curso_id", cursoId)
       .in("estado", ["activo", "en curso"]);
 
-    if (!matriculasError && matriculasData) {
+    if (matriculasError) {
+      console.error("Error cargando matrículas:", matriculasError);
+      setEstudiantes([]);
+    } else if (matriculasData) {
       setEstudiantes(matriculasData);
     }
 
-    // Cargar asistencias
-    const { data: asistenciasData, error: asistenciasError } = await supabaseBrowserClient
-      .from("asistencias")
-      .select("*, perfiles(nombre_completo)")
-      .in("matricula_id", matriculasData?.map(m => m.id) || [])
-      .order("fecha", { ascending: false });
+    // Cargar asistencias solo si hay matrículas
+    if (matriculasData && matriculasData.length > 0) {
+      const matriculaIds = matriculasData.map(m => m.id);
+      
+      const { data: asistenciasData, error: asistenciasError } = await supabaseBrowserClient
+        .from("asistencias")
+        .select("*, matriculas!asistencias_matricula_id_fkey(perfiles(nombre_completo))")
+        .in("matricula_id", matriculaIds)
+        .order("fecha", { ascending: false });
 
-    if (!asistenciasError && asistenciasData) {
-      setAsistencias(asistenciasData);
+      if (asistenciasError) {
+        console.error("Error cargando asistencias:", asistenciasError);
+      } else if (asistenciasData) {
+        setAsistencias(asistenciasData);
+      }
+    } else {
+      setAsistencias([]);
     }
 
     setLoading(false);
@@ -154,7 +165,7 @@ export default function SalonVirtualPage() {
                     <Progress
                       type="circle"
                       percent={porcentaje}
-                      width={50}
+                      size={50}
                       status={porcentaje >= 80 ? "success" : porcentaje >= 60 ? "normal" : "exception"}
                     />
                     <Text type="secondary">{presentes}/{total}</Text>
@@ -200,7 +211,7 @@ export default function SalonVirtualPage() {
               },
               {
                 title: "Estudiante",
-                dataIndex: ["perfiles", "nombre_completo"],
+                dataIndex: ["matriculas", "perfiles", "nombre_completo"],
                 key: "estudiante",
               },
               {

@@ -182,10 +182,10 @@ export default function DashboardPage() {
           .order("fecha_pago", { ascending: false })
           .limit(8),
         
-        // 8. PRÓXIMOS CURSOS
+        // 8. PRÓXIMOS CURSOS - Cargar cursos y luego contar matrículas activas
         supabaseBrowserClient
           .from("cursos")
-          .select("id, nombre, fecha_inicio, cupos, estado, matriculas(count)")
+          .select("id, nombre, fecha_inicio, cupos, estado")
           .gte("fecha_inicio", hoy.format('YYYY-MM-DD'))
           .in("estado", ["proximo", "activo"])
           .order("fecha_inicio", { ascending: true })
@@ -288,7 +288,24 @@ export default function DashboardPage() {
       setDistribucionPagos(distribucion);
       setPagosRecientes(pagosRec.data || []);
       setCumplesHoy(cumples);
-      setProximosCursos(proxCursos.data || []);
+      
+      // Contar matrículas activas para cada curso próximo
+      const cursosConConteo = await Promise.all(
+        (proxCursos.data || []).map(async (curso: any) => {
+          const { count } = await supabaseBrowserClient
+            .from("matriculas")
+            .select("*", { count: "exact", head: true })
+            .eq("curso_id", curso.id)
+            .neq("estado", "cancelado");
+          
+          return {
+            ...curso,
+            matriculas: [{ count: count || 0 }]
+          };
+        })
+      );
+      
+      setProximosCursos(cursosConConteo);
       setPagosVencidos(vencidos.data || []);
 
     } catch (error) {

@@ -89,7 +89,8 @@ export default function CursosList() {
     const { data, error } = await supabaseBrowserClient
       .from("matriculas")
       .select("curso_id")
-      .in("curso_id", cursoIds);
+      .in("curso_id", cursoIds)
+      .neq("estado", "cancelado");
 
     if (error) {
       message.error("No se pudieron cargar los inscritos");

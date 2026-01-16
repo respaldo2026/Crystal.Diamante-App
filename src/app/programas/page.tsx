@@ -609,7 +609,7 @@ export default function ProgramasPage() {
       </Modal>
 
       {/* GESTOR DE PENSUM Y MATERIAL */}
-      {programaSeleccionado && (
+      {gestorPensumVisible && programaSeleccionado && (
         <GestorPensum
           programaId={programaSeleccionado.id}
           programaNombre={programaSeleccionado.nombre}

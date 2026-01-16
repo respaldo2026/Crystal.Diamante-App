@@ -69,21 +69,36 @@ export default function MatriculaCreate() {
 
             setCursosLoading(true);
             try {
-                const todayString = dayjs().format("YYYY-MM-DD");
-                const { data, error } = await supabaseBrowserClient
+                // Primero obtenemos los cursos
+                const { data: cursosData, error } = await supabaseBrowserClient
                     .from("cursos")
-                    .select("id, nombre, cupos, fecha_inicio, estado, programa_id, matriculas(count)")
+                    .select("id, nombre, cupos, fecha_inicio, estado, programa_id")
                     .eq("programa_id", programaSeleccionado)
                     .in("estado", ["activo", "proximo"])
-                    .or(`fecha_inicio.is.null,fecha_inicio.gte.${todayString}`)
                     .order("fecha_inicio", { ascending: true, nullsFirst: true });
 
                 if (error) throw error;
 
+                // Luego contamos matrículas activas para cada curso
+                const cursosConConteo = await Promise.all(
+                    (cursosData || []).map(async (curso: any) => {
+                        const { count } = await supabaseBrowserClient
+                            .from("matriculas")
+                            .select("*", { count: "exact", head: true })
+                            .eq("curso_id", curso.id)
+                            .neq("estado", "cancelado");
+                        
+                        return {
+                            ...curso,
+                            inscritos: count || 0
+                        };
+                    })
+                );
+
                 const today = dayjs();
-                const mapped = (data || [])
+                const mapped = cursosConConteo
                     .map((curso: any) => {
-                        const inscritos = curso?.matriculas?.[0]?.count ?? 0;
+                        const inscritos = curso.inscritos;
                         const cupos = curso?.cupos ?? 0;
                         const disponibles = cupos - inscritos;
                         if (disponibles <= 0) return null;
@@ -208,7 +223,8 @@ export default function MatriculaCreate() {
             const { count, error: errCount } = await supabaseBrowserClient
                 .from("matriculas")
                 .select("*", { count: "exact", head: true })
-                .eq("curso_id", cursoIdNumber);
+                .eq("curso_id", cursoIdNumber)
+                .neq("estado", "cancelado");
 
             if (errCount) throw errCount;
 
