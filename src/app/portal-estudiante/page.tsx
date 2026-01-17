@@ -1,7 +1,25 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Tabs, Card, Table, Row, Col, Statistic, Spin, Alert, Progress, Button, Empty, message, Modal, Tag, Divider } from "antd";
+import {
+  Tabs,
+  Card,
+  Table,
+  Row,
+  Col,
+  Statistic,
+  Spin,
+  Alert,
+  Progress,
+  Button,
+  Empty,
+  message,
+  Tag,
+  Divider,
+  List,
+  Collapse,
+  Typography
+} from "antd";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -11,16 +29,23 @@ import {
   DownloadOutlined,
   WhatsAppOutlined,
   DollarCircleOutlined,
+  SafetyCertificateOutlined,
+  VideoCameraOutlined,
+  FilePdfOutlined,
+  ClockCircleOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import "dayjs/locale/es";
 import { formatDate } from "@utils/date";
-import { useParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
 
-const { Title, Text } = require("antd").Typography;
+dayjs.locale("es");
+
+const { Title, Text } = Typography;
+const { Panel } = Collapse;
 
 export default function PortalEstudiante() {
   const [loading, setLoading] = useState(true);
@@ -30,107 +55,119 @@ export default function PortalEstudiante() {
   const [avancePorCurso, setAvancePorCurso] = useState<any[]>([]);
   const [certificados, setCertificados] = useState<any[]>([]);
   const [pagos, setPagos] = useState<any[]>([]);
+  const [pensum, setPensum] = useState<any[]>([]);
+  const [materiales, setMateriales] = useState<any[]>([]);
+  const [matriculas, setMatriculas] = useState<any[]>([]);
 
   useEffect(() => {
-    cargarDatosEstudiante();
+    cargarDatos();
   }, []);
 
-  const cargarDatosEstudiante = async () => {
+  const cargarDatos = async () => {
     try {
       setLoading(true);
-      
-      // Obtener estudiante autenticado
+
       const { data: { user }, error: authError } = await supabaseBrowserClient.auth.getUser();
       if (authError || !user) {
         message.error("No autenticado");
         return;
       }
 
-      // Cargar perfil
       const { data: perfil, error: errPerfil } = await supabaseBrowserClient
         .from("perfiles")
         .select("*")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (errPerfil) {
-        message.error("Error cargando perfil");
-        return;
-      }
-      
-      if (!perfil) {
-        message.error("Perfil no encontrado");
+      if (errPerfil || !perfil) {
+        message.error("Perfil no encontrado. Contacta a la administración.");
         return;
       }
 
       setEstudiante(perfil);
 
-      // Cargar asistencias
-      const { data: dataAsistencias, error: errAsistencias } = await supabaseBrowserClient
-        .from("asistencias")
-        .select("*, matriculas(id, estudiante_id, cursos(nombre))")
-        .order("fecha", { ascending: false });
-
-      if (!errAsistencias && dataAsistencias) {
-        // Filtrar solo las del estudiante actual
-        const miasistencias = dataAsistencias.filter((a: any) => a.matriculas?.estudiante_id === user.id);
-        setAsistencias(miasistencias);
-      }
-
-      // Cargar calificaciones
-      const { data: dataCalificaciones, error: errCalificaciones } = await supabaseBrowserClient
-        .from("calificaciones")
-        .select("*, matriculas(id, estudiante_id, cursos(nombre))")
-        .order("fecha_evaluacion", { ascending: false });
-
-      if (!errCalificaciones && dataCalificaciones) {
-        // Filtrar solo las del estudiante actual
-        const miscalificaciones = dataCalificaciones.filter((c: any) => c.matriculas?.estudiante_id === user.id);
-        setCalificaciones(miscalificaciones);
-      }
-
-      // Calcular avance por curso
-      const { data: dataMatriculas, error: errMatriculas } = await supabaseBrowserClient
+      // 1. Cargar Matrículas con Cursos y Programas
+      const { data: dataMatriculas } = await supabaseBrowserClient
         .from("matriculas")
-        .select("*, cursos(*, temas_curso(count))")
+        .select(`
+          *,
+          cursos (
+            *,
+            programas (*)
+          )
+        `)
         .eq("estudiante_id", user.id)
-        .eq("estado", "activo");
+        .neq("estado", "cancelado");
 
-      if (!errMatriculas && dataMatriculas) {
-        const avance = dataMatriculas.map((m: any) => ({
-          curso: m.cursos?.nombre,
-          cursada: m.cursos?.nota_final || 0,
-          totalTemas: m.cursos?.temas_curso?.[0]?.count || 0,
-          porcentaje: m.nota_final || 0,
-        }));
-        setAvancePorCurso(avance);
-      }
+      setMatriculas(dataMatriculas || []);
 
-      // Verificar certificados disponibles (cursos finalizados con nota >= 70)
-      const { data: dataCertificados } = await supabaseBrowserClient
-        .from("matriculas")
-        .select("*, cursos(nombre, fecha_fin)")
-        .eq("estudiante_id", user.id)
-        .eq("estado_academico", "aprobado")
-        .gte("nota_final", 70);
+      const matriculaIds = dataMatriculas?.map(m => m.id) || [];
+      const programaIds = dataMatriculas?.map(m => m.cursos?.programa_id).filter(Boolean) || [];
 
-      if (dataCertificados) {
-        setCertificados(dataCertificados);
-      }
-
-      // Cargar pagos (realizados y pendientes)
+      // 2. Cargar Pagos (Independiente de matrículas activas para ver historial completo)
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
-        .select("*, matriculas(id, estudiante_id, cursos(nombre))")
+        .select("*")
         .eq("estudiante_id", user.id)
-        .order("fecha_pago", { ascending: false });
+        .order("fecha_vencimiento", { ascending: true });
+      
+      if (errPagos) console.error("Error cargando pagos:", errPagos);
+      setPagos(dataPagos || []);
 
-      if (!errPagos && dataPagos) {
-        setPagos(dataPagos);
+      // 3. Cargar datos relacionados a matrículas activas
+      if (matriculaIds.length > 0) {
+        // Asistencias
+        const { data: dataAsistencias } = await supabaseBrowserClient
+          .from("asistencias")
+          .select("*, matriculas(id, cursos(nombre))")
+          .in("matricula_id", matriculaIds)
+          .order("fecha", { ascending: false });
+        setAsistencias(dataAsistencias || []);
+
+        // Calificaciones
+        const { data: dataCalificaciones } = await supabaseBrowserClient
+          .from("calificaciones")
+          .select("*, matriculas(id, cursos(nombre))")
+          .in("matricula_id", matriculaIds)
+          .order("fecha_evaluacion", { ascending: false });
+        setCalificaciones(dataCalificaciones || []);
+      }
+
+      // 4. Cargar Pensum y Materiales si hay programas
+      if (programaIds.length > 0) {
+        const { data: pensumData } = await supabaseBrowserClient
+          .from("pensum")
+          .select(`*, pensum_cursos (*)`)
+          .in("programa_id", programaIds)
+          .eq("activo", true)
+          .order("numero_ciclo", { ascending: true });
+        setPensum(pensumData || []);
+
+        const { data: materialesData } = await supabaseBrowserClient
+          .from("material_didactico")
+          .select("*")
+          .in("programa_id", programaIds)
+          .eq("visible", true)
+          .order("created_at", { ascending: false });
+        setMateriales(materialesData || []);
+      }
+
+      // 5. Calcular Avance y Certificados
+      if (dataMatriculas) {
+        const avance = dataMatriculas.map((m: any) => ({
+          curso: m.cursos?.nombre,
+          programa: m.cursos?.programas?.nombre,
+          nota: m.nota_final || 0,
+          estado: m.estado_academico
+        }));
+        setAvancePorCurso(avance);
+
+        const certs = dataMatriculas.filter((m: any) => m.estado_academico === 'aprobado' && m.nota_final >= 70);
+        setCertificados(certs);
       }
     } catch (error) {
       console.error("Error:", error);
-      message.error("Error cargando datos");
+      message.error("Error cargando información del portal");
     } finally {
       setLoading(false);
     }
@@ -149,6 +186,165 @@ export default function PortalEstudiante() {
       console.error(err);
       message.error("No se pudo descargar el certificado");
     }
+  };
+
+  const renderFinanciero = () => {
+    const pendientes = pagos.filter(p => p.estado === 'pendiente');
+    const realizados = pagos.filter(p => p.estado === 'pagado');
+
+    // Función auxiliar para determinar si está vencido (estrictamente anterior a hoy)
+    const isVencido = (fecha: string) => {
+      return fecha && dayjs().startOf('day').isAfter(dayjs(fecha));
+    };
+
+    return (
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
+          <Card title={<><ClockCircleOutlined /> Próximos Pagos</>} className="shadow-sm">
+            {pendientes.length > 0 ? (
+              <Table 
+                dataSource={pendientes} 
+                rowKey="id" 
+                pagination={false} 
+                size="small"
+                columns={[
+                  { 
+                    title: 'Concepto', 
+                    dataIndex: 'periodo_pagado', 
+                    render: (t, r: any) => {
+                      const vencido = isVencido(r.fecha_vencimiento);
+                      const style = !vencido ? { color: '#8c8c8c', fontSize: '13px' } : {};
+                      return <span style={style}>{t || `Cuota ${r.numero_cuota}`}</span>;
+                    } 
+                  },
+                  { 
+                    title: 'Vence', 
+                    dataIndex: 'fecha_vencimiento', 
+                    render: (d, r: any) => {
+                      const vencido = isVencido(r.fecha_vencimiento);
+                      const style = !vencido ? { color: '#8c8c8c', fontSize: '13px' } : {};
+                      return <span style={style}>{d ? dayjs(d).format("DD/MM/YYYY") : '-'}</span>;
+                    }
+                  },
+                  { 
+                    title: 'Monto', 
+                    dataIndex: 'monto', 
+                    render: (v, r: any) => {
+                      const vencido = isVencido(r.fecha_vencimiento);
+                      const style = !vencido ? { color: '#8c8c8c', fontSize: '13px' } : {};
+                      return <span style={style}>{`$ ${Number(v).toLocaleString()}`}</span>;
+                    }
+                  },
+                  { 
+                    title: 'Estado', 
+                    render: (_, r: any) => {
+                      const vencido = isVencido(r.fecha_vencimiento);
+                      if (vencido) return <Tag color="red">VENCIDO</Tag>;
+                      return <Tag style={{ color: '#8c8c8c', borderColor: '#d9d9d9', fontSize: '11px' }}>PENDIENTE</Tag>;
+                    } 
+                  }
+                ]}
+              />
+            ) : (
+              <Alert message="¡Estás al día!" description="No tienes pagos pendientes." type="success" showIcon />
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title={<><CheckCircleOutlined /> Historial de Pagos</>} className="shadow-sm">
+             <Table 
+                dataSource={realizados} 
+                rowKey="id" 
+                pagination={{ pageSize: 5 }} 
+                size="small"
+                columns={[
+                  { title: 'Concepto', dataIndex: 'periodo_pagado', render: (t, r: any) => t || `Cuota ${r.numero_cuota}` },
+                  { title: 'Fecha', dataIndex: 'fecha_pago', render: (d) => d ? dayjs(d).format("DD/MM/YYYY") : '-' },
+                  { title: 'Monto', dataIndex: 'monto', render: (v) => `$ ${Number(v).toLocaleString()}` },
+                  { title: 'Estado', render: () => <Tag color="green">PAGADO</Tag> }
+                ]}
+              />
+          </Card>
+        </Col>
+      </Row>
+    );
+  };
+
+  const renderPensum = () => {
+    if (!matriculas.length) return <Empty description="No tienes cursos activos" />;
+    const programasIds = Array.from(new Set(matriculas.map(m => m.cursos?.programa_id))).filter(Boolean);
+
+    return (
+      <div>
+        {programasIds.map((progId: any) => {
+          const programa = matriculas.find(m => m.cursos?.programa_id === progId)?.cursos?.programas;
+          const pensumProg = pensum.filter(p => p.programa_id === progId);
+          const matProg = materiales.filter(m => m.programa_id === progId);
+
+          return (
+            <Card key={progId} title={`Plan de Estudios: ${programa?.nombre}`} style={{ marginBottom: 20 }}>
+              <Tabs items={[
+                {
+                  key: 'pensum',
+                  label: 'Pensum Académico',
+                  children: (
+                    <Collapse defaultActiveKey={pensumProg[0]?.id}>
+                      {pensumProg.map(ciclo => (
+                        <Panel header={`${ciclo.nombre_ciclo} (${ciclo.duracion_semanas || 0} semanas)`} key={ciclo.id}>
+                          <Text type="secondary">{ciclo.descripcion}</Text>
+                          <Divider style={{ margin: '10px 0' }} />
+                          <List
+                            header={<Text strong>Temas:</Text>}
+                            dataSource={ciclo.pensum_cursos || []}
+                            renderItem={(curso: any) => (
+                              <List.Item>
+                                <List.Item.Meta
+                                  avatar={<BookOutlined />}
+                                  title={curso.nombre_curso}
+                                  description={`${curso.horas} horas • ${curso.tipo_curso}`}
+                                />
+                              </List.Item>
+                            )}
+                          />
+                        </Panel>
+                      ))}
+                    </Collapse>
+                  )
+                },
+                {
+                  key: 'material',
+                  label: 'Material Didáctico',
+                  children: (
+                    <List
+                      grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
+                      dataSource={matProg}
+                      renderItem={(item: any) => {
+                        let Icon = FileTextOutlined;
+                        if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                        if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                        return (
+                          <List.Item>
+                            <Card 
+                              size="small" 
+                              title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
+                              extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
+                            >
+                              <Text strong>{item.titulo}</Text>
+                              <br />
+                              <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
+                            </Card>
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  )
+                }
+              ]} />
+            </Card>
+          );
+        })}
+      </div>
+    );
   };
 
   if (loading) {
@@ -175,7 +371,7 @@ export default function PortalEstudiante() {
                 type="primary"
                 size="large"
                 style={{ backgroundColor: "#25D366", borderColor: "#25D366" }}
-                onClick={() => enviarWhatsapp(estudiante.telefono, "Hola, quiero recibir información sobre mis cursos")}
+                onClick={() => enviarWhatsapp(estudiante.telefono, "Hola, tengo una consulta sobre mis cursos")}
               >
                 Contactar
               </Button>
@@ -195,294 +391,82 @@ export default function PortalEstudiante() {
                 {avancePorCurso.length === 0 ? (
                   <Empty description="No estás inscrito en ningún curso activo" />
                 ) : (
-                  <>
-                    <Row gutter={16} style={{ marginBottom: 20 }}>
-                      <Col xs={24} sm={8}>
-                        <Card>
-                          <Statistic
-                            title="Cursos Activos"
-                            value={avancePorCurso.length}
-                            prefix={<BookOutlined />}
-                            valueStyle={{ color: "#1890ff" }}
-                          />
+                  <Row gutter={16}>
+                    {avancePorCurso.map((curso: any, idx: number) => (
+                      <Col xs={24} sm={12} lg={8} key={idx}>
+                        <Card title={curso.curso} extra={<Tag>{curso.programa}</Tag>}>
+                          <Progress type="circle" percent={curso.nota} format={() => `${curso.nota}/100`} />
+                          <div style={{ marginTop: 10, textAlign: 'center' }}>
+                            <Tag color={curso.nota >= 70 ? "green" : "orange"}>{curso.estado?.toUpperCase()}</Tag>
+                          </div>
                         </Card>
                       </Col>
-                    </Row>
-                    <Row gutter={16}>
-                      {avancePorCurso.map((curso: any, idx: number) => (
-                        <Col xs={24} sm={12} lg={8} key={idx}>
-                          <Card 
-                            title={curso.curso}
-                            extra={
-                              <Tag color={curso.porcentaje >= 70 ? "green" : "orange"}>
-                                {curso.porcentaje.toFixed(1)}/100
-                              </Tag>
-                            }
-                          >
-                            <Progress
-                              type="circle"
-                              percent={Math.min(curso.porcentaje, 100)}
-                              strokeColor={curso.porcentaje >= 70 ? "#52c41a" : "#faad14"}
-                            />
-                            <div style={{ marginTop: 16, textAlign: "center" }}>
-                              <Text type="secondary">Progreso del curso</Text>
-                            </div>
-                          </Card>
-                        </Col>
-                      ))}
-                    </Row>
-                  </>
+                    ))}
+                  </Row>
                 )}
               </>
             ),
           },
           {
             key: "2",
-            label: <span><CheckCircleOutlined /> Asistencia</span>,
-            children: (
-              <>
-                {asistencias.length === 0 ? (
-                  <Empty description="No hay registros de asistencia" />
-                ) : (
-                  <>
-                    <Row gutter={16} style={{ marginBottom: 20 }}>
-                      <Col xs={24} sm={8}>
-                        <Card>
-                          <Statistic
-                            title="Total de Clases"
-                            value={asistencias.length}
-                            prefix={<BookOutlined />}
-                          />
-                        </Card>
-                      </Col>
-                      <Col xs={24} sm={8}>
-                        <Card>
-                          <Statistic
-                            title="Presente"
-                            value={asistencias.filter((a: any) => a.estado === "presente").length}
-                            valueStyle={{ color: "#52c41a" }}
-                            prefix={<CheckCircleOutlined />}
-                          />
-                        </Card>
-                      </Col>
-                      <Col xs={24} sm={8}>
-                        <Card>
-                          <Statistic
-                            title="Ausente"
-                            value={asistencias.filter((a: any) => a.estado === "ausente").length}
-                            valueStyle={{ color: "#ff4d4f" }}
-                            prefix={<CloseCircleOutlined />}
-                          />
-                        </Card>
-                      </Col>
-                    </Row>
-                    <Table
-                      dataSource={asistencias}
-                      rowKey="id"
-                      columns={[
-                        {
-                          title: "Fecha",
-                          dataIndex: "fecha",
-                          render: (fecha) => formatDate(fecha),
-                        },
-                        {
-                          title: "Curso",
-                          render: (_, record: any) => record.matriculas?.cursos?.nombre,
-                        },
-                        {
-                          title: "Estado",
-                          dataIndex: "estado",
-                          render: (estado) => (
-                            <Tag color={estado === "presente" ? "green" : "red"}>
-                              {estado?.charAt(0).toUpperCase() + estado?.slice(1)}
-                            </Tag>
-                          ),
-                        },
-                        {
-                          title: "Observaciones",
-                          dataIndex: "observaciones",
-                        },
-                      ]}
-                      pagination={{ pageSize: 10 }}
-                    />
-                  </>
-                )}
-              </>
-            ),
+            label: <span><SafetyCertificateOutlined /> Plan de Estudios</span>,
+            children: renderPensum()
           },
           {
             key: "3",
-            label: <span><FileTextOutlined /> Calificaciones</span>,
-            children: (
-              <>
-                {calificaciones.length === 0 ? (
-                  <Empty description="No hay calificaciones registradas" />
-                ) : (
-                  <Table
-                    dataSource={calificaciones}
-                    rowKey="id"
-                    columns={[
-                      {
-                        title: "Curso",
-                        render: (_, record: any) => record.matriculas?.cursos?.nombre,
-                      },
-                      {
-                        title: "Tipo",
-                        dataIndex: "tipo_evaluacion",
-                        render: (tipo) => tipo?.charAt(0).toUpperCase() + tipo?.slice(1),
-                      },
-                      {
-                        title: "Calificación",
-                        dataIndex: "calificacion",
-                        render: (cal) => (
-                          <Tag color={cal >= 70 ? "green" : "red"}>
-                            {cal}/100
-                          </Tag>
-                        ),
-                      },
-                      {
-                        title: "Fecha",
-                        dataIndex: "fecha_evaluacion",
-                        render: (fecha) => formatDate(fecha),
-                      },
-                    ]}
-                    pagination={{ pageSize: 10 }}
-                  />
-                )}
-              </>
-            ),
+            label: <span><DollarCircleOutlined /> Financiero</span>,
+            children: renderFinanciero()
           },
           {
             key: "4",
-            label: <span><DollarCircleOutlined /> Mis Pagos</span>,
+            label: <span><CheckCircleOutlined /> Asistencia</span>,
             children: (
-              <>
-                {pagos.length === 0 ? (
-                  <Empty description="No hay registros de pago" />
-                ) : (
-                  <>
-                    <Row gutter={16} style={{ marginBottom: 20 }}>
-                      <Col xs={24} sm={12}>
-                        <Card>
-                          <Statistic
-                            title="Total Pagado"
-                            value={pagos.filter((p: any) => p.estado === "pagado").reduce((sum: number, p: any) => sum + Number(p.monto || 0), 0)}
-                            prefix="$"
-                            valueStyle={{ color: "#52c41a" }}
-                            formatter={(value) => `$ ${Number(value).toLocaleString()}`}
-                          />
-                        </Card>
-                      </Col>
-                      <Col xs={24} sm={12}>
-                        <Card>
-                          <Statistic
-                            title="Pagos Pendientes"
-                            value={pagos.filter((p: any) => p.estado === "pendiente").length}
-                            valueStyle={{ color: "#faad14" }}
-                          />
-                        </Card>
-                      </Col>
-                    </Row>
-                    <Alert 
-                      message="Para realizar pagos, por favor contacta a la academia o usa el sistema de pagos desde Matrícula" 
-                      type="info" 
-                      showIcon 
-                      style={{ marginBottom: 16 }}
-                    />
-                    <Table
-                      dataSource={pagos}
-                      rowKey="id"
-                      columns={[
-                        {
-                          title: "Fecha",
-                          dataIndex: "fecha_pago",
-                          render: (fecha) => fecha ? formatDate(fecha) : "-",
-                        },
-                        {
-                          title: "Curso",
-                          render: (_, record: any) => record.matriculas?.cursos?.nombre,
-                        },
-                        {
-                          title: "Monto",
-                          dataIndex: "monto",
-                          render: (monto) => `$ ${Number(monto || 0).toLocaleString()}`,
-                        },
-                        {
-                          title: "Método",
-                          dataIndex: "metodo_pago",
-                          render: (metodo) => <Tag color="blue">{metodo || "Por especificar"}</Tag>,
-                        },
-                        {
-                          title: "Estado",
-                          dataIndex: "estado",
-                          render: (estado) => (
-                            <Tag color={estado === "pagado" ? "success" : "warning"}>
-                              {estado?.charAt(0).toUpperCase() + estado?.slice(1)}
-                            </Tag>
-                          ),
-                        },
-                      ]}
-                      pagination={{ pageSize: 10 }}
-                    />
-                  </>
-                )}
-              </>
+              <Table
+                dataSource={asistencias}
+                rowKey="id"
+                columns={[
+                  { title: "Fecha", dataIndex: "fecha", render: (f) => formatDate(f) },
+                  { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
+                  { title: "Estado", dataIndex: "estado", render: (e) => <Tag color={e === "presente" ? "green" : "red"}>{e?.toUpperCase()}</Tag> },
+                ]}
+              />
             ),
           },
           {
             key: "5",
-            label: <span><TrophyOutlined /> Certificados</span>,
+            label: <span><FileTextOutlined /> Calificaciones</span>,
             children: (
-              <>
-                {certificados.length === 0 ? (
-                  <Alert message="Completa tus cursos con calificación >= 70 para descargar certificados" type="info" showIcon />
-                ) : (
-                  <Table
-                    dataSource={certificados}
-                    rowKey="id"
-                    columns={[
-                      {
-                        title: "Curso",
-                        render: (_, record: any) => record.cursos?.nombre,
-                      },
-                      {
-                        title: "Calificación",
-                        dataIndex: "nota_final",
-                        render: (nota) => <Tag color="green">{nota}/100</Tag>,
-                      },
-                      {
-                        title: "Fecha Finalización",
-                        render: (_, record: any) => formatDate(record.cursos?.fecha_fin),
-                      },
-                      {
-                        title: "Acciones",
-                        width: 120,
-                        render: (_, record: any) => {
-                          return (
-                            <Button 
-                              size="small" 
-                              type="primary"
-                              icon={<DownloadOutlined />}
-                              onClick={() => descargarCertificado(record)}
-                            >
-                              Descargar
-                            </Button>
-                          );
-                        },
-                      },
-                    ]}
-                  />
-                )}
-              </>
+              <Table
+                dataSource={calificaciones}
+                rowKey="id"
+                columns={[
+                  { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
+                  { title: "Nota", dataIndex: "calificacion", render: (c) => <Tag color={c >= 70 ? "green" : "red"}>{c}</Tag> },
+                  { title: "Fecha", dataIndex: "fecha_evaluacion", render: (f) => formatDate(f) },
+                ]}
+              />
             ),
           },
           {
             key: "6",
-            label: <span><BookOutlined /> Materiales</span>,
+            label: <span><TrophyOutlined /> Certificados</span>,
             children: (
-              <HistorialEntregas estudianteId={estudiante?.id} />
+              <Table
+                dataSource={certificados}
+                rowKey="id"
+                columns={[
+                  { title: "Curso", render: (_, r: any) => r.cursos?.nombre },
+                  { title: "Nota Final", dataIndex: "nota_final" },
+                  { title: "Acción", render: (_, r) => <Button icon={<DownloadOutlined />} onClick={() => descargarCertificado(r)}>Descargar</Button> }
+                ]}
+              />
             ),
           },
+          {
+            key: "7",
+            label: <span><BookOutlined /> Materiales (Kits)</span>,
+            children: <HistorialEntregas estudianteId={estudiante?.id} />
+          }
         ]}
       />
     </div>
