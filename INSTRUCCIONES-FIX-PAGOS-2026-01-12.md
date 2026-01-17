@@ -122,7 +122,7 @@ BEGIN
     );
 
     FOR i IN 1..duracion_meses LOOP
-        fecha_vencimiento_cuota := DATE_TRUNC('month', fecha_base + INTERVAL '1 month' * (i - 1)) + INTERVAL '4 days';
+        fecha_vencimiento_cuota := fecha_base + (INTERVAL '1 month' * (i - 1));
 
         INSERT INTO pagos (
             estudiante_id,
@@ -292,4 +292,3 @@ Verifica que existan todas las tablas requeridas en Supabase.
    - ❌ NO → El trigger no ejecutó, revisar error en `CREATE FUNCTION`
 
 Comparte el output de SQL en el chat.
-

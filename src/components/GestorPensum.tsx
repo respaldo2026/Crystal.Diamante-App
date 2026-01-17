@@ -35,6 +35,7 @@ import {
   GiftOutlined,
   CheckCircleOutlined,
   LinkOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import type { UploadFile } from "antd";
@@ -74,6 +75,7 @@ interface MaterialDidactico {
   mime_type: string;
   subido_por_nombre: string;
   created_at: string;
+  pensum_id?: string;
 }
 
 interface GestorPensumProps {
@@ -453,13 +455,22 @@ export default function GestorPensum({
         const file = fileList[0].originFileObj as File;
 
         // Subir archivo a Supabase Storage
-        const fileName = `${Date.now()}-${file.name}`;
+        // Sanear nombre para evitar error 400 por espacios o caracteres especiales
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `${Date.now()}-${sanitizedName}`;
+
         const { data: uploadData, error: uploadError } =
           await supabaseBrowserClient.storage
             .from("material_didactico")
             .upload(`${programaId}/${fileName}`, file);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          // Detectar error de políticas RLS para dar un mensaje más claro
+          if (uploadError.message.includes("security policy") || uploadError.message.includes("row-level security")) {
+            throw new Error("Error de permisos: Falta configurar políticas RLS en el bucket 'material_didactico'. Ejecuta el script SQL de permisos.");
+          }
+          throw uploadError;
+        }
 
         // Obtener URL pública
         const { data: urlData } =
@@ -513,6 +524,15 @@ export default function GestorPensum({
     } finally {
       setUploadingMaterial(false);
     }
+  };
+
+  const handleAbrirMaterial = (url: string) => {
+    console.log("Intentando abrir URL:", url); // Debug para verificar qué llega
+    if (!url) {
+      message.error("Error: El material no tiene una URL válida");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -723,14 +743,16 @@ export default function GestorPensum({
                         renderItem={(material: MaterialDidactico) => (
                           <List.Item
                             actions={[
-                              <a
-                                href={material.url_archivo}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {material.mime_type === 'link' ? <LinkOutlined /> : <DownloadOutlined />} 
-                                {material.mime_type === 'link' ? " Abrir Enlace" : " Descargar"}
-                              </a>,
+                              <Tooltip title="Clic para proyectar en clase o ver contenido">
+                                <Button
+                                  type="link"
+                                  onClick={() => handleAbrirMaterial(material.url_archivo)}
+                                  icon={material.mime_type === 'link' ? <LinkOutlined /> : <EyeOutlined />}
+                                  style={{ fontWeight: 500, padding: 0, height: 'auto' }}
+                                >
+                                  {material.mime_type === 'link' ? " Abrir Enlace" : " Ver / Proyectar"}
+                                </Button>
+                              </Tooltip>,
                               <Button
                                 icon={<DeleteOutlined />}
                                 danger

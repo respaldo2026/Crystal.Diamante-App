@@ -102,8 +102,8 @@ BEGIN
 
     -- 2. GENERAR CUOTAS MENSUALES (una por cada mes de duración)
     FOR i IN 1..duracion_meses LOOP
-        -- Calcular fecha de vencimiento: primeros 5 días del mes correspondiente
-        fecha_vencimiento_cuota := DATE_TRUNC('month', fecha_base + INTERVAL '1 month' * (i - 1)) + INTERVAL '4 days';
+        -- Calcular fecha de vencimiento: Mismo día de inicio del curso para evitar errores de cálculo
+        fecha_vencimiento_cuota := fecha_base + (INTERVAL '1 month' * (i - 1));
 
         -- Insertar cuota mensual
         INSERT INTO pagos (
@@ -231,7 +231,7 @@ USING (
 -- 10. Comentarios para documentación
 COMMENT ON COLUMN pagos.periodo_pagado IS 'Descripción del periodo: "Mes 1", "Mes 2", "Inscripción"';
 COMMENT ON COLUMN pagos.numero_cuota IS 'Número secuencial de la cuota dentro de la matrícula';
-COMMENT ON COLUMN pagos.fecha_vencimiento IS 'Fecha máxima de pago (primeros 5 días del mes)';
+COMMENT ON COLUMN pagos.fecha_vencimiento IS 'Fecha máxima de pago (basada en fecha inicio curso)';
 COMMENT ON COLUMN pagos.estado IS 'Estado del pago: pendiente, pagado, vencido, cancelado';
 COMMENT ON FUNCTION generar_cuotas_automaticas() IS 'Genera cuotas automáticamente al crear una matrícula';
 COMMENT ON FUNCTION actualizar_cuotas_vencidas() IS 'Actualiza estado de cuotas que ya vencieron';
