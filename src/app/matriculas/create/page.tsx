@@ -139,7 +139,6 @@ export default function MatriculaCreate() {
                 .from("perfiles")
                 .select("id,nombre_completo,email,telefono,identificacion,rol")
                 .eq("identificacion", identificacionBuscar.trim())
-                .eq("rol", "estudiante")
                 .maybeSingle();
 
             if (error) throw error;
@@ -147,7 +146,11 @@ export default function MatriculaCreate() {
             if (data) {
                 setStudentFound(data);
                 formProps.form?.setFieldValue("estudiante_id", data.id);
-                message.success(`Estudiante encontrado: ${data.nombre_completo}`);
+                if (data.rol !== 'estudiante') {
+                    message.warning(`Usuario encontrado con rol: ${data.rol}. Se procederá a matricular.`);
+                } else {
+                    message.success(`Estudiante encontrado: ${data.nombre_completo}`);
+                }
             } else {
                 message.info("No se encontró estudiante con esa identificación");
                 createForm.setFieldsValue({ identificacion: identificacionBuscar });
@@ -172,21 +175,32 @@ export default function MatriculaCreate() {
                 return;
             }
 
-            const { data, error } = await supabaseBrowserClient
-                .from("perfiles")
-                .insert({
-                    identificacion: values.identificacion,
-                    nombre_completo: values.nombre_completo,
-                    email: values.email,
-                    telefono: values.telefono,
+            // REFACTORIZACIÓN (Auditoría): Usar API para crear usuario Auth + Perfil
+            // Esto asegura que el estudiante pueda iniciar sesión.
+            const response = await fetch("/api/create-user", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: values.email || `${values.identificacion}@academia.local`, // Fallback si no tiene email
+                    password: String(values.identificacion), // Contraseña inicial = Identificación
                     rol: "estudiante",
-                    activo: true,
-                    notif_whatsapp: true,
-                })
-                .select()
-                .single();
+                    user_metadata: {
+                        identificacion: values.identificacion,
+                        nombre_completo: values.nombre_completo,
+                        telefono: values.telefono,
+                        activo: true,
+                        notif_whatsapp: true,
+                    },
+                }),
+            });
 
-            if (error) throw error;
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Error al crear el estudiante");
+            }
+
+            const data = result.perfil; // La API devuelve { success: true, user, perfil }
 
             setStudentFound(data);
             formProps.form?.setFieldValue("estudiante_id", data.id);

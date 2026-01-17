@@ -48,27 +48,44 @@ export async function POST(request: NextRequest) {
     }
 
     // El trigger on_auth_user_created ya creó el perfil automáticamente
-    // Esperamos un momento para que el trigger termine
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // IMPLEMENTACIÓN ROBUSTA: Reintentos + Upsert para evitar condiciones de carrera
+    let perfil = null;
+    let intentos = 0;
+    const maxIntentos = 3;
 
-    // Actualizar el perfil con los datos completos
-    const { data: perfil, error: perfilError } = await supabaseAdmin
-      .from("perfiles")
-      .update({
-        email: email,
-        rol: rol || "estudiante",
-        ...user_metadata,
-      })
-      .eq("id", authUser.user.id)
-      .select()
-      .single();
+    while (!perfil && intentos < maxIntentos) {
+      // Esperar progresivamente (500ms, 1000ms, 1500ms)
+      await new Promise(resolve => setTimeout(resolve, 500 * (intentos + 1)));
+      
+      // Intentar actualizar si existe, o insertar si falló el trigger (Upsert)
+      const { data, error } = await supabaseAdmin
+        .from("perfiles")
+        .upsert({
+          id: authUser.user.id,
+          email: email,
+          rol: rol || "estudiante",
+          identificacion: user_metadata?.identificacion,
+          nombre_completo: user_metadata?.nombre_completo,
+          telefono: user_metadata?.telefono,
+          activo: user_metadata?.activo ?? true,
+          notif_whatsapp: user_metadata?.notif_whatsapp ?? true,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' }) // Si existe por ID, actualiza. Si no, crea.
+        .select()
+        .single();
 
-    if (perfilError) {
-      console.error("Error actualizando perfil:", perfilError);
-      // No eliminamos el usuario porque el perfil ya existe
+      if (!error && data) {
+        perfil = data;
+      } else {
+        console.warn(`Intento ${intentos + 1} fallido actualizando perfil:`, error?.message);
+      }
+      intentos++;
+    }
+
+    if (!perfil) {
       return NextResponse.json(
-        { error: "Error actualizando perfil: " + perfilError.message },
-        { status: 400 }
+        { error: "El usuario se creó, pero hubo un error configurando su perfil. Por favor contacte soporte." },
+        { status: 500 }
       );
     }
 
