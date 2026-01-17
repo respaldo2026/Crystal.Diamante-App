@@ -4,11 +4,12 @@ import React, { useEffect, useState } from "react";
 import { 
   Typography, Row, Col, Card, Button, 
   Modal, Form, Input, DatePicker, Avatar, List, Divider, Drawer, Switch, message, Spin, Select, InputNumber, Timeline, Alert, Space,
-  Tabs, Tag, Tooltip, Statistic
+  Tabs, Tag, Tooltip, Statistic, Collapse, Empty
 } from "antd";
 import { 
   UserOutlined, BookOutlined, TeamOutlined, PlusOutlined, ExclamationCircleOutlined, StarOutlined,
-  WhatsAppOutlined, ClockCircleOutlined, DollarCircleOutlined, GiftOutlined
+  WhatsAppOutlined, ClockCircleOutlined, DollarCircleOutlined, GiftOutlined,
+  FileTextOutlined, VideoCameraOutlined, FilePdfOutlined, DownloadOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -17,6 +18,7 @@ import { formatDate } from "@utils/date";
 import { EntregaMaterialModal } from "@components/EntregaMaterialModal";
 
 const { Title, Text } = Typography;
+const { Panel } = Collapse;
 
 export default function MiOficinaProfesor() {
   const [messageApi, contextHolder] = message.useMessage();
@@ -39,6 +41,8 @@ export default function MiOficinaProfesor() {
   const [alumnosClase, setAlumnosClase] = useState<any[]>([]);
   const [temasCurso, setTemasCurso] = useState<any[]>([]);
   const [temaSeleccionado, setTemaSeleccionado] = useState<string | null>(null);
+  const [pensum, setPensum] = useState<any[]>([]);
+  const [materiales, setMateriales] = useState<any[]>([]);
   
   // Asistencia y Horas (NÓMINA)
   const [asistenciaMap, setAsistenciaMap] = useState<Record<string, boolean>>({});
@@ -183,14 +187,6 @@ export default function MiOficinaProfesor() {
     }
   };
 
-  const handleWhatsAppClick = () => {
-    if (!profesor?.telefono) {
-      messageApi.warning("No tienes teléfono registrado");
-      return;
-    }
-    const mensaje = `Hola ${profesor.nombre_completo}, te contacto desde Academia Crystal.`;
-    enviarWhatsapp(profesor.telefono, mensaje);
-  };
 
   const verificarPagoAlDia = (fechaPagoVencimiento: string | null): boolean => {
     if (!fechaPagoVencimiento) return false;
@@ -237,6 +233,28 @@ export default function MiOficinaProfesor() {
             
           if (errTemas) throw errTemas;
           setTemasCurso(dataTemas || []);
+
+          // D) Pensum y Materiales del Programa (Igual al portal estudiante)
+          if (curso.programa_id) {
+             const { data: pData } = await supabaseBrowserClient
+                .from("pensum")
+                .select(`*, pensum_cursos (*)`)
+                .eq("programa_id", curso.programa_id)
+                .eq("activo", true)
+                .order("numero_ciclo", { ascending: true });
+             setPensum(pData || []);
+
+             const { data: mData } = await supabaseBrowserClient
+                .from("material_didactico")
+                .select("*")
+                .eq("programa_id", curso.programa_id)
+                .eq("visible", true)
+                .order("created_at", { ascending: false });
+             setMateriales(mData || []);
+          } else {
+             setPensum([]);
+             setMateriales([]);
+          }
 
           // C) BUSCAR ASISTENCIA PREVIA
           const fechaHoyStr = dayjs().format("YYYY-MM-DD");
@@ -539,16 +557,6 @@ export default function MiOficinaProfesor() {
       {contextHolder}
       {modalContextHolder}
 
-      {process.env.NODE_ENV === 'development' && (
-        <Alert 
-          message="🔧 MODO DESARROLLO - Datos de demostración" 
-          description="Estás viendo la oficina del profesor con datos de prueba. Esto desaparece en producción."
-          type="warning" 
-          showIcon 
-          closable
-          style={{marginBottom: 20}}
-        />
-      )}
       
       {profesor && (
         <>
@@ -578,15 +586,6 @@ export default function MiOficinaProfesor() {
                   <Space direction="vertical" align="end" style={{color: 'white'}}>
                     <div><strong>Cédula:</strong> {profesor.identificacion}</div>
                     <div><strong>Email:</strong> {profesor.email}</div>
-                    {profesor.telefono && (
-                      <Button 
-                        icon={<WhatsAppOutlined />} 
-                        onClick={handleWhatsAppClick}
-                        style={{marginTop: 8, backgroundColor: '#25D366', border: 'none', color: 'white'}}
-                      >
-                        WhatsApp
-                      </Button>
-                    )}
                   </Space>
                 </Col>
             </Row>
@@ -1093,29 +1092,108 @@ export default function MiOficinaProfesor() {
             {
                 key: '3', label: '📚 Ver Pensum',
                 children: (
-                    <>
-                        <Button type="dashed" icon={<PlusOutlined />} block onClick={() => setModalPensumVisible(true)} style={{marginBottom: 20}}>
-                            Agregar Tema al Pensum
-                        </Button>
-                        <Timeline items={temasCurso.map(t => ({ key: t?.id, children: <b>{t.titulo}</b>, color: 'blue' }))} />
-                    </>
+                    <div style={{maxHeight: '500px', overflowY: 'auto'}}>
+                        <Alert message="Plan de estudios oficial del programa." type="info" showIcon style={{marginBottom: 16}} />
+                        {pensum.length === 0 ? <Empty description="No hay pensum asignado" /> : (
+                            <Collapse defaultActiveKey={pensum[0]?.id}>
+                                {pensum.map(ciclo => (
+                                    <Panel header={`${ciclo.nombre_ciclo} (${ciclo.duracion_semanas || 0} semanas)`} key={ciclo.id}>
+                                        <Text type="secondary">{ciclo.descripcion}</Text>
+                                        <Divider style={{ margin: '10px 0' }} />
+                                        <List
+                                            size="small"
+                                            dataSource={ciclo.pensum_cursos || []}
+                                            renderItem={(curso: any) => (
+                                                <List.Item>
+                                                    <List.Item.Meta
+                                                        avatar={<BookOutlined />}
+                                                        title={curso.nombre_curso}
+                                                        description={`${curso.horas} horas • ${curso.tipo_curso}`}
+                                                    />
+                                                </List.Item>
+                                            )}
+                                        />
+                                    </Panel>
+                                ))}
+                            </Collapse>
+                        )}
+                    </div>
                 )
             },
             {
                 key: '4', label: '📄 Material Didáctico',
                 children: (
-                    <>
+                    <div style={{maxHeight: '500px', overflowY: 'auto'}}>
                         <Alert 
-                          message="Aquí puedes subir material, notas de clase, ejercicios y recursos para tus estudiantes." 
+                          message="Recursos descargables del programa." 
                           type="info" 
                           style={{marginBottom: 20}}
                           showIcon
                         />
-                        <div style={{textAlign: 'center', padding: '40px 20px', background: '#fafafa', borderRadius: 8, border: '2px dashed #d9d9d9'}}>
-                            <p style={{color: '#999', marginBottom: 10}}>Material didáctico (próximamente)</p>
-                            <p style={{color: '#999', fontSize: 12}}>Función en desarrollo para compartir archivos y recursos con estudiantes</p>
-                        </div>
-                    </>
+                        {materiales.length === 0 ? <Empty description="No hay material disponible" /> : (
+                            <div>
+                                {pensum.map(ciclo => {
+                                    const matsCiclo = materiales.filter(m => m.pensum_id === ciclo.id);
+                                    if (matsCiclo.length === 0) return null;
+                                    return (
+                                        <div key={ciclo.id} style={{marginBottom: 24}}>
+                                            <Divider orientation="left" style={{borderColor: '#d9d9d9'}}>{ciclo.nombre_ciclo}</Divider>
+                                            <List
+                                                grid={{ gutter: 16, xs: 1, sm: 2 }}
+                                                dataSource={matsCiclo}
+                                                renderItem={(item: any) => {
+                                                    let Icon = FileTextOutlined;
+                                                    if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                                                    if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                                                    return (
+                                                        <List.Item>
+                                                            <Card 
+                                                                size="small" 
+                                                                title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
+                                                                extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
+                                                            >
+                                                                <Text strong>{item.titulo}</Text>
+                                                                <br />
+                                                                <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
+                                                            </Card>
+                                                        </List.Item>
+                                                    );
+                                                }}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                                
+                                {materiales.filter(m => !m.pensum_id).length > 0 && (
+                                    <div style={{marginBottom: 24}}>
+                                        <Divider orientation="left">General</Divider>
+                                        <List
+                                            grid={{ gutter: 16, xs: 1, sm: 2 }}
+                                            dataSource={materiales.filter(m => !m.pensum_id)}
+                                            renderItem={(item: any) => {
+                                                let Icon = FileTextOutlined;
+                                                if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                                                if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                                                return (
+                                                    <List.Item>
+                                                        <Card 
+                                                            size="small" 
+                                                            title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
+                                                            extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
+                                                        >
+                                                            <Text strong>{item.titulo}</Text>
+                                                            <br />
+                                                            <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
+                                                        </Card>
+                                                    </List.Item>
+                                                );
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 )
             }
         ]} />

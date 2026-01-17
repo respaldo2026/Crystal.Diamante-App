@@ -315,28 +315,66 @@ export default function PortalEstudiante() {
                   key: 'material',
                   label: 'Material Didáctico',
                   children: (
-                    <List
-                      grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
-                      dataSource={matProg}
-                      renderItem={(item: any) => {
-                        let Icon = FileTextOutlined;
-                        if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
-                        if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                    <div>
+                      {pensumProg.map(ciclo => {
+                        const matsCiclo = matProg.filter(m => m.pensum_id === ciclo.id);
+                        if (matsCiclo.length === 0) return null;
                         return (
-                          <List.Item>
-                            <Card 
-                              size="small" 
-                              title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
-                              extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
-                            >
-                              <Text strong>{item.titulo}</Text>
-                              <br />
-                              <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
-                            </Card>
-                          </List.Item>
+                          <div key={ciclo.id} style={{marginBottom: 24}}>
+                            <Divider orientation="left">{ciclo.nombre_ciclo}</Divider>
+                            <List
+                              grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
+                              dataSource={matsCiclo}
+                              renderItem={(item: any) => {
+                                let Icon = FileTextOutlined;
+                                if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                                if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                                return (
+                                  <List.Item>
+                                    <Card 
+                                      size="small" 
+                                      title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
+                                      extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
+                                    >
+                                      <Text strong>{item.titulo}</Text>
+                                      <br />
+                                      <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
+                                    </Card>
+                                  </List.Item>
+                                );
+                              }}
+                            />
+                          </div>
                         );
-                      }}
-                    />
+                      })}
+                      {matProg.filter(m => !m.pensum_id).length > 0 && (
+                        <div style={{marginBottom: 24}}>
+                          <Divider orientation="left">General</Divider>
+                          <List
+                            grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
+                            dataSource={matProg.filter(m => !m.pensum_id)}
+                            renderItem={(item: any) => {
+                              let Icon = FileTextOutlined;
+                              if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                              if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                              return (
+                                <List.Item>
+                                  <Card 
+                                    size="small" 
+                                    title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
+                                    extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
+                                  >
+                                    <Text strong>{item.titulo}</Text>
+                                    <br />
+                                    <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
+                                  </Card>
+                                </List.Item>
+                              );
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   )
                 }
               ]} />
