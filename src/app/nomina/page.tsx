@@ -6,7 +6,7 @@ import {
     Statistic, Tag, message, Modal, Space, Alert
 } from "antd";
 import { 
-  CalculatorOutlined, DollarCircleOutlined, PayCircleOutlined 
+  CalculatorOutlined, DollarCircleOutlined, PayCircleOutlined, PrinterOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { formatDate } from "@utils/date";
@@ -14,6 +14,7 @@ import { formatDate } from "@utils/date";
 // CORRECCIÓN: Usamos tu cliente configurado en utils, no creamos uno nuevo
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { enviarWhatsapp } from "@utils/whatsapp";
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -23,11 +24,22 @@ export default function NominaPage() {
   const [loading, setLoading] = useState(false);
   const [profesores, setProfesores] = useState<any[]>([]);
   // Iniciamos con el mes actual por defecto
-  const [rangoFechas, setRangoFechas] = useState<any>([dayjs().startOf('month'), dayjs().endOf('month')]);
+  const [rangoFechas, setRangoFechas] = useState<any>(() => {
+      const hoy = dayjs();
+      if (hoy.date() <= 15) {
+          // Primera quincena: 1 al 15
+          return [hoy.startOf('month'), hoy.date(15)];
+      } else {
+          // Segunda quincena: 16 al fin de mes
+          return [hoy.date(16), hoy.endOf('month')];
+      }
+  });
   const [totalAPagar, setTotalAPagar] = useState(0);
   const [metodoNomina, setMetodoNomina] = useState<string>('Efectivo');
     const [clasesPendientes, setClasesPendientes] = useState<any[]>([]);
     const [pagandoClaseId, setPagandoClaseId] = useState<string | null>(null);
+    const [modalReciboVisible, setModalReciboVisible] = useState(false);
+    const [pagoReciente, setPagoReciente] = useState<any>(null);
 
   // Modal Pagar
   const [modalVisible, setModalVisible] = useState(false);
@@ -156,7 +168,7 @@ export default function NominaPage() {
         // 1. Obtener profesores y su valor hora
         let query = supabaseBrowserClient
             .from("perfiles")
-            .select("id, nombre_completo, valor_hora")
+            .select("id, nombre_completo, valor_hora, telefono")
             .eq("rol", "profesor");
 
         // Si es profesor, solo ve su propia información
@@ -169,7 +181,7 @@ export default function NominaPage() {
         // 2. Obtener sesiones trabajadas en ese rango (AMBAS: pendiente y pagado)
         const { data: sesiones } = await supabaseBrowserClient
             .from("sesiones_clase")
-            .select("id, profesor_id, curso_id, fecha, horas_dictadas, tema_visto, estado_pago, cursos(nombre), perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora)")
+            .select("id, profesor_id, curso_id, fecha, horas_dictadas, tema_visto, estado_pago, cursos(nombre), perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora, telefono)")
             .gte("fecha", inicio)
             .lte("fecha", fin)
             .order("fecha", { ascending: true });
@@ -225,7 +237,7 @@ export default function NominaPage() {
       
       try {
         // 1. Guardar en historial de pagos (pagos_nomina)
-        const { error: errPago } = await supabaseBrowserClient.from("pagos_nomina").insert({
+        const { data: pagoData, error: errPago } = await supabaseBrowserClient.from("pagos_nomina").insert({
             profesor_id: profesorSeleccionado.id,
             fecha_pago: dayjs().format("YYYY-MM-DD"),
             total_pagado: profesorSeleccionado.total_pagado,
@@ -233,7 +245,7 @@ export default function NominaPage() {
             fecha_inicio_periodo: rangoFechas[0].format("YYYY-MM-DD"),
             fecha_fin_periodo: rangoFechas[1].format("YYYY-MM-DD"),
             observaciones: `Pago por ${profesorSeleccionado.total_horas} horas trabajadas del ${formatDate(rangoFechas[0])} al ${formatDate(rangoFechas[1])} - Método: ${metodoNomina}`
-        });
+        }).select().single();
         if (errPago) throw errPago;
 
         // 2. Marcar clases como PAGADAS
@@ -251,8 +263,16 @@ export default function NominaPage() {
         if (errUpdate) throw errUpdate;
 
         message.success(`Pago registrado a ${profesorSeleccionado.nombre_completo}`);
+        
+        // 3. Enviar WhatsApp
+        if (profesorSeleccionado.telefono) {
+            enviarWhatsapp(profesorSeleccionado.telefono, `Hola ${profesorSeleccionado.nombre_completo}, te informamos que se ha generado el pago de tu nómina por valor de $${Number(profesorSeleccionado.total_pagado).toLocaleString()}. Gracias por tu labor.`);
+        }
+
         setModalVisible(false);
         calcularNomina(); // Refrescar pantalla
+        setPagoReciente({ ...pagoData, nombre_profesor: profesorSeleccionado.nombre_completo });
+        setModalReciboVisible(true);
 
       } catch (error: any) {
           message.error("Error: " + error.message);
@@ -278,7 +298,7 @@ export default function NominaPage() {
                     const valorHora = Number(clase.valor_hora || 0);
                     const monto = Number(clase.horas_dictadas || 0) * (valorHora || 0);
 
-                    await supabaseBrowserClient.from("pagos_nomina").insert({
+                    const { data: pagoData, error: errPago } = await supabaseBrowserClient.from("pagos_nomina").insert({
                         profesor_id: clase.profesor_id,
                         fecha_pago: dayjs().format("YYYY-MM-DD"),
                         total_pagado: monto,
@@ -286,7 +306,8 @@ export default function NominaPage() {
                         fecha_inicio_periodo: clase.fecha,
                         fecha_fin_periodo: clase.fecha,
                         observaciones: `Pago clase individual - ${clase.cursos?.nombre || 'Clase'} (${metodoNomina})`
-                    });
+                    }).select().single();
+                    if (errPago) throw errPago;
 
                     await supabaseBrowserClient
                         .from("sesiones_clase")
@@ -295,7 +316,15 @@ export default function NominaPage() {
                         .eq("estado_pago", "pendiente");
 
                     message.success("Clase pagada y descontada del pendiente");
+                    
+                    // WhatsApp
+                    if (clase.perfiles?.telefono) {
+                        enviarWhatsapp(clase.perfiles.telefono, `Hola ${clase.perfiles.nombre_completo}, te informamos que se ha pagado la clase del ${formatDate(clase.fecha)} por valor de $${Number(monto).toLocaleString()}.`);
+                    }
+
                     calcularNomina();
+                    setPagoReciente({ ...pagoData, nombre_profesor: clase.perfiles?.nombre_completo });
+                    setModalReciboVisible(true);
                 } catch (error: any) {
                     message.error("Error pagando clase: " + error.message);
                 } finally {
@@ -392,6 +421,56 @@ export default function NominaPage() {
                     <p style={{fontSize: 12, color: '#888', marginTop: 12}}>
                         Al confirmar, las clases se marcarán como pagadas.
                     </p>
+                </div>
+            )}
+        </Modal>
+
+        {/* MODAL TICKET / RECIBO */}
+        <Modal
+            title="Comprobante de Pago"
+            open={modalReciboVisible}
+            onCancel={() => setModalReciboVisible(false)}
+            footer={[
+                <Button key="close" onClick={() => setModalReciboVisible(false)}>Cerrar</Button>,
+                <Button key="print" type="primary" icon={<PrinterOutlined />} onClick={() => {
+                    const content = document.getElementById('printable-receipt')?.innerHTML;
+                    const printWindow = window.open('', '', 'height=600,width=800');
+                    if(printWindow && content) {
+                        printWindow.document.write('<html><head><title>Recibo de Pago</title>');
+                        printWindow.document.write('<style>body { font-family: sans-serif; padding: 20px; } .header { text-align: center; margin-bottom: 20px; } .amount { font-size: 24px; font-weight: bold; text-align: right; }</style>');
+                        printWindow.document.write('</head><body>');
+                        printWindow.document.write(content);
+                        printWindow.document.write('</body></html>');
+                        printWindow.document.close();
+                        printWindow.print();
+                    }
+                }}>Imprimir Ticket</Button>
+            ]}
+        >
+            {pagoReciente && (
+                <div id="printable-receipt" style={{ padding: 20, border: '1px dashed #ccc', background: '#fff' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                        <Title level={4} style={{ margin: 0 }}>Academia Crystal</Title>
+                        <Text type="secondary">Comprobante de Pago a Profesor</Text>
+                    </div>
+                    <div style={{ borderBottom: '1px solid #eee', marginBottom: 10 }}></div>
+                    <p><strong>Fecha:</strong> {dayjs(pagoReciente.fecha_pago).format("DD/MM/YYYY HH:mm")}</p>
+                    <p><strong>Profesor:</strong> {pagoReciente.nombre_profesor}</p>
+                    <p><strong>ID Pago:</strong> {pagoReciente.id?.slice(0,8)}</p>
+                    <div style={{ background: '#f5f5f5', padding: 10, borderRadius: 4, margin: '10px 0' }}>
+                        <p style={{ margin: 0 }}><strong>Detalle:</strong></p>
+                        <p style={{ margin: 0 }}>{pagoReciente.observaciones}</p>
+                    </div>
+                    <div style={{ borderBottom: '1px solid #eee', margin: '10px 0' }}></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text>Total Pagado:</Text>
+                        <Text strong style={{ fontSize: 20, color: '#3f8600' }}>
+                            $ {Number(pagoReciente.total_pagado).toLocaleString()}
+                        </Text>
+                    </div>
+                    <div style={{ textAlign: 'center', marginTop: 30 }}>
+                        <Text type="secondary" style={{ fontSize: 10 }}>Generado automáticamente por el sistema</Text>
+                    </div>
                 </div>
             )}
         </Modal>

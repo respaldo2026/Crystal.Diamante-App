@@ -283,7 +283,6 @@ export default function TesoreriaList() {
                     title="Acciones"
                     render={(_, record: any) => (
                         <Space>
-                            <EditButton hideText size="small" recordItemId={record.id} resource="pagos" />
                             {user?.rol === "admin" && (
                                 <DeleteButton 
                                     hideText 

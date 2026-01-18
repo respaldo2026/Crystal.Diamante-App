@@ -52,7 +52,6 @@ export default function RootLayout({
 
   // Función para determinar qué recursos mostrar según el rol
   const getResourcesByRole = () => {
-    if (permisosLoading) return []; // Esperar a que carguen los permisos
     const userRole = user?.rol;
     
     // Recursos para profesores: solo Mi Oficina
@@ -170,18 +169,6 @@ export default function RootLayout({
         },
       },
       {
-        key: "tesoreria", // Pagos es parte de tesorería
-        name: "pagos",
-        list: "/pagos",
-        create: "/pagos/create",
-        edit: "/pagos/edit/:id",
-        show: "/pagos/show/:id",
-        meta: {
-          label: "Pagos",
-          icon: <DollarCircleOutlined />,
-        },
-      },
-      {
         key: "nomina",
         name: "nomina",
         list: "/nomina",
@@ -218,6 +205,7 @@ export default function RootLayout({
     }
 
     // Para otros roles (ej: administrativo), filtrar según la tabla de permisos
+    if (permisosLoading) return [];
     const userPermisos = permisos[userRole || ''] || {};
     
     return allResources.filter(resource => {

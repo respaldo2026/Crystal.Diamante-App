@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Show } from "@refinedev/antd";
 import { 
   Typography, Row, Col, Card, Button, 
@@ -50,6 +50,9 @@ export default function ShowProfesorDashboard() {
   const [alumnosClase, setAlumnosClase] = useState<any[]>([]);
   const [temasCurso, setTemasCurso] = useState<any[]>([]);
   const [temaSeleccionado, setTemaSeleccionado] = useState<string | null>(null);
+  const [pensum, setPensum] = useState<any[]>([]);
+  const [temasVistos, setTemasVistos] = useState<Set<string>>(new Set());
+  const [entregasMap, setEntregasMap] = useState<Record<string, any[]>>({});
   
   // Asistencia y Horas (NÓMINA)
   const [asistenciaMap, setAsistenciaMap] = useState<Record<string, boolean>>({});
@@ -77,6 +80,49 @@ export default function ShowProfesorDashboard() {
     }
   }, [horaInicioclase, horaFinClase]);
 
+  // CALCULAR OPCIONES DE TEMAS (Memoizado para actualización inmediata)
+  const opcionesTemas = useMemo(() => {
+    const opciones: any[] = [];
+
+    // 1. Temas Manuales
+    if (temasCurso.length > 0) {
+        opciones.push({
+            label: <span style={{fontWeight: 'bold', color: '#1890ff'}}>Temas Específicos</span>,
+            options: temasCurso.map(t => {
+                const visto = temasVistos.has(String(t.id));
+                const titulo = t.titulo || "Sin título";
+                return {
+                    label: visto ? <span style={{color: '#999', fontStyle: 'italic'}}>✓ {t.orden ? `${t.orden}. ` : ''}{titulo} (Visto)</span> : `${t.orden ? `${t.orden}. ` : ''}${titulo}`,
+                    value: t.id,
+                    disabled: visto,
+                    key: `tema-${t.id}`
+                };
+            })
+        });
+    }
+
+    // 2. Temas del Pensum
+    pensum.forEach(ciclo => {
+        if (ciclo.pensum_cursos && ciclo.pensum_cursos.length > 0) {
+            opciones.push({
+                label: <span style={{fontWeight: 'bold', color: '#722ed1'}}>{ciclo.nombre_ciclo}</span>,
+                options: ciclo.pensum_cursos.map((pc: any) => {
+                    const visto = temasVistos.has(String(pc.id));
+                    const nombre = pc.nombre_curso || "Sin nombre";
+                    return {
+                        label: visto ? <span style={{color: '#999', fontStyle: 'italic'}}>✓ {nombre} (Visto)</span> : nombre,
+                        value: pc.id,
+                        disabled: visto,
+                        key: `pensum-${pc.id}`
+                    };
+                })
+            });
+        }
+    });
+
+    return opciones;
+  }, [temasCurso, temasVistos, pensum]);
+
   // 1. CARGAR DATOS INICIALES
   useEffect(() => {
     if (idProfesor) cargarDashboard();
@@ -97,19 +143,17 @@ export default function ShowProfesorDashboard() {
         // Cursos activos
         const { data: dataCursos, error: errCursos } = await supabase
             .from("cursos")
-            .select(`*, matriculas!inner ( count )`)
+            .select(`*, matriculas ( estado )`)
             .eq("profesor_id", idProfesor)
-            .eq("estado", "activo")
-            .eq("matriculas.estado", "activo");
-        
+            .eq("estado", "activo");
+            
         if (errCursos) throw errCursos;
 
         const cursosFmt = dataCursos?.map((c: any) => ({
             ...c,
-            total_estudiantes: c.matriculas?.[0]?.count || 0
+            total_estudiantes: c.matriculas?.filter((m: any) => m.estado === 'activo').length || 0
         })) || [];
 
-        setMisCursos(cursosFmt);
 
         // Historial de cursos (todos los estados)
         const { data: dataCursosHist } = await supabase
@@ -250,6 +294,21 @@ export default function ShowProfesorDashboard() {
           
           setAlumnosClase(alumnosConPago);
 
+          // A.1) Cargar historial de entregas
+          if (alumnosConPago.length > 0) {
+            const ids = alumnosConPago.map(a => a.estudiante_id);
+            const { data: entregasData } = await supabase
+                .from("entregas_materiales")
+                .select("estudiante_id, tipo_material")
+                .in("estudiante_id", ids);
+            
+            const eMap: Record<string, any[]> = {};
+            entregasData?.forEach((e: any) => {
+                if (!eMap[e.estudiante_id]) eMap[e.estudiante_id] = [];
+                eMap[e.estudiante_id].push(e);
+            });
+            setEntregasMap(eMap);
+          }
           
           // B) Temas
           const { data: dataTemas, error: errTemas } = await supabase
@@ -262,42 +321,88 @@ export default function ShowProfesorDashboard() {
 
           setTemasCurso(dataTemas || []);
 
-          // C) BUSCAR ASISTENCIA PREVIA
-          const fechaHoyStr = dayjs().format("YYYY-MM-DD");
-          const matriculaIds = alumnosConPago?.map((a: any) => a.id) || [];
-          
-          let asistenciasHoy: any[] = [];
-          // Solo hacer la búsqueda si hay alumnos
-          if (matriculaIds.length > 0) {
-              const { data } = await supabase
-                  .from("asistencias")
-                  .select("matricula_id, estado, tema_id")
-                  .eq("fecha", fechaHoyStr)
-                  .in("matricula_id", matriculaIds);
-              asistenciasHoy = data || [];
+          // C) Cargar Pensum (Igual que en mi-oficina)
+          if (curso.programa_id) {
+             const { data: pData } = await supabase
+                .from("pensum")
+                .select(`*, pensum_cursos (*)`)
+                .eq("programa_id", curso.programa_id)
+                .eq("activo", true)
+                .order("numero_ciclo", { ascending: true });
+             setPensum(pData || []);
+          } else {
+             setPensum([]);
           }
 
-          const mapa: any = {};
-          
-          if (asistenciasHoy && asistenciasHoy.length > 0) {
-              asistenciasHoy.forEach((asist: any) => {
-                  mapa[asist.matricula_id] = asist.estado === 'presente';
-              });
-              if(asistenciasHoy[0].tema_id) setTemaSeleccionado(asistenciasHoy[0].tema_id);
-              messageApi.success({ content: "Datos cargados", key: "loadingAula" });
-          } else {
-              alumnosConPago?.forEach((a: any) => mapa[a.id] = true);
-              messageApi.success({ content: "Aula lista", key: "loadingAula" });
-          }
-          
-          setAsistenciaMap(mapa);
+          // C) Cargar datos de sesión (asistencia y temas vistos)
+          const hoy = dayjs();
+          setFechaAsistencia(hoy);
+          await cargarDatosSesion(hoy, alumnosConPago);
+
           // Registrar hora de inicio
           setHoraInicioClase(dayjs());
           setHoraFinClase(null);
           setHorasCalculadas(0);
           setDrawerVisible(true);
+          messageApi.success({ content: "Aula lista", key: "loadingAula" });
       } catch (error: any) {
           messageApi.error({ content: "Error: " + error.message, key: "loadingAula" });
+      }
+  };
+
+  const cargarDatosSesion = async (fecha: dayjs.Dayjs, alumnos: any[]) => {
+      const fechaStr = fecha.format("YYYY-MM-DD");
+      const matriculaIds = alumnos.map((a: any) => a.id);
+      
+      // 1. Cargar temas vistos en OTRAS fechas
+      const vistosSet = new Set<string>();
+      if (matriculaIds.length > 0) {
+          const { data: dataVistos } = await supabase
+            .from("asistencias")
+            .select("tema_id")
+            .in("matricula_id", matriculaIds)
+            .neq("fecha", fechaStr) // Excluir fecha actual
+            .not("tema_id", "is", null);
+          
+          dataVistos?.forEach((d: any) => {
+              if (d.tema_id) vistosSet.add(String(d.tema_id));
+          });
+      }
+      setTemasVistos(vistosSet);
+
+      // 2. Cargar asistencia de la fecha
+      let asistenciasFecha: any[] = [];
+      if (matriculaIds.length > 0) {
+          const { data } = await supabase
+              .from("asistencias")
+              .select("matricula_id, estado, tema_id")
+              .eq("fecha", fechaStr)
+              .in("matricula_id", matriculaIds);
+          asistenciasFecha = data || [];
+      }
+
+      const mapa: any = {};
+      let temaDia = null;
+
+      if (asistenciasFecha.length > 0) {
+          asistenciasFecha.forEach((asist: any) => {
+              mapa[asist.matricula_id] = asist.estado === 'presente';
+              if (asist.tema_id) temaDia = asist.tema_id;
+          });
+      } else {
+          alumnos.forEach((a: any) => mapa[a.id] = true);
+      }
+      
+      setAsistenciaMap(mapa);
+      setTemaSeleccionado(temaDia);
+  };
+
+  const handleFechaChange = async (fecha: dayjs.Dayjs) => {
+      setFechaAsistencia(fecha);
+      if (cursoActivo && alumnosClase.length > 0) {
+          messageApi.loading({ content: "Cargando datos...", key: "loadingFecha" });
+          await cargarDatosSesion(fecha, alumnosClase);
+          messageApi.success({ content: "Datos actualizados", key: "loadingFecha" });
       }
   };
 
@@ -313,21 +418,39 @@ export default function ShowProfesorDashboard() {
           return;
       }
 
-      // Capturar hora de fin (ahora)
-      const horaFin = dayjs();
+      // VALIDACIÓN DE FECHA FUTURA
+      if (fechaAsistencia.isAfter(dayjs(), 'day')) {
+          messageApi.error("⛔ No puedes registrar asistencia en una fecha futura.");
+          return;
+      }
 
-      // Calcular horas
-      const duracion = horaFin.diff(horaInicioclase, 'hour', true);
-      const horasRedondeadas = Math.round(duracion);
-      const horasFinal = Math.max(horasRedondeadas, 1);
+      // VALIDACIÓN DE INTENSIDAD HORARIA
+      const horasFinal = horasCalculadas; // Usar valor editable
+
+      if (cursoActivo?.hora_inicio && cursoActivo?.hora_fin) {
+          const fechaBase = dayjs().format('YYYY-MM-DD');
+          const inicioProg = dayjs(`${fechaBase} ${cursoActivo.hora_inicio}`);
+          const finProg = dayjs(`${fechaBase} ${cursoActivo.hora_fin}`);
+          
+          if (inicioProg.isValid() && finProg.isValid()) {
+              const horasProgramadas = finProg.diff(inicioProg, 'hour', true);
+              const limiteHoras = Math.ceil(horasProgramadas);
+              
+              if (horasFinal > limiteHoras) {
+                  messageApi.error({
+                      content: `⛔ Error de Intensidad: Estás intentando registrar ${horasFinal} horas, pero este curso tiene programadas ${Number(horasProgramadas).toFixed(1)} horas por clase.`,
+                      duration: 5
+                  });
+                  return;
+              }
+          }
+      }
 
       modal.confirm({
           title: '¿Registrar Clase?',
           icon: <ExclamationCircleOutlined />,
           content: (
               <div>
-                  <p>Hora inicio: <b>{horaInicioclase.format('h:mm A')}</b></p>
-                  <p>Hora fin: <b>{horaFin.format('h:mm A')}</b></p>
                   <p>Se guardará la asistencia de los alumnos.</p>
                   <p>Horas a pagar: <b>{horasFinal} {horasFinal === 1 ? 'hora' : 'horas'}</b></p>
               </div>
@@ -341,34 +464,123 @@ export default function ShowProfesorDashboard() {
   const ejecutarGuardadoReal = async (horasARegistrar: number) => {
       setGuardandoAsistencia(true);
       try {
-          // 1. Guardar Asistencia ALUMNOS
-          const registros = alumnosClase.map(alumno => ({
-              matricula_id: alumno.id,
-              fecha: fechaAsistencia.format("YYYY-MM-DD"),
-              estado: asistenciaMap[alumno.id] ? 'presente' : 'ausente',
-              tema_id: temaSeleccionado,
-              observaciones: asistenciaMap[alumno.id] ? 'Tema completado' : 'Tema pendiente'
-          }));
+          const fechaStr = fechaAsistencia.format("YYYY-MM-DD");
 
-          const { error: errAsis } = await supabase
-            .from("asistencias")
-            .upsert(registros, { onConflict: 'matricula_id, fecha' });
+          // VERIFICACIÓN DE SEGURIDAD: No modificar si ya está pagado
+          const { data: sesionExistente } = await supabase
+              .from("sesiones_clase")
+              .select("estado_pago")
+              .eq("curso_id", cursoActivo.id)
+              .eq("profesor_id", idProfesor)
+              .eq("fecha", fechaStr)
+              .maybeSingle();
 
-          if (errAsis) throw errAsis;
+          if (sesionExistente?.estado_pago === 'pagado') {
+              throw new Error("⛔ Esta clase ya fue pagada en nómina y no se puede modificar.");
+          }
+
+          // 0. VALIDAR Y PREPARAR TEMA (Resolver conflicto de FK)
+          let finalTemaId = temaSeleccionado;
+          const isManualTopic = temasCurso.some(t => t.id === temaSeleccionado);
+
+          if (!isManualTopic && temaSeleccionado) {
+              // Es un tema del Pensum. Buscar detalles:
+              let pensumTopic: any = null;
+              pensum.forEach(c => {
+                  const found = c.pensum_cursos?.find((pc: any) => pc.id === temaSeleccionado);
+                  if (found) pensumTopic = found;
+              });
+
+              if (pensumTopic) {
+                  // Verificar si ya existe en temas_curso por título
+                  const existingTema = temasCurso.find(t => t.titulo === pensumTopic.nombre_curso);
+                  
+                  if (existingTema) {
+                      finalTemaId = existingTema.id;
+                  } else {
+                      // Crear el tema en temas_curso automáticamente
+                      const { data: newTema, error: errNew } = await supabase
+                          .from("temas_curso")
+                          .insert({
+                              curso_id: cursoActivo.id,
+                              titulo: pensumTopic.nombre_curso,
+                              descripcion: "Tema del pensum",
+                              orden: (temasCurso.length + 1)
+                          })
+                          .select()
+                          .single();
+                      
+                      if (errNew) throw errNew;
+                      finalTemaId = newTema.id;
+                      setTemasCurso(prev => [...prev, newTema]);
+                  }
+              }
+          }
+
+          // 1. ASISTENCIAS: Estrategia DELETE + INSERT
+          const matriculaIds = alumnosClase.map(a => a.id);
+          
+          if (matriculaIds.length > 0) {
+              // Borrar previos
+              await supabase
+                .from("asistencias")
+                .delete()
+                .eq("fecha", fechaStr)
+                .in("matricula_id", matriculaIds);
+
+              // Insertar nuevos
+              const registros = alumnosClase.map(alumno => ({
+                  matricula_id: alumno.id,
+                  fecha: fechaStr,
+                  estado: asistenciaMap[alumno.id] ? 'presente' : 'ausente',
+                  tema_id: finalTemaId,
+                  observaciones: asistenciaMap[alumno.id] ? 'Tema completado' : 'Tema pendiente'
+              }));
+
+              const { error: errAsis } = await supabase
+                .from("asistencias")
+                .insert(registros);
+
+              if (errAsis) throw errAsis;
+          }
 
           // 2. Guardar Sesión PROFESOR (Para Nómina)
-          const temaTxt = temasCurso.find(t => t.id === temaSeleccionado)?.titulo || 'Tema del día';
+          const temaTxt = temasCurso.find(t => t.id === finalTemaId)?.titulo || 
+                          pensum.flatMap(c => c.pensum_cursos || []).find((p: any) => p.id === temaSeleccionado)?.nombre_curso || 
+                          'Tema del día';
           
-          const { error: errSesion } = await supabase
+          const { data: existingSesion } = await supabase
             .from("sesiones_clase")
-            .upsert({
-                curso_id: cursoActivo.id,
-                profesor_id: idProfesor,
-                fecha: fechaAsistencia.format("YYYY-MM-DD"),
-                horas_dictadas: horasARegistrar,
-                tema_visto: temaTxt,
-                estado_pago: 'pendiente'
-            }, { onConflict: 'curso_id, profesor_id, fecha' }); // Evita duplicados el mismo día
+            .select("id")
+            .eq("curso_id", cursoActivo.id)
+            .eq("profesor_id", idProfesor)
+            .eq("fecha", fechaStr)
+            .maybeSingle();
+
+          const sesionData: any = {
+              curso_id: cursoActivo.id,
+              profesor_id: idProfesor,
+              fecha: fechaStr,
+              horas_dictadas: horasARegistrar,
+              tema_visto: temaTxt,
+              estado_pago: 'pendiente'
+          };
+
+          let errSesion;
+          if (existingSesion) {
+              // UPDATE
+              const { error } = await supabase
+                .from("sesiones_clase")
+                .update(sesionData)
+                .eq("id", existingSesion.id);
+              errSesion = error;
+          } else {
+              // INSERT
+              const { error } = await supabase
+                .from("sesiones_clase")
+                .insert(sesionData);
+              errSesion = error;
+          }
 
           if (errSesion) throw errSesion;
 
@@ -650,7 +862,7 @@ export default function ShowProfesorDashboard() {
                             <Row gutter={16}>
                                 <Col span={12}>
                                     <label>Fecha Clase:</label>
-                                    <DatePicker style={{width:'100%'}} value={fechaAsistencia} onChange={val => setFechaAsistencia(val || dayjs())} allowClear={false}/>
+                                    <DatePicker style={{width:'100%'}} value={fechaAsistencia} onChange={val => handleFechaChange(val || dayjs())} allowClear={false}/>
                                 </Col>
                                 <Col span={12}>
                                     <label>Horas Dictadas:</label>
@@ -659,7 +871,7 @@ export default function ShowProfesorDashboard() {
                                             min={1} 
                                             max={8} 
                                             value={horasCalculadas} 
-                                            disabled
+                                            onChange={(val) => setHorasCalculadas(val || 0)}
                                             style={{ width: '85%' }} 
                                         />
                                         <Button disabled style={{ width: '15%' }}>Hrs</Button>
@@ -677,16 +889,7 @@ export default function ShowProfesorDashboard() {
                                         placeholder="Selecciona tema..."
                                         value={temaSeleccionado}
                                         onChange={setTemaSeleccionado}
-                                        options={temasCurso.map(t => ({label: `${t.orden}. ${t.titulo}`, value: t.id}))}
-                                        popupRender={(menu) => (
-                                            <>
-                                                {menu}
-                                                <Divider style={{ margin: '8px 0' }} />
-                                                <Button type="text" icon={<PlusOutlined />} block onClick={() => setModalPensumVisible(true)}>
-                                                    + Nuevo Tema
-                                                </Button>
-                                            </>
-                                        )}
+                                        options={opcionesTemas}
                                     />
                                 </Col>
                             </Row>
@@ -697,6 +900,9 @@ export default function ShowProfesorDashboard() {
                             dataSource={alumnosClase}
                           renderItem={(alumno: any) => {
                               const pagado = alumno.pagado;
+                              const entregasEst = entregasMap[alumno.estudiante_id] || [];
+                              const tieneCamiseta = entregasEst.some(e => e.tipo_material === 'camiseta');
+                              const kits = entregasEst.filter(e => e.tipo_material === 'kit').length;
                               return (
                             <List.Item key={alumno?.id} actions={[
                               <Tooltip key={`asistencia-${alumno?.id}`} title={!pagado ? "Estudiante sin pagos al día" : ""}>
@@ -717,6 +923,8 @@ export default function ShowProfesorDashboard() {
                                             <Space>
                                                 {asistenciaMap[alumno.id] ? <Tag color="green">Presente</Tag> : <Tag color="red">Ausente</Tag>}
                                                 {pagado ? <Tag color="success">Pagado</Tag> : <Tag color="error">Sin Pagar</Tag>}
+                                                {tieneCamiseta && <Tooltip title="Camiseta entregada">👕</Tooltip>}
+                                                {kits > 0 && <Tooltip title={`${kits} Kits entregados`}>📦 {kits}</Tooltip>}
                                             </Space>
                                         }
                                     />
