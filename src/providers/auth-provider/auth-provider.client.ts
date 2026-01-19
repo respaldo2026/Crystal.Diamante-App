@@ -1,10 +1,9 @@
 import { supabaseBrowserClient as supabase } from "@utils/supabase/client";
+import { AuthProvider } from "@refinedev/core";
 
-export const authProviderClient: any = {
+export const authProviderClient: AuthProvider = {
   login: async ({ email, password }: { email: string; password: string }) => {
-    console.log("🔐 Intentando login con email:", email);
-    
-    // Email es el correo del usuario, password es la cédula
+    // La contraseña es la cédula por diseño de la academia
     const { data, error } = await supabase.auth.signInWithPassword({ 
       email: email,
       password: password // La contraseña es la cédula
@@ -15,42 +14,28 @@ export const authProviderClient: any = {
       return { success: false, error };
     }
     
-    console.log("✅ Login exitoso, usuario:", data.user?.email);
-    
     // Verificar el rol del usuario para redirigir correctamente
     if (data.user) {
-      const { data: perfil, error: perfilError } = await supabase
+      const { data: perfil } = await supabase
         .from("perfiles")
         .select("rol, nombre_completo")
         .eq("id", data.user.id)
         .maybeSingle();
       
-      if (perfilError) {
-        console.error("⚠️ Error obteniendo perfil:", perfilError);
-      } else if (perfil) {
-        console.log("👤 Perfil encontrado:", perfil?.nombre_completo, "- Rol:", perfil?.rol);
-      } else {
-        console.warn("ℹ️ Perfil no encontrado para el usuario; usando redirección por defecto");
-      }
-      
       // Redirigir según el rol
       if (perfil?.rol === "profesor") {
-        console.log("🎓 Redirigiendo a /mi-oficina (Profesor)");
         return { success: true, redirectTo: "/mi-oficina" };
       }
       
-      if (perfil?.rol === "admin" || perfil?.rol === "administrativo") {
-        console.log("🏢 Redirigiendo a / (Admin/Administrativo - Dashboard)");
+      if (perfil?.rol === "admin" || perfil?.rol === "administrativo" || perfil?.rol === "director") {
         return { success: true, redirectTo: "/" };
       }
       
       if (perfil?.rol === "estudiante") {
-        console.log("📚 Redirigiendo a /portal-estudiante (Estudiante)");
         return { success: true, redirectTo: "/portal-estudiante" };
       }
     }
     
-    console.log("🏠 Redirigiendo a / (default)");
     return { success: true, redirectTo: "/" };
   },
 
@@ -63,13 +48,17 @@ export const authProviderClient: any = {
     return { success: true, redirectTo: "/login" };
   },
 
-  // MODO DESARROLLO: Siempre permite el acceso en el navegador
   check: async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    return { authenticated: !!session };
+    return { authenticated: !!session, redirectTo: session ? undefined : "/login" };
   },
 
-  getPermissions: async () => null,
+  getPermissions: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase.from("perfiles").select("rol").eq("id", user.id).single();
+    return data?.rol || null;
+  },
 
   getIdentity: async () => {
     const { data: { user } } = await supabase.auth.getUser();

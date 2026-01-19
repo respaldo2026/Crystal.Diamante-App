@@ -42,7 +42,11 @@ export function useRolePermissions() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    cargarPermisos();
+    let isMounted = true;
+    cargarPermisos().then(() => {
+      if (isMounted) setLoading(false);
+    });
+    return () => { isMounted = false; };
   }, []);
 
   const cargarPermisos = async () => {
@@ -60,8 +64,6 @@ export function useRolePermissions() {
       }
     } catch (error) {
       console.error("Error cargando permisos:", error);
-    } finally {
-      setLoading(false);
     }
   };
 

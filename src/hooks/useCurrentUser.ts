@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export interface CurrentUser {
@@ -15,44 +15,30 @@ export interface CurrentUser {
 export function useCurrentUser() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const fetchedRef = useRef(false);
 
   useEffect(() => {
-    // Si ya hemos hecho fetch, no repetir
-    if (fetchedRef.current) return;
-
     const fetchUser = async () => {
       try {
-        fetchedRef.current = true;
-        
         // Obtener usuario autenticado
-        const { data: { user: authUser } } = await supabaseBrowserClient.auth.getUser();
+        const { data: { user: authUser }, error: authError } = await supabaseBrowserClient.auth.getUser();
         
-        if (!authUser) {
-          // Modo dev: habilitar admin temporal para poder probar flujos sin login real
-          console.warn("No auth user found; enabling temporary dev admin");
-          setUser({ id: "dev-admin", email: "dev@local", rol: "admin", nombre_completo: "Dev Admin" });
+        if (authError || !authUser) {
+          setUser(null);
           setLoading(false);
           return;
         }
 
-        console.log("Auth user found:", authUser.id);
-
-        // Obtener perfil con rol (sin timeout para permitir conexión lenta)
+        // Obtener perfil con rol
         const { data: perfil, error } = await supabaseBrowserClient
           .from("perfiles")
           .select("id, email, rol, nombre_completo")
           .eq("id", authUser.id)
           .maybeSingle();
 
-        console.log("Profile query result:", { perfil, error });
-
         if (error) {
           console.error("Error fetching perfil:", error);
-          // Aún así retorna usuario básico
           setUser({ id: authUser.id, email: authUser.email });
         } else if (perfil) {
-          console.log("Setting user with rol:", perfil.rol);
           setUser({
             id: perfil.id,
             email: perfil.email || authUser.email,
