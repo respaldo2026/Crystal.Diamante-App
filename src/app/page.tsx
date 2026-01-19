@@ -309,7 +309,6 @@ export default function DashboardPage() {
       setPagosVencidos(vencidos.data || []);
 
     } catch (error) {
-      console.error("Error cargando dashboard:", error);
     } finally {
       setLoading(false);
     }

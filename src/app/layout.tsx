@@ -218,13 +218,10 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
 
   if (userLoading || permisosLoading) {
     return (
-      <html lang="es">
-        <body>
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-            <Spin size="large" tip="Cargando Academia Crystal..." />
-          </div>
-        </body>
-      </html>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: '16px' }}>
+        <Spin size="large" />
+        <div style={{ color: '#5B21B6', fontWeight: 500 }}>Cargando Academia Crystal...</div>
+      </div>
     );
   }
 
@@ -308,7 +305,11 @@ export default function RootLayout({
   if (!mounted) {
     return (
       <html lang="es">
-        <body></body>
+        <body>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            <Spin size="large" />
+          </div>
+        </body>
       </html>
     );
   }

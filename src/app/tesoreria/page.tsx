@@ -49,10 +49,6 @@ export default function TesoreriaList() {
         }
     });
 
-    console.log("🔍 Tesorería - tableQuery:", tableQuery);
-    console.log("🔍 Tesorería - data:", tableQuery?.data);
-    console.log("🔍 Tesorería - error:", tableQuery?.error);
-
     const [busqueda, setBusqueda] = useState("");
     const [filtroFecha, setFiltroFecha] = useState<[any, any] | null>(null);
     const [filtroMetodo, setFiltroMetodo] = useState<string | null>(null);
@@ -60,7 +56,6 @@ export default function TesoreriaList() {
 
     // Calcular el total de lo que se ve en pantalla
     const pagos = tableProps.dataSource || [];
-    console.log("🔍 Tesorería - Pagos en tabla:", pagos.length, "registros", pagos);
 
     // Métodos únicos para el filtro
     const metodosUnicos = useMemo(() => {
