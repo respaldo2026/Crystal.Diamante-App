@@ -22,7 +22,8 @@ import {
   CustomerServiceOutlined,
   HomeOutlined,
   UsergroupAddOutlined,
-  SolutionOutlined
+  SolutionOutlined,
+  HistoryOutlined
 } from "@ant-design/icons";
 
 import routerProvider from "@refinedev/nextjs-router";
@@ -189,6 +190,15 @@ export default function RootLayout({
         },
       },
       {
+        key: "auditoria",
+        name: "auditoria",
+        list: "/auditoria",
+        meta: {
+          label: "Auditoría",
+          icon: <HistoryOutlined />,
+        },
+      },
+      {
         key: "configuracion", // Usualmente solo admin, o configurable
         name: "configuracion",
         list: "/configuracion",
@@ -278,9 +288,6 @@ export default function RootLayout({
                 options={{
                   syncWithLocation: true,
                   warnWhenUnsavedChanges: true,
-                  redirect: {
-                    afterLogout: "/login",
-                  },
                 }}
               >
                 <ThemedLayout
