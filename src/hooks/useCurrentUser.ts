@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { useMemo } from "react";
 
 export interface CurrentUser {
   id: string;
@@ -13,51 +14,39 @@ export interface CurrentUser {
  * Optimizado para evitar llamadas duplicadas
  */
 export function useCurrentUser() {
-  const [user, setUser] = useState<CurrentUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: user, isLoading } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: async (): Promise<CurrentUser | null> => {
+      const { data: { user: authUser } } = await supabaseBrowserClient.auth.getUser();
+      
+      if (!authUser) return null;
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        // Obtener usuario autenticado
-        const { data: { user: authUser }, error: authError } = await supabaseBrowserClient.auth.getUser();
-        
-        if (authError || !authUser) {
-          setUser(null);
-          setLoading(false);
-          return;
-        }
+      const { data: perfil, error } = await supabaseBrowserClient
+        .from("perfiles")
+        .select("id, email, rol, nombre_completo")
+        .eq("id", authUser.id)
+        .maybeSingle();
 
-        // Obtener perfil con rol
-        const { data: perfil, error } = await supabaseBrowserClient
-          .from("perfiles")
-          .select("id, email, rol, nombre_completo")
-          .eq("id", authUser.id)
-          .maybeSingle();
-
-        if (error) {
-          console.error("Error fetching perfil:", error);
-          setUser({ id: authUser.id, email: authUser.email });
-        } else if (perfil) {
-          setUser({
-            id: perfil.id,
-            email: perfil.email || authUser.email,
-            rol: perfil.rol,
-            nombre_completo: perfil.nombre_completo,
-          });
-        } else {
-          setUser({ id: authUser.id, email: authUser.email });
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error);
-        setUser(null);
-      } finally {
-        setLoading(false);
+      if (error || !perfil) {
+        return { id: authUser.id, email: authUser.email };
       }
-    };
 
-    fetchUser();
-  }, []);
+      return {
+        id: perfil.id,
+        email: perfil.email || authUser.email,
+        rol: perfil.rol,
+        nombre_completo: perfil.nombre_completo,
+      };
+    },
+    staleTime: 1000 * 60 * 5, // El perfil se considera fresco por 5 minutos
+    retry: 1,
+  });
 
-  return { user, loading };
+  // Memorizamos el resultado para evitar re-renders innecesarios
+  const result = useMemo(() => ({
+    user: user ?? null,
+    loading: isLoading
+  }), [user, isLoading]);
+
+  return result;
 }

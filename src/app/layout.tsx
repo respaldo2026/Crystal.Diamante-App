@@ -36,20 +36,9 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useCurrentUser } from "@hooks/useCurrentUser"; 
 import { useRolePermissions } from "@hooks/useRolePermissions";
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  // --- CORRECCIÓN DEL ERROR DE HIDRATACIÓN ---
-  // Estado para verificar si ya estamos en el navegador
-  const [mounted, setMounted] = useState(false);
+const AppContent = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: userLoading } = useCurrentUser();
   const { permisos, loading: permisosLoading } = useRolePermissions();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Función para determinar qué recursos mostrar según el rol
   const getResourcesByRole = () => {
@@ -227,86 +216,108 @@ export default function RootLayout({
     });
   };
 
-  // Si no está montado (aún es servidor), mostramos un loader simple o nada.
-  // Esto evita que el servidor genere IDs que luego choquen con el cliente.
-  if (!mounted || userLoading) {
+  if (userLoading || permisosLoading) {
     return (
       <html lang="es">
         <body>
-           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-             Cargando...
-           </div>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            <Spin size="large" tip="Cargando Academia Crystal..." />
+          </div>
         </body>
       </html>
     );
   }
-  // --------------------------------------------
+
+  return (
+    <RefineKbarProvider>
+      <ConfigProvider 
+        theme={{
+          token: {
+            colorPrimary: '#5B21B6',
+            colorSuccess: '#059669',
+            colorWarning: '#D97706',
+            colorError: '#DC2626',
+            colorInfo: '#0284C7',
+            colorTextBase: '#1F2937',
+            colorBgBase: '#FFFFFF',
+            borderRadius: 8,
+            fontSize: 14,
+          },
+          components: {
+            Button: {
+              controlHeight: 36,
+              fontWeight: 500,
+            },
+            Card: {
+              borderRadiusLG: 12,
+            },
+            Tag: {
+              borderRadiusSM: 6,
+            },
+            Table: {
+              headerBg: '#F9FAFB',
+              headerColor: '#374151',
+              rowHoverBg: '#F3F4F6',
+            },
+          },
+        }}
+      >
+        <AntdApp>
+          <Refine
+            routerProvider={routerProvider}
+            dataProvider={dataProvider}
+            authProvider={authProvider}
+            resources={getResourcesByRole()}
+            options={{
+              syncWithLocation: true,
+              warnWhenUnsavedChanges: true,
+            }}
+          >
+            <ThemedLayout
+              initialSiderCollapsed={false}
+              Title={({ collapsed }) => (
+                <ThemedTitle
+                  collapsed={collapsed}
+                  text="Crystal App"
+                  icon={<BookOutlined />}
+                />
+              )}
+            >
+              {children}
+            </ThemedLayout>
+            <RefineKbar />
+          </Refine>
+        </AntdApp>
+      </ConfigProvider>
+    </RefineKbarProvider>
+  );
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // --- CORRECCIÓN DEL ERROR DE HIDRATACIÓN ---
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <html lang="es">
+        <body></body>
+      </html>
+    );
+  }
 
   return (
     <html lang="es">
       <body>
         <QueryProvider>
-          <RefineKbarProvider>
-            <ConfigProvider 
-            theme={{
-              token: {
-                colorPrimary: '#5B21B6', // Púrpura profesional más oscuro
-                colorSuccess: '#059669', // Verde esmeralda
-                colorWarning: '#D97706', // Ámbar
-                colorError: '#DC2626', // Rojo más profesional
-                colorInfo: '#0284C7', // Azul cyan profesional
-                colorTextBase: '#1F2937', // Gris oscuro para texto
-                colorBgBase: '#FFFFFF',
-                borderRadius: 8,
-                fontSize: 14,
-              },
-              components: {
-                Button: {
-                  controlHeight: 36,
-                  fontWeight: 500,
-                },
-                Card: {
-                  borderRadiusLG: 12,
-                },
-                Tag: {
-                  borderRadiusSM: 6,
-                },
-                Table: {
-                  headerBg: '#F9FAFB',
-                  headerColor: '#374151',
-                  rowHoverBg: '#F3F4F6',
-                },
-              },
-            }}
-          >
-            <AntdApp>
-              <Refine
-                routerProvider={routerProvider}
-                dataProvider={dataProvider}
-                authProvider={authProvider}
-                resources={getResourcesByRole()}
-                options={{
-                  syncWithLocation: true,
-                  warnWhenUnsavedChanges: true,
-                }}
-              >
-                <ThemedLayout
-                  initialSiderCollapsed={false}
-                  Title={({ collapsed }) => (
-                    <ThemedTitle
-                      collapsed={collapsed}
-                      text="Crystal App"
-                      icon={<BookOutlined />}
-                    />
-                  )}
-                >
-                  {children}
-                </ThemedLayout>
-                <RefineKbar />
-              </Refine>
-            </AntdApp>
-          </ConfigProvider>
-        </RefineKbarProvider>
+          <AppContent>{children}</AppContent>
         </QueryProvider>
       </body>
     </html>

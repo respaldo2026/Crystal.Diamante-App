@@ -56,14 +56,25 @@ export const authProviderClient: AuthProvider = {
   getPermissions: async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
-    const { data } = await supabase.from("perfiles").select("rol").eq("id", user.id).single();
+    const { data } = await supabase.from("perfiles").select("rol").eq("id", user.id).maybeSingle();
     return data?.rol || null;
   },
 
   getIdentity: async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) return { ...user, name: user.email };
-    return null;
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return null;
+
+    const { data: perfil } = await supabase
+      .from("perfiles")
+      .select("nombre_completo, foto_url")
+      .eq("id", authUser.id)
+      .maybeSingle();
+
+    return {
+      ...authUser,
+      name: perfil?.nombre_completo || authUser.email,
+      avatar: perfil?.foto_url,
+    };
   },
 
   onError: async (error: any) => {

@@ -1,2 +1,5 @@
-export const SUPABASE_URL = "https://xqcsftjkvcrbcetrdulq.supabase.co";
-export const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxY3NmdGprdmNyYmNldHJkdWxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwMTI1NjQsImV4cCI6MjA4MTU4ODU2NH0.sFp55IsqCP0AbypQbtnHKF1Z1OJDpNHxs7LKs7AlXg8";
+// Estas llaves ahora se leen del entorno (.env.local o .env.production)
+// Asegúrate de tener NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY configurados
+
+export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+export const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
