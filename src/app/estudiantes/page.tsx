@@ -8,7 +8,7 @@ import {
     ShowButton, 
     CreateButton
 } from "@refinedev/antd";
-import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography, App, message } from "antd";
+import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography, App } from "antd";
 import { 
     WhatsAppOutlined, 
     UserOutlined, 
@@ -53,7 +53,6 @@ export default function EstudiantesList() {
         },
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
         pagination: {
-            current: 1,
             pageSize: 50 // Limitar a 50 por página para mejor rendimiento
         },
         // Filtro base: Solo estudiantes

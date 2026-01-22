@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Modal, Form, Input, Select, DatePicker, message, Radio } from "antd";
+import React, { useState, useEffect } from "react";
+import { Modal, Form, Input, Select, DatePicker, message, Radio, Table, Tag } from "antd";
 import { GiftOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -98,5 +98,42 @@ export const EntregaMaterialModal: React.FC<EntregaMaterialModalProps> = ({
         </Form.Item>
       </Form>
     </Modal>
+  );
+};
+
+export const HistorialEntregas: React.FC<{ estudianteId: string }> = ({ estudianteId }) => {
+  const [entregas, setEntregas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (estudianteId) {
+      cargarEntregas();
+    }
+  }, [estudianteId]);
+
+  const cargarEntregas = async () => {
+    setLoading(true);
+    const { data } = await supabaseBrowserClient
+      .from("entregas_materiales")
+      .select("*, perfiles:entregado_por(nombre_completo)")
+      .eq("estudiante_id", estudianteId)
+      .order("fecha_entrega", { ascending: false });
+    setEntregas(data || []);
+    setLoading(false);
+  };
+
+  return (
+    <Table
+      dataSource={entregas}
+      rowKey="id"
+      loading={loading}
+      pagination={false}
+      columns={[
+        { title: "Fecha", dataIndex: "fecha_entrega", render: (val: string) => dayjs(val).format("DD/MM/YYYY") },
+        { title: "Tipo", dataIndex: "tipo_material", render: (val: string) => <Tag>{val?.toUpperCase()}</Tag> },
+        { title: "Descripción", dataIndex: "descripcion" },
+        { title: "Entregado Por", dataIndex: ["perfiles", "nombre_completo"] },
+      ]}
+    />
   );
 };

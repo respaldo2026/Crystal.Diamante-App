@@ -17,7 +17,6 @@ import {
   Col,
   Divider,
   Typography,
-  Alert,
   Spin,
   Drawer,
   Descriptions,
@@ -25,11 +24,8 @@ import {
 import {
   DeleteOutlined,
   EditOutlined,
-  PlusOutlined,
   TeamOutlined,
-  SettingOutlined,
   UserAddOutlined,
-  LockOutlined,
   ArrowRightOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -545,7 +541,7 @@ export default function GestionarPerfilesPage() {
               </Descriptions.Item>
               <Descriptions.Item label="Rol">
                 <Tag color={getNivelColor(selectedPerfil.nivel_jerarquico)}>
-                  {getNivelLabel(selectedPerfil.nivel_jejarquico)}
+                  {getNivelLabel(selectedPerfil.nivel_jerarquico)}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Teléfono">
