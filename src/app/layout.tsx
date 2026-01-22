@@ -22,8 +22,7 @@ import {
   CustomerServiceOutlined,
   HomeOutlined,
   UsergroupAddOutlined,
-  SolutionOutlined,
-  HistoryOutlined
+  SolutionOutlined
 } from "@ant-design/icons";
 
 import routerProvider from "@refinedev/nextjs-router";
@@ -176,15 +175,6 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
         meta: {
           label: "Tesorería",
           icon: <DollarCircleOutlined />,
-        },
-      },
-      {
-        key: "auditoria",
-        name: "auditoria",
-        list: "/auditoria",
-        meta: {
-          label: "Auditoría",
-          icon: <HistoryOutlined />,
         },
       },
       {

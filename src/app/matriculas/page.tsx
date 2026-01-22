@@ -12,6 +12,7 @@ import {
   WarningOutlined,
   LockOutlined
 } from "@ant-design/icons";
+import { useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { DiplomaPDF } from "@components/pdf/DiplomaPDF";
@@ -29,6 +30,7 @@ export default function MatriculasList() {
     const [loadingAsistencias, setLoadingAsistencias] = useState(false);
     const [activeTab, setActiveTab] = useState<string>('nuevo');
     const [listFilter, setListFilter] = useState<'all' | 'sin_pagos' | 'con_pagos' | 'bajo_asistencia'>('all');
+    const router = useRouter();
 
     // Construcción de filtros según rol
     const permanentFilters = () => {
@@ -292,7 +294,7 @@ export default function MatriculasList() {
                                 console.error('Error deleting matricula:', errorMatricula);
                             } else {
                                 antMessage.success('Matrícula y todos sus registros eliminados correctamente');
-                                setTimeout(() => window.location.reload(), 1000);
+                                router.refresh();
                             }
                         } catch (err: any) {
                             antMessage.error(err?.message || 'Error en eliminación en cascada');
@@ -322,7 +324,7 @@ export default function MatriculasList() {
                             console.error('Delete error:', error);
                         } else {
                             antMessage.success('Matrícula eliminada');
-                            setTimeout(() => window.location.reload(), 1000);
+                            router.refresh();
                         }
                     } catch (err: any) {
                         antMessage.error(err?.message || 'Error al eliminar');
@@ -377,7 +379,7 @@ export default function MatriculasList() {
                         }
                         
                         // Recargar para reflejar cambio de estado
-                        setTimeout(() => window.location.reload(), 1000);
+                        router.refresh();
                     }
                 } catch (err: any) {
                     antMessage.error(err?.message || 'Error al cancelar');
@@ -686,7 +688,7 @@ export default function MatriculasList() {
                             <EditButton hideText size="small" recordItemId={record.id} />
                             <Button size="small" type="dashed" onClick={() => {
                                 const url = `/tesoreria/create?estudiante_id=${record.estudiante_id}&matricula_id=${record.id}`;
-                                window.location.href = url;
+                                router.push(url);
                             }}>
                                 Registrar Pago
                             </Button>

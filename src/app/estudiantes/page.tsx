@@ -18,23 +18,18 @@ import {
     IdcardOutlined,
     DeleteOutlined
 } from "@ant-design/icons";
+import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 const { Text } = Typography;
 
 export default function EstudiantesList() {
+    const router = useRouter();
     const { message: antMessage, modal } = App.useApp();
     const { user } = useCurrentUser();
     const [searchValue, setSearchValue] = useState("");
     
-    // Debug: Verificar que el usuario está siendo cargado
-    useEffect(() => {
-        console.log("Usuario actual:", user);
-        console.log("Usuario rol:", user?.rol);
-        console.log("Es admin?", user?.rol === "admin");
-    }, [user]);
-
     // Construcción dinámica de filtros según rol
     const permanentFilters = () => {
         const filters: any[] = [
@@ -50,7 +45,7 @@ export default function EstudiantesList() {
         return filters;
     };
 
-    const { tableProps, searchFormProps, setFilters } = useTable({
+    const { tableProps, setFilters } = useTable({
         resource: "perfiles",
         // TRUCO AVANZADO: Especificar explícitamente la FK para evitar ambigüedad
         meta: {
@@ -359,7 +354,7 @@ export default function EstudiantesList() {
                                     type="text"
                                     size="small"
                                     disabled={user?.rol !== "admin"}
-                                    onClick={() => confirmarEliminarEstudiante(record, antMessage, modal)}
+                                    onClick={() => confirmarEliminarEstudiante(record, antMessage, modal, router)}
                                     icon={<DeleteOutlined />}
                                 />
                             </Tooltip>
@@ -367,7 +362,7 @@ export default function EstudiantesList() {
                             <Button 
                                 size="small" 
                                 danger
-                                onClick={() => handleArchivarEstudiante(record, antMessage, modal)}
+                                onClick={() => handleArchivarEstudiante(record, antMessage, modal, router)}
                             >
                                 Archivar
                             </Button>
@@ -379,64 +374,7 @@ export default function EstudiantesList() {
     );
 }
 
-async function archivableCheck(estudianteId: string) {
-    const { data: mats, error } = await supabaseBrowserClient
-        .from("matriculas")
-        .select("id, estado, cursos(nombre)")
-        .eq("estudiante_id", estudianteId);
-    if (error) throw error;
-    return mats || [];
-}
-
-async function checkDatosRelacionados(estudianteId: string) {
-    // Primero obtener las matrículas
-    const matriculasResp = await supabaseBrowserClient
-        .from("matriculas")
-        .select("id, cursos(nombre)")
-        .eq("estudiante_id", estudianteId);
-    
-    const matriculaIds = matriculasResp.data?.map((m: any) => m.id) || [];
-
-    // Luego verificar pagos (directos e indirectos)
-    const [pagosEstudiante, pagosMatriculas, asistencias] = await Promise.all([
-        supabaseBrowserClient
-            .from("pagos")
-            .select("id, monto, matricula_id, estudiante_id")
-            .eq("estudiante_id", estudianteId),
-        matriculaIds.length > 0
-            ? supabaseBrowserClient
-                .from("pagos")
-                .select("id, monto, matricula_id, estudiante_id")
-                .in("matricula_id", matriculaIds)
-            : Promise.resolve({ data: [], error: null }),
-        matriculaIds.length > 0
-            ? supabaseBrowserClient
-                .from("asistencias")
-                .select("id")
-                .in("matricula_id", matriculaIds)
-            : Promise.resolve({ data: [], error: null })
-    ]);
-
-    // Combinar todos los pagos encontrados (sin duplicados)
-    const pagosMap = new Map();
-    [...(pagosEstudiante.data || []), ...(pagosMatriculas.data || [])].forEach((pago: any) => {
-        if (pago.id && !pagosMap.has(pago.id)) {
-            pagosMap.set(pago.id, pago);
-        }
-    });
-    const todosPagos = Array.from(pagosMap.values());
-
-    return {
-        matriculas: matriculasResp.data || [],
-        pagos: todosPagos,
-        asistencias: asistencias.data || [],
-        tieneDatos: (matriculasResp.data?.length || 0) > 0 || 
-                    (todosPagos.length) > 0 || 
-                    (asistencias.data?.length || 0) > 0
-    };
-}
-
-async function handleEliminarEstudiante(record: any, msg: any, modalInstance: any) {
+async function handleEliminarEstudiante(record: any, msg: any, modalInstance: any, router: any) {
     const estudianteId = record.id;
     
     // Primero, eliminar todas las relaciones de forma segura
@@ -494,7 +432,7 @@ async function handleEliminarEstudiante(record: any, msg: any, modalInstance: an
         }
         
         msg.success("✅ Estudiante y todos sus datos eliminados correctamente");
-        setTimeout(() => window.location.reload(), 1000);
+        router.refresh();
         
     } catch (err: any) {
         console.error('Error inesperado:', err);
@@ -502,7 +440,7 @@ async function handleEliminarEstudiante(record: any, msg: any, modalInstance: an
     }
 }
 
-function confirmarEliminarEstudiante(record: any, msg: any, modalInstance: any) {
+function confirmarEliminarEstudiante(record: any, msg: any, modalInstance: any, router: any) {
     const estudianteId = record.id;
     
     // Usar el modal desde el contexto de App correctamente
@@ -538,12 +476,12 @@ function confirmarEliminarEstudiante(record: any, msg: any, modalInstance: any) 
         okType: "danger",
         cancelText: "Cancelar",
         onOk: async () => {
-            await handleEliminarEstudiante(record, msg, modalInstance);
+            await handleEliminarEstudiante(record, msg, modalInstance, router);
         }
     });
 }
 
-function handleArchivarEstudiante(record: any, msg: any, modalInstance: any) {
+function handleArchivarEstudiante(record: any, msg: any, modalInstance: any, router: any) {
     const estudianteId = record.id;
     
     modalInstance.confirm({
@@ -581,7 +519,7 @@ function handleArchivarEstudiante(record: any, msg: any, modalInstance: any) {
                 }
                 
                 msg.success("Estudiante archivado correctamente");
-                setTimeout(() => window.location.reload(), 1000);
+                router.refresh();
             } catch (err: any) {
                 msg.error(err?.message || "Error al archivar estudiante");
             }

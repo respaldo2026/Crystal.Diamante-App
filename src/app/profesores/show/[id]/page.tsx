@@ -2,36 +2,31 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { Show } from "@refinedev/antd";
-import { 
-  Typography, Row, Col, Card, Button, 
-  Modal, Form, Input, DatePicker, Avatar, List, Divider, Drawer, Switch, message, Spin, Select, InputNumber, Timeline, Alert, Space,
-  Tabs, Tag, Upload, Tooltip
-} from "antd";
+import { Typography, Row, Col, Card, Button, Modal, Form, Avatar, List, Divider, message, Spin, Select, Space, Tag, Upload } from "antd";
 import { 
   UserOutlined, BookOutlined, TeamOutlined, PlusOutlined, ExclamationCircleOutlined, StarOutlined,
   WhatsAppOutlined, CameraOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { useParams } from "next/navigation"; 
-import { createClient } from "@supabase/supabase-js";
+import { useParams, useRouter } from "next/navigation"; 
+import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { ClassDrawer } from "@app/mi-oficina/ClassDrawer";
+import { CalificarModal } from "@app/mi-oficina/CalificarModal";
+import { NuevoTemaModal } from "@app/mi-oficina/NuevoTemaModal";
+import { useGestorTemas } from "@hooks/useGestorTemas";
 
 const { Title, Text } = Typography;
 
 export default function ShowProfesorDashboard() {
-  const params = useParams();
+  const router = useRouter();
+  const params = useParams(); // No es necesario crear un nuevo cliente supabase
   const idProfesor = params?.id as string;
 
   // HOOKS DE ANT DESIGN
   const [messageApi, contextHolder] = message.useMessage();
   const [modal, modalContextHolder] = Modal.useModal();
-  const [formPensum] = Form.useForm();
   const [formNotas] = Form.useForm();
 
   // ESTADOS GENERALES
@@ -58,27 +53,13 @@ export default function ShowProfesorDashboard() {
   const [asistenciaMap, setAsistenciaMap] = useState<Record<string, boolean>>({});
   const [fechaAsistencia, setFechaAsistencia] = useState(dayjs());
   const [horaInicioclase, setHoraInicioClase] = useState<dayjs.Dayjs | null>(null);
-  const [horaFinClase, setHoraFinClase] = useState<dayjs.Dayjs | null>(null);
   const [horasCalculadas, setHorasCalculadas] = useState<number>(0);
   const [guardandoAsistencia, setGuardandoAsistencia] = useState(false);
-
-  // Pensum
-  const [modalPensumVisible, setModalPensumVisible] = useState(false);
-  const [guardandoTema, setGuardandoTema] = useState(false);
 
   // Calificaciones
   const [modalNotasVisible, setModalNotasVisible] = useState(false);
   const [estudianteACalificar, setEstudianteACalificar] = useState<any>(null);
   const [guardandoNota, setGuardandoNota] = useState(false);
-
-  // Efecto para calcular horas cuando la clase termina
-  useEffect(() => {
-    if (horaInicioclase && horaFinClase) {
-      const duracion = horaFinClase.diff(horaInicioclase, 'hour', true);
-      const horasRedondeadas = Math.round(duracion);
-      setHorasCalculadas(Math.max(horasRedondeadas, 1));
-    }
-  }, [horaInicioclase, horaFinClase]);
 
   // CALCULAR OPCIONES DE TEMAS (Memoizado para actualización inmediata)
   const opcionesTemas = useMemo(() => {
@@ -123,6 +104,15 @@ export default function ShowProfesorDashboard() {
     return opciones;
   }, [temasCurso, temasVistos, pensum]);
 
+  // HOOK GESTOR DE TEMAS
+  const { 
+    form: formPensum, 
+    visible: modalPensumVisible, 
+    setVisible: setModalPensumVisible, 
+    loading: guardandoTema, 
+    guardarTema: guardarTemaPensum 
+  } = useGestorTemas(cursoActivo?.id, (nuevos) => setTemasCurso(nuevos), messageApi);
+
   // 1. CARGAR DATOS INICIALES
   useEffect(() => {
     if (idProfesor) cargarDashboard();
@@ -131,8 +121,8 @@ export default function ShowProfesorDashboard() {
   const cargarDashboard = async () => {
     try {
         setLoading(true);
-        // Perfil
-        const { data: dataProf, error: errProf } = await supabase.from("perfiles").select("*").eq("id", idProfesor).maybeSingle();
+        // Perfil - Usar supabaseBrowserClient
+        const { data: dataProf, error: errProf } = await supabaseBrowserClient.from("perfiles").select("*").eq("id", idProfesor).maybeSingle();
         if (errProf) throw errProf;
         if (!dataProf) {
           console.error("Profesor no encontrado");
@@ -141,7 +131,7 @@ export default function ShowProfesorDashboard() {
         setProfesor(dataProf);
 
         // Cursos activos
-        const { data: dataCursos, error: errCursos } = await supabase
+        const { data: dataCursos, error: errCursos } = await supabaseBrowserClient
             .from("cursos")
             .select(`*, matriculas ( estado )`)
             .eq("profesor_id", idProfesor)
@@ -156,15 +146,15 @@ export default function ShowProfesorDashboard() {
 
 
         // Historial de cursos (todos los estados)
-        const { data: dataCursosHist } = await supabase
+        const { data: dataCursosHist } = await supabaseBrowserClient
           .from("cursos")
           .select("id, nombre, estado, fecha_inicio, fecha_fin")
           .eq("profesor_id", idProfesor)
           .order("fecha_inicio", { ascending: false });
         setHistorialCursos(dataCursosHist || []);
 
-        // Pagos de nómina del profesor
-        const { data: dataPagos } = await supabase
+        // Pagos de nómina del profesor - Usar supabaseBrowserClient
+        const { data: dataPagos } = await supabaseBrowserClient
           .from("pagos_nomina")
           .select("id, fecha_pago, total_pagado, total_horas, observaciones")
           .eq("profesor_id", idProfesor)
@@ -184,18 +174,18 @@ export default function ShowProfesorDashboard() {
       const fileExt = file.name.split(".").pop();
       const fileName = `${idProfesor}_${Date.now()}.${fileExt}`;
       const filePath = `perfiles/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
+      
+      const { error: uploadError } = await supabaseBrowserClient.storage
         .from("avatars")
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
+      
+      const { data: urlData } = supabaseBrowserClient.storage
         .from("avatars")
         .getPublicUrl(filePath);
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseBrowserClient
         .from("perfiles")
         .update({ foto_url: urlData.publicUrl })
         .eq("id", idProfesor);
@@ -238,8 +228,8 @@ export default function ShowProfesorDashboard() {
           setAlumnosClase([]);
           setTemaSeleccionado(null);
           
-          // A) Estudiantes - Simplificado para evitar errores de join
-          const { data: dataMatriculas, error: errMatriculas } = await supabase
+          // A) Estudiantes - Usar supabaseBrowserClient
+          const { data: dataMatriculas, error: errMatriculas } = await supabaseBrowserClient
             .from("matriculas")
             .select(`id, estudiante_id`)
             .eq("curso_id", curso.id)
@@ -254,18 +244,18 @@ export default function ShowProfesorDashboard() {
               const estudianteIds = dataMatriculas.map((m: any) => m.estudiante_id);
               
               // Traer perfiles
-              const { data: perfiles } = await supabase
+              const { data: perfiles } = await supabaseBrowserClient
                   .from("perfiles")
                   .select("id, nombre_completo, telefono")
                   .in("id", estudianteIds);
               
               const perfilesMap = (perfiles || []).reduce((acc: any, p: any) => {
-                  acc[p.id] = p;
+                  acc[p.id] = p; // Usar supabaseBrowserClient
                   return acc;
               }, {});
               
               // Traer pagos
-              const { data: pagosData } = await supabase
+              const { data: pagosData } = await supabaseBrowserClient
                   .from("pagos")
                   .select("estudiante_id, fecha_pago")
                   .in("estudiante_id", estudianteIds)
@@ -297,7 +287,7 @@ export default function ShowProfesorDashboard() {
           // A.1) Cargar historial de entregas
           if (alumnosConPago.length > 0) {
             const ids = alumnosConPago.map(a => a.estudiante_id);
-            const { data: entregasData } = await supabase
+            const { data: entregasData } = await supabaseBrowserClient
                 .from("entregas_materiales")
                 .select("estudiante_id, tipo_material")
                 .in("estudiante_id", ids);
@@ -311,7 +301,7 @@ export default function ShowProfesorDashboard() {
           }
           
           // B) Temas
-          const { data: dataTemas, error: errTemas } = await supabase
+          const { data: dataTemas, error: errTemas } = await supabaseBrowserClient
             .from("temas_curso")
             .select("*")
             .eq("curso_id", curso.id)
@@ -323,7 +313,7 @@ export default function ShowProfesorDashboard() {
 
           // C) Cargar Pensum (Igual que en mi-oficina)
           if (curso.programa_id) {
-             const { data: pData } = await supabase
+             const { data: pData } = await supabaseBrowserClient
                 .from("pensum")
                 .select(`*, pensum_cursos (*)`)
                 .eq("programa_id", curso.programa_id)
@@ -341,7 +331,6 @@ export default function ShowProfesorDashboard() {
 
           // Registrar hora de inicio
           setHoraInicioClase(dayjs());
-          setHoraFinClase(null);
           setHorasCalculadas(0);
           setDrawerVisible(true);
           messageApi.success({ content: "Aula lista", key: "loadingAula" });
@@ -357,7 +346,7 @@ export default function ShowProfesorDashboard() {
       // 1. Cargar temas vistos en OTRAS fechas
       const vistosSet = new Set<string>();
       if (matriculaIds.length > 0) {
-          const { data: dataVistos } = await supabase
+          const { data: dataVistos } = await supabaseBrowserClient
             .from("asistencias")
             .select("tema_id")
             .in("matricula_id", matriculaIds)
@@ -373,7 +362,7 @@ export default function ShowProfesorDashboard() {
       // 2. Cargar asistencia de la fecha
       let asistenciasFecha: any[] = [];
       if (matriculaIds.length > 0) {
-          const { data } = await supabase
+          const { data } = await supabaseBrowserClient
               .from("asistencias")
               .select("matricula_id, estado, tema_id")
               .eq("fecha", fechaStr)
@@ -467,7 +456,7 @@ export default function ShowProfesorDashboard() {
           const fechaStr = fechaAsistencia.format("YYYY-MM-DD");
 
           // VERIFICACIÓN DE SEGURIDAD: No modificar si ya está pagado
-          const { data: sesionExistente } = await supabase
+          const { data: sesionExistente } = await supabaseBrowserClient
               .from("sesiones_clase")
               .select("estado_pago")
               .eq("curso_id", cursoActivo.id)
@@ -499,7 +488,7 @@ export default function ShowProfesorDashboard() {
                       finalTemaId = existingTema.id;
                   } else {
                       // Crear el tema en temas_curso automáticamente
-                      const { data: newTema, error: errNew } = await supabase
+                      const { data: newTema, error: errNew } = await supabaseBrowserClient
                           .from("temas_curso")
                           .insert({
                               curso_id: cursoActivo.id,
@@ -522,7 +511,7 @@ export default function ShowProfesorDashboard() {
           
           if (matriculaIds.length > 0) {
               // Borrar previos
-              await supabase
+              await supabaseBrowserClient
                 .from("asistencias")
                 .delete()
                 .eq("fecha", fechaStr)
@@ -537,7 +526,7 @@ export default function ShowProfesorDashboard() {
                   observaciones: asistenciaMap[alumno.id] ? 'Tema completado' : 'Tema pendiente'
               }));
 
-              const { error: errAsis } = await supabase
+              const { error: errAsis } = await supabaseBrowserClient
                 .from("asistencias")
                 .insert(registros);
 
@@ -549,7 +538,7 @@ export default function ShowProfesorDashboard() {
                           pensum.flatMap(c => c.pensum_cursos || []).find((p: any) => p.id === temaSeleccionado)?.nombre_curso || 
                           'Tema del día';
           
-          const { data: existingSesion } = await supabase
+          const { data: existingSesion } = await supabaseBrowserClient
             .from("sesiones_clase")
             .select("id")
             .eq("curso_id", cursoActivo.id)
@@ -569,14 +558,14 @@ export default function ShowProfesorDashboard() {
           let errSesion;
           if (existingSesion) {
               // UPDATE
-              const { error } = await supabase
+              const { error } = await supabaseBrowserClient
                 .from("sesiones_clase")
                 .update(sesionData)
                 .eq("id", existingSesion.id);
               errSesion = error;
           } else {
-              // INSERT
-              const { error } = await supabase
+              // INSERT - Usar supabaseBrowserClient
+              const { error } = await supabaseBrowserClient
                 .from("sesiones_clase")
                 .insert(sesionData);
               errSesion = error;
@@ -593,31 +582,6 @@ export default function ShowProfesorDashboard() {
       }
   };
 
-  // 4. GUARDAR TEMA PENSUM
-  const guardarTemaPensum = async () => {
-      setGuardandoTema(true);
-      try {
-          const values = await formPensum.validateFields();
-          const { error } = await supabase.from("temas_curso").insert({
-              ...values,
-              curso_id: cursoActivo.id
-          });
-
-          if (error) throw error;
-
-          messageApi.success("Tema agregado");
-          formPensum.resetFields();
-          setModalPensumVisible(false);
-          
-          const { data } = await supabase.from("temas_curso").select("*").eq("curso_id", cursoActivo.id).order("orden");
-          setTemasCurso(data || []);
-
-      } catch (error: any) {
-          messageApi.error("Error: " + error.message);
-      } finally {
-          setGuardandoTema(false);
-      }
-  };
 
   // 5. CALIFICAR
   const abrirCalificar = (alumno: any) => {
@@ -631,7 +595,7 @@ export default function ShowProfesorDashboard() {
       try {
           const values = await formNotas.validateFields();
           
-          const { error } = await supabase.from("calificaciones").insert({
+          const { error } = await supabaseBrowserClient.from("calificaciones").insert({
              matricula_id: estudianteACalificar.id,
              concepto: values.concepto,
              nota: values.nota,
@@ -651,7 +615,7 @@ export default function ShowProfesorDashboard() {
               enviarWhatsapp(telefono, mensaje);
             }
 
-            await supabase.from("notificaciones").insert({
+            await supabaseBrowserClient.from("notificaciones").insert({
               user_id: estudianteACalificar.estudiante_id,
               titulo: "Nota baja registrada",
               mensaje,
@@ -745,7 +709,7 @@ export default function ShowProfesorDashboard() {
                         <Button
                           icon={<UserOutlined />}
                           size="small"
-                          onClick={() => window.location.href = `/profesores/edit/${idProfesor}`}
+                          onClick={() => router.push(`/profesores/edit/${idProfesor}`)}
                         >
                           Editar
                         </Button>
@@ -841,217 +805,50 @@ export default function ShowProfesorDashboard() {
         )}
       />
 
-      <Drawer
-        title={`Clase: ${cursoActivo?.nombre}`}
-        width={600}
+      <ClassDrawer
+        visible={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        open={drawerVisible}
-        maskClosable={false}
-        extra={
-            <Button type="primary" onClick={confirmarGuardado} loading={guardandoAsistencia}>
-                Guardar Asistencia
-            </Button>
-        }
-      >
-        <Tabs defaultActiveKey="1" items={[
-            {
-                key: '1', label: '📝 Tomar Lista',
-                children: (
-                    <>
-                        <Card variant="borderless" style={{background: '#f0f2f5', marginBottom: 20}}>
-                            <Row gutter={16}>
-                                <Col span={12}>
-                                    <label>Fecha Clase:</label>
-                                    <DatePicker style={{width:'100%'}} value={fechaAsistencia} onChange={val => handleFechaChange(val || dayjs())} allowClear={false}/>
-                                </Col>
-                                <Col span={12}>
-                                    <label>Horas Dictadas:</label>
-                                    <Space.Compact style={{ width: '100%' }}>
-                                        <InputNumber 
-                                            min={1} 
-                                            max={8} 
-                                            value={horasCalculadas} 
-                                            onChange={(val) => setHorasCalculadas(val || 0)}
-                                            style={{ width: '85%' }} 
-                                        />
-                                        <Button disabled style={{ width: '15%' }}>Hrs</Button>
-                                    </Space.Compact>
-                                    <p style={{fontSize: '12px', color: '#999', marginTop: 5}}>
-                                        {horaInicioclase && `Inicio: ${horaInicioclase.format('h:mm A')}`}
-                                    </p>
-                                </Col>
-                            </Row>
-                            <Row style={{marginTop: 10}}>
-                                <Col span={24}>
-                                    <label>Tema de hoy:</label>
-                                    <Select 
-                                        style={{width:'100%'}} 
-                                        placeholder="Selecciona tema..."
-                                        value={temaSeleccionado}
-                                        onChange={setTemaSeleccionado}
-                                        options={opcionesTemas}
-                                    />
-                                </Col>
-                            </Row>
-                        </Card>
-
-                        <List
-                            itemLayout="horizontal"
-                            dataSource={alumnosClase}
-                          renderItem={(alumno: any) => {
-                              const pagado = alumno.pagado;
-                              const entregasEst = entregasMap[alumno.estudiante_id] || [];
-                              const tieneCamiseta = entregasEst.some(e => e.tipo_material === 'camiseta');
-                              const kits = entregasEst.filter(e => e.tipo_material === 'kit').length;
-                              return (
-                            <List.Item key={alumno?.id} actions={[
-                              <Tooltip key={`asistencia-${alumno?.id}`} title={!pagado ? "Estudiante sin pagos al día" : ""}>
-                                <Switch
-                                        checkedChildren="Vino" 
-                                        unCheckedChildren="Faltó"
-                                        checked={asistenciaMap[alumno.id]}
-                                        onChange={(val) => setAsistenciaMap({...asistenciaMap, [alumno.id]: val})}
-                                        disabled={!pagado}
-                                        style={{ backgroundColor: asistenciaMap[alumno.id] ? '#52c41a' : '#ff4d4f' }}
-                                    />
-                              </Tooltip>
-                                ]}>
-                                    <List.Item.Meta
-                                        avatar={<Avatar>{alumno.perfiles.nombre_completo[0]}</Avatar>}
-                                        title={alumno.perfiles.nombre_completo}
-                                        description={
-                                            <Space>
-                                                {asistenciaMap[alumno.id] ? <Tag color="green">Presente</Tag> : <Tag color="red">Ausente</Tag>}
-                                                {pagado ? <Tag color="success">Pagado</Tag> : <Tag color="error">Sin Pagar</Tag>}
-                                                {tieneCamiseta && <Tooltip title="Camiseta entregada">👕</Tooltip>}
-                                                {kits > 0 && <Tooltip title={`${kits} Kits entregados`}>📦 {kits}</Tooltip>}
-                                            </Space>
-                                        }
-                                    />
-                                </List.Item>
-                            );
-                            }}
-                        />
-                    </>
-                )
-            },
-            {
-                key: '2', label: '⭐ Calificar',
-                children: (
-                    <div>
-                        <Alert message="Selecciona un estudiante para asignar una nota." type="info" style={{marginBottom: 15}} />
-                        <List
-                            itemLayout="horizontal"
-                            dataSource={alumnosClase}
-                          renderItem={(alumno: any) => {
-                              const pagado = alumno.pagado;
-                              return (
-                            <List.Item key={alumno?.id} actions={[
-                              <Tooltip key={`calificar-${alumno?.id}`} title={!pagado ? "Debe estar al día en pagos para calificar" : ""}>
-                                <Button
-                                        type="dashed" 
-                                        shape="round" 
-                                        icon={<StarOutlined />} 
-                                        onClick={() => abrirCalificar(alumno)}
-                                        disabled={!pagado}
-                                    >
-                                        Calificar
-                                    </Button>
-                              </Tooltip>
-                                ]}>
-                                    <List.Item.Meta
-                                        avatar={<Avatar style={{backgroundColor: '#faad14'}}>{alumno.perfiles.nombre_completo[0]}</Avatar>}
-                                        title={alumno.perfiles.nombre_completo}
-                                        description={
-                                            <Space>
-                                                <span>Gestionar notas</span>
-                                                {pagado ? <Tag color="success">Pagado</Tag> : <Tag color="error">Sin Pagar</Tag>}
-                                            </Space>
-                                        }
-                                    />
-                                </List.Item>
-                            );
-                            }}
-                        />
-                    </div>
-                )
-            },
-            {
-                key: '3', label: '📚 Ver Pensum',
-                children: (
-                    <>
-                        <Button type="dashed" icon={<PlusOutlined />} block onClick={() => setModalPensumVisible(true)} style={{marginBottom: 20}}>
-                            Agregar Tema al Pensum
-                        </Button>
-                        <Timeline items={temasCurso.map(t => ({ key: t?.id, children: <b>{t.titulo}</b>, color: 'blue' }))} />
-                    </>
-                )
-            }
-        ]} />
-      </Drawer>
+        cursoActivo={cursoActivo}
+        fechaAsistencia={fechaAsistencia}
+        onFechaChange={handleFechaChange}
+        horasCalculadas={horasCalculadas}
+        onHorasChange={setHorasCalculadas}
+        horaInicioclase={horaInicioclase}
+        temaSeleccionado={temaSeleccionado}
+        onTemaChange={setTemaSeleccionado}
+        opcionesTemas={opcionesTemas}
+        alumnosClase={alumnosClase}
+        asistenciaMap={asistenciaMap}
+        onAsistenciaChange={(id, val) => setAsistenciaMap(prev => ({ ...prev, [id]: val }))}
+        entregasMap={entregasMap}
+        onRegistrarEntrega={() => {}} // Simplificado, ya que no se usa en esta vista
+        onConfirmarGuardado={confirmarGuardado}
+        guardandoAsistencia={guardandoAsistencia}
+        onAbrirCalificar={abrirCalificar}
+        pensum={pensum}
+        materiales={[]} // Simplificado
+        profesorNombre={profesor?.nombre_completo || 'Profesor'}
+      />
 
       {/* MODAL NUEVO TEMA PENSUM */}
-      <Modal
-        title="Nuevo Tema en el Pensum"
-        open={modalPensumVisible}
+      <NuevoTemaModal
+        visible={modalPensumVisible}
+        onCancel={() => setModalPensumVisible(false)}
         onOk={guardarTemaPensum}
         confirmLoading={guardandoTema}
-        onCancel={() => setModalPensumVisible(false)}
-      >
-          <Form form={formPensum} layout="vertical">
-              <Row gutter={16}>
-                  <Col span={6}>
-                      <Form.Item name="orden" label="Nº" initialValue={(temasCurso.length || 0) + 1}>
-                          <InputNumber style={{width:'100%'}} />
-                      </Form.Item>
-                  </Col>
-                  <Col span={18}>
-                      <Form.Item name="titulo" label="Título" rules={[{required:true}]}>
-                          <Input placeholder="Ej: Manicure Ruso" />
-                      </Form.Item>
-                  </Col>
-              </Row>
-              <Form.Item name="descripcion" label="Descripción">
-                  <Input.TextArea rows={2} />
-              </Form.Item>
-          </Form>
-      </Modal>
+        form={formPensum}
+        initialOrden={(temasCurso.length || 0) + 1}
+      />
 
       {/* MODAL CALIFICAR */}
-      <Modal
-        title={<span><StarOutlined /> Calificar a {estudianteACalificar?.perfiles.nombre_completo}</span>}
-        open={modalNotasVisible}
-        onOk={guardarNota}
-        confirmLoading={guardandoNota}
+      <CalificarModal
+        visible={modalNotasVisible}
         onCancel={() => setModalNotasVisible(false)}
-        okText="Guardar Nota"
-      >
-          <Form form={formNotas} layout="vertical">
-              <Row gutter={16}>
-                  <Col span={16}>
-                      <Form.Item 
-                        name="concepto" 
-                        label="Actividad o Evaluación" 
-                        rules={[{required:true, message: 'Indica qué estás calificando'}]}
-                      >
-                          <Input placeholder="Ej: Examen Teórico, Práctica Gel..." />
-                      </Form.Item>
-                  </Col>
-                  <Col span={8}>
-                      <Form.Item 
-                        name="nota" 
-                        label="Nota (0-5)" 
-                        rules={[{required:true, message: 'Falta la nota'}]}
-                      >
-                          <InputNumber min={0} max={5} step={0.1} style={{width: '100%'}} />
-                      </Form.Item>
-                  </Col>
-              </Row>
-              <Form.Item name="observaciones" label="Observaciones (Opcional)">
-                  <Input.TextArea rows={2} placeholder="Comentarios sobre el desempeño..." />
-              </Form.Item>
-          </Form>
-      </Modal>
+        onOk={guardarNota}
+        loading={guardandoNota}
+        form={formNotas}
+        estudiante={estudianteACalificar}
+      />
 
       <Modal
         open={previewVisible}

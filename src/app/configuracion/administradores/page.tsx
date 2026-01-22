@@ -143,61 +143,48 @@ export default function AdministradoresPage() {
     const handleGuardarAdmin = async (values: any) => {
         setLoading(true);
         try {
-            const passwordAuth = values.identificacion.replace(/\./g, '');
+            if (!values.email || !values.email.includes('@')) {
+                throw new Error("El correo electrónico es obligatorio y debe ser válido para crear el acceso");
+            }
 
-            // 1. PRIMERO: Crear usuario en Auth vía signUp
-            console.log('📝 Creando usuario en Auth...');
-            const { data: authData, error: authError } = await supabaseBrowserClient.auth.signUp({
-                email: values.email,
-                password: passwordAuth,
-                options: {
-                    data: {
+            const passwordTemporal = values.identificacion.replace(/\./g, '') || 'admin123';
+
+            const response = await fetch('/api/create-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: values.email,
+                    password: passwordTemporal,
+                    rol: 'admin',
+                    user_metadata: {
                         nombre_completo: values.nombre_completo,
-                        rol: 'admin',
-                    },
-                    emailRedirectTo: `${window.location.origin}/auth/callback`,
-                },
+                        identificacion: values.identificacion,
+                        telefono: values.telefono || null,
+                        direccion: values.direccion || null,
+                        observaciones: values.observaciones || null,
+                        foto_url: fotoUrl || null,
+                    }
+                }),
             });
 
-            if (authError) {
-                console.error('❌ Error en signUp:', authError.message);
-                message.error(`Error creando usuario en Auth: ${authError.message}`);
-                setLoading(false);
-                return;
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Error al crear el usuario administrador");
             }
 
-            const authUserId = authData.user?.id;
-            if (!authUserId) {
-                message.error('No se pudo obtener el ID del usuario');
-                setLoading(false);
-                return;
-            }
-
-            console.log('✅ Usuario creado en Auth con ID:', authUserId);
-
-            // 2. LUEGO: Actualizar el perfil creado por el trigger
-            console.log('📝 Actualizando perfil...');
-            const { error: updateError } = await supabaseBrowserClient
-                .from("perfiles")
-                .update({
-                    nombre_completo: values.nombre_completo,
-                    identificacion: values.identificacion,
-                    email: values.email,
-                    telefono: values.telefono || null,
-                    rol: 'admin',
-                    direccion: values.direccion || null,
-                    observaciones: values.observaciones || null,
-                    foto_url: fotoUrl || null,
-                })
-                .eq('id', authUserId);
-
-            if (updateError) {
-                console.error("Error actualizando perfil:", updateError);
-                message.warning('Usuario creado pero no se pudieron guardar todos los datos');
-            } else {
-                console.log('✅ Perfil actualizado');
-                message.success(`✅ Administrador creado correctamente.\nEmail: ${values.email}\nContraseña: ${passwordAuth}`);
-            }
+            message.success({
+                content: (
+                    <div>
+                        <div>¡Administrador creado correctamente!</div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                            Email: <strong>{values.email}</strong><br />
+                            Contraseña temporal: <strong>{passwordTemporal}</strong>
+                        </div>
+                    </div>
+                ),
+                duration: 8
+            });
 
             // 3. Limpiar formulario
             form.resetFields();

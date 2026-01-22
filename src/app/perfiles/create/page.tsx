@@ -1,60 +1,67 @@
 "use client";
 
-import React from "react";
-import { Create, useForm } from "@refinedev/antd";
+import React, { useState } from "react";
+import { Create } from "@refinedev/antd";
+import { useNavigation } from "@refinedev/core";
 import { Form, Input, Select, Divider, App } from "antd";
-import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export default function CreatePerfil() {
+  const { list } = useNavigation();
   const { message } = App.useApp();
-  const { formProps, saveButtonProps, onFinish } = useForm({
-    onMutationSuccess: async (data, variables) => {
-      const perfil = variables as any;
-      
-      if (!perfil.identificacion || !perfil.email) {
-        message.warning("Falta identificación o email");
-        return;
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
+
+  const handleGuardarManual = async (values: any) => {
+    setLoading(true);
+    try {
+      if (!values.email || !values.email.includes('@')) {
+        throw new Error("El correo electrónico es obligatorio");
       }
 
-      const passwordAuth = perfil.identificacion.replace(/\./g, '');
-      
-      try {
-        // Crear usuario en Auth directamente
-        const { data: authData, error: authError } = await supabaseBrowserClient.auth.signUp({
-          email: perfil.email,
-          password: passwordAuth,
-          options: {
-            data: {
-              nombre_completo: perfil.nombre_completo,
-              rol: perfil.rol,
-            },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
+      const passwordTemporal = values.identificacion.replace(/\./g, '') || 'usuario123';
 
-        if (authError) {
-          message.warning(`Perfil guardado. Error en Auth: ${authError.message}`);
-          return;
-        }
+      const response = await fetch('/api/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: values.email,
+          password: passwordTemporal,
+          rol: values.rol,
+          user_metadata: {
+            nombre_completo: values.nombre_completo,
+            identificacion: values.identificacion,
+            telefono: values.telefono,
+            rol: values.rol,
+          }
+        }),
+      });
 
-        if (authData.user) {
-          message.success(`✅ Usuario creado. Ya puede hacer login con:\nEmail: ${perfil.email}\nContraseña: ${passwordAuth}`);
-        }
-      } catch (error: any) {
-        message.info(`Perfil guardado. Credenciales: ${perfil.email} / ${passwordAuth}`);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Error al crear el usuario");
       }
+
+      message.success(`✅ Usuario creado. Login: ${values.email} / ${passwordTemporal}`);
+      list("perfiles");
+
+    } catch (error: any) {
+      console.error("Error:", error);
+      message.error(error.message || "Error al crear");
+    } finally {
+      setLoading(false);
     }
-  });
+  };
 
   return (
-    <Create saveButtonProps={saveButtonProps} title="Registrar Persona">
+    <Create title="Registrar Persona" isLoading={loading} saveButtonProps={{ onClick: () => form.submit(), disabled: loading }}>
       <div style={{ padding: '12px', background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: '4px', marginBottom: '16px' }}>
         <strong>🔑 Sistema de Login:</strong> El <strong>usuario es el correo</strong> y la <strong>contraseña es la cédula</strong>.
         <br />
         <small>Ejemplo: Usuario: <code>usuario@correo.com</code> / Contraseña: <code>1234567890</code></small>
       </div>
       
-      <Form {...formProps} form={formProps.form} layout="vertical">
+      <Form form={form} layout="vertical" onFinish={handleGuardarManual}>
         
         <h3 style={{ marginTop: 0, color: '#722ed1' }}>Datos Personales</h3>
         
