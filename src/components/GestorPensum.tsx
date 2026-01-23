@@ -38,6 +38,7 @@ import {
   EyeOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { logger } from "@utils/logger";
 import type { UploadFile } from "antd";
 
 const { Title, Text } = require("antd").Typography;
@@ -98,7 +99,13 @@ export default function GestorPensum({
   // Estados para pensum
   const [pensums, setPensums] = useState<Pensum[]>([]);
   const [loadingPensums, setLoadingPensums] = useState(false);
-  const [programaData, setProgramaData] = useState<any>(null);
+  interface ProgramaData {
+    id: number;
+    nombre: string;
+    duracion: string;
+    [key: string]: unknown;
+  }
+  const [programaData, setProgramaData] = useState<ProgramaData | null>(null);
 
   // Estados para cursos del pensum
   const [cursosPensum, setCursosPensum] = useState<PensumCurso[]>([]);
@@ -162,7 +169,7 @@ export default function GestorPensum({
       setProgramaData(data);
     } catch (error) {
       message.error("Error al cargar programa");
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -189,7 +196,7 @@ export default function GestorPensum({
       .eq("programa_id", programaId);
 
     if (error) {
-      console.error("Error verificando ciclos:", error);
+      logger.error("Error verificando ciclos:", error);
       await cargarPensums();
       return;
     }
@@ -227,11 +234,11 @@ export default function GestorPensum({
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error("Error creando ciclos:", errorData);
+          logger.error("Error creando ciclos:", errorData);
           message.error("Error al crear ciclos automáticamente");
         }
       } catch (error) {
-        console.error("Error al llamar API crear ciclos:", error);
+        logger.error("Error al llamar API crear ciclos:", error);
         message.error("Error de conexión al crear ciclos");
       }
     }
@@ -254,7 +261,7 @@ export default function GestorPensum({
       setPensums(data || []);
     } catch (error) {
       message.error("Error al cargar pensum");
-      console.error(error);
+      logger.error(error);
     } finally {
       setLoadingPensums(false);
     }
@@ -301,8 +308,12 @@ export default function GestorPensum({
       setModalCicloVisible(false);
       setEditingCiclo(null);
       cargarPensums();
-    } catch (error: any) {
-      message.error(error?.message || "Error al actualizar ciclo");
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message || "Error al actualizar ciclo");
+      } else {
+        message.error("Error al actualizar ciclo");
+      }
       cargarPensums(); // Si falla, recargamos para revertir el cambio visual
     }
   };
@@ -355,8 +366,12 @@ export default function GestorPensum({
       formCurso.resetFields();
       setEditingCurso(null);
       cargarCursosPensum(selectedCicloId);
-    } catch (error: any) {
-      message.error(error?.message || "Error");
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message || "Error");
+      } else {
+        message.error("Error");
+      }
     }
   };
 
@@ -375,8 +390,12 @@ export default function GestorPensum({
           if (error) throw error;
           message.success("Tema eliminado");
           if (selectedCicloId) cargarCursosPensum(selectedCicloId);
-        } catch (error: any) {
-          message.error(error?.message || "Error");
+        } catch (error) {
+          if (error instanceof Error) {
+            message.error(error.message || "Error");
+          } else {
+            message.error("Error");
+          }
         }
       },
     });
@@ -418,8 +437,12 @@ export default function GestorPensum({
           if (error) throw error;
           message.success("Material eliminado");
           cargarMateriales();
-        } catch (error: any) {
-          message.error(error?.message || "Error");
+        } catch (error) {
+          if (error instanceof Error) {
+            message.error(error.message || "Error");
+          } else {
+            message.error("Error");
+          }
         }
       },
     });
@@ -519,15 +542,19 @@ export default function GestorPensum({
       setFileList([]);
       setTipoOrigen('archivo');
       cargarMateriales();
-    } catch (error: any) {
-      message.error(error?.message || "Error al subir material");
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message || "Error al subir material");
+      } else {
+        message.error("Error al subir material");
+      }
     } finally {
       setUploadingMaterial(false);
     }
   };
 
   const handleAbrirMaterial = (url: string) => {
-    console.log("Intentando abrir URL:", url); // Debug para verificar qué llega
+    logger.debug("Intentando abrir URL:", url); // Debug para verificar qué llega
     if (!url) {
       message.error("Error: El material no tiene una URL válida");
       return;

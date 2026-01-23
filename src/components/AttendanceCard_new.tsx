@@ -7,6 +7,7 @@ import {
   TrophyOutlined 
 } from '@ant-design/icons';
 import { supabaseBrowserClient } from '@utils/supabase/client';
+import { logger } from '@utils/logger';
 
 const { Text } = Typography;
 
@@ -71,7 +72,7 @@ export const AttendanceCardNew: React.FC<AttendanceCardProps> = ({
         });
       }
     } catch (error) {
-      console.error('Error calculando asistencia:', error);
+      logger.error('Error calculando asistencia:', error);
     } finally {
       setLoading(false);
     }

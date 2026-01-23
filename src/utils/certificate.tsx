@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React from "react";
+import { logger } from "@utils/logger";
 import { pdf } from "@react-pdf/renderer";
 import { DiplomaPDF } from "@components/pdf/DiplomaPDF";
 
@@ -34,7 +35,7 @@ export const descargarCertificado = async (data: CertificateData) => {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   } catch (error) {
-    console.error("Error descargando certificado:", error);
+    logger.error("Error descargando certificado:", error);
     throw new Error("No se pudo descargar el certificado");
   }
 };
@@ -56,7 +57,7 @@ export const previewCertificado = async (data: CertificateData) => {
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
   } catch (error) {
-    console.error("Error abriendo certificado:", error);
+    logger.error("Error abriendo certificado:", error);
     throw new Error("No se pudo abrir el certificado");
   }
 };

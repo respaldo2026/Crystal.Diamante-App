@@ -33,11 +33,12 @@ import { authProvider } from "../providers/auth-provider/auth-provider.client";
 import { QueryProvider } from "../providers/query-provider";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useCurrentUser } from "@hooks/useCurrentUser"; 
-import { useRolePermissions } from "@hooks/useRolePermissions";
+import { RolesPermissionsProvider, useRolesPermissions } from "@contexts/roles-permissions-context";
+
 
 const AppContent = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: userLoading } = useCurrentUser();
-  const { permisos, loading: permisosLoading } = useRolePermissions();
+  const { permisos, loading: permisosLoading } = useRolesPermissions();
 
   // Función para determinar qué recursos mostrar según el rol
   const getResourcesByRole = () => {
@@ -216,67 +217,69 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <RefineKbarProvider>
-      <ConfigProvider 
-        theme={{
-          token: {
-            colorPrimary: '#5B21B6',
-            colorSuccess: '#059669',
-            colorWarning: '#D97706',
-            colorError: '#DC2626',
-            colorInfo: '#0284C7',
-            colorTextBase: '#1F2937',
-            colorBgBase: '#FFFFFF',
-            borderRadius: 8,
-            fontSize: 14,
-          },
-          components: {
-            Button: {
-              controlHeight: 36,
-              fontWeight: 500,
+    <RolesPermissionsProvider>
+      <RefineKbarProvider>
+        <ConfigProvider 
+          theme={{
+            token: {
+              colorPrimary: '#5B21B6',
+              colorSuccess: '#059669',
+              colorWarning: '#D97706',
+              colorError: '#DC2626',
+              colorInfo: '#0284C7',
+              colorTextBase: '#1F2937',
+              colorBgBase: '#FFFFFF',
+              borderRadius: 8,
+              fontSize: 14,
             },
-            Card: {
-              borderRadiusLG: 12,
+            components: {
+              Button: {
+                controlHeight: 36,
+                fontWeight: 500,
+              },
+              Card: {
+                borderRadiusLG: 12,
+              },
+              Tag: {
+                borderRadiusSM: 6,
+              },
+              Table: {
+                headerBg: '#F9FAFB',
+                headerColor: '#374151',
+                rowHoverBg: '#F3F4F6',
+              },
             },
-            Tag: {
-              borderRadiusSM: 6,
-            },
-            Table: {
-              headerBg: '#F9FAFB',
-              headerColor: '#374151',
-              rowHoverBg: '#F3F4F6',
-            },
-          },
-        }}
-      >
-        <AntdApp>
-          <Refine
-            routerProvider={routerProvider}
-            dataProvider={dataProvider}
-            authProvider={authProvider}
-            resources={getResourcesByRole()}
-            options={{
-              syncWithLocation: true,
-              warnWhenUnsavedChanges: true,
-            }}
-          >
-            <ThemedLayout
-              initialSiderCollapsed={false}
-              Title={({ collapsed }) => (
-                <ThemedTitle
-                  collapsed={collapsed}
-                  text="Crystal App"
-                  icon={<BookOutlined />}
-                />
-              )}
+          }}
+        >
+          <AntdApp>
+            <Refine
+              routerProvider={routerProvider}
+              dataProvider={dataProvider}
+              authProvider={authProvider}
+              resources={getResourcesByRole()}
+              options={{
+                syncWithLocation: true,
+                warnWhenUnsavedChanges: true,
+              }}
             >
-              {children}
-            </ThemedLayout>
-            <RefineKbar />
-          </Refine>
-        </AntdApp>
-      </ConfigProvider>
-    </RefineKbarProvider>
+              <ThemedLayout
+                initialSiderCollapsed={false}
+                Title={({ collapsed }) => (
+                  <ThemedTitle
+                    collapsed={collapsed}
+                    text="Crystal App"
+                    icon={<BookOutlined />}
+                  />
+                )}
+              >
+                {children}
+              </ThemedLayout>
+              <RefineKbar />
+            </Refine>
+          </AntdApp>
+        </ConfigProvider>
+      </RefineKbarProvider>
+    </RolesPermissionsProvider>
   );
 };
 

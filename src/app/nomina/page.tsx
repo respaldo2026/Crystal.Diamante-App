@@ -225,7 +225,7 @@ export default function NominaPage() {
         setTotalAPagar(totalGeneral);
 
     } catch (error) {
-        console.error(error);
+            logger.error(error);
         message.error("Error calculando nómina");
     } finally {
         setLoading(false);

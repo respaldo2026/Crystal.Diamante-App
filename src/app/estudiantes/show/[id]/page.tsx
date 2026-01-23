@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import Image from "next/image";
 import { Show } from "@refinedev/antd";
 import {
   Typography,
@@ -934,7 +935,13 @@ export default function StudentDetailView() {
         footer={null}
         onCancel={() => setPreviewVisible(false)}
       >
-        <img alt="Foto de perfil" style={{ width: "100%" }} src={previewImage} />
+        <Image
+          alt="Foto de perfil"
+          src={previewImage}
+          width={600}
+          height={600}
+          style={{ width: "100%", height: "auto" }}
+        />
       </Modal>
     </Show>
   );

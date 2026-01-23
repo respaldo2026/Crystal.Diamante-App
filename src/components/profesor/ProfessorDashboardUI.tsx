@@ -1,6 +1,13 @@
 import React from "react";
 import { Card, Statistic, Row, Col, Spin, Tabs, List, Typography } from "antd";
 
+
+interface CursoResumen {
+  nombre: string;
+  estado: string;
+  [key: string]: unknown;
+}
+
 interface ProfessorDashboardUIProps {
   dashboard: {
     loading: boolean;
@@ -9,7 +16,7 @@ interface ProfessorDashboardUIProps {
       totalEstudiantes: number;
       horasMes: number;
     };
-    cursos: any[];
+    cursos: CursoResumen[];
   };
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { logger } from "@utils/logger";
 import { Create } from "@refinedev/antd";
 import { useNavigation } from "@refinedev/core";
 import { Form, Input, DatePicker, Row, Col, Divider, App, Alert } from "antd";
@@ -72,7 +73,7 @@ export default function ProfesorCreate() {
             list("profesores");
 
         } catch (error: any) {
-            console.error("Error creando profesor:", error);
+            logger.error("Error creando profesor:", error);
             message.error(error.message || "Error al crear el profesor");
         } finally {
             setLoading(false);

@@ -48,18 +48,59 @@ export default function DashboardPage() {
     tasaOcupacion: 0,
     moraPromedio: 0,
     ingresosPorEstudiante: 0,
-    rentabilidadPorPrograma: [] as any[]
+    rentabilidadPorPrograma: [] as ProgramaRentabilidad[]
   });
 
   // Datos para gráficos
-  const [ingresosChart, setIngresosChart] = useState<any[]>([]);
-  const [distribucionPagos, setDistribucionPagos] = useState<any[]>([]);
+  // Types
+  interface Pago {
+    id: string;
+    monto: number;
+    estado: string;
+    metodo_pago: string;
+    fecha_pago: string;
+    referencia?: string;
+    perfiles?: { nombre_completo?: string; telefono?: string };
+    periodo_pagado?: string;
+    fecha_vencimiento?: string;
+    [key: string]: any;
+  }
+  interface Estudiante {
+    id: string;
+    nombre_completo: string;
+    telefono: string;
+  }
+  interface Curso {
+    id: string;
+    nombre: string;
+    fecha_inicio?: string;
+    cupos?: number;
+    matriculas?: { count: number }[];
+  }
+  interface ProgramaRentabilidad {
+    nombre: string;
+    estudiantes: number;
+    promedioPorEstudiante: number;
+    ingresos: number;
+  }
+  interface ChartData {
+    fecha: string;
+    monto: number;
+    cantidad: number;
+  }
+  interface MetodoPagoDistribucion {
+    metodo: string;
+    monto: number;
+  }
+
+  const [ingresosChart, setIngresosChart] = useState<ChartData[]>([]);
+  const [distribucionPagos, setDistribucionPagos] = useState<MetodoPagoDistribucion[]>([]);
   
   // Listas
-  const [pagosRecientes, setPagosRecientes] = useState<any[]>([]);
-  const [cumplesHoy, setCumplesHoy] = useState<any[]>([]);
-  const [proximosCursos, setProximosCursos] = useState<any[]>([]);
-  const [pagosVencidos, setPagosVencidos] = useState<any[]>([]);
+  const [pagosRecientes, setPagosRecientes] = useState<Pago[]>([]);
+  const [cumplesHoy, setCumplesHoy] = useState<Estudiante[]>([]);
+  const [proximosCursos, setProximosCursos] = useState<Curso[]>([]);
+  const [pagosVencidos, setPagosVencidos] = useState<Pago[]>([]);
 
   // Redirigir no autorizados - USAR EFFECT PARA EVITAR CONDICIONALES
   useEffect(() => {
@@ -211,7 +252,7 @@ export default function DashboardPage() {
       ).length || 0;
 
       // Solo cargar cumpleaños si son pocos registros para no ralentizar
-      const cumples: any[] = []; // Desactivado temporalmente para mejor rendimiento
+      const cumples: Estudiante[] = []; // Desactivado temporalmente para mejor rendimiento
 
       // 10. DATOS PARA GRÁFICO DE INGRESOS (dinámico según período)
       const chartData = [];
@@ -291,13 +332,12 @@ export default function DashboardPage() {
       
       // Contar matrículas activas para cada curso próximo
       const cursosConConteo = await Promise.all(
-        (proxCursos.data || []).map(async (curso: any) => {
+        (proxCursos.data || []).map(async (curso: Curso) => {
           const { count } = await supabaseBrowserClient
             .from("matriculas")
             .select("*", { count: "exact", head: true })
             .eq("curso_id", curso.id)
             .neq("estado", "cancelado");
-          
           return {
             ...curso,
             matriculas: [{ count: count || 0 }]
@@ -355,7 +395,7 @@ export default function DashboardPage() {
     xField: 'metodo',
     yField: 'monto',
     seriesField: 'metodo',
-    color: ({ metodo }: any) => {
+    color: ({ metodo }: MetodoPagoDistribucion) => {
       const colors: Record<string, string> = {
         'efectivo': '#52c41a',
         'transferencia': '#1890ff',
@@ -403,7 +443,7 @@ export default function DashboardPage() {
               { label: 'Año', value: 'year' },
             ]}
             value={timeRange}
-            onChange={(value: any) => setTimeRange(value)}
+            onChange={(value: 'week' | 'month' | 'year') => setTimeRange(value)}
           />
           <Button 
             icon={<SyncOutlined />} 
@@ -627,7 +667,7 @@ export default function DashboardPage() {
               variant="borderless"
             >
               <Space direction="vertical" style={{ width: '100%' }}>
-                {pagosVencidos.slice(0, 5).map((pago: any) => (
+                {pagosVencidos.slice(0, 5).map((pago: Pago) => (
                   <Card key={pago.id} size="small" style={{ background: '#fff1f0', borderColor: '#ffccc7' }}>
                     <Space direction="vertical" size={0}>
                       <Text strong>{pago.perfiles?.nombre_completo || 'Estudiante'}</Text>
@@ -657,7 +697,7 @@ export default function DashboardPage() {
               variant="borderless"
             >
               <Space direction="vertical" style={{ width: '100%' }}>
-                {cumplesHoy.map((estudiante: any) => (
+                {cumplesHoy.map((estudiante: Estudiante) => (
                   <Card key={estudiante.id} size="small" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
                     <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                       <Space>
@@ -693,7 +733,7 @@ export default function DashboardPage() {
               <Empty description="No hay pagos recientes" />
             ) : (
               <Space direction="vertical" style={{ width: '100%' }}>
-                {pagosRecientes.map((pago: any) => (
+                {pagosRecientes.map((pago: Pago) => (
                   <div key={pago.id} style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
@@ -726,7 +766,7 @@ export default function DashboardPage() {
               <Empty description="No hay grupos próximos" />
             ) : (
               <Space direction="vertical" style={{ width: '100%' }}>
-                {proximosCursos.map((curso: any) => {
+                {proximosCursos.map((curso: Curso) => {
                   const inscritos = curso.matriculas?.[0]?.count || 0;
                   const cupos = curso.cupos || 20;
                   const porcentaje = (inscritos / cupos) * 100;
@@ -767,7 +807,7 @@ export default function DashboardPage() {
           style={{ marginBottom: 24, marginTop: 24 }}
         >
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            {stats.rentabilidadPorPrograma.map((programa: any, index: number) => (
+            {stats.rentabilidadPorPrograma.map((programa: ProgramaRentabilidad, index: number) => (
               <div key={index}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Space>

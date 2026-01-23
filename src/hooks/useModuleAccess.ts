@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
-import { useRolePermissions } from "./useRolePermissions";
+import { useRolesPermissions } from "@contexts/roles-permissions-context";
 import { useCurrentUser } from "./useCurrentUser";
 
 /**
  * Hook para verificar si el usuario actual tiene acceso a un módulo
  * Se usa en el layout para filtrar el menú dinámicamente
  */
-export function useModuleAccess() {
   const { user } = useCurrentUser();
-  const { tienePermiso, loading } = useRolePermissions();
+  const { tienePermiso, loading } = useRolesPermissions();
   const [modulosAccesibles, setModulosAccesibles] = useState<string[]>([]);
 
   useEffect(() => {

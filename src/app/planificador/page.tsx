@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import { useNavigation } from "@refinedev/core";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { logger } from "@utils/logger";
 import dayjs, { Dayjs } from "dayjs";
 import isoWeek from 'dayjs/plugin/isoWeek';
 import isBetween from 'dayjs/plugin/isBetween';
@@ -117,7 +118,7 @@ export default function PlanificadorPage() {
         setInscritosPorCurso({});
       }
     } catch (err) {
-      console.error("Error cargando cursos:", err);
+      logger.error("Error cargando cursos:", err);
       setCursos([]);
       setClases([]);
     } finally {
@@ -137,7 +138,7 @@ export default function PlanificadorPage() {
         setProfesores(data as { id: string; nombre_completo: string }[]);
       }
     } catch (err) {
-      console.error("Error cargando profesores:", err);
+      logger.error("Error cargando profesores:", err);
     }
   };
 
@@ -160,7 +161,7 @@ export default function PlanificadorPage() {
       });
       setInscritosPorCurso(conteos);
     } catch (error) {
-      console.error("Error cargando inscritos:", error);
+      logger.error("Error cargando inscritos:", error);
     }
   };
 
@@ -190,7 +191,7 @@ export default function PlanificadorPage() {
         setClases([]);
       }
     } catch (err) {
-      console.error("Error cargando clases:", err);
+      logger.error("Error cargando clases:", err);
       setClases([]);
     }
   };

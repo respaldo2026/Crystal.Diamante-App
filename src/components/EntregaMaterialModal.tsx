@@ -3,6 +3,7 @@ import { Modal, Form, Input, Select, DatePicker, message, Radio, Table, Tag } fr
 import { GiftOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { SupabaseError } from '@supabase/supabase-js';
 
 interface EntregaMaterialModalProps {
   visible: boolean;
@@ -15,6 +16,13 @@ interface EntregaMaterialModalProps {
 
 export const EntregaMaterialModal: React.FC<EntregaMaterialModalProps> = ({
   visible,
+  interface EntregaMaterial {
+    id: string;
+    fecha_entrega: string;
+    tipo_material: string;
+    descripcion: string;
+    perfiles?: { nombre_completo?: string };
+  }
   onCancel,
   onSuccess,
   estudianteId,
@@ -42,7 +50,11 @@ export const EntregaMaterialModal: React.FC<EntregaMaterialModalProps> = ({
           entregado_por: profesorId,
           observaciones: values.observaciones,
         });
-
+      if (error instanceof SupabaseError) {
+        message.error("Error al registrar entrega: " + error.message);
+      } else {
+        message.error("Error desconocido al registrar entrega");
+      }
       if (error) throw error;
 
       message.success("Entrega registrada correctamente");

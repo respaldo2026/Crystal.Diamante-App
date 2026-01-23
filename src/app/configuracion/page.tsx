@@ -9,7 +9,8 @@ import {
   DollarOutlined, SortAscendingOutlined, UserAddOutlined
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { useRolePermissions, ROLES_DISPONIBLES, MODULOS_DISPONIBLES } from "@hooks/useRolePermissions";
+import { useRolesPermissions } from "@contexts/roles-permissions-context";
+import { ROLES_DISPONIBLES, MODULOS_DISPONIBLES } from "@hooks/useRolePermissions";
 import dynamic from "next/dynamic";
 
 // Importar la página de administradores de forma dinámica
@@ -24,7 +25,7 @@ export default function ConfiguracionPage() {
   const [guardando, setGuardando] = useState(false);
   const [configId, setConfigId] = useState<string | null>(null);
   const [form] = Form.useForm();
-  const { permisos, loading: permisosLoading, guardarPermisos } = useRolePermissions();
+  const { permisos, loading: permisosLoading, guardarPermisos } = useRolesPermissions();
   const [tab, setTab] = useState("academia");
 
   // Estados para plantillas WhatsApp
@@ -46,7 +47,7 @@ export default function ConfiguracionPage() {
     cargarConfiguracion();
     cargarPlantillas();
     cargarMediosPago();
-  }, []);
+  }, [cargarConfiguracion, cargarPlantillas, cargarMediosPago]);
 
   const cargarConfiguracion = async () => {
     setLoading(true);

@@ -23,12 +23,12 @@ export default function ProgramasPage() {
 
   useEffect(() => {
     cargarProgramas();
-  }, []);
+  }, [cargarProgramas]);
 
   // Refrescar cuando cambia el filtro de inactivos
   useEffect(() => {
     cargarProgramas();
-  }, [mostrarInactivos]);
+  }, [mostrarInactivos, cargarProgramas]);
 
   const cargarProgramas = async () => {
     setLoading(true);

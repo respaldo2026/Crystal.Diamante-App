@@ -40,6 +40,9 @@
       "@app/*": [
         "./src/app/*"
       ],
+      "@contexts/*": [
+        "./src/contexts/*"
+      ],
       "@pages/*": [
         "./pages/*"
       ]

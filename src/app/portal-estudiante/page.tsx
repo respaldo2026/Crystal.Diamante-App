@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { logger } from "@utils/logger";
 import {
   Tabs,
   Card,
@@ -111,7 +112,7 @@ export default function PortalEstudiante() {
         .eq("estudiante_id", user.id)
         .order("fecha_vencimiento", { ascending: true });
       
-      if (errPagos) console.error("Error cargando pagos:", errPagos);
+      if (errPagos) logger.error("Error cargando pagos:", errPagos);
       setPagos(dataPagos || []);
 
       // 3. Cargar datos relacionados a matrículas activas
@@ -166,7 +167,7 @@ export default function PortalEstudiante() {
         setCertificados(certs);
       }
     } catch (error) {
-      console.error("Error:", error);
+      logger.error("Error:", error);
       message.error("Error cargando información del portal");
     } finally {
       setLoading(false);
@@ -183,7 +184,7 @@ export default function PortalEstudiante() {
       });
       message.success("Certificado descargado");
     } catch (err: any) {
-      console.error(err);
+      logger.error(err);
       message.error("No se pudo descargar el certificado");
     }
   };

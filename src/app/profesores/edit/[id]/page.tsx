@@ -9,6 +9,7 @@ import {
     UserOutlined, PhoneOutlined, MailOutlined, HomeOutlined, 
     IdcardOutlined, FileTextOutlined
 } from "@ant-design/icons";
+import { logger } from "@utils/logger";
 
 export default function ProfesorEdit() {
     const params = useParams();
@@ -20,7 +21,7 @@ export default function ProfesorEdit() {
         id: id,
         redirect: "list",
         onMutationError: (error: any) => {
-            console.error("Error al guardar:", error);
+            logger.error("Error al guardar:", error);
             message.error(error?.message || "No se pudo guardar los cambios");
         }
     });

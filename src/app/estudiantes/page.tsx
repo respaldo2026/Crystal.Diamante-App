@@ -149,16 +149,15 @@ export default function EstudiantesList() {
             }
         };
         fetchAsist();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [calcularAsistencia, dataSource.length]);
+    }, [calcularAsistencia, dataSource, supabaseBrowserClient]);
     const activos = useMemo(() => dataSource.filter(s => {
         // Mostrar todos los estudiantes que tienen activo=true O no tienen el campo
         // Si tienen matrículas, verificar que al menos una esté activa
         const mats = s.matriculas || [];
         if (mats.length === 0) return s.activo !== false; // Estudiantes sin matrícula (activos por defecto)
         return mats.some((m: any) => activoEstados.includes(String(m.estado || '').toLowerCase()));
-    }), [dataSource]);
-    const graduados = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => graduadoEstados.includes(String(m.estado || '').toLowerCase()))), [dataSource]);
+    }), [dataSource, activoEstados]);
+    const graduados = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => graduadoEstados.includes(String(m.estado || '').toLowerCase()))), [dataSource, graduadoEstados]);
     const desertores = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => {
         const st = asistStats[m.id];
         return st && st.tieneDatos && !st.cumple;

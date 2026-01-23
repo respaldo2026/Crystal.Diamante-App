@@ -21,8 +21,32 @@ export default function TesoreriaList() {
     const { user } = useCurrentUser();
 
     // Construcción de filtros según rol
+    interface Curso {
+        nombre: string;
+    }
+    interface Matricula {
+        cursos?: Curso;
+    }
+    interface Perfil {
+        nombre_completo?: string;
+        id?: string;
+    }
+    export interface Pago {
+        id: string;
+        monto: number;
+        estado: string;
+        metodo_pago: string;
+        fecha_pago: string;
+        referencia?: string;
+        perfiles?: Perfil;
+        matriculas?: Matricula;
+        [key: string]: any; // For any extra fields from Supabase
+    }
+
+    type NullableDateRange = [dayjs.Dayjs | null, dayjs.Dayjs | null] | null;
+
     const permanentFilters = () => {
-        const filters: any[] = [];
+        const filters: { field: string; operator: string; value: string }[] = [];
         
         // COMENTADO: Profesor solo ve sus pagos - DESACTIVADO para debug
         // if (user?.rol === "profesor") {
@@ -50,22 +74,22 @@ export default function TesoreriaList() {
     });
 
     const [busqueda, setBusqueda] = useState("");
-    const [filtroFecha, setFiltroFecha] = useState<[any, any] | null>(null);
+    const [filtroFecha, setFiltroFecha] = useState<NullableDateRange>(null);
     const [filtroMetodo, setFiltroMetodo] = useState<string | null>(null);
     const [filtroConcepto, setFiltroConcepto] = useState<string | null>(null);
 
     // Calcular el total de lo que se ve en pantalla
-    const pagos = tableProps.dataSource || [];
+    const pagos: Pago[] = tableProps.dataSource || [];
 
     // Métodos únicos para el filtro
     const metodosUnicos = useMemo(() => {
-        const metodos = new Set(pagos.map((p: any) => p.metodo_pago).filter(Boolean));
+        const metodos = new Set(pagos.map((p) => p.metodo_pago).filter(Boolean));
         return Array.from(metodos).sort();
     }, [pagos]);
 
     // Conceptos únicos para el filtro
     const conceptosUnicos = useMemo(() => {
-        const conceptos = new Set(pagos.map((p: any) => p.matriculas?.cursos?.nombre).filter(Boolean));
+        const conceptos = new Set(pagos.map((p) => p.matriculas?.cursos?.nombre).filter(Boolean));
         return Array.from(conceptos).sort();
     }, [pagos]);
 
@@ -75,7 +99,7 @@ export default function TesoreriaList() {
         // Filtro por búsqueda
         if (busqueda) {
             const term = busqueda.toLowerCase();
-            resultado = resultado.filter((p: any) => {
+            resultado = resultado.filter((p) => {
                 const estudiante = (p.perfiles?.nombre_completo || "").toLowerCase();
                 const curso = (p.matriculas?.cursos?.nombre || "").toLowerCase();
                 const ref = (p.referencia || "").toLowerCase();
@@ -87,29 +111,29 @@ export default function TesoreriaList() {
         if (filtroFecha && filtroFecha[0] && filtroFecha[1]) {
             const start = filtroFecha[0];
             const end = filtroFecha[1];
-            resultado = resultado.filter((p: any) => {
+            resultado = resultado.filter((p) => {
                 const pFecha = dayjs(p.fecha_pago);
-                return pFecha.isAfter(start) && pFecha.isBefore(end.add(1, 'day'));
+                return start && end && pFecha.isAfter(start) && pFecha.isBefore(end.add(1, 'day'));
             });
         }
 
         // Filtro por método
         if (filtroMetodo) {
-            resultado = resultado.filter((p: any) => p.metodo_pago === filtroMetodo);
+            resultado = resultado.filter((p) => p.metodo_pago === filtroMetodo);
         }
 
         // Filtro por concepto
         if (filtroConcepto) {
-            resultado = resultado.filter((p: any) => p.matriculas?.cursos?.nombre === filtroConcepto);
+            resultado = resultado.filter((p) => p.matriculas?.cursos?.nombre === filtroConcepto);
         }
 
         return resultado;
-    }, [busqueda, pagos, filtroFecha, filtroMetodo, filtroConcepto]);
+    }, [busqueda, pagos, filtroFecha, filtroMetodo, filtroConcepto, dayjs]);
 
     const totalPagadoEnPantalla = useMemo(() => {
         return dataFiltrada
-            .filter((p: any) => (p.estado || "").toLowerCase() === "pagado")
-            .reduce((acc: number, curr: any) => acc + Number(curr.monto || 0), 0);
+            .filter((p) => (p.estado || "").toLowerCase() === "pagado")
+            .reduce((acc: number, curr) => acc + Number(curr.monto || 0), 0);
     }, [dataFiltrada]);
 
     return (
@@ -220,7 +244,7 @@ export default function TesoreriaList() {
                 {/* ESTUDIANTE */}
                 <Table.Column 
                     title="Estudiante"
-                    render={(_, record: any) => (
+                    render={(_, record: Pago) => (
                         <Space>
                             <UserOutlined style={{ color: '#1890ff' }} />
                             <Text strong>{record.perfiles?.nombre_completo || "Desconocido"}</Text>
@@ -231,7 +255,7 @@ export default function TesoreriaList() {
                 {/* CURSO QUE PAGA */}
                 <Table.Column 
                     title="Concepto"
-                    render={(_, record: any) => {
+                    render={(_, record: Pago) => {
                         const curso = record.matriculas?.cursos?.nombre;
                         return curso ? <Tag color="purple">{curso}</Tag> : <Tag>Otro</Tag>;
                     }}
@@ -276,7 +300,7 @@ export default function TesoreriaList() {
 
                 <Table.Column 
                     title="Acciones"
-                    render={(_, record: any) => (
+                    render={(_, record: Pago) => (
                         <Space>
                             {user?.rol === "admin" && (
                                 <DeleteButton 

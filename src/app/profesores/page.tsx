@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { logger } from "@utils/logger";
 import { useNavigation, useDelete } from "@refinedev/core";
 import { Card, Avatar, Typography, Button, Spin, Alert, List, Badge, message, Modal, Form, Select, Input, Dropdown } from "antd";
 import { 
@@ -66,7 +67,7 @@ export default function ProfesoresCards() {
                 setProfesorSeleccionado(null);
 
         } catch (err: any) {
-            console.error("Error cargando:", err);
+            logger.error("Error cargando:", err);
             setErrorMsg(err.message || "Error de conexión");
         } finally {
             setLoading(false);

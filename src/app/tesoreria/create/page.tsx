@@ -122,104 +122,107 @@ export default function PagoCreate() {
             }
 
             // Normalizar método de pago a los valores permitidos por el check de la tabla
-            const metodoPagoNormalizado = (() => {
-                const valor = String(metodo_pago || "").toLowerCase();
-                if (["efectivo", "transferencia", "tarjeta", "otro"].includes(valor)) return valor;
-                // Mapear alias comunes a transferencia
-                if (["nequi", "bancolombia", "sistecredito", "pse", "banco"].includes(valor)) return "transferencia";
-                return "otro";
-            })();
+            // Definir parser fuera del JSX para evitar error de sintaxis
+            const montoParser = (value: string | undefined): number => {
+                const parsed = value?.replace(/\$\s?|(,*)/g, '');
+                return parsed ? parseInt(parsed, 10) : 0;
+            };
 
-            const { error } = await supabaseBrowserClient
-                .from("pagos")
-                .update({
-                    estado: "pagado",
-                    fecha_pago: fecha_pago ? fecha_pago.format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
-                    monto: montoNumero,
-                    metodo_pago: metodoPagoNormalizado,
-                    referencia,
-                    observaciones: `Pago registrado el ${formatDate(dayjs())} ${formatTime(dayjs())}`
-                })
-                .eq("id", cuota_id);
-
-            if (error) throw error;
-
-            message.success("Pago registrado exitosamente");
-            window.location.href = "/tesoreria";
-        } catch (e: any) {
-            message.error(e?.message || "Error registrando el pago");
-        }
-    };
-
-    // Prefill desde query params: estudiante_id y matricula_id
-    useEffect(() => {
-        const estudianteId = searchParams.get('estudiante_id');
-        const matriculaId = searchParams.get('matricula_id');
-        if (estudianteId) {
-            formProps.form?.setFieldValue('estudiante_id', estudianteId);
-            // Dispara búsqueda de matrículas y luego preselecciona
-            handleEstudianteChange(estudianteId);
-        }
-        if (matriculaId) {
-            // Intentamos setear después de que carguen los cursos
-            const timeout = setTimeout(() => {
-                formProps.form?.setFieldValue('matricula_id', matriculaId);
-                const m = cursosDelEstudiante.find(m => String(m.id) === String(matriculaId));
-                if (m?.cursos?.precio_mensualidad) {
-                    formProps.form?.setFieldValue('monto', m.cursos.precio_mensualidad);
-                }
-            }, 400);
-            return () => clearTimeout(timeout);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams]);
-
-    return (
-        <Create 
-            saveButtonProps={{ ...saveButtonProps, onClick: () => formProps.form?.submit() }} 
-            title="Registrar Nuevo Ingreso"
-        >
-            <Form 
-                {...formProps} 
-                form={formProps.form}
-                layout="vertical" 
-                onFinish={handleOnFinish} 
-                initialValues={{ metodo_pago: 'efectivo', fecha_pago: dayjs() }}
-            >
+            return (
+                <Create 
+                    saveButtonProps={{ ...saveButtonProps, onClick: () => formProps.form?.submit() }} 
+                    title="Registrar Nuevo Ingreso"
+                >
+                    <Form 
+                        {...formProps} 
+                        form={formProps.form}
+                        layout="vertical" 
+                        onFinish={handleOnFinish} 
+                        initialValues={{ metodo_pago: 'efectivo', fecha_pago: dayjs() }}
+                    >
                 
-                <Row gutter={24}>
-                    <Col span={12}>
-                        <Form.Item label="Estudiante" name="estudiante_id" rules={[{ required: true, message: "Selecciona un estudiante" }]}>
-                            <Select 
-                                {...estudianteSelectProps} 
-                                placeholder="Escribe para buscar..." 
-                                showSearch
-                                optionFilterProp="label"
-                                onChange={handleEstudianteChange}
-                                suffixIcon={<UserOutlined />}
-                            />
-                        </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                        <Form.Item 
-                            label="Curso (Matrícula)" 
-                            name="matricula_id" 
-                            rules={[{ required: true, message: "Selecciona el curso" }]}
-                            help={cursosDelEstudiante.length === 0 && !buscandoCursos ? "Selecciona un estudiante primero" : ""}
-                        >
-                            <Select 
-                                placeholder="Selecciona el curso"
-                                loading={buscandoCursos}
-                                onChange={handleCursoChange}
-                                disabled={cursosDelEstudiante.length === 0}
-                            >
-                                {cursosDelEstudiante.map((m: any) => (
-                                    <Select.Option key={m.id} value={m.id}>
-                                        {m.cursos?.nombre || "Curso sin nombre"}
-                                    </Select.Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
+                        <Row gutter={24}>
+                            <Col span={12}>
+                                <Form.Item label="Estudiante" name="estudiante_id" rules={[{ required: true, message: "Selecciona un estudiante" }]}> 
+                                    <Select 
+                                        {...estudianteSelectProps} 
+                                        placeholder="Escribe para buscar..." 
+                                        showSearch
+                                        optionFilterProp="label"
+                                        onChange={handleEstudianteChange}
+                                        suffixIcon={<UserOutlined />}
+                                    />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item label="Curso" name="matricula_id" rules={[{ required: true, message: "Selecciona un curso" }]}> 
+                                    <Select 
+                                        options={cursosDelEstudiante.map(m => ({ label: m.cursos?.nombre, value: m.id }))}
+                                        loading={buscandoCursos}
+                                        placeholder="Selecciona un curso"
+                                        onChange={handleCursoChange}
+                                        allowClear
+                                        suffixIcon={<SolutionOutlined />}
+                                    />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                        <Row gutter={24}>
+                            <Col span={12}>
+                                <Form.Item label="Cuota" name="cuota_id" rules={[{ required: true, message: "Selecciona una cuota" }]}> 
+                                    <Select 
+                                        options={cuotasPendientes.map(c => ({ label: `Cuota #${c.numero_cuota} - $${c.monto}`, value: c.id }))}
+                                        loading={cargandoCuotas}
+                                        placeholder="Selecciona una cuota"
+                                        onChange={handleCuotaChange}
+                                        allowClear
+                                        suffixIcon={<DollarCircleOutlined />}
+                                    />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item label="Monto a pagar" name="monto" rules={[{ required: true, message: "Ingresa el monto" }]}> 
+                                    <InputNumber 
+                                        min={0}
+                                        max={999999999}
+                                        style={{ width: "100%" }}
+                                        parser={montoParser}
+                                        prefix={<DollarCircleOutlined />}
+                                        placeholder="Monto"
+                                    />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                        <Row gutter={24}>
+                            <Col span={12}>
+                                <Form.Item label="Método de pago" name="metodo_pago" rules={[{ required: true, message: "Selecciona el método de pago" }]}> 
+                                    <Select
+                                        options={[
+                                            { label: "Efectivo", value: "efectivo" },
+                                            { label: "Transferencia", value: "transferencia" },
+                                            { label: "Tarjeta", value: "tarjeta" },
+                                            { label: "Otro", value: "otro" },
+                                        ]}
+                                        placeholder="Selecciona el método de pago"
+                                    />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item label="Fecha de pago" name="fecha_pago" rules={[{ required: true, message: "Selecciona la fecha de pago" }]}> 
+                                    <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                        <Row gutter={24}>
+                            <Col span={12}>
+                                <Form.Item label="Referencia" name="referencia"> 
+                                    <Input placeholder="Referencia o número de comprobante" />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                    </Form>
+                </Create>
+            );
                     </Col>
                 </Row>
 

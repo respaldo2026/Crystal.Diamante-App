@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Form, Input, Row, Col, Alert, Button, Card, Table, Space, Popconfirm, Spin, App, Modal, Dropdown, Checkbox, Divider, Tag, Upload, Avatar } from "antd";
 import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined, MoreOutlined, LockOutlined, CameraOutlined, UploadOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { MODULOS_DISPONIBLES } from "@hooks/useRolePermissions";
+import { MODULOS_DISPONIBLES } from "@hooks/useRolePermissions"; // Si se centraliza, mover a contexts/roles-permissions-context si es necesario
 
 export default function AdministradoresPage() {
     const { message, modal } = App.useApp();

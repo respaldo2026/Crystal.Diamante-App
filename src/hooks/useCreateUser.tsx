@@ -1,6 +1,17 @@
 import { useState } from "react";
+import { logger } from "@utils/logger";
 import { App } from "antd";
 import { useNavigation } from "@refinedev/core";
+
+
+interface CreateUserValues {
+  email: string;
+  identificacion?: string;
+}
+
+interface CreateUserMetadata {
+  [key: string]: unknown;
+}
 
 interface UseCreateUserProps {
   rol?: string;
@@ -13,7 +24,7 @@ export const useCreateUser = (props: UseCreateUserProps = {}) => {
   const { message } = App.useApp();
   const { list } = useNavigation();
 
-  const createUser = async (values: any, metadata: any, specificRol?: string) => {
+  const createUser = async (values: CreateUserValues, metadata: CreateUserMetadata, specificRol?: string) => {
     setLoading(true);
     try {
       if (!values.email || !values.email.includes('@')) {
@@ -65,9 +76,13 @@ export const useCreateUser = (props: UseCreateUserProps = {}) => {
       
       return true;
 
-    } catch (error: any) {
-      console.error("Error creando usuario:", error);
-      message.error(error.message || "Error al crear el usuario");
+    } catch (error) {
+      logger.error("Error creando usuario:", error);
+      if (error instanceof Error) {
+        message.error(error.message || "Error al crear el usuario");
+      } else {
+        message.error("Error al crear el usuario");
+      }
       return false;
     } finally {
       setLoading(false);

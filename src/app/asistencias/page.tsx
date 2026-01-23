@@ -53,7 +53,7 @@ export default function ListAsistencias() {
     if (cursoId) {
       setCursoSeleccionado(Number(cursoId));
     }
-  }, [searchParams]);
+  }, [searchParams, setCursoSeleccionado]);
 
   const cursoActualLabel = useMemo(() => {
     const match = cursoSelect.options?.find((opt: any) => opt.value === cursoSeleccionado);
@@ -120,7 +120,7 @@ export default function ListAsistencias() {
     } else {
       setEstadisticas([]);
     }
-  }, [cursoSeleccionado]);
+  }, [cursoSeleccionado, calcularEstadisticas]);
 
   // Calcular resumen general
   const estudiantesEnRiesgo = estadisticas.filter(e => !e.cumple).length;
