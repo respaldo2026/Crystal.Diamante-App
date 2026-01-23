@@ -217,27 +217,26 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <RolesPermissionsProvider>
-      <RefineKbarProvider>
-        <ConfigProvider 
-          theme={{
-            token: {
-              colorPrimary: '#5B21B6',
-              colorSuccess: '#059669',
-              colorWarning: '#D97706',
-              colorError: '#DC2626',
-              colorInfo: '#0284C7',
-              colorTextBase: '#1F2937',
-              colorBgBase: '#FFFFFF',
-              borderRadius: 8,
-              fontSize: 14,
+    <RefineKbarProvider>
+      <ConfigProvider 
+        theme={{
+          token: {
+            colorPrimary: '#5B21B6',
+            colorSuccess: '#059669',
+            colorWarning: '#D97706',
+            colorError: '#DC2626',
+            colorInfo: '#0284C7',
+            colorTextBase: '#1F2937',
+            colorBgBase: '#FFFFFF',
+            borderRadius: 8,
+            fontSize: 14,
+          },
+          components: {
+            Button: {
+              controlHeight: 36,
+              fontWeight: 500,
             },
-            components: {
-              Button: {
-                controlHeight: 36,
-                fontWeight: 500,
-              },
-              Card: {
+            Card: {
                 borderRadiusLG: 12,
               },
               Tag: {
@@ -279,7 +278,6 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
           </AntdApp>
         </ConfigProvider>
       </RefineKbarProvider>
-    </RolesPermissionsProvider>
   );
 };
 
@@ -311,7 +309,9 @@ export default function RootLayout({
     <html lang="es">
       <body>
         <QueryProvider>
-          <AppContent>{children}</AppContent>
+          <RolesPermissionsProvider>
+            <AppContent>{children}</AppContent>
+          </RolesPermissionsProvider>
         </QueryProvider>
       </body>
     </html>

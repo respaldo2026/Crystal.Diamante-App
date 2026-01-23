@@ -11,8 +11,9 @@ import {
 } from "@ant-design/icons";
 
 // CORRECCIÓN: Usamos la misma ruta que funcionó en 'Inventario'
-import { supabaseBrowserClient } from "@utils/supabase/client";
-import { enviarWhatsapp } from "@utils/whatsapp"; 
+import { obtenerUsuariosPorRol } from "@modules/usuarios/usuarios.service";
+import { obtenerCursos } from "@modules/academico/cursos.service";
+import { enviarWhatsapp } from "@modules/comunicacion/whatsapp.service";
 
 const { Text, Title } = Typography;
 
@@ -36,36 +37,18 @@ export default function ProfesoresCards() {
         setLoading(true);
         setErrorMsg("");
         try {
-            // Usamos el cliente importado correctamente
-            const { data, error } = await supabaseBrowserClient
-                .from('perfiles')
-                .select('*');
-
-            if (error) throw error;
-
+            const data = await obtenerUsuariosPorRol("profesor");
             setTotalEncontrados(data?.length || 0);
-
-            const soloProfes = (data || []).filter((p: any) => {
-                const esProfesor = p.rol && String(p.rol).trim().toLowerCase() === 'profesor';
-                const estaActivo = p.activo !== false; 
-                return esProfesor && estaActivo;
-            });
-
-            // Traer cursos activos para cada profesor
+            const soloProfes = (data || []).filter((p: any) => p.activo !== false);
             const profesoresConCursos = await Promise.all(
                 soloProfes.map(async (prof: any) => {
-                    const { data: cursos } = await supabaseBrowserClient
-                        .from("cursos")
-                        .select("id, nombre, estado")
-                        .eq("profesor_id", prof.id)
-                        .eq("estado", "activo");
-                    return { ...prof, cursos_activos: cursos || [] };
+                    const cursos = await obtenerCursos();
+                    const cursosActivos = (cursos || []).filter((c: any) => c.profesor_id === prof.id && c.estado === "activo");
+                    return { ...prof, cursos_activos: cursosActivos };
                 })
             );
-            
             setProfesores(profesoresConCursos);
-                setProfesorSeleccionado(null);
-
+            setProfesorSeleccionado(null);
         } catch (err: any) {
             logger.error("Error cargando:", err);
             setErrorMsg(err.message || "Error de conexión");

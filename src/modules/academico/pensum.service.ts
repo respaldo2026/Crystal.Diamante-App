@@ -1,0 +1,24 @@
+// Servicio de pensum y materiales: lógica de negocio para planes de estudio y recursos
+import { supabaseBrowserClient } from "@utils/supabase/client";
+
+export async function obtenerPensumPorProgramas(programaIds: string[]) {
+  const { data, error } = await supabaseBrowserClient
+    .from("pensum")
+    .select("*, pensum_cursos (*)")
+    .in("programa_id", programaIds)
+    .eq("activo", true)
+    .order("numero_ciclo", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function obtenerMaterialesPorProgramas(programaIds: string[]) {
+  const { data, error } = await supabaseBrowserClient
+    .from("material_didactico")
+    .select("*")
+    .in("programa_id", programaIds)
+    .eq("visible", true)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}

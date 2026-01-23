@@ -18,7 +18,7 @@ import {
   CheckCircleOutlined,
 } from "@ant-design/icons";
 import { useNavigation } from "@refinedev/core";
-import { supabaseBrowserClient } from "@utils/supabase/client";
+import { obtenerCursos } from "@modules/academico/cursos.service";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
@@ -47,16 +47,12 @@ export default function CursosList() {
   const [inscritosPorCurso, setInscritosPorCurso] = useState<Record<number, number>>({});
 
   useEffect(() => {
-    // Cargar inmediatamente, aplicar filtros cuando user esté disponible
-    cargarCursos();
-  }, [mostrarFinalizados, user]);
-
-  const cargarCursos = async () => {
     setLoading(true);
-    let query = supabaseBrowserClient
-      .from("cursos")
-      .select(`*, perfiles (nombre_completo), programas (*)`)
-      .neq("estado", "eliminado");
+    obtenerCursos()
+      .then((data) => setCursos(data))
+      .catch((err) => message.error("No se pudieron cargar los cursos: " + err.message))
+      .finally(() => setLoading(false));
+  }, [mostrarFinalizados, user]);
 
     // Filtrar por rol solo si user está disponible
     if (user && user.rol === "estudiante") {

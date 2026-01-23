@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
 import { Form, Input, Select, InputNumber, DatePicker, Row, Col, Divider, message, Card, Alert } from "antd";
 import dayjs from "dayjs";
-import { supabaseBrowserClient } from "@utils/supabase/client";
+import { obtenerCursosDeEstudiante } from "@modules/academico/matriculas.service";
 import { UserOutlined, DollarCircleOutlined, SolutionOutlined } from "@ant-design/icons";
 import { useParams } from "next/navigation";
 
@@ -46,17 +46,11 @@ export default function PagoEdit() {
         setEstudianteActual(estudianteId);
         setBuscandoCursos(true);
         setCursosDelEstudiante([]); // Limpiar anterior
-        
-        // Hacemos la consulta a Supabase
-        const { data, error } = await supabaseBrowserClient
-            .from("matriculas")
-            .select("id, cursos(nombre, precio_mensualidad)")
-            .eq("estudiante_id", estudianteId);
-        
-        if (error) {
-            message.error("Error buscando cursos del estudiante");
-        } else if (data) {
+        try {
+            const data = await obtenerCursosDeEstudiante(estudianteId);
             setCursosDelEstudiante(data);
+        } catch (error: any) {
+            message.error("Error buscando cursos del estudiante");
         }
         setBuscandoCursos(false);
     };

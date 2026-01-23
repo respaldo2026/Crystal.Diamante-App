@@ -1,20 +1,25 @@
 "use client";
 
 import React from "react";
-import { List, useTable, EditButton, DeleteButton } from "@refinedev/antd";
+import { List, EditButton, DeleteButton } from "@refinedev/antd";
+import { obtenerUsuariosPorRol } from "@modules/usuarios/usuarios.service";
 import { Table, Space, Avatar, Tag } from "antd";
 import { UserOutlined } from "@ant-design/icons";
 
 export default function ListPerfiles() {
-  const { tableProps } = useTable({
-    resource: "perfiles",
-    // IMPORTANTE: Ordenamos para que salgan primero los últimos creados
-    sorters: { initial: [{ field: "created_at", order: "desc" }] }, 
-  });
+  const [usuarios, setUsuarios] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    setLoading(true);
+    obtenerUsuariosPorRol("estudiante")
+      .then((data) => setUsuarios(data || []))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <List>
-      <Table {...tableProps} rowKey="id">
+      <Table dataSource={usuarios} loading={loading} rowKey="id">
         
         {/* COLUMNA 1: Cédula (Ya no saldrá el número largo) */}
         <Table.Column 

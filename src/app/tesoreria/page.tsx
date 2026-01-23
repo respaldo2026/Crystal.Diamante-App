@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { List, useTable, CreateButton, EditButton, DeleteButton } from "@refinedev/antd";
-import { Table, Space, Tag, Typography, Card, Statistic, Row, Col, Input, Button, DatePicker, Select, Alert } from "antd";
+import { List, CreateButton, EditButton, DeleteButton } from "@refinedev/antd";
+import { Table, Space, Tag, Typography, Card, Statistic, Row, Col, Input, Button, DatePicker, Select, Alert, Spin } from "antd";
 import { 
     DollarCircleOutlined, 
     UserOutlined, 
@@ -12,6 +12,7 @@ import {
     DeleteOutlined
 } from "@ant-design/icons";
 import { useCurrentUser } from "@hooks/useCurrentUser";
+import { obtenerPagosPorEstudiante } from "@modules/finanzas/pagos.service";
 import dayjs from "dayjs";
 
 const { Text } = Typography;
@@ -19,67 +20,24 @@ const { Search } = Input;
 
 export default function TesoreriaList() {
     const { user } = useCurrentUser();
-
-    // Construcción de filtros según rol
-    interface Curso {
-        nombre: string;
-    }
-    interface Matricula {
-        cursos?: Curso;
-    }
-    interface Perfil {
-        nombre_completo?: string;
-        id?: string;
-    }
-    export interface Pago {
-        id: string;
-        monto: number;
-        estado: string;
-        metodo_pago: string;
-        fecha_pago: string;
-        referencia?: string;
-        perfiles?: Perfil;
-        matriculas?: Matricula;
-        [key: string]: any; // For any extra fields from Supabase
-    }
-
-    type NullableDateRange = [dayjs.Dayjs | null, dayjs.Dayjs | null] | null;
-
-    const permanentFilters = () => {
-        const filters: { field: string; operator: string; value: string }[] = [];
-        
-        // COMENTADO: Profesor solo ve sus pagos - DESACTIVADO para debug
-        // if (user?.rol === "profesor") {
-        //     filters.push({ field: "perfiles.id", operator: "eq", value: user.id });
-        // }
-        
-        // MOSTRAR TODOS LOS PAGOS: tanto pendientes como pagados
-        // Ajuste: solo mostrar pagos confirmados (estado = pagado)
-        filters.push({ field: "estado", operator: "eq", value: "pagado" });
-        
-        return filters;
-    };
-
-    // Traemos los pagos junto con el nombre del estudiante y el curso
-    const { tableProps, tableQuery } = useTable({
-        resource: "pagos",
-        meta: {
-            // Desambiguamos las relaciones usando el nombre exacto del FK
-            select: "*, perfiles!pagos_estudiante_id_fkey(nombre_completo,id), matriculas!pagos_matricula_id_fkey(cursos(nombre))"
-        },
-        sorters: { initial: [{ field: "created_at", order: "desc" }] },
-        filters: {
-            permanent: permanentFilters()
-        }
-    });
-
+    const [pagos, setPagos] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [busqueda, setBusqueda] = useState("");
-    const [filtroFecha, setFiltroFecha] = useState<NullableDateRange>(null);
+    const [filtroFecha, setFiltroFecha] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
     const [filtroMetodo, setFiltroMetodo] = useState<string | null>(null);
     const [filtroConcepto, setFiltroConcepto] = useState<string | null>(null);
 
-    // Calcular el total de lo que se ve en pantalla
-    const pagos: Pago[] = tableProps.dataSource || [];
+    useEffect(() => {
+        setLoading(true);
+        setError(null);
+        // Si el usuario es profesor, filtrar por su id; si no, traer todos los pagos
+        const estudianteId = user?.rol === "profesor" ? user.id : undefined;
+        obtenerPagosPorEstudiante(estudianteId)
+            .then(setPagos)
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
+    }, [user]);
 
     // Métodos únicos para el filtro
     const metodosUnicos = useMemo(() => {

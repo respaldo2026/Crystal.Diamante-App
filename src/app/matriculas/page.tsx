@@ -17,7 +17,7 @@ import dayjs from "dayjs";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { DiplomaPDF } from "@components/pdf/DiplomaPDF";
 import { useCurrentUser } from "@hooks/useCurrentUser";
-import { supabaseBrowserClient } from "@utils/supabase/client";
+import { obtenerStatsAsistenciasYPagos } from "@modules/academico/asistencias.service";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
 
@@ -76,42 +76,8 @@ export default function MatriculasList() {
         setLoadingAsistencias(true);
         try {
             const matriculaIds = matriculas.map((m: any) => m.id);
-            
-            const { data: asistencias } = await supabaseBrowserClient
-                .from("asistencias")
-                .select("matricula_id, estado")
-                .in("matricula_id", matriculaIds);
-
-            const { data: pagos } = await supabaseBrowserClient
-                .from("pagos")
-                .select("matricula_id, monto")
-                .in("matricula_id", matriculaIds);
-
-            const statsMap: Record<number, any> = {};
-            
-            matriculas.forEach((matricula: any) => {
-                const asistenciasAlumno = asistencias?.filter(a => a.matricula_id === matricula.id) || [];
-                const totalClases = asistenciasAlumno.length;
-                const presentes = asistenciasAlumno.filter(a => a.estado === 'presente').length;
-                const porcentaje = totalClases > 0 ? (presentes / totalClases) * 100 : 0;
-                const minimoRequerido = matricula.cursos?.porcentaje_minimo || 80;
-
-                const pagosMatricula = pagos?.filter(p => p.matricula_id === matricula.id) || [];
-                const pagosCount = pagosMatricula.length;
-                const pagosTotal = pagosMatricula.reduce((acc, curr: any) => acc + Number(curr.monto || 0), 0);
-
-                statsMap[matricula.id] = {
-                    totalClases,
-                    presentes,
-                    porcentaje: Math.round(porcentaje),
-                    minimoRequerido,
-                    cumple: porcentaje >= minimoRequerido,
-                    tieneDatos: totalClases > 0,
-                    pagosCount,
-                    pagosTotal
-                };
-            });
-
+            const cursosPorMatricula = Object.fromEntries(matriculas.map((m: any) => [m.id, m.cursos]));
+            const statsMap = await obtenerStatsAsistenciasYPagos(matriculaIds, cursosPorMatricula);
             setAsistenciasPorMatricula(statsMap);
         } catch (error) {
             console.error("Error calculando asistencias:", error);

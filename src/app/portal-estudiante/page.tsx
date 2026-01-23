@@ -38,7 +38,7 @@ import {
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import { formatDate } from "@utils/date";
-import { supabaseBrowserClient } from "@utils/supabase/client";
+import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas } from "@modules/academico/pensum.service";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
@@ -136,21 +136,11 @@ export default function PortalEstudiante() {
 
       // 4. Cargar Pensum y Materiales si hay programas
       if (programaIds.length > 0) {
-        const { data: pensumData } = await supabaseBrowserClient
-          .from("pensum")
-          .select(`*, pensum_cursos (*)`)
-          .in("programa_id", programaIds)
-          .eq("activo", true)
-          .order("numero_ciclo", { ascending: true });
-        setPensum(pensumData || []);
+        const pensumData = await obtenerPensumPorProgramas(programaIds);
+        setPensum(pensumData);
 
-        const { data: materialesData } = await supabaseBrowserClient
-          .from("material_didactico")
-          .select("*")
-          .in("programa_id", programaIds)
-          .eq("visible", true)
-          .order("created_at", { ascending: false });
-        setMateriales(materialesData || []);
+        const materialesData = await obtenerMaterialesPorProgramas(programaIds);
+        setMateriales(materialesData);
       }
 
       // 5. Calcular Avance y Certificados

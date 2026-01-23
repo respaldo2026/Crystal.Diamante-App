@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Form, Input, Row, Col, Alert, Button, Card, Table, Space, Popconfirm, Spin, App, Modal, Dropdown, Checkbox, Divider, Tag, Upload, Avatar } from "antd";
 import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined, MoreOutlined, LockOutlined, CameraOutlined, UploadOutlined } from "@ant-design/icons";
-import { supabaseBrowserClient } from "@utils/supabase/client";
+import { crearUsuario, obtenerUsuariosPorRol } from "@modules/usuarios/usuarios.service";
 import { MODULOS_DISPONIBLES } from "@hooks/useRolePermissions"; // Si se centraliza, mover a contexts/roles-permissions-context si es necesario
 
 export default function AdministradoresPage() {
@@ -20,9 +20,13 @@ export default function AdministradoresPage() {
     const [fotoUrl, setFotoUrl] = useState<string>("");
     const [fotoEditUrl, setFotoEditUrl] = useState<string>("");
 
-    // Cargar lista de administradores al montar
+    // Migración: cargar administradores usando servicio modular
     React.useEffect(() => {
-        cargarAdministradores();
+        setListLoading(true);
+        obtenerUsuariosPorRol("admin")
+            .then((data) => setAdminsList(data))
+            .catch((err) => message.error("Error cargando administradores: " + err.message))
+            .finally(() => setListLoading(false));
     }, []);
 
     const handleFotoUpload = async (file: any) => {
@@ -101,44 +105,7 @@ export default function AdministradoresPage() {
         }
     };
 
-    const cargarAdministradores = async () => {
-        setListLoading(true);
-        try {
-            console.log("📋 Cargando administradores...");
-            console.log("🔑 Usuario actual:", await supabaseBrowserClient.auth.getUser());
-            
-            const { data, error } = await supabaseBrowserClient
-                .from("perfiles")
-                .select("id, nombre_completo, identificacion, email, telefono, rol, created_at")
-                .eq("rol", "admin")
-                .order("created_at", { ascending: false });
-
-            console.log("✅ Respuesta de BD:", { data, error });
-            console.log("📊 Total de admins encontrados:", data?.length || 0);
-            
-            if (data && data.length > 0) {
-                console.log("👥 Administradores:", data);
-            } else {
-                console.warn("⚠️ No se encontraron administradores. Verifica:");
-                console.warn("   1. ¿Hay registros en 'perfiles' con rol='admin'?");
-                console.warn("   2. ¿RLS está bloqueando la consulta?");
-                console.warn("   3. ¿Los emails están confirmados en auth.users?");
-            }
-
-            if (error) {
-                console.error("❌ Error en query:", error);
-                throw error;
-            }
-            
-            setAdminsList(data || []);
-        } catch (error: any) {
-            console.error("❌ Error cargando admins:", error);
-            message.error("Error cargando administradores: " + error.message);
-            setAdminsList([]);
-        } finally {
-            setListLoading(false);
-        }
-    };
+    // Removed cargarAdministradores function
 
     const handleGuardarAdmin = async (values: any) => {
         setLoading(true);
@@ -192,7 +159,8 @@ export default function AdministradoresPage() {
             
             // Recargar inmediatamente y varias veces para asegurar
             console.log('🔄 Recargando lista de administradores...');
-            await cargarAdministradores();
+            obtenerUsuariosPorRol("admin")
+                .then((data) => setAdminsList(data));
             
             // Esperar y recargar una vez más por si acaso
             setTimeout(async () => {
