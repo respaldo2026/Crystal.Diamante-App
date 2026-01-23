@@ -45,6 +45,13 @@
       ],
       "@pages/*": [
         "./pages/*"
+      ],
+      "@constants/*": [
+        "./src/constants/*"
+      ]
+      ,
+      "@modules/*": [
+        "./src/modules/*"
       ]
     },
     "incremental": true

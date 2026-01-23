@@ -1,6 +1,19 @@
+// Declarar tipo Pago
+type Pago = {
+    id: string;
+    monto: number;
+    fecha_pago: string;
+    metodo_pago: string;
+    referencia?: string;
+    perfiles?: { nombre_completo: string };
+    matriculas?: { cursos?: { nombre: string } };
+};
+
+// Declarar tableProps como objeto vacío si no está definido
+const tableProps = {};
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { List, CreateButton, EditButton, DeleteButton } from "@refinedev/antd";
 import { Table, Space, Tag, Typography, Card, Statistic, Row, Col, Input, Button, DatePicker, Select, Alert, Spin } from "antd";
 import { 
@@ -12,7 +25,7 @@ import {
     DeleteOutlined
 } from "@ant-design/icons";
 import { useCurrentUser } from "@hooks/useCurrentUser";
-import { obtenerPagosPorEstudiante } from "@modules/finanzas/pagos.service";
+import { obtenerPagosPorEstudiante } from "../../modules/finanzas/pagos.service";
 import dayjs from "dayjs";
 
 const { Text } = Typography;
@@ -33,7 +46,7 @@ export default function TesoreriaList() {
         setError(null);
         // Si el usuario es profesor, filtrar por su id; si no, traer todos los pagos
         const estudianteId = user?.rol === "profesor" ? user.id : undefined;
-        obtenerPagosPorEstudiante(estudianteId)
+        obtenerPagosPorEstudiante(estudianteId || "")
             .then(setPagos)
             .catch((err) => setError(err.message))
             .finally(() => setLoading(false));

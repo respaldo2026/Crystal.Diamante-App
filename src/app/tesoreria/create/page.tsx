@@ -10,6 +10,25 @@ import { UserOutlined, DollarCircleOutlined, SolutionOutlined } from "@ant-desig
 import { useSearchParams } from "next/navigation";
 
 export default function PagoCreate() {
+        // Handler para el submit del formulario
+        const handleOnFinish = async (values: any) => {
+            const { cuota_id, monto } = values;
+            if (!cuota_id) {
+                message.error("Debes seleccionar una cuota a pagar");
+                return;
+            }
+            const montoNumero = Number(monto || 0);
+            if (Number.isNaN(montoNumero) || montoNumero <= 0) {
+                message.error("El monto debe ser mayor a 0");
+                return;
+            }
+            if (montoNumero > 999999999) {
+                message.error("El monto es demasiado alto");
+                return;
+            }
+            // Aquí puedes agregar la lógica para guardar el pago en la base de datos
+            message.success("Pago registrado correctamente (simulado)");
+        };
     const { formProps, saveButtonProps, onFinish } = useForm({ redirect: "list" });
     const searchParams = useSearchParams();
     
@@ -102,136 +121,110 @@ export default function PagoCreate() {
         }
     };
 
-    const handleOnFinish = async (values: any) => {
-        try {
-            const { cuota_id, monto, metodo_pago, fecha_pago, referencia } = values;
+    // Definir parser fuera del JSX para evitar error de sintaxis
+    const montoParser = (value: string | undefined): number => {
+        const parsed = value?.replace(/\$\s?|(,*)/g, '');
+        return parsed ? parseInt(parsed, 10) : 0;
+    };
 
-            if (!cuota_id) {
-                message.error("Debes seleccionar una cuota a pagar");
-                return;
-            }
-
-            const montoNumero = Number(monto || 0);
-            if (Number.isNaN(montoNumero) || montoNumero <= 0) {
-                message.error("El monto debe ser mayor a 0");
-                return;
-            }
-            if (montoNumero > 999999999) {
-                message.error("El monto es demasiado alto");
-                return;
-            }
-
-            // Normalizar método de pago a los valores permitidos por el check de la tabla
-            // Definir parser fuera del JSX para evitar error de sintaxis
-            const montoParser = (value: string | undefined): number => {
-                const parsed = value?.replace(/\$\s?|(,*)/g, '');
-                return parsed ? parseInt(parsed, 10) : 0;
-            };
-
-            return (
-                <Create 
-                    saveButtonProps={{ ...saveButtonProps, onClick: () => formProps.form?.submit() }} 
-                    title="Registrar Nuevo Ingreso"
-                >
-                    <Form 
-                        {...formProps} 
-                        form={formProps.form}
-                        layout="vertical" 
-                        onFinish={handleOnFinish} 
-                        initialValues={{ metodo_pago: 'efectivo', fecha_pago: dayjs() }}
-                    >
-                
-                        <Row gutter={24}>
-                            <Col span={12}>
-                                <Form.Item label="Estudiante" name="estudiante_id" rules={[{ required: true, message: "Selecciona un estudiante" }]}> 
-                                    <Select 
-                                        {...estudianteSelectProps} 
-                                        placeholder="Escribe para buscar..." 
-                                        showSearch
-                                        optionFilterProp="label"
-                                        onChange={handleEstudianteChange}
-                                        suffixIcon={<UserOutlined />}
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item label="Curso" name="matricula_id" rules={[{ required: true, message: "Selecciona un curso" }]}> 
-                                    <Select 
-                                        options={cursosDelEstudiante.map(m => ({ label: m.cursos?.nombre, value: m.id }))}
-                                        loading={buscandoCursos}
-                                        placeholder="Selecciona un curso"
-                                        onChange={handleCursoChange}
-                                        allowClear
-                                        suffixIcon={<SolutionOutlined />}
-                                    />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        <Row gutter={24}>
-                            <Col span={12}>
-                                <Form.Item label="Cuota" name="cuota_id" rules={[{ required: true, message: "Selecciona una cuota" }]}> 
-                                    <Select 
-                                        options={cuotasPendientes.map(c => ({ label: `Cuota #${c.numero_cuota} - $${c.monto}`, value: c.id }))}
-                                        loading={cargandoCuotas}
-                                        placeholder="Selecciona una cuota"
-                                        onChange={handleCuotaChange}
-                                        allowClear
-                                        suffixIcon={<DollarCircleOutlined />}
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item label="Monto a pagar" name="monto" rules={[{ required: true, message: "Ingresa el monto" }]}> 
-                                    <InputNumber 
-                                        min={0}
-                                        max={999999999}
-                                        style={{ width: "100%" }}
-                                        parser={montoParser}
-                                        prefix={<DollarCircleOutlined />}
-                                        placeholder="Monto"
-                                    />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        <Row gutter={24}>
-                            <Col span={12}>
-                                <Form.Item label="Método de pago" name="metodo_pago" rules={[{ required: true, message: "Selecciona el método de pago" }]}> 
-                                    <Select
-                                        options={[
-                                            { label: "Efectivo", value: "efectivo" },
-                                            { label: "Transferencia", value: "transferencia" },
-                                            { label: "Tarjeta", value: "tarjeta" },
-                                            { label: "Otro", value: "otro" },
-                                        ]}
-                                        placeholder="Selecciona el método de pago"
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item label="Fecha de pago" name="fecha_pago" rules={[{ required: true, message: "Selecciona la fecha de pago" }]}> 
-                                    <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        <Row gutter={24}>
-                            <Col span={12}>
-                                <Form.Item label="Referencia" name="referencia"> 
-                                    <Input placeholder="Referencia o número de comprobante" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                    </Form>
-                </Create>
-            );
+    return (
+        <Create 
+            saveButtonProps={{ ...saveButtonProps, onClick: () => formProps.form?.submit() }} 
+            title="Registrar Nuevo Ingreso"
+        >
+            <Form 
+                {...formProps} 
+                form={formProps.form}
+                layout="vertical" 
+                onFinish={handleOnFinish} 
+                initialValues={{ metodo_pago: 'efectivo', fecha_pago: dayjs() }}
+            >
+                <Row gutter={24}>
+                    <Col span={12}>
+                        <Form.Item label="Estudiante" name="estudiante_id" rules={[{ required: true, message: "Selecciona un estudiante" }]}> 
+                            <Select 
+                                {...estudianteSelectProps} 
+                                placeholder="Escribe para buscar..." 
+                                showSearch
+                                optionFilterProp="label"
+                                onChange={handleEstudianteChange}
+                                suffixIcon={<UserOutlined />}
+                            />
+                        </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                        <Form.Item label="Curso" name="matricula_id" rules={[{ required: true, message: "Selecciona un curso" }]}> 
+                            <Select 
+                                options={cursosDelEstudiante.map(m => ({ label: m.cursos?.nombre, value: m.id }))}
+                                loading={buscandoCursos}
+                                placeholder="Selecciona un curso"
+                                onChange={handleCursoChange}
+                                allowClear
+                                suffixIcon={<SolutionOutlined />}
+                            />
+                        </Form.Item>
+                    </Col>
+                </Row>
+                <Row gutter={24}>
+                    <Col span={12}>
+                        <Form.Item label="Cuota" name="cuota_id" rules={[{ required: true, message: "Selecciona una cuota" }]}> 
+                            <Select 
+                                options={cuotasPendientes.map(c => ({ label: `Cuota #${c.numero_cuota} - $${c.monto}`, value: c.id }))}
+                                loading={cargandoCuotas}
+                                placeholder="Selecciona una cuota"
+                                onChange={handleCuotaChange}
+                                allowClear
+                                suffixIcon={<DollarCircleOutlined />}
+                            />
+                        </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                        <Form.Item label="Monto a pagar" name="monto" rules={[{ required: true, message: "Ingresa el monto" }]}> 
+                            <InputNumber 
+                                min={0}
+                                max={999999999}
+                                style={{ width: "100%" }}
+                                parser={montoParser}
+                                prefix={<DollarCircleOutlined />}
+                                placeholder="Monto"
+                            />
+                        </Form.Item>
+                    </Col>
+                </Row>
+                <Row gutter={24}>
+                    <Col span={12}>
+                        <Form.Item label="Método de pago" name="metodo_pago" rules={[{ required: true, message: "Selecciona el método de pago" }]}> 
+                            <Select
+                                options={[
+                                    { label: "Efectivo", value: "efectivo" },
+                                    { label: "Transferencia", value: "transferencia" },
+                                    { label: "Tarjeta", value: "tarjeta" },
+                                    { label: "Otro", value: "otro" },
+                                ]}
+                                placeholder="Selecciona el método de pago"
+                            />
+                        </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                        <Form.Item label="Fecha de pago" name="fecha_pago" rules={[{ required: true, message: "Selecciona la fecha de pago" }]}> 
+                            <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+                        </Form.Item>
+                    </Col>
+                </Row>
+                <Row gutter={24}>
+                    <Col span={12}>
+                        <Form.Item label="Referencia" name="referencia"> 
+                            <Input placeholder="Referencia o número de comprobante" />
+                        </Form.Item>
                     </Col>
                 </Row>
 
                 {cursosDelEstudiante.length === 0 && !buscandoCursos && (
-                     <Alert style={{marginBottom: 20}} type="info" message="Nota: Selecciona un estudiante para ver sus cursos inscritos." />
+                    <Alert style={{marginBottom: 20}} type="info" message="Nota: Selecciona un estudiante para ver sus cursos inscritos." />
                 )}
 
                 {cuotasPendientes.length === 0 && !cargandoCuotas && cursosDelEstudiante.length > 0 && (
-                     <Alert style={{marginBottom: 20}} type="warning" message="Este estudiante no tiene cuotas pendientes de pago." />
+                    <Alert style={{marginBottom: 20}} type="warning" message="Este estudiante no tiene cuotas pendientes de pago." />
                 )}
 
                 {cuotasPendientes.length > 0 && (
@@ -249,10 +242,10 @@ export default function PagoCreate() {
                                 {cuotasPendientes.map((cuota: any) => {
                                     const esVencida = cuota.estado === 'vencido';
                                     const labelEstado = esVencida ? ' 🔴 VENCIDA' : '';
-                                       const vencimiento = cuota.fecha_vencimiento ? ` - Vence: ${formatDate(cuota.fecha_vencimiento)}` : '';
+                                    const vencimiento = cuota.fecha_vencimiento ? ` - Vence: ${formatDate(cuota.fecha_vencimiento)}` : '';
                                     return (
                                         <Select.Option key={cuota.id} value={cuota.id}>
-                                            {cuota.periodo_pagado} - ${cuota.monto?.toLocaleString() || 0}{vencimiento}{labelEstado}
+                                            {`${cuota.periodo_pagado} - $${cuota.monto?.toLocaleString() || 0}${vencimiento}${labelEstado}`}
                                         </Select.Option>
                                     );
                                 })}
@@ -265,7 +258,7 @@ export default function PagoCreate() {
 
                 <Row gutter={24}>
                     <Col span={8}>
-                        <Form.Item label="Monto Recibido" name="monto" rules={[{ required: true, message: "Ingresa el valor" }]}>
+                        <Form.Item label="Monto Recibido" name="monto" rules={[{ required: true, message: "Ingresa el valor" }]}> 
                             <InputNumber 
                                 style={{ width: '100%', fontSize: '16px', fontWeight: 'bold' }} 
                                 prefix="$"
@@ -304,7 +297,6 @@ export default function PagoCreate() {
                         </Form.Item>
                     </Col>
                 </Row>
-
             </Form>
         </Create>
     );

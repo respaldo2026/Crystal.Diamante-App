@@ -64,12 +64,24 @@ export default function DashboardPage() {
   // Redirigir no autorizados - USAR EFFECT PARA EVITAR CONDICIONALES
   useEffect(() => {
     if (!userLoading && user) {
+      if (user.rol === "admin") {
+        router.push("/dashboard/admin");
+        return;
+      }
+      if (user.rol === "director") {
+        router.push("/dashboard/director");
+        return;
+      }
       if (user.rol === "profesor") {
-        router.push("/mi-oficina");
+        router.push("/dashboard/profesor");
         return;
       }
       if (user.rol === "estudiante") {
-        router.push("/portal-estudiante");
+        router.push("/dashboard/estudiante");
+        return;
+      }
+      if (user.rol === "secretaria") {
+        router.push("/dashboard/secretaria");
         return;
       }
     }

@@ -189,10 +189,14 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
       },
     ];
 
-    // Si es admin, mostrar todo (o filtrar también si quieres que el admin se auto-restrinja)
-    if (userRole === 'admin' || userRole === 'director') {
+     // Si es admin, mostrar todo el menú sin restricciones
+     if (userRole === 'admin') {
        return allResources;
-    }
+     }
+     // Si es director, mostrar todo el menú (puedes ajustar si quieres restricciones para director)
+     if (userRole === 'director') {
+       return allResources;
+     }
 
     // Para otros roles (ej: administrativo), filtrar según la tabla de permisos
     if (permisosLoading) return [];
@@ -207,12 +211,71 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
     });
   };
 
-  if (userLoading || permisosLoading) {
+
+  // Si el usuario es admin, mostrar el menú completo aunque esté cargando
+  if (user?.rol === 'admin') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: '16px' }}>
-        <Spin size="large" />
-        <div style={{ color: '#5B21B6', fontWeight: 500 }}>Cargando Academia Crystal...</div>
-      </div>
+      <RefineKbarProvider>
+        <ConfigProvider 
+          theme={{
+            token: {
+              colorPrimary: '#5B21B6',
+              colorSuccess: '#059669',
+              colorWarning: '#D97706',
+              colorError: '#DC2626',
+              colorInfo: '#0284C7',
+              colorTextBase: '#1F2937',
+              colorBgBase: '#FFFFFF',
+              borderRadius: 8,
+              fontSize: 14,
+            },
+            components: {
+              Button: {
+                controlHeight: 36,
+                fontWeight: 500,
+              },
+              Card: {
+                  borderRadiusLG: 12,
+                },
+                Tag: {
+                  borderRadiusSM: 6,
+                },
+                Table: {
+                  headerBg: '#F9FAFB',
+                  headerColor: '#374151',
+                  rowHoverBg: '#F3F4F6',
+                },
+              },
+            }}
+          >
+            <AntdApp>
+              <Refine
+                routerProvider={routerProvider}
+                dataProvider={dataProvider}
+                authProvider={authProvider}
+                resources={allResources}
+                options={{
+                  syncWithLocation: true,
+                  warnWhenUnsavedChanges: true,
+                }}
+              >
+                <ThemedLayout
+                  initialSiderCollapsed={false}
+                  Title={({ collapsed }) => (
+                    <ThemedTitle
+                      collapsed={collapsed}
+                      text="Crystal App"
+                      icon={<BookOutlined />}
+                    />
+                  )}
+                >
+                  {children}
+                </ThemedLayout>
+                <RefineKbar />
+              </Refine>
+            </AntdApp>
+          </ConfigProvider>
+        </RefineKbarProvider>
     );
   }
 

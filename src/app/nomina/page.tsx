@@ -15,6 +15,7 @@ import { formatDate } from "@utils/date";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { logger } from "@utils/logger";
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;

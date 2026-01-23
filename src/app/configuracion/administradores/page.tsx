@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { Form, Input, Row, Col, Alert, Button, Card, Table, Space, Popconfirm, Spin, App, Modal, Dropdown, Checkbox, Divider, Tag, Upload, Avatar } from "antd";
+import { Form, Input, Row, Col, Alert, Button, Card, Table, Space, Popconfirm, Spin, App, Modal, Dropdown, Checkbox, Divider, Tag, Upload, Avatar, Select } from "antd";
 import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined, MoreOutlined, LockOutlined, CameraOutlined, UploadOutlined } from "@ant-design/icons";
-import { crearUsuario, obtenerUsuariosPorRol } from "@modules/usuarios/usuarios.service";
+import { crearUsuario, obtenerUsuariosPorRol } from "../../../modules/usuarios/usuarios.service";
+import { supabaseBrowserClient } from "../../../utils/supabase/client";
 import { MODULOS_DISPONIBLES } from "@hooks/useRolePermissions"; // Si se centraliza, mover a contexts/roles-permissions-context si es necesario
 
 export default function AdministradoresPage() {
@@ -14,19 +15,29 @@ export default function AdministradoresPage() {
     const [adminsList, setAdminsList] = useState<any[]>([]);
     const [listLoading, setListLoading] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [rolSeleccionado, setRolSeleccionado] = useState<'admin' | 'secretaria'>('admin');
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editingAdmin, setEditingAdmin] = useState<any>(null);
     const [permisos, setPermisos] = useState<Record<string, boolean>>({});
     const [fotoUrl, setFotoUrl] = useState<string>("");
     const [fotoEditUrl, setFotoEditUrl] = useState<string>("");
 
+
     // Migración: cargar administradores usando servicio modular
-    React.useEffect(() => {
+    const cargarAdministradores = async () => {
         setListLoading(true);
-        obtenerUsuariosPorRol("admin")
-            .then((data) => setAdminsList(data))
-            .catch((err) => message.error("Error cargando administradores: " + err.message))
-            .finally(() => setListLoading(false));
+        try {
+            const data = await obtenerUsuariosPorRol("admin");
+            setAdminsList(data);
+        } catch (err: any) {
+            message.error("Error cargando administradores: " + err.message);
+        } finally {
+            setListLoading(false);
+        }
+    };
+
+    React.useEffect(() => {
+        cargarAdministradores();
     }, []);
 
     const handleFotoUpload = async (file: any) => {
@@ -114,7 +125,7 @@ export default function AdministradoresPage() {
                 throw new Error("El correo electrónico es obligatorio y debe ser válido para crear el acceso");
             }
 
-            const passwordTemporal = values.identificacion.replace(/\./g, '') || 'admin123';
+            const passwordTemporal = values.identificacion.replace(/\./g, '') || (rolSeleccionado === 'admin' ? 'admin123' : 'secretaria123');
 
             const response = await fetch('/api/create-user', {
                 method: 'POST',
@@ -122,7 +133,7 @@ export default function AdministradoresPage() {
                 body: JSON.stringify({
                     email: values.email,
                     password: passwordTemporal,
-                    rol: 'admin',
+                    rol: rolSeleccionado,
                     user_metadata: {
                         nombre_completo: values.nombre_completo,
                         identificacion: values.identificacion,
@@ -203,7 +214,7 @@ export default function AdministradoresPage() {
             observaciones: admin.observaciones,
         });
 
-        // Cargar permisos del admin
+        // Cargar permisos del usuario (admin o secretaria)
         try {
             const { data } = await supabaseBrowserClient
                 .from("admin_permissions")
@@ -317,6 +328,12 @@ export default function AdministradoresPage() {
                             layout="vertical"
                             onFinish={handleGuardarAdmin}
                         >
+                            <Form.Item label="Rol" required>
+                                <Select value={rolSeleccionado} onChange={setRolSeleccionado} style={{ width: 200 }}>
+                                    <Select.Option value="admin">Administrador</Select.Option>
+                                    <Select.Option value="secretaria">Secretaria</Select.Option>
+                                </Select>
+                            </Form.Item>
                             <Row gutter={16}>
                                 <Col xs={24} md={12}>
                                     <Form.Item
@@ -588,7 +605,7 @@ export default function AdministradoresPage() {
 
                         <Divider><LockOutlined /> Permisos de Acceso</Divider>
                         <Alert
-                            message="Selecciona los módulos a los que este administrador tendrá acceso"
+                            message={`Selecciona los módulos a los que este usuario tendrá acceso (${editingAdmin?.rol === 'secretaria' ? 'Secretaria' : 'Administrador'})`}
                             type="info"
                             style={{ marginBottom: 16 }}
                             showIcon
@@ -601,7 +618,7 @@ export default function AdministradoresPage() {
                                         checked={permisos[modulo.key] || false}
                                         onChange={(e) => handlePermisoChange(modulo.key, e.target.checked)}
                                     >
-                                        <Tag color="blue">{modulo.label}</Tag>
+                                        <Tag color={editingAdmin?.rol === 'secretaria' ? 'green' : 'blue'}>{modulo.label}</Tag>
                                     </Checkbox>
                                 </Col>
                             ))}

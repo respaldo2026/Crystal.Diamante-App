@@ -15,5 +15,4 @@ export interface RolePermissions {
 export const MODULOS_DISPONIBLES: ModuleDefinition[] = MODULES;
 export const ROLES_DISPONIBLES: Record<string, RoleDefinition> = ROLES;
 
-/**
-// Hook de permisos migrado a contexto global. Usar useRolesPermissions de @contexts/roles-permissions-context
+

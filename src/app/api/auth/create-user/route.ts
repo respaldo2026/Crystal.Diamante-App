@@ -49,6 +49,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+
+    // Registrar acción en audit_logs
+    await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/audit/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: data.user.id,
+        action: 'create',
+        entity: 'user',
+        entity_id: data.user.id,
+        details: { email, metadata },
+      }),
+    });
+
     // Si se creó correctamente, retornar éxito
     return NextResponse.json({ 
       success: true, 

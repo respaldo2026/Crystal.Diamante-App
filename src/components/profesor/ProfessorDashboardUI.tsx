@@ -1,5 +1,7 @@
 import React from "react";
-import { Card, Statistic, Row, Col, Spin, Tabs, List, Typography } from "antd";
+import { Card, Statistic, Row, Col, Spin, Tabs, List, Typography, Button, Space } from "antd";
+import { Line, Column } from "@ant-design/plots";
+import { UserAddOutlined, FileTextOutlined, CheckCircleOutlined } from "@ant-design/icons";
 
 
 interface CursoResumen {
@@ -15,6 +17,8 @@ interface ProfessorDashboardUIProps {
       cursosActivos: number;
       totalEstudiantes: number;
       horasMes: number;
+      asistenciaChart?: any[];
+      calificacionesChart?: any[];
     };
     cursos: CursoResumen[];
   };
@@ -23,16 +27,33 @@ interface ProfessorDashboardUIProps {
 export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dashboard }) => {
   const { loading, stats, cursos } = dashboard;
 
+  // Configuración de gráficas (simples, pueden ser reemplazadas por datos reales)
+  const asistenciaConfig = {
+    data: stats.asistenciaChart || [],
+    xField: 'fecha',
+    yField: 'asistencias',
+    smooth: true,
+    color: '#52c41a',
+    height: 200,
+  };
+  const calificacionesConfig = {
+    data: stats.calificacionesChart || [],
+    xField: 'fecha',
+    yField: 'promedio',
+    color: '#1890ff',
+    height: 200,
+  };
+
   if (loading) {
     return <Spin size="large" style={{ margin: "48px auto", display: "block" }} />;
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
       <Typography.Title level={2} style={{ textAlign: "center", marginBottom: 32 }}>
         Mi Oficina - Panel del Profesor
       </Typography.Title>
-      <Row gutter={[24, 24]} justify="center">
+      <Row gutter={[24, 24]} justify="center" style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
           <Card bordered={false} style={{ textAlign: "center" }}>
             <Statistic title="Cursos Activos" value={stats.cursosActivos} valueStyle={{ color: "#1890ff" }} />
@@ -49,6 +70,25 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           </Card>
         </Col>
       </Row>
+      <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
+        <Col xs={24} md={12}>
+          <Card title="Asistencias Recientes" bordered={false}>
+            <Line {...asistenciaConfig} />
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card title="Promedio de Calificaciones" bordered={false}>
+            <Column {...calificacionesConfig} />
+          </Card>
+        </Col>
+      </Row>
+      <Card style={{ marginBottom: 24 }}>
+        <Space size="middle" wrap>
+          <Button type="primary" icon={<CheckCircleOutlined />} size="large">Tomar Lista</Button>
+          <Button icon={<FileTextOutlined />} size="large">Calificar</Button>
+          <Button icon={<UserAddOutlined />} size="large">Agregar Estudiante</Button>
+        </Space>
+      </Card>
       <Tabs defaultActiveKey="1" style={{ marginTop: 32 }}>
         <Tabs.TabPane tab="Mis Cursos" key="1">
           <List

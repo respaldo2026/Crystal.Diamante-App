@@ -39,6 +39,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/es";
 import { formatDate } from "@utils/date";
 import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas } from "@modules/academico/pensum.service";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";

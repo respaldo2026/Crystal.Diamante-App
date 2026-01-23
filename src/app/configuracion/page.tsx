@@ -42,12 +42,15 @@ export default function ConfiguracionPage() {
   const [medioEditando, setMedioEditando] = useState<any>(null);
   const [formMedio] = Form.useForm();
 
+
+  // ...existing code...
+
   // 1. Cargar la configuración actual
   useEffect(() => {
     cargarConfiguracion();
     cargarPlantillas();
     cargarMediosPago();
-  }, [cargarConfiguracion, cargarPlantillas, cargarMediosPago]);
+  }, []);
 
   const cargarConfiguracion = async () => {
     setLoading(true);

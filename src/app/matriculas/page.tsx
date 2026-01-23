@@ -21,6 +21,8 @@ import { obtenerStatsAsistenciasYPagos } from "@modules/academico/asistencias.se
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
 
+import { supabaseBrowserClient } from "@utils/supabase/client";
+
 const { Text } = Typography;
 
 export default function MatriculasList() {
@@ -186,8 +188,8 @@ export default function MatriculasList() {
             const pagosCount = pagosData?.length || 0;
 
             if (asistCount > 0 || pagosCount > 0) {
-                const pagosPendientes = pagosData?.filter(p => p.estado === 'pendiente').length || 0;
-                const pagosPagados = pagosData?.filter(p => p.estado === 'pagado').length || 0;
+                const pagosPendientes = pagosData?.filter((p: any) => p.estado === 'pendiente').length || 0;
+                const pagosPagados = pagosData?.filter((p: any) => p.estado === 'pagado').length || 0;
                 
                 modal.confirm({
                     title: 'Esta matrícula tiene registros asociados',

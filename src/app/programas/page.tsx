@@ -1,8 +1,8 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Tooltip, Dropdown } from "antd";
 import { PlusOutlined, EditOutlined, BookOutlined, MoreOutlined, FolderOutlined } from "@ant-design/icons";
-import { useState, useEffect } from "react";
 import type { CheckboxChangeEvent } from "antd/es/checkbox";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import GestorPensum from "@components/GestorPensum";
@@ -11,6 +11,8 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 export default function ProgramasPage() {
+
+  // Declaración de estado y hooks (única sección)
   const { message, modal } = App.useApp();
   const [form] = Form.useForm();
   const [modalVisible, setModalVisible] = useState(false);
@@ -21,73 +23,65 @@ export default function ProgramasPage() {
   const [gestorPensumVisible, setGestorPensumVisible] = useState(false);
   const [programaSeleccionado, setProgramaSeleccionado] = useState<any>(null);
 
-  useEffect(() => {
-    cargarProgramas();
-  }, [cargarProgramas]);
 
-  // Refrescar cuando cambia el filtro de inactivos
-  useEffect(() => {
-    cargarProgramas();
-  }, [mostrarInactivos, cargarProgramas]);
 
-  const cargarProgramas = async () => {
-    setLoading(true);
-    try {
-      let query = supabaseBrowserClient
-        .from("programas")
-        .select("*")
-        .order("nombre", { ascending: true });
-      
-      // Filtrar por activos si no se quiere ver inactivos
-      if (!mostrarInactivos) {
-        query = query.eq("activo", true);
-      }
-      
-      const { data, error } = await query;
-      
-      if (!error && data) {
-        setProgramas(data);
-      }
-    } catch (error) {
-      message.error("Error al cargar programas");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleSubmit = async () => {
-    try {
-      const values = await form.validateFields();
-      const payload = {
-        ...values,
-        emoji: values.emoji ? String(values.emoji).trim() : null,
-      };
 
-      if (editingPrograma) {
-        const { error } = await supabaseBrowserClient
+    // Cargar programas desde Supabase (única versión)
+    const cargarProgramas = async () => {
+      setLoading(true);
+      try {
+        let query = supabaseBrowserClient
           .from("programas")
-          .update(payload)
-          .eq("id", editingPrograma.id);
-
-        if (error) throw error;
-        message.success("Programa actualizado correctamente");
-      } else {
-        const { error } = await supabaseBrowserClient
-          .from("programas")
-          .insert([payload]);
-
-        if (error) throw error;
-        message.success("Programa creado correctamente");
+          .select("*")
+          .order("nombre", { ascending: true });
+        if (!mostrarInactivos) {
+          query = query.eq("activo", true);
+        }
+        const { data, error } = await query;
+        if (!error && data) {
+          setProgramas(data);
+        }
+      } catch (error) {
+        message.error("Error al cargar programas");
+        console.error(error);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      handleCloseModal();
+    useEffect(() => {
       cargarProgramas();
-    } catch (error: any) {
-      message.error("Error al guardar: " + (error?.message || "Desconocido"));
-      console.error(error);
-    }
-  };
+    }, [mostrarInactivos]);
+
+    // Guardar o editar programa (única versión)
+    const handleSubmit = async () => {
+      try {
+        const values = await form.validateFields();
+        let payload = { ...values };
+        if (editingPrograma) {
+          // Editar
+          const { error } = await supabaseBrowserClient
+            .from("programas")
+            .update(payload)
+            .eq("id", editingPrograma.id);
+          if (error) throw error;
+          message.success("Programa actualizado correctamente");
+        } else {
+          // Crear
+          const { error } = await supabaseBrowserClient
+            .from("programas")
+            .insert([payload]);
+          if (error) throw error;
+          message.success("Programa creado correctamente");
+        }
+        handleCloseModal();
+        cargarProgramas();
+      } catch (error: any) {
+        message.error("Error al guardar: " + (error?.message || "Desconocido"));
+        console.error(error);
+      }
+    };
 
   const handleOpenModal = (programa?: any) => {
     if (programa) {
