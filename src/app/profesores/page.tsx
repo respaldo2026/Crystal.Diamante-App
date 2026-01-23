@@ -11,9 +11,9 @@ import {
 } from "@ant-design/icons";
 
 // CORRECCIÓN: Usamos la misma ruta que funcionó en 'Inventario'
-import { obtenerUsuariosPorRol } from "@modules/usuarios/usuarios.service";
-import { obtenerCursos } from "@modules/academico/cursos.service";
-import { enviarWhatsapp } from "@modules/comunicacion/whatsapp.service";
+import { obtenerUsuariosPorRol } from "../../modules/usuarios/usuarios.service";
+import { obtenerCursos } from "../../modules/academico/cursos.service";
+import { enviarWhatsapp } from "../../modules/comunicacion/whatsapp.service";
 
 const { Text, Title } = Typography;
 
