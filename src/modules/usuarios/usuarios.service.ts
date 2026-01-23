@@ -19,7 +19,8 @@ export async function obtenerUsuariosPorRol(rol: string) {
   const { data, error } = await supabaseBrowserClient
     .from("perfiles")
     .select("*")
-    .eq("rol", rol);
+    .eq("rol", rol)
+    .eq("activo", true);
   if (error) throw error;
   return data;
 }

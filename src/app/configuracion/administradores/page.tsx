@@ -8,11 +8,50 @@ import { supabaseBrowserClient } from "../../../utils/supabase/client";
 import { MODULOS_DISPONIBLES } from "@hooks/useRolePermissions"; // Si se centraliza, mover a contexts/roles-permissions-context si es necesario
 
 export default function AdministradoresPage() {
+                // Estado para mostrar secretarias en la UI
+                const [secretariasList, setSecretariasList] = useState<any[]>([]);
+            // DEBUG: Mostrar secretarias
+            const mostrarSecretarias = async () => {
+                setListLoading(true);
+                try {
+                    const { data, error } = await supabaseBrowserClient
+                        .from("perfiles")
+                        .select("*")
+                        .eq("rol", "secretaria");
+                    if (error) throw error;
+                    setSecretariasList(data || []);
+                    console.log("[DEBUG] Secretarias:", data);
+                    message.info(`Secretarias encontradas: ${data?.length ?? 0}`);
+                } catch (err: any) {
+                    setSecretariasList([]);
+                    console.error("[DEBUG] Error mostrando secretarias:", err);
+                    message.error("Error mostrando secretarias: " + err.message);
+                } finally {
+                    setListLoading(false);
+                }
+            };
+        // DEBUG: Mostrar todos los perfiles sin filtro para depuración
+        const mostrarTodosLosPerfiles = async () => {
+            setListLoading(true);
+            try {
+                const { data, error } = await supabaseBrowserClient
+                    .from("perfiles")
+                    .select("*");
+                if (error) throw error;
+                console.log("[DEBUG] Todos los perfiles:", data);
+                message.info(`Perfiles encontrados: ${data?.length ?? 0}`);
+            } catch (err: any) {
+                console.error("[DEBUG] Error mostrando todos los perfiles:", err);
+                message.error("Error mostrando todos los perfiles: " + err.message);
+            } finally {
+                setListLoading(false);
+            }
+        };
     const { message, modal } = App.useApp();
     const [form] = Form.useForm();
     const [editForm] = Form.useForm();
     const [loading, setLoading] = useState(false);
-    const [adminsList, setAdminsList] = useState<any[]>([]);
+    const [adminYSecretariasList, setAdminYSecretariasList] = useState<any[]>([]);
     const [listLoading, setListLoading] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [rolSeleccionado, setRolSeleccionado] = useState<'admin' | 'secretaria'>('admin');
@@ -24,20 +63,27 @@ export default function AdministradoresPage() {
 
 
     // Migración: cargar administradores usando servicio modular
-    const cargarAdministradores = async () => {
+    // Cargar todos los perfiles administrativos (admin y secretaria)
+    const cargarAdministrativos = async () => {
         setListLoading(true);
         try {
-            const data = await obtenerUsuariosPorRol("admin");
-            setAdminsList(data);
+            const { data, error } = await supabaseBrowserClient
+                .from("perfiles")
+                .select("*")
+                .in("rol", ["admin", "secretaria"])
+                .eq("activo", true);
+            if (error) throw error;
+            setAdminYSecretariasList(data || []);
         } catch (err: any) {
-            message.error("Error cargando administradores: " + err.message);
+            setAdminYSecretariasList([]);
+            message.error("Error cargando administrativos: " + err.message);
         } finally {
             setListLoading(false);
         }
     };
 
     React.useEffect(() => {
-        cargarAdministradores();
+        cargarAdministrativos();
     }, []);
 
     const handleFotoUpload = async (file: any) => {
@@ -296,6 +342,91 @@ export default function AdministradoresPage() {
     };
     return (
         <div style={{ padding: '24px' }}>
+            <Card>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <div>
+                        <h1 style={{ margin: 0 }}>👔 Perfiles Administrativos</h1>
+                        <p style={{ color: '#666', marginTop: '8px' }}>Gestiona los usuarios con acceso administrativo al sistema (Administradores y Secretarias)</p>
+                    </div>
+                    <Button
+                        type="primary"
+                        size="large"
+                        icon={<PlusOutlined />}
+                        onClick={() => setShowForm(!showForm)}
+                    >
+                        {showForm ? 'Cancelar' : 'Nuevo Administrativo'}
+                    </Button>
+                </div>
+                <Spin spinning={listLoading}>
+                    <h3 style={{ marginTop: '24px', marginBottom: '16px' }}>
+                        Administrativos Registrados ({adminYSecretariasList.length})
+                    </h3>
+                    <Table
+                        dataSource={adminYSecretariasList}
+                        rowKey="id"
+                        pagination={{ pageSize: 10 }}
+                        columns={[
+                            {
+                                title: 'Nombre',
+                                dataIndex: 'nombre_completo',
+                                key: 'nombre_completo',
+                                render: (text, record) => (
+                                    <Space>
+                                        <UserOutlined />
+                                        <strong>{text}</strong>
+                                        <Tag color={record.rol === 'admin' ? 'blue' : 'green'}>{record.rol === 'admin' ? 'Administrador' : 'Secretaria'}</Tag>
+                                    </Space>
+                                )
+                            },
+                            {
+                                title: 'Cédula',
+                                dataIndex: 'identificacion',
+                                key: 'identificacion',
+                            },
+                            {
+                                title: 'Correo',
+                                dataIndex: 'email',
+                                key: 'email',
+                            },
+                            {
+                                title: 'Teléfono',
+                                dataIndex: 'telefono',
+                                key: 'telefono',
+                            },
+                            {
+                                title: 'Acciones',
+                                key: 'acciones',
+                                width: 80,
+                                render: (text, record) => {
+                                    const menuItems = [
+                                        {
+                                            key: 'edit',
+                                            label: 'Editar Perfil',
+                                            icon: <EditOutlined />,
+                                            onClick: () => abrirModalEditar(record),
+                                        },
+                                        {
+                                            key: 'delete',
+                                            label: 'Eliminar',
+                                            icon: <DeleteOutlined />,
+                                            onClick: () => handleEliminarAdmin(record.id),
+                                        },
+                                    ];
+                                    return (
+                                        <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+                                            <Button icon={<MoreOutlined />} size="small" />
+                                        </Dropdown>
+                                    );
+                                }
+                            },
+                        ]}
+                    />
+                </Spin>
+            </Card>
+            {/* Botón temporal de depuración para ver todos los perfiles */}
+            <Button onClick={mostrarTodosLosPerfiles} style={{ marginBottom: 16 }}>
+                [DEBUG] Mostrar todos los perfiles
+            </Button>
             <Card>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                     <div>

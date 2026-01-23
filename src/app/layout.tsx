@@ -8,6 +8,7 @@ import { ConfigProvider, App as AntdApp, Spin } from "antd";
 import "@refinedev/antd/dist/reset.css";
 import "@utils/suppress-warnings";
 
+
 // ICONOS
 import { 
   DashboardOutlined, 
@@ -24,6 +25,123 @@ import {
   UsergroupAddOutlined,
   SolutionOutlined
 } from "@ant-design/icons";
+
+// Definición de TODOS los recursos posibles del panel administrativo (debe estar fuera de cualquier función y antes de cualquier uso)
+const allResources = [
+  {
+    key: "dashboard",
+    name: "dashboard",
+    list: "/",
+    meta: {
+      label: "Dashboard",
+      icon: <DashboardOutlined />,
+    },
+  },
+  {
+    key: "estudiantes", // Clave debe coincidir con el módulo en permisos
+    name: "perfiles",
+    list: "/estudiantes",
+    create: "/estudiantes/create",
+    edit: "/estudiantes/edit/:id",
+    show: "/estudiantes/show/:id",
+    meta: {
+      label: "Estudiantes",
+      icon: <UserOutlined />,
+    },
+  },
+  {
+    key: "profesores",
+    name: "profesores",
+    list: "/profesores",
+    create: "/profesores/create",
+    edit: "/profesores/edit/:id",
+    show: "/profesores/show/:id",
+    meta: {
+      label: "Profesores",
+      icon: <SolutionOutlined />,
+    },
+  },
+  {
+    key: "cursos", // Programas suele ir junto con cursos
+    name: "programas",
+    list: "/programas",
+    meta: {
+      label: "Programas",
+      icon: <BookOutlined />,
+    },
+  },
+  {
+    key: "cursos",
+    name: "cursos",
+    list: "/cursos",
+    create: "/cursos/create",
+    edit: "/cursos/edit/:id",
+    show: "/cursos/show/:id",
+    meta: {
+      label: "Grupos",
+      icon: <UsergroupAddOutlined />,
+    },
+  },
+  {
+    key: "leads",
+    name: "leads",
+    list: "/leads",
+    meta: {
+      label: "Leads",
+      icon: <CustomerServiceOutlined />,
+    },
+  },
+  {
+    key: "planificador",
+    name: "planificador",
+    list: "/planificador",
+    meta: {
+      label: "Planificador",
+      icon: <CalendarOutlined />,
+    },
+  },
+  {
+    key: "matriculas",
+    name: "matriculas",
+    list: "/matriculas",
+    create: "/matriculas/create",
+    edit: "/matriculas/edit/:id",
+    show: "/matriculas/show/:id",
+    meta: {
+      label: "Matrículas",
+      icon: <FileTextOutlined />,
+    },
+  },
+  {
+    key: "nomina",
+    name: "nomina",
+    list: "/nomina",
+    create: "/nomina/create",
+    meta: {
+      label: "Nómina",
+      icon: <CalculatorOutlined />,
+    },
+  },
+  {
+    key: "tesoreria",
+    name: "tesoreria",
+    list: "/tesoreria",
+    create: "/tesoreria/create",
+    meta: {
+      label: "Tesorería",
+      icon: <DollarCircleOutlined />,
+    },
+  },
+  {
+    key: "configuracion", // Usualmente solo admin, o configurable
+    name: "configuracion",
+    list: "/configuracion",
+    meta: {
+      label: "Configuración",
+      icon: <SettingOutlined />,
+    },
+  },
+];
 
 import routerProvider from "@refinedev/nextjs-router";
 
@@ -72,122 +190,122 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
       ];
     }
 
-    // Definición de TODOS los recursos posibles del panel administrativo
-    const allResources = [
-      {
-        key: "dashboard",
-        name: "dashboard",
-        list: "/",
-        meta: {
-          label: "Dashboard",
-          icon: <DashboardOutlined />,
-        },
-      },
-      {
-        key: "estudiantes", // Clave debe coincidir con el módulo en permisos
-        name: "perfiles",
-        list: "/estudiantes",
-        create: "/estudiantes/create",
-        edit: "/estudiantes/edit/:id",
-        show: "/estudiantes/show/:id",
-        meta: {
-          label: "Estudiantes",
-          icon: <UserOutlined />,
-        },
-      },
-      {
-        key: "profesores",
-        name: "profesores",
-        list: "/profesores",
-        create: "/profesores/create",
-        edit: "/profesores/edit/:id",
-        show: "/profesores/show/:id",
-        meta: {
-          label: "Profesores",
-          icon: <SolutionOutlined />,
-        },
-      },
-      {
-        key: "cursos", // Programas suele ir junto con cursos
-        name: "programas",
-        list: "/programas",
-        meta: {
-          label: "Programas",
-          icon: <BookOutlined />,
-        },
-      },
-      {
-        key: "cursos",
-        name: "cursos",
-        list: "/cursos",
-        create: "/cursos/create",
-        edit: "/cursos/edit/:id",
-        show: "/cursos/show/:id",
-        meta: {
-          label: "Grupos",
-          icon: <UsergroupAddOutlined />,
-        },
-      },
-      {
-        key: "leads",
-        name: "leads",
-        list: "/leads",
-        meta: {
-          label: "Leads",
-          icon: <CustomerServiceOutlined />,
-        },
-      },
-      {
-        key: "planificador",
-        name: "planificador",
-        list: "/planificador",
-        meta: {
-          label: "Planificador",
-          icon: <CalendarOutlined />,
-        },
-      },
-      {
-        key: "matriculas",
-        name: "matriculas",
-        list: "/matriculas",
-        create: "/matriculas/create",
-        edit: "/matriculas/edit/:id",
-        show: "/matriculas/show/:id",
-        meta: {
-          label: "Matrículas",
-          icon: <FileTextOutlined />,
-        },
-      },
-      {
-        key: "nomina",
-        name: "nomina",
-        list: "/nomina",
-        create: "/nomina/create",
-        meta: {
-          label: "Nómina",
-          icon: <CalculatorOutlined />,
-        },
-      },
-      {
-        key: "tesoreria",
-        name: "tesoreria",
-        list: "/tesoreria",
-        create: "/tesoreria/create",
-        meta: {
-          label: "Tesorería",
-          icon: <DollarCircleOutlined />,
-        },
-      },
-      {
-        key: "configuracion", // Usualmente solo admin, o configurable
-        name: "configuracion",
-        list: "/configuracion",
-        meta: {
-          label: "Configuración",
-          icon: <SettingOutlined />,
-        },
-      },
-    ];
+// Definición de TODOS los recursos posibles del panel administrativo (debe estar fuera de cualquier función y al inicio del archivo)
+const allResources = [
+  {
+    key: "dashboard",
+    name: "dashboard",
+    list: "/",
+    meta: {
+      label: "Dashboard",
+      icon: <DashboardOutlined />,
+    },
+  },
+  {
+    key: "estudiantes", // Clave debe coincidir con el módulo en permisos
+    name: "perfiles",
+    list: "/estudiantes",
+    create: "/estudiantes/create",
+    edit: "/estudiantes/edit/:id",
+    show: "/estudiantes/show/:id",
+    meta: {
+      label: "Estudiantes",
+      icon: <UserOutlined />,
+    },
+  },
+  {
+    key: "profesores",
+    name: "profesores",
+    list: "/profesores",
+    create: "/profesores/create",
+    edit: "/profesores/edit/:id",
+    show: "/profesores/show/:id",
+    meta: {
+      label: "Profesores",
+      icon: <SolutionOutlined />,
+    },
+  },
+  {
+    key: "cursos", // Programas suele ir junto con cursos
+    name: "programas",
+    list: "/programas",
+    meta: {
+      label: "Programas",
+      icon: <BookOutlined />,
+    },
+  },
+  {
+    key: "cursos",
+    name: "cursos",
+    list: "/cursos",
+    create: "/cursos/create",
+    edit: "/cursos/edit/:id",
+    show: "/cursos/show/:id",
+    meta: {
+      label: "Grupos",
+      icon: <UsergroupAddOutlined />,
+    },
+  },
+  {
+    key: "leads",
+    name: "leads",
+    list: "/leads",
+    meta: {
+      label: "Leads",
+      icon: <CustomerServiceOutlined />,
+    },
+  },
+  {
+    key: "planificador",
+    name: "planificador",
+    list: "/planificador",
+    meta: {
+      label: "Planificador",
+      icon: <CalendarOutlined />,
+    },
+  },
+  {
+    key: "matriculas",
+    name: "matriculas",
+    list: "/matriculas",
+    create: "/matriculas/create",
+    edit: "/matriculas/edit/:id",
+    show: "/matriculas/show/:id",
+    meta: {
+      label: "Matrículas",
+      icon: <FileTextOutlined />,
+    },
+  },
+  {
+    key: "nomina",
+    name: "nomina",
+    list: "/nomina",
+    create: "/nomina/create",
+    meta: {
+      label: "Nómina",
+      icon: <CalculatorOutlined />,
+    },
+  },
+  {
+    key: "tesoreria",
+    name: "tesoreria",
+    list: "/tesoreria",
+    create: "/tesoreria/create",
+    meta: {
+      label: "Tesorería",
+      icon: <DollarCircleOutlined />,
+    },
+  },
+  {
+    key: "configuracion", // Usualmente solo admin, o configurable
+    name: "configuracion",
+    list: "/configuracion",
+    meta: {
+      label: "Configuración",
+      icon: <SettingOutlined />,
+    },
+  },
+];
 
      // Si es admin, mostrar todo el menú sin restricciones
      if (userRole === 'admin') {
@@ -212,8 +330,16 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
   };
 
 
-  // Si el usuario es admin, mostrar el menú completo aunque esté cargando
-  if (user?.rol === 'admin') {
+  // LOG para depuración de rol
+  if (typeof window !== "undefined") {
+    console.log("ROL DETECTADO:", user?.rol, "USER:", user);
+  }
+
+  // Si el usuario es admin (por rol o por id conocido), mostrar el menú completo aunque esté cargando
+  const adminIds = [
+    '6c879be0-1965-48aa-83be-4d9419568372', // agrega aquí más ids de admin si los tienes
+  ];
+  if ((user?.rol && String(user.rol).trim().toLowerCase() === 'admin') || (user?.id && adminIds.includes(user.id))) {
     return (
       <RefineKbarProvider>
         <ConfigProvider 

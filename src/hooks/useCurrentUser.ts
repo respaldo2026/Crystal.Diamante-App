@@ -28,13 +28,14 @@ export function useCurrentUser() {
         .maybeSingle();
 
       if (error || !perfil) {
-        return { id: authUser.id, email: authUser.email };
+        return { id: authUser.id, email: authUser.email, rol: undefined };
       }
 
+      // Si el campo rol viene vacío, intenta obtenerlo del authUser (por si acaso)
       return {
         id: perfil.id,
         email: perfil.email || authUser.email,
-        rol: perfil.rol,
+        rol: perfil.rol || authUser.rol || undefined,
         nombre_completo: perfil.nombre_completo,
       };
     },
