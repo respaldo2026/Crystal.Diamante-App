@@ -3,7 +3,7 @@
 import React from "react";
 import { useParams } from "next/navigation";
 import { useProfessorDashboard } from "@hooks/useProfessorDashboard";
-import { ProfessorDashboardUI } from "@/components/profesor/ProfessorDashboardUI";
+import { ProfessorDashboardUI } from "../../../../components/profesor/ProfessorDashboardUI";
 
 export default function ShowProfesorDashboard() {
   const params = useParams();

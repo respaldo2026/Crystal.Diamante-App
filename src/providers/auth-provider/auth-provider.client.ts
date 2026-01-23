@@ -10,7 +10,6 @@ export const authProviderClient: AuthProvider = {
     });
     
     if (error) {
-      console.error("❌ Error en login:", error);
       return { success: false, error };
     }
     
@@ -27,23 +26,20 @@ export const authProviderClient: AuthProvider = {
         return { success: true, redirectTo: "/mi-oficina" };
       }
       
-      if (perfil?.rol === "admin" || perfil?.rol === "administrativo" || perfil?.rol === "director") {
-        return { success: true, redirectTo: "/" };
-      }
-      
       if (perfil?.rol === "estudiante") {
         return { success: true, redirectTo: "/portal-estudiante" };
       }
     }
     
-    return { success: true, redirectTo: "/" };
+    // Por defecto para admin, director, administrativo o sin rol específico
+    return { success: true, redirectTo: "/dashboard" };
   },
 
   logout: async () => {
     try {
       await supabase.auth.signOut();
     } catch (error) {
-      console.error("Logout error:", error);
+      // Error silencioso en logout
     }
     return { success: true, redirectTo: "/login" };
   },
@@ -78,7 +74,6 @@ export const authProviderClient: AuthProvider = {
   },
 
   onError: async (error: any) => {
-    console.error("Client Auth Error:", error);
     return { error };
   },
 };

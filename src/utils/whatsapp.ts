@@ -9,7 +9,6 @@ import { supabaseBrowserClient } from "./supabase/client";
  */
 export const enviarWhatsapp = (telefono: string | number, mensaje: string) => {
     if (!telefono) {
-        alert("El usuario no tiene teléfono registrado.");
         return;
     }
 
@@ -48,7 +47,6 @@ export const obtenerPlantillaWhatsapp = async (
             .single();
 
         if (error || !data) {
-            console.warn(`Plantilla '${nombrePlantilla}' no encontrada o inactiva`);
             return null;
         }
 
@@ -61,7 +59,6 @@ export const obtenerPlantillaWhatsapp = async (
 
         return mensaje;
     } catch (error) {
-        console.error("Error obteniendo plantilla WhatsApp:", error);
         return null;
     }
 };
@@ -86,6 +83,6 @@ export const enviarWhatsappConPlantilla = async (
     } else if (mensajeFallback) {
         enviarWhatsapp(telefono, mensajeFallback);
     } else {
-        console.error(`No se pudo enviar WhatsApp: plantilla '${nombrePlantilla}' no disponible`);
+        // Fallback silencioso o manejo de error superior
     }
 };

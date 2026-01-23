@@ -63,7 +63,7 @@ export function useRolePermissions() {
         setPermisos(permisosMap);
       }
     } catch (error) {
-      console.error("Error cargando permisos:", error);
+      // Error silencioso
     }
   };
 
@@ -85,7 +85,6 @@ export function useRolePermissions() {
 
       return { success: true };
     } catch (error: any) {
-      console.error("Error guardando permisos:", error);
       return { success: false, error: error.message };
     }
   };
