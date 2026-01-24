@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+"use client";
+
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { ROLES } from "@/constants/roles";
 
 export interface RolePermissions {
   rol: string;
@@ -20,25 +23,35 @@ export const RolesPermissionsProvider = ({ children }: { children: ReactNode }) 
   const [permisos, setPermisos] = useState<Record<string, Record<string, boolean>>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    recargar();
-  }, []);
-
-  const recargar = async () => {
+  const recargar = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await supabaseBrowserClient.from("role_permissions").select("*");
+      const { data } = await supabaseBrowserClient
+        .from("role_permissions")
+        .select("rol, permisos");
+
       if (data) {
         const permisosMap: Record<string, Record<string, boolean>> = {};
-        data.forEach((row: { rol: string; permisos: Record<string, boolean> }) => {
-          permisosMap[row.rol] = row.permisos || {};
+        data.forEach((row: { rol: string; permisos: Record<string, boolean> | null }) => {
+          const normalizedRole = row.rol === "administrativo" ? "admin" : row.rol;
+          permisosMap[normalizedRole] = row.permisos ?? {};
         });
-        setPermisos(permisosMap);
+
+        const completos = Object.keys(ROLES).reduce<Record<string, Record<string, boolean>>>((acc, rol) => {
+          acc[rol] = permisosMap[rol] ?? {};
+          return acc;
+        }, {});
+
+        setPermisos(completos);
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void recargar();
+  }, [recargar]);
 
   const guardarPermisos = async (rol: string, nuevoPermisos: Record<string, boolean>) => {
     try {

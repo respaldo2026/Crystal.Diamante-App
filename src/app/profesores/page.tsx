@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { logger } from "@utils/logger";
 import { useNavigation, useDelete } from "@refinedev/core";
 import { Card, Avatar, Typography, Button, Spin, Alert, List, Badge, message, Modal, Form, Select, Input, Dropdown } from "antd";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 import { 
     UserOutlined, PhoneOutlined, MailOutlined, EditOutlined, 
     DeleteOutlined, PlusOutlined, IdcardOutlined, ReloadOutlined, StopOutlined,

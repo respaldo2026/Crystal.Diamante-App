@@ -3,7 +3,6 @@ import { Card, Progress, Button, Alert, Spin, Tag } from 'antd';
 import { FilePdfOutlined, WarningOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { supabaseBrowserClient } from '@/utils/supabase/client'; // Ajusta esta ruta a tu configuración real
 import { logger } from '@utils/logger';
-import { SupabaseError } from '@supabase/supabase-js';
 
 // Definición de tipos para los datos que vienen de la base de datos
 interface AttendanceStats {
@@ -46,15 +45,10 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
 
         if (error) throw error;
         setStats(data as AttendanceStats);
-      
-      } catch (err: any) {
-        if (err instanceof SupabaseError) {
-          logger.error('Error fetching attendance:', err);
-          setError('No se pudo cargar la información de asistencia.');
-        } else {
-          logger.error('Error desconocido al fetching attendance');
-          setError('Error desconocido al cargar la información de asistencia.');
-        }
+
+      } catch (err) {
+        logger.error('Error fetching attendance:', err);
+        setError('No se pudo cargar la información de asistencia.');
       } finally {
         setLoading(false);
       }

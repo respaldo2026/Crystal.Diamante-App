@@ -44,6 +44,7 @@
     "cross-env": "^7.0.3",
     "eslint": "^8",
     "eslint-config-next": "^15.0.3",
+    "openapi-typescript": "^7.10.1",
     "typescript": "^5.8.3"
   },
   "refine": {

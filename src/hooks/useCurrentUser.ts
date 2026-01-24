@@ -35,7 +35,7 @@ export function useCurrentUser() {
       return {
         id: perfil.id,
         email: perfil.email || authUser.email,
-        rol: perfil.rol || authUser.rol || undefined,
+        rol: perfil.rol || authUser.role || undefined,
         nombre_completo: perfil.nombre_completo,
       };
     },

@@ -1,9 +1,11 @@
 "use client";
 
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
+import * as ReactPDF from '@react-pdf/renderer';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
+
+const { Page, Text, View, Document, StyleSheet } = ReactPDF;
 
 // Estilos del PDF (CSS-in-JS para PDFs)
 const styles = StyleSheet.create({

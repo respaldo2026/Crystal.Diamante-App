@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider } from "antd";
 import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { MODULES, type ModuleDefinition } from "@/constants/modules";
+import { ROLES } from "@/constants/roles";
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -84,19 +86,15 @@ export default function ConfiguracionPage() {
   const [editingPlantilla, setEditingPlantilla] = useState<PlantillaWhatsApp | null>(null);
   const [submittingPlantilla, setSubmittingPlantilla] = useState(false);
 
-  const modulos = [
-    { key: "estudiantes", label: "Estudiantes" },
-    { key: "profesores", label: "Profesores" },
-    { key: "cursos", label: "Cursos/Grupos" },
-    { key: "leads", label: "Leads" },
-    { key: "planificador", label: "Planificador" },
-    { key: "matriculas", label: "Matrículas" },
-    { key: "nomina", label: "Nómina" },
-    { key: "tesoreria", label: "Tesorería" },
-    { key: "configuracion", label: "Configuración" },
-  ];
+  const modulos: ModuleDefinition[] = MODULES.filter((modulo: ModuleDefinition) => modulo.key !== "portal-estudiante");
 
-  const roles = ["administrativo", "profesor", "estudiante"];
+  const roleKeys = Object.keys(ROLES);
+  const roleLabels = roleKeys.reduce<Record<string, string>>((acc, key) => {
+    const rawLabel = ROLES[key]?.label || key;
+    acc[key] = rawLabel.replace(/^[^\w]*\s*/, "").trim() || key;
+    return acc;
+  }, {});
+  const adminAssignableRoles = ["admin", "director", "secretaria"];
 
   useEffect(() => {
     if (!initialized) {
@@ -174,14 +172,18 @@ export default function ConfiguracionPage() {
   const cargarPermisos = async () => {
     setLoadingPermisos(true);
     try {
-      const { data } = await supabaseBrowserClient.from("role_permissions").select("*");
+      const { data } = await supabaseBrowserClient
+        .from("role_permissions")
+        .select("rol, permisos");
+
       const permisosMap: PermisosPorRol = {};
-      
-      data?.forEach((row: any) => {
-        permisosMap[row.rol] = row.permisos || {};
+
+      data?.forEach((row: { rol: string; permisos: Record<string, boolean> }) => {
+        const normalizedRole = row.rol === "administrativo" ? "admin" : row.rol;
+        permisosMap[normalizedRole] = row.permisos || {};
       });
 
-      roles.forEach(rol => {
+      roleKeys.forEach((rol) => {
         if (!permisosMap[rol]) permisosMap[rol] = {};
       });
 
@@ -207,10 +209,10 @@ export default function ConfiguracionPage() {
   const guardarPermisos = async () => {
     try {
       setSavingPermisos(true);
-      for (const rol of roles) {
+      for (const rol of roleKeys) {
         await supabaseBrowserClient
           .from("role_permissions")
-          .upsert({ rol, permisos: permisos[rol] });
+          .upsert({ rol, permisos: permisos[rol] || {} });
       }
       message.success("Permisos actualizados correctamente");
       setHasChangesPermisos(false);
@@ -448,20 +450,20 @@ export default function ConfiguracionPage() {
 
   // Columnas para las tablas
   const permisosColumns = [
-    { title: "Módulo", dataIndex: "modulo", key: "modulo", fixed: "left" as const, width: 150 },
-    ...roles.map(rol => ({
-      title: rol.charAt(0).toUpperCase() + rol.slice(1),
+    { title: "Módulo", dataIndex: "modulo", key: "modulo", fixed: "left" as const, width: 180 },
+    ...roleKeys.map((rol) => ({
+      title: roleLabels[rol] || rol,
       dataIndex: rol,
       key: rol,
-      width: 120,
-      render: (_: any, record: any) => (
-        <Switch 
+      width: 140,
+      render: (_: unknown, record: { key: string }) => (
+        <Switch
           checked={permisos[rol]?.[record.key] || false}
           onChange={(val) => handleTogglePermiso(rol, record.key, val)}
           disabled={savingPermisos}
         />
-      )
-    }))
+      ),
+    })),
   ];
 
   const adminColumns = [
@@ -469,7 +471,15 @@ export default function ConfiguracionPage() {
     { title: "Email", dataIndex: "email", key: "email" },
     { title: "Identificación", dataIndex: "identificacion", key: "identificacion" },
     { title: "Teléfono", dataIndex: "telefono", key: "telefono", render: (t: string) => t || "-" },
-    { title: "Rol", dataIndex: "rol", key: "rol", render: (rol: string) => <Tag color={rol === 'admin' ? 'gold' : 'blue'}>{rol}</Tag> },
+    {
+      title: "Rol",
+      dataIndex: "rol",
+      key: "rol",
+      render: (rol: string) => {
+        const def = ROLES[rol];
+        return <Tag color={def?.color || "blue"}>{roleLabels[rol] || rol}</Tag>;
+      },
+    },
     {
       title: "Acciones", key: "actions", render: (_: any, r: Admin) => (
         <>
@@ -522,7 +532,8 @@ export default function ConfiguracionPage() {
     }
   ];
 
-  const permisosData = modulos.map(m => ({ key: m.key, modulo: m.label }));
+  const permisosData = modulos.map((m: ModuleDefinition) => ({ key: m.key, modulo: m.label }));
+  const permisosScrollX = 240 + roleKeys.length * 160;
 
   return (
     <div style={{ padding: 24 }}>
@@ -592,7 +603,7 @@ export default function ConfiguracionPage() {
                   </Button>
                 )}
               </div>
-              <Table dataSource={permisosData} columns={permisosColumns} pagination={false} scroll={{ x: 800 }} bordered />
+              <Table dataSource={permisosData} columns={permisosColumns} pagination={false} scroll={{ x: permisosScrollX }} bordered />
             </Spin>
           </TabPane>
 
@@ -658,10 +669,13 @@ export default function ConfiguracionPage() {
           <Form.Item label="Teléfono" name="telefono">
             <Input />
           </Form.Item>
-          <Form.Item label="Rol" name="rol" rules={[{ required: true }]}>
+          <Form.Item label="Rol" name="rol" rules={[{ required: true }]}> 
             <Select>
-              <Option value="admin">Administrador</Option>
-              <Option value="director">Director</Option>
+              {adminAssignableRoles.map((rol) => (
+                <Option key={rol} value={rol}>
+                  {roleLabels[rol] || rol}
+                </Option>
+              ))}
             </Select>
           </Form.Item>
         </Form>

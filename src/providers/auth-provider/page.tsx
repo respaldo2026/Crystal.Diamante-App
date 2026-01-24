@@ -308,6 +308,13 @@ export default function DashboardPage() {
         ? Math.round(totalIngresos / estudiantesUnicos.size)
         : 0;
 
+      const extractPerfil = (perfilData: unknown) => {
+        if (Array.isArray(perfilData)) {
+          return perfilData[0] ?? undefined;
+        }
+        return (perfilData as { nombre_completo?: string; telefono?: string } | undefined) ?? undefined;
+      };
+
       setStats({
         ingresosMes: totalIngresos,
         ingresosMesAnterior,
@@ -327,7 +334,12 @@ export default function DashboardPage() {
 
       setIngresosChart(chartData);
       setDistribucionPagos(distribucion);
-      setPagosRecientes(pagosRec.data || []);
+      setPagosRecientes(
+        (pagosRec.data || []).map((pago: any) => ({
+          ...pago,
+          perfiles: extractPerfil(pago.perfiles),
+        }))
+      );
       setCumplesHoy(cumples);
       
       // Contar matrículas activas para cada curso próximo
@@ -344,9 +356,13 @@ export default function DashboardPage() {
           };
         })
       );
-      
-      setProximosCursos(cursosConConteo);
-      setPagosVencidos(vencidos.data || []);
+            setProximosCursos(cursosConConteo);
+            setPagosVencidos(
+              (vencidos.data || []).map((pago: any) => ({
+                ...pago,
+                perfiles: extractPerfil(pago.perfiles),
+              }))
+            );
 
     } catch (error) {
       // Error manejado silenciosamente para no interrumpir la UI

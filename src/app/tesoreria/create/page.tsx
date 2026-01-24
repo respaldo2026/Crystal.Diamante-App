@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Create, useForm, useSelect } from "@refinedev/antd";
 import { Form, Input, Select, InputNumber, DatePicker, Row, Col, Divider, message, Card, Alert } from "antd";
 import dayjs from "dayjs";
@@ -8,6 +8,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { formatDate, formatTime } from "@utils/date";
 import { UserOutlined, DollarCircleOutlined, SolutionOutlined } from "@ant-design/icons";
 import { useSearchParams } from "next/navigation";
+import type { DefaultOptionType } from "antd/es/select";
 
 export default function PagoCreate() {
         // Handler para el submit del formulario
@@ -75,8 +76,11 @@ export default function PagoCreate() {
             
             // Si tiene solo un curso, lo pre-seleccionamos
             if (data.length === 1) {
-                formProps.form?.setFieldValue("matricula_id", data[0].id);
-                await cargarCuotasPendientes(data[0].id);
+                const [unicaMatricula] = data;
+                if (unicaMatricula) {
+                    formProps.form?.setFieldValue("matricula_id", unicaMatricula.id);
+                    await cargarCuotasPendientes(unicaMatricula.id);
+                }
             }
         }
         setBuscandoCursos(false);
@@ -127,6 +131,22 @@ export default function PagoCreate() {
         return parsed ? parseInt(parsed, 10) : 0;
     };
 
+    const cursoOptions = useMemo<DefaultOptionType[]>(
+        () => cursosDelEstudiante.map((m) => ({
+            label: m.cursos?.nombre ?? "Curso sin nombre",
+            value: m.id,
+        })),
+        [cursosDelEstudiante]
+    );
+
+    const cuotaOptions = useMemo<DefaultOptionType[]>(
+        () => cuotasPendientes.map((c) => ({
+            label: `Cuota #${c.numero_cuota} - $${c.monto}`,
+            value: c.id,
+        })),
+        [cuotasPendientes]
+    );
+
     return (
         <Create 
             saveButtonProps={{ ...saveButtonProps, onClick: () => formProps.form?.submit() }} 
@@ -155,7 +175,7 @@ export default function PagoCreate() {
                     <Col span={12}>
                         <Form.Item label="Curso" name="matricula_id" rules={[{ required: true, message: "Selecciona un curso" }]}> 
                             <Select 
-                                options={cursosDelEstudiante.map(m => ({ label: m.cursos?.nombre, value: m.id }))}
+                                options={cursoOptions}
                                 loading={buscandoCursos}
                                 placeholder="Selecciona un curso"
                                 onChange={handleCursoChange}
@@ -169,7 +189,7 @@ export default function PagoCreate() {
                     <Col span={12}>
                         <Form.Item label="Cuota" name="cuota_id" rules={[{ required: true, message: "Selecciona una cuota" }]}> 
                             <Select 
-                                options={cuotasPendientes.map(c => ({ label: `Cuota #${c.numero_cuota} - $${c.monto}`, value: c.id }))}
+                                options={cuotaOptions}
                                 loading={cargandoCuotas}
                                 placeholder="Selecciona una cuota"
                                 onChange={handleCuotaChange}

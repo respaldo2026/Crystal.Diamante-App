@@ -355,8 +355,15 @@ export default function PlanificadorPage() {
     const conflictivos = new Set<string>();
     for (let i = 0; i < eventos.length; i++) {
       for (let j = i + 1; j < eventos.length; j++) {
-        const { inicio: aIni, fin: aFin } = getRangoEvento(eventos[i]);
-        const { inicio: bIni, fin: bFin } = getRangoEvento(eventos[j]);
+        const eventoA = eventos[i];
+        const eventoB = eventos[j];
+
+        if (!eventoA || !eventoB) {
+          continue;
+        }
+
+        const { inicio: aIni, fin: aFin } = getRangoEvento(eventoA);
+        const { inicio: bIni, fin: bFin } = getRangoEvento(eventoB);
         const seSolapan = aIni.isBefore(bFin) && bIni.isBefore(aFin);
         if (seSolapan) {
           conflictivos.add(`${i}`);
@@ -522,11 +529,11 @@ export default function PlanificadorPage() {
 
   // Vista Timeline: muestra todos los cursos como barras horizontales con su duración completa
   const renderTimelineView = () => {
-    const cursosOrdenados = [...cursos].sort((a, b) => {
-      return dayjs(a.fecha_inicio).valueOf() - dayjs(b.fecha_inicio).valueOf();
-    });
+    const cursosConFecha = cursos.filter(
+      (curso): curso is Curso & { fecha_inicio: string } => Boolean(curso.fecha_inicio)
+    );
 
-    if (cursosOrdenados.length === 0) {
+    if (cursosConFecha.length === 0) {
       return (
         <Card>
           <div style={{ textAlign: 'center', padding: 40 }}>
@@ -537,24 +544,34 @@ export default function PlanificadorPage() {
       );
     }
 
+    const cursosOrdenados = [...cursosConFecha].sort((a, b) => {
+      return dayjs(a.fecha_inicio).valueOf() - dayjs(b.fecha_inicio).valueOf();
+    });
+
+    const [primerCurso] = cursosOrdenados;
+    if (!primerCurso) {
+      return null;
+    }
+    const referenciaInicio = dayjs(primerCurso.fecha_inicio);
+
     // Calcular el rango total de fechas
     const fechaMasAntigua = cursosOrdenados.reduce((min, c) => {
       const fecha = dayjs(c.fecha_inicio);
       return fecha.isBefore(min) ? fecha : min;
-    }, dayjs(cursosOrdenados[0].fecha_inicio));
+    }, referenciaInicio);
 
     const fechaMasLejana = cursosOrdenados.reduce((max, c) => {
       const fechaFin = c.fecha_fin 
         ? dayjs(c.fecha_fin)
         : dayjs(c.fecha_inicio).add(
-            c.programas?.duracion ? parseInt(c.programas.duracion) : 6,
+            c.programas?.duracion ? parseInt(c.programas.duracion, 10) : 6,
             'month'
           );
       return fechaFin.isAfter(max) ? fechaFin : max;
-    }, dayjs(cursosOrdenados[0].fecha_inicio));
+    }, referenciaInicio);
 
-    const totalDias = fechaMasLejana.diff(fechaMasAntigua, 'day');
-    const totalMeses = Math.ceil(fechaMasLejana.diff(fechaMasAntigua, 'month', true));
+    const totalDias = Math.max(fechaMasLejana.diff(fechaMasAntigua, 'day'), 1);
+    const totalMeses = Math.max(Math.ceil(fechaMasLejana.diff(fechaMasAntigua, 'month', true)), 1);
 
     // Colores para diferenciar cursos - Paleta profesional con buen contraste
     const colores = [
@@ -599,7 +616,6 @@ export default function PlanificadorPage() {
             </div>
             <div style={{ display: 'flex', flex: 1, minWidth: Math.max(800, totalMeses * 100) }}>
               {mesesArray.map(mes => {
-                const porcentajeInicio = mes.diff(fechaMasAntigua, 'day') / totalDias * 100;
                 const diasEnMes = mes.daysInMonth();
                 const porcentajeAncho = diasEnMes / totalDias * 100;
                 

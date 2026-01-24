@@ -1,18 +1,17 @@
-import { useEffect, useState } from "react";
+import { useRolesPermissions } from "@contexts/roles-permissions-context";
+import { MODULES } from "@/constants/modules";
+import { ROLES, type RoleKey, type RoleDefinition } from "@/constants/roles";
 
-import { supabaseBrowserClient } from "@utils/supabase/client";
-import { ROLES, RoleDefinition, RoleKey } from "@constants/roles";
-import { MODULES, ModuleDefinition } from "@constants/modules";
+export type { RoleKey, RoleDefinition };
 
-export interface RolePermissions {
-  rol: RoleKey;
-  permisos: {
-    [modulo: string]: boolean;
-  };
+export interface ModuleDefinition {
+  key: string;
+  label: string;
 }
 
-// Centralized modules and roles
 export const MODULOS_DISPONIBLES: ModuleDefinition[] = MODULES;
-export const ROLES_DISPONIBLES: Record<string, RoleDefinition> = ROLES;
+export const ROLES_DISPONIBLES: Record<RoleKey, RoleDefinition> = ROLES;
+
+export const useRolePermissions = () => useRolesPermissions();
 
 
