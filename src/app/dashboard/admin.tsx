@@ -53,7 +53,7 @@ interface PagoPendiente {
   monto: number;
   fecha_vencimiento: string | null;
   periodo_pagado?: string | null;
-  perfiles?: {
+  estudiante?: {
     nombre_completo?: string | null;
   } | null;
 }
@@ -106,8 +106,11 @@ export default function AdminDashboard() {
   const [pendientes, setPendientes] = useState<PagoPendiente[]>([]);
   const [cursosCriticos, setCursosCriticos] = useState<CursoOcupacion[]>([]);
 
-  useEffect(() => () => {
-    isMountedRef.current = false;
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -155,7 +158,7 @@ export default function AdminDashboard() {
           .lte("fecha_pago", finAnteriorStr),
         supabase
           .from("pagos")
-          .select("id, monto, fecha_vencimiento, periodo_pagado, perfiles(nombre_completo)")
+          .select("id, monto, fecha_vencimiento, periodo_pagado, estudiante:perfiles!pagos_estudiante_id_fkey(nombre_completo)")
           .eq("estado", "pendiente")
           .order("fecha_vencimiento", { ascending: true })
           .limit(8),
@@ -492,13 +495,11 @@ export default function AdminDashboard() {
         />
       )}
 
-      <Row gutter={[16, 16]}>
-        {metricCards.map(card => (
-          <Col key={card.key} xs={24} sm={12} xl={8} xxl={4}>
-            <Card>
-              {initialLoading ? (
-                <Skeleton active paragraph={false} title />
-              ) : (
+      <Spin spinning={initialLoading} tip="Consultando métricas...">
+        <Row gutter={[16, 16]}>
+          {metricCards.map(card => (
+            <Col key={card.key} xs={24} sm={12} xl={8} xxl={4}>
+              <Card>
                 <Space direction="vertical" size={4} style={{ width: "100%" }}>
                   <Space align="center" size={12}>
                     {card.icon}
@@ -513,24 +514,22 @@ export default function AdminDashboard() {
                     valueStyle={card.valueStyle}
                   />
                 </Space>
-              )}
-            </Card>
-          </Col>
-        ))}
-      </Row>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </Spin>
 
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={16}>
-          <Spin spinning={refreshing && !initialLoading}>
+          <Spin spinning={initialLoading || (refreshing && !initialLoading)} tip="Actualizando ingresos...">
             <Card title={
               <Space>
                 <RiseOutlined style={{ color: "#1677ff" }} />
                 <span>Evolución de ingresos</span>
               </Space>
             }>
-              {initialLoading ? (
-                <Skeleton active paragraph={{ rows: 6 }} />
-              ) : ingresosSeries.length === 0 ? (
+              {ingresosSeries.length === 0 ? (
                 <Empty description="Sin información para el rango seleccionado" />
               ) : (
                 <Line {...lineConfig} />
@@ -539,11 +538,9 @@ export default function AdminDashboard() {
           </Spin>
         </Col>
         <Col xs={24} lg={8}>
-          <Spin spinning={refreshing && !initialLoading}>
+          <Spin spinning={initialLoading || (refreshing && !initialLoading)} tip="Cargando distribución...">
             <Card title="Distribución por método de pago">
-              {initialLoading ? (
-                <Skeleton active paragraph={{ rows: 6 }} />
-              ) : metodosSeries.length === 0 ? (
+              {metodosSeries.length === 0 ? (
                 <Empty description="Registra pagos para ver la distribución" />
               ) : (
                 <Pie {...pieConfig} />
@@ -559,9 +556,8 @@ export default function AdminDashboard() {
             title="Pagos más urgentes"
             extra={<Tag color="red">Atención prioritaria</Tag>}
           >
-            {initialLoading ? (
-              <Skeleton active paragraph={{ rows: 5 }} />
-            ) : pendientes.length === 0 ? (
+            <Spin spinning={initialLoading || (refreshing && !initialLoading)}>
+              {pendientes.length === 0 ? (
               <Empty description="No hay pagos pendientes" />
             ) : (
               <List
@@ -573,7 +569,7 @@ export default function AdminDashboard() {
                     <List.Item key={pago.id}>
                       <Space style={{ width: "100%", justifyContent: "space-between" }} align="start">
                         <Space direction="vertical" size={0}>
-                          <Text strong>{pago.perfiles?.nombre_completo || "Estudiante"}</Text>
+                          <Text strong>{pago.estudiante?.nombre_completo || "Estudiante"}</Text>
                           <Text type="secondary">{pago.periodo_pagado || "Periodo sin especificar"}</Text>
                           {vencimiento && (
                             <Tag color={vencido ? "red" : "orange"}>
@@ -589,7 +585,8 @@ export default function AdminDashboard() {
                   );
                 }}
               />
-            )}
+              )}
+            </Spin>
           </Card>
         </Col>
         <Col xs={24} lg={8}>
@@ -615,9 +612,8 @@ export default function AdminDashboard() {
       </Row>
 
       <Card style={{ marginTop: 24 }} title="Cursos con mayor ocupación">
-        {initialLoading ? (
-          <Skeleton active paragraph={{ rows: 4 }} />
-        ) : cursosCriticos.length === 0 ? (
+        <Spin spinning={initialLoading || (refreshing && !initialLoading)}>
+          {cursosCriticos.length === 0 ? (
           <Empty description="No hay cursos con matrículas registradas" />
         ) : (
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -641,7 +637,8 @@ export default function AdminDashboard() {
               </div>
             ))}
           </Space>
-        )}
+          )}
+        </Spin>
       </Card>
     </div>
   );
