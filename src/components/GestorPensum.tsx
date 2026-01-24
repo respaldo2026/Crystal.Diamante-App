@@ -459,16 +459,30 @@ export default function GestorPensum({
   // Actualizar pensum_id cuando se selecciona un ciclo para subir material
   const handleSubirMaterial = async () => {
     try {
+      // Obtener valores del formulario
+      const formValues = form.getFieldsValue();
+      const tipoOrigen = formValues.tipo_origen;
+      
       let urlArchivo = "";
       let nombreArchivo = "";
       let tamanoBytes = 0;
       let mimeType = "";
 
-      if (tipoOrigen === 'archivo' && file && fileName) {
+      if (tipoOrigen === 'archivo') {
+        // Obtener el archivo del upload
+        const fileList = formValues.archivo?.fileList;
+        if (!fileList || fileList.length === 0) {
+          message.error("Por favor selecciona un archivo");
+          return;
+        }
+
+        const uploadedFile = fileList[0].originFileObj;
+        const uploadFileName = `${Date.now()}_${uploadedFile.name}`;
+
         // Subir archivo a Supabase Storage
         const { data: uploadData, error: uploadError } = await supabaseBrowserClient.storage
           .from("material_didactico")
-          .upload(`${programaId}/${fileName}`, file);
+          .upload(`${programaId}/${uploadFileName}`, uploadedFile);
 
         if (uploadError) {
           if (
@@ -485,20 +499,42 @@ export default function GestorPensum({
         // Obtener URL pública
         const { data: urlData } = supabaseBrowserClient.storage
           .from("material_didactico")
-          .getPublicUrl(`${programaId}/${fileName}`);
+          .getPublicUrl(`${programaId}/${uploadFileName}`);
 
         urlArchivo = urlData.publicUrl;
-        nombreArchivo = file.name;
-        tamanoBytes = file.size;
-        mimeType = file.type;
-      } else if (tipoOrigen === 'enlace' && values.url_externa) {
-        urlArchivo = values.url_externa;
+        nombreArchivo = uploadedFile.name;
+        tamanoBytes = uploadedFile.size;
+        mimeType = uploadedFile.type;
+      } else if (tipoOrigen === 'enlace') {
+        // Es un enlace externo
+        urlArchivo = formValues.url_externa;
         nombreArchivo = "Enlace Externo";
       }
-    } catch (error) {
-      // ...existing error handling...
-    } finally {
-      // ...existing finally block...
+
+      // Guardar en base de datos
+      const { error: insertError } = await supabaseBrowserClient
+        .from("material_didactico")
+        .insert({
+          programa_id: programaId,
+          titulo: formValues.titulo,
+          descripcion: formValues.descripcion,
+          url: urlArchivo,
+          nombre_archivo: nombreArchivo,
+          tamano_bytes: tamanoBytes,
+          tipo_mime: mimeType,
+          tipo_origen: tipoOrigen,
+        });
+
+      if (insertError) throw insertError;
+
+      message.success("Material subido correctamente");
+      form.resetFields();
+      // Recargar lista de materiales si tienes esa función
+      // cargarMateriales();
+      
+    } catch (error: any) {
+      message.error("Error al subir material: " + error.message);
+      console.error(error);
     }
   };
 

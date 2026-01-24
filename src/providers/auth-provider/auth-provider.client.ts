@@ -1,10 +1,10 @@
-import type { AuthBindings } from "@refinedev/core";
-import { supabaseBrowserClient as supabase } from "@utils/supabase/client";
+import type { AuthProvider } from "@refinedev/core";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
-export const authProvider: AuthBindings = {
-  login: async ({ email, password }: { email: string; password: string }) => {
+export const authProvider: AuthProvider = {
+  login: async ({ email, password }) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ 
+      const { data, error } = await supabaseBrowserClient.auth.signInWithPassword({
         email,
         password,
       });
@@ -20,14 +20,12 @@ export const authProvider: AuthBindings = {
       }
 
       if (data?.user) {
-        // Obtener el perfil del usuario para conocer su rol
-        const { data: perfil } = await supabase
+        const { data: perfil } = await supabaseBrowserClient
           .from("perfiles")
           .select("rol")
           .eq("id", data.user.id)
           .single();
 
-        // Redirigir según el rol
         let redirectTo = "/";
         
         if (perfil?.rol === "profesor") {
@@ -65,7 +63,7 @@ export const authProvider: AuthBindings = {
   },
 
   logout: async () => {
-    const { error } = await supabase.auth.signOut();
+    const { error } = await supabaseBrowserClient.auth.signOut();
     if (error) {
       return {
         success: false,
@@ -84,20 +82,31 @@ export const authProvider: AuthBindings = {
 
   check: async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabaseBrowserClient.auth.getSession();
       
+      if (error) {
+        console.error("Auth Check Error:", error);
+        return {
+          authenticated: false,
+          redirectTo: "/login",
+          logout: true,
+        };
+      }
+
       if (session) {
         return {
           authenticated: true,
         };
       }
 
+      // Sin sesión, redirigir
       return {
         authenticated: false,
         redirectTo: "/login",
         logout: true,
       };
     } catch (error: any) {
+      console.error("Auth Check Exception:", error);
       return {
         authenticated: false,
         redirectTo: "/login",
@@ -112,10 +121,10 @@ export const authProvider: AuthBindings = {
 
   getPermissions: async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supabaseBrowserClient.auth.getUser();
       
       if (user) {
-        const { data: perfil } = await supabase
+        const { data: perfil } = await supabaseBrowserClient
           .from("perfiles")
           .select("rol")
           .eq("id", user.id)
@@ -132,10 +141,10 @@ export const authProvider: AuthBindings = {
 
   getIdentity: async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supabaseBrowserClient.auth.getUser();
       
       if (user) {
-        const { data: perfil } = await supabase
+        const { data: perfil } = await supabaseBrowserClient
           .from("perfiles")
           .select("nombre_completo, email, rol, foto_url")
           .eq("id", user.id)
@@ -158,8 +167,12 @@ export const authProvider: AuthBindings = {
     }
   },
 
-  onError: async (error: unknown) => {
-    console.error(error);
-    return { error };
+  onError: async (error: any) => {
+    if (error instanceof Error) {
+      return { error };
+    }
+    return { 
+      error: new Error(typeof error === 'string' ? error : JSON.stringify(error))
+    };
   },
 };

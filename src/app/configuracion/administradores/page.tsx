@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, Button, Form, Input, Select, Table, message, Modal, Spin, Tag } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -25,8 +25,8 @@ export default function AdministradoresPage() {
   const [editingAdmin, setEditingAdmin] = useState<Admin | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Cargar lista de administradores
-  const loadAdmins = async () => {
+  // Usar useCallback para funciones que se pasan como props
+  const loadAdmins = useCallback(async () => {
     setListLoading(true);
     try {
       const { data, error } = await supabaseBrowserClient
@@ -42,11 +42,11 @@ export default function AdministradoresPage() {
     } finally {
       setListLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadAdmins();
-  }, []);
+  }, [loadAdmins]);
 
   const handleOpenModal = (admin?: Admin) => {
     if (admin) {

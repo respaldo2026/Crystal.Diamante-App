@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Refine } from "@refinedev/core";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
-import { RefineThemes, ThemedLayout, ThemedTitle } from "@refinedev/antd";
+import { ThemedLayout, ThemedTitle } from "@refinedev/antd";
 import { ConfigProvider, App as AntdApp, Spin } from "antd";
 import "@refinedev/antd/dist/reset.css";
 import "@utils/suppress-warnings";
@@ -143,12 +143,9 @@ const allResources = [
 ];
 
 import routerProvider from "@refinedev/nextjs-router";
-
-// PROVIDERS
 import { dataProvider } from "../providers/data-provider"; 
 import { authProvider } from "../providers/auth-provider/auth-provider.client";
 import { QueryProvider } from "../providers/query-provider";
-import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useCurrentUser } from "@hooks/useCurrentUser"; 
 import { RolesPermissionsProvider, useRolesPermissions } from "@contexts/roles-permissions-context";
 
@@ -156,26 +153,17 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: userLoading } = useCurrentUser();
   const { permisos, loading: permisosLoading } = useRolesPermissions();
 
-  // Función para determinar qué recursos mostrar según el rol
-  const getResourcesByRole = () => {
-    // Si aún está cargando, retornar array vacío temporalmente
-    if (userLoading) {
+  const resources = useMemo(() => {
+    if (userLoading || !user) {
       return [];
     }
 
-    // Si no hay usuario, retornar array vacío
-    if (!user) {
-      return [];
-    }
-
-    const userRole = user.rol;
+    const userRole = (user as any).rol || (user as any).role || 'admin';
     
-    // Recursos para ADMINISTRADORES y DIRECTORES: Dashboard completo + todos los módulos
     if (userRole === 'admin' || userRole === 'director') {
-      return allResources; // Incluye el Dashboard como primer elemento
+      return allResources; 
     }
 
-    // Recursos para PROFESORES: solo Mi Oficina (sin dashboard)
     if (userRole === "profesor") {
       return [
         {
@@ -189,7 +177,6 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
       ];
     }
 
-    // Recursos para ESTUDIANTES: solo Mi Portal (sin dashboard)
     if (userRole === "estudiante") {
       return [
         {
@@ -203,24 +190,18 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
       ];
     }
 
-    // Para ADMINISTRATIVOS: filtrar según la tabla de permisos
-    // (incluye dashboard si tienen permisos)
     if (permisosLoading) {
-      return allResources; // Mostrar todo mientras carga permisos
+      return allResources; 
     }
     
     const userPermisos = permisos[userRole || ''] || {};
     
     return allResources.filter(resource => {
-      // Dashboard siempre visible para administrativos
       if (!resource.key || resource.key === 'dashboard') return true;
-      
-      // Verificar si tiene permiso true en el objeto de permisos
       return userPermisos[resource.key] === true;
     });
-  };
+  }, [user, permisos, userLoading, permisosLoading]);
 
-  // Mostrar spinner mientras carga el usuario
   if (userLoading) {
     return (
       <div style={{ 
@@ -236,24 +217,6 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
       </div>
     );
   }
-
-  if (!user) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        gap: '16px'
-      }}>
-        <Spin size="large" />
-        <div style={{ color: '#666', fontSize: '14px' }}>Verificando sesión...</div>
-      </div>
-    );
-  }
-
-  const resources = getResourcesByRole();
 
   return (
     <RefineKbarProvider>
@@ -335,12 +298,7 @@ export default function RootLayout({
     return (
       <html lang="es">
         <body>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center', 
-            height: '100vh' 
-          }}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
             <Spin size="large" />
           </div>
         </body>
