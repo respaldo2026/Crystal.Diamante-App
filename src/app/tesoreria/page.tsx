@@ -1,3 +1,5 @@
+
+"use client";
 // Declarar tipo Pago
 type Pago = {
     id: string;
@@ -11,7 +13,6 @@ type Pago = {
 
 // Declarar tableProps como objeto vacío si no está definido
 const tableProps = {};
-"use client";
 
 import React, { useMemo, useState, useEffect } from "react";
 import { List, CreateButton, EditButton, DeleteButton } from "@refinedev/antd";
