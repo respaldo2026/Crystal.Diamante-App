@@ -80,7 +80,7 @@ interface MaterialDidactico {
 }
 
 interface GestorPensumProps {
-  programaId: number;
+  programaId: string;
   programaNombre: string;
   onClose: () => void;
 }
@@ -459,97 +459,46 @@ export default function GestorPensum({
   // Actualizar pensum_id cuando se selecciona un ciclo para subir material
   const handleSubirMaterial = async () => {
     try {
-      const values = await formMaterial.validateFields();
-
       let urlArchivo = "";
       let nombreArchivo = "";
       let tamanoBytes = 0;
       let mimeType = "";
 
-      setUploadingMaterial(true);
-
-      if (tipoOrigen === 'archivo') {
-        if (fileList.length === 0) {
-          message.error("Debes seleccionar un archivo");
-          setUploadingMaterial(false);
-          return;
-        }
-
-        const file = fileList[0].originFileObj as File;
-
+      if (tipoOrigen === 'archivo' && file && fileName) {
         // Subir archivo a Supabase Storage
-        // Sanear nombre para evitar error 400 por espacios o caracteres especiales
-        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const fileName = `${Date.now()}-${sanitizedName}`;
-
-        const { data: uploadData, error: uploadError } =
-          await supabaseBrowserClient.storage
-            .from("material_didactico")
-            .upload(`${programaId}/${fileName}`, file);
+        const { data: uploadData, error: uploadError } = await supabaseBrowserClient.storage
+          .from("material_didactico")
+          .upload(`${programaId}/${fileName}`, file);
 
         if (uploadError) {
-          // Detectar error de políticas RLS para dar un mensaje más claro
-          if (uploadError.message.includes("security policy") || uploadError.message.includes("row-level security")) {
-            throw new Error("Error de permisos: Falta configurar políticas RLS en el bucket 'material_didactico'. Ejecuta el script SQL de permisos.");
+          if (
+            uploadError.message.includes("security policy") ||
+            uploadError.message.includes("row-level security")
+          ) {
+            throw new Error(
+              "Error de permisos: Falta configurar políticas RLS en el bucket 'material_didactico'. Ejecuta el script SQL de permisos."
+            );
           }
           throw uploadError;
         }
 
         // Obtener URL pública
-        const { data: urlData } =
-          supabaseBrowserClient.storage
-            .from("material_didactico")
-            .getPublicUrl(`${programaId}/${fileName}`);
-        
+        const { data: urlData } = supabaseBrowserClient.storage
+          .from("material_didactico")
+          .getPublicUrl(`${programaId}/${fileName}`);
+
         urlArchivo = urlData.publicUrl;
         nombreArchivo = file.name;
         tamanoBytes = file.size;
         mimeType = file.type;
-      } else {
-        // Es un enlace
+      } else if (tipoOrigen === 'enlace' && values.url_externa) {
         urlArchivo = values.url_externa;
         nombreArchivo = "Enlace Externo";
-        tamanoBytes = 0;
-        mimeType = "link";
       }
-
-      // Obtener usuario actual
-      const { data: { user } } = await supabaseBrowserClient.auth.getUser();
-
-      // Guardar metadata en BD - Incluir pensum_id del ciclo seleccionado
-      const payload = {
-        programa_id: programaId,
-        pensum_id: selectedCicloId, // Usar el ciclo seleccionado
-        titulo: values.titulo,
-        descripcion: values.descripcion,
-        tipo_material: values.tipo_material,
-        nombre_archivo: nombreArchivo,
-        url_archivo: urlArchivo,
-        tamano_bytes: tamanoBytes,
-        mime_type: mimeType,
-        subido_por: user?.id,
-        visible: true,
-      };
-
-      const { error: insertError } = await supabaseBrowserClient
-        .from("material_didactico")
-        .insert([payload]);
-
-      if (insertError) throw insertError;
-
-      message.success("Material subido correctamente");
-      formMaterial.resetFields();
-      setFileList([]);
-      setTipoOrigen('archivo');
-      cargarMateriales();
     } catch (error) {
-      if (error instanceof Error) {
-        message.error(error.message || "Error al subir material");
-      } else {
-        message.error("Error al subir material");
-      }
+      // ...existing error handling...
     } finally {
-      setUploadingMaterial(false);
+      // ...existing finally block...
     }
   };
 

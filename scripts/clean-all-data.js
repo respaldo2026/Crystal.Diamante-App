@@ -36,7 +36,7 @@ async function cleanAllData() {
           const { error: error2 } = await supabase
             .from(table)
             .delete()
-            .is("id", null);  // Esto no borra nada, pero evita errores de sintaxis
+            .not("id", "is", null);  // Mejor sintaxis para "eliminar todos"
           
           console.log(`   ⚠️  Verificar tabla manualmente`);
         } else {

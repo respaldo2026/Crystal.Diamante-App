@@ -88,10 +88,10 @@
 **Prioridad:** 🟠 ALTA
 
 ### Problema: "Puedo crear user con email inválido"
-**Root Cause:** API endpoint sin validación  
-**Archivo:** src/app/api/auth/create-user/route.ts  
-**Fix:** [FIXES-CRITICOS-RAPIDOS-2026.md](FIXES-CRITICOS-RAPIDOS-2026.md#fix-7-validación-básica-en-api-endpoint-1-hora)  
-**Tiempo:** 1 hora  
+**Root Cause:** API endpoint sin validación
+**Archivo:** src/app/api/auth/create-user/route.ts
+**Fix:** [FIXES-CRITICOS-RAPIDOS-2026.md](FIXES-CRITICOS-RAPIDOS-2026.md#fix-7-validación-básica-en-api-endpoint-1-hora)
+**Tiempo:** 1 hora
 **Prioridad:** 🟠 ALTA
 
 ---

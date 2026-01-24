@@ -8,7 +8,6 @@ import { ConfigProvider, App as AntdApp, Spin } from "antd";
 import "@refinedev/antd/dist/reset.css";
 import "@utils/suppress-warnings";
 
-
 // ICONOS
 import { 
   DashboardOutlined, 
@@ -26,7 +25,7 @@ import {
   SolutionOutlined
 } from "@ant-design/icons";
 
-// Definición de TODOS los recursos posibles del panel administrativo (debe estar fuera de cualquier función y antes de cualquier uso)
+// Definición de TODOS los recursos posibles del panel administrativo
 const allResources = [
   {
     key: "dashboard",
@@ -38,7 +37,7 @@ const allResources = [
     },
   },
   {
-    key: "estudiantes", // Clave debe coincidir con el módulo en permisos
+    key: "estudiantes",
     name: "perfiles",
     list: "/estudiantes",
     create: "/estudiantes/create",
@@ -62,7 +61,7 @@ const allResources = [
     },
   },
   {
-    key: "cursos", // Programas suele ir junto con cursos
+    key: "cursos",
     name: "programas",
     list: "/programas",
     meta: {
@@ -133,7 +132,7 @@ const allResources = [
     },
   },
   {
-    key: "configuracion", // Usualmente solo admin, o configurable
+    key: "configuracion",
     name: "configuracion",
     list: "/configuracion",
     meta: {
@@ -153,16 +152,30 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useCurrentUser } from "@hooks/useCurrentUser"; 
 import { RolesPermissionsProvider, useRolesPermissions } from "@contexts/roles-permissions-context";
 
-
 const AppContent = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: userLoading } = useCurrentUser();
   const { permisos, loading: permisosLoading } = useRolesPermissions();
 
   // Función para determinar qué recursos mostrar según el rol
   const getResourcesByRole = () => {
-    const userRole = user?.rol;
+    // Si aún está cargando, retornar array vacío temporalmente
+    if (userLoading) {
+      return [];
+    }
+
+    // Si no hay usuario, retornar array vacío
+    if (!user) {
+      return [];
+    }
+
+    const userRole = user.rol;
     
-    // Recursos para profesores: solo Mi Oficina
+    // Recursos para ADMINISTRADORES y DIRECTORES: Dashboard completo + todos los módulos
+    if (userRole === 'admin' || userRole === 'director') {
+      return allResources; // Incluye el Dashboard como primer elemento
+    }
+
+    // Recursos para PROFESORES: solo Mi Oficina (sin dashboard)
     if (userRole === "profesor") {
       return [
         {
@@ -176,7 +189,7 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
       ];
     }
 
-    // Recursos para estudiantes: solo Mi Portal
+    // Recursos para ESTUDIANTES: solo Mi Portal (sin dashboard)
     if (userRole === "estudiante") {
       return [
         {
@@ -190,138 +203,16 @@ const AppContent = ({ children }: { children: React.ReactNode }) => {
       ];
     }
 
-// Definición de TODOS los recursos posibles del panel administrativo (debe estar fuera de cualquier función y al inicio del archivo)
-const allResources = [
-  {
-    key: "dashboard",
-    name: "dashboard",
-    list: "/",
-    meta: {
-      label: "Dashboard",
-      icon: <DashboardOutlined />,
-    },
-  },
-  {
-    key: "estudiantes", // Clave debe coincidir con el módulo en permisos
-    name: "perfiles",
-    list: "/estudiantes",
-    create: "/estudiantes/create",
-    edit: "/estudiantes/edit/:id",
-    show: "/estudiantes/show/:id",
-    meta: {
-      label: "Estudiantes",
-      icon: <UserOutlined />,
-    },
-  },
-  {
-    key: "profesores",
-    name: "profesores",
-    list: "/profesores",
-    create: "/profesores/create",
-    edit: "/profesores/edit/:id",
-    show: "/profesores/show/:id",
-    meta: {
-      label: "Profesores",
-      icon: <SolutionOutlined />,
-    },
-  },
-  {
-    key: "cursos", // Programas suele ir junto con cursos
-    name: "programas",
-    list: "/programas",
-    meta: {
-      label: "Programas",
-      icon: <BookOutlined />,
-    },
-  },
-  {
-    key: "cursos",
-    name: "cursos",
-    list: "/cursos",
-    create: "/cursos/create",
-    edit: "/cursos/edit/:id",
-    show: "/cursos/show/:id",
-    meta: {
-      label: "Grupos",
-      icon: <UsergroupAddOutlined />,
-    },
-  },
-  {
-    key: "leads",
-    name: "leads",
-    list: "/leads",
-    meta: {
-      label: "Leads",
-      icon: <CustomerServiceOutlined />,
-    },
-  },
-  {
-    key: "planificador",
-    name: "planificador",
-    list: "/planificador",
-    meta: {
-      label: "Planificador",
-      icon: <CalendarOutlined />,
-    },
-  },
-  {
-    key: "matriculas",
-    name: "matriculas",
-    list: "/matriculas",
-    create: "/matriculas/create",
-    edit: "/matriculas/edit/:id",
-    show: "/matriculas/show/:id",
-    meta: {
-      label: "Matrículas",
-      icon: <FileTextOutlined />,
-    },
-  },
-  {
-    key: "nomina",
-    name: "nomina",
-    list: "/nomina",
-    create: "/nomina/create",
-    meta: {
-      label: "Nómina",
-      icon: <CalculatorOutlined />,
-    },
-  },
-  {
-    key: "tesoreria",
-    name: "tesoreria",
-    list: "/tesoreria",
-    create: "/tesoreria/create",
-    meta: {
-      label: "Tesorería",
-      icon: <DollarCircleOutlined />,
-    },
-  },
-  {
-    key: "configuracion", // Usualmente solo admin, o configurable
-    name: "configuracion",
-    list: "/configuracion",
-    meta: {
-      label: "Configuración",
-      icon: <SettingOutlined />,
-    },
-  },
-];
-
-     // Si es admin, mostrar todo el menú sin restricciones
-     if (userRole === 'admin') {
-       return allResources;
-     }
-     // Si es director, mostrar todo el menú (puedes ajustar si quieres restricciones para director)
-     if (userRole === 'director') {
-       return allResources;
-     }
-
-    // Para otros roles (ej: administrativo), filtrar según la tabla de permisos
-    if (permisosLoading) return [];
+    // Para ADMINISTRATIVOS: filtrar según la tabla de permisos
+    // (incluye dashboard si tienen permisos)
+    if (permisosLoading) {
+      return allResources; // Mostrar todo mientras carga permisos
+    }
+    
     const userPermisos = permisos[userRole || ''] || {};
     
     return allResources.filter(resource => {
-      // Si el recurso no tiene key (ej: dashboard), se muestra siempre
+      // Dashboard siempre visible para administrativos
       if (!resource.key || resource.key === 'dashboard') return true;
       
       // Verificar si tiene permiso true en el objeto de permisos
@@ -329,81 +220,40 @@ const allResources = [
     });
   };
 
-
-  // LOG para depuración de rol
-  if (typeof window !== "undefined") {
-    console.log("ROL DETECTADO:", user?.rol, "USER:", user);
-  }
-
-  // Si el usuario es admin (por rol o por id conocido), mostrar el menú completo aunque esté cargando
-  const adminIds = [
-    '6c879be0-1965-48aa-83be-4d9419568372', // agrega aquí más ids de admin si los tienes
-  ];
-  if ((user?.rol && String(user.rol).trim().toLowerCase() === 'admin') || (user?.id && adminIds.includes(user.id))) {
+  // Mostrar spinner mientras carga el usuario
+  if (userLoading) {
     return (
-      <RefineKbarProvider>
-        <ConfigProvider 
-          theme={{
-            token: {
-              colorPrimary: '#5B21B6',
-              colorSuccess: '#059669',
-              colorWarning: '#D97706',
-              colorError: '#DC2626',
-              colorInfo: '#0284C7',
-              colorTextBase: '#1F2937',
-              colorBgBase: '#FFFFFF',
-              borderRadius: 8,
-              fontSize: 14,
-            },
-            components: {
-              Button: {
-                controlHeight: 36,
-                fontWeight: 500,
-              },
-              Card: {
-                  borderRadiusLG: 12,
-                },
-                Tag: {
-                  borderRadiusSM: 6,
-                },
-                Table: {
-                  headerBg: '#F9FAFB',
-                  headerColor: '#374151',
-                  rowHoverBg: '#F3F4F6',
-                },
-              },
-            }}
-          >
-            <AntdApp>
-              <Refine
-                routerProvider={routerProvider}
-                dataProvider={dataProvider}
-                authProvider={authProvider}
-                resources={allResources}
-                options={{
-                  syncWithLocation: true,
-                  warnWhenUnsavedChanges: true,
-                }}
-              >
-                <ThemedLayout
-                  initialSiderCollapsed={false}
-                  Title={({ collapsed }) => (
-                    <ThemedTitle
-                      collapsed={collapsed}
-                      text="Crystal App"
-                      icon={<BookOutlined />}
-                    />
-                  )}
-                >
-                  {children}
-                </ThemedLayout>
-                <RefineKbar />
-              </Refine>
-            </AntdApp>
-          </ConfigProvider>
-        </RefineKbarProvider>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column',
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        gap: '16px'
+      }}>
+        <Spin size="large" />
+        <div style={{ color: '#666', fontSize: '14px' }}>Cargando...</div>
+      </div>
     );
   }
+
+  if (!user) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column',
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        gap: '16px'
+      }}>
+        <Spin size="large" />
+        <div style={{ color: '#666', fontSize: '14px' }}>Verificando sesión...</div>
+      </div>
+    );
+  }
+
+  const resources = getResourcesByRole();
 
   return (
     <RefineKbarProvider>
@@ -426,47 +276,47 @@ const allResources = [
               fontWeight: 500,
             },
             Card: {
-                borderRadiusLG: 12,
-              },
-              Tag: {
-                borderRadiusSM: 6,
-              },
-              Table: {
-                headerBg: '#F9FAFB',
-                headerColor: '#374151',
-                rowHoverBg: '#F3F4F6',
-              },
+              borderRadiusLG: 12,
             },
-          }}
-        >
-          <AntdApp>
-            <Refine
-              routerProvider={routerProvider}
-              dataProvider={dataProvider}
-              authProvider={authProvider}
-              resources={getResourcesByRole()}
-              options={{
-                syncWithLocation: true,
-                warnWhenUnsavedChanges: true,
-              }}
+            Tag: {
+              borderRadiusSM: 6,
+            },
+            Table: {
+              headerBg: '#F9FAFB',
+              headerColor: '#374151',
+              rowHoverBg: '#F3F4F6',
+            },
+          },
+        }}
+      >
+        <AntdApp>
+          <Refine
+            routerProvider={routerProvider}
+            dataProvider={dataProvider}
+            authProvider={authProvider}
+            resources={resources}
+            options={{
+              syncWithLocation: true,
+              warnWhenUnsavedChanges: true,
+            }}
+          >
+            <ThemedLayout
+              initialSiderCollapsed={false}
+              Title={({ collapsed }) => (
+                <ThemedTitle
+                  collapsed={collapsed}
+                  text="Crystal App"
+                  icon={<BookOutlined />}
+                />
+              )}
             >
-              <ThemedLayout
-                initialSiderCollapsed={false}
-                Title={({ collapsed }) => (
-                  <ThemedTitle
-                    collapsed={collapsed}
-                    text="Crystal App"
-                    icon={<BookOutlined />}
-                  />
-                )}
-              >
-                {children}
-              </ThemedLayout>
-              <RefineKbar />
-            </Refine>
-          </AntdApp>
-        </ConfigProvider>
-      </RefineKbarProvider>
+              {children}
+            </ThemedLayout>
+            <RefineKbar />
+          </Refine>
+        </AntdApp>
+      </ConfigProvider>
+    </RefineKbarProvider>
   );
 };
 
@@ -475,7 +325,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // --- CORRECCIÓN DEL ERROR DE HIDRATACIÓN ---
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -486,7 +335,12 @@ export default function RootLayout({
     return (
       <html lang="es">
         <body>
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: '100vh' 
+          }}>
             <Spin size="large" />
           </div>
         </body>
