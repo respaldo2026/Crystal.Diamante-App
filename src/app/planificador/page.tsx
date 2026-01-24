@@ -898,7 +898,8 @@ export default function PlanificadorPage() {
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60 }}>
-          <Spin size="large" tip="Cargando cursos..." />
+          <Spin size="large" />
+          <div style={{ marginTop: 16, color: "#666" }}>Cargando cursos...</div>
         </div>
       ) : viewMode === 'timeline' ? (
         renderTimelineView()

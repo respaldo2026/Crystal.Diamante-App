@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider } from "antd";
-import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined } from "@ant-design/icons";
+import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider, Upload, Space, Row, Col } from "antd";
+import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined, UploadOutlined, InstagramOutlined, FacebookOutlined, YoutubeOutlined } from "@ant-design/icons";
+import type { UploadFile } from "antd/es/upload/interface";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { MODULES, type ModuleDefinition } from "@/constants/modules";
 import { ROLES } from "@/constants/roles";
@@ -10,6 +11,7 @@ import { ROLES } from "@/constants/roles";
 const { TabPane } = Tabs;
 const { TextArea } = Input;
 const { Option } = Select;
+const LOGO_STORAGE_BUCKET = "branding";
 
 // Interfaces
 interface Admin {
@@ -47,6 +49,7 @@ interface PlantillaWhatsApp {
 }
 
 export default function ConfiguracionPage() {
+  const [messageApi, contextHolder] = message.useMessage();
   const [activeTab, setActiveTab] = useState("academia");
   const [initialized, setInitialized] = useState(false);
 
@@ -54,7 +57,8 @@ export default function ConfiguracionPage() {
   const [formAcademia] = Form.useForm();
   const [loadingAcademia, setLoadingAcademia] = useState(false);
   const [savingAcademia, setSavingAcademia] = useState(false);
-  // const [logoFileList, setLogoFileList] = useState<UploadFile[]>([]);
+  const [logoFileList, setLogoFileList] = useState<UploadFile[]>([]);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   // Estados para Permisos
   const [permisos, setPermisos] = useState<PermisosPorRol>({});
@@ -103,6 +107,62 @@ export default function ConfiguracionPage() {
     }
   }, [initialized]);
 
+  const handleLogoUpload = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      messageApi.error("Solo puedes subir imágenes (PNG, JPG, SVG)");
+      return Upload.LIST_IGNORE;
+    }
+
+    setUploadingLogo(true);
+    try {
+      const fileExt = file.name.split(".").pop() || "png";
+      const uniqueId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`;
+      const filePath = `logo/logo-${uniqueId}.${fileExt}`;
+
+      const { error: uploadError } = await supabaseBrowserClient.storage
+        .from(LOGO_STORAGE_BUCKET)
+        .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicData } = supabaseBrowserClient.storage
+        .from(LOGO_STORAGE_BUCKET)
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicData?.publicUrl;
+      if (!publicUrl) {
+        throw new Error("No se pudo obtener la URL pública del logo");
+      }
+
+      formAcademia.setFieldsValue({ logo_url: publicUrl });
+      setLogoFileList([
+        {
+          uid: uniqueId,
+          name: file.name,
+          status: "done",
+          url: publicUrl,
+        },
+      ]);
+
+      messageApi.success("Logo actualizado correctamente");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "No se pudo subir el logo";
+      messageApi.error(errorMessage);
+    } finally {
+      setUploadingLogo(false);
+    }
+
+    return Upload.LIST_IGNORE;
+  };
+
+  const handleRemoveLogo = () => {
+    formAcademia.setFieldsValue({ logo_url: null });
+    setLogoFileList([]);
+    messageApi.info("Logo eliminado");
+  };
+
   const handleTabChange = (key: string) => {
     setActiveTab(key);
     if (key === "permisos" && Object.keys(permisos).length === 0) {
@@ -133,14 +193,16 @@ export default function ConfiguracionPage() {
 
       if (data) {
         formAcademia.setFieldsValue(data);
-        // if (data.logo_url) {
-        //   setLogoFileList([{
-        //     uid: '-1',
-        //     name: 'logo.png',
-        //     status: 'done',
-        //     url: data.logo_url,
-        //   }]);
-        // }
+        if (data.logo_url) {
+          setLogoFileList([
+            {
+              uid: "logo",
+              name: "logo",
+              status: "done",
+              url: data.logo_url,
+            },
+          ]);
+        }
       }
     } catch (error) {
       console.error("Load config error:", error);
@@ -160,9 +222,9 @@ export default function ConfiguracionPage() {
 
       if (error) throw error;
 
-      message.success("Configuración guardada correctamente");
+      messageApi.success("Configuración guardada correctamente");
     } catch (error: any) {
-      message.error("Error al guardar: " + error.message);
+      messageApi.error("Error al guardar: " + error.message);
     } finally {
       setSavingAcademia(false);
     }
@@ -214,10 +276,10 @@ export default function ConfiguracionPage() {
           .from("role_permissions")
           .upsert({ rol, permisos: permisos[rol] || {} });
       }
-      message.success("Permisos actualizados correctamente");
+      messageApi.success("Permisos actualizados correctamente");
       setHasChangesPermisos(false);
     } catch (error) {
-      message.error("Error al guardar permisos");
+      messageApi.error("Error al guardar permisos");
     } finally {
       setSavingPermisos(false);
     }
@@ -230,7 +292,7 @@ export default function ConfiguracionPage() {
       const { data } = await supabaseBrowserClient
         .from("perfiles")
         .select("*")
-        .in("rol", ["admin", "director"])
+        .in("rol", adminAssignableRoles)
         .order("created_at", { ascending: false });
       setAdminsList(data || []);
     } catch (error) {
@@ -261,7 +323,7 @@ export default function ConfiguracionPage() {
           .from("perfiles")
           .update(values)
           .eq("id", editingAdmin.id);
-        message.success("Administrador actualizado");
+        messageApi.success("Administrador actualizado");
       } else {
         await supabaseBrowserClient.auth.signUp({
           email: values.email,
@@ -275,12 +337,12 @@ export default function ConfiguracionPage() {
             }
           }
         });
-        message.success("Administrador creado");
+        messageApi.success("Administrador creado");
       }
       setModalAdminVisible(false);
       cargarAdministradores();
     } catch (error: any) {
-      message.error("Error: " + error.message);
+      messageApi.error("Error: " + error.message);
     } finally {
       setSubmittingAdmin(false);
     }
@@ -295,10 +357,10 @@ export default function ConfiguracionPage() {
       onOk: async () => {
         try {
           await supabaseBrowserClient.from("perfiles").delete().eq("id", admin.id);
-          message.success("Eliminado");
+          messageApi.success("Eliminado");
           cargarAdministradores();
         } catch (e: any) {
-          message.error(e.message);
+          messageApi.error(e.message);
         }
       }
     });
@@ -342,17 +404,17 @@ export default function ConfiguracionPage() {
           .from("medios_pago")
           .update(values)
           .eq("id", editingMedioPago.id);
-        message.success("Medio de pago actualizado");
+        messageApi.success("Medio de pago actualizado");
       } else {
         await supabaseBrowserClient
           .from("medios_pago")
           .insert(values);
-        message.success("Medio de pago creado");
+        messageApi.success("Medio de pago creado");
       }
       setModalMedioPagoVisible(false);
       cargarMediosPago();
     } catch (error: any) {
-      message.error("Error: " + error.message);
+      messageApi.error("Error: " + error.message);
     } finally {
       setSubmittingMedioPago(false);
     }
@@ -367,10 +429,10 @@ export default function ConfiguracionPage() {
       onOk: async () => {
         try {
           await supabaseBrowserClient.from("medios_pago").delete().eq("id", medio.id);
-          message.success("Eliminado");
+          messageApi.success("Eliminado");
           cargarMediosPago();
         } catch (e: any) {
-          message.error(e.message);
+          messageApi.error(e.message);
         }
       }
     });
@@ -414,17 +476,17 @@ export default function ConfiguracionPage() {
           .from("plantillas_whatsapp")
           .update(values)
           .eq("id", editingPlantilla.id);
-        message.success("Plantilla actualizada");
+        messageApi.success("Plantilla actualizada");
       } else {
         await supabaseBrowserClient
           .from("plantillas_whatsapp")
           .insert(values);
-        message.success("Plantilla creada");
+        messageApi.success("Plantilla creada");
       }
       setModalPlantillaVisible(false);
       cargarPlantillasWhatsApp();
     } catch (error: any) {
-      message.error("Error: " + error.message);
+      messageApi.error("Error: " + error.message);
     } finally {
       setSubmittingPlantilla(false);
     }
@@ -439,10 +501,10 @@ export default function ConfiguracionPage() {
       onOk: async () => {
         try {
           await supabaseBrowserClient.from("plantillas_whatsapp").delete().eq("id", plantilla.id);
-          message.success("Eliminado");
+          messageApi.success("Eliminado");
           cargarPlantillasWhatsApp();
         } catch (e: any) {
-          message.error(e.message);
+          messageApi.error(e.message);
         }
       }
     });
@@ -537,6 +599,7 @@ export default function ConfiguracionPage() {
 
   return (
     <div style={{ padding: 24 }}>
+      {contextHolder}
       <h2 style={{ marginBottom: 24 }}>Configuración del Sistema</h2>
       <Card>
         <Tabs activeKey={activeTab} onChange={handleTabChange}>
@@ -545,46 +608,124 @@ export default function ConfiguracionPage() {
             <Spin spinning={loadingAcademia}>
               <Form form={formAcademia} layout="vertical">
                 <Divider orientation="left">Información General</Divider>
-                <Form.Item label="Nombre de la Academia" name="nombre_academia" rules={[{ required: true }]}>
-                  <Input placeholder="Academia Crystal" />
-                </Form.Item>
-                <Form.Item label="RUC / NIT" name="ruc">
-                  <Input placeholder="1234567890001" />
-                </Form.Item>
-                <Form.Item label="Dirección" name="direccion">
-                  <TextArea rows={2} placeholder="Dirección completa de la academia" />
-                </Form.Item>
-                <Form.Item label="Teléfono" name="telefono">
-                  <Input placeholder="0987654321" />
-                </Form.Item>
-                <Form.Item label="Email" name="email" rules={[{ type: 'email' }]}>
-                  <Input placeholder="info@academiacrystal.com" />
-                </Form.Item>
-                <Form.Item label="Sitio Web" name="sitio_web">
-                  <Input placeholder="https://www.academiacrystal.com" />
+                <Row gutter={[16, 8]}>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="Nombre de la Academia" name="nombre_academia" rules={[{ required: true }]}>
+                      <Input placeholder="Academia Crystal" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="RUC / NIT" name="ruc">
+                      <Input placeholder="1234567890001" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={24}>
+                    <Form.Item label="Dirección" name="direccion">
+                      <TextArea rows={2} placeholder="Dirección completa de la academia" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="Teléfono" name="telefono">
+                      <Input placeholder="0987654321" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="Email" name="email" rules={[{ type: 'email' }]}>
+                      <Input placeholder="info@academiacrystal.com" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={24}>
+                    <Form.Item label="Sitio Web" name="sitio_web">
+                      <Input placeholder="https://www.academiacrystal.com" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+
+                <Form.Item name="logo_url" hidden>
+                  <Input type="hidden" />
                 </Form.Item>
 
-                <Divider orientation="left">Información Financiera</Divider>
-                <Form.Item label="Moneda" name="moneda">
-                  <Select placeholder="Seleccionar moneda">
-                    <Option value="USD">Dólar (USD)</Option>
-                    <Option value="EUR">Euro (EUR)</Option>
-                    <Option value="COP">Peso Colombiano (COP)</Option>
-                  </Select>
-                </Form.Item>
-                <Form.Item label="Impuesto (%)" name="impuesto">
-                  <Input type="number" placeholder="19" />
-                </Form.Item>
+                <Divider orientation="left">Marca y Redes</Divider>
+                <Row gutter={[16, 16]} align="top">
+                  <Col xs={24} lg={10}>
+                    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+                      <Upload
+                        listType="picture-card"
+                        fileList={logoFileList}
+                        showUploadList={{ showPreviewIcon: false }}
+                        beforeUpload={handleLogoUpload}
+                        onRemove={() => {
+                          handleRemoveLogo();
+                          return true;
+                        }}
+                      >
+                        {logoFileList.length >= 1 ? null : (
+                          <div>
+                            <UploadOutlined style={{ fontSize: 20 }} />
+                            <div style={{ marginTop: 8 }}>Subir Logo</div>
+                          </div>
+                        )}
+                      </Upload>
+                      <Button loading={uploadingLogo} onClick={handleRemoveLogo} disabled={logoFileList.length === 0}>
+                        Limpiar Logo
+                      </Button>
+                    </Space>
+                  </Col>
+                  <Col xs={24} lg={14}>
+                    <Row gutter={[16, 8]}>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="Instagram" name="instagram">
+                          <Input addonBefore={<InstagramOutlined />} placeholder="https://instagram.com/academia" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="Facebook" name="facebook">
+                          <Input addonBefore={<FacebookOutlined />} placeholder="https://facebook.com/academia" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="YouTube" name="youtube">
+                          <Input addonBefore={<YoutubeOutlined />} placeholder="https://youtube.com/@academia" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="WhatsApp" name="whatsapp">
+                          <Input addonBefore={<WhatsAppOutlined />} placeholder="https://wa.me/573001112233" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </Col>
+                </Row>
 
-                <Divider orientation="left">Configuración de Pagos</Divider>
-                <Form.Item label="Días de gracia para pagos" name="dias_gracia_pago">
-                  <Input type="number" placeholder="5" />
-                </Form.Item>
-                <Form.Item label="Mora por día (%)" name="mora_por_dia">
-                  <Input type="number" placeholder="2" />
-                </Form.Item>
+                <Divider orientation="left">Parámetros Financieros</Divider>
+                <Row gutter={[16, 8]}>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="Moneda" name="moneda">
+                      <Select placeholder="Seleccionar moneda">
+                        <Option value="USD">Dólar (USD)</Option>
+                        <Option value="EUR">Euro (EUR)</Option>
+                        <Option value="COP">Peso Colombiano (COP)</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="Impuesto (%)" name="impuesto">
+                      <Input type="number" placeholder="19" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="Días de gracia para pagos" name="dias_gracia_pago">
+                      <Input type="number" placeholder="5" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="Mora por día (%)" name="mora_por_dia">
+                      <Input type="number" placeholder="2" />
+                    </Form.Item>
+                  </Col>
+                </Row>
 
-                <Form.Item>
+                <Form.Item style={{ marginTop: 16 }}>
                   <Button type="primary" icon={<SaveOutlined />} loading={savingAcademia} onClick={guardarConfiguracionAcademia}>
                     Guardar Configuración
                   </Button>
