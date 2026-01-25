@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
 import { Form, Input, Select, DatePicker, Card, Alert } from "antd";
 import { 
@@ -36,14 +36,7 @@ export default function MatriculaEdit() {
         optionValue: "id",
     });
 
-    useEffect(() => {
-        const cursoId = formProps.form?.getFieldValue('curso_id');
-        if (cursoId) {
-            supabaseFetchPrograma(cursoId);
-        }
-    }, [formProps.form]);
-
-    const supabaseFetchPrograma = async (cursoId: string) => {
+    const supabaseFetchPrograma = useCallback(async (cursoId: string) => {
         try {
             const { data } = await supabaseBrowserClient
                 .from('cursos')
@@ -57,7 +50,14 @@ export default function MatriculaEdit() {
         } catch (e) {
             console.warn('No se pudo cargar el programa del curso', e);
         }
-    };
+    }, [formProps.form]);
+
+    useEffect(() => {
+        const cursoId = formProps.form?.getFieldValue('curso_id');
+        if (cursoId) {
+            supabaseFetchPrograma(cursoId);
+        }
+    }, [formProps.form, supabaseFetchPrograma]);
 
     return (
         <Edit saveButtonProps={saveButtonProps} title="Actualizar Matrícula">

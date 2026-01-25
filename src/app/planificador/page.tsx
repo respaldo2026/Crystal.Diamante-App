@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { 
   Card, Typography, Spin, Tag, Button, Space, Select, DatePicker, Row, Col, Badge, Divider, Tooltip
 } from "antd";
@@ -79,13 +79,79 @@ export default function PlanificadorPage() {
     cargarProfesores();
   }, []);
 
-  useEffect(() => {
-    cargarCursos();
-  }, [viewMode, currentDate, customRange, profesorFiltro]);
+  const cargarProfesores = async () => {
+    try {
+      const { data, error } = await supabaseBrowserClient
+        .from("perfiles")
+        .select("id, nombre_completo")
+        .eq("rol", "profesor")
+        .order("nombre_completo");
 
-  const cargarCursos = async () => {
+      if (!error && data) {
+        setProfesores(data as { id: string; nombre_completo: string }[]);
+      }
+    } catch (err) {
+      logger.error("Error cargando profesores:", err);
+    }
+  };
+
+  const cargarInscritosPorCurso = useCallback(async (cursoIds: number[]) => {
+    if (!cursoIds.length) {
+      setInscritosPorCurso({});
+      return;
+    }
+
+    try {
+      const { data } = await supabaseBrowserClient
+        .from("matriculas")
+        .select("curso_id")
+        .in("curso_id", cursoIds)
+        .neq("estado", "cancelado");
+
+      const conteos: Record<number, number> = {};
+      cursoIds.forEach(id => {
+        conteos[id] = (data || []).filter((m: any) => m.curso_id === id).length;
+      });
+      setInscritosPorCurso(conteos);
+    } catch (error) {
+      logger.error("Error cargando inscritos:", error);
+    }
+  }, []);
+
+  const cargarClases = useCallback(async (cursoIds: number[], start: Dayjs, end: Dayjs) => {
+    if (!cursoIds.length) {
+      setClases([]);
+      return;
+    }
+
+    try {
+      let query = supabaseBrowserClient
+        .from("clases")
+        .select("id, curso_id, fecha_hora, estado, profesor_id, perfiles:profesor_id (nombre_completo)")
+        .in("curso_id", cursoIds)
+        .gte("fecha_hora", start.startOf('day').toISOString())
+        .lte("fecha_hora", end.endOf('day').toISOString());
+
+      if (profesorFiltro) {
+        query = query.eq("profesor_id", profesorFiltro);
+      }
+
+      const { data, error } = await query;
+
+      if (!error && data) {
+        setClases(data as unknown as Clase[]);
+      } else {
+        setClases([]);
+      }
+    } catch (err) {
+      logger.error("Error cargando clases:", err);
+      setClases([]);
+    }
+  }, [profesorFiltro]);
+
+  const cargarCursos = useCallback(async () => {
     setLoading(true);
-    const rango = getDateRange();
+    const rango = dateRange;
     try {
       let query = supabaseBrowserClient
         .from("cursos")
@@ -124,80 +190,14 @@ export default function PlanificadorPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange, profesorFiltro, cargarInscritosPorCurso, cargarClases]);
 
-  const cargarProfesores = async () => {
-    try {
-      const { data, error } = await supabaseBrowserClient
-        .from("perfiles")
-        .select("id, nombre_completo")
-        .eq("rol", "profesor")
-        .order("nombre_completo");
-
-      if (!error && data) {
-        setProfesores(data as { id: string; nombre_completo: string }[]);
-      }
-    } catch (err) {
-      logger.error("Error cargando profesores:", err);
-    }
-  };
-
-  const cargarInscritosPorCurso = async (cursoIds: number[]) => {
-    if (!cursoIds.length) {
-      setInscritosPorCurso({});
-      return;
-    }
-
-    try {
-      const { data } = await supabaseBrowserClient
-        .from("matriculas")
-        .select("curso_id")
-        .in("curso_id", cursoIds)
-        .neq("estado", "cancelado");
-      
-      const conteos: Record<number, number> = {};
-      cursoIds.forEach(id => {
-        conteos[id] = (data || []).filter((m: any) => m.curso_id === id).length;
-      });
-      setInscritosPorCurso(conteos);
-    } catch (error) {
-      logger.error("Error cargando inscritos:", error);
-    }
-  };
-
-  const cargarClases = async (cursoIds: number[], start: Dayjs, end: Dayjs) => {
-    if (!cursoIds.length) {
-      setClases([]);
-      return;
-    }
-
-    try {
-      let query = supabaseBrowserClient
-        .from("clases")
-        .select("id, curso_id, fecha_hora, estado, profesor_id, perfiles:profesor_id (nombre_completo)")
-        .in("curso_id", cursoIds)
-        .gte("fecha_hora", start.startOf('day').toISOString())
-        .lte("fecha_hora", end.endOf('day').toISOString());
-
-      if (profesorFiltro) {
-        query = query.eq("profesor_id", profesorFiltro);
-      }
-
-      const { data, error } = await query;
-
-      if (!error && data) {
-        setClases(data as unknown as Clase[]);
-      } else {
-        setClases([]);
-      }
-    } catch (err) {
-      logger.error("Error cargando clases:", err);
-      setClases([]);
-    }
-  };
+  useEffect(() => {
+    cargarCursos();
+  }, [cargarCursos]);
 
   // Obtener rango de fechas según el modo de vista
-  const getDateRange = (): { start: Dayjs; end: Dayjs; title: string } => {
+  const dateRange = useMemo((): { start: Dayjs; end: Dayjs; title: string } => {
     if (viewMode === 'custom' && customRange) {
       return {
         start: customRange[0].startOf('day'),
@@ -207,22 +207,23 @@ export default function PlanificadorPage() {
     }
 
     if (viewMode === 'week') {
+      const startOfWeek = currentDate.startOf('isoWeek');
+      const endOfWeek = currentDate.endOf('isoWeek');
       return {
-        start: currentDate.startOf('isoWeek'),
-        end: currentDate.endOf('isoWeek'),
-        title: `Semana del ${currentDate.startOf('isoWeek').format('DD-MMM')} al ${currentDate.endOf('isoWeek').format('DD-MMM-YYYY')}`
+        start: startOfWeek,
+        end: endOfWeek,
+        title: `Semana del ${startOfWeek.format('DD-MMM')} al ${endOfWeek.format('DD-MMM-YYYY')}`
       };
     }
 
-    // month
+    const startOfMonth = currentDate.startOf('month');
+    const endOfMonth = currentDate.endOf('month');
     return {
-      start: currentDate.startOf('month'),
-      end: currentDate.endOf('month'),
+      start: startOfMonth,
+      end: endOfMonth,
       title: currentDate.format('MMM YYYY').toUpperCase()
     };
-  };
-
-  const dateRange = getDateRange();
+  }, [viewMode, currentDate, customRange]);
 
   // Filtrar cursos que están en el rango de fechas
   const cursosEnRango = cursos.filter(curso => {

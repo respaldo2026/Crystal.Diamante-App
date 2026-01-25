@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Modal,
   Form,
@@ -128,35 +128,8 @@ export default function GestorPensum({
   const [selectedCicloId, setSelectedCicloId] = useState<string | null>(null);
   const [selectedCursoId, setSelectedCursoId] = useState<string | null>(null);
 
-  useEffect(() => {
-    cargarPrograma();
-  }, []);
-
-  useEffect(() => {
-    if (programaData) {
-      verificarYCrearCiclos();
-    }
-  }, [programaData]);
-
-  useEffect(() => {
-    cargarPensums();
-  }, []);
-
-  useEffect(() => {
-    if (selectedCicloId) {
-      const cicloSeleccionado = pensums.find(p => p.id === selectedCicloId);
-      if (cicloSeleccionado) {
-        cargarCursosPensum(selectedCicloId);
-      }
-    }
-  }, [selectedCicloId]);
-
-  useEffect(() => {
-    cargarMateriales();
-  }, []);
-
   // Cargar información del programa
-  const cargarPrograma = async () => {
+  const cargarPrograma = useCallback(async () => {
     try {
       const { data, error } = await supabaseBrowserClient
         .from("programas")
@@ -170,10 +143,29 @@ export default function GestorPensum({
       message.error("Error al cargar programa");
       logger.error(error);
     }
-  };
+  }, [programaId, message]);
+
+  const cargarPensums = useCallback(async () => {
+    setLoadingPensums(true);
+    try {
+      const { data, error } = await supabaseBrowserClient
+        .from("pensum")
+        .select("*")
+        .eq("programa_id", programaId)
+        .order("numero_ciclo", { ascending: true });
+
+      if (error) throw error;
+      setPensums(data || []);
+    } catch (error) {
+      message.error("Error al cargar pensum");
+      logger.error(error);
+    } finally {
+      setLoadingPensums(false);
+    }
+  }, [programaId, message]);
 
   // Verificar y crear ciclos automáticamente según la duración del programa
-  const verificarYCrearCiclos = async () => {
+  const verificarYCrearCiclos = useCallback(async () => {
     if (!programaData?.duracion) {
       await cargarPensums();
       return;
@@ -243,28 +235,9 @@ export default function GestorPensum({
     }
 
     await cargarPensums();
-  };
+  }, [programaData, programaId, cargarPensums, message]);
 
   // ==================== PENSUM ====================
-
-  const cargarPensums = async () => {
-    setLoadingPensums(true);
-    try {
-      const { data, error } = await supabaseBrowserClient
-        .from("pensum")
-        .select("*")
-        .eq("programa_id", programaId)
-        .order("numero_ciclo", { ascending: true });
-
-      if (error) throw error;
-      setPensums(data || []);
-    } catch (error) {
-      message.error("Error al cargar pensum");
-      logger.error(error);
-    } finally {
-      setLoadingPensums(false);
-    }
-  };
 
   const handleEditarCiclo = (e: React.MouseEvent, pensum: Pensum) => {
     e.stopPropagation();
@@ -319,7 +292,7 @@ export default function GestorPensum({
 
   // ==================== CURSOS DEL PENSUM ====================
 
-  const cargarCursosPensum = async (pensumId: string) => {
+  const cargarCursosPensum = useCallback(async (pensumId: string) => {
     setLoadingCursos(true);
     try {
       const { data, error } = await supabaseBrowserClient
@@ -335,7 +308,7 @@ export default function GestorPensum({
     } finally {
       setLoadingCursos(false);
     }
-  };
+  }, [message]);
 
   const handleGuardarCurso = async () => {
     try {
@@ -402,7 +375,7 @@ export default function GestorPensum({
 
   // ==================== MATERIAL DIDÁCTICO ====================
 
-  const cargarMateriales = async () => {
+  const cargarMateriales = useCallback(async () => {
     setLoadingMateriales(true);
     try {
       const { data, error } = await supabaseBrowserClient
@@ -419,7 +392,34 @@ export default function GestorPensum({
     } finally {
       setLoadingMateriales(false);
     }
-  };
+  }, [programaId, message]);
+
+  useEffect(() => {
+    cargarPrograma();
+  }, [cargarPrograma]);
+
+  useEffect(() => {
+    if (programaData) {
+      verificarYCrearCiclos();
+    }
+  }, [programaData, verificarYCrearCiclos]);
+
+  useEffect(() => {
+    cargarPensums();
+  }, [cargarPensums]);
+
+  useEffect(() => {
+    if (selectedCicloId) {
+      const cicloSeleccionado = pensums.find(p => p.id === selectedCicloId);
+      if (cicloSeleccionado) {
+        cargarCursosPensum(selectedCicloId);
+      }
+    }
+  }, [selectedCicloId, pensums, cargarCursosPensum]);
+
+  useEffect(() => {
+    cargarMateriales();
+  }, [cargarMateriales]);
 
   const handleEliminarMaterial = (materialId: string) => {
     modal.confirm({

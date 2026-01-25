@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Card, Typography, Descriptions, Button, Space, message, Spin, Alert, Form, Select, Input, DatePicker, Divider, Row, Col, Result } from "antd";
 import { PrinterOutlined, DollarCircleOutlined, WhatsAppOutlined, CheckCircleOutlined } from "@ant-design/icons";
@@ -28,11 +28,7 @@ export default function PagoInscripcionPage() {
 
     const [form] = Form.useForm();
 
-    useEffect(() => {
-        cargarDatos();
-    }, [matriculaId]);
-
-    const cargarDatos = async () => {
+    const cargarDatos = useCallback(async () => {
         try {
             setLoading(true);
 
@@ -85,7 +81,13 @@ export default function PagoInscripcionPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [matriculaId]);
+
+    useEffect(() => {
+        if (matriculaId) {
+            cargarDatos();
+        }
+    }, [matriculaId, cargarDatos]);
 
     const handlePrint = () => {
         if (printRef.current) {

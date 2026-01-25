@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { 
   Typography, Row, Col, Card, Statistic, Button, Spin, Tag, Progress, 
   Empty, Space, Segmented, Tooltip, Badge
@@ -87,20 +87,7 @@ export default function DashboardPage() {
     }
   }, [user, userLoading, router]);
 
-  useEffect(() => {
-    cargarDashboard();
-    
-    // Actualización en tiempo real
-    const subscription = supabaseBrowserClient
-      .channel('dashboard-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pagos' }, () => cargarDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculas' }, () => cargarDashboard())
-      .subscribe();
-
-    return () => { subscription.unsubscribe(); };
-  }, [timeRange]);
-
-  const cargarDashboard = async () => {
+  const cargarDashboard = useCallback(async () => {
     setLoading(true);
     try {
       const hoy = dayjs();
@@ -321,10 +308,25 @@ export default function DashboardPage() {
       setPagosVencidos(vencidos.data || []);
 
     } catch (error) {
+      console.error("Error al cargar dashboard", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange]);
+
+  useEffect(() => {
+    cargarDashboard();
+
+    const subscription = supabaseBrowserClient
+      .channel('dashboard-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pagos' }, () => cargarDashboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculas' }, () => cargarDashboard())
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [cargarDashboard]);
 
   if (loading || userLoading) {
     return (

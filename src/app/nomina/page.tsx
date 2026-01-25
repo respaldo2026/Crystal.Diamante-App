@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
     Table, Card, Button, DatePicker, Row, Col, Typography, Select,
     Statistic, Tag, message, Modal, Space, Alert
@@ -87,81 +87,7 @@ export default function NominaPage() {
         []
     );
 
-    const columnasClases = useMemo(
-        () => [
-            {
-                title: 'Fecha',
-                dataIndex: 'fecha',
-                render: (val: string) => formatDate(val),
-            },
-            {
-                title: 'Profesor',
-                dataIndex: 'profesor_id',
-                render: (_: any, record: any) => record.perfiles?.nombre_completo || 'Sin nombre',
-            },
-            {
-                title: 'Curso',
-                dataIndex: 'curso_id',
-                render: (_: any, record: any) => record.cursos?.nombre || '—',
-            },
-            {
-                title: 'Tema',
-                dataIndex: 'tema_visto',
-                render: (val: string | null) => val || 'Sin tema',
-            },
-            {
-                title: 'Horas',
-                dataIndex: 'horas_dictadas',
-                render: (val: number) => <Tag color="blue">{val} hrs</Tag>,
-            },
-            {
-                title: 'Estado',
-                dataIndex: 'estado_pago',
-                render: (val: string) => {
-                    if (val === 'pendiente') {
-                        return <Tag color="orange">PENDIENTE</Tag>;
-                    } else if (val === 'pagado') {
-                        return <Tag color="green">✓ PAGADO</Tag>;
-                    }
-                    return <Tag>{val}</Tag>;
-                },
-            },
-            {
-                title: 'Valor Hora',
-                dataIndex: 'valor_hora',
-                render: (val: number) => val ? `$ ${Number(val).toLocaleString()}` : <Tag color="red">Sin definir</Tag>,
-            },
-            {
-                title: 'A Pagar',
-                dataIndex: 'total_estimado',
-                render: (val: number) => <Text strong type="success">$ {Number(val || 0).toLocaleString()}</Text>,
-            },
-            {
-                title: 'Acción',
-                render: (_: any, record: any) => {
-                    const estaPagado = record.estado_pago === 'pagado';
-                    return (
-                        <Button
-                            type={estaPagado ? "text" : "default"}
-                            size="small"
-                            disabled={estaPagado || !record.total_estimado}
-                            loading={pagandoClaseId === record.id}
-                            onClick={() => pagarClaseIndividual(record)}
-                        >
-                            {estaPagado ? '✓ Pagado' : 'Pagar'}
-                        </Button>
-                    );
-                },
-            },
-        ],
-        [pagandoClaseId]
-    );
-
-  useEffect(() => {
-    calcularNomina();
-  }, [rangoFechas]);
-
-  const calcularNomina = async () => {
+    const calcularNomina = useCallback(async () => {
     if (!rangoFechas) return;
     setLoading(true);
 
@@ -234,7 +160,11 @@ export default function NominaPage() {
     } finally {
         setLoading(false);
     }
-  };
+    }, [rangoFechas, user]);
+
+    useEffect(() => {
+        calcularNomina();
+    }, [calcularNomina]);
 
   const procesarPago = async () => {
       if (!profesorSeleccionado) return;
@@ -294,7 +224,7 @@ export default function NominaPage() {
       }
   };
 
-    const pagarClaseIndividual = async (clase: any) => {
+    const pagarClaseIndividual = useCallback((clase: any) => {
         Modal.confirm({
             title: '¿Pagar esta clase?',
             content: (
@@ -313,15 +243,19 @@ export default function NominaPage() {
                     const valorHora = Number(clase.valor_hora || 0);
                     const monto = Number(clase.horas_dictadas || 0) * (valorHora || 0);
 
-                    const { data: pagoData, error: errPago } = await supabaseBrowserClient.from("pagos_nomina").insert({
-                        profesor_id: clase.profesor_id,
-                        fecha_pago: dayjs().format("YYYY-MM-DD"),
-                        total_pagado: monto,
-                        total_horas: clase.horas_dictadas,
-                        fecha_inicio_periodo: clase.fecha,
-                        fecha_fin_periodo: clase.fecha,
-                        observaciones: `Pago clase individual - ${clase.cursos?.nombre || 'Clase'} (${metodoNomina})`
-                    }).select().single();
+                    const { data: pagoData, error: errPago } = await supabaseBrowserClient
+                        .from("pagos_nomina")
+                        .insert({
+                            profesor_id: clase.profesor_id,
+                            fecha_pago: dayjs().format("YYYY-MM-DD"),
+                            total_pagado: monto,
+                            total_horas: clase.horas_dictadas,
+                            fecha_inicio_periodo: clase.fecha,
+                            fecha_fin_periodo: clase.fecha,
+                            observaciones: `Pago clase individual - ${clase.cursos?.nombre || 'Clase'} (${metodoNomina})`
+                        })
+                        .select()
+                        .single();
                     if (errPago) throw errPago;
 
                     await supabaseBrowserClient
@@ -331,8 +265,7 @@ export default function NominaPage() {
                         .eq("estado_pago", "pendiente");
 
                     message.success("Clase pagada y descontada del pendiente");
-                    
-                    // WhatsApp
+
                     if (clase.perfiles?.telefono) {
                         await enviarWhatsappConPlantilla(
                             clase.perfiles.telefono,
@@ -346,7 +279,7 @@ export default function NominaPage() {
                         );
                     }
 
-                    calcularNomina();
+                    await calcularNomina();
                     setPagoReciente({ ...pagoData, nombre_profesor: clase.perfiles?.nombre_completo });
                     setModalReciboVisible(true);
                 } catch (error: any) {
@@ -356,7 +289,78 @@ export default function NominaPage() {
                 }
             }
         });
-    };
+    }, [metodoNomina, calcularNomina]);
+
+    const columnasClases = useMemo(
+        () => [
+            {
+                title: 'Fecha',
+                dataIndex: 'fecha',
+                render: (val: string) => formatDate(val),
+            },
+            {
+                title: 'Profesor',
+                dataIndex: 'profesor_id',
+                render: (_: any, record: any) => record.perfiles?.nombre_completo || 'Sin nombre',
+            },
+            {
+                title: 'Curso',
+                dataIndex: 'curso_id',
+                render: (_: any, record: any) => record.cursos?.nombre || '—',
+            },
+            {
+                title: 'Tema',
+                dataIndex: 'tema_visto',
+                render: (val: string | null) => val || 'Sin tema',
+            },
+            {
+                title: 'Horas',
+                dataIndex: 'horas_dictadas',
+                render: (val: number) => <Tag color="blue">{val} hrs</Tag>,
+            },
+            {
+                title: 'Estado',
+                dataIndex: 'estado_pago',
+                render: (val: string) => {
+                    if (val === 'pendiente') {
+                        return <Tag color="orange">PENDIENTE</Tag>;
+                    }
+                    if (val === 'pagado') {
+                        return <Tag color="green">✓ PAGADO</Tag>;
+                    }
+                    return <Tag>{val}</Tag>;
+                },
+            },
+            {
+                title: 'Valor Hora',
+                dataIndex: 'valor_hora',
+                render: (val: number) => val ? `$ ${Number(val).toLocaleString()}` : <Tag color="red">Sin definir</Tag>,
+            },
+            {
+                title: 'A Pagar',
+                dataIndex: 'total_estimado',
+                render: (val: number) => <Text strong type="success">$ {Number(val || 0).toLocaleString()}</Text>,
+            },
+            {
+                title: 'Acción',
+                render: (_: any, record: any) => {
+                    const estaPagado = record.estado_pago === 'pagado';
+                    return (
+                        <Button
+                            type={estaPagado ? "text" : "default"}
+                            size="small"
+                            disabled={estaPagado || !record.total_estimado}
+                            loading={pagandoClaseId === record.id}
+                            onClick={() => pagarClaseIndividual(record)}
+                        >
+                            {estaPagado ? '✓ Pagado' : 'Pagar'}
+                        </Button>
+                    );
+                },
+            },
+        ],
+        [pagandoClaseId, pagarClaseIndividual]
+    );
 
   return (
     <div style={{ padding: 24 }}>

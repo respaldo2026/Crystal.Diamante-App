@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Card,
   Form,
@@ -68,11 +68,7 @@ export default function GestionarPerfilesPage() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [selectedPerfil, setSelectedPerfil] = useState<Perfil | null>(null);
 
-  useEffect(() => {
-    cargarDatos();
-  }, []);
-
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -130,7 +126,11 @@ export default function GestionarPerfilesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
 
   const handleCrearPerfil = async (values: any) => {
     try {

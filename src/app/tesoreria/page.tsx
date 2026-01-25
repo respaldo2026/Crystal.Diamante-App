@@ -100,7 +100,7 @@ export default function TesoreriaList() {
         }
 
         return resultado;
-    }, [busqueda, pagos, filtroFecha, filtroMetodo, filtroConcepto, dayjs]);
+    }, [busqueda, pagos, filtroFecha, filtroMetodo, filtroConcepto]);
 
     const totalPagadoEnPantalla = useMemo(() => {
         return dataFiltrada

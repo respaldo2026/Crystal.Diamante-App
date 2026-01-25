@@ -375,6 +375,15 @@ export default function StudentDetailView() {
     []
   );
 
+  const contactoPerfil = useMemo(
+    () => ({
+      nombre: perfil?.nombre_completo ?? "",
+      telefono: perfil?.telefono ?? "",
+      whatsapp: perfil?.whatsapp ?? "",
+    }),
+    [perfil]
+  );
+
   const columnasPagos = useMemo(
     () => [
       {
@@ -440,7 +449,7 @@ export default function StudentDetailView() {
             size="small"
             type="default"
             onClick={() => {
-              const telefono = perfil?.telefono || perfil?.whatsapp || "";
+              const telefono = contactoPerfil.telefono || contactoPerfil.whatsapp;
               if (!telefono) {
                 message.warning("El estudiante no tiene teléfono registrado");
                 return;
@@ -448,14 +457,14 @@ export default function StudentDetailView() {
               const curso = record.matriculas?.cursos?.nombre || "tu curso";
               const estado = record.estado || "pendiente";
               const monto = record.monto ? `$${record.monto.toLocaleString('es-CO')}` : "(monto no indicado)";
-              const msg = `Hola ${perfil?.nombre_completo || ''}, te recuerdo el pago de ${monto} para ${curso}. Estado: ${estado.replace('_',' ')}. Por favor confirma el pago o envía el soporte. Gracias!`;
+              const msg = `Hola ${contactoPerfil.nombre}, te recuerdo el pago de ${monto} para ${curso}. Estado: ${estado.replace('_',' ')}. Por favor confirma el pago o envía el soporte. Gracias!`;
               enviarWhatsapp(telefono, msg);
             }}
           />
         ),
       },
     ],
-    []
+    [contactoPerfil]
   );
 
   const renderCuotasPorMatricula = (record: any) => {

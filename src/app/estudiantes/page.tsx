@@ -95,10 +95,10 @@ export default function EstudiantesList() {
     const [asistStats, setAsistStats] = useState<Record<number, { total: number; present: number; porcentaje: number; minimo: number; cumple: boolean; tieneDatos: boolean }>>({});
     const [loadingAsist, setLoadingAsist] = useState(false);
     const [calcularAsistencia, setCalcularAsistencia] = useState(false);
-    const activoEstados = ["activo", "en curso", "pendiente"];
-    const graduadoEstados = ["aprobado", "certificado", "finalizado"];
+    const activoEstados = useMemo(() => ["activo", "en curso", "pendiente"], []);
+    const graduadoEstados = useMemo(() => ["aprobado", "certificado", "finalizado"], []);
 
-    const dataSource = (tableProps.dataSource as any[]) || [];
+    const dataSource = useMemo(() => (tableProps.dataSource as any[]) || [], [tableProps.dataSource]);
 
     // Calcular asistencia por matrícula para cada estudiante (SOLO cuando se solicite)
     useEffect(() => {
@@ -149,7 +149,7 @@ export default function EstudiantesList() {
             }
         };
         fetchAsist();
-    }, [calcularAsistencia, dataSource, supabaseBrowserClient]);
+    }, [calcularAsistencia, dataSource]);
     const activos = useMemo(() => dataSource.filter(s => {
         // Mostrar todos los estudiantes que tienen activo=true O no tienen el campo
         // Si tienen matrículas, verificar que al menos una esté activa

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App } from "antd";
 import {
   UserOutlined,
@@ -112,78 +112,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     []
   );
 
-  const columnasEstudiantes = useMemo(
-    () => [
-      {
-        title: "Nombre",
-        dataIndex: "nombre_completo",
-        render: (text: string) => <Text strong>{text}</Text>,
-      },
-      { title: "Identificación", dataIndex: "identificacion", width: 150 },
-      { title: "Email", dataIndex: "email", ellipsis: true },
-      {
-        title: "Estado",
-        dataIndex: "estado",
-        render: (estado: string) => {
-          let color = "default";
-          if (estado === "activo") color = "success";
-          if (estado === "aprobado" || estado === "certificado") color = "blue";
-          if (estado === "cancelado") color = "error";
-          return <Tag color={color}>{estado?.toUpperCase()}</Tag>;
-        },
-        width: 120,
-      },
-      {
-        title: "Asistencia",
-        dataIndex: "asistencia_porcentaje",
-        render: (porcentaje: number) => {
-          let color = "success";
-          if (porcentaje < 80) color = "warning";
-          if (porcentaje < 70) color = "error";
-          return <Tag color={color}>{porcentaje}%</Tag>;
-        },
-        width: 100,
-        sorter: (a: any, b: any) => a.asistencia_porcentaje - b.asistencia_porcentaje,
-      },
-      {
-        title: "Acciones",
-        key: "acciones",
-        width: 280,
-        render: (_: any, record: any) => {
-          const esActivo = record.estado === "activo";
-          return (
-            <Space wrap size="small">
-              <Button 
-                size="small" 
-                type="primary"
-                disabled={!esActivo}
-                onClick={() => handleAccionMatricula("completada", record)}
-              >
-                Completar
-              </Button>
-              <Button 
-                size="small" 
-                disabled={!esActivo}
-                onClick={() => handleAccionMatricula("cancelada", record)}
-              >
-                Cancelar
-              </Button>
-              <Button 
-                size="small" 
-                danger
-                disabled={!esActivo}
-                onClick={() => handleAccionMatricula("retirada", record)}
-              >
-                Retirar
-              </Button>
-            </Space>
-          );
-        },
-      },
-    ],
-    []
-  );
-
   const columnasCalificaciones = useMemo(
     () => [
       {
@@ -218,18 +146,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     []
   );
 
-  useEffect(() => {
-    const resolveParams = async () => {
-      const resolved = await params;
-      if (resolved?.id) {
-        setCursoId(resolved.id);
-        cargarDatos(resolved.id);
-      }
-    };
-    resolveParams();
-  }, [params]);
-
-  const cargarDatos = async (id: string) => {
+  const cargarDatos = useCallback(async (id: string) => {
     setLoading(true);
     try {
       // Curso
@@ -320,9 +237,20 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const actualizarEstadoMatricula = async (matriculaId: number, nuevoEstado: string) => {
+  useEffect(() => {
+    const resolveParams = async () => {
+      const resolved = await params;
+      if (resolved?.id) {
+        setCursoId(resolved.id);
+        cargarDatos(resolved.id);
+      }
+    };
+    resolveParams();
+  }, [params, cargarDatos]);
+
+  const actualizarEstadoMatricula = useCallback(async (matriculaId: number, nuevoEstado: string) => {
     try {
       const { error } = await supabaseBrowserClient
         .from("matriculas")
@@ -335,13 +263,85 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       message.error("No se pudo actualizar la matrícula");
       console.error(error);
     }
-  };
+  }, [cursoId, cargarDatos, message]);
 
-  const handleAccionMatricula = (key: string, record: any) => {
+  const handleAccionMatricula = useCallback((key: string, record: any) => {
     if (key === "completada" || key === "cancelada" || key === "retirada") {
       actualizarEstadoMatricula(record.id, key);
     }
-  };
+  }, [actualizarEstadoMatricula]);
+
+  const columnasEstudiantes = useMemo(
+    () => [
+      {
+        title: "Nombre",
+        dataIndex: "nombre_completo",
+        render: (text: string) => <Text strong>{text}</Text>,
+      },
+      { title: "Identificación", dataIndex: "identificacion", width: 150 },
+      { title: "Email", dataIndex: "email", ellipsis: true },
+      {
+        title: "Estado",
+        dataIndex: "estado",
+        render: (estado: string) => {
+          let color = "default";
+          if (estado === "activo") color = "success";
+          if (estado === "aprobado" || estado === "certificado") color = "blue";
+          if (estado === "cancelado") color = "error";
+          return <Tag color={color}>{estado?.toUpperCase()}</Tag>;
+        },
+        width: 120,
+      },
+      {
+        title: "Asistencia",
+        dataIndex: "asistencia_porcentaje",
+        render: (porcentaje: number) => {
+          let color = "success";
+          if (porcentaje < 80) color = "warning";
+          if (porcentaje < 70) color = "error";
+          return <Tag color={color}>{porcentaje}%</Tag>;
+        },
+        width: 100,
+        sorter: (a: any, b: any) => a.asistencia_porcentaje - b.asistencia_porcentaje,
+      },
+      {
+        title: "Acciones",
+        key: "acciones",
+        width: 280,
+        render: (_: any, record: any) => {
+          const esActivo = record.estado === "activo";
+          return (
+            <Space wrap size="small">
+              <Button 
+                size="small" 
+                type="primary"
+                disabled={!esActivo}
+                onClick={() => handleAccionMatricula("completada", record)}
+              >
+                Completar
+              </Button>
+              <Button 
+                size="small" 
+                disabled={!esActivo}
+                onClick={() => handleAccionMatricula("cancelada", record)}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                size="small" 
+                danger
+                disabled={!esActivo}
+                onClick={() => handleAccionMatricula("retirada", record)}
+              >
+                Retirar
+              </Button>
+            </Space>
+          );
+        },
+      },
+    ],
+    [handleAccionMatricula]
+  );
 
   const handleDeleteCurso = async () => {
     modal.confirm({

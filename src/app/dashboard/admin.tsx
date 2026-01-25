@@ -330,7 +330,7 @@ export default function AdminDashboard() {
         setRefreshing(false);
       }
     }
-  }, [timeRange]);
+  }, [timeRange, initialLoading]);
 
   useEffect(() => {
     fetchData();

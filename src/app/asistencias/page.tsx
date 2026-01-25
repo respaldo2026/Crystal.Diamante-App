@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { List, useTable, EditButton, DeleteButton, useSelect, CreateButton } from "@refinedev/antd";
 import { Table, Space, Tag, Card, Row, Col, Progress, Typography, Statistic, Alert, Button, FloatButton, Select } from "antd";
 import { 
@@ -63,7 +63,7 @@ export default function ListAsistencias() {
   }, [cursoSeleccionado, cursoSelect.options, searchParams]);
 
   // Calcular estadísticas por estudiante
-  const calcularEstadisticas = async () => {
+  const calcularEstadisticas = useCallback(async () => {
     if (!cursoSeleccionado) return;
     
     setLoadingStats(true);
@@ -112,7 +112,7 @@ export default function ListAsistencias() {
     } finally {
       setLoadingStats(false);
     }
-  };
+  }, [cursoSeleccionado]);
 
   useEffect(() => {
     if (cursoSeleccionado) {

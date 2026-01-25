@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Tooltip, Dropdown } from "antd";
 import { PlusOutlined, EditOutlined, BookOutlined, MoreOutlined, FolderOutlined } from "@ant-design/icons";
 import type { CheckboxChangeEvent } from "antd/es/checkbox";
@@ -29,7 +29,7 @@ export default function ProgramasPage() {
 
 
     // Cargar programas desde Supabase (única versión)
-    const cargarProgramas = async () => {
+    const cargarProgramas = useCallback(async () => {
       setLoading(true);
       try {
         let query = supabaseBrowserClient
@@ -49,11 +49,11 @@ export default function ProgramasPage() {
       } finally {
         setLoading(false);
       }
-    };
+    }, [mostrarInactivos, message]);
 
     useEffect(() => {
       cargarProgramas();
-    }, [mostrarInactivos]);
+    }, [cargarProgramas]);
 
     // Guardar o editar programa (única versión)
     const handleSubmit = async () => {

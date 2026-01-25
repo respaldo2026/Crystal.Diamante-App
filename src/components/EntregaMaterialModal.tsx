@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Modal, Form, Input, Select, DatePicker, message, Radio, Table, Tag } from "antd";
 import { GiftOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -128,13 +128,7 @@ export const HistorialEntregas: React.FC<{ estudianteId: string }> = ({ estudian
   const [entregas, setEntregas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (estudianteId) {
-      cargarEntregas();
-    }
-  }, [estudianteId]);
-
-  const cargarEntregas = async () => {
+  const cargarEntregas = useCallback(async () => {
     setLoading(true);
     const { data } = await supabaseBrowserClient
       .from("entregas_materiales")
@@ -143,7 +137,13 @@ export const HistorialEntregas: React.FC<{ estudianteId: string }> = ({ estudian
       .order("fecha_entrega", { ascending: false });
     setEntregas(data || []);
     setLoading(false);
-  };
+  }, [estudianteId]);
+
+  useEffect(() => {
+    if (estudianteId) {
+      cargarEntregas();
+    }
+  }, [estudianteId, cargarEntregas]);
 
   return (
     <Table

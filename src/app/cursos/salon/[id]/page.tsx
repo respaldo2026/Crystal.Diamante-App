@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Card, Tabs, Typography, Space, Tag, Button, Table, Upload, List, Progress, Statistic, Row, Col, App } from "antd";
 import {
@@ -34,13 +34,7 @@ export default function SalonVirtualPage() {
   const [asistencias, setAsistencias] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (cursoId) {
-      cargarDatos();
-    }
-  }, [cursoId]);
-
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async () => {
     setLoading(true);
     
     // Cargar información del curso
@@ -92,16 +86,22 @@ export default function SalonVirtualPage() {
     }
 
     setLoading(false);
-  };
+  }, [cursoId, message]);
 
-  const calcularEstadisticas = () => {
+  useEffect(() => {
+    if (cursoId) {
+      cargarDatos();
+    }
+  }, [cursoId, cargarDatos]);
+
+  const calcularEstadisticas = useCallback(() => {
     const totalEstudiantes = estudiantes.length;
     const totalClases = asistencias.length > 0 
       ? new Set(asistencias.map(a => a.fecha)).size
       : 0;
 
     return { totalEstudiantes, totalClases };
-  };
+  }, [estudiantes, asistencias]);
 
   const { totalEstudiantes, totalClases } = calcularEstadisticas();
 

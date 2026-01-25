@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider, Upload, Space, Row, Col } from "antd";
 import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined, UploadOutlined, InstagramOutlined, FacebookOutlined, YoutubeOutlined } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
@@ -99,13 +99,6 @@ export default function ConfiguracionPage() {
   }, {});
   const adminAssignableRoles = ["admin", "director", "secretaria"];
 
-  useEffect(() => {
-    if (!initialized) {
-      setInitialized(true);
-      cargarConfiguracionAcademia();
-    }
-  }, [initialized]);
-
   const handleLogoUpload = async (file: File) => {
     if (!file.type.startsWith("image/")) {
       messageApi.error("Solo puedes subir imágenes (PNG, JPG, SVG)");
@@ -176,7 +169,7 @@ export default function ConfiguracionPage() {
   };
 
   // ==================== FUNCIONES ACADEMIA ====================
-  const cargarConfiguracionAcademia = async () => {
+  const cargarConfiguracionAcademia = useCallback(async () => {
     setLoadingAcademia(true);
     try {
       const { data, error } = await supabaseBrowserClient
@@ -208,7 +201,14 @@ export default function ConfiguracionPage() {
     } finally {
       setLoadingAcademia(false);
     }
-  };
+  }, [formAcademia]);
+
+  useEffect(() => {
+    if (!initialized) {
+      setInitialized(true);
+      cargarConfiguracionAcademia();
+    }
+  }, [initialized, cargarConfiguracionAcademia]);
 
   const guardarConfiguracionAcademia = async () => {
     try {

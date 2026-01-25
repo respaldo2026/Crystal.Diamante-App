@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { List, useTable, EditButton, DeleteButton, CreateButton, useSelect } from "@refinedev/antd";
 import { Table, Space, Tag, Typography, Button, Tooltip, Progress, Select, Modal, message, Tabs, Card, Row, Col, App } from "antd";
 import { 
@@ -65,16 +65,9 @@ export default function MatriculasList() {
         }
     });
 
-    const matriculas = (tableProps.dataSource as any[]) || [];
+    const matriculas = useMemo(() => (tableProps.dataSource as any[]) || [], [tableProps.dataSource]);
 
-    // Calcular asistencias cuando cambian las matrículas
-    useEffect(() => {
-        if (matriculas.length > 0) {
-            calcularAsistencias();
-        }
-    }, [matriculas.length]);
-
-    const calcularAsistencias = async () => {
+    const calcularAsistencias = useCallback(async () => {
         setLoadingAsistencias(true);
         try {
             const matriculaIds = matriculas.map((m: any) => m.id);
@@ -86,11 +79,18 @@ export default function MatriculasList() {
         } finally {
             setLoadingAsistencias(false);
         }
-    };
+    }, [matriculas]);
+
+    // Calcular asistencias cuando cambian las matrículas
+    useEffect(() => {
+        if (matriculas.length > 0) {
+            calcularAsistencias();
+        }
+    }, [matriculas, calcularAsistencias]);
 
     // Clasificación y conteos - Usar filteredByQuick que refleja el estado actual de datos
-    const activoEstados = ["activo", "en curso"];
-    const graduadoEstados = ["aprobado", "certificado", "finalizado"];
+    const activoEstados = useMemo(() => ["activo", "en curso"], []);
+    const graduadoEstados = useMemo(() => ["aprobado", "certificado", "finalizado"], []);
     
     // Calcular conteos basados en los datos que tenemos ahora (después de asistencias)
     const activosCount = matriculas.filter((m: any) => activoEstados.includes(String(m.estado || '').toLowerCase())).length;

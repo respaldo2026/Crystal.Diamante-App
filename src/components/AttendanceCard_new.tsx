@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Card, Statistic, Progress, Tag, Typography, Alert, Space } from 'antd';
 import { 
   CheckCircleOutlined, 
@@ -43,11 +43,7 @@ export const AttendanceCardNew: React.FC<AttendanceCardProps> = ({
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    calcularAsistencia();
-  }, [matriculaId]);
-
-  const calcularAsistencia = async () => {
+  const calcularAsistencia = useCallback(async () => {
     setLoading(true);
     try {
       const { data: asistencias } = await supabaseBrowserClient
@@ -76,7 +72,11 @@ export const AttendanceCardNew: React.FC<AttendanceCardProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [matriculaId, minimoRequerido]);
+
+  useEffect(() => {
+    calcularAsistencia();
+  }, [calcularAsistencia]);
 
   if (!stats.tieneDatos && !loading) {
     return (

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
 import { Form, Input, Select, InputNumber, DatePicker, Row, Col, Divider, message, Card, Alert } from "antd";
 import dayjs from "dayjs";
@@ -41,7 +41,7 @@ export default function PagoEdit() {
     };
 
     // 2. Cuando eliges un estudiante, buscamos sus matrículas
-    const handleEstudianteChange = async (estudianteId: string) => {
+    const handleEstudianteChange = useCallback(async (estudianteId: string) => {
         if (!estudianteId) return;
         setEstudianteActual(estudianteId);
         setBuscandoCursos(true);
@@ -53,7 +53,7 @@ export default function PagoEdit() {
             message.error("Error buscando cursos del estudiante");
         }
         setBuscandoCursos(false);
-    };
+    }, []);
 
     // Al seleccionar el curso, autocompletar el monto sugerido
     const handleCursoChange = (matriculaId: string) => {
@@ -75,20 +75,20 @@ export default function PagoEdit() {
         onFinish(datos);
     };
 
-    // Al cargar el formulario, actualizar cursos si hay estudiante
-    useEffect(() => {
-        if (formProps.initialValues?.estudiante_id && !estudianteActual) {
-            const studentId = formProps.initialValues.estudiante_id;
-            handleEstudianteChange(studentId);
-        }
-    }, [formProps.initialValues?.estudiante_id]);
+    const initialEstudianteId = formProps.initialValues?.estudiante_id as string | undefined;
+    const initialFechaPago = formProps.initialValues?.fecha_pago as string | undefined;
 
-    // Convertir fecha_pago a dayjs si viene como string
     useEffect(() => {
-        if (formProps.initialValues?.fecha_pago && typeof formProps.initialValues.fecha_pago === 'string') {
-            formProps.form?.setFieldValue("fecha_pago", dayjs(formProps.initialValues.fecha_pago));
+        if (initialEstudianteId && !estudianteActual) {
+            handleEstudianteChange(initialEstudianteId);
         }
-    }, [formProps.initialValues?.fecha_pago]);
+    }, [initialEstudianteId, estudianteActual, handleEstudianteChange]);
+
+    useEffect(() => {
+        if (initialFechaPago && typeof initialFechaPago === 'string') {
+            formProps.form?.setFieldValue("fecha_pago", dayjs(initialFechaPago));
+        }
+    }, [initialFechaPago, formProps.form]);
 
     return (
         <Edit 
