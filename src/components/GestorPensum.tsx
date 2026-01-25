@@ -91,7 +91,6 @@ export default function GestorPensum({
   onClose,
 }: GestorPensumProps) {
   const { message, modal } = App.useApp();
-  const [form] = Form.useForm();
   const [formCurso] = Form.useForm();
   const [formMaterial] = Form.useForm();
   const [formCiclo] = Form.useForm();
@@ -460,7 +459,7 @@ export default function GestorPensum({
   const handleSubirMaterial = async () => {
     try {
       // Obtener valores del formulario
-      const formValues = form.getFieldsValue();
+      const formValues = formMaterial.getFieldsValue();
       const tipoOrigen = formValues.tipo_origen;
       
       let urlArchivo = "";
@@ -528,7 +527,7 @@ export default function GestorPensum({
       if (insertError) throw insertError;
 
       message.success("Material subido correctamente");
-      form.resetFields();
+      formMaterial.resetFields();
       // Recargar lista de materiales si tienes esa función
       // cargarMateriales();
       
