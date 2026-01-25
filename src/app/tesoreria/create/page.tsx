@@ -11,6 +11,7 @@ import type { DefaultOptionType } from "antd/es/select";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
+import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 
 type EstudianteDetalle = {
     id: string;
@@ -331,6 +332,19 @@ export default function PagoCreate() {
                     .from("pagos")
                     .update({ ticket_url: publicUrl } as any)
                     .eq("id", cuota.id);
+
+                await registrarIngresoDesdePago({
+                    fecha: fechaPagoISO,
+                    monto: montoNumero,
+                    concepto: `${periodoLegible} - ${cursoRelacionado?.cursos?.nombre ?? "Curso"}`,
+                    categoria: "matriculas",
+                    metodo_pago,
+                    referencia: referencia || cuota.id,
+                    descripcion: observacionTexto || undefined,
+                    estudiante_id: estudianteSeleccionado?.id ?? values.estudiante_id,
+                    ticket_url: publicUrl,
+                    pago_id: cuota.id,
+                });
 
                 message.success("Pago registrado y ticket generado.");
             } catch (ticketError) {

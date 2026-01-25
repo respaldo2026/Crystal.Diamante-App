@@ -17,11 +17,24 @@ export async function registrarPago(pago: {
   return true;
 }
 
-export async function obtenerPagosPorEstudiante(estudiante_id: string) {
-  const { data, error } = await supabaseBrowserClient
+export async function obtenerPagosPorEstudiante(estudiante_id?: string | null) {
+  const query = supabaseBrowserClient
     .from("pagos")
-    .select("*")
-    .eq("estudiante_id", estudiante_id);
+    .select(
+      `
+        *,
+        perfiles!pagos_estudiante_id_fkey ( nombre_completo ),
+        matriculas:matriculas!pagos_matricula_id_fkey (
+          cursos: cursos ( nombre )
+        )
+      `
+    );
+
+  if (estudiante_id) {
+    query.eq("estudiante_id", estudiante_id);
+  }
+
+  const { data, error } = await query.order("fecha_pago", { ascending: false, nullsLast: false });
   if (error) throw error;
   return data;
 }

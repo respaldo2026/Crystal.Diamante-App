@@ -50,6 +50,7 @@ import {
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
+import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 
 dayjs.locale("es");
 dayjs.extend(localizedFormat);
@@ -576,6 +577,21 @@ export default function SecretariaDashboard() {
               .from("pagos")
               .update({ ticket_url: publicUrl } as any)
               .eq("id", cuotaId);
+
+            const conceptoMovimiento = `${ticketData.pago.periodo ?? "Pago"} - ${ticketData.curso?.nombre ?? "Curso"}`;
+
+            await registrarIngresoDesdePago({
+              fecha: fechaPagoISO,
+              monto: Number(pagoActualizado.monto ?? 0),
+              concepto: conceptoMovimiento,
+              categoria: "matriculas",
+              metodo_pago: ticketData.pago.metodo,
+              referencia: ticketData.pago.referencia ?? undefined,
+              descripcion: observacionTexto || undefined,
+              estudiante_id: pagoActualizado.estudiante_id ?? estudiantePerfil.id,
+              ticket_url: publicUrl,
+              pago_id: cuotaId,
+            });
           } catch (ticketError) {
             if (placeholder) {
               placeholder.close();
