@@ -1,5 +1,6 @@
 // src/utils/whatsapp.ts
 
+import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
 import { supabaseBrowserClient } from "./supabase/client";
 
 /**
@@ -33,8 +34,15 @@ export const enviarWhatsapp = (telefono: string | number, mensaje: string) => {
  * @param variables Objeto con las variables a reemplazar (ej: {nombre: 'Juan', curso: 'Barbería'})
  * @returns Mensaje con las variables reemplazadas o null si no existe la plantilla
  */
+const aplicarVariables = (texto: string, variables: Record<string, string | number>): string => {
+    return texto.replace(/\{\{\s*([\w_]+)\s*\}\}/g, (_, llave: string) => {
+        const valor = variables[llave];
+        return valor === undefined || valor === null ? "" : String(valor);
+    });
+};
+
 export const obtenerPlantillaWhatsapp = async (
-    nombrePlantilla: string, 
+    nombrePlantilla: string,
     variables: Record<string, string | number>
 ): Promise<string | null> => {
     try {
@@ -51,13 +59,9 @@ export const obtenerPlantillaWhatsapp = async (
         }
 
         // Reemplazar variables en la plantilla
-        let mensaje = data.plantilla;
-        Object.keys(variables).forEach(key => {
-            const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-            mensaje = mensaje.replace(regex, String(variables[key]));
-        });
+        const mensaje = aplicarVariables(data.plantilla, variables);
 
-        return mensaje;
+        return mensaje.trim().length > 0 ? mensaje : null;
     } catch (error) {
         return null;
     }
@@ -77,12 +81,22 @@ export const enviarWhatsappConPlantilla = async (
     mensajeFallback?: string
 ) => {
     const mensaje = await obtenerPlantillaWhatsapp(nombrePlantilla, variables);
-    
+    const fallback = mensajeFallback ?? buildWhatsappFallbackMessage(nombrePlantilla, variables);
+
     if (mensaje) {
         enviarWhatsapp(telefono, mensaje);
-    } else if (mensajeFallback) {
-        enviarWhatsapp(telefono, mensajeFallback);
-    } else {
-        // Fallback silencioso o manejo de error superior
+        return;
+    }
+
+    if (fallback && fallback.trim().length > 0) {
+        enviarWhatsapp(telefono, fallback);
+        return;
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+        console.warn(
+            `[whatsapp] No se encontró plantilla activa ni fallback para "${nombrePlantilla}". Variables:`,
+            variables,
+        );
     }
 };

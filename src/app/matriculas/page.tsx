@@ -18,7 +18,7 @@ import { PDFDownloadLink } from "@react-pdf/renderer";
 import { DiplomaPDF } from "@components/pdf/DiplomaPDF";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { obtenerStatsAsistenciasYPagos } from "@modules/academico/asistencias.service";
-import { enviarWhatsapp } from "@utils/whatsapp";
+import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
 
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -337,9 +337,13 @@ export default function MatriculasList() {
                                 .eq('id', record.curso_id)
                                 .single();
                             if (perfil?.telefono && (perfil?.notif_whatsapp ?? true)) {
-                                enviarWhatsapp(
+                                await enviarWhatsappConPlantilla(
                                     perfil.telefono,
-                                    `Hola ${perfil.nombre_completo}, tu matrícula en "${curso?.nombre ?? 'Curso'}" fue cancelada. Si fue un error, contáctanos.`
+                                    "matricula_cancelada",
+                                    {
+                                        nombre_estudiante: perfil.nombre_completo ?? "Estudiante",
+                                        nombre_curso: curso?.nombre ?? "curso",
+                                    },
                                 );
                             }
                         } catch (e) {

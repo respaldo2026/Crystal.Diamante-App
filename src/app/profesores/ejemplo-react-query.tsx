@@ -150,7 +150,7 @@ export default function ProfesoresListExample() {
             <li>✅ Si sales y vuelves a esta página, los datos cargan instantáneamente desde caché</li>
             <li>✅ Si otro componente pide los mismos datos, no se hace consulta duplicada</li>
             <li>✅ Estado de loading y error manejado automáticamente</li>
-            <li>✅ Botón "Recargar" para forzar actualización si es necesario</li>
+            <li>✅ Botón &quot;Recargar&quot; para forzar actualización si es necesario</li>
           </ul>
         </div>
       </Space>

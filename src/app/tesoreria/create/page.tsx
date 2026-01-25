@@ -312,8 +312,6 @@ export default function PagoCreate() {
             });
 
             if (estudianteSeleccionado?.telefono && (estudianteSeleccionado?.notif_whatsapp ?? true)) {
-                const mensajeFallback = `Hola ${estudianteSeleccionado.nombre_completo}, confirmamos tu pago de ${formatoCOP(montoNumero)} correspondiente a ${periodoLegible}. ¡Gracias por ponerte al día!`;
-
                 await enviarWhatsappConPlantilla(
                     estudianteSeleccionado.telefono,
                     "pago_confirmado",
@@ -322,8 +320,7 @@ export default function PagoCreate() {
                         curso: cursoRelacionado?.cursos?.nombre ?? "tu curso",
                         monto: formatoCOP(montoNumero),
                         periodo: periodoLegible,
-                    },
-                    mensajeFallback
+                    }
                 );
             }
 

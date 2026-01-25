@@ -12,6 +12,14 @@ import { useRouter } from "next/navigation";
 
 const { Title, Text } = Typography;
 
+const formatoCOP = (valor: number) =>
+    new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
+
+const PORTAL_ESTUDIANTE_URL =
+    process.env.NEXT_PUBLIC_PORTAL_ESTUDIANTE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://app.academiacrystal.com";
+
 export default function MatriculaCreate() {
     const router = useRouter();
     const { formProps, saveButtonProps, onFinish } = useForm({ redirect: false });
@@ -328,9 +336,7 @@ export default function MatriculaCreate() {
                     {
                         nombre: estudiante.nombre_completo,
                         curso: matricula?.cursos?.nombre ?? "Curso"
-                    },
-                    // Mensaje fallback si no existe la plantilla
-                    `Hola ${estudiante.nombre_completo}, tu inscripción académica al curso "${matricula?.cursos?.nombre ?? "Curso"}" fue registrada. Por favor completa el pago de inscripción para activar tu matrícula.`
+                    }
                 );
             }
 
@@ -352,13 +358,14 @@ export default function MatriculaCreate() {
             setProcesandoPago(true);
 
             const { monto, metodo_pago, referencia, fecha_pago } = values;
+            const montoNumero = Number(monto ?? 0) || 0;
 
             // Actualizar el pago de inscripción
             const { error: errUpdate } = await supabaseBrowserClient
                 .from("pagos")
                 .update({
                     estado: "pagado",
-                    monto: monto,
+                    monto: montoNumero,
                     metodo_pago: metodo_pago,
                     referencia: referencia || null,
                     fecha_pago: fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
@@ -385,10 +392,29 @@ export default function MatriculaCreate() {
                     'pago_confirmado',
                     {
                         nombre: estudianteData.nombre_completo,
-                        curso: cursoData?.nombre ?? "Curso"
+                        curso: cursoData?.nombre ?? "Curso",
+                        monto: formatoCOP(montoNumero || Number(pagoInscripcionData?.monto) || 0),
+                        periodo: "la inscripción",
+                    }
+                );
+
+                const identificacionLimpia = estudianteData.identificacion
+                    ? String(estudianteData.identificacion).replace(/[^0-9]/g, "")
+                    : "";
+                const usuarioPortal =
+                    estudianteData.email ?? (identificacionLimpia || estudianteData.identificacion || "tu usuario registrado");
+                const contrasenaPortal = identificacionLimpia || (estudianteData.identificacion ?? "tu número de cédula");
+
+                await enviarWhatsappConPlantilla(
+                    estudianteData.telefono,
+                    'bienvenida_portal_estudiante',
+                    {
+                        nombre: estudianteData.nombre_completo,
+                        curso: cursoData?.nombre ?? "tu curso",
+                        enlace_portal: PORTAL_ESTUDIANTE_URL,
+                        usuario: usuarioPortal,
+                        contrasena: contrasenaPortal,
                     },
-                    // Mensaje fallback
-                    `¡Hola ${estudianteData.nombre_completo}! Tu pago de inscripción ha sido confirmado. Tu matrícula al curso "${cursoData?.nombre}" está ahora ACTIVA. ¡Bienvenido! 🎉`
                 );
             }
 

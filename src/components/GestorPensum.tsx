@@ -755,7 +755,7 @@ export default function GestorPensum({
                         renderItem={(material: MaterialDidactico) => (
                           <List.Item
                             actions={[
-                              <Tooltip title="Clic para proyectar en clase o ver contenido">
+                              <Tooltip key={`ver-${material.id}`} title="Clic para proyectar en clase o ver contenido">
                                 <Button
                                   type="link"
                                   onClick={() => handleAbrirMaterial(material.url_archivo)}
@@ -766,6 +766,7 @@ export default function GestorPensum({
                                 </Button>
                               </Tooltip>,
                               <Button
+                                key={`eliminar-${material.id}`}
                                 icon={<DeleteOutlined />}
                                 danger
                                 size="small"

@@ -6,7 +6,8 @@ import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOu
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
-import { enviarWhatsapp } from "@utils/whatsapp";
+import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
+import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
 import { useSearchParams } from "next/navigation";
 import { formatDate } from "@utils/date";
 
@@ -72,7 +73,7 @@ export default function TomarAsistencia() {
         // Buscamos matriculas ACTIVAS de este curso
         const { data, error } = await supabaseBrowserClient
           .from("matriculas")
-          .select(`id, estudiante_id, perfiles(nombre_completo, email, telefono)`) 
+          .select(`id, estudiante_id, perfiles(nombre_completo, email, telefono, notif_whatsapp)`) 
           .eq("curso_id", cursoSeleccionado)
           .eq("estado", "activo")
           .order("perfiles(nombre_completo)");
@@ -190,10 +191,21 @@ export default function TomarAsistencia() {
             ausentesInfo.map(async (alumno) => {
               const nombre = alumno.perfiles?.nombre_completo || "Estudiante";
               const telefono = alumno.perfiles?.telefono;
-              const mensaje = `Hola ${nombre}, se registró una inasistencia en ${cursoNombre} el ${fechaTexto}. Si es un error o necesitas apoyo, responde este mensaje.`;
+              const variables = {
+                nombre_estudiante: nombre,
+                nombre_curso: cursoNombre || "curso",
+                fecha_clase: fechaTexto,
+              };
+              const mensaje =
+                buildWhatsappFallbackMessage("asistencia_inasistencia_registrada", variables) ??
+                `Hola ${nombre}, se registró una inasistencia en ${cursoNombre} el ${fechaTexto}. Si es un error o necesitas apoyo, responde este mensaje.`;
 
-              if (telefono) {
-                enviarWhatsapp(telefono, mensaje);
+              if (telefono && (alumno.perfiles?.notif_whatsapp ?? true)) {
+                await enviarWhatsappConPlantilla(
+                  telefono,
+                  "asistencia_inasistencia_registrada",
+                  variables,
+                );
               }
 
               await supabaseBrowserClient.from("notificaciones").insert({

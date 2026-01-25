@@ -14,11 +14,14 @@ import { formatDate } from "@utils/date";
 // CORRECCIÓN: Usamos tu cliente configurado en utils, no creamos uno nuevo
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { enviarWhatsapp } from "@utils/whatsapp";
+import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { logger } from "@utils/logger";
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
+
+const formatoCOP = (valor: number) =>
+    new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
 export default function NominaPage() {
   const { user } = useCurrentUser();
@@ -267,7 +270,18 @@ export default function NominaPage() {
         
         // 3. Enviar WhatsApp
         if (profesorSeleccionado.telefono) {
-            enviarWhatsapp(profesorSeleccionado.telefono, `Hola ${profesorSeleccionado.nombre_completo}, te informamos que se ha generado el pago de tu nómina por valor de $${Number(profesorSeleccionado.total_pagado).toLocaleString()}. Gracias por tu labor.`);
+            const periodoInicio = rangoFechas?.[0] ? formatDate(rangoFechas[0]) : formatDate(dayjs());
+            const periodoFin = rangoFechas?.[1] ? formatDate(rangoFechas[1]) : periodoInicio;
+            await enviarWhatsappConPlantilla(
+                profesorSeleccionado.telefono,
+                "nomina_pago_profesor",
+                {
+                    nombre: profesorSeleccionado.nombre_completo,
+                    monto: formatoCOP(Number(profesorSeleccionado.total_pagado) || 0),
+                    periodo_inicio: periodoInicio,
+                    periodo_fin: periodoFin,
+                }
+            );
         }
 
         setModalVisible(false);
@@ -320,7 +334,16 @@ export default function NominaPage() {
                     
                     // WhatsApp
                     if (clase.perfiles?.telefono) {
-                        enviarWhatsapp(clase.perfiles.telefono, `Hola ${clase.perfiles.nombre_completo}, te informamos que se ha pagado la clase del ${formatDate(clase.fecha)} por valor de $${Number(monto).toLocaleString()}.`);
+                        await enviarWhatsappConPlantilla(
+                            clase.perfiles.telefono,
+                            "nomina_clase_pagada",
+                            {
+                                nombre: clase.perfiles.nombre_completo,
+                                fecha: formatDate(clase.fecha),
+                                monto: formatoCOP(Number(monto) || 0),
+                                curso: clase.cursos?.nombre ?? "Clase",
+                            }
+                        );
                     }
 
                     calcularNomina();

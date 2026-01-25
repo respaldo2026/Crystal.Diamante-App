@@ -6,9 +6,12 @@ import { Card, Typography, Descriptions, Button, Space, message, Spin, Alert, Fo
 import { PrinterOutlined, DollarCircleOutlined, WhatsAppOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
-import { enviarWhatsapp } from "@utils/whatsapp";
+import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 
 const { Title, Text } = Typography;
+
+const formatoCOP = (valor: number) =>
+    new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
 export default function PagoInscripcionPage() {
     const params = useParams();
@@ -120,13 +123,14 @@ export default function PagoInscripcionPage() {
             setProcesandoPago(true);
 
             const { monto, metodo_pago, referencia, fecha_pago } = values;
+            const montoNumero = Number(monto ?? 0) || Number(pagoInscripcion?.monto ?? 0);
 
             // Actualizar el pago de inscripción
             const { error: errUpdate } = await supabaseBrowserClient
                 .from("pagos")
                 .update({
                     estado: "pagado",
-                    monto: monto,
+                    monto: montoNumero,
                     metodo_pago: metodo_pago,
                     referencia: referencia || null,
                     fecha_pago: fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
@@ -148,9 +152,15 @@ export default function PagoInscripcionPage() {
 
             // Enviar WhatsApp de confirmación
             if (estudiante?.telefono && (estudiante?.notif_whatsapp ?? true)) {
-                enviarWhatsapp(
+                await enviarWhatsappConPlantilla(
                     estudiante.telefono,
-                    `¡Hola ${estudiante.nombre_completo}! Tu pago de inscripción ha sido confirmado. Tu matrícula al curso "${curso?.nombre}" está ahora ACTIVA. ¡Bienvenido! 🎉`
+                    "pago_confirmado",
+                    {
+                        nombre: estudiante.nombre_completo,
+                        curso: curso?.nombre ?? "Curso",
+                        monto: formatoCOP(montoNumero),
+                        periodo: "la inscripción",
+                    }
                 );
             }
 
@@ -175,8 +185,15 @@ export default function PagoInscripcionPage() {
         }
 
         const monto = pagoInscripcion?.monto || curso?.programas?.precio_inscripcion || 50000;
-        const mensaje = `Hola ${estudiante.nombre_completo}, te recordamos que tienes pendiente el pago de inscripción de $${monto.toLocaleString()} para activar tu matrícula al curso "${curso?.nombre}". ¡Esperamos tu pago pronto!`;
-        enviarWhatsapp(estudiante.telefono, mensaje);
+        await enviarWhatsappConPlantilla(
+            estudiante.telefono,
+            "pago_inscripcion_pendiente",
+            {
+                nombre: estudiante.nombre_completo,
+                curso: curso?.nombre ?? "Curso",
+                monto: formatoCOP(Number(monto)),
+            }
+        );
         message.success("Recordatorio enviado por WhatsApp");
     };
 

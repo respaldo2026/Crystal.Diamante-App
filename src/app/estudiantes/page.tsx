@@ -466,7 +466,7 @@ function confirmarEliminarEstudiante(record: any, msg: any, modalInstance: any, 
                 </div>
                 <div style={{ marginTop: 12, padding: 10, background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 4 }}>
                     <strong>💡 Alternativa recomendada:</strong>
-                    <p style={{ margin: '4px 0 0 0' }}>Usa el botón <strong>"Archivar"</strong> para ocultar al estudiante sin perder su historial.</p>
+                    <p style={{ margin: '4px 0 0 0' }}>Usa el botón <strong>&quot;Archivar&quot;</strong> para ocultar al estudiante sin perder su historial.</p>
                 </div>
             </div>
         ),
