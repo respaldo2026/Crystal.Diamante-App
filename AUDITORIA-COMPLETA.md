@@ -642,6 +642,7 @@ xxl: >1600px (pantallas grandes)
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_PORTAL_ESTUDIANTE_URL=https://app.academiacrystal.com
 ```
 
 ### Scripts Disponibles

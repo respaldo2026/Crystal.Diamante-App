@@ -167,8 +167,11 @@ Asegurar que estas variables estén configuradas en el hosting (Vercel/Netlify):
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://xqcsftjkvcrbcetrdulq.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+NEXT_PUBLIC_PORTAL_ESTUDIANTE_URL=https://app.academiacrystal.com
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (⚠️ SECRETO)
 ```
+
+Asegúrate de que `NEXT_PUBLIC_PORTAL_ESTUDIANTE_URL` apunte al dominio real del portal estudiantil para que los mensajes de bienvenida entreguen la URL correcta.
 
 ### 2. Supabase: Verificar Políticas RLS
 Ejecutar en Supabase SQL Editor antes de deploy:
