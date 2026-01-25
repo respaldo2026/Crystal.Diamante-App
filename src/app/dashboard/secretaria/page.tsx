@@ -132,7 +132,10 @@ export default function SecretariaDashboard() {
   const [configuracion, setConfiguracion] = useState<ConfiguracionAcademia | null>(null);
   const [pagoForm] = Form.useForm();
   const cuotasSeleccionadas = Form.useWatch("cuotas", pagoForm) as string[] | undefined;
-  const cuotasSeleccionadasIds = cuotasSeleccionadas ?? [];
+  const cuotasSeleccionadasIds = useMemo(
+    () => cuotasSeleccionadas ?? [],
+    [cuotasSeleccionadas]
+  );
   const totalSeleccionado = useMemo(
     () =>
       cuotasDisponibles
