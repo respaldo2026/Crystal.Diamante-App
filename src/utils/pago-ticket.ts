@@ -6,9 +6,26 @@ import { TicketPagoPDF, type TicketPagoData } from "@components/pdf/TicketPagoPD
 const crearDocumento = (data: TicketPagoData) =>
   React.createElement(TicketPagoPDF, data) as React.ReactElement<DocumentProps>;
 
-export const descargarTicketPago = async (data: TicketPagoData) => {
+export const generarTicketPagoBlob = async (data: TicketPagoData) => {
   const doc = crearDocumento(data);
-  const blob = await pdf(doc).toBlob();
+  return pdf(doc).toBlob();
+};
+
+export const abrirTicketPagoDesdeBlob = (blob: Blob, placeholder?: Window | null) => {
+  const targetWindow = placeholder ?? window.open("", "_blank");
+
+  if (!targetWindow) {
+    throw new Error("No se pudo abrir la ventana del ticket");
+  }
+
+  const url = URL.createObjectURL(blob);
+  targetWindow.location.href = url;
+  targetWindow.focus();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
+
+export const descargarTicketPago = async (data: TicketPagoData) => {
+  const blob = await generarTicketPagoBlob(data);
   const url = URL.createObjectURL(blob);
 
   const link = document.createElement("a");
@@ -28,12 +45,8 @@ export const abrirTicketPago = async (data: TicketPagoData) => {
   }
 
   try {
-    const doc = crearDocumento(data);
-    const blob = await pdf(doc).toBlob();
-    const url = URL.createObjectURL(blob);
-    placeholder.location.href = url;
-    placeholder.focus();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    const blob = await generarTicketPagoBlob(data);
+    abrirTicketPagoDesdeBlob(blob, placeholder);
   } catch (error) {
     placeholder.close();
     throw error;

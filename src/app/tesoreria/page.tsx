@@ -9,6 +9,7 @@ type Pago = {
     referencia?: string;
     perfiles?: { nombre_completo: string };
     matriculas?: { cursos?: { nombre: string } };
+    ticket_url?: string | null;
 };
 
 // Declarar tableProps como objeto vacío si no está definido
@@ -268,6 +269,19 @@ export default function TesoreriaList() {
                         };
                         return <Tag color={colorMap[estado] || 'blue'}>{estado.toUpperCase()}</Tag>;
                     }}
+                />
+
+                <Table.Column
+                    title="Ticket"
+                    render={(_, record: Pago) =>
+                        record.ticket_url ? (
+                            <Button size="small" onClick={() => window.open(record.ticket_url!, "_blank")}>
+                                Ver ticket
+                            </Button>
+                        ) : (
+                            <Tag color="default">Sin ticket</Tag>
+                        )
+                    }
                 />
 
                 <Table.Column 

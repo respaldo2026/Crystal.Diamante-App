@@ -3,10 +3,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   App,
+  Alert,
   Card,
   Row,
   Col,
   Button,
+  Checkbox,
   List,
   Spin,
   Space,
@@ -19,6 +21,11 @@ import {
   Tabs,
   Timeline,
   Badge,
+  Drawer,
+  Form,
+  Select,
+  DatePicker,
+  Input,
 } from "antd";
 import {
   PlusOutlined,
@@ -38,8 +45,11 @@ import {
   getCursosSecretaria,
   getPagosPendientes,
   getLeadsPendientes,
+  getEstudiantesActivos,
 } from "../secretaria.api";
-import { registrarPago } from "../secretaria.actions";
+import { supabaseBrowserClient } from "@utils/supabase/client";
+import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { subirTicketPago } from "@utils/ticket-storage";
 
 dayjs.locale("es");
 dayjs.extend(localizedFormat);
@@ -90,6 +100,17 @@ const formatCurrency = (value?: number | null) => {
   return `$${Number(value).toLocaleString("es-CO")}`;
 };
 
+type ConfiguracionAcademia = {
+  nombre_academia?: string | null;
+  telefono?: string | null;
+  direccion?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  ticket_titulo?: string | null;
+  ticket_nota?: string | null;
+  ticket_pie?: string | null;
+};
+
 export default function SecretariaDashboard() {
   const { message: messageApi } = App.useApp();
   const router = useRouter();
@@ -99,7 +120,34 @@ export default function SecretariaDashboard() {
   const [cursosProximos, setCursosProximos] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [pagosPendientes, setPagosPendientes] = useState<any[]>([]);
-  const [registrandoPagoId, setRegistrandoPagoId] = useState<string | null>(null);
+  const [pagoDrawerOpen, setPagoDrawerOpen] = useState(false);
+  const [estudiantesOptions, setEstudiantesOptions] = useState<{ label: string; value: string }[]>([]);
+  const [estudiantesCargados, setEstudiantesCargados] = useState(false);
+  const [cargandoEstudiantes, setCargandoEstudiantes] = useState(false);
+  const [matriculasEstudiante, setMatriculasEstudiante] = useState<any[]>([]);
+  const [cargandoMatriculas, setCargandoMatriculas] = useState(false);
+  const [cuotasDisponibles, setCuotasDisponibles] = useState<any[]>([]);
+  const [cargandoCuotas, setCargandoCuotas] = useState(false);
+  const [registrandoPagos, setRegistrandoPagos] = useState(false);
+  const [configuracion, setConfiguracion] = useState<ConfiguracionAcademia | null>(null);
+  const [pagoForm] = Form.useForm();
+  const cuotasSeleccionadas = Form.useWatch("cuotas", pagoForm) as string[] | undefined;
+  const cuotasSeleccionadasIds = cuotasSeleccionadas ?? [];
+  const totalSeleccionado = useMemo(
+    () =>
+      cuotasDisponibles
+        .filter((cuota) => cuotasSeleccionadasIds.includes(cuota.id))
+        .reduce((acc, cuota) => acc + Number(cuota.monto || 0), 0),
+    [cuotasDisponibles, cuotasSeleccionadasIds]
+  );
+  const matriculasOptions = useMemo(
+    () =>
+      matriculasEstudiante.map((matricula) => ({
+        label: matricula.cursos?.nombre || "Curso sin nombre",
+        value: matricula.id,
+      })),
+    [matriculasEstudiante]
+  );
 
   const resumenFinanciero = useMemo(() => {
     const totalPendiente = pagosPendientes.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
@@ -218,18 +266,347 @@ export default function SecretariaDashboard() {
     [router]
   );
 
-  const handleRegistrarPago = async (pagoId: string) => {
-    setRegistrandoPagoId(pagoId);
-    const { error } = await registrarPago({ pagoId });
-    if (error) {
-      messageApi.error("No se pudo registrar el pago");
-      setRegistrandoPagoId(null);
-      return;
+  const cargarEstudiantes = useCallback(async () => {
+    if (estudiantesCargados || cargandoEstudiantes) return;
+    setCargandoEstudiantes(true);
+    try {
+      const { data, error } = await getEstudiantesActivos();
+      if (error) {
+        messageApi.error("No se pudieron cargar los estudiantes");
+        return;
+      }
+      const opciones = (data || []).map((estudiante: any) => ({
+        label: estudiante.nombre_completo,
+        value: estudiante.id,
+      }));
+      setEstudiantesOptions(opciones);
+      setEstudiantesCargados(true);
+    } catch (error) {
+      console.error("Error cargando estudiantes activos", error);
+      messageApi.error("No se pudieron cargar los estudiantes");
+    } finally {
+      setCargandoEstudiantes(false);
     }
-    messageApi.success("Pago marcado como recibido");
-    setRegistrandoPagoId(null);
-    cargarPanel();
-  };
+  }, [cargandoEstudiantes, estudiantesCargados, messageApi]);
+
+  const prepararDrawer = useCallback(() => {
+    pagoForm.resetFields();
+    pagoForm.setFieldsValue({
+      estudiante_id: undefined,
+      matricula_id: undefined,
+      cuotas: [],
+      metodo_pago: "efectivo",
+      fecha_pago: dayjs(),
+      referencia: undefined,
+      observaciones: undefined,
+    });
+    setMatriculasEstudiante([]);
+    setCuotasDisponibles([]);
+  }, [pagoForm]);
+
+  const cargarConfiguracion = useCallback(async () => {
+    try {
+      const { data, error } = await supabaseBrowserClient
+        .from("configuracion")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        setConfiguracion(data as ConfiguracionAcademia);
+      }
+    } catch (error) {
+      console.error("Error cargando la configuración de la academia", error);
+    }
+  }, []);
+
+  const cargarCuotasPendientes = useCallback(
+    async (matriculaId: string, options?: { preselectCuotaId?: string }) => {
+      if (!matriculaId) return;
+      setCargandoCuotas(true);
+      try {
+        const { data, error } = await supabaseBrowserClient
+          .from("pagos")
+          .select("id, monto, numero_cuota, fecha_vencimiento, periodo_pagado, estado")
+          .eq("matricula_id", matriculaId)
+          .in("estado", ["pendiente", "vencido"])
+          .order("numero_cuota", { ascending: true, nullsFirst: true });
+
+        if (error) {
+          messageApi.error("No se pudieron cargar las cuotas");
+          setCuotasDisponibles([]);
+          return;
+        }
+
+        const cuotas = data || [];
+        setCuotasDisponibles(cuotas);
+
+        if (options?.preselectCuotaId && cuotas.some((cuota) => cuota.id === options.preselectCuotaId)) {
+          pagoForm.setFieldsValue({ cuotas: [options.preselectCuotaId] });
+        }
+      } catch (error) {
+        console.error("Error cargando cuotas pendientes", error);
+        messageApi.error("No se pudieron cargar las cuotas");
+        setCuotasDisponibles([]);
+      } finally {
+        setCargandoCuotas(false);
+      }
+    },
+    [messageApi, pagoForm]
+  );
+
+  const handleMatriculaChange = useCallback(
+    async (matriculaId?: string) => {
+      pagoForm.setFieldsValue({ cuotas: [] });
+      setCuotasDisponibles([]);
+      if (!matriculaId) return;
+      await cargarCuotasPendientes(matriculaId);
+    },
+    [cargarCuotasPendientes, pagoForm]
+  );
+
+  const handleEstudianteChange = useCallback(
+    async (
+      estudianteId?: string,
+      options?: { preselectMatriculaId?: string; preselectCuotaId?: string }
+    ) => {
+      pagoForm.setFieldsValue({ matricula_id: undefined, cuotas: [] });
+      setMatriculasEstudiante([]);
+      setCuotasDisponibles([]);
+
+      if (!estudianteId) return;
+
+      setCargandoMatriculas(true);
+      try {
+        const { data, error } = await supabaseBrowserClient
+          .from("matriculas")
+          .select("id, estado, cursos ( nombre )")
+          .eq("estudiante_id", estudianteId);
+
+        if (error) {
+          messageApi.error("No se pudieron cargar las matrículas del estudiante");
+          return;
+        }
+
+        const matriculas = data || [];
+        setMatriculasEstudiante(matriculas);
+
+        let matriculaIdSeleccionada = options?.preselectMatriculaId;
+        if (!matriculaIdSeleccionada && matriculas.length === 1) {
+          matriculaIdSeleccionada = matriculas[0]?.id;
+        }
+
+        if (matriculaIdSeleccionada) {
+          pagoForm.setFieldsValue({ matricula_id: matriculaIdSeleccionada });
+          await cargarCuotasPendientes(matriculaIdSeleccionada, {
+            preselectCuotaId: options?.preselectCuotaId,
+          });
+        }
+      } catch (error) {
+        console.error("Error cargando matrículas del estudiante", error);
+        messageApi.error("No se pudieron cargar las matrículas del estudiante");
+      } finally {
+        setCargandoMatriculas(false);
+      }
+    },
+    [cargarCuotasPendientes, messageApi, pagoForm]
+  );
+
+  const abrirRegistroPago = useCallback(
+    async (pago?: any) => {
+      prepararDrawer();
+      setPagoDrawerOpen(true);
+      await cargarEstudiantes();
+
+      if (pago?.estudiante_id) {
+        setEstudiantesOptions((prev) => {
+          if (prev.some((opt) => opt.value === pago.estudiante_id)) {
+            return prev;
+          }
+          return [
+            ...prev,
+            {
+              value: pago.estudiante_id,
+              label: pago.perfiles?.nombre_completo || "Estudiante",
+            },
+          ];
+        });
+        pagoForm.setFieldsValue({ estudiante_id: pago.estudiante_id });
+        await handleEstudianteChange(pago.estudiante_id, {
+          preselectMatriculaId: pago.matricula_id,
+          preselectCuotaId: pago.id,
+        });
+      }
+    },
+    [cargarEstudiantes, handleEstudianteChange, pagoForm, prepararDrawer]
+  );
+
+  const cerrarRegistroPago = useCallback(() => {
+    if (registrandoPagos) return;
+    setPagoDrawerOpen(false);
+    prepararDrawer();
+  }, [prepararDrawer, registrandoPagos]);
+
+  const handleSubmitPago = useCallback(
+    async (values: any) => {
+      const cuotaIds: string[] = values.cuotas ?? [];
+      if (!values.estudiante_id) {
+        messageApi.error("Selecciona un estudiante antes de registrar el pago");
+        return;
+      }
+
+      if (cuotaIds.length === 0) {
+        messageApi.error("Selecciona al menos una cuota a pagar");
+        return;
+      }
+
+      setRegistrandoPagos(true);
+      try {
+        const fechaPagoISO = values.fecha_pago
+          ? dayjs(values.fecha_pago).format("YYYY-MM-DD")
+          : dayjs().format("YYYY-MM-DD");
+        const observacionTexto = values.observaciones?.trim();
+
+        const { error } = await supabaseBrowserClient
+          .from("pagos")
+          .update({
+            estado: "pagado",
+            metodo_pago: values.metodo_pago,
+            referencia: values.referencia?.trim() || null,
+            fecha_pago: fechaPagoISO,
+            observaciones: observacionTexto
+              ? `${observacionTexto} · Secretaría`
+              : `Pago registrado desde secretaría el ${dayjs().format("DD/MM/YYYY HH:mm")}`,
+          })
+          .in("id", cuotaIds);
+
+        if (error) {
+          throw error;
+        }
+
+        const { data: estudiantePerfil, error: estudianteError } = await supabaseBrowserClient
+          .from("perfiles")
+          .select("id, nombre_completo, identificacion, telefono")
+          .eq("id", values.estudiante_id)
+          .maybeSingle();
+
+        if (estudianteError || !estudiantePerfil) {
+          throw estudianteError ?? new Error("No se pudo obtener la información del estudiante");
+        }
+
+        const configAcademia = configuracion ?? {};
+
+        for (const cuotaId of cuotaIds) {
+          const placeholder = window.open("", "_blank");
+          try {
+            const { data: pagoActualizado, error: detalleError } = await supabaseBrowserClient
+              .from("pagos")
+              .select(
+                `
+                  id,
+                  monto,
+                  fecha_pago,
+                  periodo_pagado,
+                  numero_cuota,
+                  metodo_pago,
+                  referencia,
+                  estudiante_id,
+                  matricula_id,
+                  matricula:matriculas!pagos_matricula_id_fkey (
+                    cursos ( nombre )
+                  )
+                `
+              )
+              .eq("id", cuotaId)
+              .maybeSingle();
+
+            if (detalleError || !pagoActualizado) {
+              throw detalleError ?? new Error("No se encontró la información del pago actualizado");
+            }
+
+            const fechaTicketISO = pagoActualizado.fecha_pago ?? fechaPagoISO;
+            const ticketData = {
+              academia: {
+                nombre: configAcademia.nombre_academia ?? "Academia Crystal",
+                telefono: configAcademia.telefono ?? configAcademia.whatsapp ?? undefined,
+                direccion: configAcademia.direccion ?? undefined,
+                email: configAcademia.email ?? undefined,
+                ticketTitulo: configAcademia.ticket_titulo ?? undefined,
+                ticketNota: configAcademia.ticket_nota ?? undefined,
+                ticketPie: configAcademia.ticket_pie ?? undefined,
+              },
+              estudiante: {
+                nombre: estudiantePerfil.nombre_completo ?? "Estudiante",
+                identificacion: estudiantePerfil.identificacion ?? undefined,
+                telefono: estudiantePerfil.telefono ?? undefined,
+              },
+              pago: {
+                referencia: pagoActualizado.referencia || cuotaId,
+                metodo: pagoActualizado.metodo_pago ?? values.metodo_pago,
+                monto: Number(pagoActualizado.monto ?? 0),
+                fecha: dayjs(fechaTicketISO).format("DD/MM/YYYY"),
+                periodo:
+                  pagoActualizado.periodo_pagado ||
+                  `Cuota ${pagoActualizado.numero_cuota ?? ""}`.trim(),
+                numeroCuota: pagoActualizado.numero_cuota ?? undefined,
+              },
+              curso: {
+                nombre: (pagoActualizado as any)?.matricula?.cursos?.nombre ?? undefined,
+              },
+            } as const;
+
+            const blob = await generarTicketPagoBlob(ticketData);
+
+            if (placeholder) {
+              abrirTicketPagoDesdeBlob(blob, placeholder);
+            } else {
+              abrirTicketPagoDesdeBlob(blob);
+            }
+
+            const { publicUrl } = await subirTicketPago({
+              blob,
+              pagoId: cuotaId,
+              estudianteId: pagoActualizado.estudiante_id ?? estudiantePerfil.id,
+            });
+
+            await supabaseBrowserClient
+              .from("pagos")
+              .update({ ticket_url: publicUrl } as any)
+              .eq("id", cuotaId);
+          } catch (ticketError) {
+            if (placeholder) {
+              placeholder.close();
+            }
+            throw ticketError;
+          }
+        }
+
+        messageApi.success(
+          cuotaIds.length > 1
+            ? "Pagos registrados y tickets generados correctamente"
+            : "Pago registrado y ticket generado correctamente"
+        );
+
+        setPagoDrawerOpen(false);
+        prepararDrawer();
+        await cargarPanel();
+      } catch (error) {
+        console.error("Error registrando pagos desde secretaría", error);
+        messageApi.error("No se pudo registrar el pago ni generar el ticket");
+      } finally {
+        setRegistrandoPagos(false);
+      }
+    },
+    [cargarPanel, configuracion, messageApi, prepararDrawer]
+  );
+
+  useEffect(() => {
+    void cargarEstudiantes();
+  }, [cargarEstudiantes]);
+
+  useEffect(() => {
+    void cargarConfiguracion();
+  }, [cargarConfiguracion]);
 
   const renderCurso = (curso: any) => {
     const inscritos = Number(curso.matriculas?.[0]?.count || 0);
@@ -302,14 +679,10 @@ export default function SecretariaDashboard() {
                   <Button
                     icon={<CreditCardOutlined />}
                     onClick={() => {
-                      if (pagosPendientes.length === 0) {
-                        messageApi.info("No hay pagos pendientes por ahora");
-                        return;
-                      }
-                      void handleRegistrarPago(pagosPendientes[0].id);
+                      void abrirRegistroPago(pagosPendientes[0]);
                     }}
                   >
-                    Marcar pago recibido
+                    Registrar pago
                   </Button>
                   <Button
                     type="link"
@@ -496,8 +869,9 @@ export default function SecretariaDashboard() {
                             key="registrar"
                             type="link"
                             size="small"
-                            onClick={() => handleRegistrarPago(pago.id)}
-                            loading={registrandoPagoId === pago.id}
+                            onClick={() => {
+                              void abrirRegistroPago(pago);
+                            }}
                           >
                             Registrar
                           </Button>,
@@ -507,7 +881,14 @@ export default function SecretariaDashboard() {
                           title={pago.perfiles?.nombre_completo || "Estudiante"}
                           description={
                             <Space direction="vertical" size={0}>
-                              <Text strong>{formatCurrency(pago.monto)}</Text>
+                              <Space size={8} wrap>
+                                <Text strong>{formatCurrency(pago.monto)}</Text>
+                                {pago.periodo_pagado && <Tag color="purple">{pago.periodo_pagado}</Tag>}
+                                {pago.estado === "vencido" && <Tag color="red">Vencido</Tag>}
+                              </Space>
+                              <Text type="secondary">
+                                {pago.matriculas?.cursos?.nombre || "Curso sin asignar"}
+                              </Text>
                               <Text type="secondary">Vence: {formatFecha(pago.fecha_vencimiento)}</Text>
                             </Space>
                           }
@@ -584,6 +965,168 @@ export default function SecretariaDashboard() {
           </Row>
         )}
       </Space>
+
+      <Drawer
+        title="Registrar pagos"
+        placement="right"
+        width={520}
+        onClose={cerrarRegistroPago}
+        open={pagoDrawerOpen}
+        destroyOnClose
+        maskClosable={!registrandoPagos}
+        closable={!registrandoPagos}
+      >
+        <Form form={pagoForm} layout="vertical" onFinish={handleSubmitPago}>
+          <Form.Item
+            label="Estudiante"
+            name="estudiante_id"
+            rules={[{ required: true, message: "Selecciona un estudiante" }]}
+          >
+            <Select
+              options={estudiantesOptions}
+              showSearch
+              placeholder="Buscar estudiante..."
+              optionFilterProp="label"
+              loading={cargandoEstudiantes}
+              onChange={(value) => {
+                void handleEstudianteChange(value);
+              }}
+              allowClear
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Curso"
+            name="matricula_id"
+            rules={[{ required: true, message: "Selecciona un curso" }]}
+          >
+            <Select
+              options={matriculasOptions}
+              placeholder="Elige el curso a cobrar"
+              loading={cargandoMatriculas}
+              onChange={(value) => {
+                void handleMatriculaChange(value);
+              }}
+              allowClear
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Cuotas a pagar"
+            name="cuotas"
+            rules={[{ required: true, type: "array", message: "Selecciona al menos una cuota" }]}
+          >
+            {cargandoCuotas ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+                <Spin />
+              </div>
+            ) : cuotasDisponibles.length === 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                message="Selecciona un curso para ver las cuotas disponibles"
+              />
+            ) : (
+              <Checkbox.Group style={{ width: "100%" }}>
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  {cuotasDisponibles.map((cuota) => (
+                    <Checkbox key={cuota.id} value={cuota.id}>
+                      <Space direction="vertical" size={0} style={{ width: "100%" }}>
+                        <Space size={8} wrap align="center">
+                          <Text strong>
+                            {cuota.periodo_pagado || `Cuota #${cuota.numero_cuota ?? "-"}`}
+                          </Text>
+                          {cuota.estado === "vencido" && <Tag color="red">Vencida</Tag>}
+                        </Space>
+                        <Space size={8} wrap>
+                          <Text>{formatCurrency(cuota.monto)}</Text>
+                          <Text type="secondary">
+                            {cuota.fecha_vencimiento
+                              ? `Vence: ${formatFecha(cuota.fecha_vencimiento)}`
+                              : "Sin fecha de vencimiento"}
+                          </Text>
+                        </Space>
+                      </Space>
+                    </Checkbox>
+                  ))}
+                </Space>
+              </Checkbox.Group>
+            )}
+          </Form.Item>
+
+          {cuotasDisponibles.length > 0 && cuotasSeleccionadasIds.length === 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Selecciona una o varias cuotas que el estudiante desea pagar"
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          {cuotasSeleccionadasIds.length > 0 && (
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                <Text strong>{`${cuotasSeleccionadasIds.length} cuota(s) seleccionadas`}</Text>
+                <Statistic
+                  title="Total a cobrar"
+                  value={totalSeleccionado}
+                  prefix="$"
+                  valueStyle={{ fontWeight: 700 }}
+                  precision={0}
+                />
+              </Space>
+            </Card>
+          )}
+
+          <Form.Item
+            label="Método de pago"
+            name="metodo_pago"
+            rules={[{ required: true, message: "Selecciona el método de pago" }]}
+          >
+            <Select
+              options={[
+                { label: "Efectivo", value: "efectivo" },
+                { label: "Transferencia", value: "transferencia" },
+                { label: "Tarjeta", value: "tarjeta" },
+                { label: "Otro", value: "otro" },
+              ]}
+              placeholder="Selecciona el método de pago"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Fecha de pago"
+            name="fecha_pago"
+            rules={[{ required: true, message: "Selecciona la fecha de pago" }]}
+          >
+            <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+          </Form.Item>
+
+          <Form.Item label="Referencia" name="referencia">
+            <Input placeholder="Número de comprobante o referencia" />
+          </Form.Item>
+
+          <Form.Item label="Observaciones" name="observaciones">
+            <Input.TextArea rows={3} placeholder="Notas internas u observaciones" />
+          </Form.Item>
+
+          <Space style={{ width: "100%", justifyContent: "flex-end" }} size={12}>
+            <Button onClick={cerrarRegistroPago} disabled={registrandoPagos}>
+              Cancelar
+            </Button>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={registrandoPagos}
+              disabled={
+                registrandoPagos || cuotasDisponibles.length === 0 || cuotasSeleccionadasIds.length === 0
+              }
+            >
+              Confirmar pago
+            </Button>
+          </Space>
+        </Form>
+      </Drawer>
     </div>
   );
 }

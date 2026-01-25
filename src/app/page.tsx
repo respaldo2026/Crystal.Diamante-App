@@ -62,30 +62,14 @@ export default function DashboardPage() {
   const [pagosVencidos, setPagosVencidos] = useState<any[]>([]);
 
   // Redirigir no autorizados - USAR EFFECT PARA EVITAR CONDICIONALES
+  const normalizedRole = (user?.rol || "").toLowerCase();
+
   useEffect(() => {
-    if (!userLoading && user) {
-      if (user.rol === "admin") {
-        router.push("/dashboard/admin");
-        return;
-      }
-      if (user.rol === "director") {
-        router.push("/dashboard/director");
-        return;
-      }
-      if (user.rol === "profesor") {
-        router.push("/dashboard/profesor");
-        return;
-      }
-      if (user.rol === "estudiante") {
-        router.push("/dashboard/estudiante");
-        return;
-      }
-      if (user.rol === "secretaria") {
-        router.push("/dashboard/secretaria");
-        return;
-      }
+    if (userLoading || !user) return;
+    if (normalizedRole === "secretaria") {
+      void router.replace("/dashboard/secretaria");
     }
-  }, [user, userLoading, router]);
+  }, [user, userLoading, normalizedRole, router]);
 
   const cargarDashboard = useCallback(async () => {
     setLoading(true);
@@ -315,6 +299,9 @@ export default function DashboardPage() {
   }, [timeRange]);
 
   useEffect(() => {
+    if (userLoading) return;
+    if (normalizedRole === "secretaria") return;
+
     cargarDashboard();
 
     const subscription = supabaseBrowserClient
@@ -326,7 +313,7 @@ export default function DashboardPage() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [cargarDashboard]);
+  }, [cargarDashboard, normalizedRole, userLoading]);
 
   if (loading || userLoading) {
     return (

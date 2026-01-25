@@ -33,7 +33,7 @@ export const RolesPermissionsProvider = ({ children }: { children: ReactNode }) 
       if (data) {
         const permisosMap: Record<string, Record<string, boolean>> = {};
         data.forEach((row: { rol: string; permisos: Record<string, boolean> | null }) => {
-          const normalizedRole = row.rol === "administrativo" ? "admin" : row.rol;
+          const normalizedRole = (row.rol === "administrativo" ? "admin" : row.rol).toLowerCase();
           permisosMap[normalizedRole] = row.permisos ?? {};
         });
 
@@ -62,7 +62,8 @@ export const RolesPermissionsProvider = ({ children }: { children: ReactNode }) 
           { onConflict: "rol" }
         );
       if (error) throw error;
-      setPermisos((prev) => ({ ...prev, [rol]: nuevoPermisos }));
+      const normalized = rol.toLowerCase();
+      setPermisos((prev) => ({ ...prev, [normalized]: nuevoPermisos }));
       return { success: true };
     } catch (error) {
       if (error instanceof Error) {
@@ -74,7 +75,8 @@ export const RolesPermissionsProvider = ({ children }: { children: ReactNode }) 
 
   const tienePermiso = (rol: string | undefined, modulo: string): boolean => {
     if (!rol) return false;
-    const permsRol = permisos[rol];
+    const normalized = rol.toLowerCase();
+    const permsRol = permisos[normalized];
     if (!permsRol) return false;
     return permsRol[modulo] ?? false;
   };

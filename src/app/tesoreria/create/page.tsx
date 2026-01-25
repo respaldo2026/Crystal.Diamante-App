@@ -9,7 +9,8 @@ import { formatDate } from "@utils/date";
 import { UserOutlined, DollarCircleOutlined, SolutionOutlined } from "@ant-design/icons";
 import type { DefaultOptionType } from "antd/es/select";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
-import { abrirTicketPago } from "@utils/pago-ticket";
+import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { subirTicketPago } from "@utils/ticket-storage";
 
 type EstudianteDetalle = {
     id: string;
@@ -278,12 +279,10 @@ export default function PagoCreate() {
                 throw error;
             }
 
-            message.success("Pago registrado. Se abrió el ticket en una nueva pestaña.");
-
             const cursoRelacionado = cursosDelEstudiante.find((m) => String(m.id) === String(cuota.matricula_id));
             const periodoLegible = cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim();
 
-            await abrirTicketPago({
+            const ticketData = {
                 academia: {
                     nombre: configuracion?.nombre_academia ?? "Academia Crystal",
                     telefono: configuracion?.telefono ?? configuracion?.whatsapp ?? undefined,
@@ -309,7 +308,37 @@ export default function PagoCreate() {
                 curso: {
                     nombre: cursoRelacionado?.cursos?.nombre ?? "Curso",
                 },
-            });
+            } as const;
+
+            const placeholder = window.open("", "_blank");
+
+            try {
+                const blob = await generarTicketPagoBlob(ticketData);
+
+                if (placeholder) {
+                    abrirTicketPagoDesdeBlob(blob, placeholder);
+                } else {
+                    abrirTicketPagoDesdeBlob(blob);
+                }
+
+                const { publicUrl } = await subirTicketPago({
+                    blob,
+                    pagoId: cuota.id,
+                    estudianteId: estudianteSeleccionado?.id ?? values.estudiante_id,
+                });
+
+                await supabaseBrowserClient
+                    .from("pagos")
+                    .update({ ticket_url: publicUrl } as any)
+                    .eq("id", cuota.id);
+
+                message.success("Pago registrado y ticket generado.");
+            } catch (ticketError) {
+                if (placeholder) {
+                    placeholder.close();
+                }
+                throw ticketError;
+            }
 
             if (estudianteSeleccionado?.telefono && (estudianteSeleccionado?.notif_whatsapp ?? true)) {
                 await enviarWhatsappConPlantilla(

@@ -43,12 +43,16 @@ export async function getPagosPendientes() {
       monto,
       fecha_vencimiento,
       referencia,
+      estado,
+      numero_cuota,
+      periodo_pagado,
       matricula_id,
-      perfiles:estudiante_id ( nombre_completo ),
-      matriculas:matricula_id ( cursos ( nombre ) )
+      estudiante_id,
+      perfiles:estudiante_id ( id, nombre_completo ),
+      matriculas:matricula_id ( id, cursos ( nombre ) )
     `)
-    .eq("estado", "pendiente")
-    .order("fecha_vencimiento", { ascending: true });
+    .in("estado", ["pendiente", "vencido"])
+    .order("fecha_vencimiento", { ascending: true, nullsFirst: true });
 
   return { data, error };
 }

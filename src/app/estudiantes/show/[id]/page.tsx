@@ -84,6 +84,7 @@ type Pago = {
   observaciones: string | null;
   periodo_pagado: string | null;
   estado?: string | null;
+  ticket_url?: string | null;
 };
 
 type Estadisticas = {
@@ -173,7 +174,7 @@ export default function StudentDetailView() {
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
         .select(
-          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, matriculas!pagos_matricula_id_fkey(cursos(nombre))"
+          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre))"
         )
         .eq("estudiante_id", idEstudiante)
         .order("created_at", { ascending: false });
@@ -439,6 +440,17 @@ export default function StudentDetailView() {
         dataIndex: "observaciones",
         key: "obs",
         render: (text: string | null) => text || "-",
+      },
+      {
+        title: "Ticket",
+        dataIndex: "ticket_url",
+        key: "ticket",
+        render: (url: string | null) =>
+          url ? (
+            <Button size="small" onClick={() => window.open(url, "_blank")}>Ver ticket</Button>
+          ) : (
+            <Text type="secondary">No disponible</Text>
+          ),
       },
       {
         title: "Recordatorio",

@@ -493,18 +493,24 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: userLoading } = useCurrentUser();
   const { permisos, loading: permisosLoading } = useRolesPermissions();
 
+  const normalizedRole = useMemo(() => {
+    const rawRole = (user as any)?.rol ?? (user as any)?.role ?? "";
+    return typeof rawRole === "string" ? rawRole.toLowerCase() : "";
+  }, [user]);
+
+  const roleNeedsPermissions = normalizedRole.length > 0 &&
+    !["admin", "director", "profesor", "estudiante"].includes(normalizedRole);
+
   const resources = useMemo(() => {
     if (userLoading || !user) {
       return [];
     }
 
-    const userRole = (user as any).rol || (user as any).role || "admin";
-
-    if (userRole === "admin" || userRole === "director") {
+    if (normalizedRole === "admin" || normalizedRole === "director") {
       return allResources;
     }
 
-    if (userRole === "profesor") {
+    if (normalizedRole === "profesor") {
       return [
         {
           name: "mi-oficina",
@@ -517,7 +523,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
       ];
     }
 
-    if (userRole === "estudiante") {
+    if (normalizedRole === "estudiante") {
       return [
         {
           name: "portal-estudiante",
@@ -531,18 +537,18 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     }
 
     if (permisosLoading) {
-      return allResources;
+      return [];
     }
 
-    const userPermisos = permisos[userRole || ""] || {};
+    const userPermisos = permisos[normalizedRole] || {};
 
     return allResources.filter((resource) => {
       if (!resource.key || resource.key === "dashboard") return true;
       return userPermisos[resource.key] === true;
     });
-  }, [user, permisos, userLoading, permisosLoading]);
+  }, [user, userLoading, normalizedRole, permisosLoading, permisos]);
 
-  if (userLoading) {
+  if (userLoading || (roleNeedsPermissions && permisosLoading)) {
     return <FullScreenLoader />;
   }
 
