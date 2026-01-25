@@ -15,6 +15,7 @@ export default function ProgramasPage() {
   // Declaración de estado y hooks (única sección)
   const { message, modal } = App.useApp();
   const [form] = Form.useForm();
+  const formValues = Form.useWatch([], form);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPrograma, setEditingPrograma] = useState<any>(null);
   const [programas, setProgramas] = useState<any[]>([]);
@@ -506,7 +507,7 @@ export default function ProgramasPage() {
                 fontWeight: 'bold',
                 color: '#722ed1'
               }}>
-                {calcularTotalHoras(form.getFieldsValue())} horas
+                {calcularTotalHoras(formValues || {})} horas
               </div>
             </Form.Item>
             <Form.Item
@@ -522,7 +523,7 @@ export default function ProgramasPage() {
                 fontWeight: 'bold',
                 color: '#1890ff'
               }}>
-                $ {(calcularValorPorClase(form.getFieldsValue()) || 0).toLocaleString()}
+                $ {(calcularValorPorClase(formValues || {}) || 0).toLocaleString()}
               </div>
             </Form.Item>
           </Space>
@@ -541,7 +542,7 @@ export default function ProgramasPage() {
                 fontWeight: 'bold',
                 color: '#3f8600'
               }}>
-                $ {Number(calcularPrecioTotal(form.getFieldsValue())).toLocaleString()}
+                $ {Number(calcularPrecioTotal(formValues || {})).toLocaleString()}
               </div>
             </Form.Item>
           </Space>

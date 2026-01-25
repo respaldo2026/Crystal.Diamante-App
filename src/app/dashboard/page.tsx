@@ -1,10 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Spin } from "antd";
 import AdminDashboard from "./admin";
-import DirectorDashboard from "./director";
-import ProfesorDashboard from "./profesor";
 import EstudianteDashboard from "./estudiante";
-import SecretariaDashboard from "./secretaria";
 import { supabaseBrowserClient as supabase } from "@utils/supabase/client";
 
 export default function DashboardPage() {
@@ -26,14 +24,27 @@ export default function DashboardPage() {
     fetchRol();
   }, []);
 
-  if (loading) return <div>Cargando...</div>;
-  if (!rol) return <div>No tienes acceso a este panel.</div>;
+  if (loading) {
+    return (
+      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Spin tip="Cargando panel..." />
+      </div>
+    );
+  }
 
-  if (rol === "admin") return <AdminDashboard />;
-  if (rol === "director") return <DirectorDashboard />;
-  if (rol === "profesor") return <ProfesorDashboard />;
-  if (rol === "estudiante") return <EstudianteDashboard />;
-  if (rol === "secretaria") return <SecretariaDashboard />;
+  if (!rol) {
+    return <div>No tienes acceso a este panel.</div>;
+  }
 
-  return <div>Panel no disponible para tu rol.</div>;
+  const normalizedRol = rol.toLowerCase();
+
+  if (["admin", "director", "profesor", "secretaria"].includes(normalizedRol)) {
+    return <AdminDashboard />;
+  }
+
+  if (normalizedRol === "estudiante") {
+    return <EstudianteDashboard />;
+  }
+
+  return <AdminDashboard />;
 }
