@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Spin } from "antd";
 import AdminDashboard from "./admin";
 import EstudianteDashboard from "./estudiante";
+import SecretariaDashboard from "./secretaria";
 import { supabaseBrowserClient as supabase } from "@utils/supabase/client";
 
 export default function DashboardPage() {
@@ -38,8 +39,12 @@ export default function DashboardPage() {
 
   const normalizedRol = rol.toLowerCase();
 
-  if (["admin", "director", "profesor", "secretaria"].includes(normalizedRol)) {
+  if (["admin", "director", "profesor"].includes(normalizedRol)) {
     return <AdminDashboard />;
+  }
+
+  if (normalizedRol === "secretaria") {
+    return <SecretariaDashboard />;
   }
 
   if (normalizedRol === "estudiante") {
