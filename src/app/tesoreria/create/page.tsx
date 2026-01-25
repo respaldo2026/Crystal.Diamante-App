@@ -2,42 +2,47 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Create, useForm, useSelect } from "@refinedev/antd";
-import { Form, Input, Select, InputNumber, DatePicker, Row, Col, Divider, message, Card, Alert } from "antd";
+import { Form, Input, Select, InputNumber, DatePicker, Row, Col, message, Card, Alert } from "antd";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { formatDate, formatTime } from "@utils/date";
+import { formatDate } from "@utils/date";
 import { UserOutlined, DollarCircleOutlined, SolutionOutlined } from "@ant-design/icons";
-import { useSearchParams } from "next/navigation";
 import type { DefaultOptionType } from "antd/es/select";
+import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
+import { abrirTicketPago } from "@utils/pago-ticket";
+
+type EstudianteDetalle = {
+    id: string;
+    nombre_completo: string;
+    identificacion?: string | null;
+    telefono?: string | null;
+    notif_whatsapp?: boolean | null;
+};
+
+type ConfiguracionAcademia = {
+    nombre_academia?: string | null;
+    telefono?: string | null;
+    direccion?: string | null;
+    whatsapp?: string | null;
+    email?: string | null;
+    ticket_titulo?: string | null;
+    ticket_nota?: string | null;
+    ticket_pie?: string | null;
+};
+
+const formatoCOP = (valor: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
 export default function PagoCreate() {
-        // Handler para el submit del formulario
-        const handleOnFinish = async (values: any) => {
-            const { cuota_id, monto } = values;
-            if (!cuota_id) {
-                message.error("Debes seleccionar una cuota a pagar");
-                return;
-            }
-            const montoNumero = Number(monto || 0);
-            if (Number.isNaN(montoNumero) || montoNumero <= 0) {
-                message.error("El monto debe ser mayor a 0");
-                return;
-            }
-            if (montoNumero > 999999999) {
-                message.error("El monto es demasiado alto");
-                return;
-            }
-            // Aquí puedes agregar la lógica para guardar el pago en la base de datos
-            message.success("Pago registrado correctamente (simulado)");
-        };
-    const { formProps, saveButtonProps, onFinish } = useForm({ redirect: "list" });
-    const searchParams = useSearchParams();
-    
-    // Estado para guardar los cursos del estudiante seleccionado
+    const { formProps, saveButtonProps } = useForm({ redirect: "list" });
+
     const [cursosDelEstudiante, setCursosDelEstudiante] = useState<any[]>([]);
     const [buscandoCursos, setBuscandoCursos] = useState(false);
     const [cuotasPendientes, setCuotasPendientes] = useState<any[]>([]);
     const [cargandoCuotas, setCargandoCuotas] = useState(false);
+    const [cuotaSeleccionada, setCuotaSeleccionada] = useState<any | null>(null);
+    const [estudianteSeleccionado, setEstudianteSeleccionado] = useState<EstudianteDetalle | null>(null);
+    const [registrandoPago, setRegistrandoPago] = useState(false);
+    const [configuracion, setConfiguracion] = useState<ConfiguracionAcademia | null>(null);
 
     // 1. Selector de Estudiantes (Buscamos en Perfiles donde rol = estudiante Y activo = true)
     const { selectProps: allEstudianteSelectProps } = useSelect({
@@ -51,45 +56,102 @@ export default function PagoCreate() {
         sorters: [{ field: "nombre_completo", order: "asc" }]
     });
 
+    useEffect(() => {
+        const cargarConfiguracion = async () => {
+            try {
+                const { data, error } = await supabaseBrowserClient
+                    .from("configuracion")
+                    .select("*")
+                    .limit(1)
+                    .maybeSingle();
+
+                if (!error && data) {
+                    setConfiguracion(data);
+                }
+            } catch (error) {
+                console.error("No se pudo cargar la configuración de la academia", error);
+            }
+        };
+
+        cargarConfiguracion();
+    }, []);
+
     const estudianteSelectProps = {
         options: allEstudianteSelectProps.options,
         loading: allEstudianteSelectProps.loading
     };
 
     // 2. Cuando eliges un estudiante, buscamos sus matrículas activas y cuotas pendientes
-    const handleEstudianteChange = async (estudianteId: string) => {
-        if (!estudianteId) return;
+    const handleEstudianteChange = async (estudianteId?: string) => {
+        if (!estudianteId) {
+            setEstudianteSeleccionado(null);
+            setCursosDelEstudiante([]);
+            setCuotasPendientes([]);
+            setCuotaSeleccionada(null);
+            formProps.form?.setFieldsValue({
+                estudiante_id: undefined,
+                matricula_id: undefined,
+                cuota_id: undefined,
+                monto: undefined,
+            });
+            return;
+        }
+
         setBuscandoCursos(true);
-        setCursosDelEstudiante([]); // Limpiar anterior
+        setCursosDelEstudiante([]);
         setCuotasPendientes([]);
-        
-        // Hacemos la consulta a Supabase para traer las matrículas
-        const { data, error } = await supabaseBrowserClient
-            .from("matriculas")
-            .select("id, cursos(nombre, precio_mensualidad)") 
-            .eq("estudiante_id", estudianteId);
-        
-        if (error) {
-            message.error("Error buscando cursos del estudiante");
-        } else if (data) {
-            setCursosDelEstudiante(data);
-            
-            // Si tiene solo un curso, lo pre-seleccionamos
-            if (data.length === 1) {
-                const [unicaMatricula] = data;
-                if (unicaMatricula) {
-                    formProps.form?.setFieldValue("matricula_id", unicaMatricula.id);
-                    await cargarCuotasPendientes(unicaMatricula.id);
+        setCuotaSeleccionada(null);
+        formProps.form?.setFieldsValue({ matricula_id: undefined, cuota_id: undefined, monto: undefined });
+
+        try {
+            const [
+                { data: estudianteDetalle, error: errorEstudiante },
+                { data: matriculas, error: errorMatriculas },
+            ] = await Promise.all([
+                supabaseBrowserClient
+                    .from("perfiles")
+                    .select("id, nombre_completo, telefono, identificacion, notif_whatsapp")
+                    .eq("id", estudianteId)
+                    .maybeSingle(),
+                supabaseBrowserClient
+                    .from("matriculas")
+                    .select("id, cursos(nombre, precio_mensualidad)")
+                    .eq("estudiante_id", estudianteId),
+            ]);
+
+            if (estudianteDetalle) {
+                setEstudianteSeleccionado(estudianteDetalle as EstudianteDetalle);
+            } else if (errorEstudiante) {
+                console.warn("Sin información detallada del estudiante", errorEstudiante);
+            }
+
+            if (errorMatriculas) {
+                message.error("Error buscando cursos del estudiante");
+            } else if (matriculas) {
+                setCursosDelEstudiante(matriculas);
+
+                if (matriculas.length === 1) {
+                    const [unicaMatricula] = matriculas;
+                    if (unicaMatricula) {
+                        formProps.form?.setFieldValue("matricula_id", unicaMatricula.id);
+                        await cargarCuotasPendientes(unicaMatricula.id);
+                    }
                 }
             }
+        } catch (error) {
+            console.error("Error cargando información del estudiante", error);
+            message.error("No se pudo obtener la información del estudiante");
+        } finally {
+            setBuscandoCursos(false);
         }
-        setBuscandoCursos(false);
     };
 
     // 3. Cuando se selecciona una matrícula, cargar sus cuotas pendientes
     const cargarCuotasPendientes = async (matriculaId: string) => {
         if (!matriculaId) return;
         setCargandoCuotas(true);
+        formProps.form?.setFieldsValue({ cuota_id: undefined, monto: undefined });
+        setCuotaSeleccionada(null);
         
         const { data, error } = await supabaseBrowserClient
             .from("pagos")
@@ -105,23 +167,38 @@ export default function PagoCreate() {
             setCuotasPendientes(data || []);
             // Pre-seleccionar la primera cuota pendiente
             if (data && data.length > 0) {
-                formProps.form?.setFieldValue("cuota_id", data[0].id);
-                formProps.form?.setFieldValue("monto", data[0].monto);
+                const cuotaInicial = data[0];
+                formProps.form?.setFieldValue("cuota_id", cuotaInicial.id);
+                formProps.form?.setFieldValue("monto", cuotaInicial.monto);
+                setCuotaSeleccionada(cuotaInicial);
             }
         }
         setCargandoCuotas(false);
     };
 
     // Al seleccionar el curso, cargar sus cuotas pendientes
-    const handleCursoChange = (matriculaId: string) => {
+    const handleCursoChange = (matriculaId?: string) => {
+        if (!matriculaId) {
+            formProps.form?.setFieldsValue({ cuota_id: undefined, monto: undefined });
+            setCuotasPendientes([]);
+            setCuotaSeleccionada(null);
+            return;
+        }
+        setCuotaSeleccionada(null);
         cargarCuotasPendientes(matriculaId);
     };
 
     // Al seleccionar una cuota específica, autocompletar el monto
-    const handleCuotaChange = (cuotaId: string) => {
-        const cuota = cuotasPendientes.find(c => c.id === cuotaId);
+    const handleCuotaChange = (cuotaId?: string) => {
+        if (!cuotaId) {
+            setCuotaSeleccionada(null);
+            formProps.form?.setFieldValue("monto", undefined);
+            return;
+        }
+        const cuota = cuotasPendientes.find((c) => c.id === cuotaId);
         if (cuota) {
             formProps.form?.setFieldValue("monto", cuota.monto);
+            setCuotaSeleccionada(cuota);
         }
     };
 
@@ -140,16 +217,133 @@ export default function PagoCreate() {
     );
 
     const cuotaOptions = useMemo<DefaultOptionType[]>(
-        () => cuotasPendientes.map((c) => ({
-            label: `Cuota #${c.numero_cuota} - $${c.monto}`,
-            value: c.id,
-        })),
+        () =>
+            cuotasPendientes.map((c) => {
+                const montoTexto = c.monto ? c.monto.toLocaleString() : "0";
+                const vencimiento = c.fecha_vencimiento ? ` · Vence: ${formatDate(c.fecha_vencimiento)}` : "";
+                const estado = c.estado === "vencido" ? " · Vencida" : "";
+                return {
+                    label: `Cuota #${c.numero_cuota || "?"} · $${montoTexto}${vencimiento}${estado}`,
+                    value: c.id,
+                };
+            }),
         [cuotasPendientes]
     );
 
+    const handleOnFinish = async (values: any) => {
+        const { cuota_id, monto, metodo_pago, fecha_pago, referencia } = values;
+
+        if (!cuota_id) {
+            message.error("Debes seleccionar una cuota a pagar");
+            return;
+        }
+
+        const cuota = cuotasPendientes.find((c) => c.id === cuota_id) || cuotaSeleccionada;
+
+        if (!cuota) {
+            message.error("No se encontró la cuota seleccionada");
+            return;
+        }
+
+        const montoNumero = Number(monto || 0);
+        if (Number.isNaN(montoNumero) || montoNumero <= 0) {
+            message.error("El monto debe ser mayor a 0");
+            return;
+        }
+
+        if (montoNumero > 999999999) {
+            message.error("El monto es demasiado alto");
+            return;
+        }
+
+        setRegistrandoPago(true);
+
+        try {
+            const fechaPagoISO = fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
+            const fechaPagoLegible = dayjs(fechaPagoISO).format("DD/MM/YYYY");
+
+            const { error } = await supabaseBrowserClient
+                .from("pagos")
+                .update({
+                    estado: "pagado",
+                    monto: montoNumero,
+                    metodo_pago,
+                    referencia: referencia || null,
+                    fecha_pago: fechaPagoISO,
+                    observaciones: `Pago registrado manualmente el ${dayjs().format("DD/MM/YYYY HH:mm")}`,
+                })
+                .eq("id", cuota.id);
+
+            if (error) {
+                throw error;
+            }
+
+            message.success("Pago registrado. Se abrió el ticket en una nueva pestaña.");
+
+            const cursoRelacionado = cursosDelEstudiante.find((m) => String(m.id) === String(cuota.matricula_id));
+            const periodoLegible = cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim();
+
+            await abrirTicketPago({
+                academia: {
+                    nombre: configuracion?.nombre_academia ?? "Academia Crystal",
+                    telefono: configuracion?.telefono ?? configuracion?.whatsapp ?? undefined,
+                    direccion: configuracion?.direccion ?? undefined,
+                    email: configuracion?.email ?? undefined,
+                    ticketTitulo: configuracion?.ticket_titulo ?? undefined,
+                    ticketNota: configuracion?.ticket_nota ?? undefined,
+                    ticketPie: configuracion?.ticket_pie ?? undefined,
+                },
+                estudiante: {
+                    nombre: estudianteSeleccionado?.nombre_completo ?? "Estudiante",
+                    identificacion: estudianteSeleccionado?.identificacion ?? undefined,
+                    telefono: estudianteSeleccionado?.telefono ?? undefined,
+                },
+                pago: {
+                    referencia: referencia || cuota.id,
+                    metodo: metodo_pago,
+                    monto: montoNumero,
+                    fecha: fechaPagoLegible,
+                    periodo: periodoLegible,
+                    numeroCuota: cuota.numero_cuota ?? undefined,
+                },
+                curso: {
+                    nombre: cursoRelacionado?.cursos?.nombre ?? "Curso",
+                },
+            });
+
+            if (estudianteSeleccionado?.telefono && (estudianteSeleccionado?.notif_whatsapp ?? true)) {
+                const mensajeFallback = `Hola ${estudianteSeleccionado.nombre_completo}, confirmamos tu pago de ${formatoCOP(montoNumero)} correspondiente a ${periodoLegible}. ¡Gracias por ponerte al día!`;
+
+                await enviarWhatsappConPlantilla(
+                    estudianteSeleccionado.telefono,
+                    "pago_confirmado",
+                    {
+                        nombre: estudianteSeleccionado.nombre_completo,
+                        curso: cursoRelacionado?.cursos?.nombre ?? "tu curso",
+                        monto: formatoCOP(montoNumero),
+                        periodo: periodoLegible,
+                    },
+                    mensajeFallback
+                );
+            }
+
+            await cargarCuotasPendientes(String(cuota.matricula_id));
+        } catch (error) {
+            console.error("Error registrando pago", error);
+            message.error("No se pudo registrar el pago. Inténtalo nuevamente.");
+        } finally {
+            setRegistrandoPago(false);
+        }
+    };
+
     return (
         <Create 
-            saveButtonProps={{ ...saveButtonProps, onClick: () => formProps.form?.submit() }} 
+            saveButtonProps={{ 
+                ...saveButtonProps, 
+                loading: registrandoPago, 
+                disabled: registrandoPago,
+                onClick: () => formProps.form?.submit(), 
+            }} 
             title="Registrar Nuevo Ingreso"
         >
             <Form 
@@ -168,6 +362,7 @@ export default function PagoCreate() {
                                 showSearch
                                 optionFilterProp="label"
                                 onChange={handleEstudianteChange}
+                                allowClear
                                 suffixIcon={<UserOutlined />}
                             />
                         </Form.Item>
@@ -247,76 +442,24 @@ export default function PagoCreate() {
                     <Alert style={{marginBottom: 20}} type="warning" message="Este estudiante no tiene cuotas pendientes de pago." />
                 )}
 
-                {cuotasPendientes.length > 0 && (
-                    <Card style={{ marginBottom: 20, background: '#f0f5ff' }}>
-                        <Form.Item 
-                            label="Cuota a Pagar" 
-                            name="cuota_id" 
-                            rules={[{ required: true, message: "Selecciona la cuota a pagar" }]}
-                        >
-                            <Select 
-                                placeholder="Selecciona la cuota a pagar"
-                                loading={cargandoCuotas}
-                                onChange={handleCuotaChange}
-                            >
-                                {cuotasPendientes.map((cuota: any) => {
-                                    const esVencida = cuota.estado === 'vencido';
-                                    const labelEstado = esVencida ? ' 🔴 VENCIDA' : '';
-                                    const vencimiento = cuota.fecha_vencimiento ? ` - Vence: ${formatDate(cuota.fecha_vencimiento)}` : '';
-                                    return (
-                                        <Select.Option key={cuota.id} value={cuota.id}>
-                                            {`${cuota.periodo_pagado} - $${cuota.monto?.toLocaleString() || 0}${vencimiento}${labelEstado}`}
-                                        </Select.Option>
-                                    );
-                                })}
-                            </Select>
-                        </Form.Item>
+                {cuotaSeleccionada && (
+                    <Card style={{ marginBottom: 20, background: '#f0f5ff' }} title="Detalle de la cuota seleccionada">
+                        <Row gutter={[16, 12]}>
+                            <Col xs={24} md={12}>
+                                <strong>Período:</strong> {cuotaSeleccionada.periodo_pagado || "Sin período"}
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <strong>Monto:</strong> ${cuotaSeleccionada.monto?.toLocaleString() || 0}
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <strong>Estado:</strong> {cuotaSeleccionada.estado === "vencido" ? "Vencida" : "Pendiente"}
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <strong>Vence:</strong> {cuotaSeleccionada.fecha_vencimiento ? formatDate(cuotaSeleccionada.fecha_vencimiento) : "Sin fecha"}
+                            </Col>
+                        </Row>
                     </Card>
                 )}
-
-                <Divider orientation="left">Detalles del Pago</Divider>
-
-                <Row gutter={24}>
-                    <Col span={8}>
-                        <Form.Item label="Monto Recibido" name="monto" rules={[{ required: true, message: "Ingresa el valor" }]}> 
-                            <InputNumber 
-                                style={{ width: '100%', fontSize: '16px', fontWeight: 'bold' }} 
-                                prefix="$"
-                                min={0}
-                                formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                parser={((value: string | undefined): number => {
-                                    const parsed = value?.replace(/\$\s?|(,*)/g, '');
-                                    return parsed ? parseInt(parsed, 10) : 0;
-                                }) as any}
-                            />
-                        </Form.Item>
-                    </Col>
-                    <Col span={8}>
-                        <Form.Item label="Método de Pago" name="metodo_pago">
-                            <Select 
-                                options={[
-                                    { label: 'Efectivo', value: 'efectivo' },
-                                    { label: 'Transferencia (Nequi/Banco)', value: 'transferencia' },
-                                    { label: 'Tarjeta', value: 'tarjeta' },
-                                    { label: 'Otro', value: 'otro' }
-                                ]}
-                            />
-                        </Form.Item>
-                    </Col>
-                    <Col span={8}>
-                        <Form.Item label="Fecha" name="fecha_pago">
-                            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" allowClear={false} />
-                        </Form.Item>
-                    </Col>
-                </Row>
-
-                <Row>
-                    <Col span={24}>
-                        <Form.Item label="Referencia / Observación" name="referencia">
-                            <Input placeholder="Ej: Pago mes Noviembre - Comprobante #1234" prefix={<SolutionOutlined />} />
-                        </Form.Item>
-                    </Col>
-                </Row>
             </Form>
         </Create>
     );

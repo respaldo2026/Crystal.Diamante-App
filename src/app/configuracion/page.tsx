@@ -8,7 +8,6 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { MODULES, type ModuleDefinition } from "@/constants/modules";
 import { ROLES } from "@/constants/roles";
 
-const { TabPane } = Tabs;
 const { TextArea } = Input;
 const { Option } = Select;
 const LOGO_STORAGE_BUCKET = "branding";
@@ -597,191 +596,255 @@ export default function ConfiguracionPage() {
   const permisosData = modulos.map((m: ModuleDefinition) => ({ key: m.key, modulo: m.label }));
   const permisosScrollX = 240 + roleKeys.length * 160;
 
+  const academiaTab = (
+    <Spin spinning={loadingAcademia}>
+      <Form form={formAcademia} layout="vertical">
+        <Divider orientation="left">Información General</Divider>
+        <Row gutter={[16, 8]}>
+          <Col xs={24} md={12}>
+            <Form.Item label="Nombre de la Academia" name="nombre_academia" rules={[{ required: true }]}>
+              <Input placeholder="Academia Crystal" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item label="RUC / NIT" name="ruc">
+              <Input placeholder="1234567890001" />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item label="Dirección" name="direccion">
+              <TextArea rows={2} placeholder="Dirección completa de la academia" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item label="Teléfono" name="telefono">
+              <Input placeholder="0987654321" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item label="Email" name="email" rules={[{ type: "email" }]}>
+              <Input placeholder="info@academiacrystal.com" />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item label="Sitio Web" name="sitio_web">
+              <Input placeholder="https://www.academiacrystal.com" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item name="logo_url" hidden>
+          <Input type="hidden" />
+        </Form.Item>
+
+        <Divider orientation="left">Marca y Redes</Divider>
+        <Row gutter={[16, 16]} align="top">
+          <Col xs={24} lg={10}>
+            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+              <Upload
+                listType="picture-card"
+                fileList={logoFileList}
+                showUploadList={{ showPreviewIcon: false }}
+                beforeUpload={handleLogoUpload}
+                onRemove={() => {
+                  handleRemoveLogo();
+                  return true;
+                }}
+              >
+                {logoFileList.length >= 1 ? null : (
+                  <div>
+                    <UploadOutlined style={{ fontSize: 20 }} />
+                    <div style={{ marginTop: 8 }}>Subir Logo</div>
+                  </div>
+                )}
+              </Upload>
+              <Button loading={uploadingLogo} onClick={handleRemoveLogo} disabled={logoFileList.length === 0}>
+                Limpiar Logo
+              </Button>
+            </Space>
+          </Col>
+          <Col xs={24} lg={14}>
+            <Row gutter={[16, 8]}>
+              <Col xs={24} sm={12}>
+                <Form.Item label="Instagram" name="instagram">
+                  <Input prefix={<InstagramOutlined />} placeholder="https://instagram.com/academia" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Form.Item label="Facebook" name="facebook">
+                  <Input prefix={<FacebookOutlined />} placeholder="https://facebook.com/academia" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Form.Item label="YouTube" name="youtube">
+                  <Input prefix={<YoutubeOutlined />} placeholder="https://youtube.com/@academia" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Form.Item label="WhatsApp" name="whatsapp">
+                  <Input prefix={<WhatsAppOutlined />} placeholder="https://wa.me/573001112233" />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Col>
+        </Row>
+
+        <Divider orientation="left">Parámetros Financieros</Divider>
+        <Row gutter={[16, 8]}>
+          <Col xs={24} md={12}>
+            <Form.Item label="Moneda" name="moneda">
+              <Select placeholder="Seleccionar moneda">
+                <Option value="USD">Dólar (USD)</Option>
+                <Option value="EUR">Euro (EUR)</Option>
+                <Option value="COP">Peso Colombiano (COP)</Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item label="Impuesto (%)" name="impuesto">
+              <Input type="number" placeholder="19" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item label="Días de gracia para pagos" name="dias_gracia_pago">
+              <Input type="number" placeholder="5" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item label="Mora por día (%)" name="mora_por_dia">
+              <Input type="number" placeholder="2" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Divider orientation="left">Ticket de Pago</Divider>
+        <Row gutter={[16, 8]}>
+          <Col xs={24} md={12}>
+            <Form.Item label="Título del ticket" name="ticket_titulo">
+              <Input placeholder="Recibo de Pago" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item label="Texto del pie" name="ticket_pie">
+              <Input placeholder="Gracias por tu preferencia" />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item label="Mensaje adicional" name="ticket_nota">
+              <TextArea rows={3} placeholder="Condiciones, notas o agradecimientos que aparecerán en el ticket" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item style={{ marginTop: 16 }}>
+          <Button type="primary" icon={<SaveOutlined />} loading={savingAcademia} onClick={guardarConfiguracionAcademia}>
+            Guardar Configuración
+          </Button>
+        </Form.Item>
+      </Form>
+    </Spin>
+  );
+
+  const permisosTab = (
+    <Spin spinning={loadingPermisos}>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between" }}>
+        <h3>Matriz de Permisos por Rol</h3>
+        {hasChangesPermisos && (
+          <Button type="primary" icon={<SaveOutlined />} onClick={guardarPermisos} loading={savingPermisos}>
+            Guardar Cambios
+          </Button>
+        )}
+      </div>
+      <Table dataSource={permisosData} columns={permisosColumns} pagination={false} scroll={{ x: permisosScrollX }} bordered />
+    </Spin>
+  );
+
+  const administradoresTab = (
+    <Spin spinning={loadingAdmins}>
+      <div style={{ marginBottom: 16, textAlign: "right" }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModalAdmin()}>
+          Nuevo Administrador
+        </Button>
+      </div>
+      <Table dataSource={adminsList} columns={adminColumns} rowKey="id" />
+    </Spin>
+  );
+
+  const mediosPagoTab = (
+    <Spin spinning={loadingMediosPago}>
+      <div style={{ marginBottom: 16, textAlign: "right" }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModalMedioPago()}>
+          Nuevo Medio de Pago
+        </Button>
+      </div>
+      <Table dataSource={mediosPago} columns={mediosPagoColumns} rowKey="id" />
+    </Spin>
+  );
+
+  const plantillasTab = (
+    <Spin spinning={loadingPlantillas}>
+      <div style={{ marginBottom: 16, textAlign: "right" }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModalPlantilla()}>
+          Nueva Plantilla
+        </Button>
+      </div>
+      <Table dataSource={plantillasWhatsApp} columns={plantillasColumns} rowKey="id" />
+    </Spin>
+  );
+
+  const tabsItems = [
+    {
+      key: "academia",
+      label: (
+        <span>
+          <SettingOutlined /> Academia
+        </span>
+      ),
+      children: academiaTab,
+    },
+    {
+      key: "permisos",
+      label: (
+        <span>
+          <TeamOutlined /> Permisos por Rol
+        </span>
+      ),
+      children: permisosTab,
+    },
+    {
+      key: "administradores",
+      label: (
+        <span>
+          <UserOutlined /> Administradores
+        </span>
+      ),
+      children: administradoresTab,
+    },
+    {
+      key: "medios-pago",
+      label: (
+        <span>
+          <CreditCardOutlined /> Medios de Pago
+        </span>
+      ),
+      children: mediosPagoTab,
+    },
+    {
+      key: "plantillas-whatsapp",
+      label: (
+        <span>
+          <WhatsAppOutlined /> Plantillas WhatsApp
+        </span>
+      ),
+      children: plantillasTab,
+    },
+  ];
+
   return (
     <div style={{ padding: 24 }}>
       {contextHolder}
       <h2 style={{ marginBottom: 24 }}>Configuración del Sistema</h2>
       <Card>
-        <Tabs activeKey={activeTab} onChange={handleTabChange}>
-          
-          <TabPane tab={<span><SettingOutlined /> Academia</span>} key="academia">
-            <Spin spinning={loadingAcademia}>
-              <Form form={formAcademia} layout="vertical">
-                <Divider orientation="left">Información General</Divider>
-                <Row gutter={[16, 8]}>
-                  <Col xs={24} md={12}>
-                    <Form.Item label="Nombre de la Academia" name="nombre_academia" rules={[{ required: true }]}>
-                      <Input placeholder="Academia Crystal" />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item label="RUC / NIT" name="ruc">
-                      <Input placeholder="1234567890001" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={24}>
-                    <Form.Item label="Dirección" name="direccion">
-                      <TextArea rows={2} placeholder="Dirección completa de la academia" />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item label="Teléfono" name="telefono">
-                      <Input placeholder="0987654321" />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item label="Email" name="email" rules={[{ type: 'email' }]}>
-                      <Input placeholder="info@academiacrystal.com" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={24}>
-                    <Form.Item label="Sitio Web" name="sitio_web">
-                      <Input placeholder="https://www.academiacrystal.com" />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
-                <Form.Item name="logo_url" hidden>
-                  <Input type="hidden" />
-                </Form.Item>
-
-                <Divider orientation="left">Marca y Redes</Divider>
-                <Row gutter={[16, 16]} align="top">
-                  <Col xs={24} lg={10}>
-                    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-                      <Upload
-                        listType="picture-card"
-                        fileList={logoFileList}
-                        showUploadList={{ showPreviewIcon: false }}
-                        beforeUpload={handleLogoUpload}
-                        onRemove={() => {
-                          handleRemoveLogo();
-                          return true;
-                        }}
-                      >
-                        {logoFileList.length >= 1 ? null : (
-                          <div>
-                            <UploadOutlined style={{ fontSize: 20 }} />
-                            <div style={{ marginTop: 8 }}>Subir Logo</div>
-                          </div>
-                        )}
-                      </Upload>
-                      <Button loading={uploadingLogo} onClick={handleRemoveLogo} disabled={logoFileList.length === 0}>
-                        Limpiar Logo
-                      </Button>
-                    </Space>
-                  </Col>
-                  <Col xs={24} lg={14}>
-                    <Row gutter={[16, 8]}>
-                      <Col xs={24} sm={12}>
-                        <Form.Item label="Instagram" name="instagram">
-                          <Input addonBefore={<InstagramOutlined />} placeholder="https://instagram.com/academia" />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} sm={12}>
-                        <Form.Item label="Facebook" name="facebook">
-                          <Input addonBefore={<FacebookOutlined />} placeholder="https://facebook.com/academia" />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} sm={12}>
-                        <Form.Item label="YouTube" name="youtube">
-                          <Input addonBefore={<YoutubeOutlined />} placeholder="https://youtube.com/@academia" />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} sm={12}>
-                        <Form.Item label="WhatsApp" name="whatsapp">
-                          <Input addonBefore={<WhatsAppOutlined />} placeholder="https://wa.me/573001112233" />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                  </Col>
-                </Row>
-
-                <Divider orientation="left">Parámetros Financieros</Divider>
-                <Row gutter={[16, 8]}>
-                  <Col xs={24} md={12}>
-                    <Form.Item label="Moneda" name="moneda">
-                      <Select placeholder="Seleccionar moneda">
-                        <Option value="USD">Dólar (USD)</Option>
-                        <Option value="EUR">Euro (EUR)</Option>
-                        <Option value="COP">Peso Colombiano (COP)</Option>
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item label="Impuesto (%)" name="impuesto">
-                      <Input type="number" placeholder="19" />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item label="Días de gracia para pagos" name="dias_gracia_pago">
-                      <Input type="number" placeholder="5" />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item label="Mora por día (%)" name="mora_por_dia">
-                      <Input type="number" placeholder="2" />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
-                <Form.Item style={{ marginTop: 16 }}>
-                  <Button type="primary" icon={<SaveOutlined />} loading={savingAcademia} onClick={guardarConfiguracionAcademia}>
-                    Guardar Configuración
-                  </Button>
-                </Form.Item>
-              </Form>
-            </Spin>
-          </TabPane>
-
-          <TabPane tab={<span><TeamOutlined /> Permisos por Rol</span>} key="permisos">
-            <Spin spinning={loadingPermisos}>
-              <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-                <h3>Matriz de Permisos por Rol</h3>
-                {hasChangesPermisos && (
-                  <Button type="primary" icon={<SaveOutlined />} onClick={guardarPermisos} loading={savingPermisos}>
-                    Guardar Cambios
-                  </Button>
-                )}
-              </div>
-              <Table dataSource={permisosData} columns={permisosColumns} pagination={false} scroll={{ x: permisosScrollX }} bordered />
-            </Spin>
-          </TabPane>
-
-          <TabPane tab={<span><UserOutlined /> Administradores</span>} key="administradores">
-            <Spin spinning={loadingAdmins}>
-              <div style={{ marginBottom: 16, textAlign: 'right' }}>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModalAdmin()}>
-                  Nuevo Administrador
-                </Button>
-              </div>
-              <Table dataSource={adminsList} columns={adminColumns} rowKey="id" />
-            </Spin>
-          </TabPane>
-
-          <TabPane tab={<span><CreditCardOutlined /> Medios de Pago</span>} key="medios-pago">
-            <Spin spinning={loadingMediosPago}>
-              <div style={{ marginBottom: 16, textAlign: 'right' }}>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModalMedioPago()}>
-                  Nuevo Medio de Pago
-                </Button>
-              </div>
-              <Table dataSource={mediosPago} columns={mediosPagoColumns} rowKey="id" />
-            </Spin>
-          </TabPane>
-
-          <TabPane tab={<span><WhatsAppOutlined /> Plantillas WhatsApp</span>} key="plantillas-whatsapp">
-            <Spin spinning={loadingPlantillas}>
-              <div style={{ marginBottom: 16, textAlign: 'right' }}>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModalPlantilla()}>
-                  Nueva Plantilla
-                </Button>
-              </div>
-              <Table dataSource={plantillasWhatsApp} columns={plantillasColumns} rowKey="id" />
-            </Spin>
-          </TabPane>
-
-        </Tabs>
+        <Tabs activeKey={activeTab} onChange={handleTabChange} items={tabsItems} />
       </Card>
 
       {/* Modal Administradores */}

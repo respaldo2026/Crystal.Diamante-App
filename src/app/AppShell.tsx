@@ -1,10 +1,35 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { Refine } from "@refinedev/core";
+import React, { useMemo, useCallback } from "react";
+import {
+  Refine,
+  useLogout,
+  useMenu,
+  useTranslate,
+  useIsExistAuthentication,
+  useLink,
+  useWarnAboutChange,
+  type TreeMenuItem,
+} from "@refinedev/core";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
-import { ThemedLayout, ThemedTitle } from "@refinedev/antd";
-import { ConfigProvider, App as AntdApp, Spin } from "antd";
+import {
+  ThemedLayout,
+  ThemedTitle,
+  useThemedLayoutContext,
+  type RefineLayoutThemedTitleProps,
+} from "@refinedev/antd";
+import {
+  ConfigProvider,
+  App as AntdApp,
+  Spin,
+  Layout,
+  Menu,
+  Drawer,
+  Button,
+  Grid,
+  theme,
+} from "antd";
+import type { MenuProps } from "antd";
 import {
   DashboardOutlined,
   UserOutlined,
@@ -18,6 +43,11 @@ import {
   HomeOutlined,
   UsergroupAddOutlined,
   SolutionOutlined,
+  LogoutOutlined,
+  UnorderedListOutlined,
+  BarsOutlined,
+  LeftOutlined,
+  RightOutlined,
 } from "@ant-design/icons";
 import routerProvider from "@refinedev/nextjs-router";
 import { dataProvider } from "@/providers/data-provider";
@@ -142,6 +172,307 @@ const allResources = [
   },
 ];
 
+const LOGOUT_MENU_KEY = "__logout";
+
+type CustomSiderProps = {
+  Title?: React.FC<RefineLayoutThemedTitleProps>;
+  meta?: Record<string, unknown>;
+  fixed?: boolean;
+  activeItemDisabled?: boolean;
+  siderItemsAreCollapsed?: boolean;
+};
+
+type MenuClickEvent = Parameters<NonNullable<MenuProps["onClick"]>>[0];
+
+const CustomSider: React.FC<CustomSiderProps> = ({
+  Title: TitleFromProps,
+  meta,
+  fixed,
+  activeItemDisabled = false,
+  siderItemsAreCollapsed = true,
+}) => {
+  const { token } = theme.useToken();
+  const {
+    siderCollapsed,
+    setSiderCollapsed,
+    mobileSiderOpen,
+    setMobileSiderOpen,
+  } = useThemedLayoutContext();
+
+  const breakpoint = Grid.useBreakpoint();
+  const isMobile = typeof breakpoint.lg === "undefined" ? false : !breakpoint.lg;
+
+  const direction = React.useContext(ConfigProvider.ConfigContext)?.direction;
+  const isExistAuthentication = useIsExistAuthentication();
+  const { mutate: mutateLogout } = useLogout();
+  const { warnWhen, setWarnWhen } = useWarnAboutChange();
+  const translate = useTranslate();
+  const Link = useLink();
+  const { menuItems, selectedKey, defaultOpenKeys } = useMenu({ meta });
+
+  const RenderToTitle = TitleFromProps ?? ThemedTitle;
+
+  const handleLogout = useCallback(() => {
+    if (warnWhen) {
+      const confirmLeave = window.confirm(
+        translate(
+          "warnWhenUnsavedChanges",
+          "Are you sure you want to leave? You have unsaved changes.",
+        ),
+      );
+
+      if (!confirmLeave) {
+        return;
+      }
+
+      setWarnWhen(false);
+    }
+
+    mutateLogout();
+  }, [mutateLogout, setWarnWhen, translate, warnWhen]);
+
+  const buildMenuItems = useCallback(
+    (tree: TreeMenuItem[]): MenuProps["items"] => {
+      return tree
+        .map((item) => {
+          const { key, name, children, meta: itemMeta, list } = item;
+          const parentName = itemMeta?.parent;
+          const labelText = item.label ?? itemMeta?.label ?? name;
+          const iconNode = itemMeta?.icon;
+          const hasChildren = children.length > 0;
+          const childItems = hasChildren ? buildMenuItems(children) : undefined;
+          const isSelected = key === selectedKey;
+          const disabled = activeItemDisabled && isSelected;
+          const route = list;
+          const isRoute = !(parentName !== undefined && children.length === 0);
+
+          if (hasChildren) {
+            if (!childItems || childItems.length === 0) {
+              return null;
+            }
+
+            return {
+              key,
+              icon: iconNode ?? <UnorderedListOutlined />,
+              label: labelText,
+              children: childItems,
+            } satisfies NonNullable<MenuProps["items"]>[number];
+          }
+
+          const labelNode = disabled || !route ? (
+            <span>{labelText}</span>
+          ) : (
+            <Link
+              to={route ?? ""}
+              style={{
+                display: "inline-block",
+                width: "100%",
+              }}
+            >
+              {labelText}
+            </Link>
+          );
+
+          return {
+            key,
+            icon: iconNode ?? (isRoute ? <UnorderedListOutlined /> : undefined),
+            label: labelNode,
+            disabled,
+          } satisfies NonNullable<MenuProps["items"]>[number];
+        })
+        .filter(Boolean) as MenuProps["items"];
+    },
+    [Link, activeItemDisabled, selectedKey],
+  );
+
+  const menuStructure = useMemo(() => {
+    const baseItems = buildMenuItems(menuItems) ?? [];
+
+    if (!isExistAuthentication) {
+      return baseItems;
+    }
+
+    return [
+      ...baseItems,
+      { type: "divider" as const },
+      {
+        key: LOGOUT_MENU_KEY,
+        icon: <LogoutOutlined />,
+        label: translate("buttons.logout", "Logout"),
+      },
+    ] as MenuProps["items"];
+  }, [buildMenuItems, isExistAuthentication, menuItems, translate]);
+
+  const defaultExpandMenuItems = useMemo(() => {
+    if (siderItemsAreCollapsed) {
+      return [] as string[];
+    }
+
+    return menuItems.map(({ key }) => key);
+  }, [menuItems, siderItemsAreCollapsed]);
+
+  const onMenuClick = useCallback(
+    (info: MenuClickEvent) => {
+      if (String(info.key) === LOGOUT_MENU_KEY) {
+        handleLogout();
+        return;
+      }
+
+      setMobileSiderOpen(false);
+    },
+    [handleLogout, setMobileSiderOpen],
+  );
+
+  const renderMenu = () => (
+    <Menu
+      items={menuStructure}
+      selectedKeys={selectedKey ? [selectedKey] : []}
+      defaultOpenKeys={[...defaultOpenKeys, ...defaultExpandMenuItems]}
+      mode="inline"
+      style={{
+        paddingTop: "8px",
+        border: "none",
+        overflow: "auto",
+        height: "calc(100% - 72px)",
+      }}
+      onClick={onMenuClick}
+    />
+  );
+
+  const renderClosingIcons = () => {
+    const iconProps = { style: { color: token.colorPrimary } };
+    const OpenIcon = direction === "rtl" ? RightOutlined : LeftOutlined;
+    const CollapsedIcon = direction === "rtl" ? LeftOutlined : RightOutlined;
+    const IconComponent = siderCollapsed ? CollapsedIcon : OpenIcon;
+
+    return <IconComponent {...iconProps} />;
+  };
+
+  const drawerSider = (
+    <>
+      <Drawer
+        open={mobileSiderOpen}
+        onClose={() => setMobileSiderOpen(false)}
+        placement={direction === "rtl" ? "right" : "left"}
+        closable={false}
+        width={200}
+        styles={{
+          body: {
+            padding: 0,
+          },
+        }}
+        maskClosable
+      >
+        <Layout>
+          <Layout.Sider
+            style={{
+              height: "100vh",
+              backgroundColor: token.colorBgContainer,
+              borderRight: `1px solid ${token.colorBgElevated}`,
+            }}
+          >
+            <div
+              style={{
+                width: "200px",
+                padding: "0 16px",
+                display: "flex",
+                justifyContent: "flex-start",
+                alignItems: "center",
+                height: "64px",
+                backgroundColor: token.colorBgElevated,
+              }}
+            >
+              <RenderToTitle collapsed={false} />
+            </div>
+            {renderMenu()}
+          </Layout.Sider>
+        </Layout>
+      </Drawer>
+      <Button
+        style={{
+          position: "fixed",
+          top: 16,
+          left: 16,
+          zIndex: 1000,
+        }}
+        size="large"
+        onClick={() => setMobileSiderOpen(true)}
+        icon={<BarsOutlined />}
+      />
+    </>
+  );
+
+  if (isMobile) {
+    return drawerSider;
+  }
+
+  const siderStyles: React.CSSProperties = {
+    backgroundColor: token.colorBgContainer,
+    borderRight: `1px solid ${token.colorBgElevated}`,
+  };
+
+  if (fixed) {
+    siderStyles.position = "fixed";
+    siderStyles.top = 0;
+    siderStyles.height = "100vh";
+    siderStyles.zIndex = 999;
+  }
+
+  return (
+    <>
+      {fixed && (
+        <div
+          style={{
+            width: siderCollapsed ? "80px" : "200px",
+            transition: "all 0.2s",
+          }}
+        />
+      )}
+      <Layout.Sider
+        style={siderStyles}
+        collapsible
+        collapsed={siderCollapsed}
+        onCollapse={(collapsed, type) => {
+          if (type === "clickTrigger") {
+            setSiderCollapsed(collapsed);
+          }
+        }}
+        collapsedWidth={80}
+        breakpoint="lg"
+        trigger={
+          <Button
+            type="text"
+            style={{
+              borderRadius: 0,
+              height: "100%",
+              width: "100%",
+              backgroundColor: token.colorBgElevated,
+            }}
+          >
+            {renderClosingIcons()}
+          </Button>
+        }
+      >
+        <div
+          style={{
+            width: siderCollapsed ? "80px" : "200px",
+            padding: siderCollapsed ? "0" : "0 16px",
+            display: "flex",
+            justifyContent: siderCollapsed ? "center" : "flex-start",
+            alignItems: "center",
+            height: "64px",
+            backgroundColor: token.colorBgElevated,
+            fontSize: "14px",
+          }}
+        >
+          <RenderToTitle collapsed={siderCollapsed} />
+        </div>
+        {renderMenu()}
+      </Layout.Sider>
+    </>
+  );
+};
+
 const FullScreenLoader = () => (
   <div
     style={{
@@ -262,6 +593,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
           >
             <ThemedLayout
               initialSiderCollapsed={false}
+              Sider={CustomSider}
               Title={({ collapsed }) => (
                 <ThemedTitle collapsed={collapsed} text="Crystal App" icon={<BookOutlined />} />
               )}
