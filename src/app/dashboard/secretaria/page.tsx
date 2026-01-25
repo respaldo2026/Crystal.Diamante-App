@@ -9,14 +9,11 @@ import {
   Button,
   List,
   Spin,
-  Modal,
-  Select,
   Space,
   Tag,
   Typography,
   Empty,
   Tooltip,
-  Form,
   Divider,
   Statistic,
   Tabs,
@@ -27,24 +24,22 @@ import {
   PlusOutlined,
   ReloadOutlined,
   WhatsAppOutlined,
-  PhoneOutlined,
   CalendarOutlined,
   TeamOutlined,
-  CopyOutlined,
   CreditCardOutlined,
   InfoCircleOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import localizedFormat from "dayjs/plugin/localizedFormat";
+import { useRouter } from "next/navigation";
 import {
   getProgramasResumen,
   getCursosSecretaria,
   getPagosPendientes,
   getLeadsPendientes,
-  getEstudiantesActivos,
 } from "../secretaria.api";
-import { crearMatricula, registrarPago } from "../secretaria.actions";
+import { registrarPago } from "../secretaria.actions";
 
 dayjs.locale("es");
 dayjs.extend(localizedFormat);
@@ -97,17 +92,14 @@ const formatCurrency = (value?: number | null) => {
 
 export default function SecretariaDashboard() {
   const { message: messageApi } = App.useApp();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [programas, setProgramas] = useState<any[]>([]);
   const [cursosActivos, setCursosActivos] = useState<any[]>([]);
   const [cursosProximos, setCursosProximos] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [pagosPendientes, setPagosPendientes] = useState<any[]>([]);
-  const [estudiantes, setEstudiantes] = useState<any[]>([]);
   const [registrandoPagoId, setRegistrandoPagoId] = useState<string | null>(null);
-  const [matriculaVisible, setMatriculaVisible] = useState(false);
-  const [matriculaLoading, setMatriculaLoading] = useState(false);
-  const [matriculaForm] = Form.useForm();
 
   const resumenFinanciero = useMemo(() => {
     const totalPendiente = pagosPendientes.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
@@ -134,19 +126,17 @@ export default function SecretariaDashboard() {
   const cargarPanel = useCallback(async () => {
     setLoading(true);
     try {
-      const [programasRes, cursosRes, leadsRes, pagosRes, estudiantesRes] = await Promise.all([
+      const [programasRes, cursosRes, leadsRes, pagosRes] = await Promise.all([
         getProgramasResumen(),
         getCursosSecretaria(),
         getLeadsPendientes(),
         getPagosPendientes(),
-        getEstudiantesActivos(),
       ]);
 
       if (programasRes.error) messageApi.error("No se pudieron cargar los programas");
       if (cursosRes.error) messageApi.error("No se pudieron cargar los cursos");
       if (leadsRes.error) messageApi.error("No se pudieron cargar los leads");
       if (pagosRes.error) messageApi.error("No se pudieron cargar los pagos pendientes");
-      if (estudiantesRes.error) messageApi.error("No se pudieron cargar los estudiantes activos");
 
       setProgramas(programasRes.data || []);
       const cursosData = (cursosRes.data || []) as any[];
@@ -154,7 +144,6 @@ export default function SecretariaDashboard() {
       setCursosProximos(cursosData.filter((curso) => (curso.estado || "").toLowerCase() === "proximo"));
       setLeads(leadsRes.data || []);
       setPagosPendientes(pagosRes.data || []);
-      setEstudiantes(estudiantesRes.data || []);
     } catch (error) {
       console.error("Error cargando panel secretaría", error);
       messageApi.error("Ocurrió un error cargando la información");
@@ -221,41 +210,13 @@ export default function SecretariaDashboard() {
     }
   };
 
-  const handleSharePrograma = (programa: any) => {
-    const resumen = buildProgramaResumen(programa);
-    const url = `https://wa.me/?text=${encodeURIComponent(resumen)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
-
-
-  const abrirMatricula = (cursoId?: string) => {
-    setMatriculaVisible(true);
-    matriculaForm.resetFields();
-    const values: Record<string, string | undefined> = {};
-    if (cursoId) {
-      values.curso_id = cursoId;
-    }
-    matriculaForm.setFieldsValue(values);
-  };
-
-  const cerrarMatricula = () => {
-    setMatriculaVisible(false);
-    setMatriculaLoading(false);
-    matriculaForm.resetFields();
-  };
-
-  const handleCrearMatricula = async (values: { curso_id: string; estudiante_id: string }) => {
-    setMatriculaLoading(true);
-    const { error } = await crearMatricula({ cursoId: values.curso_id, estudianteId: values.estudiante_id });
-    if (error) {
-      messageApi.error("No se pudo crear la matrícula");
-      setMatriculaLoading(false);
-      return;
-    }
-    messageApi.success("Matrícula registrada");
-    cerrarMatricula();
-    cargarPanel();
-  };
+  const abrirMatricula = useCallback(
+    (cursoId?: string) => {
+      const search = cursoId ? `?cursoId=${encodeURIComponent(cursoId)}` : "";
+      router.push(`/matriculas/create${search}`);
+    },
+    [router]
+  );
 
   const handleRegistrarPago = async (pagoId: string) => {
     setRegistrandoPagoId(pagoId);
@@ -623,54 +584,6 @@ export default function SecretariaDashboard() {
           </Row>
         )}
       </Space>
-
-      <Modal
-        title="Registrar nueva matrícula"
-        open={matriculaVisible}
-        onCancel={cerrarMatricula}
-        okText="Guardar"
-        onOk={() => matriculaForm.submit()}
-        confirmLoading={matriculaLoading}
-      >
-        <Form form={matriculaForm} layout="vertical" onFinish={handleCrearMatricula}>
-          <Form.Item
-            label="Selecciona el grupo"
-            name="curso_id"
-            rules={[{ required: true, message: "Elige el grupo" }]}
-          >
-            <Select
-              showSearch
-              placeholder="Selecciona un grupo"
-              filterOption={(input, option) =>
-                (option?.label ?? "").toString().toLowerCase().includes(input.toLowerCase())
-              }
-              options={[...cursosActivos, ...cursosProximos].map((curso) => ({
-                label: `${curso.nombre} · ${formatFecha(curso.fecha_inicio)}`,
-                value: curso.id,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item
-            label="Estudiante"
-            name="estudiante_id"
-            rules={[{ required: true, message: "Selecciona el estudiante" }]}
-          >
-            <Select
-              showSearch
-              placeholder="Selecciona un estudiante"
-              filterOption={(input, option) =>
-                (option?.label ?? "").toString().toLowerCase().includes(input.toLowerCase())
-              }
-              options={estudiantes.map((est) => ({
-                label: est.nombre_completo,
-                value: est.id,
-              }))}
-            />
-          </Form.Item>
-          <Divider style={{ margin: "12px 0" }} />
-          <Text type="secondary">Si el estudiante no aparece, regístralo primero desde el módulo de Estudiantes.</Text>
-        </Form>
-      </Modal>
     </div>
   );
 }
