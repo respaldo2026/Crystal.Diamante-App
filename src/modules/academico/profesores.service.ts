@@ -1,45 +1,51 @@
 // Servicio de profesores: lógica de negocio para dashboard, cursos y métricas
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import dayjs from "dayjs";
+import { fetchProfessorDashboardData } from "@hooks/useProfessorDashboard";
 
 export async function obtenerDashboardProfesor(profesorId: string) {
-  // A. Obtener cursos del profesor
-  const { data: cursosData, error: cursosError } = await supabaseBrowserClient
-    .from("cursos")
-    .select("id, nombre, estado")
-    .eq("profesor_id", profesorId)
-    .neq("estado", "eliminado");
-  if (cursosError) throw cursosError;
+  try {
+    const [dashboard, perfilResult] = await Promise.all([
+      fetchProfessorDashboardData(profesorId),
+      supabaseBrowserClient
+        .from("perfiles")
+        .select("id, nombre_completo, email, telefono, identificacion, created_at, activo")
+        .eq("id", profesorId)
+        .maybeSingle(),
+    ]);
 
-  const cursosActivos = cursosData?.filter((c) => c.estado === "activo") || [];
-  const cursoIds = cursosData?.map((c) => c.id) || [];
+    if (perfilResult.error) {
+      console.error("Error obteniendo perfil del profesor", perfilResult.error);
+    }
 
-  // B. Contar estudiantes activos
-  let totalEstudiantes = 0;
-  if (cursoIds.length > 0) {
-    const { count, error: estError } = await supabaseBrowserClient
-      .from("matriculas")
-      .select("id", { count: "exact", head: true })
-      .eq("estado", "activo")
-      .in("curso_id", cursoIds);
-    if (estError) throw estError;
-    totalEstudiantes = count || 0;
+    const perfil = perfilResult.error ? undefined : perfilResult.data;
+    const profesorNombre = perfil?.nombre_completo || perfil?.email || undefined;
+
+    return {
+      loading: false,
+      profesorNombre,
+      perfil,
+      ...dashboard,
+    };
+  } catch (error) {
+    console.error("Error general obteniendo dashboard del profesor", error);
+    return {
+      loading: false,
+      profesorNombre: undefined,
+      perfil: undefined,
+      stats: {
+        cursosActivos: 0,
+        totalEstudiantes: 0,
+        horasMes: 0,
+        porcentajeAsistencia: 0,
+        promedioCalificaciones: 0,
+        pendientesPorCalificar: 0,
+        asistenciaChart: [],
+        calificacionesChart: [],
+        topCursos: [],
+      },
+      cursos: [],
+      proximasSesiones: [],
+      pendientes: [],
+    };
   }
-
-  // C. Sumar horas dictadas en el mes actual
-  const { data: sesionesData, error: sesError } = await supabaseBrowserClient
-    .from("sesiones_clase")
-    .select("horas_dictadas")
-    .eq("profesor_id", profesorId)
-    .gte("fecha", dayjs().startOf("month").format("YYYY-MM-DD"))
-    .lte("fecha", dayjs().endOf("month").format("YYYY-MM-DD"));
-  if (sesError) throw sesError;
-  const horasMes = sesionesData?.reduce((acc, curr) => acc + (Number(curr.horas_dictadas) || 0), 0) || 0;
-
-  return {
-    cursosActivos: cursosActivos.length,
-    totalEstudiantes,
-    horasMes,
-    cursos: cursosData || [],
-  };
 }

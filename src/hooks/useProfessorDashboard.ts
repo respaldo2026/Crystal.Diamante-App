@@ -3,15 +3,360 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import dayjs from "dayjs";
 
-export const useProfessorDashboard = (profesorId?: string) => {
+export interface ProfesorDashboardCurso {
+  id: string;
+  nombre: string;
+  estado: string;
+  estudiantesActivos: number;
+  asistenciaPromedio?: number | null;
+  promedioNota?: number | null;
+  proximaSesion?: {
+    fecha: string;
+    tema?: string | null;
+  } | null;
+}
+
+export interface ProfesorDashboardStats {
+  cursosActivos: number;
+  totalEstudiantes: number;
+  horasMes: number;
+  porcentajeAsistencia: number;
+  promedioCalificaciones: number;
+  pendientesPorCalificar: number;
+  asistenciaChart: Array<{ fecha: string; porcentaje: number; presentes: number; total: number }>;
+  calificacionesChart: Array<{ fecha: string; promedio: number; evaluaciones: number }>;
+  topCursos: Array<{ nombre: string; estudiantes: number; asistencia?: number | null }>;
+}
+
+export interface ProfesorDashboardSesion {
+  id: string;
+  fecha: string;
+  cursoId: string;
+  curso: string;
+  tema?: string | null;
+  horas?: number | null;
+}
+
+export interface ProfesorDashboardPendiente {
+  id: string;
+  curso: string;
+  cursoId?: string | null;
+  concepto: string;
+  fecha?: string | null;
+  tipo?: string | null;
+}
+
+export interface ProfessorDashboardData {
+  loading: boolean;
+  profesorNombre?: string;
+  stats: ProfesorDashboardStats;
+  cursos: ProfesorDashboardCurso[];
+  proximasSesiones: ProfesorDashboardSesion[];
+  pendientes: ProfesorDashboardPendiente[];
+}
+
+const emptyStats: ProfesorDashboardStats = {
+  cursosActivos: 0,
+  totalEstudiantes: 0,
+  horasMes: 0,
+  porcentajeAsistencia: 0,
+  promedioCalificaciones: 0,
+  pendientesPorCalificar: 0,
+  asistenciaChart: [],
+  calificacionesChart: [],
+  topCursos: [],
+};
+
+const isAsistenciaPositiva = (estado?: string | null) => {
+  if (!estado) return false;
+  const normalized = estado
+    .toLowerCase()
+    .replace("á", "a")
+    .replace("é", "e")
+    .replace("í", "i")
+    .replace("ó", "o")
+    .replace("ú", "u");
+  return normalized.includes("asistio") || normalized.includes("presente");
+};
+
+const safeNumber = (value: number) => (Number.isFinite(value) ? value : 0);
+
+export const fetchProfessorDashboardData = async (
+  profesorId: string,
+): Promise<Omit<ProfessorDashboardData, "loading" | "profesorNombre">> => {
+  const cursosResponse = await supabaseBrowserClient
+    .from("cursos")
+    .select("id, nombre, estado")
+    .eq("profesor_id", profesorId)
+    .neq("estado", "eliminado")
+    .order("nombre", { ascending: true });
+
+  if (cursosResponse.error) {
+    console.error("Error obteniendo cursos del profesor", cursosResponse.error);
+  }
+
+  const cursosData = cursosResponse.data || [];
+  const cursosActivos = cursosData.filter((c) => c.estado === "activo") || [];
+  const cursoIds = cursosData.map((c) => c.id) || [];
+
+  const cursoNombreMap = new Map<string, string>(
+    cursosData.map((curso) => [curso.id, curso.nombre]),
+  );
+
+  const startOfMonth = dayjs().startOf("month").format("YYYY-MM-DD");
+  const endOfMonth = dayjs().endOf("month").format("YYYY-MM-DD");
+
+  const [matriculasResult, sesionesMesResult, proximasSesionesResult] = await Promise.all([
+    cursoIds.length > 0
+      ? supabaseBrowserClient
+          .from("matriculas")
+          .select("id, curso_id")
+          .eq("estado", "activo")
+          .in("curso_id", cursoIds)
+      : Promise.resolve({ data: [], error: null }),
+    supabaseBrowserClient
+      .from("sesiones_clase")
+      .select("id, fecha, horas_dictadas, curso_id, tema_visto")
+      .eq("profesor_id", profesorId)
+      .gte("fecha", startOfMonth)
+      .lte("fecha", endOfMonth)
+      .order("fecha", { ascending: true }),
+    supabaseBrowserClient
+      .from("sesiones_clase")
+      .select("id, fecha, horas_dictadas, tema_visto, curso_id")
+      .eq("profesor_id", profesorId)
+      .gte("fecha", dayjs().startOf("day").format("YYYY-MM-DD"))
+      .order("fecha", { ascending: true })
+      .limit(6),
+  ]);
+
+  if (matriculasResult.error) {
+    console.error("Error obteniendo matrículas del profesor", matriculasResult.error);
+  }
+  if (sesionesMesResult.error) {
+    console.error("Error obteniendo sesiones del mes", sesionesMesResult.error);
+  }
+  if (proximasSesionesResult.error) {
+    console.error("Error obteniendo próximas sesiones", proximasSesionesResult.error);
+  }
+
+  const matriculasData = matriculasResult.data || [];
+  const sesionesMesData = sesionesMesResult.data || [];
+  const proximasSesionesData = proximasSesionesResult.data || [];
+
+  const matriculaIds = matriculasData.map((matricula: any) => matricula.id);
+
+  const [asistenciasResult, calificacionesResult] = await Promise.all([
+    matriculaIds.length > 0
+      ? supabaseBrowserClient
+          .from("asistencias")
+          .select("id, fecha, estado, matricula_id, matriculas:matriculas!asistencias_matricula_id_fkey(curso_id)")
+          .in("matricula_id", matriculaIds)
+          .gte("fecha", dayjs().subtract(30, "day").format("YYYY-MM-DD"))
+          .order("fecha", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    matriculaIds.length > 0
+      ? supabaseBrowserClient
+          .from("calificaciones")
+          .select("id, concepto, nota, calificacion, fecha_evaluacion, tipo_evaluacion, matriculas:matriculas!calificaciones_matricula_id_fkey(curso_id)")
+          .in("matricula_id", matriculaIds)
+          .gte("fecha_evaluacion", dayjs().subtract(90, "day").format("YYYY-MM-DD"))
+          .order("fecha_evaluacion", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (asistenciasResult.error) {
+    console.error("Error obteniendo asistencias", asistenciasResult.error);
+  }
+  if (calificacionesResult.error) {
+    console.error("Error obteniendo calificaciones", calificacionesResult.error);
+  }
+
+  const asistenciasData = asistenciasResult.data || [];
+  const calificacionesData = calificacionesResult.data || [];
+
+  const estudiantesPorCurso = new Map<string, number>();
+  matriculasData.forEach((matricula: any) => {
+    const actual = estudiantesPorCurso.get(matricula.curso_id) || 0;
+    estudiantesPorCurso.set(matricula.curso_id, actual + 1);
+  });
+
+  const horasMes = sesionesMesData.reduce(
+    (total: number, sesion: any) => total + safeNumber(Number(sesion.horas_dictadas) || 0),
+    0,
+  );
+
+  const asistenciaPorFecha = new Map<string, { presentes: number; total: number }>();
+  const asistenciaPorCurso = new Map<string, { presentes: number; total: number }>();
+
+  asistenciasData.forEach((asistencia: any) => {
+    const fechaClave = dayjs(asistencia.fecha).format("DD MMM");
+    const cursoId = asistencia.matriculas?.curso_id;
+    const present = isAsistenciaPositiva(asistencia.estado);
+
+    const acumuladoFecha = asistenciaPorFecha.get(fechaClave) || { presentes: 0, total: 0 };
+    asistenciaPorFecha.set(fechaClave, {
+      presentes: acumuladoFecha.presentes + (present ? 1 : 0),
+      total: acumuladoFecha.total + 1,
+    });
+
+    if (cursoId) {
+      const acumuladoCurso = asistenciaPorCurso.get(cursoId) || { presentes: 0, total: 0 };
+      asistenciaPorCurso.set(cursoId, {
+        presentes: acumuladoCurso.presentes + (present ? 1 : 0),
+        total: acumuladoCurso.total + 1,
+      });
+    }
+  });
+
+  const asistenciaChart = Array.from(asistenciaPorFecha.entries())
+    .map(([fecha, values]) => {
+      const porcentaje = values.total > 0 ? Math.round((values.presentes / values.total) * 100) : 0;
+      return {
+        fecha,
+        porcentaje,
+        presentes: values.presentes,
+        total: values.total,
+      };
+    })
+    .slice(-8);
+
+  const totalAsistencias = asistenciasData.length;
+  const totalAsistenciasPositivas = asistenciasData.filter((a: any) => isAsistenciaPositiva(a.estado)).length;
+  const porcentajeAsistencia = totalAsistencias > 0
+    ? Math.round((totalAsistenciasPositivas / totalAsistencias) * 100)
+    : 0;
+
+  const calificacionesPorFecha = new Map<string, { suma: number; total: number }>();
+  const calificacionesPorCurso = new Map<string, { suma: number; total: number }>();
+  const notasValidas: number[] = [];
+
+  calificacionesData.forEach((calificacion: any) => {
+    const nota = Number(calificacion.nota ?? calificacion.calificacion);
+    if (!Number.isFinite(nota)) return;
+    notasValidas.push(nota);
+    const fechaClave = calificacion.fecha_evaluacion
+      ? dayjs(calificacion.fecha_evaluacion).format("DD MMM")
+      : "Sin fecha";
+
+    const acumuladoFecha = calificacionesPorFecha.get(fechaClave) || { suma: 0, total: 0 };
+    calificacionesPorFecha.set(fechaClave, {
+      suma: acumuladoFecha.suma + nota,
+      total: acumuladoFecha.total + 1,
+    });
+
+    const cursoId = calificacion.matriculas?.curso_id;
+    if (cursoId) {
+      const acumuladoCurso = calificacionesPorCurso.get(cursoId) || { suma: 0, total: 0 };
+      calificacionesPorCurso.set(cursoId, {
+        suma: acumuladoCurso.suma + nota,
+        total: acumuladoCurso.total + 1,
+      });
+    }
+  });
+
+  const calificacionesChart = Array.from(calificacionesPorFecha.entries())
+    .map(([fecha, values]) => {
+      const promedio = values.total > 0 ? Number((values.suma / values.total).toFixed(1)) : 0;
+      return {
+        fecha,
+        promedio,
+        evaluaciones: values.total,
+      };
+    })
+    .slice(-8);
+
+  const promedioCalificaciones = notasValidas.length > 0
+    ? Number((notasValidas.reduce((acc, nota) => acc + nota, 0) / notasValidas.length).toFixed(1))
+    : 0;
+
+  const proximasSesionesList: ProfesorDashboardSesion[] = proximasSesionesData.map((sesion: any) => ({
+    id: sesion.id,
+    fecha: sesion.fecha,
+    cursoId: sesion.curso_id,
+    curso: cursoNombreMap.get(sesion.curso_id) || "Curso",
+    tema: sesion.tema_visto,
+    horas: Number(sesion.horas_dictadas) || null,
+  }));
+
+  const proximasSesionPorCurso = new Map<string, { fecha: string; tema?: string | null }>();
+  proximasSesionesList.forEach((sesion) => {
+    if (!proximasSesionPorCurso.has(sesion.cursoId)) {
+      proximasSesionPorCurso.set(sesion.cursoId, { fecha: sesion.fecha, tema: sesion.tema });
+    }
+  });
+
+  const pendientesList: ProfesorDashboardPendiente[] = calificacionesData
+    .filter((calificacion: any) =>
+      (calificacion.nota === null || calificacion.nota === undefined) &&
+      (calificacion.calificacion === null || calificacion.calificacion === undefined),
+    )
+    .map((calificacion: any) => ({
+      id: calificacion.id,
+      curso: cursoNombreMap.get(calificacion.matriculas?.curso_id) || "Curso",
+      cursoId: calificacion.matriculas?.curso_id || null,
+      concepto: calificacion.concepto || calificacion.tipo_evaluacion || "Sin concepto",
+      fecha: calificacion.fecha_evaluacion,
+      tipo: calificacion.tipo_evaluacion,
+    }));
+
+  const cursosEnriquecidos: ProfesorDashboardCurso[] = (cursosData || []).map((curso: any) => {
+    const asistencia = asistenciaPorCurso.get(curso.id);
+    const promedioCurso = calificacionesPorCurso.get(curso.id);
+    return {
+      id: curso.id,
+      nombre: curso.nombre,
+      estado: curso.estado,
+      estudiantesActivos: estudiantesPorCurso.get(curso.id) || 0,
+      asistenciaPromedio:
+        asistencia && asistencia.total > 0
+          ? Math.round((asistencia.presentes / asistencia.total) * 100)
+          : null,
+      promedioNota:
+        promedioCurso && promedioCurso.total > 0
+          ? Number((promedioCurso.suma / promedioCurso.total).toFixed(1))
+          : null,
+      proximaSesion: proximasSesionPorCurso.get(curso.id) || null,
+    };
+  });
+
+  const topCursos = cursosEnriquecidos
+    .filter((curso) => (curso.estudiantesActivos || 0) > 0)
+    .sort((a, b) => (b.estudiantesActivos || 0) - (a.estudiantesActivos || 0))
+    .slice(0, 3)
+    .map((curso) => ({
+      nombre: curso.nombre,
+      estudiantes: curso.estudiantesActivos,
+      asistencia: curso.asistenciaPromedio ?? null,
+    }));
+
+  const statsPayload: ProfesorDashboardStats = {
+    cursosActivos: cursosActivos.length,
+    totalEstudiantes: matriculasData.length,
+    horasMes,
+    porcentajeAsistencia,
+    promedioCalificaciones,
+    pendientesPorCalificar: pendientesList.length,
+    asistenciaChart,
+    calificacionesChart,
+    topCursos,
+  };
+
+  return {
+    stats: statsPayload,
+    cursos: cursosEnriquecidos,
+    proximasSesiones: proximasSesionesList,
+    pendientes: pendientesList,
+  };
+};
+
+export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardData => {
   const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    cursosActivos: 0,
-    totalEstudiantes: 0,
-    horasMes: 0,
-  });
-  const [cursos, setCursos] = useState<any[]>([]);
+  const [stats, setStats] = useState<ProfesorDashboardStats>(emptyStats);
+  const [cursos, setCursos] = useState<ProfesorDashboardCurso[]>([]);
+  const [proximasSesiones, setProximasSesiones] = useState<ProfesorDashboardSesion[]>([]);
+  const [pendientes, setPendientes] = useState<ProfesorDashboardPendiente[]>([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -26,51 +371,17 @@ export const useProfessorDashboard = (profesorId?: string) => {
 
       setLoading(true);
       try {
-        // A. Obtener Cursos del profesor (se mantiene como primera llamada)
-        const cursosPromise = supabaseBrowserClient
-          .from("cursos")
-          .select("id, nombre, estado")
-          .eq("profesor_id", targetId)
-          .neq("estado", "eliminado"); // Excluir eliminados (soft delete)
-
-        const { data: cursosData, error: cursosError } = await cursosPromise;
-        if (cursosError) throw cursosError;
-
-        const cursosActivos = cursosData?.filter((c) => c.estado === "activo") || [];
-        const cursoIds = cursosData?.map((c) => c.id) || [];
-
-        // B. y C. se ejecutan en paralelo
-        const [estudiantesCountResult, sesionesDataResult] = await Promise.all([
-          // B. Contar Estudiantes Activos
-          cursoIds.length > 0
-            ? supabaseBrowserClient
-            .from("matriculas")
-            .select("id", { count: "exact", head: true })
-            .eq("estado", "activo")
-            .in("curso_id", cursoIds)
-            : Promise.resolve({ count: 0, error: null }),
-          
-          // C. Sumar Horas Dictadas en el mes actual
-          supabaseBrowserClient
-            .from("sesiones_clase")
-            .select("horas_dictadas")
-            .eq("profesor_id", targetId)
-            .gte("fecha", dayjs().startOf("month").format("YYYY-MM-DD"))
-            .lte("fecha", dayjs().endOf("month").format("YYYY-MM-DD")),
-        ]);
-
-        const totalEstudiantes = estudiantesCountResult.count || 0;
-        const sesionesData = sesionesDataResult.data || [];
-        const horasMes = sesionesData?.reduce((acc, curr) => acc + (Number(curr.horas_dictadas) || 0), 0) || 0;
-
-        setStats({
-          cursosActivos: cursosActivos.length,
-          totalEstudiantes,
-          horasMes,
-        });
-        setCursos(cursosData || []);
+        const data = await fetchProfessorDashboardData(targetId);
+        setStats(data.stats);
+        setCursos(data.cursos);
+        setProximasSesiones(data.proximasSesiones);
+        setPendientes(data.pendientes);
       } catch (error) {
-        // Manejo silencioso o reporte a servicio de logs
+        console.error("Error general obteniendo dashboard del profesor", error);
+        setStats(emptyStats);
+        setCursos([]);
+        setProximasSesiones([]);
+        setPendientes([]);
       } finally {
         setLoading(false);
       }
@@ -78,6 +389,13 @@ export const useProfessorDashboard = (profesorId?: string) => {
 
     fetchDashboard();
   }, [profesorId, currentUser, userLoading]);
-
-  return { loading, stats, cursos };
+  
+  return {
+    loading,
+    profesorNombre: currentUser?.nombre_completo || currentUser?.email || undefined,
+    stats,
+    cursos,
+    proximasSesiones,
+    pendientes,
+  };
 };
