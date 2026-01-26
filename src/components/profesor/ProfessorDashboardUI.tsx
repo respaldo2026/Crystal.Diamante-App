@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { Card, Statistic, Row, Col, Spin, List, Typography, Button, Space, Tag, Divider, Progress } from "antd";
+import React, { useMemo, useState } from "react";
+import { Card, Statistic, Row, Col, Spin, List, Typography, Button, Space, Tag, Divider, Progress, Drawer } from "antd";
 import { Line, Column } from "@ant-design/plots";
 import {
   UserAddOutlined,
@@ -13,6 +13,7 @@ import {
   StarOutlined,
   FormOutlined,
   ArrowRightOutlined,
+  DollarCircleOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { ProfessorDashboardData } from "@hooks/useProfessorDashboard";
@@ -32,6 +33,10 @@ const fallbackStats: ProfessorDashboardData["stats"] = {
   asistenciaChart: [],
   calificacionesChart: [],
   topCursos: [],
+  horasQuincena: 0,
+  proyeccionQuincena: 0,
+  tarifaHora: null,
+  totalPagadoMes: 0,
 };
 
 export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dashboard, onOpenCourse }) => {
@@ -42,12 +47,31 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     cursos: [],
     proximasSesiones: [],
     pendientes: [],
+    pagos: [],
   };
 
-  const { loading, stats, cursos, proximasSesiones, pendientes, profesorNombre } = resolvedDashboard;
+  const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre } = resolvedDashboard;
   const statsData = stats ?? fallbackStats;
   const proximasSesionesData = proximasSesiones || [];
   const pendientesData = pendientes || [];
+  const pagosData = pagos || [];
+  const [financialOpen, setFinancialOpen] = useState(false);
+
+  const currencyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat("es-CO", {
+        style: "currency",
+        currency: "COP",
+        maximumFractionDigits: 0,
+      }),
+    [],
+  );
+  const proyeccionLabel = currencyFormatter.format(statsData.proyeccionQuincena || 0);
+  const pagadoMesLabel = currencyFormatter.format(statsData.totalPagadoMes || 0);
+  const tarifaHoraLabel =
+    typeof statsData.tarifaHora === "number" && Number.isFinite(statsData.tarifaHora)
+      ? currencyFormatter.format(statsData.tarifaHora)
+      : "Sin definir";
 
   const asistenciaConfig = {
     data: statsData.asistenciaChart || [],
@@ -147,11 +171,13 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                 Visualiza el pulso de tus cursos, haz seguimiento a tus estudiantes y mantén tus clases listas.
               </Typography.Paragraph>
               <Space size="middle" wrap>
-                <Button type="primary" icon={<CheckCircleOutlined />} size="large">
-                  Tomar asistencia
-                </Button>
-                <Button ghost icon={<FileTextOutlined />} size="large">
-                  Registrar calificación
+                <Button
+                  type="primary"
+                  icon={<DollarCircleOutlined />}
+                  size="large"
+                  onClick={() => setFinancialOpen(true)}
+                >
+                  Resumen financiero
                 </Button>
                 <Button ghost icon={<UserAddOutlined />} size="large">
                   Invitar estudiante
@@ -184,9 +210,26 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                   <Col span={12}>
                     <Statistic
                       prefix={<ClockCircleOutlined style={{ color: "#fbbf24" }} />}
-                      title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Horas dictadas</span>}
+                      title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Horas del mes</span>}
                       value={statsData.horasMes}
                       suffix="hrs"
+                      valueStyle={{ color: "#fff", fontWeight: 600 }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Statistic
+                      prefix={<CalendarOutlined style={{ color: "#38bdf8" }} />}
+                      title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Horas quincena</span>}
+                      value={statsData.horasQuincena}
+                      suffix="hrs"
+                      valueStyle={{ color: "#fff", fontWeight: 600 }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Statistic
+                      prefix={<DollarCircleOutlined style={{ color: "#34d399" }} />}
+                      title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Proyección quincena</span>}
+                      value={proyeccionLabel}
                       valueStyle={{ color: "#fff", fontWeight: 600 }}
                     />
                   </Col>
@@ -221,13 +264,20 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             icon: <FormOutlined style={{ color: "#f97316" }} />,
             description: statsData.pendientesPorCalificar > 0 ? "Revisa tus evaluaciones" : "Todo al día",
           }, {
-            key: "cursos",
-            title: "Cursos activos",
-            value: statsData.cursosActivos,
-            icon: <RiseOutlined style={{ color: "#2563eb" }} />,
-            description: `${cursos.length} totales asignados`,
+            key: "horas",
+            title: "Horas registradas",
+            value: statsData.horasMes,
+            suffix: "hrs",
+            icon: <ClockCircleOutlined style={{ color: "#2563eb" }} />,
+            description: "Mes en curso",
+          }, {
+            key: "pagos",
+            title: "Pagado este mes",
+            value: pagadoMesLabel,
+            icon: <DollarCircleOutlined style={{ color: "#059669" }} />,
+            description: "Incluye nómina y extras",
           }].map((item) => (
-            <Col key={item.key} xs={24} md={8}>
+            <Col key={item.key} xs={24} md={12} xl={6}>
               <Card
                 bordered={false}
                 style={{ borderRadius: 20, height: "100%", boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
@@ -238,7 +288,9 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                     <Typography.Text type="secondary">{item.title}</Typography.Text>
                     <Typography.Title level={3} style={{ margin: "8px 0" }}>
                       {item.value}
-                      {item.suffix ? <Typography.Text style={{ fontSize: 16, marginLeft: 4 }}>{item.suffix}</Typography.Text> : null}
+                      {item.suffix && typeof item.value === "number" ? (
+                        <Typography.Text style={{ fontSize: 16, marginLeft: 4 }}>{item.suffix}</Typography.Text>
+                      ) : null}
                     </Typography.Title>
                     <Typography.Text style={{ color: "#667085" }}>{item.description}</Typography.Text>
                   </div>
@@ -394,13 +446,31 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       onOpenCourse
                         ? [
                             <Button
+                              key={`asistencia-${curso.id}`}
+                              type="link"
+                              size="small"
+                              icon={<CheckCircleOutlined />}
+                              onClick={() => onOpenCourse(curso.id)}
+                            >
+                              Tomar asistencia
+                            </Button>,
+                            <Button
+                              key={`calificar-${curso.id}`}
+                              type="link"
+                              size="small"
+                              icon={<FileTextOutlined />}
+                              onClick={() => onOpenCourse(curso.id)}
+                            >
+                              Calificar
+                            </Button>,
+                            <Button
                               key={`curso-${curso.id}`}
                               type="link"
                               size="small"
                               icon={<ArrowRightOutlined />}
                               onClick={() => onOpenCourse(curso.id)}
                             >
-                              Entrar al curso
+                              Ver detalles
                             </Button>,
                           ]
                         : undefined
@@ -446,6 +516,92 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             </Card>
           </Col>
         </Row>
+
+        <Drawer
+          title="Resumen financiero"
+          placement="right"
+          width={420}
+          onClose={() => setFinancialOpen(false)}
+          open={financialOpen}
+        >
+          <Space direction="vertical" size="large" style={{ width: "100%" }}>
+            <Row gutter={[16, 16]}>
+              {[{
+                key: "tarifa",
+                title: "Tarifa por hora",
+                value: tarifaHoraLabel,
+              }, {
+                key: "horasMes",
+                title: "Horas del mes",
+                value: `${statsData.horasMes} hrs`,
+              }, {
+                key: "horasQuincena",
+                title: "Horas quincena",
+                value: `${statsData.horasQuincena} hrs`,
+              }, {
+                key: "proyeccion",
+                title: "Proyección quincena",
+                value: proyeccionLabel,
+              }, {
+                key: "pagadoMes",
+                title: "Pagado este mes",
+                value: pagadoMesLabel,
+              }].map((item, index) => (
+                <Col key={item.key} span={index === 4 ? 24 : 12}>
+                  <Card bordered={false} style={{ borderRadius: 16, background: "#f8fafc" }}>
+                    <Typography.Text type="secondary">{item.title}</Typography.Text>
+                    <Typography.Title level={4} style={{ marginTop: 8 }}>
+                      {item.value}
+                    </Typography.Title>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+
+            <div>
+              <Typography.Title level={5} style={{ marginBottom: 16 }}>Pagos recientes</Typography.Title>
+              <List
+                dataSource={pagosData.slice(0, 6)}
+                locale={{ emptyText: "Sin pagos registrados" }}
+                renderItem={(pago) => {
+                  const fechaLabel = pago.fecha ? dayjs(pago.fecha).format("DD MMM YYYY") : "Sin fecha";
+                  const periodoLabel =
+                    pago.origen === "nomina" && pago.periodo?.inicio && pago.periodo?.fin
+                      ? `${dayjs(pago.periodo.inicio).format("DD MMM")} - ${dayjs(pago.periodo.fin).format("DD MMM")}`
+                      : null;
+                  return (
+                    <List.Item>
+                      <List.Item.Meta
+                        title={
+                          <Space split={<Divider type="vertical" />}>
+                            <span>{currencyFormatter.format(pago.monto || 0)}</span>
+                            <span>{pago.tipo}</span>
+                            <Tag color={pago.origen === "nomina" ? "blue" : "gold"}>
+                              {pago.origen === "nomina" ? "Nómina" : "Extra"}
+                            </Tag>
+                          </Space>
+                        }
+                        description={
+                          <div>
+                            <Space split={<Divider type="vertical" />} style={{ color: "#475467" }}>
+                              <span>{fechaLabel}</span>
+                              <span>{pago.concepto}</span>
+                            </Space>
+                            {periodoLabel ? (
+                              <Typography.Text type="secondary" style={{ display: "block", marginTop: 4 }}>
+                                Periodo: {periodoLabel}
+                              </Typography.Text>
+                            ) : null}
+                          </div>
+                        }
+                      />
+                    </List.Item>
+                  );
+                }}
+              />
+            </div>
+          </Space>
+        </Drawer>
       </div>
     </div>
   );

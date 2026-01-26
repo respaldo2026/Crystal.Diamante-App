@@ -26,6 +26,10 @@ export interface ProfesorDashboardStats {
   asistenciaChart: Array<{ fecha: string; porcentaje: number; presentes: number; total: number }>;
   calificacionesChart: Array<{ fecha: string; promedio: number; evaluaciones: number }>;
   topCursos: Array<{ nombre: string; estudiantes: number; asistencia?: number | null }>;
+  horasQuincena: number;
+  proyeccionQuincena: number;
+  tarifaHora?: number | null;
+  totalPagadoMes: number;
 }
 
 export interface ProfesorDashboardSesion {
@@ -46,6 +50,16 @@ export interface ProfesorDashboardPendiente {
   tipo?: string | null;
 }
 
+export interface ProfesorDashboardPago {
+  id: string;
+  fecha: string;
+  monto: number;
+  tipo: string;
+  concepto: string;
+  origen: "nomina" | "extra";
+  periodo?: { inicio?: string | null; fin?: string | null } | null;
+}
+
 export interface ProfessorDashboardData {
   loading: boolean;
   profesorNombre?: string;
@@ -53,6 +67,7 @@ export interface ProfessorDashboardData {
   cursos: ProfesorDashboardCurso[];
   proximasSesiones: ProfesorDashboardSesion[];
   pendientes: ProfesorDashboardPendiente[];
+  pagos: ProfesorDashboardPago[];
 }
 
 const emptyStats: ProfesorDashboardStats = {
@@ -65,6 +80,10 @@ const emptyStats: ProfesorDashboardStats = {
   asistenciaChart: [],
   calificacionesChart: [],
   topCursos: [],
+  horasQuincena: 0,
+  proyeccionQuincena: 0,
+  tarifaHora: null,
+  totalPagadoMes: 0,
 };
 
 const isAsistenciaPositiva = (estado?: string | null) => {
@@ -146,6 +165,36 @@ export const fetchProfessorDashboardData = async (
 
   const matriculaIds = matriculasData.map((matricula: any) => matricula.id);
 
+  const [profesorInfoResult, pagosNominaResult, pagosProfesoresResult] = await Promise.all([
+    supabaseBrowserClient
+      .from("profesores_info")
+      .select("valor_hora, tipo_contrato")
+      .eq("perfil_id", profesorId)
+      .maybeSingle(),
+    supabaseBrowserClient
+      .from("pagos_nomina")
+      .select("id, fecha_pago, total_pagado, observaciones, fecha_inicio_periodo, fecha_fin_periodo")
+      .eq("profesor_id", profesorId)
+      .order("fecha_pago", { ascending: false })
+      .limit(10),
+    supabaseBrowserClient
+      .from("pagos_profesores")
+      .select("id, fecha_pago, monto, tipo, nota")
+      .eq("profesor_id", profesorId)
+      .order("fecha_pago", { ascending: false })
+      .limit(10),
+  ]);
+
+  if (profesorInfoResult.error) {
+    console.error("Error obteniendo info del profesor", profesorInfoResult.error);
+  }
+  if (pagosNominaResult.error) {
+    console.error("Error obteniendo pagos de nómina", pagosNominaResult.error);
+  }
+  if (pagosProfesoresResult.error) {
+    console.error("Error obteniendo pagos extraordinarios", pagosProfesoresResult.error);
+  }
+
   const [asistenciasResult, calificacionesResult] = await Promise.all([
     matriculaIds.length > 0
       ? supabaseBrowserClient
@@ -185,6 +234,57 @@ export const fetchProfessorDashboardData = async (
     (total: number, sesion: any) => total + safeNumber(Number(sesion.horas_dictadas) || 0),
     0,
   );
+
+  const ahora = dayjs();
+  const quincenaInicio = ahora.date() <= 15 ? ahora.startOf("month") : ahora.date(16).startOf("day");
+  const quincenaFin = ahora.date() <= 15 ? ahora.date(15).endOf("day") : ahora.endOf("month");
+
+  const horasQuincena = sesionesMesData.reduce((total: number, sesion: any) => {
+    const fechaSesion = dayjs(sesion.fecha);
+    if (fechaSesion.isBetween(quincenaInicio, quincenaFin, "day", "[]")) {
+      return total + safeNumber(Number(sesion.horas_dictadas) || 0);
+    }
+    return total;
+  }, 0);
+
+  const valorHora = profesorInfoResult.data?.valor_hora ? Number(profesorInfoResult.data.valor_hora) : null;
+  const proyeccionQuincena = valorHora ? Number((valorHora * horasQuincena).toFixed(2)) : 0;
+
+  const pagosNominaData = pagosNominaResult.data || [];
+  const pagosProfesoresData = pagosProfesoresResult.data || [];
+
+  const mesActualInicio = ahora.startOf("month");
+  const mesActualFin = ahora.endOf("month");
+
+  const totalPagadoMes = [...pagosNominaData, ...pagosProfesoresData].reduce((total, pago: any) => {
+    const fecha = pago.fecha_pago ? dayjs(pago.fecha_pago) : null;
+    if (fecha && fecha.isBetween(mesActualInicio, mesActualFin, "day", "[]")) {
+      const monto = Number(pago.total_pagado ?? pago.monto ?? 0);
+      return total + (Number.isFinite(monto) ? monto : 0);
+    }
+    return total;
+  }, 0);
+
+  const pagosRecientes: ProfesorDashboardPago[] = [
+    ...(pagosNominaData || []).map((pago: any) => ({
+      id: pago.id,
+      fecha: pago.fecha_pago,
+      monto: Number(pago.total_pagado || 0),
+      tipo: "Nómina",
+      concepto: pago.observaciones || "Pago de nómina",
+      origen: "nomina" as const,
+      periodo: { inicio: pago.fecha_inicio_periodo, fin: pago.fecha_fin_periodo },
+    })),
+    ...(pagosProfesoresData || []).map((pago: any) => ({
+      id: pago.id,
+      fecha: pago.fecha_pago,
+      monto: Number(pago.monto || 0),
+      tipo: pago.tipo || "Pago",
+      concepto: pago.nota || "Pago registrado",
+      origen: "extra" as const,
+      periodo: null,
+    })),
+  ].sort((a, b) => dayjs(b.fecha).valueOf() - dayjs(a.fecha).valueOf());
 
   const asistenciaPorFecha = new Map<string, { presentes: number; total: number }>();
   const asistenciaPorCurso = new Map<string, { presentes: number; total: number }>();
@@ -340,6 +440,10 @@ export const fetchProfessorDashboardData = async (
     asistenciaChart,
     calificacionesChart,
     topCursos,
+    horasQuincena,
+    proyeccionQuincena,
+    tarifaHora: valorHora,
+    totalPagadoMes: Number(totalPagadoMes.toFixed(2)),
   };
 
   return {
@@ -347,6 +451,7 @@ export const fetchProfessorDashboardData = async (
     cursos: cursosEnriquecidos,
     proximasSesiones: proximasSesionesList,
     pendientes: pendientesList,
+    pagos: pagosRecientes,
   };
 };
 
@@ -357,6 +462,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
   const [cursos, setCursos] = useState<ProfesorDashboardCurso[]>([]);
   const [proximasSesiones, setProximasSesiones] = useState<ProfesorDashboardSesion[]>([]);
   const [pendientes, setPendientes] = useState<ProfesorDashboardPendiente[]>([]);
+  const [pagos, setPagos] = useState<ProfesorDashboardPago[]>([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -376,12 +482,14 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
         setCursos(data.cursos);
         setProximasSesiones(data.proximasSesiones);
         setPendientes(data.pendientes);
+        setPagos(data.pagos);
       } catch (error) {
         console.error("Error general obteniendo dashboard del profesor", error);
         setStats(emptyStats);
         setCursos([]);
         setProximasSesiones([]);
         setPendientes([]);
+        setPagos([]);
       } finally {
         setLoading(false);
       }
@@ -397,5 +505,6 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
     cursos,
     proximasSesiones,
     pendientes,
+    pagos,
   };
 };
