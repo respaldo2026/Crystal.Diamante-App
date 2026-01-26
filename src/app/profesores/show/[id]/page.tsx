@@ -108,7 +108,7 @@ export default function ShowProfesorDashboard() {
           label: "Resumen",
           children: (
             <Space direction="vertical" size="large" style={{ width: "100%" }}>
-              <Card bordered={false} style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}>
+              <Card variant="borderless" style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}>
                 <Row gutter={[24, 24]} align="middle">
                   <Col xs={24} md={6}>
                     <Avatar size={96} style={{ backgroundColor: "#1e3a8a", fontSize: 36 }}>
@@ -149,24 +149,24 @@ export default function ShowProfesorDashboard() {
 
               <Row gutter={[24, 24]}>
                 <Col xs={24} md={8}>
-                  <Card bordered={false} style={{ borderRadius: 16, height: "100%" }}>
+                  <Card variant="borderless" style={{ borderRadius: 16, height: "100%" }}>
                     <Statistic title="Cursos activos" value={stats?.cursosActivos ?? 0} suffix="cursos" />
                   </Card>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Card bordered={false} style={{ borderRadius: 16, height: "100%" }}>
+                  <Card variant="borderless" style={{ borderRadius: 16, height: "100%" }}>
                     <Statistic title="Estudiantes en seguimiento" value={stats?.totalEstudiantes ?? 0} suffix="est." />
                   </Card>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Card bordered={false} style={{ borderRadius: 16, height: "100%" }}>
+                  <Card variant="borderless" style={{ borderRadius: 16, height: "100%" }}>
                     <Statistic title="Horas dictadas este mes" value={stats?.horasMes ?? 0} suffix="hrs" />
                   </Card>
                 </Col>
               </Row>
 
               <Card
-                bordered={false}
+                variant="borderless"
                 title={<Space><BookOutlined /> Cursos asignados</Space>}
                 style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
               >

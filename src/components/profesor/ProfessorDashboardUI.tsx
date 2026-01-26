@@ -152,7 +152,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     >
       <div style={{ maxWidth: 1180, margin: "0 auto" }}>
         <Card
-          bordered={false}
+          variant="borderless"
           style={{
             borderRadius: 24,
             background: "linear-gradient(135deg, #1e3a8a 0%, #111827 100%)",
@@ -160,7 +160,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             color: "#fff",
             boxShadow: "0 20px 45px -24px rgba(30,64,175,0.65)",
           }}
-          bodyStyle={{ padding: "36px 40px" }}
+          styles={{ body: { padding: "36px 40px" } }}
         >
           <Row gutter={[24, 24]} align="middle">
             <Col xs={24} md={14}>
@@ -189,9 +189,9 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             </Col>
             <Col xs={24} md={10}>
               <Card
-                bordered={false}
+                variant="borderless"
                 style={{ borderRadius: 20, background: "rgba(17, 24, 39, 0.55)", color: "#fff" }}
-                bodyStyle={{ padding: 24 }}
+                styles={{ body: { padding: 24 } }}
               >
                 <Row gutter={[16, 16]}>
                   <Col span={12}>
@@ -282,7 +282,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           }].map((item) => (
             <Col key={item.key} xs={24} md={12} xl={6}>
               <Card
-                bordered={false}
+                variant="borderless"
                 style={{ borderRadius: 20, height: "100%", boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
               >
                 <Space size="large" align="start">
@@ -306,7 +306,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
         <Row gutter={[24, 24]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={12}>
             <Card
-              bordered={false}
+              variant="borderless"
               title={<span style={{ fontWeight: 600 }}>Tendencia de asistencia</span>}
               extra={<Tag color="green">Últimas 8 sesiones</Tag>}
               style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
@@ -316,7 +316,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           </Col>
           <Col xs={24} lg={12}>
             <Card
-              bordered={false}
+              variant="borderless"
               title={<span style={{ fontWeight: 600 }}>Desempeño académico</span>}
               extra={<Tag color="blue">Evaluaciones</Tag>}
               style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
@@ -329,7 +329,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
         <Row gutter={[24, 24]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={8}>
             <Card
-              bordered={false}
+              variant="borderless"
               title={<Space><RiseOutlined />Top cursos</Space>}
               style={{ borderRadius: 20, marginBottom: 24, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
             >
@@ -353,7 +353,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             </Card>
 
             <Card
-              bordered={false}
+              variant="borderless"
               title={<Space><FormOutlined />Pendientes por calificar</Space>}
               style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
             >
@@ -395,7 +395,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
 
           <Col xs={24} lg={16}>
             <Card
-              bordered={false}
+              variant="borderless"
               title={<Space><CalendarOutlined />Próximas sesiones</Space>}
               style={{ borderRadius: 20, marginBottom: 24, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
             >
@@ -436,7 +436,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             </Card>
 
             <Card
-              bordered={false}
+              variant="borderless"
               title={<Space><BookOutlined />Mis cursos</Space>}
               style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
             >
@@ -560,7 +560,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                 value: pagadoMesLabel,
               }].map((item, index) => (
                 <Col key={item.key} span={index === 4 ? 24 : 12}>
-                  <Card bordered={false} style={{ borderRadius: 16, background: "#f8fafc" }}>
+                  <Card variant="borderless" style={{ borderRadius: 16, background: "#f8fafc" }}>
                     <Typography.Text type="secondary">{item.title}</Typography.Text>
                     <Typography.Title level={4} style={{ marginTop: 8 }}>
                       {item.value}

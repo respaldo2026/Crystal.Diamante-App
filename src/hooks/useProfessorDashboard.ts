@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import dayjs from "dayjs";
+import isBetween from "dayjs/plugin/isBetween";
+
+dayjs.extend(isBetween);
 
 export interface ProfesorDashboardCurso {
   id: string;
