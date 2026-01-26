@@ -12,9 +12,10 @@ export default function MiOficinaProfesor() {
   return (
     <ProfessorDashboardUI
       dashboard={dashboard}
-      onOpenCourse={(cursoId) => {
+      onOpenCourse={(cursoId, action) => {
         if (!cursoId) return;
-        router.push(`/cursos/show/${cursoId}`);
+        const section = action && action !== "default" ? `?section=${encodeURIComponent(action)}` : "";
+        router.push(`/cursos/show/${cursoId}${section}`);
       }}
     />
   );

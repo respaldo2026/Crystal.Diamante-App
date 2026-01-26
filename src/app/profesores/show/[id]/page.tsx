@@ -52,9 +52,10 @@ export default function ShowProfesorDashboard() {
       .finally(() => setLoading(false));
   }, [idProfesor]);
 
-  const handleOpenCourse = (cursoId: string) => {
+  const handleOpenCourse = (cursoId: string, action?: "attendance" | "grades" | "materials" | "default") => {
     if (!cursoId) return;
-    router.push(`/cursos/show/${cursoId}`);
+    const section = action && action !== "default" ? `?section=${encodeURIComponent(action)}` : "";
+    router.push(`/cursos/show/${cursoId}${section}`);
   };
 
   const dashboard = data
@@ -65,6 +66,7 @@ export default function ShowProfesorDashboard() {
         cursos: data.cursos,
         proximasSesiones: data.proximasSesiones,
         pendientes: data.pendientes,
+        pagos: data.pagos,
       }
     : null;
 

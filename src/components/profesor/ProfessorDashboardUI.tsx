@@ -14,13 +14,16 @@ import {
   FormOutlined,
   ArrowRightOutlined,
   DollarCircleOutlined,
+  ReadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { ProfessorDashboardData } from "@hooks/useProfessorDashboard";
 
+type CourseActionContext = "attendance" | "grades" | "materials" | "default";
+
 interface ProfessorDashboardUIProps {
   dashboard: ProfessorDashboardData | null | undefined;
-  onOpenCourse?: (cursoId: string) => void;
+  onOpenCourse?: (cursoId: string, action?: CourseActionContext) => void;
 }
 
 const fallbackStats: ProfessorDashboardData["stats"] = {
@@ -367,7 +370,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                               type="link"
                               size="small"
                               icon={<ArrowRightOutlined />}
-                              onClick={() => onOpenCourse(pendiente.cursoId as string)}
+                              onClick={() => onOpenCourse(pendiente.cursoId as string, "grades")}
                             >
                               Ir al curso
                             </Button>,
@@ -409,7 +412,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                               type="link"
                               size="small"
                               icon={<ArrowRightOutlined />}
-                              onClick={() => onOpenCourse(sesion.cursoId)}
+                              onClick={() => onOpenCourse(sesion.cursoId, "attendance")}
                             >
                               Ir al curso
                             </Button>,
@@ -450,7 +453,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                               type="link"
                               size="small"
                               icon={<CheckCircleOutlined />}
-                              onClick={() => onOpenCourse(curso.id)}
+                              onClick={() => onOpenCourse(curso.id, "attendance")}
                             >
                               Tomar asistencia
                             </Button>,
@@ -459,16 +462,25 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                               type="link"
                               size="small"
                               icon={<FileTextOutlined />}
-                              onClick={() => onOpenCourse(curso.id)}
+                              onClick={() => onOpenCourse(curso.id, "grades")}
                             >
                               Calificar
+                            </Button>,
+                            <Button
+                              key={`material-${curso.id}`}
+                              type="link"
+                              size="small"
+                              icon={<ReadOutlined />}
+                              onClick={() => onOpenCourse(curso.id, "materials")}
+                            >
+                              Material didáctico
                             </Button>,
                             <Button
                               key={`curso-${curso.id}`}
                               type="link"
                               size="small"
                               icon={<ArrowRightOutlined />}
-                              onClick={() => onOpenCourse(curso.id)}
+                              onClick={() => onOpenCourse(curso.id, "default")}
                             >
                               Ver detalles
                             </Button>,

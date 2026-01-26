@@ -42,10 +42,15 @@ export async function obtenerDashboardProfesor(profesorId: string) {
         asistenciaChart: [],
         calificacionesChart: [],
         topCursos: [],
+        horasQuincena: 0,
+        proyeccionQuincena: 0,
+        tarifaHora: null,
+        totalPagadoMes: 0,
       },
       cursos: [],
       proximasSesiones: [],
       pendientes: [],
+      pagos: [],
     };
   }
 }
