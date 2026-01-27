@@ -498,22 +498,24 @@ const ThemeToggleButton = () => {
 
   return (
     <Button
-      type="primary"
-      shape="round"
+      type="text"
+      shape="circle"
+      size="small"
       onClick={toggle}
       icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
       style={{
         position: "fixed",
-        bottom: 20,
-        right: 20,
-        zIndex: 1200,
-        boxShadow: isDarkMode
-          ? "0 12px 30px rgba(0,0,0,0.45)"
-          : "0 12px 30px rgba(92, 78, 204, 0.35)",
+        bottom: 16,
+        left: 14,
+        zIndex: 950,
+        background: "transparent",
+        boxShadow: "none",
+        border: `1px solid ${isDarkMode ? "#1f2937" : "#e5e7eb"}`,
+        color: isDarkMode ? "#e5e7eb" : "#111827",
       }}
       aria-label={isDarkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
     >
-      {isDarkMode ? "Modo claro" : "Modo oscuro"}
+      {null}
     </Button>
   );
 };
@@ -612,13 +614,15 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
           colorBorder: isDarkMode ? "#334155" : undefined,
         },
         Modal: {
-          contentBg: isDarkMode ? "#111827" : undefined,
-          headerBg: isDarkMode ? "#111827" : undefined,
+          contentBg: isDarkMode ? "#111827" : "#FFFFFF",
+          headerBg: isDarkMode ? "#111827" : "#FFFFFF",
+          colorBgMask: "rgba(15, 23, 42, 0.55)",
           borderRadiusLG: 14,
           paddingMD: 18,
         },
         Drawer: {
-          colorBgElevated: isDarkMode ? "#0F172A" : undefined,
+          colorBgElevated: isDarkMode ? "#0F172A" : "#FFFFFF",
+          colorBgMask: "rgba(15, 23, 42, 0.55)",
         },
       },
     }),
@@ -675,7 +679,12 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     const userPermisos = permisos[normalizedRole] || {};
 
     return allResources.filter((resource) => {
-      if (!resource.key || resource.key === "dashboard") return true;
+      if (!resource.key) return false;
+
+      if (resource.key === "dashboard") {
+        return userPermisos.dashboard === true;
+      }
+
       return userPermisos[resource.key] === true;
     });
   }, [user, userLoading, normalizedRole, permisosLoading, permisos]);

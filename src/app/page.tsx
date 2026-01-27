@@ -63,13 +63,36 @@ export default function DashboardPage() {
 
   // Redirigir no autorizados - USAR EFFECT PARA EVITAR CONDICIONALES
   const normalizedRole = (user?.rol || "").toLowerCase();
+  const isAdminRole = normalizedRole === "admin" || normalizedRole === "director";
 
   useEffect(() => {
     if (userLoading || !user) return;
     if (normalizedRole === "secretaria") {
       void router.replace("/dashboard/secretaria");
+    } else if (normalizedRole === "profesor") {
+      void router.replace("/mi-oficina");
+    } else if (normalizedRole === "estudiante") {
+      void router.replace("/portal-estudiante");
     }
   }, [user, userLoading, normalizedRole, router]);
+
+  if (userLoading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexDirection: "column" }}>
+        <Spin size="large" />
+        <Text type="secondary">Cargando perfil…</Text>
+      </div>
+    );
+  }
+
+  if (user && !isAdminRole) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexDirection: "column" }}>
+        <Spin size="large" />
+        <Text type="secondary">Redirigiendo a tu panel…</Text>
+      </div>
+    );
+  }
 
   const cargarDashboard = useCallback(async () => {
     setLoading(true);

@@ -206,7 +206,7 @@ export default function MatriculaCreate() {
                         nombre_completo: values.nombre_completo,
                         telefono: values.telefono,
                         email,
-                        fecha_nacimiento: values.fecha_nacimiento || null,
+                        fecha_nacimiento: values.fecha_nacimiento ? dayjs(values.fecha_nacimiento).format("YYYY-MM-DD") : null,
                         genero: values.genero || null,
                         talla_camiseta: values.talla_camiseta || null,
                         direccion: values.direccion || null,
@@ -685,7 +685,6 @@ export default function MatriculaCreate() {
                         <Form.Item
                             name="fecha_nacimiento"
                             label={<span style={{ color: "#e2e8f0" }}>Fecha de Nacimiento</span>}
-                            getValueFromEvent={(value) => value ? dayjs(value).format("YYYY-MM-DD") : null}
                         >
                             <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
                         </Form.Item>

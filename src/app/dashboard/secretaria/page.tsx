@@ -26,6 +26,7 @@ import {
   Select,
   DatePicker,
   Input,
+  theme,
 } from "antd";
 import {
   PlusOutlined,
@@ -115,6 +116,7 @@ type ConfiguracionAcademia = {
 export default function SecretariaDashboard() {
   const { message: messageApi } = App.useApp();
   const router = useRouter();
+  const { token } = theme.useToken();
   const [loading, setLoading] = useState(true);
   const [programas, setProgramas] = useState<any[]>([]);
   const [cursosActivos, setCursosActivos] = useState<any[]>([]);
@@ -174,6 +176,26 @@ export default function SecretariaDashboard() {
   }, [leads]);
 
   const proximosDestacados = useMemo(() => cursosProximos.slice(0, 4), [cursosProximos]);
+
+  const drawerStyles = useMemo(
+    () => ({
+      header: {
+        background: token.colorBgContainer,
+        borderBottom: `1px solid ${token.colorBorder}`,
+      },
+      body: {
+        background: token.colorBgElevated ?? token.colorBgContainer,
+      },
+      content: {
+        background: token.colorBgElevated ?? token.colorBgContainer,
+        boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
+      },
+      mask: {
+        backgroundColor: "rgba(15, 23, 42, 0.55)",
+      },
+    }),
+    [token.colorBgContainer, token.colorBgElevated, token.colorBorder],
+  );
 
   const cargarPanel = useCallback(async () => {
     setLoading(true);
@@ -994,6 +1016,7 @@ export default function SecretariaDashboard() {
         destroyOnClose
         maskClosable={!registrandoPagos}
         closable={!registrandoPagos}
+        styles={drawerStyles}
       >
         <Form form={pagoForm} layout="vertical" onFinish={handleSubmitPago}>
           <Form.Item

@@ -32,6 +32,8 @@ export const authProvider: AuthProvider = {
           redirectTo = "/mi-oficina";
         } else if (perfil?.rol === "estudiante") {
           redirectTo = "/portal-estudiante";
+        } else if (perfil?.rol === "secretaria") {
+          redirectTo = "/dashboard/secretaria";
         } else if (perfil?.rol === "admin" || perfil?.rol === "director") {
           redirectTo = "/"; // Dashboard principal con métricas
         } else if (perfil?.rol === "administrativo") {

@@ -41,6 +41,8 @@ export function useCurrentUser() {
       };
     },
     staleTime: 0,
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     retry: 1,
