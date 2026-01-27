@@ -76,6 +76,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAdminView = searchParams?.get("admin") === "1";
+  const returnTo = isAdminView ? "/cursos" : "/mi-oficina";
 
   const guardarNota = useCallback(
     async (matriculaId: string | number, nota: number | null, estado: string) => {
@@ -714,19 +715,19 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   return (
     <div style={{ padding: 24 }}>
       {/* ENCABEZADO - OFICINA DEL PROFESOR */}
-      <div style={{ marginBottom: 24, background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white", padding: 20, borderRadius: 8 }}>
-        <Space direction="vertical" style={{ width: "100%" }}>
-          <Space wrap>
+      <div style={{ marginBottom: 28, background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white", padding: 28, borderRadius: 10 }}>
+        <Space direction="vertical" style={{ width: "100%" }} size={20}>
+          <Space wrap size={20} style={{ alignItems: "center" }}>
             <Button
               type="primary"
               icon={<ArrowLeftOutlined />}
-              onClick={() => router.push("/cursos")}
+              onClick={() => router.push(returnTo)}
               style={{ background: "rgba(255,255,255,0.3)" }}
             >
               Volver
             </Button>
             <Title level={2} style={{ margin: 0, color: "white" }}>{curso.nombre}</Title>
-            <Space wrap size={12}>
+            <Space wrap size={20} style={{ marginTop: 4 }}>
               <Button icon={<BookOutlined />} onClick={() => setActiveTab("1")}>
                 Ver Temario
               </Button>
