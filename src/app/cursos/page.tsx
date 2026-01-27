@@ -272,7 +272,7 @@ export default function CursosList() {
   }
 
   return (
-    <Card bordered={false} style={{ background: "transparent" }}>
+    <Card variant="borderless" style={{ background: "transparent" }}>
       <Space direction="vertical" size={24} style={{ width: "100%" }}>
         <Space style={{ width: "100%", justifyContent: "space-between", flexWrap: "wrap" }}>
           <div>
@@ -293,19 +293,19 @@ export default function CursosList() {
 
         <Row gutter={[16, 16]}>
           <Col xs={24} md={8}>
-            <Card bordered size="small">
+            <Card variant="outlined" size="small">
               <Text type="secondary">Grupos activos</Text>
               <Title level={3} style={{ margin: 0 }}>{gruposActivos.length}</Title>
             </Card>
           </Col>
           <Col xs={24} md={8}>
-            <Card bordered size="small">
+            <Card variant="outlined" size="small">
               <Text type="secondary">Próximos grupos</Text>
               <Title level={3} style={{ margin: 0 }}>{gruposProximos.length}</Title>
             </Card>
           </Col>
           <Col xs={24} md={8}>
-            <Card bordered size="small">
+            <Card variant="outlined" size="small">
               <Text type="secondary">Cupos disponibles (activos)</Text>
               <Title level={3} style={{ margin: 0 }}>{cuposDisponibles}</Title>
             </Card>

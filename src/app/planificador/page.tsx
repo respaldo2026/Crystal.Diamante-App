@@ -75,6 +75,34 @@ export default function PlanificadorPage() {
   const [profesores, setProfesores] = useState<{ id: string; nombre_completo: string }[]>([]);
   const [profesorFiltro, setProfesorFiltro] = useState<string | null>(null);
 
+  const dateRange = useMemo((): { start: Dayjs; end: Dayjs; title: string } => {
+    if (viewMode === 'custom' && customRange) {
+      return {
+        start: customRange[0].startOf('day'),
+        end: customRange[1].endOf('day'),
+        title: `${customRange[0].format('DD-MMM-YYYY')} - ${customRange[1].format('DD-MMM-YYYY')}`
+      };
+    }
+
+    if (viewMode === 'week') {
+      const startOfWeek = currentDate.startOf('isoWeek');
+      const endOfWeek = currentDate.endOf('isoWeek');
+      return {
+        start: startOfWeek,
+        end: endOfWeek,
+        title: `Semana del ${startOfWeek.format('DD-MMM')} al ${endOfWeek.format('DD-MMM-YYYY')}`
+      };
+    }
+
+    const startOfMonth = currentDate.startOf('month');
+    const endOfMonth = currentDate.endOf('month');
+    return {
+      start: startOfMonth,
+      end: endOfMonth,
+      title: currentDate.format('MMM YYYY').toUpperCase()
+    };
+  }, [viewMode, currentDate, customRange]);
+
   useEffect(() => {
     cargarProfesores();
   }, []);
@@ -195,35 +223,6 @@ export default function PlanificadorPage() {
   useEffect(() => {
     cargarCursos();
   }, [cargarCursos]);
-
-  // Obtener rango de fechas según el modo de vista
-  const dateRange = useMemo((): { start: Dayjs; end: Dayjs; title: string } => {
-    if (viewMode === 'custom' && customRange) {
-      return {
-        start: customRange[0].startOf('day'),
-        end: customRange[1].endOf('day'),
-        title: `${customRange[0].format('DD-MMM-YYYY')} - ${customRange[1].format('DD-MMM-YYYY')}`
-      };
-    }
-
-    if (viewMode === 'week') {
-      const startOfWeek = currentDate.startOf('isoWeek');
-      const endOfWeek = currentDate.endOf('isoWeek');
-      return {
-        start: startOfWeek,
-        end: endOfWeek,
-        title: `Semana del ${startOfWeek.format('DD-MMM')} al ${endOfWeek.format('DD-MMM-YYYY')}`
-      };
-    }
-
-    const startOfMonth = currentDate.startOf('month');
-    const endOfMonth = currentDate.endOf('month');
-    return {
-      start: startOfMonth,
-      end: endOfMonth,
-      title: currentDate.format('MMM YYYY').toUpperCase()
-    };
-  }, [viewMode, currentDate, customRange]);
 
   // Filtrar cursos que están en el rango de fechas
   const cursosEnRango = cursos.filter(curso => {

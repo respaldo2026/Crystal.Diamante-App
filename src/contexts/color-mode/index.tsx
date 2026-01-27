@@ -1,73 +1,91 @@
 "use client";
 
-import { RefineThemes } from "@refinedev/antd";
-import { App as AntdApp, ConfigProvider, theme } from "antd";
 import Cookies from "js-cookie";
 import React, {
   type PropsWithChildren,
   createContext,
+  useCallback,
+  useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
+type ColorMode = "light" | "dark";
+
 type ColorModeContextType = {
-  mode: string;
-  setMode: (mode: string) => void;
+  mode: ColorMode;
+  setMode: (mode: ColorMode) => void;
+  toggle: () => void;
 };
 
-export const ColorModeContext = createContext<ColorModeContextType>(
-  {} as ColorModeContextType
+export const ColorModeContext = createContext<ColorModeContextType | undefined>(
+  undefined,
 );
 
 type ColorModeContextProviderProps = {
-  defaultMode?: string;
+  defaultMode?: ColorMode;
 };
 
 export const ColorModeContextProvider: React.FC<
   PropsWithChildren<ColorModeContextProviderProps>
-> = ({ children, defaultMode }) => {
-  const [isMounted, setIsMounted] = useState(false);
-  const [mode, setMode] = useState(defaultMode || "light");
+> = ({ children, defaultMode = "dark" }) => {
+  const [mode, setModeState] = useState<ColorMode>(defaultMode);
 
   useEffect(() => {
-    setIsMounted(true);
+    const stored = Cookies.get("theme");
+    const prefersDark =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    const nextMode =
+      stored === "light" || stored === "dark"
+        ? stored
+        : prefersDark
+          ? "dark"
+          : defaultMode;
+
+    setModeState(nextMode as ColorMode);
+
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = nextMode;
+      document.body.style.backgroundColor =
+        nextMode === "dark" ? "#0B1220" : "#FFFFFF";
+      document.body.style.color = nextMode === "dark" ? "#E5E7EB" : "#111827";
+    }
+  }, [defaultMode]);
+
+  const setMode = useCallback((nextMode: ColorMode) => {
+    setModeState(nextMode);
+    Cookies.set("theme", nextMode, { expires: 365 });
+
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = nextMode;
+      document.body.style.backgroundColor =
+        nextMode === "dark" ? "#0B1220" : "#FFFFFF";
+      document.body.style.color = nextMode === "dark" ? "#E5E7EB" : "#111827";
+      document.body.style.transition = "background-color 0.25s ease, color 0.25s ease";
+    }
   }, []);
 
-  useEffect(() => {
-    if (isMounted) {
-      const theme = Cookies.get("theme") || "light";
-      setMode(theme);
-    }
-  }, [isMounted]);
+  const toggle = useCallback(() => {
+    setMode(mode === "dark" ? "light" : "dark");
+  }, [mode, setMode]);
 
-  const setColorMode = () => {
-    if (mode === "light") {
-      setMode("dark");
-      Cookies.set("theme", "dark");
-    } else {
-      setMode("light");
-      Cookies.set("theme", "light");
-    }
-  };
-
-  const { darkAlgorithm, defaultAlgorithm } = theme;
-
-  return (
-    <ColorModeContext.Provider
-      value={{
-        setMode: setColorMode,
-        mode,
-      }}
-    >
-      <ConfigProvider
-        // you can change the theme colors here. example: ...RefineThemes.Magenta,
-        theme={{
-          ...RefineThemes.Blue,
-          algorithm: mode === "light" ? defaultAlgorithm : darkAlgorithm,
-        }}
-      >
-        <AntdApp>{children}</AntdApp>
-      </ConfigProvider>
-    </ColorModeContext.Provider>
+  const value = useMemo(
+    () => ({ mode, setMode, toggle }),
+    [mode, setMode, toggle],
   );
+
+  return <ColorModeContext.Provider value={value}>{children}</ColorModeContext.Provider>;
+};
+
+export const useColorMode = () => {
+  const context = useContext(ColorModeContext);
+
+  if (!context) {
+    throw new Error("useColorMode must be used within ColorModeContextProvider");
+  }
+
+  return context;
 };

@@ -1,30 +1,41 @@
 import React, { useMemo, useState } from "react";
-import { Card, Statistic, Row, Col, Spin, List, Typography, Button, Space, Tag, Divider, Progress, Drawer } from "antd";
-import { Line, Column } from "@ant-design/plots";
+import { Column, Line } from "@ant-design/plots";
 import {
-  UserAddOutlined,
-  FileTextOutlined,
-  CheckCircleOutlined,
+  BookOutlined,
   CalendarOutlined,
-  RiseOutlined,
+  DollarCircleOutlined,
+  FormOutlined,
+  ReadOutlined,
   TeamOutlined,
   ClockCircleOutlined,
-  BookOutlined,
   StarOutlined,
-  FormOutlined,
-  ArrowRightOutlined,
-  DollarCircleOutlined,
-  ReadOutlined,
+  UserAddOutlined,
 } from "@ant-design/icons";
+import {
+  Badge,
+  Button,
+  Card,
+  Col,
+  Divider,
+  Drawer,
+  List,
+  Progress,
+  Row,
+  Space,
+  Spin,
+  Statistic,
+  Tag,
+  Typography,
+} from "antd";
 import dayjs from "dayjs";
 import { ProfessorDashboardData } from "@hooks/useProfessorDashboard";
 
 type CourseActionContext = "attendance" | "grades" | "materials" | "default";
 
-interface ProfessorDashboardUIProps {
+type ProfessorDashboardUIProps = {
   dashboard: ProfessorDashboardData | null | undefined;
   onOpenCourse?: (cursoId: string, action?: CourseActionContext) => void;
-}
+};
 
 const fallbackStats: ProfessorDashboardData["stats"] = {
   cursosActivos: 0,
@@ -123,16 +134,38 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     },
   };
 
-  const topCursos = useMemo(
-    () => [...(statsData.topCursos || [])],
-    [statsData.topCursos],
-  );
-
+  const topCursos = useMemo(() => [...(statsData.topCursos || [])], [statsData.topCursos]);
   const cursosOrdenados = useMemo(
-    () =>
-      [...cursos].sort((a, b) => (b.estudiantesActivos || 0) - (a.estudiantesActivos || 0)),
+    () => [...cursos].sort((a, b) => (b.estudiantesActivos || 0) - (a.estudiantesActivos || 0)),
     [cursos],
   );
+
+  const courseCards = useMemo(() => {
+    return cursosOrdenados.map((curso) => {
+      const proxFecha = curso.proximaSesion?.fecha ? dayjs(curso.proximaSesion.fecha) : null;
+      const proxLabel = proxFecha ? proxFecha.format("ddd D MMM, HH:mm") : "Sin próxima sesión";
+      const isSoon = proxFecha ? proxFecha.isBefore(dayjs().add(24, "hour")) : false;
+      const asistenciaColor = typeof curso.asistenciaPromedio === "number"
+        ? curso.asistenciaPromedio >= 85
+          ? "#22c55e"
+          : curso.asistenciaPromedio >= 70
+            ? "#facc15"
+            : "#f97316"
+        : undefined;
+
+      return {
+        ...curso,
+        proxFecha,
+        proxLabel,
+        isSoon,
+        asistenciaColor,
+      };
+    });
+  }, [cursosOrdenados]);
+
+  const hasAsistenciaData = (statsData.asistenciaChart || []).length > 0;
+  const hasCalificacionesData = (statsData.calificacionesChart || []).length > 0;
+  const hasTopCursos = (topCursos || []).length > 0;
 
   if (loading) {
     return (
@@ -146,23 +179,32 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     <div
       style={{
         minHeight: "100vh",
-        padding: "32px 16px 64px",
+        padding: "24px 12px 48px",
         background: "linear-gradient(135deg, #f4f7ff 0%, #ffffff 100%)",
       }}
     >
-      <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+      <div
+        style={{
+          maxWidth: 1280,
+          margin: "0 auto",
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
         <Card
           variant="borderless"
           style={{
             borderRadius: 24,
             background: "linear-gradient(135deg, #1e3a8a 0%, #111827 100%)",
-            marginBottom: 32,
+            marginBottom: 20,
             color: "#fff",
-            boxShadow: "0 20px 45px -24px rgba(30,64,175,0.65)",
+            boxShadow: "0 16px 36px -26px rgba(30,64,175,0.6)",
           }}
-          styles={{ body: { padding: "36px 40px" } }}
+          styles={{ body: { padding: "28px 32px" } }}
         >
-          <Row gutter={[24, 24]} align="middle">
+          <Row gutter={[16, 16]} align="middle">
             <Col xs={24} md={14}>
               <Typography.Text style={{ color: "rgba(255,255,255,0.65)" }}>
                 {dayjs().format("dddd, D MMMM")}
@@ -170,16 +212,11 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
               <Typography.Title level={2} style={{ color: "#fff", marginTop: 4 }}>
                 {profesorNombre ? `Hola, ${profesorNombre}` : "Mi Oficina"}
               </Typography.Title>
-              <Typography.Paragraph style={{ color: "rgba(255,255,255,0.7)", marginBottom: 24 }}>
+              <Typography.Paragraph style={{ color: "rgba(255,255,255,0.7)", marginBottom: 20 }}>
                 Visualiza el pulso de tus cursos, haz seguimiento a tus estudiantes y mantén tus clases listas.
               </Typography.Paragraph>
               <Space size="middle" wrap>
-                <Button
-                  type="primary"
-                  icon={<DollarCircleOutlined />}
-                  size="large"
-                  onClick={() => setFinancialOpen(true)}
-                >
+                <Button type="primary" icon={<DollarCircleOutlined />} size="large" onClick={() => setFinancialOpen(true)}>
                   Resumen financiero
                 </Button>
                 <Button ghost icon={<UserAddOutlined />} size="large">
@@ -191,9 +228,9 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
               <Card
                 variant="borderless"
                 style={{ borderRadius: 20, background: "rgba(17, 24, 39, 0.55)", color: "#fff" }}
-                styles={{ body: { padding: 24 } }}
+                styles={{ body: { padding: 20 } }}
               >
-                <Row gutter={[16, 16]}>
+                <Row gutter={[12, 12]}>
                   <Col span={12}>
                     <Statistic
                       prefix={<BookOutlined style={{ color: "#60a5fa" }} />}
@@ -252,7 +289,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           </Row>
         </Card>
 
-        <Row gutter={[24, 24]} style={{ marginBottom: 12 }}>
+        <Row gutter={[16, 16]} style={{ marginBottom: 8 }}>
           {[{
             key: "asistencia",
             title: "Asistencia promedio",
@@ -283,7 +320,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             <Col key={item.key} xs={24} md={12} xl={6}>
               <Card
                 variant="borderless"
-                style={{ borderRadius: 20, height: "100%", boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
+                style={{ borderRadius: 18, height: "100%", boxShadow: "0 12px 30px -24px rgba(15,23,42,0.3)" }}
               >
                 <Space size="large" align="start">
                   {item.icon}
@@ -303,231 +340,218 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           ))}
         </Row>
 
-        <Row gutter={[24, 24]} style={{ marginTop: 16 }}>
-          <Col xs={24} lg={12}>
-            <Card
-              variant="borderless"
-              title={<span style={{ fontWeight: 600 }}>Tendencia de asistencia</span>}
-              extra={<Tag color="green">Últimas 8 sesiones</Tag>}
-              style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
-            >
-              {statsData.asistenciaChart.length > 0 ? <Line {...asistenciaConfig} /> : <Typography.Text>No hay datos recientes.</Typography.Text>}
-            </Card>
-          </Col>
-          <Col xs={24} lg={12}>
-            <Card
-              variant="borderless"
-              title={<span style={{ fontWeight: 600 }}>Desempeño académico</span>}
-              extra={<Tag color="blue">Evaluaciones</Tag>}
-              style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
-            >
-              {statsData.calificacionesChart.length > 0 ? <Column {...calificacionesConfig} /> : <Typography.Text>No hay evaluaciones recientes.</Typography.Text>}
-            </Card>
-          </Col>
-        </Row>
-
-        <Row gutter={[24, 24]} style={{ marginTop: 16 }}>
-          <Col xs={24} lg={8}>
-            <Card
-              variant="borderless"
-              title={<Space><RiseOutlined />Top cursos</Space>}
-              style={{ borderRadius: 20, marginBottom: 24, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
-            >
-              <List
-                dataSource={topCursos}
-                locale={{ emptyText: "Sin cursos destacados aún" }}
-                renderItem={(curso) => (
-                  <List.Item>
-                    <List.Item.Meta
-                      title={curso.nombre}
-                      description={`${curso.estudiantes} estudiantes`}
-                    />
-                    {typeof curso.asistencia === "number" ? (
-                      <Tag color={curso.asistencia >= 85 ? "green" : curso.asistencia >= 70 ? "gold" : "volcano"}>
-                        {curso.asistencia}%
-                      </Tag>
-                    ) : null}
-                  </List.Item>
-                )}
-              />
-            </Card>
-
-            <Card
-              variant="borderless"
-              title={<Space><FormOutlined />Pendientes por calificar</Space>}
-              style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
-            >
-              <List
-                dataSource={pendientesData.slice(0, 5)}
-                locale={{ emptyText: "No tienes pendientes" }}
-                renderItem={(pendiente) => (
-                  <List.Item
-                    actions={
-                      onOpenCourse && pendiente.cursoId
-                        ? [
-                            <Button
-                              key={`pendiente-${pendiente.id}`}
-                              type="link"
-                              size="small"
-                              icon={<ArrowRightOutlined />}
-                              onClick={() => onOpenCourse(pendiente.cursoId as string, "grades")}
-                            >
-                              Ir al curso
-                            </Button>,
-                          ]
-                        : undefined
-                    }
-                  >
-                    <List.Item.Meta
-                      title={pendiente.concepto}
-                      description={
-                        <Space split={<Divider type="vertical" />}> 
-                          <span>{pendiente.curso}</span>
-                          {pendiente.fecha ? <span>{dayjs(pendiente.fecha).format("DD MMM")}</span> : null}
-                        </Space>
-                      }
-                    />
-                  </List.Item>
-                )}
-              />
-            </Card>
-          </Col>
-
+        <Row gutter={[12, 12]} style={{ marginTop: 6 }}>
           <Col xs={24} lg={16}>
             <Card
               variant="borderless"
-              title={<Space><CalendarOutlined />Próximas sesiones</Space>}
-              style={{ borderRadius: 20, marginBottom: 24, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
-            >
-              <List
-                dataSource={proximasSesionesData}
-                locale={{ emptyText: "No hay sesiones programadas" }}
-                renderItem={(sesion) => (
-                  <List.Item
-                    actions={
-                      onOpenCourse
-                        ? [
-                            <Button
-                              key={`sesion-${sesion.id}`}
-                              type="link"
-                              size="small"
-                              icon={<ArrowRightOutlined />}
-                              onClick={() => onOpenCourse(sesion.cursoId, "attendance")}
-                            >
-                              Ir al curso
-                            </Button>,
-                          ]
-                        : undefined
-                    }
-                  >
-                    <List.Item.Meta
-                      title={sesion.curso}
-                      description={
-                        <Space split={<Divider type="vertical" />}> 
-                          <span>{dayjs(sesion.fecha).format("dddd D MMMM, HH:mm")}</span>
-                          {sesion.tema ? <span>{sesion.tema}</span> : null}
-                          {sesion.horas ? <span>{sesion.horas} hrs</span> : null}
-                        </Space>
-                      }
-                    />
-                  </List.Item>
-                )}
-              />
-            </Card>
-
-            <Card
-              variant="borderless"
               title={<Space><BookOutlined />Mis cursos</Space>}
-              style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
+              style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
             >
-              <List
-                dataSource={cursosOrdenados}
-                locale={{ emptyText: "No tienes cursos asignados" }}
-                renderItem={(curso) => (
-                  <List.Item
-                    actions={
-                      onOpenCourse
-                        ? [
-                            <Button
-                              key={`asistencia-${curso.id}`}
-                              type="link"
-                              size="small"
-                              icon={<CheckCircleOutlined />}
-                              onClick={() => onOpenCourse(curso.id, "attendance")}
-                            >
-                              Tomar asistencia
-                            </Button>,
-                            <Button
-                              key={`calificar-${curso.id}`}
-                              type="link"
-                              size="small"
-                              icon={<FileTextOutlined />}
-                              onClick={() => onOpenCourse(curso.id, "grades")}
-                            >
-                              Calificar
-                            </Button>,
-                            <Button
-                              key={`material-${curso.id}`}
-                              type="link"
-                              size="small"
-                              icon={<ReadOutlined />}
-                              onClick={() => onOpenCourse(curso.id, "materials")}
-                            >
-                              Material didáctico
-                            </Button>,
-                            <Button
-                              key={`curso-${curso.id}`}
-                              type="link"
-                              size="small"
-                              icon={<ArrowRightOutlined />}
-                              onClick={() => onOpenCourse(curso.id, "default")}
-                            >
-                              Ver detalles
-                            </Button>,
-                          ]
-                        : undefined
-                    }
-                  >
-                    <List.Item.Meta
-                      title={
-                        <Space split={<Divider type="vertical" />}> 
-                          <span>{curso.nombre}</span>
+              <Row gutter={[12, 12]}>
+                {courseCards.map((curso) => {
+                  const colSpan = courseCards.length === 1 ? 24 : courseCards.length === 2 ? 12 : 12;
+                  return (
+                    <Col key={curso.id} xs={24} sm={12} lg={colSpan}>
+                      <Card
+                        hoverable
+                        onClick={() => onOpenCourse && onOpenCourse(curso.id, "default")}
+                        style={{
+                          borderRadius: 14,
+                          height: "100%",
+                          border: curso.isSoon ? "1px solid #A855F7" : "1px solid rgba(148,163,184,0.18)",
+                          boxShadow: curso.isSoon
+                            ? "0 14px 38px -26px rgba(168,85,247,0.5)"
+                            : "0 10px 26px -22px rgba(15,23,42,0.22)",
+                          background: "linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,41,59,0.94))",
+                        }}
+                        styles={{
+                          body: {
+                            color: "#E5E7EB",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 8,
+                            minHeight: 160,
+                            padding: 12,
+                          },
+                        }}
+                      >
+                        <Space align="center" split={<Divider type="vertical" style={{ borderColor: "rgba(255,255,255,0.12)" }} />} wrap>
+                          <Typography.Title level={4} style={{ margin: 0, color: "#F8FAFC", fontSize: 18 }}>
+                            {curso.nombre}
+                          </Typography.Title>
                           <Tag color={curso.estado === "activo" ? "green" : curso.estado === "pausado" ? "gold" : "blue"}>
                             {curso.estado}
                           </Tag>
                         </Space>
-                      }
-                      description={<span>{curso.estudiantesActivos} estudiantes activos</span>}
-                    />
-                    <div style={{ minWidth: 180 }}>
-                      {typeof curso.asistenciaPromedio === "number" ? (
-                        <div style={{ marginBottom: 8 }}>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>Asistencia</Typography.Text>
-                          <Progress
-                            percent={curso.asistenciaPromedio}
-                            size="small"
-                            strokeColor={curso.asistenciaPromedio >= 85 ? "#22c55e" : curso.asistenciaPromedio >= 70 ? "#facc15" : "#f97316"}
-                            showInfo={false}
-                          />
-                        </div>
-                      ) : null}
-                      {typeof curso.promedioNota === "number" ? (
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                          Promedio {curso.promedioNota}/100
+
+                        <Typography.Text style={{ color: "#CBD5E1" }}>
+                          {curso.estudiantesActivos || 0} estudiantes activos
                         </Typography.Text>
-                      ) : null}
-                      {curso.proximaSesion ? (
-                        <div style={{ marginTop: 8 }}>
-                          <Tag color="blue">Próx: {dayjs(curso.proximaSesion.fecha).format("D MMM")}</Tag>
-                        </div>
-                      ) : null}
-                    </div>
-                  </List.Item>
+
+                        {typeof curso.asistenciaPromedio === "number" ? (
+                          <div>
+                            <Typography.Text type="secondary" style={{ color: "#94A3B8", fontSize: 12 }}>Asistencia</Typography.Text>
+                            <Progress
+                              percent={curso.asistenciaPromedio}
+                              size="small"
+                              strokeColor={curso.asistenciaColor}
+                              showInfo={false}
+                              trailColor="rgba(148,163,184,0.25)"
+                            />
+                          </div>
+                        ) : null}
+
+                        <Space size={8} align="center">
+                          <Badge color={curso.isSoon ? "#A855F7" : "#38bdf8"} text={curso.proxLabel} />
+                        </Space>
+
+                        <Button
+                          type="primary"
+                          block
+                          size="large"
+                          style={{ marginTop: 6 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenCourse && onOpenCourse(curso.id, "default");
+                          }}
+                        >
+                          Entrar al curso
+                        </Button>
+                      </Card>
+                    </Col>
+                  );
+                })}
+
+                {courseCards.length === 0 && (
+                  <Col span={24}>
+                    <Card variant="borderless" style={{ textAlign: "center" }}>
+                      <Typography.Text type="secondary">No tienes cursos asignados</Typography.Text>
+                    </Card>
+                  </Col>
                 )}
-              />
+              </Row>
             </Card>
           </Col>
+
+          <Col xs={24} lg={8}>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Card
+                variant="borderless"
+                title={<Space><CalendarOutlined />Próximas sesiones</Space>}
+                style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+                bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
+              >
+                <List
+                  dataSource={proximasSesionesData}
+                  locale={{ emptyText: "No hay sesiones programadas" }}
+                  renderItem={(sesion) => (
+                    <List.Item
+                      style={{ cursor: "pointer" }}
+                      onClick={() => onOpenCourse && onOpenCourse(sesion.cursoId, "attendance")}
+                    >
+                      <List.Item.Meta
+                        title={sesion.curso}
+                        description={
+                          <Space split={<Divider type="vertical" />}> 
+                            <span>{dayjs(sesion.fecha).format("ddd D MMM, HH:mm")}</span>
+                            {sesion.tema ? <span>{sesion.tema}</span> : null}
+                            {sesion.horas ? <span>{sesion.horas} hrs</span> : null}
+                          </Space>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              </Card>
+
+              <Card
+                variant="borderless"
+                title={<Space><FormOutlined />Pendientes por calificar</Space>}
+                style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+                bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
+              >
+                <List
+                  dataSource={pendientesData.slice(0, 5)}
+                  locale={{ emptyText: "No tienes pendientes" }}
+                  renderItem={(pendiente) => (
+                    <List.Item
+                      style={{ cursor: pendiente.cursoId ? "pointer" : "default", opacity: pendiente.cursoId ? 1 : 0.6 }}
+                      onClick={() => pendiente.cursoId && onOpenCourse && onOpenCourse(pendiente.cursoId as string, "grades")}
+                    >
+                      <List.Item.Meta
+                        title={pendiente.concepto}
+                        description={
+                          <Space split={<Divider type="vertical" />}> 
+                            <span>{pendiente.curso}</span>
+                            {pendiente.fecha ? <span>{dayjs(pendiente.fecha).format("DD MMM")}</span> : null}
+                          </Space>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              </Card>
+            </Space>
+          </Col>
         </Row>
+
+        {(hasAsistenciaData || hasCalificacionesData || hasTopCursos) && (
+          <Row gutter={[12, 12]} style={{ marginTop: 10 }}>
+            {hasAsistenciaData && (
+              <Col xs={24} lg={hasCalificacionesData ? 12 : 24}>
+                <Card
+                  variant="borderless"
+                  title={<span style={{ fontWeight: 600 }}>Tendencia de asistencia</span>}
+                  extra={<Tag color="green">Últimas 8 sesiones</Tag>}
+                  style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+                >
+                  <Line {...asistenciaConfig} />
+                </Card>
+              </Col>
+            )}
+
+            {hasCalificacionesData && (
+              <Col xs={24} lg={hasAsistenciaData ? 12 : 24}>
+                <Card
+                  variant="borderless"
+                  title={<span style={{ fontWeight: 600 }}>Desempeño académico</span>}
+                  extra={<Tag color="blue">Evaluaciones</Tag>}
+                  style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+                >
+                  <Column {...calificacionesConfig} />
+                </Card>
+              </Col>
+            )}
+
+            {hasTopCursos && (
+              <Col xs={24} lg={8}>
+                <Card
+                  variant="borderless"
+                  title={<Space><ReadOutlined />Top cursos</Space>}
+                  style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+                >
+                  <List
+                    dataSource={topCursos}
+                    locale={{ emptyText: "Sin cursos destacados aún" }}
+                    renderItem={(curso) => (
+                      <List.Item>
+                        <List.Item.Meta
+                          title={curso.nombre}
+                          description={`${curso.estudiantes} estudiantes`}
+                        />
+                        {typeof curso.asistencia === "number" ? (
+                          <Tag color={curso.asistencia >= 85 ? "green" : curso.asistencia >= 70 ? "gold" : "volcano"}>
+                            {curso.asistencia}%
+                          </Tag>
+                        ) : null}
+                      </List.Item>
+                    )}
+                  />
+                </Card>
+              </Col>
+            )}
+          </Row>
+        )}
 
         <Drawer
           title="Resumen financiero"

@@ -27,6 +27,7 @@ import {
   Tag,
   Typography,
   Spin,
+  Empty,
 } from "antd";
 import dayjs from "dayjs";
 
@@ -52,10 +53,22 @@ export default function ShowProfesorDashboard() {
       .finally(() => setLoading(false));
   }, [idProfesor]);
 
+  const allowedCourseIds = React.useMemo(() => {
+    const set = new Set<string>();
+    (data?.cursos || []).forEach((c: any) => {
+      if (c?.id) set.add(String(c.id));
+    });
+    return set;
+  }, [data?.cursos]);
+
   const handleOpenCourse = (cursoId: string, action?: "attendance" | "grades" | "materials" | "default") => {
     if (!cursoId) return;
+    const id = String(cursoId);
+    if (!allowedCourseIds.has(id)) {
+      return; // evita navegar a cursos no asignados
+    }
     const section = action && action !== "default" ? `?section=${encodeURIComponent(action)}` : "";
-    router.push(`/cursos/show/${cursoId}${section}`);
+    router.push(`/cursos/show/${id}${section}`);
   };
 
   const dashboard = data
@@ -72,6 +85,23 @@ export default function ShowProfesorDashboard() {
 
   const perfil = data?.perfil;
   const stats = dashboard?.stats;
+
+  const nextSessionByCourse = React.useMemo(() => {
+    const map: Record<string, { fecha: string; isSoon: boolean }> = {};
+
+    (dashboard?.proximasSesiones || []).forEach((sesion: any) => {
+      if (!sesion?.cursoId || !sesion?.fecha) return;
+      const key = String(sesion.cursoId);
+      const existing = map[key];
+      const fecha = dayjs(sesion.fecha);
+      if (!existing || fecha.isBefore(dayjs(existing.fecha))) {
+        const isSoon = fecha.isBefore(dayjs().add(24, "hour"));
+        map[key] = { fecha: fecha.toISOString(), isSoon };
+      }
+    });
+
+    return map;
+  }, [dashboard?.proximasSesiones]);
 
   if (loading) {
     return (
@@ -141,9 +171,6 @@ export default function ShowProfesorDashboard() {
                   <Button type="primary" icon={<DashboardOutlined />} onClick={() => setActiveKey("panel")}>
                     Abrir panel del profesor
                   </Button>
-                  <Button icon={<BookOutlined />} onClick={() => router.push("/cursos")}> 
-                    Ver cursos asignados
-                  </Button>
                 </Space>
               </Card>
 
@@ -170,41 +197,69 @@ export default function ShowProfesorDashboard() {
                 title={<Space><BookOutlined /> Cursos asignados</Space>}
                 style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
               >
-                <List
-                  dataSource={dashboard?.cursos || []}
-                  locale={{ emptyText: "No hay cursos asignados" }}
-                  renderItem={(curso) => (
-                    <List.Item
-                      actions={[
-                        <Button
-                          key={`curso-ficha-${curso.id}`}
-                          type="link"
+                <Row gutter={[16, 16]}>
+                  {(dashboard?.cursos || []).map((curso: any) => {
+                    const next = nextSessionByCourse[String(curso.id)];
+                    const isSoon = next?.isSoon;
+                    const fechaTexto = next?.fecha
+                      ? dayjs(next.fecha).format("ddd D MMM, HH:mm")
+                      : "Sin próxima sesión";
+
+                    return (
+                      <Col key={curso.id} xs={24} sm={12} lg={8}>
+                        <Card
+                          hoverable
                           onClick={() => handleOpenCourse(curso.id)}
+                          style={{
+                            borderRadius: 16,
+                            border: isSoon ? "1px solid #A855F7" : undefined,
+                            boxShadow: isSoon
+                              ? "0 14px 36px -18px rgba(168,85,247,0.45)"
+                              : "0 12px 30px -18px rgba(15,23,42,0.35)",
+                            cursor: "pointer",
+                            background: "linear-gradient(135deg, rgba(168,85,247,0.08), rgba(14,165,233,0.05))",
+                          }}
+                          bodyStyle={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 150 }}
                         >
-                          Gestionar curso
-                        </Button>,
-                      ]}
-                    >
-                      <List.Item.Meta
-                        title={
-                          <Space split={<Divider type="vertical" />}>
-                            <span>{curso.nombre}</span>
+                          <Space align="center" split={<Divider type="vertical" />} wrap>
+                            <Title level={4} style={{ margin: 0 }}>
+                              {curso.nombre}
+                            </Title>
                             <Tag color={curso.estado === "activo" ? "green" : curso.estado === "pausado" ? "gold" : "blue"}>
                               {curso.estado}
                             </Tag>
                           </Space>
-                        }
-                        description={`${curso.estudiantesActivos || 0} estudiantes activos`}
-                      />
-                    </List.Item>
+
+                          <Text type="secondary">{curso.estudiantesActivos || 0} estudiantes activos</Text>
+
+                          <Space size={8} align="center">
+                            <CalendarOutlined style={{ color: isSoon ? "#A855F7" : "#94A3B8" }} />
+                            <Text strong style={{ color: isSoon ? "#E0CCFF" : undefined }}>
+                              {fechaTexto}
+                            </Text>
+                          </Space>
+
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            Toca la tarjeta para abrir el curso y ver opciones.
+                          </Text>
+                        </Card>
+                      </Col>
+                    );
+                  })}
+                  {(dashboard?.cursos || []).length === 0 && (
+                    <Col span={24}>
+                      <Card variant="borderless">
+                        <Empty description="No hay cursos asignados" />
+                      </Card>
+                    </Col>
                   )}
-                />
+                </Row>
               </Card>
 
               <Row gutter={[24, 24]}>
                 <Col xs={24} md={12}>
                   <Card
-                    bordered={false}
+                    variant="borderless"
                     title={<Space><CalendarOutlined /> Próximas sesiones</Space>}
                     style={{ borderRadius: 16, height: "100%" }}
                   >
@@ -213,15 +268,8 @@ export default function ShowProfesorDashboard() {
                       locale={{ emptyText: "Sin sesiones programadas" }}
                       renderItem={(sesion) => (
                         <List.Item
-                          actions={[
-                            <Button
-                              key={`sesion-ficha-${sesion.id}`}
-                              type="link"
-                              onClick={() => handleOpenCourse(sesion.cursoId)}
-                            >
-                              Ir al curso
-                            </Button>,
-                          ]}
+                          style={{ cursor: "pointer" }}
+                          onClick={() => handleOpenCourse(sesion.cursoId)}
                         >
                           <List.Item.Meta
                             title={sesion.curso}
@@ -234,7 +282,7 @@ export default function ShowProfesorDashboard() {
                 </Col>
                 <Col xs={24} md={12}>
                   <Card
-                    bordered={false}
+                    variant="borderless"
                     title={<Space><DashboardOutlined /> Pendientes por calificar</Space>}
                     style={{ borderRadius: 16, height: "100%" }}
                   >
@@ -243,16 +291,8 @@ export default function ShowProfesorDashboard() {
                       locale={{ emptyText: "Sin pendientes" }}
                       renderItem={(pendiente) => (
                         <List.Item
-                          actions={[
-                            <Button
-                              key={`pendiente-ficha-${pendiente.id}`}
-                              type="link"
-                              onClick={() => handleOpenCourse(pendiente.cursoId || "")}
-                              disabled={!pendiente.cursoId}
-                            >
-                              Revisar curso
-                            </Button>,
-                          ]}
+                          style={{ cursor: pendiente.cursoId ? "pointer" : "default", opacity: pendiente.cursoId ? 1 : 0.6 }}
+                          onClick={() => pendiente.cursoId && handleOpenCourse(pendiente.cursoId)}
                         >
                           <List.Item.Meta
                             title={pendiente.concepto}

@@ -48,6 +48,8 @@ import {
   BarsOutlined,
   LeftOutlined,
   RightOutlined,
+  MoonOutlined,
+  SunOutlined,
 } from "@ant-design/icons";
 import routerProvider from "@refinedev/nextjs-router";
 import { dataProvider } from "@/providers/data-provider";
@@ -55,6 +57,7 @@ import { authProvider } from "@/providers/auth-provider/auth-provider.client";
 import { QueryProvider } from "@/providers/query-provider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { RolesPermissionsProvider, useRolesPermissions } from "@/contexts/roles-permissions-context";
+import { ColorModeContextProvider, useColorMode } from "@/contexts/color-mode";
 
 const allResources = [
   {
@@ -489,9 +492,115 @@ const FullScreenLoader = () => (
   </div>
 );
 
+const ThemeToggleButton = () => {
+  const { mode, toggle } = useColorMode();
+  const isDarkMode = mode === "dark";
+
+  return (
+    <Button
+      type="primary"
+      shape="round"
+      onClick={toggle}
+      icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
+      style={{
+        position: "fixed",
+        bottom: 20,
+        right: 20,
+        zIndex: 1200,
+        boxShadow: isDarkMode
+          ? "0 12px 30px rgba(0,0,0,0.45)"
+          : "0 12px 30px rgba(92, 78, 204, 0.35)",
+      }}
+      aria-label={isDarkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+    >
+      {isDarkMode ? "Modo claro" : "Modo oscuro"}
+    </Button>
+  );
+};
+
 const AppInner = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: userLoading } = useCurrentUser();
   const { permisos, loading: permisosLoading } = useRolesPermissions();
+  const { mode } = useColorMode();
+
+  const isDarkMode = mode === "dark";
+
+  const themeConfig = useMemo(
+    () => ({
+      algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+      token: {
+        colorPrimary: isDarkMode ? "#A855F7" : "#5B21B6",
+        colorSuccess: "#059669",
+        colorWarning: "#D97706",
+        colorError: "#DC2626",
+        colorInfo: "#0284C7",
+        colorTextBase: isDarkMode ? "#F3F4F6" : "#1F2937",
+        colorText: isDarkMode ? "#E5E7EB" : "#1F2937",
+        colorTextSecondary: isDarkMode ? "#CBD5E1" : "#4B5563",
+        colorTextTertiary: isDarkMode ? "#94A3B8" : "#6B7280",
+        colorBgBase: isDarkMode ? "#0B1220" : "#FFFFFF",
+        colorBgContainer: isDarkMode ? "#0F172A" : "#F9FAFB",
+        colorBgElevated: isDarkMode ? "#111827" : "#FFFFFF",
+        colorBgLayout: isDarkMode ? "#0B1220" : "#F3F4F6",
+        colorBorder: isDarkMode ? "#1F2937" : "#E5E7EB",
+        colorBorderSecondary: isDarkMode ? "#111827" : "#E5E7EB",
+        colorFillSecondary: isDarkMode ? "#1F2937" : "#E5E7EB",
+        colorPrimaryBg: isDarkMode ? "#2D0F52" : "#EDE9FE",
+        controlOutline: isDarkMode ? "#A855F7" : "#5B21B6",
+        borderRadius: 8,
+        fontSize: 14,
+      },
+      components: {
+        Button: {
+          controlHeight: 36,
+          fontWeight: 600,
+        },
+        Card: {
+          borderRadiusLG: 12,
+          colorBgContainer: isDarkMode ? "#111827" : undefined,
+          headerBg: isDarkMode ? "#0F172A" : undefined,
+        },
+        Tag: {
+          borderRadiusSM: 6,
+        },
+        Table: {
+          headerBg: isDarkMode ? "#0F172A" : "#F9FAFB",
+          headerColor: isDarkMode ? "#E5E7EB" : "#374151",
+          rowHoverBg: isDarkMode ? "#0B1220" : "#F3F4F6",
+          borderColor: isDarkMode ? "#1F2937" : "#E5E7EB",
+        },
+        Layout: {
+          bodyBg: isDarkMode ? "#0B1220" : "#F3F4F6",
+          headerBg: isDarkMode ? "#0F172A" : "#FFFFFF",
+          siderBg: isDarkMode ? "#0F172A" : undefined,
+        },
+        Menu: {
+          itemColor: isDarkMode ? "#E5E7EB" : undefined,
+          itemSelectedColor: isDarkMode ? "#F3F4F6" : undefined,
+          itemSelectedBg: isDarkMode ? "#1F2937" : undefined,
+          itemHoverBg: isDarkMode ? "#111827" : undefined,
+        },
+        Input: {
+          colorBgContainer: isDarkMode ? "#0F172A" : undefined,
+          colorTextPlaceholder: isDarkMode ? "#94A3B8" : undefined,
+          activeBorderColor: isDarkMode ? "#A855F7" : undefined,
+        },
+        Select: {
+          colorBgContainer: isDarkMode ? "#0F172A" : undefined,
+          colorTextPlaceholder: isDarkMode ? "#94A3B8" : undefined,
+          optionSelectedBg: isDarkMode ? "#1F2937" : undefined,
+        },
+        Modal: {
+          contentBg: isDarkMode ? "#0F172A" : undefined,
+          headerBg: isDarkMode ? "#0F172A" : undefined,
+        },
+        Drawer: {
+          colorBgElevated: isDarkMode ? "#0F172A" : undefined,
+        },
+      },
+    }),
+    [isDarkMode],
+  );
 
   const normalizedRole = useMemo(() => {
     const rawRole = (user as any)?.rol ?? (user as any)?.role ?? "";
@@ -555,36 +664,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   return (
     <RefineKbarProvider>
       <ConfigProvider
-        theme={{
-          token: {
-            colorPrimary: "#5B21B6",
-            colorSuccess: "#059669",
-            colorWarning: "#D97706",
-            colorError: "#DC2626",
-            colorInfo: "#0284C7",
-            colorTextBase: "#1F2937",
-            colorBgBase: "#FFFFFF",
-            borderRadius: 8,
-            fontSize: 14,
-          },
-          components: {
-            Button: {
-              controlHeight: 36,
-              fontWeight: 500,
-            },
-            Card: {
-              borderRadiusLG: 12,
-            },
-            Tag: {
-              borderRadiusSM: 6,
-            },
-            Table: {
-              headerBg: "#F9FAFB",
-              headerColor: "#374151",
-              rowHoverBg: "#F3F4F6",
-            },
-          },
-        }}
+        theme={themeConfig}
       >
         <AntdApp>
           <Refine
@@ -604,6 +684,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
                 <ThemedTitle collapsed={collapsed} text="Crystal App" icon={<BookOutlined />} />
               )}
             >
+              <ThemeToggleButton />
               {children}
             </ThemedLayout>
             <RefineKbar />
@@ -617,7 +698,9 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 export const AppShell = ({ children }: { children: React.ReactNode }) => (
   <QueryProvider>
     <RolesPermissionsProvider>
-      <AppInner>{children}</AppInner>
+      <ColorModeContextProvider defaultMode="dark">
+        <AppInner>{children}</AppInner>
+      </ColorModeContextProvider>
     </RolesPermissionsProvider>
   </QueryProvider>
 );

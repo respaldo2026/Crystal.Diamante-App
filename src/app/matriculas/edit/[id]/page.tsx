@@ -73,7 +73,7 @@ export default function MatriculaEdit() {
 
             <Form {...formProps} form={formProps.form} layout="vertical">
                 
-                <Card title="Datos de la Matrícula" bordered={false}>
+                <Card title="Datos de la Matrícula" variant="borderless">
                     
                     {/* ESTUDIANTE (Deshabilitado para no cambiarlo por error) */}
                     <Form.Item label="Estudiante" name="estudiante_id">
