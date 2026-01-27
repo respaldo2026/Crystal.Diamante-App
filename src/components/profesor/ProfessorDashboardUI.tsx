@@ -196,7 +196,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     <div
       style={{
         minHeight: "100vh",
-        padding: "24px 12px 48px",
+        padding: "16px 10px 32px",
         background: "linear-gradient(135deg, #f4f7ff 0%, #ffffff 100%)",
       }}
     >
@@ -207,7 +207,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           width: "100%",
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: 12,
         }}
       >
         <Card
@@ -215,13 +215,13 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           style={{
             borderRadius: 24,
             background: "linear-gradient(135deg, #1e3a8a 0%, #111827 100%)",
-            marginBottom: 20,
+            marginBottom: 12,
             color: "#fff",
             boxShadow: "0 16px 36px -26px rgba(30,64,175,0.6)",
           }}
-          styles={{ body: { padding: "28px 32px" } }}
+          styles={{ body: { padding: "18px 20px" } }}
         >
-          <Row gutter={[16, 16]} align="middle">
+          <Row gutter={[12, 12]} align="middle">
             <Col xs={24} md={14}>
               <Typography.Text style={{ color: "rgba(255,255,255,0.65)" }}>
                 {dayjs().format("dddd, D MMMM")}
@@ -229,14 +229,14 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
               <Typography.Title level={2} style={{ color: "#fff", marginTop: 4 }}>
                 {profesorNombre ? `Hola, ${profesorNombre}` : "Mi Oficina"}
               </Typography.Title>
-              <Typography.Paragraph style={{ color: "rgba(255,255,255,0.7)", marginBottom: 20 }}>
+              <Typography.Paragraph style={{ color: "rgba(255,255,255,0.7)", marginBottom: 12 }}>
                 Visualiza el pulso de tus cursos, haz seguimiento a tus estudiantes y mantén tus clases listas.
               </Typography.Paragraph>
-              <Space size="middle" wrap>
-                <Button type="primary" icon={<DollarCircleOutlined />} size="large" onClick={() => setFinancialOpen(true)}>
+              <Space size="small" wrap>
+                <Button type="primary" icon={<DollarCircleOutlined />} size="middle" onClick={() => setFinancialOpen(true)}>
                   Resumen financiero
                 </Button>
-                <Button ghost icon={<UserAddOutlined />} size="large">
+                <Button ghost icon={<UserAddOutlined />} size="middle">
                   Invitar estudiante
                 </Button>
               </Space>
@@ -245,9 +245,9 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
               <Card
                 variant="borderless"
                 style={{ borderRadius: 20, background: "rgba(17, 24, 39, 0.55)", color: "#fff" }}
-                styles={{ body: { padding: 20 } }}
+                styles={{ body: { padding: 14 } }}
               >
-                <Row gutter={[12, 12]}>
+                <Row gutter={[10, 10]}>
                   <Col span={12}>
                     <Statistic
                       prefix={<BookOutlined style={{ color: "#60a5fa" }} />}
@@ -306,7 +306,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           </Row>
         </Card>
 
-        <Row gutter={[16, 16]} style={{ marginBottom: 8 }}>
+        <Row gutter={[12, 12]} style={{ marginBottom: 4 }}>
           {[{
             key: "asistencia",
             title: "Asistencia promedio",
@@ -331,13 +331,14 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             <Col key={item.key} xs={24} md={12} xl={arr.length === 3 ? 8 : 6}>
               <Card
                 variant="borderless"
-                style={{ borderRadius: 18, height: "100%", boxShadow: "0 12px 30px -24px rgba(15,23,42,0.3)" }}
+                style={{ borderRadius: 16, height: "100%", boxShadow: "0 12px 24px -22px rgba(15,23,42,0.26)" }}
+                styles={{ body: { padding: 12 } }}
               >
-                <Space size="large" align="start">
+                <Space size="small" align="start">
                   {item.icon}
                   <div>
                     <Typography.Text type="secondary">{item.title}</Typography.Text>
-                    <Typography.Title level={3} style={{ margin: "8px 0" }}>
+                    <Typography.Title level={4} style={{ margin: "6px 0" }}>
                       {item.value}
                       {item.suffix && typeof item.value === "number" ? (
                         <Typography.Text style={{ fontSize: 16, marginLeft: 4 }}>{item.suffix}</Typography.Text>
@@ -351,14 +352,14 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           ))}
         </Row>
 
-        <Row gutter={[12, 12]} style={{ marginTop: 6 }}>
+        <Row gutter={[12, 12]} style={{ marginTop: 4 }}>
           <Col xs={24} lg={16}>
             <Card
               variant="borderless"
               title={<Space><BookOutlined />Mis cursos</Space>}
               style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
             >
-              <Row gutter={[12, 12]}>
+              <Row gutter={[10, 10]}>
                 {courseCards.map((curso) => {
                   const colSpan = courseCards.length === 1 ? 24 : courseCards.length === 2 ? 12 : 12;
                   return (
@@ -380,9 +381,9 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                             color: "#E5E7EB",
                             display: "flex",
                             flexDirection: "column",
-                            gap: 8,
-                            minHeight: 160,
-                            padding: 12,
+                            gap: 6,
+                            minHeight: 150,
+                            padding: 10,
                           },
                         }}
                       >
@@ -433,8 +434,8 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                         <Button
                           type="primary"
                           block
-                          size="large"
-                          style={{ marginTop: 6 }}
+                          size="middle"
+                          style={{ marginTop: 4 }}
                           onClick={(e) => {
                             e.stopPropagation();
                             onOpenCourse && onOpenCourse(curso.id, "default");
@@ -586,7 +587,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           open={financialOpen}
         >
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
-            <Row gutter={[16, 16]}>
+            <Row gutter={[12, 12]}>
               {[{
                 key: "tarifa",
                 title: "Tarifa por hora",
