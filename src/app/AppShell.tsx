@@ -536,8 +536,9 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
         colorInfo: "#0284C7",
         colorTextBase: isDarkMode ? "#F3F4F6" : "#1F2937",
         colorText: isDarkMode ? "#E5E7EB" : "#1F2937",
-        colorTextSecondary: isDarkMode ? "#CBD5E1" : "#4B5563",
-        colorTextTertiary: isDarkMode ? "#94A3B8" : "#6B7280",
+        // Slightly darker for better contrast in light mode
+        colorTextSecondary: isDarkMode ? "#CBD5E1" : "#374151",
+        colorTextTertiary: isDarkMode ? "#94A3B8" : "#4B5563",
         colorBgBase: isDarkMode ? "#0B1220" : "#FFFFFF",
         colorBgContainer: isDarkMode ? "#0F172A" : "#F9FAFB",
         colorBgElevated: isDarkMode ? "#111827" : "#FFFFFF",
