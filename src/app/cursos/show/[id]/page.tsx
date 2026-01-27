@@ -18,7 +18,7 @@ import {
   CheckOutlined,
   FormOutlined,
 } from "@ant-design/icons";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
 
@@ -61,6 +61,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [curso, setCurso] = useState<any>(null);
   const [estudiantes, setEstudiantes] = useState<Student[]>([]);
   const [temas, setTemas] = useState<Tema[]>([]);
+  const [materiales, setMateriales] = useState<any[]>([]);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalTemaVisible, setModalTemaVisible] = useState(false);
@@ -68,6 +69,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [formTema] = Form.useForm();
   const [formSesion] = Form.useForm();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isAdminView = searchParams?.get("admin") === "1";
 
   // Resolver params si es una Promise
   useEffect(() => {
@@ -217,13 +220,25 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         setEstudiantes(estudiantesConAsistencia);
       }
 
-      // Temario
-      const { data: temasData } = await supabaseBrowserClient
-        .from("temas_curso")
-        .select("*")
-        .eq("curso_id", parseInt(id))
-        .order("orden", { ascending: true });
-      setTemas(temasData || []);
+      // Temario desde programa académico
+      if (cursoConProfesor?.programa_id) {
+        const { data: temasData } = await supabaseBrowserClient
+          .from("pensum")
+          .select("*")
+          .eq("programa_id", cursoConProfesor.programa_id)
+          .order("orden", { ascending: true });
+        setTemas(temasData || []);
+
+        const { data: materialesData } = await supabaseBrowserClient
+          .from("material_didactico")
+          .select("*")
+          .eq("programa_id", cursoConProfesor.programa_id)
+          .order("orden", { ascending: true });
+        setMateriales(materialesData || []);
+      } else {
+        setTemas([]);
+        setMateriales([]);
+      }
 
       // Sesiones de clase
       const { data: sesionesData } = await supabaseBrowserClient
@@ -562,22 +577,26 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               <Button icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
                 Calificar Tareas
               </Button>
-              <Button icon={<EditOutlined />} onClick={() => router.push(`/cursos/edit/${cursoId}`)}>
-                Editar curso
-              </Button>
-              <Button danger icon={<DeleteOutlined />} onClick={handleDeleteCurso}>
-                Eliminar curso
-              </Button>
-              {curso.estado === 'activo' && (
-                <Tag color="blue" style={{ marginLeft: 8 }}>{estudiantesActivos} activos</Tag>
+              {isAdminView && (
+                <>
+                  <Button icon={<EditOutlined />} onClick={() => router.push(`/cursos/edit/${cursoId}`)}>
+                    Editar curso
+                  </Button>
+                  <Button danger icon={<DeleteOutlined />} onClick={handleDeleteCurso}>
+                    Eliminar curso
+                  </Button>
+                  {curso.estado === 'activo' && (
+                    <Tag color="blue" style={{ marginLeft: 8 }}>{estudiantesActivos} activos</Tag>
+                  )}
+                  <Button 
+                    type={curso.estado === 'activo' ? 'default' : 'primary'}
+                    danger={curso.estado === 'activo'}
+                    onClick={handleToggleEstadoGrupo}
+                  >
+                    {curso.estado === 'activo' ? 'Finalizar Grupo' : 'Reactivar Grupo'}
+                  </Button>
+                </>
               )}
-              <Button 
-                type={curso.estado === 'activo' ? 'default' : 'primary'}
-                danger={curso.estado === 'activo'}
-                onClick={handleToggleEstadoGrupo}
-              >
-                {curso.estado === 'activo' ? 'Finalizar Grupo' : 'Reactivar Grupo'}
-              </Button>
             </Space>
           </Space>
           <div>
@@ -656,33 +675,33 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             children: (
               <Card
                 title="Contenido del Curso - Temario"
-                extra={
+                extra={isAdminView ? (
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalTemaVisible(true)}>
                     Agregar Tema
                   </Button>
-                }
+                ) : null}
               >
                 {temas.length > 0 ? (
                   <List
                     dataSource={temas}
                     renderItem={(tema, index) => (
                       <List.Item key={tema?.id ?? index}
-                        actions={[
+                        actions={isAdminView ? [
                           <Button key={`eliminar-tema-${tema?.id ?? index}`} type="link" danger icon={<DeleteOutlined />} onClick={() => onDeleteTema(tema.id)}>
                             Eliminar
                           </Button>
-                        ]}
+                        ] : []}
                       >
                         <List.Item.Meta
-                          avatar={<span style={{ fontSize: 24, fontWeight: "bold", color: "#667eea" }}>{tema.orden || index + 1}</span>}
-                          title={<Text strong>{tema.titulo}</Text>}
-                          description={tema.descripcion}
+                          avatar={<span style={{ fontSize: 24, fontWeight: "bold", color: "#667eea" }}>{tema.orden || tema.numero_ciclo || index + 1}</span>}
+                          title={<Text strong>{tema.nombre_ciclo || tema.titulo || `Tema ${index + 1}`}</Text>}
+                          description={tema.descripcion || ""}
                         />
                       </List.Item>
                     )}
                   />
                 ) : (
-                  <Empty description="No hay temas registrados. Comienza a agregar contenido." />
+                  <Empty description="No hay temas registrados en el programa." />
                 )}
               </Card>
             )
@@ -693,23 +712,50 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             children: (
               <Card
                 title="Recursos y Material para la Enseñanza"
-                extra={
+                extra={isAdminView ? (
                   <Upload maxCount={5} multiple>
                     <Button type="primary" icon={<PlusOutlined />}>
                       Subir Material
                     </Button>
                   </Upload>
-                }
+                ) : null}
               >
                 <Alert
-                  message="Característica en desarrollo"
-                  description="Aquí podrás subir PDFs, videos, documentos y otros recursos para tus estudiantes."
+                  message="Material controlado desde el programa académico"
+                  description="El temario y los recursos provienen del programa académico. Para cambios, contacta a un administrador."
                   type="info"
                   showIcon
                 />
-                <div style={{ marginTop: 20 }}>
-                  <Text type="secondary">Los materiales subidos estarán disponibles para que los estudiantes descarguen desde sus secciones.</Text>
-                </div>
+                {materiales.length > 0 ? (
+                  <List
+                    style={{ marginTop: 16 }}
+                    dataSource={materiales}
+                    renderItem={(material) => (
+                      <List.Item
+                        key={material.id}
+                        extra={material.url_archivo ? (
+                          <a href={material.url_archivo} target="_blank" rel="noreferrer">
+                            Descargar
+                          </a>
+                        ) : null}
+                      >
+                        <List.Item.Meta
+                          title={<Text strong>{material.titulo || material.nombre_archivo || "Recurso"}</Text>}
+                          description={
+                            <Space direction="vertical" size={2}>
+                              {material.descripcion ? <Text type="secondary">{material.descripcion}</Text> : null}
+                              {material.tipo_material ? <Tag>{material.tipo_material}</Tag> : null}
+                            </Space>
+                          }
+                        />
+                      </List.Item>
+                    )}
+                  />
+                ) : (
+                  <div style={{ marginTop: 16 }}>
+                    <Text type="secondary">No hay material didáctico publicado para este programa.</Text>
+                  </div>
+                )}
               </Card>
             )
           },
@@ -768,7 +814,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       {/* MODAL AGREGAR TEMA */}
       <Modal
         title="Agregar Tema al Temario"
-        open={modalTemaVisible}
+        open={isAdminView && modalTemaVisible}
         onOk={() => formTema.submit()}
         onCancel={() => setModalTemaVisible(false)}
       >
