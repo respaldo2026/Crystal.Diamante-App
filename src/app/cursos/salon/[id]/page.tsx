@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Card, Tabs, Typography, Space, Tag, Button, Table, Upload, List, Progress, Statistic, Row, Col, App } from "antd";
+import { Card, Tabs, Typography, Space, Tag, Button, Table, List, Progress, Statistic, Row, Col, App, Alert } from "antd";
 import {
   ArrowLeftOutlined,
   CalendarOutlined,
@@ -11,7 +11,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   FileTextOutlined,
-  UploadOutlined,
+  BookOutlined,
   DownloadOutlined,
   TrophyOutlined,
 } from "@ant-design/icons";
@@ -32,6 +32,8 @@ export default function SalonVirtualPage() {
   const [curso, setCurso] = useState<any>(null);
   const [estudiantes, setEstudiantes] = useState<any[]>([]);
   const [asistencias, setAsistencias] = useState<any[]>([]);
+  const [temas, setTemas] = useState<any[]>([]);
+  const [materiales, setMateriales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const cargarDatos = useCallback(async () => {
@@ -51,6 +53,31 @@ export default function SalonVirtualPage() {
     }
 
     setCurso(cursoData);
+
+    if (cursoData?.programa_id) {
+      const { data: temasData, error: temasError } = await supabaseBrowserClient
+        .from("pensum")
+        .select("*")
+        .eq("programa_id", cursoData.programa_id)
+        .order("orden", { ascending: true });
+      if (temasError) {
+        console.error("Error cargando pensum:", temasError);
+      }
+      setTemas(temasData || []);
+
+      const { data: materialesData, error: materialesError } = await supabaseBrowserClient
+        .from("material_didactico")
+        .select("*")
+        .eq("programa_id", cursoData.programa_id)
+        .order("orden", { ascending: true });
+      if (materialesError) {
+        console.error("Error cargando material didáctico:", materialesError);
+      }
+      setMateriales(materialesData || []);
+    } else {
+      setTemas([]);
+      setMateriales([]);
+    }
 
     // Cargar estudiantes matriculados
     const { data: matriculasData, error: matriculasError } = await supabaseBrowserClient
@@ -294,6 +321,34 @@ export default function SalonVirtualPage() {
           </Card>
 
           <Card title="Material Disponible">
+      {
+        key: "temario",
+        label: (
+          <span>
+            <BookOutlined /> Temario / Pensum ({temas.length})
+          </span>
+        ),
+        children: (
+          <Card title="Temario del Programa">
+            {temas.length > 0 ? (
+              <List
+                dataSource={temas}
+                renderItem={(tema, index) => (
+                  <List.Item key={tema?.id ?? index}>
+                    <List.Item.Meta
+                      avatar={<Tag color="purple">{tema.orden || tema.numero_ciclo || index + 1}</Tag>}
+                      title={<Text strong>{tema.nombre_ciclo || tema.titulo || `Tema ${index + 1}`}</Text>}
+                      description={tema.descripcion || "Sin descripción"}
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Alert type="info" message="Aún no hay temario cargado para este programa." showIcon />
+            )}
+          </Card>
+        ),
+      },
             <List
               dataSource={[]}
               locale={{ emptyText: "No hay material didáctico cargado aún" }}
@@ -345,41 +400,91 @@ export default function SalonVirtualPage() {
         <Space direction="vertical" style={{ width: "100%" }}>
           <Button
             icon={<ArrowLeftOutlined />}
-            onClick={() => list("cursos")}
+          <FileTextOutlined /> Material Didáctico ({materiales.length})
             type="text"
           >
             Volver a Grupos
-          </Button>
+        <Card title="Material Didáctico">
+          <Alert
+            message="Material controlado desde el programa académico"
+            description="Los recursos se organizan por ciclo/tema del pensum. Para cambios, contacta a un administrador."
+            type="info"
+            showIcon
+          />
+          {materiales.length > 0 ? (
+            (() => {
+              const pensumNombre = (pensumId?: string | number | null) => {
+                if (pensumId == null) return "Sin ciclo";
+                const numericId = typeof pensumId === "string" ? Number(pensumId) : pensumId;
+                const match = temas.find((t: any) => t.id === numericId || t.id === pensumId);
+                if (match) {
+                  if (match.nombre_ciclo) return match.nombre_ciclo;
+                  if (match.titulo) return match.titulo;
+                  if (match.numero_ciclo) return `Ciclo ${match.numero_ciclo}`;
+                }
+                return "Sin ciclo";
+              };
 
-          <Title level={2} style={{ margin: 0 }}>
-            {curso.programas?.nombre || curso.nombre}
-          </Title>
+              const grupos = materiales.reduce<Record<string, any[]>>((acc, mat) => {
+                const keyValue = mat.pensum_id ?? "sin-ciclo";
+                const key = String(keyValue);
+                acc[key] = acc[key] || [];
+                acc[key].push(mat);
+                return acc;
+              }, {});
 
-          <Space wrap>
-            {curso.dias_semana && (
-              <Tag icon={<CalendarOutlined />}>
-                {Array.isArray(curso.dias_semana)
-                  ? curso.dias_semana.join(", ")
-                  : curso.dias_semana}
-              </Tag>
-            )}
-            {curso.hora_inicio && (
-              <Tag icon={<ClockCircleOutlined />}>
-                {formatTime(dayjs(curso.hora_inicio, "HH:mm:ss"))} - {curso.hora_fin ? formatTime(dayjs(curso.hora_fin, "HH:mm:ss")) : ""}
-              </Tag>
-            )}
-            {curso.perfiles?.nombre_completo && (
-              <Tag icon={<UserOutlined />}>{curso.perfiles.nombre_completo}</Tag>
-            )}
-          </Space>
-
-          <Row gutter={16}>
-            <Col span={8}>
-              <Statistic
-                title="Estudiantes"
-                value={totalEstudiantes}
-                prefix={<UserOutlined />}
-              />
+              return (
+                <Space direction="vertical" size={16} style={{ marginTop: 16, width: "100%" }}>
+                  {Object.entries(grupos).map(([key, mats]) => (
+                    <Card
+                      key={key}
+                      type="inner"
+                      title={`Ciclo / Tema: ${pensumNombre(key === "sin-ciclo" ? null : key)}`}
+                    >
+                      <List
+                        dataSource={mats}
+                        renderItem={(material) => (
+                          <List.Item
+                            key={material.id}
+                            actions={material.url_archivo ? [
+                              <Button
+                                key={`descargar-${material.id}`}
+                                type="link"
+                                icon={<DownloadOutlined />}
+                                href={material.url_archivo}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Descargar
+                              </Button>
+                            ] : []}
+                          >
+                            <List.Item.Meta
+                              title={<Text strong>{material.titulo || material.nombre_archivo || "Recurso"}</Text>}
+                              description={
+                                <Space direction="vertical" size={2}>
+                                  {material.descripcion ? <Text type="secondary">{material.descripcion}</Text> : null}
+                                  <Space size={8} wrap>
+                                    {material.tipo_material ? <Tag>{material.tipo_material}</Tag> : null}
+                                    {material.orden ? <Tag color="blue">Orden {material.orden}</Tag> : null}
+                                  </Space>
+                                </Space>
+                              }
+                            />
+                          </List.Item>
+                        )}
+                      />
+                    </Card>
+                  ))}
+                </Space>
+              );
+            })()
+          ) : (
+            <div style={{ marginTop: 16 }}>
+              <Text type="secondary">No hay material didáctico publicado para este programa.</Text>
+            </div>
+          )}
+        </Card>
             </Col>
             <Col span={8}>
               <Statistic

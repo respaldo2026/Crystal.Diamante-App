@@ -727,30 +727,66 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   showIcon
                 />
                 {materiales.length > 0 ? (
-                  <List
-                    style={{ marginTop: 16 }}
-                    dataSource={materiales}
-                    renderItem={(material) => (
-                      <List.Item
-                        key={material.id}
-                        extra={material.url_archivo ? (
-                          <a href={material.url_archivo} target="_blank" rel="noreferrer">
-                            Descargar
-                          </a>
-                        ) : null}
-                      >
-                        <List.Item.Meta
-                          title={<Text strong>{material.titulo || material.nombre_archivo || "Recurso"}</Text>}
-                          description={
-                            <Space direction="vertical" size={2}>
-                              {material.descripcion ? <Text type="secondary">{material.descripcion}</Text> : null}
-                              {material.tipo_material ? <Tag>{material.tipo_material}</Tag> : null}
-                            </Space>
-                          }
-                        />
-                      </List.Item>
-                    )}
-                  />
+                  (() => {
+                    const pensumNombre = (pensumId?: string | number | null) => {
+                      if (pensumId == null) return "Sin ciclo";
+                      const numericId = typeof pensumId === "string" ? Number(pensumId) : pensumId;
+                      const match = temas.find((t: any) => t.id === numericId || t.id === pensumId);
+                      if (match) {
+                        if (match.nombre_ciclo) return match.nombre_ciclo;
+                        if (match.titulo) return match.titulo;
+                        if (match.numero_ciclo) return `Ciclo ${match.numero_ciclo}`;
+                      }
+                      return "Sin ciclo";
+                    };
+
+                    const grupos = materiales.reduce<Record<string, any[]>>((acc, mat) => {
+                      const keyValue = mat.pensum_id ?? "sin-ciclo";
+                      const key = String(keyValue);
+                      acc[key] = acc[key] || [];
+                      acc[key].push(mat);
+                      return acc;
+                    }, {});
+
+                    return (
+                      <Space direction="vertical" size={16} style={{ marginTop: 16, width: "100%" }}>
+                        {Object.entries(grupos).map(([key, mats]) => (
+                          <Card
+                            key={key}
+                            type="inner"
+                            title={`Ciclo / Tema: ${pensumNombre(key === "sin-ciclo" ? null : key)}`}
+                          >
+                            <List
+                              dataSource={mats}
+                              renderItem={(material) => (
+                                <List.Item
+                                  key={material.id}
+                                  extra={material.url_archivo ? (
+                                    <a href={material.url_archivo} target="_blank" rel="noreferrer">
+                                      Descargar
+                                    </a>
+                                  ) : null}
+                                >
+                                  <List.Item.Meta
+                                    title={<Text strong>{material.titulo || material.nombre_archivo || "Recurso"}</Text>}
+                                    description={
+                                      <Space direction="vertical" size={2}>
+                                        {material.descripcion ? <Text type="secondary">{material.descripcion}</Text> : null}
+                                        <Space size={8} wrap>
+                                          {material.tipo_material ? <Tag>{material.tipo_material}</Tag> : null}
+                                          {material.orden ? <Tag color="blue">Orden {material.orden}</Tag> : null}
+                                        </Space>
+                                      </Space>
+                                    }
+                                  />
+                                </List.Item>
+                              )}
+                            />
+                          </Card>
+                        ))}
+                      </Space>
+                    );
+                  })()
                 ) : (
                   <div style={{ marginTop: 16 }}>
                     <Text type="secondary">No hay material didáctico publicado para este programa.</Text>
