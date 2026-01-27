@@ -180,7 +180,7 @@ export default function PagoInscripcionPage() {
         }
     };
 
-    const handleWhatsAppRecordatorio = () => {
+    const handleWhatsAppRecordatorio = async () => {
         if (!estudiante?.telefono) {
             message.warning("El estudiante no tiene teléfono registrado");
             return;

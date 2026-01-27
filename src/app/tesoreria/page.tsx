@@ -189,7 +189,7 @@ export default function TesoreriaPage() {
         } finally {
             setRegistrando(false);
         }
-    }, [cargarMovimientos, form]);
+    }, [cargarMovimientos, form, user?.id]);
 
     const handleEliminar = useCallback(
         async (movimientoId: string) => {
@@ -530,11 +530,11 @@ export default function TesoreriaPage() {
                         name="monto"
                         rules={[{ required: true, message: "Ingresa el monto" }]}
                     >
-                        <InputNumber
+                        <InputNumber<number>
                             min={0}
                             style={{ width: "100%" }}
                             formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}
-                            parser={(value) => Number(value?.replace(/\./g, ""))}
+                            parser={(value) => Number(value?.replace(/\./g, "")) || 0}
                             addonBefore={<DollarCircleOutlined />}
                         />
                     </Form.Item>

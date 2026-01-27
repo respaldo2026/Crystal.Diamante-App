@@ -127,7 +127,11 @@ export default function CursosList() {
         return true;
       }
       const fechaInicio = grupo.fecha_inicio ? dayjs(grupo.fecha_inicio) : null;
-      return (grupo.estado || "").toLowerCase() === "proximo" && fechaInicio && fechaInicio.isSameOrBefore(hoy.add(1, "day"));
+      return (
+        (grupo.estado || "").toLowerCase() === "proximo" &&
+        fechaInicio &&
+        !fechaInicio.isAfter(hoy.add(1, "day"))
+      );
     });
   }, [grupos]);
 

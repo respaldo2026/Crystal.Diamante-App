@@ -32,7 +32,9 @@ export const Header: React.FC<RefineThemedLayoutHeaderProps> = ({
   const { token } = useToken();
   const { data: user } = useGetIdentity<IUser>();
   const { mutate: logout } = useLogout();
-  const { mode, setMode } = useContext(ColorModeContext);
+  const colorMode = useContext(ColorModeContext);
+  const mode = colorMode?.mode ?? "light";
+  const setMode = colorMode?.setMode ?? (() => {});
   const router = useRouter();
   const { user: currentUser } = useCurrentUser();
 

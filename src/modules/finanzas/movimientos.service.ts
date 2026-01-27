@@ -88,9 +88,9 @@ export async function crearMovimiento(payload: {
     monto: number;
     concepto: string;
     categoria?: string;
-    metodo_pago?: string;
-    referencia?: string;
-    descripcion?: string;
+    metodo_pago?: string | null;
+    referencia?: string | null;
+    descripcion?: string | null;
     estudiante_id?: string | null;
     proveedor_id?: string | null;
     ticket_url?: string | null;

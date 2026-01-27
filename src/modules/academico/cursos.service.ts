@@ -63,7 +63,18 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
     .order("fecha_inicio", { ascending: true, nullsFirst: true });
 
   if (error) throw error;
-  return data ?? [];
+  const normalizados = (data ?? []).map((item: any) => ({
+    ...item,
+    programas: Array.isArray(item.programas) ? item.programas[0] ?? null : item.programas,
+    profesor: Array.isArray(item.profesor) ? item.profesor[0] ?? null : item.profesor,
+    matriculas: Array.isArray(item.matriculas)
+      ? item.matriculas
+      : item.matriculas
+        ? [item.matriculas]
+        : [],
+  }));
+
+  return normalizados as GrupoAcademico[];
 }
 
 // ...más funciones de negocio para cursos, inscripciones, etc.

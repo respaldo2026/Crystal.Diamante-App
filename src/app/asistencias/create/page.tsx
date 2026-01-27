@@ -106,7 +106,7 @@ export default function TomarAsistencia() {
     };
 
     cargarClase();
-  }, [cursoSeleccionado]);
+  }, [cursoSeleccionado, message]);
 
   // Función para cambiar estado individual
   const toggleEstado = useCallback((matriculaId: number) => {

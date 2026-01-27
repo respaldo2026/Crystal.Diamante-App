@@ -31,12 +31,12 @@ export const subirTicketPago = async ({ blob, pagoId, estudianteId }: TicketUplo
     throw uploadError;
   }
 
-  const { data: publicData, error: publicError } = supabaseBrowserClient.storage
+  const { data: publicData } = supabaseBrowserClient.storage
     .from(TICKETS_BUCKET)
     .getPublicUrl(filePath);
 
-  if (publicError || !publicData?.publicUrl) {
-    throw publicError ?? new Error("No se pudo obtener la URL pública del ticket");
+  if (!publicData?.publicUrl) {
+    throw new Error("No se pudo obtener la URL pública del ticket");
   }
 
   return {

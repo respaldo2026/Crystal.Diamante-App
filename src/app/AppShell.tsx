@@ -567,7 +567,6 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
           padding: 14,
           paddingSM: 12,
           paddingLG: 16,
-          headerPadding: "10px 14px",
           bodyPadding: 14,
           colorBgContainer: isDarkMode ? "#111827" : undefined,
           headerBg: isDarkMode ? "#0F172A" : undefined,

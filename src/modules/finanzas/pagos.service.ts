@@ -34,7 +34,7 @@ export async function obtenerPagosPorEstudiante(estudiante_id?: string | null) {
     query.eq("estudiante_id", estudiante_id);
   }
 
-  const { data, error } = await query.order("fecha_pago", { ascending: false, nullsLast: false });
+  const { data, error } = await query.order("fecha_pago", { ascending: false });
   if (error) throw error;
   return data;
 }

@@ -41,6 +41,8 @@ interface Tema {
   titulo: string;
   descripcion?: string;
   orden?: number;
+  numero_ciclo?: number;
+  nombre_ciclo?: string;
   created_at?: string;
 }
 
@@ -198,14 +200,17 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     []
   );
 
-  const estadoOptions = [
-    "aprobado",
-    "certificado",
-    "en curso",
-    "activo",
-    "reprobado",
-    "pendiente_pago",
-  ];
+  const estadoOptions = useMemo(
+    () => [
+      "aprobado",
+      "certificado",
+      "en curso",
+      "activo",
+      "reprobado",
+      "pendiente_pago",
+    ],
+    []
+  );
 
   const columnasCalificaciones = useMemo(
     () => [
@@ -284,7 +289,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         width: 200,
       },
     ],
-    [estadoEdicion, estadoOptions, notaEdicion, savingNotaId]
+    [estadoEdicion, estadoOptions, notaEdicion, savingNotaId, guardarNota]
   );
 
   const cargarDatos = useCallback(async (id: string) => {

@@ -340,7 +340,6 @@ export default function PagoCreate() {
                     categoria: "matriculas",
                     metodo_pago,
                     referencia: referencia || cuota.id,
-                    descripcion: observacionTexto || undefined,
                     estudiante_id: estudianteSeleccionado?.id ?? values.estudiante_id,
                     ticket_url: publicUrl,
                     pago_id: cuota.id,

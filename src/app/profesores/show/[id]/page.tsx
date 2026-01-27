@@ -266,7 +266,7 @@ export default function ShowProfesorDashboard() {
                     <List
                       dataSource={dashboard?.proximasSesiones?.slice(0, 4) || []}
                       locale={{ emptyText: "Sin sesiones programadas" }}
-                      renderItem={(sesion) => (
+                      renderItem={(sesion: any) => (
                         <List.Item
                           style={{ cursor: "pointer" }}
                           onClick={() => handleOpenCourse(sesion.cursoId)}
@@ -289,7 +289,7 @@ export default function ShowProfesorDashboard() {
                     <List
                       dataSource={dashboard?.pendientes?.slice(0, 4) || []}
                       locale={{ emptyText: "Sin pendientes" }}
-                      renderItem={(pendiente) => (
+                      renderItem={(pendiente: any) => (
                         <List.Item
                           style={{ cursor: pendiente.cursoId ? "pointer" : "default", opacity: pendiente.cursoId ? 1 : 0.6 }}
                           onClick={() => pendiente.cursoId && handleOpenCourse(pendiente.cursoId)}
