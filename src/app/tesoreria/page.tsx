@@ -70,7 +70,9 @@ export default function TesoreriaPage() {
         setLoading(true);
         setError(null);
         try {
-            const data = await listarMovimientos();
+            const role = (user?.rol || "").toLowerCase();
+            const esAdmin = role === "admin" || role === "director" || role === "administrador" || role === "administrativo" || role.includes("admin");
+            const data = await listarMovimientos({}, { userId: user?.id || null, esAdmin });
             setMovimientos(data);
         } catch (err: any) {
             console.error("Error cargando movimientos", err);
@@ -78,7 +80,7 @@ export default function TesoreriaPage() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [user?.id, user?.rol]);
 
     useEffect(() => {
         void cargarMovimientos();
@@ -171,6 +173,7 @@ export default function TesoreriaPage() {
                 metodo_pago: values.metodo_pago || null,
                 referencia: values.referencia || null,
                 descripcion: values.descripcion || null,
+                created_by: user?.id || null,
             });
 
             message.success("Movimiento registrado correctamente");

@@ -34,12 +34,19 @@ export type MovimientoFiltro = {
     texto?: string;
 };
 
-export async function listarMovimientos(filtros: MovimientoFiltro = {}) {
+export async function listarMovimientos(filtros: MovimientoFiltro = {}, options?: { userId?: string | null; esAdmin?: boolean }) {
+    const { userId, esAdmin } = options || {};
+
     const query = supabaseBrowserClient
         .from("movimientos_financieros")
         .select(`*, perfiles:perfiles!movimientos_financieros_estudiante_id_fkey(nombre_completo), proveedores:perfiles!movimientos_financieros_proveedor_id_fkey(nombre_completo)`)
         .order("fecha", { ascending: false })
         .order("created_at", { ascending: false });
+
+    // Si no es admin, limitamos a los movimientos creados por el usuario para evitar bloqueos por RLS
+    if (!esAdmin && userId) {
+        query.eq("created_by", userId);
+    }
 
     if (filtros.fechaDesde) {
         query.gte("fecha", filtros.fechaDesde);
@@ -88,6 +95,7 @@ export async function crearMovimiento(payload: {
     proveedor_id?: string | null;
     ticket_url?: string | null;
     pago_id?: string | null;
+    created_by?: string | null;
 }) {
     const { data, error } = await supabaseBrowserClient
         .from("movimientos_financieros")
@@ -132,6 +140,7 @@ export async function registrarIngresoDesdePago(payload: {
     estudiante_id?: string | null;
     ticket_url?: string | null;
     pago_id?: string | null;
+    created_by?: string | null;
 }) {
     const record = {
         ...payload,

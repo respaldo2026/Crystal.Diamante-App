@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { useMemo } from "react";
 
 export interface CurrentUser {
   id: string;
@@ -14,6 +14,7 @@ export interface CurrentUser {
  * Optimizado para evitar llamadas duplicadas
  */
 export function useCurrentUser() {
+  const queryClient = useQueryClient();
   const { data: user, isLoading } = useQuery({
     queryKey: ["current-user"],
     queryFn: async (): Promise<CurrentUser | null> => {
@@ -39,9 +40,40 @@ export function useCurrentUser() {
         nombre_completo: perfil.nombre_completo,
       };
     },
-    staleTime: 1000 * 60 * 5, // El perfil se considera fresco por 5 minutos
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     retry: 1,
   });
+
+  useEffect(() => {
+    const { data: authListener } = supabaseBrowserClient.auth.onAuthStateChange(() => {
+      queryClient.invalidateQueries({ queryKey: ["current-user"] });
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabaseBrowserClient
+      .channel(`perfil-rol-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "perfiles", filter: `id=eq.${user.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["current-user"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabaseBrowserClient.removeChannel(channel);
+    };
+  }, [queryClient, user?.id]);
 
   // Memorizamos el resultado para evitar re-renders innecesarios
   const result = useMemo(() => ({
