@@ -281,14 +281,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                   </Col>
                   <Col span={12}>
                     <Statistic
-                      prefix={<DollarCircleOutlined style={{ color: "#34d399" }} />}
-                      title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Proyección quincena</span>}
-                      value={proyeccionLabel}
-                      valueStyle={{ color: "#fff", fontWeight: 600 }}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Statistic
                       prefix={<StarOutlined style={{ color: "#a78bfa" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Promedio</span>}
                       value={statsData.promedioCalificaciones}
@@ -318,12 +310,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             suffix: "hrs",
             icon: <ClockCircleOutlined style={{ color: "#2563eb" }} />,
             description: "Mes en curso",
-          }, {
-            key: "pagos",
-            title: "Pagado este mes",
-            value: pagadoMesLabel,
-            icon: <DollarCircleOutlined style={{ color: "#059669" }} />,
-            description: "Incluye nómina y extras",
           }].map((item, index, arr) => (
             <Col key={item.key} xs={24} md={12} xl={arr.length === 3 ? 8 : 6}>
               <Card
