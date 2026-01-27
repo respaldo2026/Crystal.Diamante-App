@@ -311,7 +311,13 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             icon: <ClockCircleOutlined style={{ color: "#2563eb" }} />,
             description: "Mes en curso",
           }].map((item, index, arr) => (
-            <Col key={item.key} xs={24} md={12} xl={arr.length === 3 ? 8 : 6}>
+            <Col
+              key={item.key}
+              xs={24}
+              sm={12}
+              lg={arr.length === 2 ? 12 : 8}
+              xl={arr.length === 2 ? 12 : 8}
+            >
               <Card
                 variant="borderless"
                 style={{ borderRadius: 16, height: "100%", boxShadow: "0 12px 24px -22px rgba(15,23,42,0.26)" }}
