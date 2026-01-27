@@ -193,18 +193,26 @@ export default function MatriculaCreate() {
                 return;
             }
 
-            // Intentamos con la ruta que no requiere SERVICE_ROLE
-            const response = await fetch("/api/auth/create-user", {
+            // Crear usuario + perfil con service role para asegurar que se guarde identificación
+            const response = await fetch("/api/create-user", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     email,
                     password: password || identificacion,
-                    metadata: {
-                        rol: "estudiante",
+                    rol: "estudiante",
+                    user_metadata: {
                         identificacion,
                         nombre_completo: values.nombre_completo,
                         telefono: values.telefono,
+                        email,
+                        fecha_nacimiento: values.fecha_nacimiento || null,
+                        genero: values.genero || null,
+                        talla_camiseta: values.talla_camiseta || null,
+                        direccion: values.direccion || null,
+                        acudiente_nombre: values.acudiente_nombre || null,
+                        acudiente_telefono: values.acudiente_telefono || null,
+                        observaciones: values.observaciones || null,
                         activo: true,
                         notif_whatsapp: true,
                     },
@@ -213,7 +221,7 @@ export default function MatriculaCreate() {
 
             const result = await response.json();
 
-            const userId = result?.data?.user?.id || result?.user?.id;
+            const userId = result?.user?.id || result?.data?.user?.id;
             const perfilFromApi = result?.perfil;
 
             if (!response.ok || !userId) {
@@ -673,6 +681,59 @@ export default function MatriculaCreate() {
                             rules={[{ required: true }]}
                         >
                             <Input />
+                        </Form.Item>
+                        <Form.Item
+                            name="fecha_nacimiento"
+                            label={<span style={{ color: "#e2e8f0" }}>Fecha de Nacimiento</span>}
+                            getValueFromEvent={(value) => value ? dayjs(value).format("YYYY-MM-DD") : null}
+                        >
+                            <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+                        </Form.Item>
+                        <Form.Item
+                            name="genero"
+                            label={<span style={{ color: "#e2e8f0" }}>Género</span>}
+                        >
+                            <Select
+                                options={[
+                                    { label: "Femenino", value: "Femenino" },
+                                    { label: "Masculino", value: "Masculino" },
+                                    { label: "Otro", value: "Otro" },
+                                ]}
+                                placeholder="Selecciona género"
+                            />
+                        </Form.Item>
+                        <Form.Item
+                            name="talla_camiseta"
+                            label={<span style={{ color: "#e2e8f0" }}>Talla de camiseta</span>}
+                        >
+                            <Select
+                                options={["XS","S","M","L","XL","XXL"].map((t) => ({ label: t, value: t }))}
+                                placeholder="Selecciona talla"
+                            />
+                        </Form.Item>
+                        <Form.Item
+                            name="direccion"
+                            label={<span style={{ color: "#e2e8f0" }}>Dirección</span>}
+                        >
+                            <Input.TextArea rows={2} />
+                        </Form.Item>
+                        <Form.Item
+                            name="acudiente_nombre"
+                            label={<span style={{ color: "#e2e8f0" }}>Nombre del acudiente</span>}
+                        >
+                            <Input />
+                        </Form.Item>
+                        <Form.Item
+                            name="acudiente_telefono"
+                            label={<span style={{ color: "#e2e8f0" }}>Teléfono del acudiente</span>}
+                        >
+                            <Input />
+                        </Form.Item>
+                        <Form.Item
+                            name="observaciones"
+                            label={<span style={{ color: "#e2e8f0" }}>Observaciones</span>}
+                        >
+                            <Input.TextArea rows={2} />
                         </Form.Item>
                         <Form.Item>
                             <Space>

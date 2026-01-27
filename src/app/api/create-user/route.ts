@@ -62,18 +62,23 @@ export async function POST(request: Request) {
       .maybeSingle();
 
 
-    // 3. Registrar acción en audit_logs
-    await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/audit/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: userId,
-        action: 'create',
-        entity: 'user',
-        entity_id: userId,
-        details: { email, rol, user_metadata },
-      }),
-    });
+    // 3. Registrar acción en audit_logs (no bloquear si falta URL)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+    try {
+      await fetch(appUrl + '/api/audit/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          action: 'create',
+          entity: 'user',
+          entity_id: userId,
+          details: { email, rol, user_metadata },
+        }),
+      });
+    } catch (logErr) {
+      console.warn('Audit log fallo (se continúa):', logErr);
+    }
 
     return NextResponse.json({ user: authData.user, perfil, message: 'Usuario creado exitosamente' });
 
