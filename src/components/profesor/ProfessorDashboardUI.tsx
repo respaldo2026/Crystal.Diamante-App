@@ -236,9 +236,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                 <Button type="primary" icon={<DollarCircleOutlined />} size="middle" onClick={() => setFinancialOpen(true)}>
                   Resumen financiero
                 </Button>
-                <Button ghost icon={<UserAddOutlined />} size="middle">
-                  Invitar estudiante
-                </Button>
               </Space>
             </Col>
             <Col xs={24} md={10}>
