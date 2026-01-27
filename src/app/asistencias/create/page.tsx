@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, message, Tag, Space, Statistic, Typography, Spin } from "antd";
+import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App } from "antd";
 import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -14,6 +14,7 @@ import { formatDate } from "@utils/date";
 const { Title, Text } = Typography;
 
 export default function TomarAsistencia() {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,6 +29,11 @@ export default function TomarAsistencia() {
   // Formato: { "id_matricula": "presente", ... }
   const [asistenciasMap, setAsistenciasMap] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
+  const cursoIdParam = searchParams.get("curso_id") || searchParams.get("cursoId");
+  const returnTo = useMemo(
+    () => searchParams.get("return") || (cursoIdParam ? `/cursos/show/${cursoIdParam}` : "/cursos"),
+    [cursoIdParam, searchParams]
+  );
 
   // Cargar cursos al inicio
   useEffect(() => {
@@ -43,7 +49,6 @@ export default function TomarAsistencia() {
 
   // Preseleccionar curso desde la URL (dentro del grupo)
   useEffect(() => {
-    const cursoIdParam = searchParams.get("curso_id") || searchParams.get("cursoId");
     if (cursoIdParam) {
       const id = Number(cursoIdParam);
       setCursoSeleccionado(id);
@@ -57,8 +62,11 @@ export default function TomarAsistencia() {
           setCursoNombre(cursoInfo.nombre);
         }
       }
+    } else if (cursos.length > 0) {
+      message.warning("Debes abrir asistencia desde un curso específico.");
+      router.push("/cursos");
     }
-  }, [searchParams, cursos]);
+  }, [searchParams, cursos, cursoIdParam, message, router]);
 
   // Cargar Alumnos cuando cambia el curso
   useEffect(() => {
@@ -73,18 +81,20 @@ export default function TomarAsistencia() {
         // Buscamos matriculas ACTIVAS de este curso
         const { data, error } = await supabaseBrowserClient
           .from("matriculas")
-          .select(`id, estudiante_id, perfiles(nombre_completo, email, telefono, notif_whatsapp)`) 
+          .select(`id, estudiante_id, estado, perfiles(nombre_completo, email, telefono, notif_whatsapp)`) 
           .eq("curso_id", cursoSeleccionado)
-          .eq("estado", "activo")
           .order("perfiles(nombre_completo)");
 
         if (error) {
           message.error("Error cargando lista de clase");
         } else {
           setAlumnos(data || []);
-          // Pre-llenar todos con "presente" para ahorrar tiempo
+          // Pre-llenar solo los habilitados con "presente"; deshabilitados quedan sin valor
           const inicial: any = {};
-          data?.forEach((m: any) => (inicial[m.id] = "presente"));
+          data?.forEach((m: any) => {
+            const habilitado = m.estado === "activo" || m.estado === "en curso";
+            inicial[m.id] = habilitado ? "presente" : undefined;
+          });
           setAsistenciasMap(inicial);
         }
       } catch (error) {
@@ -118,17 +128,19 @@ export default function TomarAsistencia() {
         align: "center" as const,
         width: 150,
         render: (_: any, record: any) => {
+          const habilitado = record.estado === "activo" || record.estado === "en curso";
           const esPresente = asistenciasMap[record.id] === "presente";
           return (
             <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
               <Switch
+                disabled={!habilitado}
                 checked={esPresente}
                 onChange={() => toggleEstado(record.id)}
                 checkedChildren={<CheckOutlined />}
                 unCheckedChildren={<CloseOutlined />}
               />
-              <Tag color={esPresente ? "success" : "error"} style={{ margin: 0 }}>
-                {esPresente ? "PRESENTE" : "AUSENTE"}
+              <Tag color={habilitado ? (esPresente ? "success" : "error") : "default"} style={{ margin: 0 }}>
+                {habilitado ? (esPresente ? "PRESENTE" : "AUSENTE") : "PENDIENTE PAGO"}
               </Tag>
             </div>
           );
@@ -175,53 +187,52 @@ export default function TomarAsistencia() {
         .insert(registros);
 
       if (error) {
-        if (error.message.includes("unique")) {
-          message.warning(
-            "⚠️ Ya se tomó asistencia para este curso en esta fecha."
-          );
-        } else {
-          message.error("Error guardando: " + error.message);
+        if (error.code === "23505" || error.message.includes("duplicate") || error.message.includes("unique")) {
+          message.warning("⚠️ Ya se tomó asistencia para este curso en esta fecha.");
+          return;
         }
-      } else {
-        // Notificar automáticamente a ausentes
-        const ausentesInfo = alumnos.filter((alumno) => asistenciasMap[alumno.id] === "ausente");
-        if (ausentesInfo.length > 0) {
-          const fechaTexto = formatDate(fecha);
-          await Promise.all(
-            ausentesInfo.map(async (alumno) => {
-              const nombre = alumno.perfiles?.nombre_completo || "Estudiante";
-              const telefono = alumno.perfiles?.telefono;
-              const variables = {
-                nombre_estudiante: nombre,
-                nombre_curso: cursoNombre || "curso",
-                fecha_clase: fechaTexto,
-              };
-              const mensaje =
-                buildWhatsappFallbackMessage("asistencia_inasistencia_registrada", variables) ??
-                `Hola ${nombre}, se registró una inasistencia en ${cursoNombre} el ${fechaTexto}. Si es un error o necesitas apoyo, responde este mensaje.`;
-
-              if (telefono && (alumno.perfiles?.notif_whatsapp ?? true)) {
-                await enviarWhatsappConPlantilla(
-                  telefono,
-                  "asistencia_inasistencia_registrada",
-                  variables,
-                );
-              }
-
-              await supabaseBrowserClient.from("notificaciones").insert({
-                user_id: alumno.estudiante_id,
-                titulo: "Inasistencia registrada",
-                mensaje,
-                tipo: "asistencia",
-                leido: false,
-              });
-            })
-          );
-        }
-
-        message.success("✅ ¡Asistencia guardada correctamente!");
-        setTimeout(() => router.push("/asistencias"), 1500);
+        message.error("Error guardando: " + error.message);
+        return;
       }
+
+      // Notificar automáticamente a ausentes
+      const ausentesInfo = alumnos.filter((alumno) => asistenciasMap[alumno.id] === "ausente");
+      if (ausentesInfo.length > 0) {
+        const fechaTexto = formatDate(fecha);
+        await Promise.all(
+          ausentesInfo.map(async (alumno) => {
+            const nombre = alumno.perfiles?.nombre_completo || "Estudiante";
+            const telefono = alumno.perfiles?.telefono;
+            const variables = {
+              nombre_estudiante: nombre,
+              nombre_curso: cursoNombre || "curso",
+              fecha_clase: fechaTexto,
+            };
+            const mensaje =
+              buildWhatsappFallbackMessage("asistencia_inasistencia_registrada", variables) ??
+              `Hola ${nombre}, se registró una inasistencia en ${cursoNombre} el ${fechaTexto}. Si es un error o necesitas apoyo, responde este mensaje.`;
+
+            if (telefono && (alumno.perfiles?.notif_whatsapp ?? true)) {
+              await enviarWhatsappConPlantilla(
+                telefono,
+                "asistencia_inasistencia_registrada",
+                variables,
+              );
+            }
+
+            await supabaseBrowserClient.from("notificaciones").insert({
+              user_id: alumno.estudiante_id,
+              titulo: "Inasistencia registrada",
+              mensaje,
+              tipo: "asistencia",
+              leido: false,
+            });
+          })
+        );
+      }
+
+      message.success("✅ ¡Asistencia guardada correctamente!");
+      setTimeout(() => router.push(returnTo), 800);
     } catch (error) {
       console.error(error);
       message.error("Error al guardar asistencia");
@@ -237,6 +248,7 @@ export default function TomarAsistencia() {
   const ausentes = Object.values(asistenciasMap).filter(
     (v) => v === "ausente"
   ).length;
+  const totalHabilitados = alumnos.filter((a) => a.estado === "activo" || a.estado === "en curso").length;
 
   return (
     <div style={{ padding: "24px" }}>
@@ -266,7 +278,7 @@ export default function TomarAsistencia() {
           type="primary"
           icon={<ArrowLeftOutlined />}
           size="large"
-          onClick={() => router.push("/asistencias")}
+          onClick={() => router.push(returnTo)}
           style={{ background: "rgba(255,255,255,0.2)" }}
         >
           Volver
@@ -352,7 +364,7 @@ export default function TomarAsistencia() {
                         title="Presentes"
                         value={presentes}
                         valueStyle={{ color: "#52c41a" }}
-                        suffix={`/ ${alumnos.length}`}
+                        suffix={`/ ${totalHabilitados || alumnos.length}`}
                       />
                     </Card>
                   </Col>
@@ -362,7 +374,7 @@ export default function TomarAsistencia() {
                         title="Ausentes"
                         value={ausentes}
                         valueStyle={{ color: "#ff4d4f" }}
-                        suffix={`/ ${alumnos.length}`}
+                        suffix={`/ ${totalHabilitados || alumnos.length}`}
                       />
                     </Card>
                   </Col>
@@ -371,14 +383,14 @@ export default function TomarAsistencia() {
                       <Statistic
                         title="% Asistencia"
                         value={
-                          alumnos.length > 0
-                            ? Math.round((presentes / alumnos.length) * 100)
+                          totalHabilitados > 0
+                            ? Math.round((presentes / totalHabilitados) * 100)
                             : 0
                         }
                         suffix="%"
                         valueStyle={{
                           color:
-                            presentes / alumnos.length >= 0.8
+                            totalHabilitados > 0 && presentes / totalHabilitados >= 0.8
                               ? "#52c41a"
                               : "#ff4d4f",
                         }}
@@ -407,7 +419,7 @@ export default function TomarAsistencia() {
                   block
                   size="large"
                   icon={<ArrowLeftOutlined />}
-                  onClick={() => router.push("/asistencias")}
+                  onClick={() => router.push(returnTo)}
                 >
                   Cancelar
                 </Button>

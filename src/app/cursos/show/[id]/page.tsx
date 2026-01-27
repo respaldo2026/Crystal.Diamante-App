@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App } from "antd";
+import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select } from "antd";
 import {
   UserOutlined,
   CheckCircleOutlined,
@@ -60,6 +60,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [cursoId, setCursoId] = useState<string>("");
   const [curso, setCurso] = useState<any>(null);
   const [estudiantes, setEstudiantes] = useState<Student[]>([]);
+  const [notaEdicion, setNotaEdicion] = useState<Record<string, number | null>>({});
+  const [estadoEdicion, setEstadoEdicion] = useState<Record<string, string>>({});
+  const [savingNotaId, setSavingNotaId] = useState<string | null>(null);
+  const [calificacionesTema, setCalificacionesTema] = useState<Record<string, Record<string, number | null>>>({});
+  const [savingCalificacionId, setSavingCalificacionId] = useState<string | null>(null);
   const [temas, setTemas] = useState<Tema[]>([]);
   const [materiales, setMateriales] = useState<any[]>([]);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
@@ -71,6 +76,83 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAdminView = searchParams?.get("admin") === "1";
+
+  const guardarNota = useCallback(
+    async (matriculaId: string | number, nota: number | null, estado: string) => {
+      if (nota == null || Number.isNaN(nota)) {
+        message.warning("Ingresa una nota válida (0 a 5)");
+        return;
+      }
+      setSavingNotaId(String(matriculaId));
+      try {
+        const { error } = await supabaseBrowserClient
+          .from("matriculas")
+          .update({ nota_final: nota, estado })
+          .eq("id", matriculaId);
+
+        if (error) {
+          message.error("Error guardando nota: " + error.message);
+        } else {
+          message.success("Nota actualizada");
+          setEstudiantes((prev) =>
+            prev.map((est) =>
+              est.id === matriculaId ? { ...est, nota_final: nota, estado } : est
+            )
+          );
+        }
+      } catch (err) {
+        console.error(err);
+        message.error("Error inesperado guardando nota");
+      } finally {
+        setSavingNotaId(null);
+      }
+    },
+    [message]
+  );
+
+  const guardarNotaTema = useCallback(
+    async (temaId: string | number, matriculaId: string | number, nota: number | null) => {
+      if (nota == null || Number.isNaN(nota)) {
+        message.warning("Ingresa una nota válida (0 a 5)");
+        return;
+      }
+      const key = `${temaId}-${matriculaId}`;
+      setSavingCalificacionId(key);
+      try {
+        const payload: any = {
+          tema_id: temaId,
+          matricula_id: matriculaId,
+          nota,
+          calificacion: nota,
+          tipo_evaluacion: "tema",
+        };
+
+        const { error } = await supabaseBrowserClient
+          .from("calificaciones")
+          .upsert(payload, { onConflict: "matricula_id,tema_id" });
+
+        if (error) {
+          message.error("Error guardando nota de tema: " + error.message);
+          return;
+        }
+
+        setCalificacionesTema((prev) => ({
+          ...prev,
+          [String(temaId)]: {
+            ...(prev[String(temaId)] || {}),
+            [String(matriculaId)]: nota,
+          },
+        }));
+        message.success("Nota guardada");
+      } catch (err) {
+        console.error(err);
+        message.error("Error inesperado guardando nota de tema");
+      } finally {
+        setSavingCalificacionId(null);
+      }
+    },
+    [message]
+  );
 
   // Resolver params si es una Promise
   useEffect(() => {
@@ -115,22 +197,38 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     []
   );
 
+  const estadoOptions = [
+    "aprobado",
+    "certificado",
+    "en curso",
+    "activo",
+    "reprobado",
+    "pendiente_pago",
+  ];
+
   const columnasCalificaciones = useMemo(
     () => [
       {
         title: "Nombre",
         dataIndex: "nombre_completo",
-        render: (text: string) => <Text strong>{text}</Text>,
+        render: (text: string, record: any) => (
+          <Space direction="vertical" size={0}>
+            <Text strong>{text}</Text>
+            {record.estado === "pendiente_pago" ? (
+              <Tag color="default">PENDIENTE PAGO</Tag>
+            ) : null}
+          </Space>
+        ),
       },
       {
         title: "Nota Final",
         dataIndex: "nota_final",
-        render: (nota: number) => {
+        render: (nota: number, record: any) => {
           if (!nota) return <Text type="secondary">Pendiente</Text>;
           let color = "success";
           if (nota < 3) color = "error";
           if (nota < 4) color = "warning";
-          return <Tag color={color}>{nota.toFixed(1)}/5.0</Tag>;
+          return <Tag color={record.estado === "pendiente_pago" ? "default" : color}>{nota.toFixed(1)}/5.0</Tag>;
         },
         width: 120,
       },
@@ -145,8 +243,47 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         },
         width: 140,
       },
+      {
+        title: "Calificar",
+        render: (_: any, record: any) => {
+          const currentNota = notaEdicion[String(record.id)] ?? record.nota_final ?? null;
+          const currentEstado = estadoEdicion[String(record.id)] ?? record.estado ?? "en curso";
+          const habilitado = currentEstado !== "pendiente_pago";
+          const disabled = currentNota == null || Number.isNaN(currentNota) || !habilitado;
+          return (
+            <Space direction="vertical" size={8}>
+              <InputNumber
+                min={0}
+                max={5}
+                step={0.1}
+                value={currentNota}
+                disabled={!habilitado}
+                onChange={(value) => setNotaEdicion((prev) => ({ ...prev, [record.id]: value === null ? null : Number(value) }))}
+                style={{ width: 120 }}
+              />
+              <Select
+                size="small"
+                value={currentEstado}
+                onChange={(value) => setEstadoEdicion((prev) => ({ ...prev, [record.id]: value }))}
+                style={{ width: 140 }}
+                options={estadoOptions.map((opt) => ({ label: opt.toUpperCase(), value: opt }))}
+              />
+              <Button
+                type="primary"
+                size="small"
+                loading={savingNotaId === String(record.id)}
+                disabled={disabled}
+                onClick={() => guardarNota(record.id, currentNota, currentEstado)}
+              >
+                Guardar
+              </Button>
+            </Space>
+          );
+        },
+        width: 200,
+      },
     ],
-    []
+    [estadoEdicion, estadoOptions, notaEdicion, savingNotaId]
   );
 
   const cargarDatos = useCallback(async (id: string) => {
@@ -218,6 +355,32 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           })
         );
         setEstudiantes(estudiantesConAsistencia);
+        const notasIniciales: Record<string, number | null> = {};
+        const estadosIniciales: Record<string, string> = {};
+        estudiantesConAsistencia.forEach((est) => {
+          notasIniciales[String(est.id)] = est.nota_final ?? null;
+          estadosIniciales[String(est.id)] = est.estado;
+        });
+        setNotaEdicion(notasIniciales);
+        setEstadoEdicion(estadosIniciales);
+
+        const matriculaIds = estudiantesConAsistencia.map((e) => e.id);
+        if (matriculaIds.length > 0) {
+          const { data: califData } = await supabaseBrowserClient
+            .from("calificaciones")
+            .select("matricula_id, tema_id, nota, calificacion")
+            .in("matricula_id", matriculaIds);
+
+          const mapa: Record<string, Record<string, number | null>> = {};
+          (califData || []).forEach((c: any) => {
+            const temaKey = String(c.tema_id);
+            const matKey = String(c.matricula_id);
+            const valor = c.calificacion ?? c.nota ?? null;
+            if (!mapa[temaKey]) mapa[temaKey] = {};
+            mapa[temaKey][matKey] = valor;
+          });
+          setCalificacionesTema(mapa);
+        }
       }
 
       // Temario desde programa académico
@@ -563,7 +726,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               Volver
             </Button>
             <Title level={2} style={{ margin: 0, color: "white" }}>{curso.nombre}</Title>
-            <Space wrap>
+            <Space wrap size={12}>
               <Button icon={<BookOutlined />} onClick={() => setActiveTab("1")}>
                 Ver Temario
               </Button>
@@ -834,14 +997,97 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             key: "5",
             label: <span><FileTextOutlined /> Calificaciones</span>,
             children: (
-              <Card title="Notas y Desempeño de Estudiantes">
-                <Table
-                  dataSource={estudiantes}
-                  rowKey="id"
-                  pagination={{ pageSize: 20 }}
-                  columns={columnasCalificaciones}
+              <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                <Alert
+                  message="Calificaciones por tema"
+                  description="Cada tema del temario debe tener su nota. Los estudiantes pendientes de pago no pueden ser calificados."
+                  type="info"
+                  showIcon
+                  style={{ padding: "8px 10px" }}
                 />
-              </Card>
+                {temas.length === 0 ? (
+                  <Card><Empty description="No hay temario cargado" /></Card>
+                ) : (
+                  temas.map((tema) => (
+                    <Card
+                      key={tema.id}
+                      title={<Text strong style={{ fontSize: 14 }}>{`Tema: ${tema.nombre_ciclo || tema.titulo || "Tema"}`}</Text>}
+                      style={{ marginBottom: 8 }}
+                      bodyStyle={{ padding: 10 }}
+                      headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
+                    >
+                      <Table
+                        size="small"
+                        dataSource={estudiantes}
+                        rowKey="id"
+                        pagination={false}
+                        style={{ marginTop: 4 }}
+                        columns={[
+                          {
+                            title: "Nombre",
+                            dataIndex: "nombre_completo",
+                            render: (text: string, record: any) => (
+                              <Space direction="vertical" size={0}>
+                                <Text strong>{text}</Text>
+                                {record.estado === "pendiente_pago" ? (
+                                  <Tag color="default">PENDIENTE PAGO</Tag>
+                                ) : null}
+                              </Space>
+                            ),
+                          },
+                          {
+                            title: "Nota (0-5)",
+                            width: 140,
+                            render: (_: any, record: any) => {
+                              const current = calificacionesTema[String(tema.id)]?.[String(record.id)] ?? null;
+                              const habilitado = record.estado !== "pendiente_pago";
+                              return (
+                                <InputNumber
+                                  min={0}
+                                  max={5}
+                                  step={0.1}
+                                  value={current}
+                                  disabled={!habilitado}
+                                  onChange={(val) =>
+                                    setCalificacionesTema((prev) => ({
+                                      ...prev,
+                                      [String(tema.id)]: {
+                                        ...(prev[String(tema.id)] || {}),
+                                        [String(record.id)]: val === null ? null : Number(val),
+                                      },
+                                    }))
+                                  }
+                                  style={{ width: 110 }}
+                                />
+                              );
+                            },
+                          },
+                          {
+                            title: "Guardar",
+                            width: 120,
+                            render: (_: any, record: any) => {
+                              const current = calificacionesTema[String(tema.id)]?.[String(record.id)] ?? null;
+                              const habilitado = record.estado !== "pendiente_pago";
+                              const saving = savingCalificacionId === `${tema.id}-${record.id}`;
+                              return (
+                                <Button
+                                  type="primary"
+                                  size="small"
+                                  disabled={!habilitado || current == null || Number.isNaN(current)}
+                                  loading={saving}
+                                  onClick={() => guardarNotaTema(tema.id, record.id, current)}
+                                >
+                                  Guardar
+                                </Button>
+                              );
+                            },
+                          },
+                        ]}
+                      />
+                    </Card>
+                  ))
+                )}
+              </Space>
             )
           }
         ]}
