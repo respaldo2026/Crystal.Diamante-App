@@ -22,6 +22,7 @@ export default function PermisosRolPage() {
     { key: "estudiantes", label: "Estudiantes" },
     { key: "profesores", label: "Profesores" },
     { key: "cursos", label: "Cursos/Grupos" },
+    { key: "catalogo", label: "Catálogo cursos" },
     { key: "leads", label: "Leads" },
     { key: "planificador", label: "Planificador" },
     { key: "matriculas", label: "Matrículas" },

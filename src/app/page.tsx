@@ -76,23 +76,7 @@ export default function DashboardPage() {
     }
   }, [user, userLoading, normalizedRole, router]);
 
-  if (userLoading) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexDirection: "column" }}>
-        <Spin size="large" />
-        <Text type="secondary">Cargando perfil…</Text>
-      </div>
-    );
-  }
-
-  if (user && !isAdminRole) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexDirection: "column" }}>
-        <Spin size="large" />
-        <Text type="secondary">Redirigiendo a tu panel…</Text>
-      </div>
-    );
-  }
+  const showBlockingScreen = userLoading || (user && !isAdminRole);
 
   const cargarDashboard = useCallback(async () => {
     setLoading(true);
@@ -338,7 +322,7 @@ export default function DashboardPage() {
     };
   }, [cargarDashboard, normalizedRole, userLoading]);
 
-  if (loading || userLoading) {
+  if (loading || showBlockingScreen) {
     return (
       <div style={{ 
         display: 'flex', 

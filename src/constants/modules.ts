@@ -15,6 +15,7 @@ export const MODULES: ModuleDefinition[] = [
   { key: "nomina", label: "Nómina" },
   { key: "perfiles", label: "Perfiles" },
   { key: "leads", label: "Leads" },
+  { key: "catalogo", label: "Catálogo cursos" },
   { key: "inventario", label: "Inventario" },
   { key: "planificador", label: "Planificador" },
   { key: "portal-estudiante", label: "Portal Estudiante" },

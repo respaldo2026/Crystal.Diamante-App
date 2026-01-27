@@ -133,6 +133,15 @@ const allResources = [
     },
   },
   {
+    key: "catalogo",
+    name: "catalogo",
+    list: "/catalogo",
+    meta: {
+      label: "Catálogo cursos",
+      icon: <BarsOutlined />,
+    },
+  },
+  {
     key: "matriculas",
     name: "matriculas",
     list: "/matriculas",
