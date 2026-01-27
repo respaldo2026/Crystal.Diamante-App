@@ -29,6 +29,7 @@ export default function EstudiantesList() {
     const { message: antMessage, modal } = App.useApp();
     const { user } = useCurrentUser();
     const [searchValue, setSearchValue] = useState("");
+    const [deletedIds, setDeletedIds] = useState<string[]>([]);
     
     // Construcción dinámica de filtros según rol
     const permanentFilters = () => {
@@ -98,7 +99,10 @@ export default function EstudiantesList() {
     const activoEstados = useMemo(() => ["activo", "en curso", "pendiente"], []);
     const graduadoEstados = useMemo(() => ["aprobado", "certificado", "finalizado"], []);
 
-    const dataSource = useMemo(() => (tableProps.dataSource as any[]) || [], [tableProps.dataSource]);
+    const dataSource = useMemo(
+        () => ((tableProps.dataSource as any[]) || []).filter((s: any) => !deletedIds.includes(s.id)),
+        [tableProps.dataSource, deletedIds]
+    );
 
     // Calcular asistencia por matrícula para cada estudiante (SOLO cuando se solicite)
     useEffect(() => {
@@ -352,7 +356,7 @@ export default function EstudiantesList() {
                                     type="text"
                                     size="small"
                                     disabled={user?.rol !== "admin"}
-                                    onClick={() => confirmarEliminarEstudiante(record, antMessage, modal, router)}
+                                    onClick={() => confirmarEliminarEstudiante(record, antMessage, modal, router, setDeletedIds)}
                                     icon={<DeleteOutlined />}
                                 />
                             </Tooltip>
@@ -372,7 +376,7 @@ export default function EstudiantesList() {
     );
 }
 
-async function handleEliminarEstudiante(record: any, msg: any, _modalInstance: any, router: any) {
+async function handleEliminarEstudiante(record: any, msg: any, _modalInstance: any, router: any, setDeletedIds: React.Dispatch<React.SetStateAction<string[]>>) {
     const estudianteId = record.id;
 
     try {
@@ -389,6 +393,7 @@ async function handleEliminarEstudiante(record: any, msg: any, _modalInstance: a
         }
 
         msg.success("✅ Estudiante eliminado en app y Supabase");
+        setDeletedIds((prev) => [...prev, estudianteId]);
         router.refresh();
     } catch (err: any) {
         console.error('Error eliminando estudiante:', err);
@@ -396,7 +401,7 @@ async function handleEliminarEstudiante(record: any, msg: any, _modalInstance: a
     }
 }
 
-function confirmarEliminarEstudiante(record: any, msg: any, modalInstance: any, router: any) {
+function confirmarEliminarEstudiante(record: any, msg: any, modalInstance: any, router: any, setDeletedIds: React.Dispatch<React.SetStateAction<string[]>>) {
     const estudianteId = record.id;
     
     // Usar el modal desde el contexto de App correctamente
@@ -432,7 +437,7 @@ function confirmarEliminarEstudiante(record: any, msg: any, modalInstance: any, 
         okType: "danger",
         cancelText: "Cancelar",
         onOk: async () => {
-            await handleEliminarEstudiante(record, msg, modalInstance, router);
+            await handleEliminarEstudiante(record, msg, modalInstance, router, setDeletedIds);
         }
     });
 }

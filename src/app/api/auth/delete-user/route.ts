@@ -47,8 +47,11 @@ export async function POST(request: NextRequest) {
 
     // 5) Borrar usuario auth
     const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    if (authErr && !String(authErr.message || "").toLowerCase().includes("not exist")) {
-      throw authErr;
+    if (authErr) {
+      const msg = String(authErr.message || "").toLowerCase();
+      if (!msg.includes("not exist") && !msg.includes("not found")) {
+        throw authErr;
+      }
     }
 
     return NextResponse.json({ success: true });
