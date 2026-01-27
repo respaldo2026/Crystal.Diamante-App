@@ -372,69 +372,27 @@ export default function EstudiantesList() {
     );
 }
 
-async function handleEliminarEstudiante(record: any, msg: any, modalInstance: any, router: any) {
+async function handleEliminarEstudiante(record: any, msg: any, _modalInstance: any, router: any) {
     const estudianteId = record.id;
-    
-    // Primero, eliminar todas las relaciones de forma segura
+
     try {
-        // 1. Eliminar asistencias relacionadas con matrículas del estudiante
-        const { data: matriculas } = await supabaseBrowserClient
-            .from("matriculas")
-            .select("id")
-            .eq("estudiante_id", estudianteId);
-        
-        if (matriculas && matriculas.length > 0) {
-            const matriculaIds = matriculas.map(m => m.id);
-            
-            // Eliminar asistencias
-            await supabaseBrowserClient
-                .from("asistencias")
-                .delete()
-                .in("matricula_id", matriculaIds);
-            
-            // Eliminar calificaciones
-            await supabaseBrowserClient
-                .from("calificaciones")
-                .delete()
-                .in("matricula_id", matriculaIds);
-            
-            // Eliminar pagos de matrículas
-            await supabaseBrowserClient
-                .from("pagos")
-                .delete()
-                .in("matricula_id", matriculaIds);
+        const response = await fetch("/api/auth/delete-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: estudianteId }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result?.success) {
+            throw new Error(result?.error || "No se pudo eliminar el usuario");
         }
-        
-        // 2. Eliminar pagos directos del estudiante
-        await supabaseBrowserClient
-            .from("pagos")
-            .delete()
-            .eq("estudiante_id", estudianteId);
-        
-        // 3. Eliminar matrículas
-        await supabaseBrowserClient
-            .from("matriculas")
-            .delete()
-            .eq("estudiante_id", estudianteId);
-        
-        // 4. Finalmente eliminar el perfil
-        const { error } = await supabaseBrowserClient
-            .from("perfiles")
-            .delete()
-            .eq("id", estudianteId);
-        
-        if (error) {
-            console.error('Error al eliminar perfil:', error);
-            msg.error("Error al eliminar: " + (error.message || 'Desconocido'));
-            return;
-        }
-        
-        msg.success("✅ Estudiante y todos sus datos eliminados correctamente");
+
+        msg.success("✅ Estudiante eliminado en app y Supabase");
         router.refresh();
-        
     } catch (err: any) {
-        console.error('Error inesperado:', err);
-        msg.error('Error inesperado: ' + (err?.message || 'Desconocido'));
+        console.error('Error eliminando estudiante:', err);
+        msg.error('Error al eliminar: ' + (err?.message || 'Desconocido'));
     }
 }
 

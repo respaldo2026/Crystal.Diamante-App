@@ -50,18 +50,23 @@ export async function POST(request: NextRequest) {
     }
 
 
-    // Registrar acción en audit_logs
-    await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/audit/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: data.user.id,
-        action: 'create',
-        entity: 'user',
-        entity_id: data.user.id,
-        details: { email, metadata },
-      }),
-    });
+    // Registrar acción en audit_logs (no bloquear si falla)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+    try {
+      await fetch(appUrl + '/api/audit/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: data.user.id,
+          action: 'create',
+          entity: 'user',
+          entity_id: data.user.id,
+          details: { email, metadata },
+        }),
+      });
+    } catch (logError) {
+      console.warn('Audit log fallo, se continúa:', logError);
+    }
 
     // Si se creó correctamente, retornar éxito
     return NextResponse.json({ 

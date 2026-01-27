@@ -39,22 +39,27 @@ export async function POST(request: Request) {
 
     const userId = authData.user.id;
 
-    // 2. Actualizar el perfil público
-    // El trigger de base de datos debería haber creado el perfil, pero actualizamos para asegurar todos los campos
+    // 2. Crear/actualizar el perfil público (con upsert para asegurar que exista)
     const { error: profileError } = await supabaseAdmin
       .from('perfiles')
-      .update({
+      .upsert({
+        id: userId,
         ...user_metadata,
         rol,
         email,
-      })
-      .eq('id', userId);
+      }, { onConflict: 'id' });
 
     if (profileError) {
         console.error("Error actualizando perfil:", profileError);
         // No retornamos error 500 porque el usuario Auth ya se creó, es mejor avisar
         return NextResponse.json({ user: authData.user, warning: "Usuario creado pero hubo un error actualizando detalles del perfil." });
     }
+
+    const { data: perfil } = await supabaseAdmin
+      .from('perfiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
 
 
     // 3. Registrar acción en audit_logs
@@ -70,7 +75,7 @@ export async function POST(request: Request) {
       }),
     });
 
-    return NextResponse.json({ user: authData.user, message: 'Usuario creado exitosamente' });
+    return NextResponse.json({ user: authData.user, perfil, message: 'Usuario creado exitosamente' });
 
   } catch (error: any) {
     console.error("API Error:", error);

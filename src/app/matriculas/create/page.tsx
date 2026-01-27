@@ -32,6 +32,7 @@ export default function MatriculaCreate() {
     const [studentFound, setStudentFound] = useState<any>(null);
     const [identificacionBuscar, setIdentificacionBuscar] = useState("");
     const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [creatingStudent, setCreatingStudent] = useState(false);
     const [programaSeleccionado, setProgramaSeleccionado] = useState<string | undefined>(undefined);
     const [createForm] = Form.useForm();
     const [cursoOptions, setCursoOptions] = useState<{ label: string; value: string | number }[]>([]);
@@ -172,28 +173,33 @@ export default function MatriculaCreate() {
     };
 
     const handleCrearEstudiante = async (values: any) => {
+        const identificacion = String(values.identificacion || "").trim();
+        const email = (values.email || `${identificacion}@academia.local`).trim();
+        const password = identificacion.replace(/\./g, "");
+
         try {
+            setCreatingStudent(true);
+
             const { count } = await supabaseBrowserClient
                 .from("perfiles")
                 .select("*", { count: "exact", head: true })
-                .eq("identificacion", values.identificacion);
+                .eq("identificacion", identificacion);
 
             if ((count || 0) > 0) {
                 message.error("Ya existe un estudiante con esa identificación");
                 return;
             }
 
-            // REFACTORIZACIÓN (Auditoría): Usar API para crear usuario Auth + Perfil
-            // Esto asegura que el estudiante pueda iniciar sesión.
-            const response = await fetch("/api/create-user", {
+            // Intentamos con la ruta que no requiere SERVICE_ROLE
+            const response = await fetch("/api/auth/create-user", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    email: values.email || `${values.identificacion}@academia.local`, // Fallback si no tiene email
-                    password: String(values.identificacion), // Contraseña inicial = Identificación
-                    rol: "estudiante",
-                    user_metadata: {
-                        identificacion: values.identificacion,
+                    email,
+                    password: password || identificacion,
+                    metadata: {
+                        rol: "estudiante",
+                        identificacion,
                         nombre_completo: values.nombre_completo,
                         telefono: values.telefono,
                         activo: true,
@@ -204,19 +210,56 @@ export default function MatriculaCreate() {
 
             const result = await response.json();
 
-            if (!response.ok) {
-                throw new Error(result.error || "Error al crear el estudiante");
+            const userId = result?.data?.user?.id || result?.user?.id;
+            const perfilFromApi = result?.perfil;
+
+            if (!response.ok || !userId) {
+                throw new Error(result?.error || "Error al crear el estudiante");
             }
 
-            const data = result.perfil; // La API devuelve { success: true, user, perfil }
+            // Semilla mínima para continuar el flujo aunque no podamos leer perfil (RLS)
+            let perfil: any = perfilFromApi || {
+                id: userId,
+                nombre_completo: values.nombre_completo,
+                identificacion,
+                telefono: values.telefono,
+                email,
+            };
 
-            setStudentFound(data);
-            formProps.form?.setFieldValue("estudiante_id", data.id);
+            // Intentar leer el perfil real; si falla, usar la semilla
+            const getPerfil = async () => {
+                const { data, error } = await supabaseBrowserClient
+                    .from("perfiles")
+                    .select("*")
+                    .eq("id", userId)
+                    .maybeSingle();
+
+                if (error) {
+                    console.warn("No se pudo leer perfil, se usará la semilla:", error.message);
+                    return null;
+                }
+                return data;
+            };
+
+            if (!perfilFromApi) {
+                const perfilDb = await getPerfil();
+                if (!perfilDb) {
+                    await new Promise((resolve) => setTimeout(resolve, 600));
+                    perfilDb ?? (await getPerfil());
+                }
+                if (perfilDb) perfil = perfilDb;
+            }
+
+            setStudentFound(perfil);
+            formProps.form?.setFieldValue("estudiante_id", perfil.id);
             setCreateModalOpen(false);
             createForm.resetFields();
             message.success("Estudiante creado correctamente");
         } catch (e: any) {
+            console.error("Error creando estudiante:", e);
             message.error(e?.message || "Error creando estudiante");
+        } finally {
+            setCreatingStudent(false);
         }
     };
 
@@ -290,7 +333,7 @@ export default function MatriculaCreate() {
             return;
         }
 
-        const payload = { estudiante_id, curso_id, fecha_inicio, estado: "pendiente", observaciones };
+        const payload = { estudiante_id, curso_id, fecha_inicio, estado: "pendiente", observaciones, tipo_pago: "cuotas" };
 
         try {
             const result = await onFinish(payload);
@@ -604,7 +647,12 @@ export default function MatriculaCreate() {
                         </Form.Item>
                         <Form.Item>
                             <Space>
-                                <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>
+                                <Button
+                                    type="primary"
+                                    htmlType="submit"
+                                    icon={<PlusOutlined />}
+                                    loading={creatingStudent}
+                                >
                                     Crear Estudiante
                                 </Button>
                                 <Button onClick={() => {
