@@ -57,32 +57,32 @@ export default function CursoCreate() {
         const programa = programas.find(p => p.id === programaId);
         const horaInicioValue = formProps.form?.getFieldValue("hora_inicio");
         
-        if (programa && diasSeleccionados.length > 0) {
-            let nombreGenerado = programa.nombre;
-            
-            if (diasSeleccionados.length > 0) {
-                const diasAbreviados = diasSeleccionados.map(d => {
-                    const abrev: Record<string, string> = {
-                        'Lunes': 'Lun', 'Martes': 'Mar', 'Miércoles': 'Mié',
-                        'Jueves': 'Jue', 'Viernes': 'Vie', 'Sábado': 'Sáb', 'Domingo': 'Dom'
-                    };
-                    return abrev[d] || d;
-                });
-                nombreGenerado += ` - ${diasAbreviados.join('/')}`;
-            }
-            
-            if (horaInicioValue) {
-                const hora = dayjs.isDayjs(horaInicioValue) 
-                    ? horaInicioValue.format('h:mm A')
-                    : (typeof horaInicioValue === 'string' ? dayjs(horaInicioValue, 'HH:mm:ss').format('h:mm A') : '');
-                if (hora) {
-                    nombreGenerado += ` ${hora}`;
-                }
-            }
-            
-            formProps.form?.setFieldValue("nombre", nombreGenerado);
+        if (!programa) return;
+
+        let nombreGenerado = programa.nombre;
+
+        if (diasSeleccionados.length > 0) {
+            const diasAbreviados = diasSeleccionados.map(d => {
+                const abrev: Record<string, string> = {
+                    'Lunes': 'Lun', 'Martes': 'Mar', 'Miércoles': 'Mié',
+                    'Jueves': 'Jue', 'Viernes': 'Vie', 'Sábado': 'Sáb', 'Domingo': 'Dom'
+                };
+                return abrev[d] || d;
+            });
+            nombreGenerado += ` - ${diasAbreviados.join('/')}`;
         }
-    }, [diasSeleccionados, formProps.form, programas]);
+        
+        if (horaInicioValue) {
+            const hora = dayjs.isDayjs(horaInicioValue) 
+                ? horaInicioValue.format('h:mm A')
+                : (typeof horaInicioValue === 'string' ? dayjs(horaInicioValue, 'HH:mm:ss').format('h:mm A') : '');
+            if (hora) {
+                nombreGenerado += ` ${hora}`;
+            }
+        }
+        
+        formProps.form?.setFieldValue("nombre", nombreGenerado);
+    }, [diasSeleccionados, formProps.form, programas, horaInicio]);
 
     useEffect(() => {
         if (horaInicio) {

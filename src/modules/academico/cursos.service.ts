@@ -60,7 +60,8 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
       `
     )
     .order("estado", { ascending: true })
-    .order("fecha_inicio", { ascending: true, nullsFirst: true });
+    .order("fecha_inicio", { ascending: true, nullsFirst: true })
+    .order("hora_inicio", { ascending: true, nullsFirst: true });
 
   if (error) throw error;
   const normalizados = (data ?? []).map((item: any) => ({

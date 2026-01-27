@@ -257,21 +257,22 @@ export default function CatalogoCursosPage() {
                     {proximos.length > 0 ? (
                       <Space direction="vertical" size={4} style={{ width: "100%" }}>
                         <Text style={{ color: "#cbd5e1" }}>Próximos grupos</Text>
-                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                        <Space direction="vertical" size={6} style={{ width: "100%" }}>
                           {proximos.slice(0, 2).map((g) => (
-                            <Badge.Ribbon
+                            <Card
                               key={g.id}
-                              text={(g.estado || "").toUpperCase()}
-                              color="purple"
-                              placement="end"
+                              size="small"
+                              bordered={false}
+                              style={{ background: "#111827", border: "1px solid #1f2937" }}
                             >
-                              <Card size="small" bordered={false} style={{ background: "#111827", border: "1px solid #1f2937" }}>
-                                <Space style={{ width: "100%", justifyContent: "space-between" }}>
-                                  <Text style={{ color: "#e2e8f0" }}>{g.nombre || "Grupo"}</Text>
+                              <Space style={{ width: "100%", justifyContent: "space-between", alignItems: "center" }}>
+                                <Text style={{ color: "#e2e8f0" }}>{g.nombre || "Grupo"}</Text>
+                                <Space size={8}>
+                                  <Tag color="purple" style={{ margin: 0 }}>{(g.estado || "").toUpperCase()}</Tag>
                                   <Text style={{ color: "#94a3b8" }}>{g.fecha_inicio ? dayjs(g.fecha_inicio).format("DD MMM") : "Próximamente"}</Text>
                                 </Space>
-                              </Card>
-                            </Badge.Ribbon>
+                              </Space>
+                            </Card>
                           ))}
                         </Space>
                       </Space>
