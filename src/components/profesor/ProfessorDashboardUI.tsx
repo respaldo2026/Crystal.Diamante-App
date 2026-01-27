@@ -53,6 +53,17 @@ const fallbackStats: ProfessorDashboardData["stats"] = {
   totalPagadoMes: 0,
 };
 
+const dedupeByKey = <T,>(items: T[] = [], keySelector: (item: T) => string): T[] => {
+  const map = new Map<string, T>();
+  items.forEach((item) => {
+    const key = keySelector(item);
+    if (!map.has(key)) {
+      map.set(key, item);
+    }
+  });
+  return Array.from(map.values());
+};
+
 export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dashboard, onOpenCourse }) => {
   const resolvedDashboard: ProfessorDashboardData = dashboard ?? {
     loading: true,
@@ -66,9 +77,9 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
 
   const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre } = resolvedDashboard;
   const statsData = stats ?? fallbackStats;
-  const proximasSesionesData = proximasSesiones || [];
-  const pendientesData = pendientes || [];
-  const pagosData = pagos || [];
+  const proximasSesionesData = dedupeByKey(proximasSesiones || [], (sesion: any) => `${sesion.cursoId ?? ""}-${sesion.fecha ?? ""}-${sesion.tema ?? ""}`);
+  const pendientesData = dedupeByKey(pendientes || [], (pendiente: any) => `${pendiente.cursoId ?? ""}-${pendiente.concepto ?? ""}-${pendiente.fecha ?? ""}`);
+  const pagosData = dedupeByKey(pagos || [], (pago: any) => `${pago.id ?? ""}-${pago.fecha ?? ""}-${pago.monto ?? ""}-${pago.tipo ?? ""}`);
   const [financialOpen, setFinancialOpen] = useState(false);
 
   const currencyFormatter = useMemo(
@@ -134,9 +145,13 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     },
   };
 
-  const topCursos = useMemo(() => [...(statsData.topCursos || [])], [statsData.topCursos]);
+  const topCursos = useMemo(
+    () => dedupeByKey(statsData.topCursos || [], (curso: any) => `${curso.id ?? curso.nombre ?? ""}`),
+    [statsData.topCursos],
+  );
   const cursosOrdenados = useMemo(
-    () => [...cursos].sort((a, b) => (b.estudiantesActivos || 0) - (a.estudiantesActivos || 0)),
+    () => dedupeByKey(cursos || [], (curso: any) => `${curso.id ?? curso.nombre ?? ""}`)
+      .sort((a, b) => (b.estudiantesActivos || 0) - (a.estudiantesActivos || 0)),
     [cursos],
   );
 
@@ -159,6 +174,8 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
         proxLabel,
         isSoon,
         asistenciaColor,
+        temaActual: curso.temaActual,
+        siguienteTema: curso.siguienteTema,
       };
     });
   }, [cursosOrdenados]);
@@ -298,12 +315,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             icon: <CalendarOutlined style={{ color: "#16a34a" }} />,
             description: "Últimos 30 días",
           }, {
-            key: "pendientes",
-            title: "Pendientes por calificar",
-            value: statsData.pendientesPorCalificar,
-            icon: <FormOutlined style={{ color: "#f97316" }} />,
-            description: statsData.pendientesPorCalificar > 0 ? "Revisa tus evaluaciones" : "Todo al día",
-          }, {
             key: "horas",
             title: "Horas registradas",
             value: statsData.horasMes,
@@ -316,8 +327,8 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             value: pagadoMesLabel,
             icon: <DollarCircleOutlined style={{ color: "#059669" }} />,
             description: "Incluye nómina y extras",
-          }].map((item) => (
-            <Col key={item.key} xs={24} md={12} xl={6}>
+          }].map((item, index, arr) => (
+            <Col key={item.key} xs={24} md={12} xl={arr.length === 3 ? 8 : 6}>
               <Card
                 variant="borderless"
                 style={{ borderRadius: 18, height: "100%", boxShadow: "0 12px 30px -24px rgba(15,23,42,0.3)" }}
@@ -404,6 +415,20 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                         <Space size={8} align="center">
                           <Badge color={curso.isSoon ? "#A855F7" : "#38bdf8"} text={curso.proxLabel} />
                         </Space>
+
+                        {curso.temaActual ? (
+                          <Typography.Text type="secondary" style={{ color: "#cbd5e1", fontSize: 12 }}>
+                            Tema actual: {curso.temaActual}
+                          </Typography.Text>
+                        ) : null}
+
+                        <Typography.Text style={{ color: "#e2e8f0", fontSize: 12, display: "block" }}>
+                          Horario próximo: {curso.proxLabel}
+                        </Typography.Text>
+                        <Typography.Text style={{ color: "#e2e8f0", fontSize: 12 }}>
+                          Próxima clase: {curso.proxLabel}
+                          {curso.siguienteTema ? ` • Tema: ${curso.siguienteTema}` : ""}
+                        </Typography.Text>
 
                         <Button
                           type="primary"

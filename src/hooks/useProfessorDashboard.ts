@@ -13,6 +13,8 @@ export interface ProfesorDashboardCurso {
   estudiantesActivos: number;
   asistenciaPromedio?: number | null;
   promedioNota?: number | null;
+  temaActual?: string | null;
+  siguienteTema?: string | null;
   proximaSesion?: {
     fecha: string;
     tema?: string | null;
@@ -389,6 +391,17 @@ export const fetchProfessorDashboardData = async (
     }
   });
 
+  const ultimaSesionPorCurso = new Map<string, { fecha: string; tema?: string | null }>();
+  sesionesMesData.forEach((sesion: any) => {
+    if (!sesion.fecha || !sesion.curso_id) return;
+    const fechaSesion = dayjs(sesion.fecha);
+    if (fechaSesion.isAfter(dayjs())) return; // solo sesiones pasadas o de hoy
+    const existente = ultimaSesionPorCurso.get(sesion.curso_id);
+    if (!existente || fechaSesion.isAfter(dayjs(existente.fecha))) {
+      ultimaSesionPorCurso.set(sesion.curso_id, { fecha: sesion.fecha, tema: sesion.tema_visto });
+    }
+  });
+
   const pendientesList: ProfesorDashboardPendiente[] = calificacionesData
     .filter((calificacion: any) =>
       (calificacion.nota === null || calificacion.nota === undefined) &&
@@ -406,6 +419,8 @@ export const fetchProfessorDashboardData = async (
   const cursosEnriquecidos: ProfesorDashboardCurso[] = (cursosData || []).map((curso: any) => {
     const asistencia = asistenciaPorCurso.get(curso.id);
     const promedioCurso = calificacionesPorCurso.get(curso.id);
+    const ultimaSesion = ultimaSesionPorCurso.get(curso.id);
+    const proximaSesion = proximasSesionPorCurso.get(curso.id) || null;
     return {
       id: curso.id,
       nombre: curso.nombre,
@@ -419,7 +434,9 @@ export const fetchProfessorDashboardData = async (
         promedioCurso && promedioCurso.total > 0
           ? Number((promedioCurso.suma / promedioCurso.total).toFixed(1))
           : null,
-      proximaSesion: proximasSesionPorCurso.get(curso.id) || null,
+      temaActual: ultimaSesion?.tema ?? null,
+      siguienteTema: proximaSesion?.tema ?? null,
+      proximaSesion,
     };
   });
 
