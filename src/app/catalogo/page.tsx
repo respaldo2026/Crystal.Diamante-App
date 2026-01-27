@@ -92,12 +92,14 @@ export default function CatalogoCursosPage() {
   }, []);
 
   const proximosPorPrograma = useMemo(() => {
-    return grupos.reduce<Record<string, Grupo[]>>((acc, grupo) => {
-      if (!grupo.programa_id) return acc;
-      acc[grupo.programa_id] = acc[grupo.programa_id] || [];
-      acc[grupo.programa_id].push(grupo);
-      return acc;
-    }, {});
+    const mapa: Record<string, Grupo[]> = {};
+    grupos.forEach((grupo) => {
+      const key = grupo.programa_id ? String(grupo.programa_id) : undefined;
+      if (!key) return;
+      if (!mapa[key]) mapa[key] = [];
+      mapa[key].push(grupo);
+    });
+    return mapa;
   }, [grupos]);
 
   const abrirShare = (programa: Programa) => {
