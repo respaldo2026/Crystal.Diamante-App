@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
 import { useRouter } from "next/navigation";
+import { useColorMode } from "@/contexts/color-mode";
 
 const { Title, Text } = Typography;
 
@@ -24,6 +25,8 @@ export default function MatriculaCreate() {
     const router = useRouter();
     const { formProps, saveButtonProps, onFinish } = useForm({ redirect: false });
     const printRef = useRef<HTMLDivElement>(null);
+    const { mode } = useColorMode();
+    const isDark = mode === "dark";
 
     // Estados para fase 1: crear inscripción
     const [cuposInfo, setCuposInfo] = useState<{ ocupados: number; total: number } | null>(null);
@@ -624,8 +627,19 @@ export default function MatriculaCreate() {
                 </Form>
 
                 <Modal
-                    title="Crear Nuevo Estudiante"
+                    title={<span style={{ color: "#f8fafc", fontWeight: 600 }}>Crear Nuevo Estudiante</span>}
                     open={createModalOpen}
+                    styles={{
+                        mask: { backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.65)" },
+                        content: {
+                            backgroundColor: "#111a2d",
+                            border: "1px solid #233044",
+                            boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+                            color: "#e2e8f0",
+                        },
+                        header: { backgroundColor: "#111a2d", borderBottom: "1px solid #233044", color: "#e2e8f0" },
+                        body: { backgroundColor: "#111a2d", color: "#e2e8f0" },
+                    }}
                     onCancel={() => {
                         setCreateModalOpen(false);
                         createForm.resetFields();
@@ -633,16 +647,31 @@ export default function MatriculaCreate() {
                     footer={null}
                 >
                     <Form form={createForm} layout="vertical" onFinish={handleCrearEstudiante}>
-                        <Form.Item name="identificacion" label="Identificación" rules={[{ required: true }]}>
+                        <Form.Item
+                            name="identificacion"
+                            label={<span style={{ color: "#e2e8f0" }}>Identificación</span>}
+                            rules={[{ required: true }]}
+                        >
                             <Input />
                         </Form.Item>
-                        <Form.Item name="nombre_completo" label="Nombre Completo" rules={[{ required: true }]}>
+                        <Form.Item
+                            name="nombre_completo"
+                            label={<span style={{ color: "#e2e8f0" }}>Nombre Completo</span>}
+                            rules={[{ required: true }]}
+                        >
                             <Input />
                         </Form.Item>
-                        <Form.Item name="email" label="Email">
+                        <Form.Item
+                            name="email"
+                            label={<span style={{ color: "#e2e8f0" }}>Email</span>}
+                        >
                             <Input type="email" />
                         </Form.Item>
-                        <Form.Item name="telefono" label="Teléfono" rules={[{ required: true }]}>
+                        <Form.Item
+                            name="telefono"
+                            label={<span style={{ color: "#e2e8f0" }}>Teléfono</span>}
+                            rules={[{ required: true }]}
+                        >
                             <Input />
                         </Form.Item>
                         <Form.Item>
