@@ -1,4 +1,5 @@
 import { AuthPage } from "@components/auth-page";
+import { LoginLanding } from "@components/auth-page/LoginLanding";
 import { authProviderServer } from "../../providers/auth-provider/auth-provider.server";
 import { redirect } from "next/navigation";
 
@@ -9,7 +10,11 @@ export default async function Login() {
     redirect(data?.redirectTo || "/");
   }
 
-  return <AuthPage type="login" />;
+  return (
+    <LoginLanding>
+      <AuthPage type="login" />
+    </LoginLanding>
+  );
 }
 
 async function getData() {

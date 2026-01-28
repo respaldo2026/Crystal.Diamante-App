@@ -54,18 +54,27 @@ export async function POST(request: Request) {
     }
 
 
-    // Registrar acción en audit_logs
-    await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/audit/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: null, // Reemplazar por el id del usuario si está disponible
-        action: 'create',
-        entity: 'pensum_ciclo',
-        entity_id: programaId,
-        details: { ciclosFaltantes },
-      }),
-    });
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+    if (appUrl) {
+      try {
+        const auditUrl = new URL('/api/audit/log', appUrl).toString();
+
+        await fetch(auditUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: null, // Reemplazar por el id del usuario si está disponible
+            action: 'create',
+            entity: 'pensum_ciclo',
+            entity_id: programaId,
+            details: { ciclosFaltantes },
+          }),
+        });
+      } catch (logErr) {
+        console.warn('Audit log fallo (continuando):', logErr);
+      }
+    }
 
     return Response.json({ success: true, data });
   } catch (error) {

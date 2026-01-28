@@ -528,8 +528,7 @@ export default function GestorPensum({
 
       message.success("Material subido correctamente");
       formMaterial.resetFields();
-      // Recargar lista de materiales si tienes esa función
-      // cargarMateriales();
+      await cargarMateriales();
       
     } catch (error: any) {
       message.error("Error al subir material: " + error.message);

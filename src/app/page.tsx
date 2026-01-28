@@ -14,6 +14,8 @@ import {
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@hooks/useCurrentUser";
+import { LoginLanding } from "@components/auth-page/LoginLanding";
+import { AuthPage as AuthPageComponent } from "@components/auth-page";
 import dayjs from "dayjs";
 import isBetween from 'dayjs/plugin/isBetween';
 import { formatDate } from "@utils/date";
@@ -64,6 +66,7 @@ export default function DashboardPage() {
   // Redirigir no autorizados - USAR EFFECT PARA EVITAR CONDICIONALES
   const normalizedRole = (user?.rol || "").toLowerCase();
   const isAdminRole = normalizedRole === "admin" || normalizedRole === "director";
+  const isUnauthenticated = !userLoading && !user;
 
   useEffect(() => {
     if (userLoading || !user) return;
@@ -380,6 +383,14 @@ export default function DashboardPage() {
       },
     },
   };
+
+  if (isUnauthenticated) {
+    return (
+      <LoginLanding>
+        <AuthPageComponent type="login" />
+      </LoginLanding>
+    );
+  }
 
   // Texto del período seleccionado
   const periodoTexto = timeRange === 'week' ? 'de la Semana' : timeRange === 'year' ? 'del Año' : 'del Mes';

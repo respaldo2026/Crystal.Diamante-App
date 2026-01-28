@@ -348,7 +348,10 @@ export default function MatriculaCreate() {
 
         try {
             const result = await onFinish(payload);
-            const matriculaId = result?.data?.id;
+            const dataResult = result?.data;
+            const matriculaId = Array.isArray(dataResult)
+                ? dataResult[0]?.id
+                : dataResult?.id;
 
             if (!matriculaId) {
                 throw new Error("No se pudo obtener el ID de la matrícula creada");
