@@ -3,3 +3,11 @@
 
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 export const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+if (!SUPABASE_URL) {
+	console.error("Supabase URL env var missing at runtime");
+}
+
+if (!SUPABASE_KEY) {
+	console.error("Supabase anon key env var missing at runtime");
+}
