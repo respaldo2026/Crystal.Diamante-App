@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import "@refinedev/antd/dist/reset.css";
 import "@utils/suppress-warnings";
 import { AppShell } from "./AppShell";
+import { LoginLanding } from "@components/auth-page/LoginLanding";
+import { AuthPage } from "@components/auth-page";
 
 const LayoutFallback = () => (
   <div
