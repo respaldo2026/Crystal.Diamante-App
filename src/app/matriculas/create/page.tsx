@@ -48,6 +48,7 @@ export default function MatriculaCreate() {
     const [cursoData, setCursoData] = useState<any>(null);
     const [pagoInscripcionData, setPagoInscripcionData] = useState<any>(null);
     const [procesandoPago, setProcesandoPago] = useState(false);
+    const [creatingMatricula, setCreatingMatricula] = useState(false);
     const [pagoForm] = Form.useForm();
     const [mediosPago, setMediosPago] = useState<any[]>([]);
 
@@ -347,11 +348,19 @@ export default function MatriculaCreate() {
         const payload = { estudiante_id, curso_id, fecha_inicio, estado: "pendiente", observaciones, tipo_pago: "cuotas" };
 
         try {
-            const result = await onFinish(payload);
-            const dataResult = result?.data;
-            const matriculaId = Array.isArray(dataResult)
-                ? dataResult[0]?.id
-                : dataResult?.id;
+            setCreatingMatricula(true);
+
+            const { data: matriculaCreada, error: errInsert } = await supabaseBrowserClient
+                .from("matriculas")
+                .insert([payload])
+                .select("id")
+                .single();
+
+            if (errInsert) {
+                throw errInsert;
+            }
+
+            const matriculaId = matriculaCreada?.id;
 
             if (!matriculaId) {
                 throw new Error("No se pudo obtener el ID de la matrícula creada");
@@ -407,6 +416,8 @@ export default function MatriculaCreate() {
         } catch (error: any) {
             console.error("Error creando matrícula:", error);
             message.error("❌ Error al crear la matrícula. Por favor intenta de nuevo.");
+        } finally {
+            setCreatingMatricula(false);
         }
     };
 
@@ -631,7 +642,7 @@ export default function MatriculaCreate() {
                             </Col>
                         </Row>
 
-                        <Button type="primary" htmlType="submit" size="large" block loading={saveButtonProps.loading}>
+                        <Button type="primary" htmlType="submit" size="large" block loading={creatingMatricula || saveButtonProps.loading}>
                             Crear Inscripción Académica
                         </Button>
                     </Card>
