@@ -357,15 +357,18 @@ export default function MatriculaCreate() {
                 .single();
 
             if (errInsert) {
+                console.error("Error insertando matrícula:", errInsert);
                 throw errInsert;
             }
 
             const matriculaId = matriculaCreada?.id;
 
             if (!matriculaId) {
+                console.error("No se obtuvo ID de matrícula");
                 throw new Error("No se pudo obtener el ID de la matrícula creada");
             }
 
+            console.log("Matrícula creada con ID:", matriculaId);
             message.success("✅ Inscripción académica registrada");
 
             // Cargar datos completos para mostrar el recibo
