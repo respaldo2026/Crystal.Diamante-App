@@ -466,10 +466,7 @@ export default function AdminDashboard() {
 
   return (
     <div style={{
-      padding: "24px 12px",
-      "@media (max-width: 768px)": {
-        padding: "16px 8px",
-      },
+      padding: window.innerWidth < 768 ? "16px 8px" : "24px 12px",
     }}>
       <div style={{
         display: "flex",
