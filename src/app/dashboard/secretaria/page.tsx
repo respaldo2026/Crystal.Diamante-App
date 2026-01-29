@@ -689,75 +689,104 @@ export default function SecretariaDashboard() {
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <Space direction="vertical" size={24} style={{ width: "100%" }}>
+    <div style={{
+      padding: window.innerWidth < 768 ? "16px 12px" : "24px",
+      backgroundColor: window.innerWidth < 768 ? "#fafafa" : "transparent"
+    }}>
+      <Space direction="vertical" size={window.innerWidth < 768 ? 16 : 24} style={{ width: "100%" }}>
         <div
           style={{
             background: "linear-gradient(135deg, #5B21B6, #7C3AED)",
-            borderRadius: 18,
-            padding: 24,
+            borderRadius: window.innerWidth < 768 ? 12 : 18,
+            padding: window.innerWidth < 768 ? "16px" : "24px",
             color: "#fff",
             boxShadow: "0 18px 40px -24px rgba(91,33,182,0.55)",
           }}
         >
-          <Row gutter={[24, 24]} align="middle">
+          <Row gutter={[window.innerWidth < 768 ? 12 : 24, window.innerWidth < 768 ? 12 : 24]} align="middle">
             <Col xs={24} md={14}>
-              <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                <Space size={12} wrap>
-                  <Badge color="#F5F5F5" text={<span style={{ color: "#F5F5F5" }}>Centro de atención</span>} />
-                  <Badge color="#C4B5FD" text={<span style={{ color: "#F5F5F5" }}>Secretaría</span>} />
+              <Space direction="vertical" size={window.innerWidth < 768 ? 8 : 12} style={{ width: "100%" }}>
+                <Space size={window.innerWidth < 768 ? 8 : 12} wrap>
+                  <Badge color="#F5F5F5" text={<span style={{ color: "#F5F5F5", fontSize: window.innerWidth < 768 ? "12px" : "14px" }}>Centro de atención</span>} />
+                  <Badge color="#C4B5FD" text={<span style={{ color: "#F5F5F5", fontSize: window.innerWidth < 768 ? "12px" : "14px" }}>Secretaría</span>} />
                 </Space>
-                <Title level={2} style={{ color: "#FFFFFF", marginBottom: 0 }}>
-                  Bienvenida, facilita la información y gestiona el flujo académico
+                <Title level={window.innerWidth < 768 ? 3 : 2} style={{ color: "#FFFFFF", marginBottom: 0, fontSize: window.innerWidth < 768 ? "18px" : "28px" }}>
+                  Bienvenida, gestiona el flujo académico
                 </Title>
-                <Text style={{ color: "rgba(255,255,255,0.85)" }}>
-                  Mantén actualizada la información de cursos, realiza matrículas y controla los pagos de los estudiantes desde un solo lugar.
+                <Text style={{
+                  color: "rgba(255,255,255,0.85)",
+                  fontSize: window.innerWidth < 768 ? "12px" : "14px"
+                }}>
+                  Matrículas, pagos y cursos en un solo lugar.
                 </Text>
-                <Space size={[12, 12]} wrap>
-                  <Button type="primary" icon={<PlusOutlined />} onClick={() => abrirMatricula()}>
-                    Registrar matrícula
+                <Space size={window.innerWidth < 768 ? [8, 8] : [12, 12]} wrap>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => abrirMatricula()}
+                    size={window.innerWidth < 768 ? "small" : "middle"}
+                    style={{
+                      fontSize: window.innerWidth < 768 ? "12px" : "14px",
+                    }}
+                  >
+                    {window.innerWidth < 768 ? "Matrícula" : "Registrar matrícula"}
                   </Button>
                   <Button
                     icon={<CreditCardOutlined />}
                     onClick={() => {
                       void abrirRegistroPago(pagosPendientes[0]);
                     }}
+                    size={window.innerWidth < 768 ? "small" : "middle"}
+                    style={{
+                      fontSize: window.innerWidth < 768 ? "12px" : "14px",
+                    }}
                   >
-                    Registrar pago
+                    {window.innerWidth < 768 ? "Pago" : "Registrar pago"}
                   </Button>
-                  <Button
-                    type="link"
-                    style={{ color: "#E0E7FF" }}
-                    icon={<InfoCircleOutlined />}
-                    onClick={() => window.open("/programas", "_blank")}
-                  >
-                    Catálogo de cursos
-                  </Button>
-                  <Button
-                    icon={<ReloadOutlined />}
-                    ghost
-                    onClick={cargarPanel}
-                    disabled={loading}
-                  >
-                    Actualizar datos
-                  </Button>
+                  {!loading && (
+                    <Button
+                      icon={<ReloadOutlined />}
+                      ghost
+                      onClick={cargarPanel}
+                      disabled={loading}
+                      size={window.innerWidth < 768 ? "small" : "middle"}
+                      style={{
+                        fontSize: window.innerWidth < 768 ? "12px" : "14px",
+                      }}
+                    >
+                      {window.innerWidth < 768 ? "Actualizar" : "Actualizar datos"}
+                    </Button>
+                  )}
                 </Space>
               </Space>
             </Col>
             <Col xs={24} md={10}>
-              <Row gutter={[16, 16]}>
+              <Row gutter={[window.innerWidth < 768 ? 8 : 16, window.innerWidth < 768 ? 8 : 16]}>
                 {resumenCards.map((card) => (
-                  <Col xs={12} key={card.key}>
+                  <Col xs={12} sm={8} md={12} key={card.key}>
                     <div
                       style={{
                         backgroundColor: "rgba(17,24,39,0.28)",
-                        borderRadius: 16,
-                        padding: 16,
+                        borderRadius: window.innerWidth < 768 ? 8 : 16,
+                        padding: window.innerWidth < 768 ? "12px" : "16px",
                         backdropFilter: "blur(2px)",
                       }}
                     >
-                      <Text style={{ color: "rgba(255,255,255,0.7)" }}>{card.label}</Text>
-                      <Statistic value={card.value} valueStyle={{ color: "#FFFFFF", fontWeight: 700 }} />
+                      <Text style={{
+                        color: "rgba(255,255,255,0.7)",
+                        fontSize: window.innerWidth < 768 ? "11px" : "13px",
+                        display: "block",
+                        marginBottom: "4px",
+                        wordWrap: "break-word"
+                      }}>{card.label}</Text>
+                      <Statistic
+                        value={card.value}
+                        valueStyle={{
+                          color: "#FFFFFF",
+                          fontWeight: 700,
+                          fontSize: window.innerWidth < 768 ? "20px" : "28px"
+                        }}
+                      />
                     </div>
                   </Col>
                 ))}
@@ -771,12 +800,15 @@ export default function SecretariaDashboard() {
             <Spin size="large" />
           </div>
         ) : (
-          <Row gutter={[24, 24]}>
-            <Col xs={24} xl={16}>
+          <Row gutter={[window.innerWidth < 768 ? 12 : 24, window.innerWidth < 768 ? 12 : 24]}>
+            <Col xs={24} md={window.innerWidth < 768 ? 24 : 16}>
               <Card
-                title="Vista general académica"
-                extra={<Button type="link" onClick={() => window.open("/programas", "_blank")}>Gestionar programas</Button>}
+                title={<span style={{ fontSize: window.innerWidth < 768 ? "14px" : "16px" }}>Vista general académica</span>}
+                extra={window.innerWidth >= 768 && <Button type="link" onClick={() => window.open("/programas", "_blank")} size="small">Gestionar programas</Button>}
                 variant="outlined"
+                style={{
+                  marginBottom: window.innerWidth < 768 ? "12px" : "0px",
+                }}
               >
                 <Tabs
                   defaultActiveKey="programas"
@@ -870,51 +902,54 @@ export default function SecretariaDashboard() {
                 />
               </Card>
             </Col>
-            <Col xs={24} xl={8}>
-              <Space direction="vertical" size={24} style={{ width: "100%" }}>
-                <Card title="Estado de pagos" variant="outlined">
-                  <Row gutter={[16, 16]}>
-                    <Col span={12}>
+            <Col xs={24} md={window.innerWidth < 768 ? 24 : 8}>
+              <Space direction="vertical" size={window.innerWidth < 768 ? 16 : 24} style={{ width: "100%" }}>
+                <Card title={<span style={{ fontSize: window.innerWidth < 768 ? "14px" : "16px" }}>Estado de pagos</span>} variant="outlined">
+                  <Row gutter={[window.innerWidth < 768 ? 12 : 16, window.innerWidth < 768 ? 12 : 16]}>
+                    <Col xs={12} md={12}>
                       <Statistic
-                        title="Pendiente"
+                        title={<span style={{ fontSize: window.innerWidth < 768 ? "11px" : "12px" }}>Pendiente</span>}
                         value={resumenFinanciero.totalPendiente}
                         precision={0}
                         prefix="$"
-                        valueStyle={{ color: "#B91C1C", fontWeight: 700 }}
+                        valueStyle={{ color: "#B91C1C", fontWeight: 700, fontSize: window.innerWidth < 768 ? "16px" : "24px" }}
                       />
                     </Col>
-                    <Col span={12}>
+                    <Col xs={12} md={12}>
                       <Statistic
-                        title="Pagos vencidos"
+                        title={<span style={{ fontSize: window.innerWidth < 768 ? "11px" : "12px" }}>Vencidos</span>}
                         value={resumenFinanciero.vencidos}
-                        valueStyle={{ color: "#DC2626", fontWeight: 700 }}
+                        valueStyle={{ color: "#DC2626", fontWeight: 700, fontSize: window.innerWidth < 768 ? "16px" : "24px" }}
                       />
                     </Col>
                     <Col span={24}>
                       <Statistic
-                        title="Vencen en 7 días"
+                        title={<span style={{ fontSize: window.innerWidth < 768 ? "11px" : "12px" }}>Vencen en 7d</span>}
                         value={resumenFinanciero.proximosVencimientos}
-                        valueStyle={{ color: "#F59E0B", fontWeight: 600 }}
+                        valueStyle={{ color: "#F59E0B", fontWeight: 600, fontSize: window.innerWidth < 768 ? "16px" : "24px" }}
                       />
                     </Col>
                   </Row>
-                  <Divider style={{ margin: "16px 0" }} />
+                  <Divider style={{ margin: window.innerWidth < 768 ? "12px 0" : "16px 0" }} />
                   <List
                     dataSource={pagosPendientes.slice(0, 4)}
                     rowKey={(pago) => pago.id}
                     locale={{ emptyText: <Empty description="Sin pagos pendientes" /> }}
                     renderItem={(pago) => (
                       <List.Item
+                        style={{
+                          paddingBottom: window.innerWidth < 768 ? "8px" : "12px",
+                        }}
                         actions={[
                           <Button
                             key="registrar"
                             type="link"
-                            size="small"
+                            size={window.innerWidth < 768 ? "small" : "middle"}
                             onClick={() => {
                               void abrirRegistroPago(pago);
                             }}
                           >
-                            Registrar
+                            {window.innerWidth < 768 ? "+" : "Registrar"}
                           </Button>,
                         ]}
                       >
@@ -938,38 +973,47 @@ export default function SecretariaDashboard() {
                     )}
                   />
                   {pagosPendientes.length > 4 && (
-                    <Button type="link" onClick={() => window.open("/tesoreria", "_blank")}>Ver todos los pagos</Button>
+                    <Button type="link" size={window.innerWidth < 768 ? "small" : "middle"} onClick={() => window.open("/tesoreria", "_blank")}>
+                      {window.innerWidth < 768 ? "Ver más" : "Ver todos los pagos"}
+                    </Button>
                   )}
                 </Card>
 
                 <Card
-                  title="Leads en seguimiento"
-                  extra={<Button type="link" onClick={() => window.open("/leads", "_blank")}>
-                    Abrir módulo
+                  title={<span style={{ fontSize: window.innerWidth < 768 ? "14px" : "16px" }}>Leads en seguimiento</span>}
+                  extra={window.innerWidth >= 768 && <Button type="link" size="small" onClick={() => window.open("/leads", "_blank")}>
+                    Módulo
                   </Button>}
                   variant="outlined"
                 >
-                  <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <Space direction="vertical" size={window.innerWidth < 768 ? 8 : 12} style={{ width: "100%" }}>
                     <Statistic
-                      title="Sin contacto"
+                      title={<span style={{ fontSize: window.innerWidth < 768 ? "11px" : "12px" }}>Sin contacto</span>}
                       value={leadsPrioritarios.sinContacto.length}
-                      valueStyle={{ color: "#2563EB", fontWeight: 600 }}
+                      valueStyle={{ color: "#2563EB", fontWeight: 600, fontSize: window.innerWidth < 768 ? "16px" : "20px" }}
                     />
                     <Statistic
-                      title="En seguimiento"
+                      title={<span style={{ fontSize: window.innerWidth < 768 ? "11px" : "12px" }}>En seguimiento</span>}
                       value={leadsPrioritarios.seguimiento.length}
-                      valueStyle={{ color: "#0EA5E9", fontWeight: 600 }}
+                      valueStyle={{ color: "#0EA5E9", fontWeight: 600, fontSize: window.innerWidth < 768 ? "16px" : "20px" }}
                     />
-                    <Divider style={{ margin: "12px 0" }} />
+                    <Divider style={{ margin: window.innerWidth < 768 ? "8px 0" : "12px 0" }} />
                     <List
                       dataSource={leads.slice(0, 4)}
+                      style={{
+                        maxHeight: window.innerWidth < 768 ? "300px" : "400px",
+                        overflowY: "auto"
+                      }}
                       rowKey={(lead) => lead.id}
                       locale={{ emptyText: <Empty description="Sin leads pendientes" /> }}
                       renderItem={(lead) => (
                         <List.Item
+                          style={{
+                            paddingBottom: window.innerWidth < 768 ? "8px" : "12px",
+                          }}
                           actions={[
                             lead.telefono ? (
-                              <Tooltip key="whatsapp" title="Enviar mensaje">
+                              <Tooltip key="whatsapp" title="WhatsApp">
                                 <Button
                                   type="link"
                                   size="small"
@@ -983,22 +1027,27 @@ export default function SecretariaDashboard() {
                         >
                           <List.Item.Meta
                             title={
-                              <Space>
-                                <Text strong>{lead.nombre}</Text>
+                              <Space size={window.innerWidth < 768 ? 4 : 8}>
+                                <Text strong style={{ fontSize: window.innerWidth < 768 ? "12px" : "14px" }}>{lead.nombre}</Text>
                                 {lead.estado && (
-                                  <Tag color={estadoLeadColor[lead.estado] || "default"}>{lead.estado.replace(/_/g, " ")}</Tag>
+                                  <Tag color={estadoLeadColor[lead.estado] || "default"} style={{ fontSize: window.innerWidth < 768 ? "10px" : "12px" }}>{lead.estado.replace(/_/g, " ")}</Tag>
                                 )}
                               </Space>
                             }
                             description={
-                              <Text type="secondary">
-                                {lead.interes || "Sin observaciones"}
+                              <Text type="secondary" style={{ fontSize: window.innerWidth < 768 ? "11px" : "12px" }}>
+                                {(lead.interes || "Sin obs").substring(0, window.innerWidth < 768 ? 30 : 60)}
                               </Text>
                             }
                           />
                         </List.Item>
                       )}
                     />
+                    {leads.length > 4 && (
+                      <Button type="link" size={window.innerWidth < 768 ? "small" : "middle"} block onClick={() => window.open("/leads", "_blank")}>
+                        Ver todos ({leads.length})
+                      </Button>
+                    )}
                   </Space>
                 </Card>
               </Space>

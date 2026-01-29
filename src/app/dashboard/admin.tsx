@@ -465,23 +465,48 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+    <div style={{
+      padding: "24px 12px",
+      "@media (max-width: 768px)": {
+        padding: "16px 8px",
+      },
+    }}>
+      <div style={{
+        display: "flex",
+        flexDirection: window.innerWidth < 768 ? "column" : "row",
+        justifyContent: "space-between",
+        alignItems: window.innerWidth < 768 ? "flex-start" : "center",
+        marginBottom: 24,
+        gap: 16,
+      }}>
         <div>
-          <Title level={3} style={{ marginBottom: 4 }}>Panel administrativo</Title>
-          <Text type="secondary">Visualiza indicadores clave y toma decisiones con datos confiables.</Text>
+          <Title level={window.innerWidth < 768 ? 4 : 3} style={{ marginBottom: 4 }}>Panel administrativo</Title>
+          <Text type="secondary" style={{
+            fontSize: window.innerWidth < 768 ? "12px" : "14px",
+          }}>Visualiza indicadores clave y toma decisiones con datos confiables.</Text>
         </div>
-        <Space size={12} align="center">
+        <Space size={8} align="center" wrap style={{
+          width: window.innerWidth < 768 ? "100%" : "auto",
+        }}>
           <Segmented
             options={[
-              { label: "Últimos 30 días", value: "30d" },
-              { label: "Últimos 90 días", value: "90d" },
-              { label: "12 meses", value: "year" }
+              { label: "30d", value: "30d" },
+              { label: "90d", value: "90d" },
+              { label: "12m", value: "year" }
             ]}
             value={timeRange}
             onChange={handleRangeChange}
+            size={window.innerWidth < 768 ? "small" : "middle"}
+            style={{
+              fontSize: window.innerWidth < 768 ? "12px" : "14px",
+            }}
           />
-          <Button icon={<SyncOutlined />} onClick={fetchData} loading={refreshing && !initialLoading} />
+          <Button
+            icon={<SyncOutlined />}
+            onClick={fetchData}
+            loading={refreshing && !initialLoading}
+            size={window.innerWidth < 768 ? "small" : "middle"}
+          />
         </Space>
       </div>
 
@@ -496,22 +521,44 @@ export default function AdminDashboard() {
       )}
 
       <Spin spinning={initialLoading} tip="Consultando métricas...">
-        <Row gutter={[16, 16]}>
+        <Row gutter={[12, 12]} style={{
+          marginBottom: 24,
+        }}>
           {metricCards.map(card => (
-            <Col key={card.key} xs={24} sm={12} xl={8} xxl={4}>
-              <Card>
+            <Col key={card.key} xs={12} sm={12} md={8} lg={6}>
+              <Card style={{
+                padding: window.innerWidth < 768 ? "12px" : "16px",
+              }}>
                 <Space direction="vertical" size={4} style={{ width: "100%" }}>
-                  <Space align="center" size={12}>
-                    {card.icon}
-                    <Text type="secondary">{card.title}</Text>
-                    {card.extra}
+                  <Space align="center" size={window.innerWidth < 768 ? 6 : 12} style={{
+                    flexWrap: "wrap",
+                  }}>
+                    <span style={{
+                      fontSize: window.innerWidth < 768 ? "16px" : "20px",
+                    }}>
+                      {card.icon}
+                    </span>
+                    <Text type="secondary" style={{
+                      fontSize: window.innerWidth < 768 ? "11px" : "13px",
+                      flex: 1,
+                    }}>{card.title}</Text>
+                    {card.extra && (
+                      <div style={{
+                        fontSize: window.innerWidth < 768 ? "10px" : "12px",
+                      }}>
+                        {card.extra}
+                      </div>
+                    )}
                   </Space>
                   <Statistic
                     value={card.value}
                     prefix={card.prefix}
                     suffix={card.suffix}
                     precision={card.precision}
-                    valueStyle={card.valueStyle}
+                    valueStyle={{
+                      ...card.valueStyle,
+                      fontSize: window.innerWidth < 768 ? "16px" : "24px",
+                    }}
                   />
                 </Space>
               </Card>
@@ -520,30 +567,42 @@ export default function AdminDashboard() {
         </Row>
       </Spin>
 
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        <Col xs={24} lg={16}>
+      <Row gutter={[12, 12]} style={{ marginTop: 24 }}>
+        <Col xs={24} md={16}>
           <Spin spinning={initialLoading || (refreshing && !initialLoading)} tip="Actualizando ingresos...">
             <Card title={
-              <Space>
-                <RiseOutlined style={{ color: "#1677ff" }} />
-                <span>Evolución de ingresos</span>
+              <Space size={8}>
+                <RiseOutlined style={{ color: "#1677ff", fontSize: window.innerWidth < 768 ? "16px" : "20px" }} />
+                <span style={{
+                  fontSize: window.innerWidth < 768 ? "14px" : "16px",
+                }}>Evolución de ingresos</span>
               </Space>
-            }>
+            } style={{
+              marginBottom: window.innerWidth < 768 ? "12px" : "0px",
+            }}>
               {ingresosSeries.length === 0 ? (
                 <Empty description="Sin información para el rango seleccionado" />
               ) : (
-                <Line {...lineConfig} />
+                <Line {...{
+                  ...lineConfig,
+                  height: window.innerWidth < 768 ? 200 : 280,
+                }} />
               )}
             </Card>
           </Spin>
         </Col>
-        <Col xs={24} lg={8}>
+        <Col xs={24} md={8}>
           <Spin spinning={initialLoading || (refreshing && !initialLoading)} tip="Cargando distribución...">
-            <Card title="Distribución por método de pago">
+            <Card title={<span style={{
+              fontSize: window.innerWidth < 768 ? "14px" : "16px",
+            }}>Distribución por método de pago</span>}>
               {metodosSeries.length === 0 ? (
                 <Empty description="Registra pagos para ver la distribución" />
               ) : (
-                <Pie {...pieConfig} />
+                <Pie {...{
+                  ...pieConfig,
+                  height: window.innerWidth < 768 ? 200 : 300,
+                }} />
               )}
             </Card>
           </Spin>
