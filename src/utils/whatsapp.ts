@@ -52,7 +52,7 @@ export const obtenerPlantillaWhatsapp = async (
             .select("plantilla, activa")
             .eq("nombre", nombrePlantilla)
             .eq("activa", true)
-            .single();
+            .maybeSingle();
 
         if (error || !data) {
             return null;

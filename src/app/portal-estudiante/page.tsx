@@ -199,6 +199,7 @@ export default function PortalEstudiante() {
                 rowKey="id" 
                 pagination={false} 
                 size="small"
+                scroll={{ x: 560 }}
                 columns={[
                   { 
                     title: 'Concepto', 
@@ -249,6 +250,7 @@ export default function PortalEstudiante() {
                 rowKey="id" 
                 pagination={{ pageSize: 5 }} 
                 size="small"
+               scroll={{ x: 520 }}
                 columns={[
                   { title: 'Concepto', dataIndex: 'periodo_pagado', render: (t, r: any) => t || `Cuota ${r.numero_cuota}` },
                   { title: 'Fecha', dataIndex: 'fecha_pago', render: (d) => d ? dayjs(d).format("DD/MM/YYYY") : '-' },
@@ -387,14 +389,14 @@ export default function PortalEstudiante() {
   }
 
   return (
-    <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
+    <div className="portal-estudiante" style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
       <Card style={{ marginBottom: 20 }}>
-        <Row gutter={16}>
+        <Row gutter={16} className="header-row">
           <Col xs={24} sm={12}>
             <Title level={2}>Bienvenido, {estudiante?.nombre_completo}! 🎓</Title>
             <Text type="secondary">Portal de Estudiante - Academy Crystal</Text>
           </Col>
-          <Col xs={24} sm={12} style={{ textAlign: "right" }}>
+          <Col xs={24} sm={12} className="header-actions" style={{ textAlign: "right" }}>
             {estudiante?.telefono && (
               <Button
                 icon={<WhatsAppOutlined />}
@@ -424,7 +426,7 @@ export default function PortalEstudiante() {
                   <Row gutter={16}>
                     {avancePorCurso.map((curso: any, idx: number) => (
                       <Col xs={24} sm={12} lg={8} key={idx}>
-                        <Card title={curso.curso} extra={<Tag>{curso.programa}</Tag>}>
+                        <Card className="course-card" title={curso.curso} extra={<Tag>{curso.programa}</Tag>}>
                           <Progress type="circle" percent={curso.nota} format={() => `${curso.nota}/100`} />
                           <div style={{ marginTop: 10, textAlign: 'center' }}>
                             <Tag color={curso.nota >= 70 ? "green" : "orange"}>{curso.estado?.toUpperCase()}</Tag>
@@ -454,6 +456,8 @@ export default function PortalEstudiante() {
               <Table
                 dataSource={asistencias}
                 rowKey="id"
+                size="small"
+                scroll={{ x: 520 }}
                 columns={[
                   { title: "Fecha", dataIndex: "fecha", render: (f) => formatDate(f) },
                   { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
@@ -469,6 +473,8 @@ export default function PortalEstudiante() {
               <Table
                 dataSource={calificaciones}
                 rowKey="id"
+                size="small"
+                scroll={{ x: 520 }}
                 columns={[
                   { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
                   { title: "Nota", dataIndex: "calificacion", render: (c) => <Tag color={c >= 70 ? "green" : "red"}>{c}</Tag> },
@@ -484,6 +490,8 @@ export default function PortalEstudiante() {
               <Table
                 dataSource={certificados}
                 rowKey="id"
+                size="small"
+                scroll={{ x: 520 }}
                 columns={[
                   { title: "Curso", render: (_, r: any) => r.cursos?.nombre },
                   { title: "Nota Final", dataIndex: "nota_final" },
@@ -499,6 +507,40 @@ export default function PortalEstudiante() {
           }
         ]}
       />
+      <style jsx global>{`
+        .portal-estudiante .header-row {
+          align-items: center;
+        }
+        @media (max-width: 576px) {
+          .portal-estudiante {
+            padding: 12px !important;
+          }
+          .portal-estudiante .header-row {
+            text-align: center;
+          }
+          .portal-estudiante .header-actions {
+            text-align: center !important;
+            margin-top: 12px;
+          }
+          .portal-estudiante .header-actions .ant-btn {
+            width: 100%;
+          }
+          .portal-estudiante .ant-card-head-title {
+            white-space: normal;
+          }
+          .portal-estudiante .course-card .ant-card-body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+          }
+          .portal-estudiante .ant-table {
+            font-size: 12px;
+          }
+          .portal-estudiante .ant-table-cell {
+            white-space: normal;
+          }
+        }
+      `}</style>
     </div>
   );
 }

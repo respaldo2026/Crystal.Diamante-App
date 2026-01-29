@@ -6,7 +6,6 @@ import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOu
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
-import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
 import { useSearchParams } from "next/navigation";
 import { formatDate } from "@utils/date";
@@ -212,13 +211,7 @@ export default function TomarAsistencia() {
               buildWhatsappFallbackMessage("asistencia_inasistencia_registrada", variables) ??
               `Hola ${nombre}, se registró una inasistencia en ${cursoNombre} el ${fechaTexto}. Si es un error o necesitas apoyo, responde este mensaje.`;
 
-            if (telefono && (alumno.perfiles?.notif_whatsapp ?? true)) {
-              await enviarWhatsappConPlantilla(
-                telefono,
-                "asistencia_inasistencia_registrada",
-                variables,
-              );
-            }
+            // Se omite el envío de WhatsApp para ausencias
 
             await supabaseBrowserClient.from("notificaciones").insert({
               user_id: alumno.estudiante_id,

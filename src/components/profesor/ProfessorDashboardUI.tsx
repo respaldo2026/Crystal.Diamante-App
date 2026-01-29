@@ -194,6 +194,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
 
   return (
     <div
+      className="profesor-dashboard"
       style={{
         minHeight: "100vh",
         padding: "16px 10px 32px",
@@ -653,6 +654,35 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             </div>
           </Space>
         </Drawer>
+        <style jsx global>{`
+          @media (max-width: 576px) {
+            .profesor-dashboard {
+              padding: 12px !important;
+            }
+            .profesor-dashboard .ant-card-head-title {
+              white-space: normal;
+            }
+            .profesor-dashboard .ant-typography {
+              word-break: break-word;
+            }
+            .profesor-dashboard .ant-btn {
+              width: 100%;
+            }
+            .profesor-dashboard .ant-space {
+              width: 100%;
+            }
+            .profesor-dashboard .ant-list-item-meta-title,
+            .profesor-dashboard .ant-list-item-meta-description {
+              white-space: normal;
+            }
+            .profesor-dashboard .ant-card-body {
+              padding: 12px !important;
+            }
+            .profesor-dashboard .ant-drawer-content-wrapper {
+              width: 100% !important;
+            }
+          }
+        `}</style>
       </div>
     </div>
   );

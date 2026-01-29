@@ -130,13 +130,41 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           tipo_evaluacion: "tema",
         };
 
-        const { error } = await supabaseBrowserClient
+        const { data: existente, error: errExistente } = await supabaseBrowserClient
           .from("calificaciones")
-          .upsert(payload, { onConflict: "matricula_id,tema_id" });
+          .select("id")
+          .eq("matricula_id", matriculaId)
+          .eq("tema_id", temaId)
+          .maybeSingle();
 
-        if (error) {
-          message.error("Error guardando nota de tema: " + error.message);
+        if (errExistente) {
+          message.error("Error validando nota de tema: " + errExistente.message);
           return;
+        }
+
+        if (existente?.id) {
+          const { error: errUpdate } = await supabaseBrowserClient
+            .from("calificaciones")
+            .update({
+              nota,
+              calificacion: nota,
+              tipo_evaluacion: "tema",
+            })
+            .eq("id", existente.id);
+
+          if (errUpdate) {
+            message.error("Error actualizando nota de tema: " + errUpdate.message);
+            return;
+          }
+        } else {
+          const { error: errInsert } = await supabaseBrowserClient
+            .from("calificaciones")
+            .insert(payload);
+
+          if (errInsert) {
+            message.error("Error guardando nota de tema: " + errInsert.message);
+            return;
+          }
         }
 
         setCalificacionesTema((prev) => ({
