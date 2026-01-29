@@ -317,23 +317,28 @@ export default function MatriculaCreate() {
     };
 
     const handleOnFinish = async (values: any) => {
+        console.log("=== INICIANDO handleOnFinish ===", values);
         const { estudiante_id, curso_id, fecha_inicio, observaciones } = values || {};
 
+        console.log("Validando estudiante_id:", estudiante_id);
         if (!estudiante_id) {
             message.error("⚠️ Debes buscar o crear un estudiante primero.");
             return;
         }
 
+        console.log("Validando curso_id:", curso_id);
         if (!curso_id) {
             message.error("⚠️ Debes seleccionar un curso.");
             return;
         }
 
+        console.log("Validando cupos:", cuposInfo);
         if (cuposInfo && cuposInfo.ocupados >= cuposInfo.total) {
             message.error("⛔ ¡El curso está lleno! No se puede matricular.");
             return;
         }
 
+        console.log("Verificando matrícula existente...");
         const { count } = await supabaseBrowserClient
             .from("matriculas")
             .select("id", { count: "exact", head: true })
