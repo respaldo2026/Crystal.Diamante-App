@@ -339,11 +339,17 @@ export default function MatriculaCreate() {
         }
 
         console.log("Verificando matrícula existente...");
-        const { count } = await supabaseBrowserClient
+        const { count, error: errCountMatricula } = await supabaseBrowserClient
             .from("matriculas")
             .select("id", { count: "exact", head: true })
             .eq("estudiante_id", estudiante_id)
             .eq("curso_id", curso_id);
+
+        if (errCountMatricula) {
+            console.error("Error verificando matrícula existente:", errCountMatricula);
+        }
+
+        console.log("Resultado conteo matrícula existente:", count);
 
         if ((count || 0) > 0) {
             message.error("⚠️ Ya existe una matrícula para este estudiante en este curso.");
@@ -351,10 +357,12 @@ export default function MatriculaCreate() {
         }
 
         const payload = { estudiante_id, curso_id, fecha_inicio, estado: "pendiente", observaciones, tipo_pago: "cuotas" };
+        console.log("Payload matrícula:", payload);
 
         try {
             setCreatingMatricula(true);
 
+            console.log("Insertando matrícula...");
             const { data: matriculaCreada, error: errInsert } = await supabaseBrowserClient
                 .from("matriculas")
                 .insert([payload])
