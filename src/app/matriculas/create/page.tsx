@@ -352,7 +352,49 @@ export default function MatriculaCreate() {
         console.log("Resultado conteo matrícula existente:", count);
 
         if ((count || 0) > 0) {
-            message.error("⚠️ Ya existe una matrícula para este estudiante en este curso.");
+            message.warning("⚠️ Ya existe una matrícula para este estudiante. Abriendo el paso de pago.");
+
+            const { data: matriculaExistente, error: errMatExistente } = await supabaseBrowserClient
+                .from("matriculas")
+                .select(`*, cursos(*, programas(*))`)
+                .eq("estudiante_id", estudiante_id)
+                .eq("curso_id", curso_id)
+                .neq("estado", "cancelado")
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (errMatExistente || !matriculaExistente?.id) {
+                console.error("Error cargando matrícula existente:", errMatExistente);
+                message.error("❌ No se pudo cargar la matrícula existente.");
+                return;
+            }
+
+            const { data: estudiante } = await supabaseBrowserClient
+                .from("perfiles")
+                .select("*")
+                .eq("id", estudiante_id)
+                .single();
+
+            const { data: pagoInscripcion } = await supabaseBrowserClient
+                .from("pagos")
+                .select("*")
+                .eq("matricula_id", matriculaExistente.id)
+                .eq("numero_cuota", 0)
+                .maybeSingle();
+
+            setMatriculaData(matriculaExistente);
+            setEstudianteData(estudiante);
+            setCursoData(matriculaExistente?.cursos);
+            setPagoInscripcionData(pagoInscripcion);
+            setInscripcionCreada(true);
+
+            const montoInscripcion = pagoInscripcion?.monto || matriculaExistente?.cursos?.programas?.precio_inscripcion || 50000;
+            pagoForm.setFieldsValue({
+                monto: montoInscripcion,
+                fecha_pago: dayjs()
+            });
+
             return;
         }
 

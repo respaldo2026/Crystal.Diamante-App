@@ -458,6 +458,10 @@ export default function GestorPensum({
   // Actualizar pensum_id cuando se selecciona un ciclo para subir material
   const handleSubirMaterial = async () => {
     try {
+      if (!selectedCicloId) {
+        message.error("Selecciona un ciclo antes de subir material.");
+        return;
+      }
       // Obtener valores del formulario
       const formValues = formMaterial.getFieldsValue();
       const tipoOrigen = formValues.tipo_origen;
@@ -515,13 +519,15 @@ export default function GestorPensum({
         .from("material_didactico")
         .insert({
           programa_id: programaId,
+          pensum_id: selectedCicloId,
           titulo: formValues.titulo,
           descripcion: formValues.descripcion,
-          url: urlArchivo,
+          tipo_material: formValues.tipo_material || tipoOrigen,
+          url_archivo: urlArchivo,
           nombre_archivo: nombreArchivo,
           tamano_bytes: tamanoBytes,
-          tipo_mime: mimeType,
-          tipo_origen: tipoOrigen,
+          mime_type: mimeType,
+          visible: true,
         });
 
       if (insertError) throw insertError;
