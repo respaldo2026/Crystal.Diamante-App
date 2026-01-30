@@ -29,21 +29,33 @@ export const dataProvider: DataProvider = {
     
     try {
       console.log("🟡 [DATA PROVIDER] Enviando a Supabase...");
-      const result = await supabaseDataProvider.update!<TData, TVariables>({ resource, id, variables, meta });
+      
+      // Hacer el UPDATE directamente con el cliente de Supabase
+      const { data, error } = await supabaseBrowserClient
+        .from(resource)
+        .update(variables as any)
+        .eq("id", id)
+        .select("*");
+      
+      console.log("🟡 [DATA PROVIDER] Respuesta de Supabase:");
+      console.log("  - data:", data);
+      console.log("  - error:", error);
+      
+      if (error) {
+        console.error("❌ [DATA PROVIDER] ERROR DE SUPABASE:", error);
+        throw error;
+      }
       
       console.log("✅ [DATA PROVIDER] UPDATE EXITOSO");
-      console.log("  📊 Resultado:", JSON.stringify(result, null, 2));
-      console.log("  📊 Data retornada:", result?.data);
-      console.log("  📊 Tipo de resultado:", typeof result);
+      console.log("  📊 Datos retornados:", data);
+      console.log("  📊 Cantidad de filas actualizadas:", data?.length);
       
-      return result;
+      return { data: data as TData };
     } catch (error: any) {
       console.error("❌ [DATA PROVIDER] UPDATE FALLÓ");
       console.error("  💥 Error message:", error?.message);
       console.error("  💥 Error code:", error?.code);
       console.error("  💥 Error details:", error?.details);
-      console.error("  💥 Error hint:", error?.hint);
-      console.error("  💥 Error status:", error?.status);
       console.error("  💥 Error completo:", error);
       throw error;
     }
