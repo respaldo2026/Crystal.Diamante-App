@@ -29,7 +29,7 @@ CREATE POLICY "perfiles_select" ON perfiles
   FOR SELECT
   USING (
     auth.uid() = id
-    OR coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    OR coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- UPDATE: Actualizar propio perfil + admin/director/administrativo (via JWT) actualiza todo
@@ -37,25 +37,25 @@ CREATE POLICY "perfiles_update" ON perfiles
   FOR UPDATE
   USING (
     auth.uid() = id
-    OR coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    OR coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   )
   WITH CHECK (
     auth.uid() = id
-    OR coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    OR coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- INSERT: Solo admin/director/administrativo (via JWT) puede crear nuevos perfiles
 CREATE POLICY "perfiles_insert" ON perfiles
   FOR INSERT
   WITH CHECK (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- DELETE: Solo admin/director (via JWT) puede eliminar
 CREATE POLICY "perfiles_delete" ON perfiles
   FOR DELETE
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
   );
 
 -- ====================================================
@@ -79,7 +79,7 @@ CREATE POLICY "cursos_select" ON cursos
   USING (
     estado IN ('activo', 'proximo')
     OR profesor_id = auth.uid()
-    OR coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    OR coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- UPDATE: Profesor actualiza sus cursos + admin actualiza todo
@@ -87,25 +87,25 @@ CREATE POLICY "cursos_update" ON cursos
   FOR UPDATE
   USING (
     profesor_id = auth.uid()
-    OR coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    OR coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   )
   WITH CHECK (
     profesor_id = auth.uid()
-    OR coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    OR coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- INSERT: Solo admin puede crear cursos
 CREATE POLICY "cursos_insert" ON cursos
   FOR INSERT
   WITH CHECK (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- DELETE: Solo admin puede eliminar
 CREATE POLICY "cursos_delete" ON cursos
   FOR DELETE
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
   );
 
 -- ====================================================
@@ -133,7 +133,7 @@ CREATE POLICY "matriculas_select" ON matriculas
       WHERE c.id = matriculas.curso_id 
       AND c.profesor_id = auth.uid()
     )
-    OR coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    OR coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- UPDATE: Profesor/admin actualiza matrículas de sus estudiantes
@@ -145,7 +145,7 @@ CREATE POLICY "matriculas_update" ON matriculas
       WHERE c.id = matriculas.curso_id 
       AND c.profesor_id = auth.uid()
     )
-    OR coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    OR coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   )
   WITH CHECK (
     EXISTS (
@@ -153,21 +153,21 @@ CREATE POLICY "matriculas_update" ON matriculas
       WHERE c.id = matriculas.curso_id 
       AND c.profesor_id = auth.uid()
     )
-    OR coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    OR coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- INSERT: Admin puede crear matrículas
 CREATE POLICY "matriculas_insert" ON matriculas
   FOR INSERT
   WITH CHECK (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- DELETE: Admin puede eliminar
 CREATE POLICY "matriculas_delete" ON matriculas
   FOR DELETE
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
   );
 
 -- ====================================================
@@ -186,28 +186,28 @@ DROP POLICY IF EXISTS "leads_delete" ON leads;
 CREATE POLICY "leads_select" ON leads
   FOR SELECT
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 CREATE POLICY "leads_update" ON leads
   FOR UPDATE
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   )
   WITH CHECK (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 CREATE POLICY "leads_insert" ON leads
   FOR INSERT
   WITH CHECK (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 CREATE POLICY "leads_delete" ON leads
   FOR DELETE
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
   );
 
 -- ====================================================
@@ -226,28 +226,28 @@ DROP POLICY IF EXISTS "configuracion_delete" ON configuracion;
 CREATE POLICY "configuracion_select" ON configuracion
   FOR SELECT
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
   );
 
 CREATE POLICY "configuracion_update" ON configuracion
   FOR UPDATE
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
   )
   WITH CHECK (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
   );
 
 CREATE POLICY "configuracion_insert" ON configuracion
   FOR INSERT
   WITH CHECK (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
   );
 
 CREATE POLICY "configuracion_delete" ON configuracion
   FOR DELETE
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director')
   );
 
 -- ====================================================
@@ -272,17 +272,17 @@ DROP POLICY IF EXISTS "pagos_select_admin" ON pagos;
 CREATE POLICY "pagos_select_admin" ON pagos
   FOR SELECT
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- UPDATE: Solo admin puede actualizar pagos
 CREATE POLICY "pagos_update" ON pagos
   FOR UPDATE
   USING (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   )
   WITH CHECK (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- INSERT: Solo admin puede crear pagos
@@ -290,7 +290,7 @@ DROP POLICY IF EXISTS "pagos_insert" ON pagos;
 CREATE POLICY "pagos_insert" ON pagos
   FOR INSERT
   WITH CHECK (
-    coalesce(auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
+    coalesce(auth.jwt()->'app_metadata'->>'rol', auth.jwt()->>'rol', auth.jwt()->>'role') IN ('admin', 'director', 'administrativo')
   );
 
 -- ====================================================
