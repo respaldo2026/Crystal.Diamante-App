@@ -11,7 +11,7 @@ import "../globals-programas.css";
 
 const { useBreakpoint } = Grid;
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 export default function ProgramasPage() {
@@ -341,10 +341,9 @@ export default function ProgramasPage() {
           {/* Body con información */}
           <div style={{ padding: "20px" }}>
             {programa.descripcion && (
-              <Text
+              <Paragraph
                 type="secondary"
                 style={{
-                  display: "block",
                   marginBottom: 16,
                   fontSize: 13,
                   lineHeight: 1.5,
@@ -353,7 +352,7 @@ export default function ProgramasPage() {
                 ellipsis={{ rows: 2, tooltip: programa.descripcion }}
               >
                 {programa.descripcion}
-              </Text>
+              </Paragraph>
             )}
 
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
