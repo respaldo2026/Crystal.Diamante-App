@@ -2,14 +2,14 @@
 
 import { dataProvider as dataProviderSupabase } from "@refinedev/supabase";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import type { DataProvider } from "@refinedev/core";
+import type { DataProvider, UpdateParams, UpdateResponse, BaseRecord } from "@refinedev/core";
 
 const supabaseDataProvider = dataProviderSupabase(supabaseBrowserClient);
 
 export const dataProvider: DataProvider = {
   ...supabaseDataProvider,
   
-  update: async ({ resource, id, variables, meta }) => {
+  update: async <TData extends BaseRecord = BaseRecord, TVariables = {}>({ resource, id, variables, meta }: UpdateParams<TVariables>) => {
     console.log("🔵 [DATA PROVIDER] UPDATE INICIADO");
     console.log("  📌 Resource:", resource);
     console.log("  📌 ID:", id);
