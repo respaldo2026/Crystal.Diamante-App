@@ -50,7 +50,7 @@ export const dataProvider: DataProvider = {
       console.log("  📊 Datos retornados:", data);
       console.log("  📊 Cantidad de filas actualizadas:", data?.length);
       
-      return { data: data as TData };
+      return { data: (data?.[0] || data) as TData };
     } catch (error: any) {
       console.error("❌ [DATA PROVIDER] UPDATE FALLÓ");
       console.error("  💥 Error message:", error?.message);
