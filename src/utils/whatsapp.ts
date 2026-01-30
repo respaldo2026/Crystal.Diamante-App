@@ -16,10 +16,9 @@ export const enviarWhatsapp = (telefono: string | number, mensaje: string) => {
     // Convertir a string y limpiar caracteres no numéricos
     let phoneStr = String(telefono).replace(/\D/g, '');
 
-    // Validación básica para Colombia (si tiene 10 dígitos, agregamos 57)
-    // Puedes ajustar esto según tu país
-    if (phoneStr.length === 10 && !phoneStr.startsWith('57')) {
-        phoneStr = '57' + phoneStr;
+    // Forzar prefijo Colombia (+57) para todos los enlaces
+    if (!phoneStr.startsWith('57')) {
+        phoneStr = `57${phoneStr}`;
     }
 
     const url = `https://wa.me/${phoneStr}?text=${encodeURIComponent(mensaje)}`;

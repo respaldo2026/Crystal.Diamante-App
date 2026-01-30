@@ -45,6 +45,7 @@ import dayjs from "dayjs";
 import { formatDate } from "@utils/date";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { construirNombreGrupo } from "@utils/grupos";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
 
@@ -146,7 +147,7 @@ export default function StudentDetailView() {
         .select(
           `
             id, fecha_inicio, estado, monto_pagado, deuda_pendiente, nota_final, estado_academico,
-            cursos ( id, nombre, descripcion, precio, precio_mensualidad, duracion, perfiles(nombre_completo) )
+            cursos ( id, nombre, descripcion, precio, precio_mensualidad, duracion, dias_semana, hora_inicio, hora_fin, programas(nombre), perfiles(nombre_completo) )
           `
         )
         .eq("estudiante_id", idEstudiante)
@@ -174,7 +175,7 @@ export default function StudentDetailView() {
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
         .select(
-          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre))"
+          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
         )
         .eq("estudiante_id", idEstudiante)
         .order("created_at", { ascending: false });
@@ -289,7 +290,7 @@ export default function StudentDetailView() {
         title: "Curso",
         dataIndex: ["cursos", "nombre"],
         key: "curso",
-        render: (text: string) => <Text strong>{text}</Text>,
+        render: (_: string, record: any) => <Text strong>{construirNombreGrupo(record.cursos)}</Text>,
       },
       {
         title: "Fecha Inicio",
@@ -342,6 +343,7 @@ export default function StudentDetailView() {
         title: "Curso",
         dataIndex: ["cursos", "nombre"],
         key: "curso",
+        render: (_: string, record: any) => construirNombreGrupo(record.cursos),
       },
       {
         title: "Precio Total",
@@ -411,7 +413,7 @@ export default function StudentDetailView() {
         title: "Curso",
         dataIndex: ["matriculas", "cursos", "nombre"],
         key: "curso",
-        render: (text: string) => text || "Curso no asociado",
+        render: (_: string, record: any) => construirNombreGrupo(record.matriculas?.cursos) || "Curso no asociado",
       },
       {
         title: "Monto",
@@ -466,7 +468,7 @@ export default function StudentDetailView() {
                 message.warning("El estudiante no tiene teléfono registrado");
                 return;
               }
-              const curso = record.matriculas?.cursos?.nombre || "tu curso";
+              const curso = construirNombreGrupo(record.matriculas?.cursos) || "tu curso";
               const estado = record.estado || "pendiente";
               const monto = record.monto ? `$${record.monto.toLocaleString('es-CO')}` : "(monto no indicado)";
               const msg = `Hola ${contactoPerfil.nombre}, te recuerdo el pago de ${monto} para ${curso}. Estado: ${estado.replace('_',' ')}. Por favor confirma el pago o envía el soporte. Gracias!`;
@@ -726,7 +728,7 @@ export default function StudentDetailView() {
                   .filter(m => m.estado === "pendiente")
                   .map(m => (
                     <li key={m.id}>
-                      <strong>{m.cursos?.nombre}</strong>
+                      <strong>{construirNombreGrupo(m.cursos)}</strong>
                       {" - "}
                       <Button 
                         type="link" 
@@ -913,7 +915,7 @@ export default function StudentDetailView() {
                       {
                         title: "Curso",
                         dataIndex: ["cursos", "nombre"],
-                        render: (text: string) => <Text strong>{text || "Curso no asociado"}</Text>,
+                        render: (_: string, record: any) => <Text strong>{construirNombreGrupo(record.cursos) || "Curso no asociado"}</Text>,
                       },
                       {
                         title: "Cuotas de Pago",

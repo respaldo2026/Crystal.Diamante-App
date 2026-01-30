@@ -23,6 +23,8 @@ import {
     Typography,
     Popconfirm,
     message,
+    Grid,
+    Dropdown,
 } from "antd";
 import {
     BankOutlined,
@@ -34,6 +36,7 @@ import {
     ReloadOutlined,
     SaveOutlined,
     SearchOutlined,
+    EllipsisOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useCurrentUser } from "@hooks/useCurrentUser";
@@ -45,6 +48,8 @@ import {
 } from "@modules/finanzas/movimientos.service";
 import { MOVIMIENTO_CATEGORIAS, MOVIMIENTO_TIPO, MOVIMIENTO_TIPO_COLOR, MOVIMIENTO_TIPO_LABEL } from "@constants/movimientos";
 
+const { useBreakpoint } = Grid;
+
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
@@ -52,6 +57,9 @@ const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
 export default function TesoreriaPage() {
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
+    const isTablet = screens.md && !screens.lg;
     const { user } = useCurrentUser();
     const [movimientos, setMovimientos] = useState<MovimientoFinanciero[]>([]);
     const [loading, setLoading] = useState(false);
@@ -216,19 +224,26 @@ export default function TesoreriaPage() {
 
     return (
         <List
-            title="💰 Tesorería - Movimientos Financieros"
+            title={isMobile ? "💰 Tesorería" : "💰 Tesorería - Movimientos Financieros"}
             headerButtons={
-                <Space>
+                <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? "100%" : "auto" }}>
                     <Input
-                        placeholder="Buscar por concepto, referencia o persona"
+                        placeholder={isMobile ? "Buscar..." : "Buscar por concepto, referencia o persona"}
                         allowClear
                         prefix={<SearchOutlined />}
                         value={busqueda}
                         onChange={(e) => setBusqueda(e.target.value)}
-                        style={{ width: 320 }}
+                        style={{ width: isMobile ? "100%" : 320 }}
+                        size={isMobile ? "middle" : "large"}
                     />
-                    <Button icon={<ReloadOutlined />} onClick={() => void cargarMovimientos()} disabled={loading}>
-                        Actualizar
+                    <Button 
+                        icon={<ReloadOutlined />} 
+                        onClick={() => void cargarMovimientos()} 
+                        disabled={loading}
+                        size={isMobile ? "middle" : "large"}
+                        block={isMobile}
+                    >
+                        {isMobile ? "Actualizar" : "Actualizar"}
                     </Button>
                     <Button
                         type="primary"
@@ -239,8 +254,10 @@ export default function TesoreriaPage() {
                             form.setFieldValue("fecha", dayjs());
                             setDrawerVisible(true);
                         }}
+                        size={isMobile ? "middle" : "large"}
+                        block={isMobile}
                     >
-                        Registrar movimiento
+                        {isMobile ? "Registrar" : "Registrar movimiento"}
                     </Button>
                 </Space>
             }
@@ -256,89 +273,98 @@ export default function TesoreriaPage() {
                 />
             )}
 
-            <Row gutter={16} style={{ marginBottom: 20 }}>
-                <Col xs={24} md={8}>
+            <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+                <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ background: "#f6ffed", borderColor: "#b7eb8f" }}>
                         <Statistic
                             title="Ingresos filtrados"
                             value={formatoCOP(totalIngresos)}
-                            valueStyle={{ color: "#3f8600" }}
+                            valueStyle={{ color: "#3f8600", fontSize: isMobile ? 16 : 20 }}
                             prefix={<DollarCircleOutlined />}
                         />
                     </Card>
                 </Col>
-                <Col xs={24} md={8}>
+                <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ background: "#fff1f0", borderColor: "#ffa39e" }}>
                         <Statistic
                             title="Egresos filtrados"
                             value={formatoCOP(totalEgresos)}
-                            valueStyle={{ color: "#cf1322" }}
+                            valueStyle={{ color: "#cf1322", fontSize: isMobile ? 16 : 20 }}
                             prefix={<DollarCircleOutlined />}
                         />
                     </Card>
                 </Col>
-                <Col xs={24} md={8}>
+                <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ background: "#e6f7ff", borderColor: "#91d5ff" }}>
                         <Statistic
                             title="Saldo neto"
                             value={formatoCOP(saldoNeto)}
-                            valueStyle={{ color: saldoNeto >= 0 ? "#1890ff" : "#cf1322" }}
+                            valueStyle={{ color: saldoNeto >= 0 ? "#1890ff" : "#cf1322", fontSize: isMobile ? 16 : 20 }}
                             prefix={<BankOutlined />}
                         />
                     </Card>
                 </Col>
             </Row>
 
-            <Card style={{ marginBottom: 20 }} title={<Space><FilterOutlined />Filtros</Space>}>
-                <Row gutter={16}>
+            <Card style={{ marginBottom: 20 }} title={<Space><FilterOutlined />{isMobile ? "Filtros" : "Filtros"}</Space>}>
+                <Row gutter={[16, 16]}>
                     <Col xs={24} md={8}>
                         <label style={{ fontSize: 12, fontWeight: "bold" }}>Rango de fechas</label>
                         <RangePicker
                             style={{ width: "100%" }}
                             value={filtroRango as any}
                             onChange={(value) => setFiltroRango(value as any)}
+                            size={isMobile ? "middle" : "large"}
                         />
                     </Col>
-                    <Col xs={24} md={4}>
+                    <Col xs={12} sm={6} md={4}>
                         <label style={{ fontSize: 12, fontWeight: "bold" }}>Tipo</label>
                         <Select
                             allowClear
                             placeholder="Todos"
                             value={filtroTipo ?? undefined}
                             onChange={(val) => setFiltroTipo(val ?? null)}
+                            style={{ width: "100%" }}
+                            size={isMobile ? "middle" : "large"}
                             options={[
                                 { label: MOVIMIENTO_TIPO_LABEL[MOVIMIENTO_TIPO.INGRESO], value: MOVIMIENTO_TIPO.INGRESO },
                                 { label: MOVIMIENTO_TIPO_LABEL[MOVIMIENTO_TIPO.EGRESO], value: MOVIMIENTO_TIPO.EGRESO },
                             ]}
                         />
                     </Col>
-                    <Col xs={24} md={4}>
+                    <Col xs={12} sm={6} md={4}>
                         <label style={{ fontSize: 12, fontWeight: "bold" }}>Categoría</label>
                         <Select
                             allowClear
                             placeholder="Todas"
                             value={filtroCategoria ?? undefined}
                             onChange={(val) => setFiltroCategoria(val ?? null)}
+                            style={{ width: "100%" }}
+                            size={isMobile ? "middle" : "large"}
                             options={categoriasDisponibles.map((cat) => ({ label: cat, value: cat }))}
                         />
                     </Col>
-                    <Col xs={24} md={4}>
+                    <Col xs={12} sm={6} md={4}>
                         <label style={{ fontSize: 12, fontWeight: "bold" }}>Método</label>
                         <Select
                             allowClear
                             placeholder="Todos"
                             value={filtroMetodo ?? undefined}
                             onChange={(val) => setFiltroMetodo(val ?? null)}
+                            style={{ width: "100%" }}
+                            size={isMobile ? "middle" : "large"}
                             options={metodosDisponibles.map((met) => ({ label: met, value: met }))}
                         />
                     </Col>
-                    <Col xs={24} md={4}>
+                    <Col xs={12} sm={6} md={4}>
                         <label style={{ fontSize: 12, fontWeight: "bold" }}>Conciliación</label>
                         <Select
                             allowClear
                             placeholder="Todos"
                             value={filtroConciliado ?? undefined}
                             onChange={(val) => setFiltroConciliado(val ?? null)}
+                            style={{ width: "100%" }}
+                            size={isMobile ? "middle" : "large"}
                             options={[
                                 { label: "Conciliados", value: "conciliado" },
                                 { label: "Pendientes", value: "pendiente" },
@@ -346,9 +372,28 @@ export default function TesoreriaPage() {
                         />
                     </Col>
                     <Col xs={24} md={4} style={{ display: "flex", alignItems: "flex-end" }}>
-                        <Button onClick={resetFiltros} style={{ width: "100%" }}>
-                            Limpiar filtros
-                        </Button>
+                        {isMobile ? (
+                            <Dropdown
+                                trigger={["click"]}
+                                menu={{
+                                    items: [
+                                        {
+                                            key: "reset-filtros",
+                                            label: "Limpiar filtros",
+                                            onClick: resetFiltros,
+                                        },
+                                    ],
+                                }}
+                            >
+                                <Button icon={<EllipsisOutlined />} style={{ width: "100%" }} size="middle">
+                                    Opciones
+                                </Button>
+                            </Dropdown>
+                        ) : (
+                            <Button onClick={resetFiltros} style={{ width: "100%" }} size="large">
+                                Limpiar filtros
+                            </Button>
+                        )}
                     </Col>
                 </Row>
             </Card>
@@ -363,8 +408,13 @@ export default function TesoreriaPage() {
                 <Table
                     rowKey="id"
                     dataSource={movimientosFiltrados}
-                    pagination={{ pageSize: 15 }}
-                    scroll={{ x: true }}
+                                        scroll={{ x: isMobile ? 900 : true }}
+                    size={isMobile ? "small" : "middle"}
+                    pagination={{ 
+                      pageSize: 15,
+                      simple: isMobile,
+                      showSizeChanger: !isMobile 
+                    }}
                 >
                     <Table.Column
                         title="Fecha"
@@ -393,15 +443,17 @@ export default function TesoreriaPage() {
                             </Space>
                         )}
                     />
-                    <Table.Column
-                        title="Método"
-                        dataIndex="metodo_pago"
-                        render={(value: string | null) => (
-                            <Tag icon={<DollarCircleOutlined />}>
-                                {value || "Efectivo"}
-                            </Tag>
-                        )}
-                    />
+                    {!isMobile && (
+                        <Table.Column
+                            title="Método"
+                            dataIndex="metodo_pago"
+                            render={(value: string | null) => (
+                                <Tag icon={<DollarCircleOutlined />}>
+                                    {value || "Efectivo"}
+                                </Tag>
+                            )}
+                        />
+                    )}
                     <Table.Column
                         title="Monto"
                         dataIndex="monto"
@@ -413,58 +465,91 @@ export default function TesoreriaPage() {
                             </Text>
                         )}
                     />
+                    {!isMobile && (
+                        <Table.Column
+                            title="Referencia"
+                            dataIndex="referencia"
+                            render={(value: string | null) => value || "-"}
+                        />
+                    )}
+                    {!isMobile && (
+                        <Table.Column
+                            title="Persona"
+                            render={(_, record: MovimientoFinanciero) => (
+                                <Space direction="vertical" size={0}>
+                                    {record.perfiles?.nombre_completo ? (
+                                        <Text>{record.perfiles.nombre_completo}</Text>
+                                    ) : null}
+                                    {record.proveedores?.nombre_completo ? (
+                                        <Text type="secondary">Proveedor: {record.proveedores.nombre_completo}</Text>
+                                    ) : null}
+                                    {!record.perfiles?.nombre_completo && !record.proveedores?.nombre_completo ? (
+                                        <Text type="secondary">No asignado</Text>
+                                    ) : null}
+                                </Space>
+                            )}
+                        />
+                    )}
+                    {!isMobile && (
+                        <Table.Column
+                            title="Ticket"
+                            render={(_, record: MovimientoFinanciero) =>
+                                record.ticket_url ? (
+                                    <Button size="small" onClick={() => window.open(record.ticket_url!, "_blank")}>Ver comprobante</Button>
+                                ) : (
+                                    <Tag color="default">Sin comprobante</Tag>
+                                )
+                            }
+                        />
+                    )}
+                    {!isMobile && (
+                        <Table.Column
+                            title="Conciliado"
+                            dataIndex="conciliado"
+                            render={(value: boolean) => (
+                                <Tag color={value ? "green" : "orange"}>{value ? "Conciliado" : "Pendiente"}</Tag>
+                            )}
+                        />
+                    )}
                     <Table.Column
-                        title="Referencia"
-                        dataIndex="referencia"
-                        render={(value: string | null) => value || "-"}
-                    />
-                    <Table.Column
-                        title="Persona"
-                        render={(_, record: MovimientoFinanciero) => (
-                            <Space direction="vertical" size={0}>
-                                {record.perfiles?.nombre_completo ? (
-                                    <Text>{record.perfiles.nombre_completo}</Text>
-                                ) : null}
-                                {record.proveedores?.nombre_completo ? (
-                                    <Text type="secondary">Proveedor: {record.proveedores.nombre_completo}</Text>
-                                ) : null}
-                                {!record.perfiles?.nombre_completo && !record.proveedores?.nombre_completo ? (
-                                    <Text type="secondary">No asignado</Text>
-                                ) : null}
-                            </Space>
-                        )}
-                    />
-                    <Table.Column
-                        title="Ticket"
-                        render={(_, record: MovimientoFinanciero) =>
-                            record.ticket_url ? (
-                                <Button size="small" onClick={() => window.open(record.ticket_url!, "_blank")}>Ver comprobante</Button>
-                            ) : (
-                                <Tag color="default">Sin comprobante</Tag>
-                            )
-                        }
-                    />
-                    <Table.Column
-                        title="Conciliado"
-                        dataIndex="conciliado"
-                        render={(value: boolean) => (
-                            <Tag color={value ? "green" : "orange"}>{value ? "Conciliado" : "Pendiente"}</Tag>
-                        )}
-                    />
-                    <Table.Column
-                        title="Acciones"
+                        title={isMobile ? "Opciones" : "Acciones"}
                         fixed="right"
                         render={(_, record: MovimientoFinanciero) => (
                             user?.rol === "admin" ? (
-                                <Popconfirm
-                                    title="Eliminar movimiento"
-                                    description="Esta acción no se puede deshacer. ¿Deseas continuar?"
-                                    okText="Sí, eliminar"
-                                    cancelText="Cancelar"
-                                    onConfirm={() => void handleEliminar(record.id)}
-                                >
-                                    <Button size="small" danger icon={<DeleteOutlined />} />
-                                </Popconfirm>
+                                isMobile ? (
+                                    <Dropdown
+                                        trigger={["click"]}
+                                        menu={{
+                                            items: [
+                                                {
+                                                    key: `ver-ticket-${record.id}`,
+                                                    label: record.ticket_url ? "Ver comprobante" : "Sin comprobante",
+                                                    disabled: !record.ticket_url,
+                                                    onClick: () => record.ticket_url && window.open(record.ticket_url!, "_blank"),
+                                                },
+                                                { type: "divider" as const },
+                                                {
+                                                    key: `eliminar-${record.id}`,
+                                                    label: "Eliminar",
+                                                    danger: true,
+                                                    onClick: () => void handleEliminar(record.id),
+                                                },
+                                            ],
+                                        }}
+                                    >
+                                        <Button size="small" icon={<EllipsisOutlined />} />
+                                    </Dropdown>
+                                ) : (
+                                    <Popconfirm
+                                        title="Eliminar movimiento"
+                                        description="Esta acción no se puede deshacer. ¿Deseas continuar?"
+                                        okText="Sí, eliminar"
+                                        cancelText="Cancelar"
+                                        onConfirm={() => void handleEliminar(record.id)}
+                                    >
+                                        <Button size="small" danger icon={<DeleteOutlined />} />
+                                    </Popconfirm>
+                                )
                             ) : null
                         )}
                     />
@@ -473,13 +558,15 @@ export default function TesoreriaPage() {
 
             <Drawer
                 title="Registrar movimiento"
-                width={420}
+                width={isMobile ? "100%" : isTablet ? 380 : 420}
                 open={drawerVisible}
                 onClose={() => {
                     if (registrando) return;
                     setDrawerVisible(false);
                 }}
                 destroyOnClose
+                placement={isMobile ? "bottom" : "right"}
+                height={isMobile ? "90%" : undefined}
                 extra={
                     <Space>
                         <Button onClick={() => setDrawerVisible(false)} disabled={registrando}>

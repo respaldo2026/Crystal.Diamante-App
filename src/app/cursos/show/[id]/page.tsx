@@ -21,6 +21,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
+import { construirNombreGrupo } from "@utils/grupos";
 
 const { Title, Text } = Typography;
 
@@ -759,7 +760,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             >
               Volver
             </Button>
-            <Title level={2} style={{ margin: 0, color: "white" }}>{curso.nombre}</Title>
+            <Title level={2} style={{ margin: 0, color: "white" }}>{construirNombreGrupo(curso)}</Title>
             <Space wrap size={20} style={{ marginTop: 4 }}>
               <Button icon={<BookOutlined />} onClick={() => setActiveTab("1")}>
                 Ver Temario
@@ -767,7 +768,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               <Button
                 type="primary"
                 icon={<CheckOutlined />}
-                onClick={() => router.push(`/asistencias/create?curso_id=${cursoId}&curso_nombre=${encodeURIComponent(curso.nombre)}`)}
+                onClick={() => router.push(`/asistencias/create?curso_id=${cursoId}&curso_nombre=${encodeURIComponent(construirNombreGrupo(curso))}`)}
               >
                 Llamar Lista
               </Button>

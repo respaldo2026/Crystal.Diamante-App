@@ -15,6 +15,7 @@ import {
   Empty,
   Tooltip,
   App,
+  Grid,
 } from "antd";
 import {
   PlusOutlined,
@@ -29,10 +30,13 @@ import updateLocale from "dayjs/plugin/updateLocale";
 import "dayjs/locale/es";
 import { useNavigation } from "@refinedev/core";
 import { obtenerCursos, type GrupoAcademico } from "../../modules/academico/cursos.service";
+import { construirNombreGrupo } from "@utils/grupos";
 
 dayjs.extend(updateLocale);
 dayjs.updateLocale("es", { weekStart: 1 });
 dayjs.locale("es");
+
+const { useBreakpoint } = Grid;
 
 const { Title, Text } = Typography;
 
@@ -87,6 +91,9 @@ function obtenerEstado(grupo: GrupoAcademico) {
 }
 
 export default function CursosList() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = screens.md && !screens.lg;
   const { edit, create, show } = useNavigation();
   const { message } = App.useApp();
   const [grupos, setGrupos] = useState<GrupoAcademico[]>([]);
@@ -180,25 +187,36 @@ export default function CursosList() {
         key={grupo.id}
         hoverable
         style={{ marginBottom: 16 }}
-        bodyStyle={{ padding: 20 }}
+        bodyStyle={{ padding: isMobile ? 12 : 20 }}
       >
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Space style={{ width: "100%", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <Title level={4} style={{ marginBottom: 4 }}>
-                {grupo.nombre || "Grupo sin nombre"}
+        <Space direction="vertical" size={isMobile ? 12 : 16} style={{ width: "100%" }}>
+          <Space 
+            style={{ width: "100%", justifyContent: "space-between", alignItems: "flex-start" }}
+            direction={isMobile ? "vertical" : "horizontal"}
+          >
+            <div style={{ width: isMobile ? "100%" : "auto" }}>
+              <Title level={isMobile ? 5 : 4} style={{ marginBottom: 4 }}>
+                {construirNombreGrupo(grupo)}
               </Title>
-              <Text type="secondary">
+              <Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>
                 {grupo.programas?.nombre || "Programa sin asignar"}
               </Text>
             </div>
-            <Space wrap>
+            <Space wrap size={isMobile ? 4 : 8}>
               <Tag color={estado.color}>{estado.label}</Tag>
-              <Button icon={<EditOutlined />} onClick={() => edit("cursos", grupo.id)}>
-                Editar
+              <Button 
+                size={isMobile ? "small" : "middle"}
+                icon={<EditOutlined />} 
+                onClick={() => edit("cursos", grupo.id)}
+              >
+                {isMobile ? "Editar" : "Editar"}
               </Button>
-              <Button type="link" onClick={() => show("cursos", grupo.id)}>
-                Ver detalle
+              <Button 
+                type="link" 
+                size={isMobile ? "small" : "middle"}
+                onClick={() => show("cursos", grupo.id)}
+              >
+                {isMobile ? "Ver" : "Ver detalle"}
               </Button>
             </Space>
           </Space>
@@ -277,41 +295,54 @@ export default function CursosList() {
 
   return (
     <Card variant="borderless" style={{ background: "transparent" }}>
-      <Space direction="vertical" size={24} style={{ width: "100%" }}>
-        <Space style={{ width: "100%", justifyContent: "space-between", flexWrap: "wrap" }}>
+      <Space direction="vertical" size={isMobile ? 16 : 24} style={{ width: "100%" }}>
+        <Space 
+          style={{ width: "100%", justifyContent: "space-between", flexWrap: "wrap" }}
+          direction={isMobile ? "vertical" : "horizontal"}
+        >
           <div>
-            <Title level={2} style={{ marginBottom: 0 }}>
+            <Title level={isMobile ? 3 : 2} style={{ marginBottom: 0 }}>
               Grupos académicos
             </Title>
-            <Text type="secondary">Revisa los grupos activos y los próximos lanzamientos en un solo lugar.</Text>
+            {!isMobile && <Text type="secondary">Revisa los grupos activos y los próximos lanzamientos en un solo lugar.</Text>}
           </div>
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={refrescar} loading={refreshing}>
-              Actualizar
+          <Space size={isMobile ? 8 : 12}>
+            <Button 
+              icon={<ReloadOutlined />} 
+              onClick={refrescar} 
+              loading={refreshing}
+              size={isMobile ? "middle" : "large"}
+            >
+              {isMobile ? "" : "Actualizar"}
             </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => create("cursos")}>
-              Nuevo grupo
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              onClick={() => create("cursos")}
+              size={isMobile ? "middle" : "large"}
+            >
+              {isMobile ? "Nuevo" : "Nuevo grupo"}
             </Button>
           </Space>
         </Space>
 
         <Row gutter={[16, 16]}>
-          <Col xs={24} md={8}>
+          <Col xs={24} sm={8}>
             <Card variant="outlined" size="small">
-              <Text type="secondary">Grupos activos</Text>
-              <Title level={3} style={{ margin: 0 }}>{gruposActivos.length}</Title>
+              <Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>Grupos activos</Text>
+              <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>{gruposActivos.length}</Title>
             </Card>
           </Col>
-          <Col xs={24} md={8}>
+          <Col xs={24} sm={8}>
             <Card variant="outlined" size="small">
-              <Text type="secondary">Próximos grupos</Text>
-              <Title level={3} style={{ margin: 0 }}>{gruposProximos.length}</Title>
+              <Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>Próximos grupos</Text>
+              <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>{gruposProximos.length}</Title>
             </Card>
           </Col>
-          <Col xs={24} md={8}>
+          <Col xs={24} sm={8}>
             <Card variant="outlined" size="small">
-              <Text type="secondary">Cupos disponibles (activos)</Text>
-              <Title level={3} style={{ margin: 0 }}>{cuposDisponibles}</Title>
+              <Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>Cupos disponibles (activos)</Text>
+              <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>{cuposDisponibles}</Title>
             </Card>
           </Col>
         </Row>

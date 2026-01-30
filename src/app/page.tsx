@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { 
   Typography, Row, Col, Card, Statistic, Button, Spin, Tag, Progress, 
-  Empty, Space, Segmented, Tooltip, Badge
+  Empty, Space, Segmented, Tooltip, Badge, Grid
 } from "antd";
 import {
   DollarCircleOutlined, TeamOutlined, BookOutlined, RiseOutlined,
@@ -22,6 +22,7 @@ import { formatDate } from "@utils/date";
 import { Line, Column } from "@ant-design/plots";
 import 'dayjs/locale/es';
 import { useQuery } from "@tanstack/react-query";
+import { construirNombreGrupo } from "@utils/grupos";
 
 dayjs.extend(isBetween);
 dayjs.locale('es');
@@ -33,6 +34,9 @@ export default function DashboardPage() {
   const router = useRouter();
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
   const { user, loading: userLoading } = useCurrentUser();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = screens.md && !screens.lg;
 
   // Estadísticas principales
   const [stats, setStats] = useState({
@@ -79,7 +83,6 @@ export default function DashboardPage() {
     }
   }, [user, userLoading, normalizedRole, router]);
 
-  const showBlockingScreen = userLoading || (user && !isAdminRole);
 
   const cargarDashboard = useCallback(async () => {
     setLoading(true);
@@ -178,7 +181,7 @@ export default function DashboardPage() {
         // 8. PRÓXIMOS CURSOS - Cargar cursos y luego contar matrículas activas
         supabaseBrowserClient
           .from("cursos")
-          .select("id, nombre, fecha_inicio, cupos, estado")
+          .select("id, nombre, fecha_inicio, cupos, estado, dias_semana, hora_inicio, hora_fin, programas(nombre)")
           .gte("fecha_inicio", hoy.format('YYYY-MM-DD'))
           .in("estado", ["proximo", "activo"])
           .order("fecha_inicio", { ascending: true })
@@ -325,16 +328,34 @@ export default function DashboardPage() {
     };
   }, [cargarDashboard, normalizedRole, userLoading]);
 
-  if (loading || showBlockingScreen) {
+  if (userLoading) {
     return (
       <div style={{ 
         display: 'flex', 
         justifyContent: 'center', 
         alignItems: 'center', 
-        height: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+        minHeight: '60vh',
+        background: '#f0f2f5'
       }}>
-        <Spin size="large" />
+        <Spin size="large" tip="Cargando dashboard..." />
+      </div>
+    );
+  }
+
+  if (user && !isAdminRole) {
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '60vh',
+        background: '#f0f2f5'
+      }}>
+        <Spin size="large" tip="Cargando indicadores..." />
       </div>
     );
   }
@@ -397,7 +418,7 @@ export default function DashboardPage() {
   const periodoAnteriorTexto = timeRange === 'week' ? 'Semana Anterior' : timeRange === 'year' ? 'Año Anterior' : 'Mes Anterior';
 
   return (
-    <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
+    <div style={{ padding: isMobile ? 12 : isTablet ? 16 : 24, background: '#f0f2f5', minHeight: '100vh' }}>
       {/* Header */}
       <div style={{ 
         marginBottom: 24, 
@@ -408,12 +429,12 @@ export default function DashboardPage() {
         gap: 16
       }}>
         <div>
-          <Title level={2} style={{ margin: 0, color: '#262626' }}>
+          <Title level={isMobile ? 4 : 2} style={{ margin: 0, color: '#262626' }}>
             Dashboard Ejecutivo
           </Title>
           <Text type="secondary">{dayjs().format('dddd, D [de] MMMM [de] YYYY')}</Text>
         </div>
-        <Space>
+        <Space wrap style={{ width: isMobile ? '100%' : 'auto' }}>
           <Segmented
             options={[
               { label: 'Semana', value: 'week' },
@@ -421,12 +442,14 @@ export default function DashboardPage() {
               { label: 'Año', value: 'year' },
             ]}
             value={timeRange}
-            onChange={(value: any) => setTimeRange(value)}
+            onChange={(value: 'week' | 'month' | 'year') => setTimeRange(value)}
+            size={isMobile ? 'small' : 'middle'}
           />
           <Button 
             icon={<SyncOutlined />} 
             onClick={cargarDashboard}
             type="primary"
+            size={isMobile ? 'small' : 'middle'}
           >
             Actualizar
           </Button>
@@ -753,7 +776,7 @@ export default function DashboardPage() {
                     <Card key={curso.id} size="small" hoverable onClick={() => router.push(`/cursos/salon/${curso.id}`)}>
                       <Space direction="vertical" style={{ width: '100%' }} size={4}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text strong>{curso.nombre}</Text>
+                          <Text strong>{construirNombreGrupo(curso)}</Text>
                           <Tag color="blue">{formatDate(curso.fecha_inicio)}</Tag>
                         </div>
                         <Progress 

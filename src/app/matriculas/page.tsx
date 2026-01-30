@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { List, useTable, EditButton, DeleteButton, CreateButton, useSelect } from "@refinedev/antd";
-import { Table, Space, Tag, Typography, Button, Tooltip, Progress, Select, Modal, message, Tabs, Card, Row, Col, App } from "antd";
+import { Table, Space, Tag, Typography, Button, Tooltip, Progress, Select, Modal, message, Tabs, Card, Row, Col, App, Grid } from "antd";
 import { 
   FileTextOutlined, 
   CheckCircleOutlined, 
@@ -20,6 +20,7 @@ import { useCurrentUser } from "@hooks/useCurrentUser";
 import { obtenerStatsAsistenciasYPagos } from "@modules/academico/asistencias.service";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
+import { construirNombreGrupo } from "@utils/grupos";
 
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
@@ -28,6 +29,9 @@ const { Text } = Typography;
 export default function MatriculasList() {
     const { user } = useCurrentUser();
     const { modal, message: antMessage } = App.useApp();
+    const screens = Grid.useBreakpoint();
+    const isMobile = !screens.md;
+    const isTablet = screens.md && !screens.lg;
     const [asistenciasPorMatricula, setAsistenciasPorMatricula] = useState<Record<number, any>>({});
     const [loadingAsistencias, setLoadingAsistencias] = useState(false);
     const [activeTab, setActiveTab] = useState<string>('nuevo');
@@ -415,12 +419,18 @@ export default function MatriculasList() {
     return (
         <>
         <List title="Gestión de Matrículas">
-            <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
+            <Tabs
+                activeKey={activeTab}
+                onChange={setActiveTab}
+                size={isMobile ? "small" : "middle"}
+                tabBarGutter={isMobile ? 8 : 16}
+                items={[
                 { key: 'nuevo', label: 'Nueva Matrícula' },
                 { key: 'activos', label: `Activos (${activosCount})` },
                 { key: 'graduados', label: `Graduados (${graduadosCount})` },
                 { key: 'desertores', label: `Desertores (${desertoresCount})` },
-            ]} />
+            ]}
+            />
 
             {activeTab === 'nuevo' ? (
                 <>
@@ -453,14 +463,16 @@ export default function MatriculasList() {
                             </Card>
                         </Col>
                     </Row>
-                    <Space>
-                        <CreateButton type="primary" size="large" icon={<FileTextOutlined />}>Crear nueva matrícula</CreateButton>
+                    <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: "100%" }}>
+                        <CreateButton type="primary" size={isMobile ? "middle" : "large"} icon={<FileTextOutlined />} block={isMobile}>
+                            Crear nueva matrícula
+                        </CreateButton>
                         <Select
                             options={programaFilterSelect.options}
                             loading={programaFilterSelect.loading}
                             allowClear
                             placeholder="Filtrar por programa"
-                            style={{ minWidth: 240 }}
+                            style={{ minWidth: isMobile ? "100%" : 240, width: isMobile ? "100%" : undefined }}
                             onChange={(val) => onFilterPrograma(val as string)}
                         />
                         <Select
@@ -468,20 +480,20 @@ export default function MatriculasList() {
                             loading={cursoFilterSelect.loading}
                             allowClear
                             placeholder="Filtrar por curso"
-                            style={{ minWidth: 260 }}
+                            style={{ minWidth: isMobile ? "100%" : 260, width: isMobile ? "100%" : undefined }}
                             onChange={(val) => onFilterCurso(val as string)}
                         />
                     </Space>
                 </>
             ) : (
                 <>
-                    <Space style={{ marginBottom: 12 }}>
+                    <Space style={{ marginBottom: 12, width: "100%" }} direction={isMobile ? "vertical" : "horizontal"}>
                         <Select
                             options={programaFilterSelect.options}
                             loading={programaFilterSelect.loading}
                             allowClear
                             placeholder="Filtrar por programa"
-                            style={{ minWidth: 240 }}
+                            style={{ minWidth: isMobile ? "100%" : 240, width: isMobile ? "100%" : undefined }}
                             onChange={(val) => onFilterPrograma(val as string)}
                         />
                         <Select
@@ -489,13 +501,13 @@ export default function MatriculasList() {
                             loading={cursoFilterSelect.loading}
                             allowClear
                             placeholder="Filtrar por curso"
-                            style={{ minWidth: 260 }}
+                            style={{ minWidth: isMobile ? "100%" : 260, width: isMobile ? "100%" : undefined }}
                             onChange={(val) => onFilterCurso(val as string)}
                         />
-                        <CreateButton type="primary" icon={<FileTextOutlined />}>Nueva Matrícula</CreateButton>
+                        <CreateButton type="primary" icon={<FileTextOutlined />} block={isMobile}>Nueva Matrícula</CreateButton>
                     </Space>
                     {/* Quick filters for table */}
-                    <Space style={{ marginBottom: 12 }}>
+                    <Space style={{ marginBottom: 12 }} wrap>
                         <Button size="small" type={listFilter === 'all' ? 'primary' : 'default'} onClick={() => setListFilter('all')}>Todas</Button>
                         <Button size="small" type={listFilter === 'sin_pagos' ? 'primary' : 'default'} onClick={() => setListFilter('sin_pagos')}>Sin Pagos</Button>
                         <Button size="small" type={listFilter === 'con_pagos' ? 'primary' : 'default'} onClick={() => setListFilter('con_pagos')}>Con Pagos</Button>
@@ -504,7 +516,19 @@ export default function MatriculasList() {
                 </>
             )}
             {activeTab !== 'nuevo' && (
-            <Table {...tableProps} dataSource={filteredByQuick as any} rowKey="id" loading={loadingAsistencias}>
+            <Table
+                {...tableProps}
+                dataSource={filteredByQuick as any}
+                rowKey="id"
+                loading={loadingAsistencias}
+                size={isMobile ? "small" : "middle"}
+                scroll={isMobile ? { x: 900 } : isTablet ? { x: 1100 } : undefined}
+                pagination={{
+                    ...(tableProps.pagination || {}),
+                    simple: isMobile,
+                    showSizeChanger: !isMobile,
+                }}
+            >
                 
                 {/* COLUMNA 1: ESTUDIANTE */}
                 <Table.Column
@@ -522,45 +546,49 @@ export default function MatriculasList() {
                 <Table.Column
                     title="Curso Inscrito"
                     dataIndex={["cursos", "nombre"]}
-                    render={(val) => <Tag color="blue">{val || "Curso General"}</Tag>}
+                    render={(_, record: any) => <Tag color="blue">{construirNombreGrupo(record.cursos) || "Curso General"}</Tag>}
                 />
 
-                <Table.Column
-                    title="Programa"
-                    dataIndex={["cursos", "programas", "nombre"]}
-                    render={(val) => <Tag color="purple">{val || "Sin programa"}</Tag>}
-                />
+                {!isMobile && (
+                    <Table.Column
+                        title="Programa"
+                        dataIndex={["cursos", "programas", "nombre"]}
+                        render={(val) => <Tag color="purple">{val || "Sin programa"}</Tag>}
+                    />
+                )}
 
                 {/* COLUMNA 3: ASISTENCIA */}
-                <Table.Column
-                    title="Asistencia"
-                    align="center"
-                    render={(_, record: any) => {
-                        const stats = asistenciasPorMatricula[record.id];
-                        
-                        if (!stats || !stats.tieneDatos) {
-                            return <Text type="secondary" style={{fontSize:11}}>Sin datos</Text>;
-                        }
+                {!isMobile && (
+                    <Table.Column
+                        title="Asistencia"
+                        align="center"
+                        render={(_, record: any) => {
+                            const stats = asistenciasPorMatricula[record.id];
+                            
+                            if (!stats || !stats.tieneDatos) {
+                                return <Text type="secondary" style={{fontSize:11}}>Sin datos</Text>;
+                            }
 
-                        const { porcentaje, minimoRequerido, cumple } = stats;
+                            const { porcentaje, minimoRequerido, cumple } = stats;
 
-                        return (
-                            <Tooltip 
-                                title={`${stats.presentes}/${stats.totalClases} clases. Mínimo requerido: ${minimoRequerido}%`}
-                            >
-                                <div style={{ minWidth: 80 }}>
-                                    <Progress 
-                                        type="circle" 
-                                        percent={porcentaje} 
-                                        size={50}
-                                        status={cumple ? 'success' : 'exception'}
-                                        format={(percent) => `${percent}%`}
-                                    />
-                                </div>
-                            </Tooltip>
-                        );
-                    }}
-                />
+                            return (
+                                <Tooltip 
+                                    title={`${stats.presentes}/${stats.totalClases} clases. Mínimo requerido: ${minimoRequerido}%`}
+                                >
+                                    <div style={{ minWidth: 80 }}>
+                                        <Progress 
+                                            type="circle" 
+                                            percent={porcentaje} 
+                                            size={50}
+                                            status={cumple ? 'success' : 'exception'}
+                                            format={(percent) => `${percent}%`}
+                                        />
+                                    </div>
+                                </Tooltip>
+                            );
+                        }}
+                    />
+                )}
 
                 {/* COLUMNA 4: ESTADO ACADÉMICO */}
                 <Table.Column
@@ -587,76 +615,80 @@ export default function MatriculasList() {
                 />
 
                 {/* COLUMNA 5: FECHA MATRÍCULA (creación) */}
-                <Table.Column
-                    title="Fecha Matrícula"
-                    dataIndex="created_at"
-                    render={(val) => formatDate(val)}
-                />
+                {!isMobile && (
+                    <Table.Column
+                        title="Fecha Matrícula"
+                        dataIndex="created_at"
+                        render={(val) => formatDate(val)}
+                    />
+                )}
 
                 {/* COLUMNA 6: DIPLOMA CON VALIDACIÓN */}
-                <Table.Column
-                    title="Certificado"
-                    align="center"
-                    render={(_, record: any) => {
-                        const estado = (record.estado || "").toLowerCase();
-                        const esAprobado = estado === "aprobado" || estado === "certificado" || estado === "finalizado";
-                        const stats = asistenciasPorMatricula[record.id];
-                        
-                        // Si no está aprobado, mostrar mensaje
-                        if (!esAprobado) {
-                            return <Text type="secondary" style={{fontSize:11}}>En progreso...</Text>;
-                        }
+                {!isMobile && (
+                    <Table.Column
+                        title="Certificado"
+                        align="center"
+                        render={(_, record: any) => {
+                            const estado = (record.estado || "").toLowerCase();
+                            const esAprobado = estado === "aprobado" || estado === "certificado" || estado === "finalizado";
+                            const stats = asistenciasPorMatricula[record.id];
+                            
+                            // Si no está aprobado, mostrar mensaje
+                            if (!esAprobado) {
+                                return <Text type="secondary" style={{fontSize:11}}>En progreso...</Text>;
+                            }
 
-                        // VALIDACIÓN: Verificar asistencia
-                        if (stats && stats.tieneDatos && !stats.cumple) {
+                            // VALIDACIÓN: Verificar asistencia
+                            if (stats && stats.tieneDatos && !stats.cumple) {
+                                return (
+                                    <Tooltip title={`No cumple el porcentaje mínimo de asistencia (${stats.porcentaje}% < ${stats.minimoRequerido}%)`}>
+                                        <Tag color="error" icon={<LockOutlined />}>
+                                            BLOQUEADO
+                                        </Tag>
+                                    </Tooltip>
+                                );
+                            }
+
+                            // Si cumple todo, mostrar diploma
                             return (
-                                <Tooltip title={`No cumple el porcentaje mínimo de asistencia (${stats.porcentaje}% < ${stats.minimoRequerido}%)`}>
-                                    <Tag color="error" icon={<LockOutlined />}>
-                                        BLOQUEADO
-                                    </Tag>
-                                </Tooltip>
+                                <PDFDownloadLink
+                                    document={
+                                        <DiplomaPDF 
+                                            estudiante={record.perfiles?.nombre_completo || "Estudiante"}
+                                            curso={record.cursos?.nombre || "Curso"}
+                                            fechaFin={record.updated_at || new Date().toISOString()} 
+                                            folio={record.id}
+                                        />
+                                    }
+                                    fileName={`Diploma_${record.perfiles?.nombre_completo || 'Alumno'}.pdf`}
+                                >
+                                    {({ loading }: { loading: boolean }) => 
+                                        loading ? (
+                                            <Button size="small" loading>...</Button>
+                                        ) : (
+                                            <Button 
+                                                type="primary" 
+                                                size="small" 
+                                                icon={<DownloadOutlined />} 
+                                                style={{ backgroundColor: '#D4AF37', borderColor: '#D4AF37', color: '#fff' }}
+                                                title="Descargar Diploma Oficial"
+                                            >
+                                                Diploma
+                                            </Button>
+                                        )
+                                    }
+                                </PDFDownloadLink>
                             );
-                        }
-
-                        // Si cumple todo, mostrar diploma
-                        return (
-                            <PDFDownloadLink
-                                document={
-                                    <DiplomaPDF 
-                                        estudiante={record.perfiles?.nombre_completo || "Estudiante"}
-                                        curso={record.cursos?.nombre || "Curso"}
-                                        fechaFin={record.updated_at || new Date().toISOString()} 
-                                        folio={record.id}
-                                    />
-                                }
-                                fileName={`Diploma_${record.perfiles?.nombre_completo || 'Alumno'}.pdf`}
-                            >
-                                {({ loading }: { loading: boolean }) => 
-                                    loading ? (
-                                        <Button size="small" loading>...</Button>
-                                    ) : (
-                                        <Button 
-                                            type="primary" 
-                                            size="small" 
-                                            icon={<DownloadOutlined />} 
-                                            style={{ backgroundColor: '#D4AF37', borderColor: '#D4AF37', color: '#fff' }}
-                                            title="Descargar Diploma Oficial"
-                                        >
-                                            Diploma
-                                        </Button>
-                                    )
-                                }
-                            </PDFDownloadLink>
-                        );
-                    }}
-                />
+                        }}
+                    />
+                )}
                 
 
                 {/* COLUMNA 9: ACCIONES */}
                 <Table.Column
                     title="Acciones"
                     render={(_, record: any) => (
-                        <Space>
+                        <Space wrap>
                             <EditButton hideText size="small" recordItemId={record.id} />
                             <Button size="small" type="dashed" onClick={() => {
                                 const url = `/tesoreria/create?estudiante_id=${record.estudiante_id}&matricula_id=${record.id}`;

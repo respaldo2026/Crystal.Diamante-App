@@ -1,11 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Tooltip, Dropdown } from "antd";
-import { PlusOutlined, EditOutlined, BookOutlined, MoreOutlined, FolderOutlined } from "@ant-design/icons";
+import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Tooltip, Dropdown, Grid, Row, Col, Statistic, Divider, Badge } from "antd";
+import { PlusOutlined, EditOutlined, BookOutlined, MoreOutlined, FolderOutlined, ClockCircleOutlined, DollarOutlined, FireOutlined, TrophyOutlined, EyeOutlined, ThunderboltOutlined, AppstoreOutlined, UnorderedListOutlined, FileTextOutlined } from "@ant-design/icons";
 import type { CheckboxChangeEvent } from "antd/es/checkbox";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import GestorPensum from "@components/GestorPensum";
+import "./programas.module.css";
+import "../globals-programas.css";
+
+const { useBreakpoint } = Grid;
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -13,6 +17,9 @@ const { TextArea } = Input;
 export default function ProgramasPage() {
 
   // Declaración de estado y hooks (única sección)
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = screens.md && !screens.lg;
   const { message, modal } = App.useApp();
   const [form] = Form.useForm();
   const formValues = Form.useWatch([], form);
@@ -23,6 +30,7 @@ export default function ProgramasPage() {
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
   const [gestorPensumVisible, setGestorPensumVisible] = useState(false);
   const [programaSeleccionado, setProgramaSeleccionado] = useState<any>(null);
+  const [vistaCards, setVistaCards] = useState(true);
 
 
 
@@ -233,6 +241,210 @@ export default function ProgramasPage() {
     }
   };
 
+  const getGradientColor = (nombre: string) => {
+    const lower = nombre.toLowerCase();
+    if (lower.includes("uña")) return "linear-gradient(135deg, #ec4899 0%, #f472b6 100%)";
+    if (lower.includes("maquill")) return "linear-gradient(135deg, #d946ef 0%, #e879f9 100%)";
+    if (lower.includes("ceja") || lower.includes("micro")) return "linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)";
+    if (lower.includes("pesta") || lower.includes("mirada")) return "linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)";
+    if (lower.includes("barber")) return "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)";
+    return "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)";
+  };
+
+  const renderProgramaCard = (programa: any) => {
+    const nombre = programa.nombre || "Programa";
+    const icono = programa.emoji || (() => {
+      const lower = nombre.toLowerCase();
+      if (lower.includes("uña")) return "💅";
+      if (lower.includes("maquill")) return "💄";
+      if (lower.includes("ceja") || lower.includes("micro")) return "👁️";
+      if (lower.includes("pesta") || lower.includes("mirada")) return "👀";
+      if (lower.includes("barber")) return "✂️";
+      return "📘";
+    })();
+
+    const totalHoras = calcularTotalHoras(programa);
+    const valorTotal = calcularPrecioTotal(programa);
+    const valorClase = calcularValorPorClase(programa);
+
+    return (
+      <Col xs={24} sm={12} lg={8} xl={6} key={programa.id}>
+        <Card
+          hoverable
+          style={{
+            borderRadius: 16,
+            overflow: "hidden",
+            border: "none",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+            transition: "all 0.3s ease",
+            height: "100%",
+          }}
+          bodyStyle={{ padding: 0 }}
+          className="programa-card"
+        >
+          {/* Header con gradiente */}
+          <div
+            style={{
+              background: getGradientColor(nombre),
+              padding: "24px 20px",
+              position: "relative",
+              minHeight: 120,
+            }}
+          >
+            <div style={{ position: "absolute", top: 12, right: 12 }}>
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: "gestor",
+                      label: "Gestionar Pensum",
+                      icon: <BookOutlined />,
+                      onClick: () => handleAction("gestor", programa),
+                    },
+                    {
+                      key: "edit",
+                      label: "Editar",
+                      icon: <EditOutlined />,
+                      onClick: () => handleAction("edit", programa),
+                    },
+                    {
+                      type: "divider",
+                    },
+                    {
+                      key: "toggle",
+                      label: programa.activo ? "Desactivar" : "Activar",
+                      danger: programa.activo,
+                      onClick: () => handleAction("toggle", programa),
+                    },
+                  ],
+                }}
+                trigger={["click"]}
+              >
+                <Button
+                  type="text"
+                  icon={<MoreOutlined />}
+                  style={{ color: "white", background: "rgba(255,255,255,0.2)" }}
+                  size="small"
+                />
+              </Dropdown>
+            </div>
+
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{icono}</div>
+            <Title level={isMobile ? 5 : 4} style={{ margin: 0, color: "white", fontWeight: 700 }}>
+              {nombre}
+            </Title>
+            {!programa.activo && (
+              <Tag color="red" style={{ marginTop: 8 }}>Inactivo</Tag>
+            )}
+          </div>
+
+          {/* Body con información */}
+          <div style={{ padding: "20px" }}>
+            {programa.descripcion && (
+              <Text
+                type="secondary"
+                style={{
+                  display: "block",
+                  marginBottom: 16,
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  minHeight: 40,
+                }}
+                ellipsis={{ rows: 2, tooltip: programa.descripcion }}
+              >
+                {programa.descripcion}
+              </Text>
+            )}
+
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              {/* Duración y clases */}
+              <Row gutter={8}>
+                <Col span={12}>
+                  <div style={{ textAlign: "center", padding: "8px", background: "#f0f5ff", borderRadius: 8 }}>
+                    <ClockCircleOutlined style={{ color: "#1890ff", fontSize: 16 }} />
+                    <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
+                      {programa.duracion || "N/A"}
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 11 }}>Duración</Text>
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div style={{ textAlign: "center", padding: "8px", background: "#f6ffed", borderRadius: 8 }}>
+                    <FireOutlined style={{ color: "#52c41a", fontSize: 16 }} />
+                    <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
+                      {programa.total_clases || 0}
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 11 }}>Clases</Text>
+                  </div>
+                </Col>
+              </Row>
+
+              {/* Total horas y valor */}
+              <Row gutter={8}>
+                <Col span={12}>
+                  <div style={{ textAlign: "center", padding: "8px", background: "#fff7e6", borderRadius: 8 }}>
+                    <ThunderboltOutlined style={{ color: "#fa8c16", fontSize: 16 }} />
+                    <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
+                      {totalHoras}h
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 11 }}>Total horas</Text>
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div style={{ textAlign: "center", padding: "8px", background: "#f0f5ff", borderRadius: 8 }}>
+                    <TrophyOutlined style={{ color: "#722ed1", fontSize: 16 }} />
+                    <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>
+                      {valorClase ? `$${valorClase.toLocaleString()}` : "N/A"}
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 11 }}>Por clase</Text>
+                  </div>
+                </Col>
+              </Row>
+
+              <Divider style={{ margin: "8px 0" }} />
+
+              {/* Precio total destacado */}
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "12px",
+                  background: "linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%)",
+                  borderRadius: 8,
+                  border: "2px solid #91d5ff",
+                }}
+              >
+                <Text type="secondary" style={{ fontSize: 12 }}>Inversión total</Text>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "#0050b3", marginTop: 4 }}>
+                  ${Number(valorTotal).toLocaleString()}
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <Space style={{ width: "100%", marginTop: 8 }} size={8}>
+                <Button
+                  icon={<BookOutlined />}
+                  onClick={() => handleAction("gestor", programa)}
+                  block
+                  type="primary"
+                  ghost
+                >
+                  Pensum
+                </Button>
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => handleAction("edit", programa)}
+                  block
+                >
+                  Editar
+                </Button>
+              </Space>
+            </Space>
+          </div>
+        </Card>
+      </Col>
+    );
+  };
+
   const columns = [
     {
       title: "Programa Académico",
@@ -377,32 +589,187 @@ export default function ProgramasPage() {
 
   return (
     <App>
-      <div style={{ padding: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, alignItems: "center" }}>
-          <div>
-            <Title level={2} style={{ marginBottom: 4 }}>Programas Académicos</Title>
-            <Text type="secondary">Gestiona los cursos/programas generales. Los grupos con horarios se crean dentro de cada programa.</Text>
-          </div>
-          <Space>
-            <Checkbox
-              checked={mostrarInactivos}
-              onChange={(e: CheckboxChangeEvent) => setMostrarInactivos(e.target.checked)}
-            >
-              Mostrar inactivos {programas.filter(p => !p.activo).length > 0 && `(${programas.filter(p => !p.activo).length})`}
-            </Checkbox>
-            <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>
-              Nuevo Programa
-            </Button>
-          </Space>
-        </div>
+      <div style={{ padding: isMobile ? 12 : isTablet ? 16 : 24, background: "#f5f5f5", minHeight: "100vh" }}>
+        {/* Header moderno */}
+        <Card
+          style={{
+            marginBottom: 24,
+            borderRadius: 16,
+            border: "none",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          }}
+        >
+          <Row gutter={[16, 16]} align="middle">
+            <Col xs={24} md={12}>
+              <Space direction="vertical" size={4}>
+                <Space align="center">
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
+                      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 24,
+                    }}
+                  >
+                    📚
+                  </div>
+                  <div>
+                    <Title level={isMobile ? 4 : 2} style={{ margin: 0 }}>Programas Académicos</Title>
+                    {!isMobile && (
+                      <Text type="secondary" style={{ fontSize: 13 }}>
+                        Gestiona tu catálogo de cursos y programas educativos
+                      </Text>
+                    )}
+                  </div>
+                </Space>
+              </Space>
+            </Col>
+            <Col xs={24} md={12} style={{ textAlign: isMobile ? "left" : "right" }}>
+              <Space wrap size={8}>
+                {!isMobile && (
+                  <Button.Group>
+                    <Button
+                      type={vistaCards ? "primary" : "default"}
+                      icon={<AppstoreOutlined />}
+                      onClick={() => setVistaCards(true)}
+                    >
+                      Cards
+                    </Button>
+                    <Button
+                      type={!vistaCards ? "primary" : "default"}
+                      icon={<UnorderedListOutlined />}
+                      onClick={() => setVistaCards(false)}
+                    >
+                      Tabla
+                    </Button>
+                  </Button.Group>
+                )}
+                <Checkbox
+                  checked={mostrarInactivos}
+                  onChange={(e: CheckboxChangeEvent) => setMostrarInactivos(e.target.checked)}
+                >
+                  Inactivos
+                  {programas.filter(p => !p.activo).length > 0 && (
+                    <Badge
+                      count={programas.filter(p => !p.activo).length}
+                      style={{ marginLeft: 8, background: "#ff4d4f" }}
+                    />
+                  )}
+                </Checkbox>
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<PlusOutlined />}
+                  onClick={() => handleOpenModal()}
+                  style={{
+                    borderRadius: 8,
+                    boxShadow: "0 2px 8px rgba(24, 144, 255, 0.3)",
+                  }}
+                >
+                  {isMobile ? "Nuevo" : "Nuevo Programa"}
+                </Button>
+              </Space>
+            </Col>
+          </Row>
 
-      <Card>
-        <Table
-          dataSource={programas}
-          columns={columns}
-          rowKey="id"
-          loading={loading}
-          pagination={{ pageSize: 10 }}
+          {/* Estadísticas rápidas */}
+          {!isMobile && (
+            <>
+              <Divider style={{ margin: "16px 0" }} />
+              <Row gutter={16}>
+                <Col span={6}>
+                  <Statistic
+                    title="Programas Activos"
+                    value={programas.filter(p => p.activo).length}
+                    prefix={<FireOutlined style={{ color: "#52c41a" }} />}
+                    valueStyle={{ color: "#52c41a", fontSize: 24 }}
+                  />
+                </Col>
+                <Col span={6}>
+                  <Statistic
+                    title="Total Programas"
+                    value={programas.length}
+                    prefix={<BookOutlined style={{ color: "#1890ff" }} />}
+                    valueStyle={{ fontSize: 24 }}
+                  />
+                </Col>
+                <Col span={6}>
+                  <Statistic
+                    title="Horas Totales"
+                    value={programas.reduce((acc, p) => acc + calcularTotalHoras(p), 0)}
+                    suffix="h"
+                    prefix={<ClockCircleOutlined style={{ color: "#fa8c16" }} />}
+                    valueStyle={{ fontSize: 24 }}
+                  />
+                </Col>
+                <Col span={6}>
+                  <Statistic
+                    title="Clases Totales"
+                    value={programas.reduce((acc, p) => acc + (Number(p.total_clases) || 0), 0)}
+                    prefix={<ThunderboltOutlined style={{ color: "#722ed1" }} />}
+                    valueStyle={{ fontSize: 24 }}
+                  />
+                </Col>
+              </Row>
+            </>
+          )}
+        </Card>
+
+      {/* Vista de cards moderna */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 60 }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 16, color: "#999" }}>Cargando programas...</div>
+        </div>
+      ) : vistaCards ? (
+        <Row gutter={[16, 16]}>
+          {programas.map(programa => renderProgramaCard(programa))}
+          {programas.length === 0 && (
+            <Col span={24}>
+              <Card style={{ textAlign: "center", padding: 40 }}>
+                <div style={{ fontSize: 64, marginBottom: 16 }}>📚</div>
+                <Title level={4}>No hay programas registrados</Title>
+                <Text type="secondary">Comienza creando tu primer programa académico</Text>
+                <br />
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<PlusOutlined />}
+                  onClick={() => handleOpenModal()}
+                  style={{ marginTop: 16 }}
+                >
+                  Crear Primer Programa
+                </Button>
+              </Card>
+            </Col>
+          )}
+        </Row>
+      ) : (
+        <Card
+          style={{
+            borderRadius: 16,
+            border: "none",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          }}
+        >
+          <Table
+            dataSource={programas}
+            columns={isMobile ? columns.filter(col => 
+              ['nombre', 'duracion', 'precio_total', 'activo', 'acciones'].includes(String(col.key))
+            ) : columns}
+            rowKey="id"
+            loading={loading}
+            scroll={isMobile ? { x: 800 } : undefined}
+            pagination={{ 
+              pageSize: 10,
+              simple: isMobile,
+              showSizeChanger: !isMobile 
+            }}
+            size={isMobile ? "small" : "middle"}
           expandable={{
             expandedRowRender: (record) => (
               <div style={{ padding: 16, background: "#fafafa", borderRadius: 8 }}>
@@ -429,177 +796,248 @@ export default function ProgramasPage() {
               </div>
             ),
           }}
-        />
-      </Card>
+          />
+        </Card>
+      )}
 
       <Modal
-        title={editingPrograma ? "Editar Programa" : "Nuevo Programa"}
+        title={
+          <Space>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 20,
+              }}
+            >
+              {editingPrograma ? "✏️" : "➕"}
+            </div>
+            <span style={{ fontSize: 18, fontWeight: 600 }}>
+              {editingPrograma ? "Editar Programa" : "Nuevo Programa"}
+            </span>
+          </Space>
+        }
         open={modalVisible}
         onOk={handleSubmit}
         onCancel={handleCloseModal}
-        width={700}
-        okText="Guardar"
+        width={isMobile ? "100%" : isTablet ? 600 : 750}
+        style={isMobile ? { top: 0, paddingBottom: 0, maxHeight: "100vh" } : undefined}
+        bodyStyle={isMobile ? { maxHeight: "calc(100vh - 110px)", overflowY: "auto" } : { padding: 24 }}
+        okText={editingPrograma ? "💾 Guardar Cambios" : "✨ Crear Programa"}
         cancelText="Cancelar"
+        okButtonProps={{
+          size: "large",
+          style: {
+            borderRadius: 8,
+            boxShadow: "0 2px 8px rgba(24, 144, 255, 0.3)",
+          }
+        }}
+        cancelButtonProps={{ size: "large" }}
       >
         <Form form={form} layout="vertical">
-          <Form.Item
-            name="nombre"
-            label="Nombre del Programa"
-            rules={[{ required: true, message: "Ingresa el nombre del programa" }]}
+          {/* Sección: Información Básica */}
+          <Card
+            size="small"
+            title={<Space><BookOutlined /> Información Básica</Space>}
+            style={{ marginBottom: 16, background: "#fafafa" }}
           >
-            <Input placeholder="Ej: Micropigmentación Profesional" />
-          </Form.Item>
-
-          <Form.Item
-            name="emoji"
-            label="Emoji representativo (opcional)"
-            tooltip="Se mostrará en la lista de programas"
-          >
-            <Input placeholder="Ej: 💅" maxLength={4} />
-          </Form.Item>
-
-          <Form.Item
-            name="descripcion"
-            label="Descripción"
-          >
-            <TextArea rows={3} placeholder="Descripción breve del programa" />
-          </Form.Item>
-
-          <Form.Item
-            name="duracion"
-            label="Duración"
-          >
-            <Input placeholder="Ej: 3 meses, 120 horas" />
-          </Form.Item>
-
-          <Form.Item
-            name="horas_por_clase"
-            label="Horas por Clase/Sesión"
-            rules={[{ required: true, message: "Ingresa las horas por clase" }]}
-          >
-            <InputNumber 
-              style={{ width: "100%" }} 
-              min={0.5} 
-              step={0.5}
-              placeholder="Ej: 2 o 2.5" 
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="total_clases"
-            label="Total de Clases/Sesiones"
-            rules={[{ required: true, message: "Ingresa el número de clases" }]}
-          >
-            <InputNumber style={{ width: "100%" }} min={1} placeholder="Ej: 24" />
-          </Form.Item>
-
-          <Space style={{ width: "100%" }} size="large" direction="horizontal">
             <Form.Item
-              label="Total Horas Programa"
-              style={{ marginBottom: 0, flex: 1 }}
+              name="nombre"
+              label="Nombre del Programa"
+              rules={[{ required: true, message: "Ingresa el nombre del programa" }]}
             >
-              <div style={{
-                padding: '8px 12px',
-                border: '1px solid #d9d9d9',
-                borderRadius: '4px',
-                background: '#f9f0ff',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                color: '#722ed1'
-              }}>
-                {calcularTotalHoras(formValues || {})} horas
-              </div>
-            </Form.Item>
-            <Form.Item
-              label="Valor por Clase"
-              style={{ marginBottom: 0, flex: 1 }}
-            >
-              <div style={{
-                padding: '8px 12px',
-                border: '1px solid #d9d9d9',
-                borderRadius: '4px',
-                background: '#e6f7ff',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                color: '#1890ff'
-              }}>
-                $ {(calcularValorPorClase(formValues || {}) || 0).toLocaleString()}
-              </div>
-            </Form.Item>
-          </Space>
-
-          <Space style={{ width: "100%" }} size="large" direction="horizontal">
-            <Form.Item
-              label="Valor Total Calculado"
-              style={{ marginBottom: 0, flex: 1 }}
-            >
-              <div style={{
-                padding: '8px 12px',
-                border: '1px solid #d9d9d9',
-                borderRadius: '4px',
-                background: '#f0f2f5',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                color: '#3f8600'
-              }}>
-                $ {Number(calcularPrecioTotal(formValues || {})).toLocaleString()}
-              </div>
-            </Form.Item>
-          </Space>
-
-          <Space style={{ width: "100%" }} size="large" direction="vertical">
-            <Text type="secondary" style={{fontSize: 12}}>Configura Inscripción y Mensualidad para calcular el total automáticamente</Text>
-            <Form.Item
-              name="precio_inscripcion"
-              label="Valor Inscripción"
-              style={{ marginBottom: 0 }}
-            >
-              <InputNumber
-                style={{ width: '100%' }}
-                min={0}
-                placeholder="0"
-                formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
-                onChange={() => form.validateFields()}
+              <Input 
+                placeholder="Ej: Micropigmentación Profesional" 
+                size="large"
+                prefix="📚"
               />
             </Form.Item>
 
             <Form.Item
-              name="precio_mensualidad"
-              label="Valor Mensualidad"
-              style={{ marginBottom: 0 }}
+              name="emoji"
+              label="Emoji representativo (opcional)"
+              tooltip="Se mostrará en la lista de programas"
             >
-              <InputNumber
-                style={{ width: '100%' }}
-                min={0}
-                placeholder="0"
-                formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
-                onChange={() => form.validateFields()}
+              <Input placeholder="Ej: 💅" maxLength={4} size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="descripcion"
+              label="Descripción"
+            >
+              <TextArea rows={3} placeholder="Descripción breve del programa" />
+            </Form.Item>
+          </Card>
+
+          {/* Sección: Duración y Clases */}
+          <Card
+            size="small"
+            title={<Space><ClockCircleOutlined /> Duración y Clases</Space>}
+            style={{ marginBottom: 16, background: "#fafafa" }}
+          >
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="duracion"
+                  label="Duración"
+                >
+                  <Input placeholder="Ej: 3 meses" size="large" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="total_clases"
+                  label="Total de Clases"
+                  rules={[{ required: true, message: "Requerido" }]}
+                >
+                  <InputNumber 
+                    style={{ width: "100%" }} 
+                    min={1} 
+                    placeholder="Ej: 24"
+                    size="large"
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item
+              name="horas_por_clase"
+              label="Horas por Clase/Sesión"
+              rules={[{ required: true, message: "Ingresa las horas por clase" }]}
+            >
+              <InputNumber 
+                style={{ width: "100%" }} 
+                min={0.5} 
+                step={0.5}
+                placeholder="Ej: 2 o 2.5"
+                size="large"
+                prefix="⏱️"
               />
             </Form.Item>
-          </Space>
 
-          <Form.Item
-            name="contenido"
-            label="Contenido del Programa"
-          >
-            <TextArea rows={4} placeholder="Describe los temas y módulos del programa" />
-          </Form.Item>
+            {/* Resumen calculado */}
+            <div
+              style={{
+                padding: 16,
+                background: "linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%)",
+                borderRadius: 8,
+                border: "2px solid #91d5ff",
+              }}
+            >
+              <Row gutter={16}>
+                <Col span={12}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 12, color: "#666" }}>Total Horas</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: "#722ed1" }}>
+                      {calcularTotalHoras(formValues || {})}h
+                    </div>
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 12, color: "#666" }}>Valor/Clase</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "#1890ff" }}>
+                      ${(calcularValorPorClase(formValues || {}) || 0).toLocaleString()}
+                    </div>
+                  </div>
+                </Col>
+              </Row>
+            </div>
+          </Card>
 
-          <Form.Item
-            name="requisitos"
-            label="Requisitos"
+          {/* Sección: Precios */}
+          <Card
+            size="small"
+            title={<Space><DollarOutlined /> Precios e Inversión</Space>}
+            style={{ marginBottom: 16, background: "#fafafa" }}
           >
-            <TextArea rows={2} placeholder="Requisitos previos para inscribirse" />
-          </Form.Item>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="precio_inscripcion"
+                  label="Valor Inscripción"
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    size="large"
+                    min={0}
+                    placeholder="0"
+                    formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
+                    onChange={() => form.validateFields()}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="precio_mensualidad"
+                  label="Valor Mensualidad"
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    size="large"
+                    min={0}
+                    placeholder="0"
+                    formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
+                    onChange={() => form.validateFields()}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
 
-          <Form.Item
-            name="certificacion"
-            label="Certificación"
+            {/* Total destacado */}
+            <div
+              style={{
+                padding: 20,
+                background: "linear-gradient(135deg, #52c41a 0%, #73d13d 100%)",
+                borderRadius: 12,
+                textAlign: "center",
+                color: "white",
+              }}
+            >
+              <div style={{ fontSize: 14, opacity: 0.9, marginBottom: 8 }}>
+                💎 Inversión Total del Programa
+              </div>
+              <div style={{ fontSize: 36, fontWeight: 700 }}>
+                ${Number(calcularPrecioTotal(formValues || {})).toLocaleString()}
+              </div>
+            </div>
+          </Card>
+
+          {/* Sección: Información Adicional */}
+          <Card
+            size="small"
+            title={<Space><FileTextOutlined /> Información Adicional</Space>}
+            style={{ marginBottom: 0, background: "#fafafa" }}
           >
-            <Input placeholder="Tipo de certificación que se otorga" />
-          </Form.Item>
+            <Form.Item
+              name="contenido"
+              label="Contenido del Programa"
+            >
+              <TextArea rows={4} placeholder="Describe los temas y módulos del programa" />
+            </Form.Item>
+
+            <Form.Item
+              name="requisitos"
+              label="Requisitos"
+            >
+              <TextArea rows={2} placeholder="Requisitos previos para inscribirse" />
+            </Form.Item>
+
+            <Form.Item
+              name="certificacion"
+              label="Certificación"
+              style={{ marginBottom: 0 }}
+            >
+              <Input placeholder="Tipo de certificación que se otorga" size="large" />
+            </Form.Item>
+          </Card>
         </Form>
       </Modal>
 

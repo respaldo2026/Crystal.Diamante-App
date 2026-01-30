@@ -29,6 +29,7 @@ import {
 } from "antd";
 import dayjs from "dayjs";
 import { ProfessorDashboardData } from "@hooks/useProfessorDashboard";
+import { construirNombreGrupo } from "@utils/grupos";
 
 type CourseActionContext = "attendance" | "grades" | "materials" | "default";
 
@@ -379,7 +380,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       >
                         <Space align="center" split={<Divider type="vertical" style={{ borderColor: "rgba(255,255,255,0.12)" }} />} wrap>
                           <Typography.Title level={4} style={{ margin: 0, color: "#F8FAFC", fontSize: 18 }}>
-                            {curso.nombre}
+                            {construirNombreGrupo(curso)}
                           </Typography.Title>
                           <Tag color={curso.estado === "activo" ? "green" : curso.estado === "pausado" ? "gold" : "blue"}>
                             {curso.estado}
@@ -552,7 +553,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                     renderItem={(curso) => (
                       <List.Item>
                         <List.Item.Meta
-                          title={curso.nombre}
+                          title={construirNombreGrupo(curso)}
                           description={`${curso.estudiantes} estudiantes`}
                         />
                         {typeof curso.asistencia === "number" ? (

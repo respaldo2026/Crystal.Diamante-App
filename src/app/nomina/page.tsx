@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
     Table, Card, Button, DatePicker, Row, Col, Typography, Select,
-    Statistic, Tag, message, Modal, Space, Alert
+    Statistic, Tag, message, Modal, Space, Alert, Grid
 } from "antd";
 import { 
   CalculatorOutlined, DollarCircleOutlined, PayCircleOutlined, PrinterOutlined
@@ -17,6 +17,8 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { logger } from "@utils/logger";
 
+const { useBreakpoint } = Grid;
+
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
@@ -24,6 +26,9 @@ const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
 export default function NominaPage() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = screens.md && !screens.lg;
   const { user } = useCurrentUser();
   const [loading, setLoading] = useState(false);
   const [profesores, setProfesores] = useState<any[]>([]);
@@ -363,27 +368,28 @@ export default function NominaPage() {
     );
 
   return (
-    <div style={{ padding: 24 }}>
-        <Title level={3}><CalculatorOutlined /> Liquidación de Profesores</Title>
+    <div style={{ padding: isMobile ? 12 : isTablet ? 16 : 24 }}>
+        <Title level={isMobile ? 4 : 3}><CalculatorOutlined /> {isMobile ? "Liquidación" : "Liquidación de Profesores"}</Title>
         
         <Card style={{ marginBottom: 20 }}>
-            <Row gutter={16} align="middle">
-                <Col span={12}>
+            <Row gutter={[16, 16]} align="middle">
+                <Col xs={24} md={12}>
                     <Text strong>Selecciona el Periodo:</Text><br/>
                     <RangePicker 
                         style={{ width: '100%', marginTop: 5 }} 
                         value={rangoFechas}
                         onChange={(dates) => setRangoFechas(dates)}
                         format="DD-MMM-YYYY"
+                        size={isMobile ? "middle" : "large"}
                     />
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                     <Statistic 
                         title="Total a Dispersar" 
                         value={totalAPagar} 
                         prefix={<DollarCircleOutlined />} 
                         precision={0}
-                        valueStyle={{ color: '#3f8600' }}
+                        valueStyle={{ color: '#3f8600', fontSize: isMobile ? 20 : 24 }}
                     />
                 </Col>
             </Row>
@@ -394,25 +400,44 @@ export default function NominaPage() {
             rowKey="id"
             loading={loading}
             locale={{ emptyText: "No hay clases pendientes de pago en este rango de fechas" }}
-            columns={columnasNomina}
+            columns={isMobile ? columnasNomina.filter((col: any) => 
+              ['nombre_completo', 'total_horas', 'total_pagado', 'Acción'].includes(col.title)
+            ) : columnasNomina}
+            scroll={isMobile ? { x: 600 } : undefined}
+            size={isMobile ? "small" : "middle"}
+            pagination={{ 
+              pageSize: 10,
+              simple: isMobile,
+              showSizeChanger: !isMobile 
+            }}
         />
 
                 <Card style={{ marginTop: 20 }} title="📋 Registro Diario Detallado de Clases Trabajadas">
                     <Space direction="vertical" style={{ width: '100%' }}>
-                        <Alert
-                            message="Este es el registro DIARIO DETALLADO de cada clase dictada"
-                            description="Cada fila representa una clase trabajada con fecha específica, profesor, curso, horas y tema. Este historial permanece incluso después de pagar."
-                            type="info"
-                            showIcon
-                            style={{ marginBottom: 16 }}
-                        />
+                        {!isMobile && (
+                          <Alert
+                              message="Este es el registro DIARIO DETALLADO de cada clase dictada"
+                              description="Cada fila representa una clase trabajada con fecha específica, profesor, curso, horas y tema. Este historial permanece incluso después de pagar."
+                              type="info"
+                              showIcon
+                              style={{ marginBottom: 16 }}
+                          />
+                        )}
                         <Table
                             dataSource={clasesPendientes}
                             rowKey="id"
                             loading={loading}
                             locale={{ emptyText: "No hay clases pendientes en este rango" }}
-                            columns={columnasClases}
-                            pagination={{ pageSize: 10 }}
+                            columns={isMobile ? columnasClases.filter((col: any) => 
+                              ['Fecha', 'Profesor', 'Horas', 'A Pagar', 'Acción'].includes(col.title)
+                            ) : columnasClases}
+                            scroll={isMobile ? { x: 600 } : undefined}
+                            size={isMobile ? "small" : "middle"}
+                            pagination={{ 
+                              pageSize: 10,
+                              simple: isMobile,
+                              showSizeChanger: !isMobile 
+                            }}
                         />
                     </Space>
                 </Card>

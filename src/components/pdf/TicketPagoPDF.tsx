@@ -2,6 +2,7 @@
 
 import React from "react";
 import * as ReactPDF from "@react-pdf/renderer";
+import { construirNombreGrupo } from "@utils/grupos";
 
 const { Page, Text, View, Document, StyleSheet } = ReactPDF;
 
@@ -111,10 +112,10 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
             <Text style={styles.value}>{estudiante.identificacion}</Text>
           </>
         ) : null}
-        {curso?.nombre ? (
+            {curso ? (
           <>
             <Text style={styles.label}>Curso:</Text>
-            <Text style={styles.value}>{curso.nombre}</Text>
+                <Text style={styles.value}>{construirNombreGrupo(curso)}</Text>
           </>
         ) : null}
       </View>

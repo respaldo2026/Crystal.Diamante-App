@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useForm, useSelect } from "@refinedev/antd";
 import { Form, Select, DatePicker, Input, Card, message, Alert, Button, Space, Divider, Modal, Col, Row, Descriptions, Result, Typography } from "antd";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { construirNombreGrupo } from "@utils/grupos";
 import { BookOutlined, SearchOutlined, PlusOutlined, PrinterOutlined, DollarCircleOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
@@ -85,7 +86,7 @@ export default function MatriculaCreate() {
                 // Primero obtenemos los cursos
                 const { data: cursosData, error } = await supabaseBrowserClient
                     .from("cursos")
-                    .select("id, nombre, cupos, fecha_inicio, estado, programa_id")
+                    .select("id, nombre, cupos, fecha_inicio, estado, programa_id, dias_semana, hora_inicio, hora_fin, programas(nombre)")
                     .eq("programa_id", programaSeleccionado)
                     .in("estado", ["activo", "proximo"])
                     .order("fecha_inicio", { ascending: true, nullsFirst: true });
@@ -119,9 +120,10 @@ export default function MatriculaCreate() {
                         const fechaLabel = curso?.fecha_inicio ? formatDate(curso.fecha_inicio) : "Sin fecha";
                         const esProximo = curso?.fecha_inicio && dayjs(curso.fecha_inicio).diff(today, "day") <= 14;
                         const badge = esProximo ? "[Próximo] " : "";
+                        const nombreGrupo = construirNombreGrupo(curso);
                         return {
                             value: curso.id,
-                            label: `${badge}${curso.nombre} · ${fechaLabel} · cupos ${disponibles}`,
+                            label: `${badge}${nombreGrupo} · ${fechaLabel} · cupos ${disponibles}`,
                         };
                     })
                     .filter(Boolean) as { label: string; value: string | number }[];

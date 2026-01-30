@@ -16,6 +16,10 @@ import {
   Alert,
   Divider,
   Tooltip,
+  Grid,
+  Row,
+  Col,
+  Statistic,
 } from "antd";
 import {
   PlusOutlined,
@@ -30,6 +34,8 @@ import {
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
+
+const { useBreakpoint } = Grid;
 
 const { Title, Text } = Typography;
 
@@ -108,6 +114,9 @@ const buildMailTo = (lead: Lead, mensaje: string) => {
 };
 
 export default function LeadsPage() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = screens.md && !screens.lg;
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -250,6 +259,86 @@ export default function LeadsPage() {
     });
   }, [leads, filtroEstado, filtroCanal, filtroPrograma]);
 
+  const leadStats = useMemo(() => {
+    const total = leadsFiltrados.length;
+    const nuevo = leadsFiltrados.filter((l) => (l.estado || "") === "nuevo").length;
+    const seguimiento = leadsFiltrados.filter((l) => (l.estado || "") === "en_seguimiento").length;
+    const cerrado = leadsFiltrados.filter((l) => (l.estado || "") === "cerrado").length;
+    return { total, nuevo, seguimiento, cerrado };
+  }, [leadsFiltrados]);
+
+  const getEstadoColor = (estado?: string | null) => {
+    return estadoOptions.find((e) => e.value === (estado || ""))?.color || "default";
+  };
+
+  const renderLeadCard = (record: Lead) => (
+    <Card
+      key={record.id}
+      hoverable
+      style={{ borderRadius: 14, border: "1px solid #f0f0f0" }}
+      bodyStyle={{ padding: 16 }}
+    >
+      <Space direction="vertical" size={8} style={{ width: "100%" }}>
+        <Space style={{ justifyContent: "space-between", width: "100%" }}>
+          <Space>
+            <UserOutlined />
+            <Text strong>{record.nombre}</Text>
+          </Space>
+          <Tag color={getEstadoColor(record.estado)}>{record.estado || "nuevo"}</Tag>
+        </Space>
+
+        <Space size={6} wrap>
+          {record.telefono && (
+            <Tag icon={<PhoneOutlined />} color="blue">
+              {record.telefono}
+            </Tag>
+          )}
+          {record.email && (
+            <Tag icon={<MailOutlined />} color="geekblue">
+              {record.email}
+            </Tag>
+          )}
+        </Space>
+
+        <Space direction="vertical" size={2}>
+          <Text type="secondary">Interés: {record.interes || "-"}</Text>
+          <Text type="secondary">Canal: {record.canal || "-"}</Text>
+          <Text type="secondary">
+            Creado: {record.created_at ? dayjs(record.created_at).format("DD MMM YYYY") : "-"}
+          </Text>
+        </Space>
+
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+          <Select
+            size="middle"
+            value={record.estado || "nuevo"}
+            onChange={(value) => actualizarEstado(record, value)}
+            options={estadoOptions.map((e) => ({ value: e.value, label: e.label }))}
+            style={{ width: "100%" }}
+          />
+          <Space style={{ width: "100%" }}>
+            <Button
+              icon={<WhatsAppOutlined />}
+              type="primary"
+              ghost
+              block
+              onClick={() => sendTemplate(record, "bienvenida", "whatsapp")}
+            >
+              WhatsApp
+            </Button>
+            <Button
+              icon={<SendOutlined />}
+              block
+              onClick={() => sendTemplate(record, "bienvenida", "email")}
+            >
+              Email
+            </Button>
+          </Space>
+        </Space>
+      </Space>
+    </Card>
+  );
+
   const columns = [
     {
       title: "Lead",
@@ -340,21 +429,83 @@ export default function LeadsPage() {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: isMobile ? 12 : isTablet ? 16 : 24 }}>
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
-        <Card>
-          <Space style={{ width: "100%", justifyContent: "space-between", flexWrap: "wrap" }}>
-            <Space size="middle" wrap>
-              <Title level={3} style={{ margin: 0 }}>
+        <Card
+          style={{
+            borderRadius: 16,
+            border: "none",
+            background: "linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%)",
+            color: "#fff",
+          }}
+          bodyStyle={{ padding: isMobile ? 16 : 24 }}
+        >
+          <Space
+            style={{ width: "100%", justifyContent: "space-between", flexWrap: "wrap" }}
+            direction={isMobile ? "vertical" : "horizontal"}
+          >
+            <Space direction="vertical" size={4}>
+              <Title level={isMobile ? 4 : 3} style={{ margin: 0, color: "#fff" }}>
                 Leads e interesados
               </Title>
-              <Tag color="purple">WhatsApp / Email</Tag>
+              <Text style={{ color: "#cbd5f5" }}>
+                Gestiona contactos, seguimiento y comunicación en un solo lugar.
+              </Text>
             </Space>
-            <Space size="middle" wrap>
+            <Space size={isMobile ? 8 : "middle"} wrap direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? "100%" : "auto" }}>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={cargarLeads}
+                size={isMobile ? "middle" : "large"}
+                block={isMobile}
+              >
+                Recargar
+              </Button>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setModalVisible(true)}
+                size={isMobile ? "middle" : "large"}
+                block={isMobile}
+              >
+                Nuevo lead
+              </Button>
+            </Space>
+          </Space>
+        </Card>
+
+        <Card style={{ borderRadius: 16 }}>
+          <Row gutter={[16, 16]} align="middle">
+            <Col xs={12} md={6}>
+              <Statistic title="Total" value={leadStats.total} />
+            </Col>
+            <Col xs={12} md={6}>
+              <Statistic title="Nuevos" value={leadStats.nuevo} />
+            </Col>
+            <Col xs={12} md={6}>
+              <Statistic title="En seguimiento" value={leadStats.seguimiento} />
+            </Col>
+            <Col xs={12} md={6}>
+              <Statistic title="Cerrados" value={leadStats.cerrado} />
+            </Col>
+          </Row>
+        </Card>
+
+        <Card style={{ borderRadius: 16 }}>
+          <Space
+            style={{ width: "100%", justifyContent: "space-between", flexWrap: "wrap" }}
+            direction={isMobile ? "vertical" : "horizontal"}
+          >
+            <Space size="small" wrap>
+              <Text strong>Filtros</Text>
+              {!isMobile && <Tag color="purple">WhatsApp / Email</Tag>}
+            </Space>
+            <Space size={isMobile ? 8 : "middle"} wrap direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? "100%" : "auto" }}>
               <Select
                 allowClear
                 placeholder="Estado"
-                style={{ width: 160 }}
+                size={isMobile ? "middle" : "large"}
+                style={{ width: isMobile ? "100%" : 160 }}
                 options={estadoOptions}
                 value={filtroEstado}
                 onChange={(v) => setFiltroEstado(v)}
@@ -362,7 +513,8 @@ export default function LeadsPage() {
               <Select
                 allowClear
                 placeholder="Canal"
-                style={{ width: 160 }}
+                size={isMobile ? "middle" : "large"}
+                style={{ width: isMobile ? "100%" : 160 }}
                 options={canalOptions.map((c) => ({ value: c.toLowerCase(), label: c }))}
                 value={filtroCanal}
                 onChange={(v) => setFiltroCanal(v)}
@@ -371,17 +523,12 @@ export default function LeadsPage() {
                 allowClear
                 showSearch
                 placeholder="Programa"
-                style={{ width: 200 }}
+                size={isMobile ? "middle" : "large"}
+                style={{ width: isMobile ? "100%" : 200 }}
                 options={programas.map((p) => ({ value: p, label: p }))}
                 value={filtroPrograma}
                 onChange={(v) => setFiltroPrograma(v)}
               />
-              <Button icon={<ReloadOutlined />} onClick={cargarLeads}>
-                Recargar
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
-                Nuevo lead
-              </Button>
             </Space>
           </Space>
         </Card>
@@ -413,15 +560,30 @@ export default function LeadsPage() {
           />
         )}
 
-        <Card>
-          <Table
-            rowKey="id"
-            columns={columns}
-            dataSource={leadsFiltrados}
-            loading={loading}
-            pagination={{ pageSize: 10 }}
-            locale={{ emptyText: tablaInexistente ? "Crea la tabla 'leads' y recarga." : "Sin leads" }}
-          />
+        <Card style={{ borderRadius: 16 }}>
+          {isMobile ? (
+            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+              {leadsFiltrados.length === 0 && (
+                <Text type="secondary">{tablaInexistente ? "Crea la tabla 'leads' y recarga." : "Sin leads"}</Text>
+              )}
+              {leadsFiltrados.map((lead) => renderLeadCard(lead))}
+            </Space>
+          ) : (
+            <Table
+              rowKey="id"
+              columns={columns}
+              dataSource={leadsFiltrados}
+              loading={loading}
+              scroll={isTablet ? { x: 800 } : undefined}
+              size="middle"
+              pagination={{ 
+                pageSize: 10,
+                simple: false,
+                showSizeChanger: true 
+              }}
+              locale={{ emptyText: tablaInexistente ? "Crea la tabla 'leads' y recarga." : "Sin leads" }}
+            />
+          )}
         </Card>
       </Space>
 
@@ -432,6 +594,9 @@ export default function LeadsPage() {
         onOk={() => form.submit()}
         okText="Guardar"
         cancelText="Cancelar"
+        width={isMobile ? "100%" : isTablet ? 500 : 600}
+        style={isMobile ? { top: 0, paddingBottom: 0, maxHeight: "100vh" } : undefined}
+        bodyStyle={isMobile ? { maxHeight: "calc(100vh - 110px)", overflowY: "auto" } : undefined}
       >
         <Form layout="vertical" form={form} onFinish={crearLead}>
           <Form.Item name="nombre" label="Nombre completo" rules={[{ required: true, message: "Ingresa el nombre" }]}> 

@@ -41,6 +41,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/es";
 import localizedFormat from "dayjs/plugin/localizedFormat";
 import { useRouter } from "next/navigation";
+import { construirNombreGrupo } from "@utils/grupos";
 import {
   getProgramasResumen,
   getCursosSecretaria,
@@ -665,7 +666,7 @@ export default function SecretariaDashboard() {
         <List.Item.Meta
           title={
             <Space direction="vertical" size={0}>
-              <Text strong>{curso.nombre || "Grupo sin nombre"}</Text>
+              <Text strong>{construirNombreGrupo(curso)}</Text>
               <Text type="secondary">{curso.programas?.nombre || "Programa por definir"}</Text>
             </Space>
           }
@@ -880,7 +881,7 @@ export default function SecretariaDashboard() {
                                 <div>
                                   <Space direction="vertical" size={4}>
                                     <Space align="center">
-                                      <Text strong>{curso.nombre}</Text>
+                                      <Text strong>{construirNombreGrupo(curso)}</Text>
                                       <Tag color="geekblue">{curso.programas?.nombre || "Programa"}</Tag>
                                     </Space>
                                     <Text type="secondary">Inicio: {formatFecha(curso.fecha_inicio)}</Text>

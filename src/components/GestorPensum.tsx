@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Modal,
   Form,
@@ -24,6 +24,7 @@ import {
   List,
   Alert,
   Radio,
+  Dropdown,
 } from "antd";
 import {
   PlusOutlined,
@@ -36,6 +37,7 @@ import {
   CheckCircleOutlined,
   LinkOutlined,
   EyeOutlined,
+  EllipsisOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { logger } from "@utils/logger";
@@ -77,6 +79,8 @@ interface MaterialDidactico {
   subido_por_nombre: string;
   created_at: string;
   pensum_id?: string;
+  nombre_ciclo?: string | null;
+  programa_nombre?: string | null;
 }
 
 interface GestorPensumProps {
@@ -122,6 +126,7 @@ export default function GestorPensum({
   const [drawerMaterialesVisible, setDrawerMaterialesVisible] = useState(false);
   const [uploadingMaterial, setUploadingMaterial] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [editingMaterial, setEditingMaterial] = useState<MaterialDidactico | null>(null);
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace'>('archivo');
 
   // Estados para navegación
@@ -421,6 +426,49 @@ export default function GestorPensum({
     cargarMateriales();
   }, [cargarMateriales]);
 
+  const parseTemaFromTitulo = (titulo: string) => {
+    const match = titulo.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
+    if (!match) return { tema: undefined, tituloLimpio: titulo };
+    const tema = match[1]?.trim();
+    const tituloLimpio = (match[2] || titulo).trim();
+    return { tema, tituloLimpio };
+  };
+
+  const buildTituloConTema = (titulo: string, tema?: string) => {
+    if (!tema) return titulo;
+    if (/^\s*tema[:\-]/i.test(titulo) || /^\s*\[tema[:\-]/i.test(titulo)) return titulo;
+    return `Tema: ${tema} — ${titulo}`;
+  };
+
+  const abrirDrawerMaterialParaTema = (temaNombre?: string) => {
+    setEditingMaterial(null);
+    formMaterial.resetFields();
+    setFileList([]);
+    setTipoOrigen('archivo');
+    formMaterial.setFieldsValue({ tema_relacionado: temaNombre });
+    setDrawerMaterialesVisible(true);
+  };
+
+  const editarMaterial = (material: MaterialDidactico, temaNombre?: string) => {
+    const esEnlace = material.mime_type === "link" || material.nombre_archivo === "Enlace Externo";
+    setEditingMaterial(material);
+    setFileList([]);
+    setTipoOrigen(esEnlace ? 'enlace' : 'archivo');
+    formMaterial.setFieldsValue({
+      tema_relacionado: temaNombre,
+      titulo: material.titulo,
+      descripcion: material.descripcion,
+      tipo_material: material.tipo_material,
+      url_externa: esEnlace ? material.url_archivo : undefined,
+    });
+    setDrawerMaterialesVisible(true);
+  };
+
+  const materialesCiclo = useMemo(() => {
+    return materiales.filter(m => m.pensum_id === selectedCicloId);
+  }, [materiales, selectedCicloId]);
+
+
   const handleEliminarMaterial = (materialId: string) => {
     modal.confirm({
       title: "Eliminar material",
@@ -455,6 +503,16 @@ export default function GestorPensum({
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
+  const sanitizarNombreArchivo = (nombre: string) => {
+    return nombre
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 120);
+  };
+
   // Actualizar pensum_id cuando se selecciona un ciclo para subir material
   const handleSubirMaterial = async () => {
     try {
@@ -464,76 +522,113 @@ export default function GestorPensum({
       }
       // Obtener valores del formulario
       const formValues = formMaterial.getFieldsValue();
-      const tipoOrigen = formValues.tipo_origen;
+      const tipoOrigenSeleccionado = tipoOrigen;
+      const temaRelacionado = formValues.tema_relacionado as string | undefined;
       
       let urlArchivo = "";
       let nombreArchivo = "";
       let tamanoBytes = 0;
       let mimeType = "";
 
-      if (tipoOrigen === 'archivo') {
+      if (tipoOrigenSeleccionado === 'archivo') {
         // Obtener el archivo del upload
         const fileList = formValues.archivo?.fileList;
         if (!fileList || fileList.length === 0) {
-          message.error("Por favor selecciona un archivo");
-          return;
-        }
-
-        const uploadedFile = fileList[0].originFileObj;
-        const uploadFileName = `${Date.now()}_${uploadedFile.name}`;
-
-        // Subir archivo a Supabase Storage
-        const { data: uploadData, error: uploadError } = await supabaseBrowserClient.storage
-          .from("material_didactico")
-          .upload(`${programaId}/${uploadFileName}`, uploadedFile);
-
-        if (uploadError) {
-          if (
-            uploadError.message.includes("security policy") ||
-            uploadError.message.includes("row-level security")
-          ) {
-            throw new Error(
-              "Error de permisos: Falta configurar políticas RLS en el bucket 'material_didactico'. Ejecuta el script SQL de permisos."
-            );
+          if (!editingMaterial) {
+            message.error("Por favor selecciona un archivo");
+            return;
           }
-          throw uploadError;
         }
 
-        // Obtener URL pública
-        const { data: urlData } = supabaseBrowserClient.storage
-          .from("material_didactico")
-          .getPublicUrl(`${programaId}/${uploadFileName}`);
+        if (fileList && fileList.length > 0) {
+          const uploadedFile = fileList[0].originFileObj;
+          const safeName = sanitizarNombreArchivo(uploadedFile.name);
+          const uploadFileName = `${Date.now()}_${safeName}`;
 
-        urlArchivo = urlData.publicUrl;
-        nombreArchivo = uploadedFile.name;
-        tamanoBytes = uploadedFile.size;
-        mimeType = uploadedFile.type;
-      } else if (tipoOrigen === 'enlace') {
+          // Subir archivo a Supabase Storage
+          const { data: uploadData, error: uploadError } = await supabaseBrowserClient.storage
+            .from("material_didactico")
+            .upload(`${programaId}/${uploadFileName}`, uploadedFile);
+
+          if (uploadError) {
+            if (
+              uploadError.message.includes("security policy") ||
+              uploadError.message.includes("row-level security")
+            ) {
+              throw new Error(
+                "Error de permisos: Falta configurar políticas RLS en el bucket 'material_didactico'. Ejecuta el script SQL de permisos."
+              );
+            }
+            throw uploadError;
+          }
+
+          // Obtener URL pública
+          const { data: urlData } = supabaseBrowserClient.storage
+            .from("material_didactico")
+            .getPublicUrl(`${programaId}/${uploadFileName}`);
+
+          urlArchivo = urlData.publicUrl;
+          nombreArchivo = uploadedFile.name;
+          tamanoBytes = uploadedFile.size;
+          mimeType = uploadedFile.type;
+        } else if (editingMaterial) {
+          urlArchivo = editingMaterial.url_archivo;
+          nombreArchivo = editingMaterial.nombre_archivo;
+          tamanoBytes = editingMaterial.tamano_bytes;
+          mimeType = editingMaterial.mime_type;
+        }
+      } else if (tipoOrigenSeleccionado === 'enlace') {
         // Es un enlace externo
         urlArchivo = formValues.url_externa;
         nombreArchivo = "Enlace Externo";
+        tamanoBytes = 0;
+        mimeType = "link";
       }
 
       // Guardar en base de datos
-      const { error: insertError } = await supabaseBrowserClient
-        .from("material_didactico")
-        .insert({
-          programa_id: programaId,
-          pensum_id: selectedCicloId,
-          titulo: formValues.titulo,
-          descripcion: formValues.descripcion,
-          tipo_material: formValues.tipo_material || tipoOrigen,
-          url_archivo: urlArchivo,
-          nombre_archivo: nombreArchivo,
-          tamano_bytes: tamanoBytes,
-          mime_type: mimeType,
-          visible: true,
-        });
+      const { data: authData } = await supabaseBrowserClient.auth.getUser();
+      const authUser = authData?.user;
+      if (!authUser) {
+        message.error("Debes iniciar sesión para subir material");
+        return;
+      }
 
-      if (insertError) throw insertError;
+      const payload = {
+        programa_id: programaId,
+        pensum_id: selectedCicloId,
+        subido_por: authUser.id,
+        titulo: buildTituloConTema(formValues.titulo, temaRelacionado),
+        descripcion: formValues.descripcion,
+        tipo_material: formValues.tipo_material || tipoOrigenSeleccionado,
+        url_archivo: urlArchivo,
+        nombre_archivo: nombreArchivo,
+        tamano_bytes: tamanoBytes,
+        mime_type: mimeType,
+        visible: true,
+      };
 
-      message.success("Material subido correctamente");
+      if (editingMaterial) {
+        const { error: updateError } = await supabaseBrowserClient
+          .from("material_didactico")
+          .update(payload)
+          .eq("id", editingMaterial.id);
+
+        if (updateError) throw updateError;
+        message.success("Material actualizado correctamente");
+      } else {
+        const { error: insertError } = await supabaseBrowserClient
+          .from("material_didactico")
+          .insert(payload);
+
+        if (insertError) throw insertError;
+        message.success("Material subido correctamente");
+      }
+
       formMaterial.resetFields();
+      setDrawerMaterialesVisible(false);
+      setFileList([]);
+      setTipoOrigen('archivo');
+      setEditingMaterial(null);
       await cargarMateriales();
       
     } catch (error: any) {
@@ -644,144 +739,157 @@ export default function GestorPensum({
             </div>
           </div>
 
-          <Tabs
-            defaultActiveKey="1"
-            items={[
-              {
-                key: "1",
-                label: "📖 Temas del Ciclo",
-                children: (
-                  <div>
-                    <div style={{ marginBottom: 16 }}>
-                      <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={() => {
-                          setEditingCurso(null);
-                          formCurso.resetFields();
-                          setModalCursoVisible(true);
+          <Alert
+            type="info"
+            showIcon
+            message="Temas + Material en una sola vista"
+            description={
+              <div>
+                Cada tarjeta de tema muestra sus materiales. Así se ve de un solo vistazo lo que tiene cada tema.
+              </div>
+            }
+            style={{ marginBottom: 16 }}
+          />
+
+          <div style={{ marginBottom: 16 }}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingCurso(null);
+                formCurso.resetFields();
+                setModalCursoVisible(true);
+              }}
+            >
+              Agregar Tema
+            </Button>
+          </div>
+
+          {cursosPensum.length === 0 ? (
+            <Empty description="Sin temas en este ciclo" />
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: 16,
+              }}
+            >
+              {cursosPensum.map((curso) => {
+                const materialesTema = materialesCiclo.filter((material) => {
+                  const { tema: temaMaterial } = parseTemaFromTitulo(material.titulo);
+                  return (temaMaterial || "").toLowerCase() === curso.nombre_curso.toLowerCase();
+                });
+
+                return (
+                  <Card
+                    key={curso.id}
+                    style={{
+                      borderRadius: 8,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                    }}
+                    extra={
+                      <Dropdown
+                        trigger={["click"]}
+                        menu={{
+                          items: [
+                            {
+                              key: `subir-material-${curso.id}`,
+                              label: "Subir material",
+                              icon: <UploadOutlined />,
+                              onClick: () => abrirDrawerMaterialParaTema(curso.nombre_curso),
+                            },
+                            { type: "divider" as const },
+                            {
+                              key: `editar-tema-${curso.id}`,
+                              label: "Editar tema",
+                              icon: <EditOutlined />,
+                              onClick: () => {
+                                setEditingCurso(curso);
+                                formCurso.setFieldsValue(curso);
+                                setModalCursoVisible(true);
+                              },
+                            },
+                            {
+                              key: `eliminar-tema-${curso.id}`,
+                              label: "Eliminar tema",
+                              icon: <DeleteOutlined />,
+                              danger: true,
+                              onClick: () => handleEliminarCurso(curso.id),
+                            },
+                            ...(materialesTema.length > 0
+                              ? [
+                                  { type: "divider" as const },
+                                  ...materialesTema.map((material) => {
+                                    const { tituloLimpio } = parseTemaFromTitulo(material.titulo);
+                                    return {
+                                      key: `editar-material-${material.id}`,
+                                      label: `Editar material: ${tituloLimpio}`,
+                                      icon: <EditOutlined />,
+                                      onClick: () => editarMaterial(material, curso.nombre_curso),
+                                    };
+                                  }),
+                                ]
+                              : []),
+                          ],
                         }}
                       >
-                        Agregar Tema
-                      </Button>
-                    </div>
-
-                    {cursosPensum.length === 0 ? (
-                      <Empty description="Sin temas en este ciclo" />
-                    ) : (
-                      <div
+                        <Button type="text" icon={<EllipsisOutlined />} />
+                      </Dropdown>
+                    }
+                  >
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>📝</div>
+                    <Text strong style={{ fontSize: 15, display: "block" }}>
+                      {curso.nombre_curso}
+                    </Text>
+                    {curso.descripcion && (
+                      <p
                         style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                          gap: 16,
+                          fontSize: 13,
+                          color: "#666",
+                          marginTop: 8,
+                          marginBottom: 8,
                         }}
                       >
-                        {cursosPensum.map((curso) => (
-                          <Card
-                            key={curso.id}
-                            style={{
-                              borderRadius: 8,
-                              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                            }}
-                          >
-                            <div style={{ fontSize: 32, marginBottom: 8 }}>📝</div>
-                            <Text strong style={{ fontSize: 15, display: "block" }}>
-                              {curso.nombre_curso}
-                            </Text>
-                            {curso.descripcion && (
-                              <p
-                                style={{
-                                  fontSize: 13,
-                                  color: "#666",
-                                  marginTop: 8,
-                                  marginBottom: 8,
-                                }}
-                              >
-                                {curso.descripcion}
-                              </p>
-                            )}
-                            <Divider style={{ margin: "8px 0" }} />
-                            <div style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
-                              <div>⏱️ {curso.horas || 0} horas</div>
-                              {curso.creditos && (
-                                <div>⭐ {curso.creditos} créditos</div>
-                              )}
-                              <Tag style={{ marginTop: 8 }} color="blue">
-                                {curso.tipo_curso}
-                              </Tag>
-                            </div>
-                            <div style={{ display: "flex", gap: 8 }}>
-                              <Button
-                                size="small"
-                                icon={<EditOutlined />}
-                                onClick={() => {
-                                  setEditingCurso(curso);
-                                  formCurso.setFieldsValue(curso);
-                                  setModalCursoVisible(true);
-                                }}
-                              >
-                                Editar
-                              </Button>
-                              <Button
-                                size="small"
-                                danger
-                                icon={<DeleteOutlined />}
-                                onClick={() => handleEliminarCurso(curso.id)}
-                              />
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
+                        {curso.descripcion}
+                      </p>
                     )}
-                  </div>
-                ),
-              },
-              {
-                key: "2",
-                label: "📎 Materiales Didácticos",
-                children: (
-                  <div>
-                    <div style={{ marginBottom: 16 }}>
-                      <Button
-                        type="primary"
-                        icon={<UploadOutlined />}
-                        onClick={() => setDrawerMaterialesVisible(true)}
-                      >
-                        Subir Material
-                      </Button>
+                    <Divider style={{ margin: "8px 0" }} />
+                    <div style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
+                      <div>⏱️ {curso.horas || 0} horas</div>
+                      {curso.creditos && (
+                        <div>⭐ {curso.creditos} créditos</div>
+                      )}
+                      <Tag style={{ marginTop: 8 }} color="blue">
+                        {curso.tipo_curso}
+                      </Tag>
                     </div>
 
-                    {materiales.filter(m => m.pensum_id === selectedCicloId).length === 0 ? (
-                      <Empty description="Sin materiales en este ciclo" />
+                    <Text strong style={{ fontSize: 13 }}>Material didáctico</Text>
+                    {materialesTema.length === 0 ? (
+                      <Text type="secondary" style={{ display: "block", marginTop: 6 }}>
+                        Sin material asignado
+                      </Text>
                     ) : (
                       <List
-                        dataSource={materiales.filter(m => m.pensum_id === selectedCicloId)}
+                        size="small"
+                        dataSource={materialesTema}
+                        style={{ marginTop: 8 }}
                         renderItem={(material: MaterialDidactico) => (
                           <List.Item
                             actions={[
-                              <Tooltip key={`ver-${material.id}`} title="Clic para proyectar en clase o ver contenido">
-                                <Button
-                                  type="link"
-                                  onClick={() => handleAbrirMaterial(material.url_archivo)}
-                                  icon={material.mime_type === 'link' ? <LinkOutlined /> : <EyeOutlined />}
-                                  style={{ fontWeight: 500, padding: 0, height: 'auto' }}
-                                >
-                                  {material.mime_type === 'link' ? " Abrir Enlace" : " Ver / Proyectar"}
-                                </Button>
-                              </Tooltip>,
                               <Button
-                                key={`eliminar-${material.id}`}
-                                icon={<DeleteOutlined />}
-                                danger
-                                size="small"
-                                type="text"
-                                onClick={() => handleEliminarMaterial(material.id)}
+                                key={`ver-${material.id}`}
+                                type="link"
+                                onClick={() => handleAbrirMaterial(material.url_archivo)}
+                                icon={material.mime_type === 'link' ? <LinkOutlined /> : <EyeOutlined />}
+                                style={{ fontWeight: 500, padding: 0, height: 'auto' }}
                               />,
                             ]}
                           >
                             <List.Item.Meta
                               avatar={
-                                <div style={{ fontSize: 24, width: 32, textAlign: "center" }}>
+                                <div style={{ fontSize: 18, width: 24, textAlign: "center" }}>
                                   {material.tipo_material === "documento" && "📄"}
                                   {material.tipo_material === "video" && "🎥"}
                                   {material.tipo_material === "imagen" && "🖼️"}
@@ -790,28 +898,22 @@ export default function GestorPensum({
                                   {material.tipo_material === "otro" && "📎"}
                                 </div>
                               }
-                              title={<Text strong>{material.titulo}</Text>}
-                              description={
-                                <div>
-                                  <p style={{ margin: "4px 0", fontSize: 13 }}>
-                                    {material.descripcion}
-                                  </p>
-                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                    📦 {formatearTamano(material.tamano_bytes || 0)} • 👤{" "}
-                                    {material.subido_por_nombre}
-                                  </Text>
-                                </div>
-                              }
+                              title={(() => {
+                                const { tituloLimpio } = parseTemaFromTitulo(material.titulo);
+                                return <Text>{tituloLimpio}</Text>;
+                              })()}
+                              description={null}
                             />
                           </List.Item>
                         )}
                       />
                     )}
-                  </div>
-                ),
-              },
-            ]}
-          />
+
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -886,9 +988,15 @@ export default function GestorPensum({
 
       {/* DRAWER: Subir Material Didáctico */}
       <Drawer
-        title="Subir Material Didáctico"
+        title={editingMaterial ? "Editar Material Didáctico" : "Subir Material Didáctico"}
         placement="right"
-        onClose={() => setDrawerMaterialesVisible(false)}
+        onClose={() => {
+          setDrawerMaterialesVisible(false);
+          setEditingMaterial(null);
+          formMaterial.resetFields();
+          setFileList([]);
+          setTipoOrigen('archivo');
+        }}
         open={drawerMaterialesVisible}
         width={500}
       >
@@ -899,6 +1007,21 @@ export default function GestorPensum({
             showIcon
             style={{ marginBottom: 16 }}
           />
+
+          <Form.Item
+            name="tema_relacionado"
+            label="Tema relacionado (opcional)"
+            help="Selecciona el tema para que el material quede claramente asociado."
+          >
+            <Select
+              allowClear
+              placeholder="Ej: Introducción, Herramientas, Técnica base"
+              options={cursosPensum.map((curso) => ({
+                value: curso.nombre_curso,
+                label: curso.nombre_curso,
+              }))}
+            />
+          </Form.Item>
 
           <Form.Item
             name="titulo"

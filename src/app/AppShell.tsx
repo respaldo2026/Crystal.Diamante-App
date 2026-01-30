@@ -30,6 +30,7 @@ import {
   theme,
 } from "antd";
 import type { MenuProps } from "antd";
+import { usePathname } from "next/navigation";
 import {
   DashboardOutlined,
   UserOutlined,
@@ -533,6 +534,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: userLoading } = useCurrentUser();
   const { permisos, loading: permisosLoading } = useRolesPermissions();
   const { mode } = useColorMode();
+  const pathname = usePathname();
 
   const isDarkMode = mode === "dark";
 
@@ -643,8 +645,19 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     return typeof rawRole === "string" ? rawRole.toLowerCase() : "";
   }, [user]);
 
+  const isAuthRoute = useMemo(() => {
+    if (!pathname) return false;
+    return (
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/register") ||
+      pathname.startsWith("/auth")
+    );
+  }, [pathname]);
+
   const roleNeedsPermissions = normalizedRole.length > 0 &&
     !["admin", "director", "profesor", "estudiante"].includes(normalizedRole);
+
+  const shouldUseLayout = !isAuthRoute && Boolean(user);
 
   const resources = useMemo(() => {
     if (userLoading || !user) {
@@ -718,16 +731,22 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
               warnWhenUnsavedChanges: true,
             }}
           >
-            <ThemedLayout
-              initialSiderCollapsed={false}
-              Sider={CustomSider}
-              Title={({ collapsed }) => (
-                <ThemedTitle collapsed={collapsed} text="Crystal App" icon={<BookOutlined />} />
-              )}
-            >
-              <ThemeToggleButton />
-              {children}
-            </ThemedLayout>
+            {!shouldUseLayout ? (
+              <div style={{ minHeight: "100vh" }}>
+                {children}
+              </div>
+            ) : (
+              <ThemedLayout
+                initialSiderCollapsed={false}
+                Sider={CustomSider}
+                Title={({ collapsed }) => (
+                  <ThemedTitle collapsed={collapsed} text="Crystal App" icon={<BookOutlined />} />
+                )}
+              >
+                <ThemeToggleButton />
+                {children}
+              </ThemedLayout>
+            )}
             <RefineKbar />
           </Refine>
         </AntdApp>

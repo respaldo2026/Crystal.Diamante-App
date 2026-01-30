@@ -40,6 +40,7 @@ import dayjs from "dayjs";
 import localizedFormat from "dayjs/plugin/localizedFormat";
 import "dayjs/locale/es";
 import { supabaseBrowserClient as supabase } from "@utils/supabase/client";
+import { construirNombreGrupo } from "@utils/grupos";
 
 dayjs.extend(localizedFormat);
 dayjs.locale("es");
@@ -178,7 +179,7 @@ export default function AdminDashboard() {
           .lte("created_at", finActualStr),
         supabase
           .from("cursos")
-          .select("id, nombre, cupos, estado, matriculas:matriculas(count)")
+          .select("id, nombre, cupos, estado, dias_semana, hora_inicio, hora_fin, programas(nombre), matriculas:matriculas(count)")
           .eq("estado", "activo")
           .order("cupos", { ascending: false })
           .limit(8)
@@ -239,7 +240,7 @@ export default function AdminDashboard() {
         const ocupacion = cupos > 0 ? (inscritos / cupos) * 100 : 0;
         return {
           id: curso.id,
-          nombre: curso.nombre,
+          nombre: construirNombreGrupo(curso),
           cupos,
           inscritos,
           ocupacion
@@ -677,7 +678,7 @@ export default function AdminDashboard() {
               <div key={curso.id}>
                 <Space style={{ width: "100%", justifyContent: "space-between" }}>
                   <Space direction="vertical" size={0}>
-                    <Text strong>{curso.nombre}</Text>
+                    <Text strong>{construirNombreGrupo(curso)}</Text>
                     <Text type="secondary">{curso.inscritos}/{curso.cupos || 0} estudiantes</Text>
                   </Space>
                   <Tag color={curso.ocupacion >= 85 ? "red" : curso.ocupacion >= 70 ? "orange" : "blue"}>

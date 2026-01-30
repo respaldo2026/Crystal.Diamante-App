@@ -20,6 +20,7 @@ import { formatDate } from "@utils/date";
 import { Line, Column } from "@ant-design/plots";
 import 'dayjs/locale/es';
 import { useQuery } from "@tanstack/react-query";
+import { construirNombreGrupo } from "@utils/grupos";
 
 dayjs.extend(isBetween);
 dayjs.locale('es');
@@ -213,7 +214,7 @@ export default function DashboardPage() {
         // 8. PRÓXIMOS CURSOS - Cargar cursos y luego contar matrículas activas
         supabaseBrowserClient
           .from("cursos")
-          .select("id, nombre, fecha_inicio, cupos, estado")
+          .select("id, nombre, fecha_inicio, cupos, estado, dias_semana, hora_inicio, hora_fin, programas(nombre)")
           .gte("fecha_inicio", hoy.format('YYYY-MM-DD'))
           .in("estado", ["proximo", "activo"])
           .order("fecha_inicio", { ascending: true })
@@ -792,7 +793,7 @@ export default function DashboardPage() {
                     <Card key={curso.id} size="small" hoverable onClick={() => router.push(`/cursos/salon/${curso.id}`)}>
                       <Space direction="vertical" style={{ width: '100%' }} size={4}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text strong>{curso.nombre}</Text>
+                          <Text strong>{construirNombreGrupo(curso)}</Text>
                           <Tag color="blue">{formatDate(curso.fecha_inicio)}</Tag>
                         </div>
                         <Progress 

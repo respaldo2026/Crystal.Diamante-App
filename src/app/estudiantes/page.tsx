@@ -8,7 +8,7 @@ import {
     ShowButton, 
     CreateButton
 } from "@refinedev/antd";
-import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography, App } from "antd";
+import { Table, Space, Tag, Button, Tooltip, Avatar, Input, Card, Row, Col, Tabs, Select, Typography, App, Grid, Dropdown } from "antd";
 import { 
     WhatsAppOutlined, 
     UserOutlined, 
@@ -16,18 +16,23 @@ import {
     PhoneOutlined,
     SearchOutlined,
     IdcardOutlined,
-    DeleteOutlined
+    DeleteOutlined,
+    EllipsisOutlined
 } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { construirNombreGrupo } from "@utils/grupos";
 const { Text } = Typography;
 
 export default function EstudiantesList() {
     const router = useRouter();
     const { message: antMessage, modal } = App.useApp();
     const { user } = useCurrentUser();
+    const screens = Grid.useBreakpoint();
+    const isMobile = !screens.md;
+    const isTablet = screens.md && !screens.lg;
     const [searchValue, setSearchValue] = useState("");
     const [deletedIds, setDeletedIds] = useState<string[]>([]);
     
@@ -50,7 +55,7 @@ export default function EstudiantesList() {
         resource: "perfiles",
         // TRUCO AVANZADO: Especificar explícitamente la FK para evitar ambigüedad
         meta: {
-            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, cursos(nombre, porcentaje_minimo))"
+            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
         },
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
         pagination: {
@@ -95,6 +100,8 @@ export default function EstudiantesList() {
     const [attFilter, setAttFilter] = useState<'all' | 'bajo' | 'sin'>('all');
     const [asistStats, setAsistStats] = useState<Record<number, { total: number; present: number; porcentaje: number; minimo: number; cumple: boolean; tieneDatos: boolean }>>({});
     const [loadingAsist, setLoadingAsist] = useState(false);
+    const [pagosStats, setPagosStats] = useState<Record<number, { pagados: number; pendientes: number }>>({});
+    const [loadingPagos, setLoadingPagos] = useState(false);
     const [calcularAsistencia, setCalcularAsistencia] = useState(false);
     const activoEstados = useMemo(() => ["activo", "en curso", "pendiente"], []);
     const graduadoEstados = useMemo(() => ["aprobado", "certificado", "finalizado"], []);
@@ -154,6 +161,41 @@ export default function EstudiantesList() {
         };
         fetchAsist();
     }, [calcularAsistencia, dataSource]);
+
+    useEffect(() => {
+        const matriculaIds: number[] = [];
+        dataSource.forEach((s: any) => {
+            (s.matriculas || []).forEach((m: any) => {
+                if (m?.id) matriculaIds.push(m.id);
+            });
+        });
+        if (matriculaIds.length === 0) {
+            setPagosStats({});
+            return;
+        }
+        const fetchPagos = async () => {
+            setLoadingPagos(true);
+            try {
+                const { data: pagos } = await supabaseBrowserClient
+                    .from('pagos')
+                    .select('matricula_id, estado')
+                    .in('matricula_id', matriculaIds);
+
+                const stats: Record<number, { pagados: number; pendientes: number }> = {};
+                (pagos || []).forEach((p: any) => {
+                    if (!stats[p.matricula_id]) stats[p.matricula_id] = { pagados: 0, pendientes: 0 };
+                    if (p.estado === 'pagado') stats[p.matricula_id].pagados += 1;
+                    if (p.estado === 'pendiente') stats[p.matricula_id].pendientes += 1;
+                });
+                setPagosStats(stats);
+            } catch (e) {
+                console.error('Error cargando pagos estudiantes:', e);
+            } finally {
+                setLoadingPagos(false);
+            }
+        };
+        fetchPagos();
+    }, [dataSource]);
     const activos = useMemo(() => dataSource.filter(s => {
         // Mostrar todos los estudiantes que tienen activo=true O no tienen el campo
         // Si tienen matrículas, verificar que al menos una esté activa
@@ -195,14 +237,19 @@ export default function EstudiantesList() {
 
     return (
         <List
-            title="Estudiantes"
+            title={isMobile ? "Estudiantes" : "Gestión de Estudiantes"}
             headerButtons={<CreateButton resource="perfiles" />}
         >
-            <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
+            <Tabs
+                activeKey={activeTab}
+                onChange={setActiveTab}
+                size={isMobile ? "small" : "middle"}
+                items={[
                 { key: 'activos', label: `Activos (${activos.length})` },
                 { key: 'graduados', label: `Graduados (${graduados.length})` },
                 { key: 'desertores', label: `Desertores (${desertores.length})` },
-            ]} />
+            ]}
+            />
 
             {/* --- BARRA DE BÚSQUEDA EN TIEMPO REAL --- */}
             <Card variant="borderless" style={{ marginBottom: 12, background: '#f9f9f9' }}>
@@ -210,21 +257,144 @@ export default function EstudiantesList() {
                     placeholder="🔍 Buscar por nombre (escribe para filtrar en tiempo real)..." 
                     prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
                     allowClear
-                    size="large"
+                    size={isMobile ? "middle" : "large"}
                     value={searchValue}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    style={{ width: '100%', maxWidth: '500px' }}
+                    style={{ width: '100%', maxWidth: isMobile ? '100%' : '500px' }}
                 />
             </Card>
 
             {/* Quick attendance filters */}
-            <Space style={{ marginBottom: 16 }}>
+            <Space style={{ marginBottom: 16 }} wrap>
                 <Button type={attFilter === 'all' ? 'primary' : 'default'} size="small" onClick={() => setAttFilter('all')}>Todas</Button>
                 <Button type={attFilter === 'bajo' ? 'primary' : 'default'} size="small" onClick={() => setAttFilter('bajo')}>Bajo Asistencia</Button>
                 <Button type={attFilter === 'sin' ? 'primary' : 'default'} size="small" onClick={() => setAttFilter('sin')}>Sin Asistencia</Button>
             </Space>
 
-            <Table {...tableProps} dataSource={filteredDataSource} rowKey="id" loading={tableProps.loading || loadingAsist}>
+            {isMobile ? (
+                <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+                    {filteredDataSource.length === 0 && (
+                        <Text type="secondary">Sin estudiantes para mostrar</Text>
+                    )}
+                    {filteredDataSource.map((record: any) => {
+                        const mats = record.matriculas || [];
+                        const cursoNombre = construirNombreGrupo(mats[0]?.cursos);
+                        let hasPendiente = false;
+                        let hasPagado = false;
+                        mats.forEach((m: any) => {
+                            const st = pagosStats[m.id];
+                            if (st?.pendientes) hasPendiente = true;
+                            if (st?.pagados) hasPagado = true;
+                        });
+                        const pagoTag = hasPendiente
+                            ? { label: 'Pago pendiente', color: 'orange' }
+                            : hasPagado
+                                ? { label: 'Al día', color: 'green' }
+                                : { label: 'Sin pagos', color: 'default' };
+
+                        return (
+                            <Card key={record.id} style={{ borderRadius: 10 }} bodyStyle={{ padding: 10, position: "relative" }}>
+                                <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 6 }}>
+                                    <Tooltip title="Enviar WhatsApp">
+                                        <Button 
+                                            shape="circle"
+                                            icon={<WhatsAppOutlined />} 
+                                            size="small"
+                                            style={{ 
+                                                backgroundColor: '#f6ffed', 
+                                                borderColor: '#b7eb8f', 
+                                                color: '#389e0d' 
+                                            }}
+                                            onClick={() => {
+                                                const msg = `Hola ${record.nombre_completo}, te contactamos de la Academia...`;
+                                                enviarWhatsapp(record.telefono, msg);
+                                            }}
+                                        />
+                                    </Tooltip>
+
+                                    <Dropdown
+                                        trigger={["click"]}
+                                        menu={{
+                                            items: [
+                                                {
+                                                    key: `ver-${record.id}`,
+                                                    label: "Ver perfil",
+                                                    onClick: () => router.push(`/estudiantes/show/${record.id}`),
+                                                },
+                                                {
+                                                    key: `editar-${record.id}`,
+                                                    label: "Editar",
+                                                    onClick: () => router.push(`/estudiantes/edit/${record.id}`),
+                                                },
+                                                { type: "divider" as const },
+                                                {
+                                                    key: `archivar-${record.id}`,
+                                                    label: "Archivar",
+                                                    danger: true,
+                                                    onClick: () => handleArchivarEstudiante(record, antMessage, modal, router),
+                                                },
+                                                {
+                                                    key: `eliminar-${record.id}`,
+                                                    label: "Eliminar",
+                                                    danger: true,
+                                                    disabled: user?.rol !== "admin",
+                                                    onClick: () => confirmarEliminarEstudiante(record, antMessage, modal, router, setDeletedIds),
+                                                },
+                                            ],
+                                        }}
+                                    >
+                                        <Button size="small" icon={<EllipsisOutlined />} />
+                                    </Dropdown>
+                                </div>
+
+                                <Space direction="vertical" size={6} style={{ width: "100%", paddingRight: 56 }}>
+                                    <Space>
+                                        <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <Text strong>{record.nombre_completo || "Sin Nombre"}</Text>
+                                            <Text type="secondary" style={{ fontSize: 12 }}>ID: {record.identificacion || 'N/A'}</Text>
+                                        </div>
+                                    </Space>
+
+                                    <Space size={4} wrap style={{ marginTop: 2 }}>
+                                        {cursoNombre && <Tag color="blue">{cursoNombre}</Tag>}
+                                        <Tag color={pagoTag.color}>{pagoTag.label}</Tag>
+                                    </Space>
+
+                                    {(record.telefono || record.email) && (
+                                        <Space direction="vertical" size={0} style={{ marginTop: 2 }}>
+                                            {record.telefono && (
+                                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                                    <PhoneOutlined /> {record.telefono}
+                                                </Text>
+                                            )}
+                                            {record.email && (
+                                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                                    <MailOutlined /> {record.email}
+                                                </Text>
+                                            )}
+                                        </Space>
+                                    )}
+
+                                </Space>
+                            </Card>
+                        );
+                    })}
+                </Space>
+            ) : (
+                <Table
+                    {...tableProps}
+                    dataSource={filteredDataSource}
+                    rowKey="id"
+                    loading={tableProps.loading || loadingAsist || loadingPagos}
+                    size={"middle"}
+                    scroll={isTablet ? { x: 1100 } : undefined}
+                    pagination={{
+                        ...(tableProps.pagination || {}),
+                        simple: false,
+                        showSizeChanger: true,
+                    }}
+                >
                 
                 {/* 1. Estudiante (Foto + Nombre) */}
                 <Table.Column 
@@ -260,77 +430,125 @@ export default function EstudiantesList() {
                                 })()}
                                 {/* ID de referencia rápida */}
                                 <span style={{ fontSize: '11px', color: '#999' }}>ID: {record.identificacion || 'N/A'}</span>
+                                {isMobile && (() => {
+                                    const mats = record.matriculas || [];
+                                    const cursoNombre = mats[0]?.cursos?.nombre;
+                                    let hasPendiente = false;
+                                    let hasPagado = false;
+                                    mats.forEach((m: any) => {
+                                        const st = pagosStats[m.id];
+                                        if (st?.pendientes) hasPendiente = true;
+                                        if (st?.pagados) hasPagado = true;
+                                    });
+                                    const pagoTag = hasPendiente
+                                        ? { label: 'Pago pendiente', color: 'orange' }
+                                        : hasPagado
+                                            ? { label: 'Al día', color: 'green' }
+                                            : { label: 'Sin pagos', color: 'default' };
+                                    return (
+                                        <Space size={6} wrap style={{ marginTop: 6 }}>
+                                            {cursoNombre && <Tag color="blue">{cursoNombre}</Tag>}
+                                            <Tag color={pagoTag.color}>{pagoTag.label}</Tag>
+                                        </Space>
+                                    );
+                                })()}
                             </div>
                         </Space>
                     )}
                 />
 
                 {/* 2. Identificación (Columna Dedicada) */}
-                <Table.Column 
-                    dataIndex="identificacion" 
-                    title="Identificación"
-                    render={(value) => (
-                        <div style={{ color: '#555' }}>
-                            <IdcardOutlined style={{ marginRight: 6 }} />
-                            {value ? <span style={{ fontWeight: 500 }}>{value}</span> : <span style={{color:'#ccc'}}>--</span>}
-                        </div>
-                    )}
-                />
+                {!isMobile && (
+                    <Table.Column 
+                        dataIndex="identificacion" 
+                        title="Identificación"
+                        render={(value) => (
+                            <div style={{ color: '#555' }}>
+                                <IdcardOutlined style={{ marginRight: 6 }} />
+                                {value ? <span style={{ fontWeight: 500 }}>{value}</span> : <span style={{color:'#ccc'}}>--</span>}
+                            </div>
+                        )}
+                    />
+                )}
 
                 {/* 3. Cursos Inscritos (¡NUEVO!) */}
-                <Table.Column 
-                    title="Cursos Activos"
-                    render={(_, record: any) => {
-                        // Filtramos solo matrículas activas o recientes
-                        const matriculas = record.matriculas || [];
-                        if (matriculas.length === 0) return <Tag>Ninguno</Tag>;
+                {!isMobile && (
+                    <Table.Column 
+                        title="Cursos Activos"
+                        render={(_, record: any) => {
+                            // Filtramos solo matrículas activas o recientes
+                            const matriculas = record.matriculas || [];
+                            if (matriculas.length === 0) return <Tag>Ninguno</Tag>;
 
-                        return (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                {matriculas.map((mat: any, index: number) => {
-                                    const nombreCurso = mat.cursos?.nombre || "Curso sin nombre";
-                                    const estadoRaw = mat.estado || "";
-                                    const estado = (typeof estadoRaw === "string" ? estadoRaw.toLowerCase() : estadoRaw);
-                                    const color = estado === 'activo' ? 'blue' : estado === 'finalizado' ? 'green' : 'default';
-                                    return (
-                                        <Tag key={index} color={color} style={{ margin: 0 }}>
-                                            {nombreCurso}
-                                        </Tag>
-                                    );
-                                })}
-                            </div>
-                        );
-                    }}
-                />
+                            return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    {matriculas.map((mat: any, index: number) => {
+                                        const nombreCurso = construirNombreGrupo(mat.cursos) || "Curso sin nombre";
+                                        const estadoRaw = mat.estado || "";
+                                        const estado = (typeof estadoRaw === "string" ? estadoRaw.toLowerCase() : estadoRaw);
+                                        const color = estado === 'activo' ? 'blue' : estado === 'finalizado' ? 'green' : 'default';
+                                        return (
+                                            <Tag key={index} color={color} style={{ margin: 0 }}>
+                                                {nombreCurso}
+                                            </Tag>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        }}
+                    />
+                )}
+
+                {!isMobile && (
+                    <Table.Column
+                        title="Pago"
+                        render={(_, record: any) => {
+                            const mats = record.matriculas || [];
+                            let hasPendiente = false;
+                            let hasPagado = false;
+                            mats.forEach((m: any) => {
+                                const st = pagosStats[m.id];
+                                if (st?.pendientes) hasPendiente = true;
+                                if (st?.pagados) hasPagado = true;
+                            });
+                            if (hasPendiente) return <Tag color="orange">Pendiente</Tag>;
+                            if (hasPagado) return <Tag color="green">Al día</Tag>;
+                            return <Tag color="default">Sin pagos</Tag>;
+                        }}
+                    />
+                )}
 
                 {/* 4. Contacto */}
-                <Table.Column 
-                    title="Contacto"
-                    width={200}
-                    render={(_, record: any) => (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            {record.telefono && (
-                                <Tag icon={<PhoneOutlined />} color="geekblue" style={{ border: 'none', background: 'transparent', padding: 0, color: '#1d39c4' }}>
-                                    {record.telefono}
-                                </Tag>
-                            )}
-                            {record.email && (
-                                <span style={{ fontSize: '12px', color: '#888' }}>
-                                    <MailOutlined style={{ marginRight: 4 }} />
-                                    {record.email}
-                                </span>
-                            )}
-                        </div>
-                    )}
-                />
+                {!isMobile && (
+                    <Table.Column 
+                        title="Contacto"
+                        width={200}
+                        render={(_, record: any) => (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                {record.telefono && (
+                                    <Tag icon={<PhoneOutlined />} color="geekblue" style={{ border: 'none', background: 'transparent', padding: 0, color: '#1d39c4' }}>
+                                        {record.telefono}
+                                    </Tag>
+                                )}
+                                {record.email && (
+                                    <span style={{ fontSize: '12px', color: '#888' }}>
+                                        <MailOutlined style={{ marginRight: 4 }} />
+                                        {record.email}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    />
+                )}
 
                 {/* 5. Acciones */}
                 <Table.Column 
                     title="Acciones"
                     fixed="right"
-                    width={200}
+                    width={70}
+                    align="center"
                     render={(_, record: any) => (
-                        <Space>
+                        <Space direction="vertical" size={4} align="center">
                             <Tooltip title="Enviar WhatsApp">
                                 <Button 
                                     shape="circle"
@@ -347,31 +565,44 @@ export default function EstudiantesList() {
                                 />
                             </Tooltip>
 
-                            <ShowButton hideText size="small" resource="perfiles" recordItemId={record.id} />
-                            <EditButton hideText size="small" resource="perfiles" recordItemId={record.id} />
-                            
-                            <Tooltip title={user?.rol === "admin" ? "Eliminar estudiante (borrado en cascada automático)" : "Solo admin puede eliminar"}>
-                                <Button 
-                                    danger
-                                    type="text"
-                                    size="small"
-                                    disabled={user?.rol !== "admin"}
-                                    onClick={() => confirmarEliminarEstudiante(record, antMessage, modal, router, setDeletedIds)}
-                                    icon={<DeleteOutlined />}
-                                />
-                            </Tooltip>
-                            
-                            <Button 
-                                size="small" 
-                                danger
-                                onClick={() => handleArchivarEstudiante(record, antMessage, modal, router)}
+                            <Dropdown
+                                trigger={["click"]}
+                                menu={{
+                                    items: [
+                                        {
+                                            key: `ver-${record.id}`,
+                                            label: "Ver perfil",
+                                            onClick: () => router.push(`/estudiantes/show/${record.id}`),
+                                        },
+                                        {
+                                            key: `editar-${record.id}`,
+                                            label: "Editar",
+                                            onClick: () => router.push(`/estudiantes/edit/${record.id}`),
+                                        },
+                                        { type: "divider" as const },
+                                        {
+                                            key: `archivar-${record.id}`,
+                                            label: "Archivar",
+                                            danger: true,
+                                            onClick: () => handleArchivarEstudiante(record, antMessage, modal, router),
+                                        },
+                                        {
+                                            key: `eliminar-${record.id}`,
+                                            label: "Eliminar",
+                                            danger: true,
+                                            disabled: user?.rol !== "admin",
+                                            onClick: () => confirmarEliminarEstudiante(record, antMessage, modal, router, setDeletedIds),
+                                        },
+                                    ],
+                                }}
                             >
-                                Archivar
-                            </Button>
+                                <Button size="small" icon={<EllipsisOutlined />} />
+                            </Dropdown>
                         </Space>
                     )}
                 />
-            </Table>
+                </Table>
+            )}
         </List>
     );
 }

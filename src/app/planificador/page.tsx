@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { 
-  Card, Typography, Spin, Tag, Button, Space, Select, DatePicker, Row, Col, Badge, Divider, Tooltip
+  Card, Typography, Spin, Tag, Button, Space, Select, DatePicker, Row, Col, Badge, Divider, Tooltip, Grid
 } from "antd";
 import { 
   CalendarOutlined, ClockCircleOutlined, UserOutlined, TeamOutlined,
@@ -19,6 +19,8 @@ import 'dayjs/locale/es';
 dayjs.extend(isoWeek);
 dayjs.extend(isBetween);
 dayjs.locale('es');
+
+const { useBreakpoint } = Grid;
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -64,6 +66,9 @@ interface EventoCalendario {
 }
 
 export default function PlanificadorPage() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = screens.md && !screens.lg;
   const { show } = useNavigation();
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
@@ -822,24 +827,25 @@ export default function PlanificadorPage() {
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card style={{ marginBottom: 24 }}>
-        <Row gutter={16} align="middle" justify="space-between">
-          <Col>
-            <Title level={3} style={{ margin: 0 }}>
-              <CalendarOutlined /> Planificador de Cursos
+    <div style={{ padding: isMobile ? 12 : isTablet ? 16 : 24 }}>
+      <Card style={{ marginBottom: isMobile ? 16 : 24 }}>
+        <Row gutter={[16, 16]} align="middle" justify="space-between">
+          <Col xs={24} md={12}>
+            <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
+              <CalendarOutlined /> {isMobile ? "Planificador" : "Planificador de Cursos"}
             </Title>
           </Col>
           
-          <Col>
-            <Space size="middle">
+          <Col xs={24} md={12}>
+            <Space size={isMobile ? 8 : "middle"} wrap style={{ width: isMobile ? "100%" : "auto" }}>
               <Select
                 value={viewMode}
                 onChange={(value) => {
                   setViewMode(value);
                   setCustomRange(null);
                 }}
-                style={{ width: 150 }}
+                size={isMobile ? "middle" : "large"}
+                style={{ width: isMobile ? "100%" : 150 }}
               >
                 <Select.Option value="timeline">
                   <BarChartOutlined /> Timeline
@@ -860,11 +866,13 @@ export default function PlanificadorPage() {
                   value={customRange}
                   onChange={(dates) => setCustomRange(dates ? (dates as [Dayjs, Dayjs]) : null)}
                   format="DD MMM YYYY"
+                  size={isMobile ? "middle" : "large"}
+                  style={{ width: isMobile ? "100%" : "auto" }}
                 />
               ) : viewMode !== 'timeline' ? (
-                <Space.Compact>
+                <Space.Compact size={isMobile ? "middle" : "large"} style={{ width: isMobile ? "100%" : "auto" }}>
                   <Button icon={<LeftOutlined />} onClick={() => navigatePeriod('prev')} />
-                  <Button onClick={() => setCurrentDate(dayjs())}>Hoy</Button>
+                  <Button onClick={() => setCurrentDate(dayjs())}>{isMobile ? "Hoy" : "Hoy"}</Button>
                   <Button icon={<RightOutlined />} onClick={() => navigatePeriod('next')} />
                 </Space.Compact>
               ) : null}
@@ -872,11 +880,12 @@ export default function PlanificadorPage() {
               <Select
                 allowClear
                 showSearch
-                placeholder="Todos los profesores"
+                placeholder={isMobile ? "Profesor" : "Todos los profesores"}
                 optionFilterProp="label"
                 value={profesorFiltro || undefined}
                 onChange={(value) => setProfesorFiltro(value || null)}
-                style={{ minWidth: 220 }}
+                size={isMobile ? "middle" : "large"}
+                style={{ minWidth: isMobile ? "100%" : 220 }}
                 options={profesores.map((p) => ({ value: p.id, label: p.nombre_completo }))}
               />
             </Space>
