@@ -28,21 +28,42 @@ export const dataProvider: DataProvider = {
     }
     
     try {
+      console.log("🟡 [DATA PROVIDER] Refrescando sesión...");
+      await supabaseBrowserClient.auth.refreshSession();
+      const { data: sessionData } = await supabaseBrowserClient.auth.getSession();
+      const session = sessionData?.session;
+      const userId = session?.user?.id;
+      const userRole = session?.user?.app_metadata?.rol;
+
+      console.log("🟡 [DATA PROVIDER] Sesión actual:");
+      console.log("  - userId:", userId);
+      console.log("  - userRole:", userRole);
+
+      if (!session) {
+        throw new Error("No hay sesión activa. Cierra sesión y vuelve a entrar.");
+      }
+
+      const isAdmin = ["admin", "director", "administrativo"].includes(String(userRole));
+      const isOwner = String(userId) === String(id);
+      if (!isAdmin && !isOwner) {
+        throw new Error("Permisos insuficientes para actualizar este perfil.");
+      }
+
       console.log("🟡 [DATA PROVIDER] Enviando UPDATE a Supabase...");
-      
+
       // Paso 1: Hacer el UPDATE sin SELECT
       const { error: updateError } = await supabaseBrowserClient
         .from(resource)
         .update(variables as any)
         .eq("id", id);
-      
+
       if (updateError) {
         console.error("❌ [DATA PROVIDER] ERROR en UPDATE:", updateError);
         throw updateError;
       }
-      
+
       console.log("✅ [DATA PROVIDER] UPDATE ejecutado sin errores");
-      
+
       // Paso 2: Hacer un SELECT separado para obtener los datos actualizados
       console.log("🟡 [DATA PROVIDER] Obteniendo datos actualizados...");
       const { data, error: selectError } = await supabaseBrowserClient
@@ -50,16 +71,16 @@ export const dataProvider: DataProvider = {
         .select("*")
         .eq("id", id)
         .single();
-      
+
       if (selectError) {
         console.error("❌ [DATA PROVIDER] ERROR en SELECT:", selectError);
         // No lanzamos error aquí porque el UPDATE ya se completó
         return { data: undefined as any };
       }
-      
+
       console.log("✅ [DATA PROVIDER] DATOS OBTENIDOS");
       console.log("  📊 Datos actualizados:", data);
-      
+
       return { data: data as TData };
     } catch (error: any) {
       console.error("❌ [DATA PROVIDER] UPDATE FALLÓ");
