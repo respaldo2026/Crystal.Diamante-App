@@ -183,9 +183,11 @@ export default function EstudiantesList() {
 
                 const stats: Record<number, { pagados: number; pendientes: number }> = {};
                 (pagos || []).forEach((p: any) => {
-                    if (!stats[p.matricula_id]) stats[p.matricula_id] = { pagados: 0, pendientes: 0 };
-                    if (p.estado === 'pagado') stats[p.matricula_id].pagados += 1;
-                    if (p.estado === 'pendiente') stats[p.matricula_id].pendientes += 1;
+                    const matriculaId = p?.matricula_id;
+                    if (!matriculaId) return;
+                    if (!stats[matriculaId]) stats[matriculaId] = { pagados: 0, pendientes: 0 };
+                    if (p.estado === 'pagado') stats[matriculaId].pagados += 1;
+                    if (p.estado === 'pendiente') stats[matriculaId].pendientes += 1;
                 });
                 setPagosStats(stats);
             } catch (e) {
