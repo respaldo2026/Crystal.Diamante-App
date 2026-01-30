@@ -4,18 +4,34 @@ import React from "react";
 import { Edit, useForm } from "@refinedev/antd";
 import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select } from "antd";
 import dayjs from "dayjs";
+import { useParams } from "next/navigation";
 
 export default function EditEstudiante() {
-  const { formProps, saveButtonProps, formLoading } = useForm({
+  const params = useParams();
+  const id = params?.id as string;
+
+  const { formProps, saveButtonProps, formLoading, onFinish } = useForm({
     resource: "perfiles", // Guardamos en la tabla perfiles
+    action: "edit",
+    id,
     redirect: "list",     // Al terminar, volvemos a la lista
     // Si falla la carga automática, esto ayuda a depurar:
     meta: { select: "*" } 
   });
 
+  const handleOnFinish = (values: any) => {
+    const datosListos = {
+      ...values,
+      fecha_nacimiento: values.fecha_nacimiento ? dayjs(values.fecha_nacimiento).format("YYYY-MM-DD") : null,
+    };
+    delete datosListos.created_at;
+    delete datosListos.updated_at;
+    return onFinish(datosListos);
+  };
+
   return (
     <Edit saveButtonProps={saveButtonProps} isLoading={formLoading} title="Editar Estudiante">
-    <Form {...formProps} form={formProps.form} layout="vertical">
+    <Form {...formProps} form={formProps.form} layout="vertical" onFinish={handleOnFinish}>
         
         {/* ROL OCULTO (Seguridad) */}
         <Form.Item name="rol" hidden><Input /></Form.Item>
