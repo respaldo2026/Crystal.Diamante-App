@@ -59,7 +59,6 @@ import { QueryProvider } from "@/providers/query-provider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { RolesPermissionsProvider, useRolesPermissions } from "@/contexts/roles-permissions-context";
 import { ColorModeContextProvider, useColorMode } from "@/contexts/color-mode";
-import { PwaInstallPrompt } from "@components/PwaInstallPrompt";
 
 const allResources = [
   {
@@ -774,7 +773,6 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
                 {children}
               </ThemedLayout>
             )}
-            <PwaInstallPrompt />
             <RefineKbar />
           </Refine>
         </AntdApp>

@@ -54,8 +54,8 @@ export const AuthPage = (props: AuthPageProps) => {
             style={{
               width: "100%",
               background: "linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255, 230, 243, 0.95))",
-              padding: isMobile ? 12 : 16,
-              borderRadius: 16,
+              padding: isMobile ? 10 : 14,
+              borderRadius: 12,
               border: "1px solid rgba(255, 42, 161, 0.25)",
               boxShadow: "0 12px 30px rgba(255, 42, 161, 0.25)",
             }}
@@ -88,12 +88,12 @@ export const AuthPage = (props: AuthPageProps) => {
 
       {props.type === "login" && (
         <div style={{
-          marginTop: isMobile ? "6px" : "8px",
+          marginTop: isMobile ? "4px" : "6px",
           textAlign: "center"
         }}>
           <Divider plain style={{
-            margin: isMobile ? "6px 0" : "8px 0",
-            fontSize: isMobile ? "12px" : "13px"
+            margin: isMobile ? "4px 0" : "6px 0",
+            fontSize: isMobile ? "11px" : "12px"
           }}>
             o accede con
           </Divider>
