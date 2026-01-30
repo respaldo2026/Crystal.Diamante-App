@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider, Upload, Space, Row, Col } from "antd";
+import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider, Upload, Space, Row, Col, Grid } from "antd";
 import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined, UploadOutlined, InstagramOutlined, FacebookOutlined, YoutubeOutlined } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
+import type { ColumnsType } from "antd/es/table";
+import type { Breakpoint } from "antd/es/_util/responsiveObserver";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { MODULES, type ModuleDefinition } from "@/constants/modules";
 import { ROLES } from "@/constants/roles";
@@ -41,9 +43,9 @@ interface MedioPago {
 interface PlantillaWhatsApp {
   id: string;
   nombre: string;
-  tipo: string;
-  mensaje: string;
-  activo: boolean;
+  descripcion?: string;
+  plantilla: string;
+  activa: boolean;
   created_at?: string;
 }
 
@@ -51,6 +53,9 @@ export default function ConfiguracionPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const [activeTab, setActiveTab] = useState("academia");
   const [initialized, setInitialized] = useState(false);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = screens.md && !screens.lg;
 
   // Estados para Academia
   const [formAcademia] = Form.useForm();
@@ -107,15 +112,26 @@ export default function ConfiguracionPage() {
 
     setUploadingLogo(true);
     try {
-      const fileExt = file.name.split(".").pop() || "png";
+      const fileExt = (file.name.split(".").pop() || "png").toLowerCase();
       const uniqueId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`;
       const filePath = `logo/logo-${uniqueId}.${fileExt}`;
 
       const { error: uploadError } = await supabaseBrowserClient.storage
         .from(LOGO_STORAGE_BUCKET)
-        .upload(filePath, file, { cacheControl: "3600", upsert: true });
+        .upload(filePath, file, { cacheControl: "3600", upsert: true, contentType: file.type });
 
       if (uploadError) {
+        const errorMessage = uploadError.message || "Error subiendo el logo";
+        if (errorMessage.toLowerCase().includes("bucket")) {
+          throw new Error(
+            `No existe el bucket '${LOGO_STORAGE_BUCKET}' en Supabase Storage. Créalo como público y agrega políticas de insert/select para storage.objects.`
+          );
+        }
+        if (errorMessage.toLowerCase().includes("policy") || errorMessage.toLowerCase().includes("row-level")) {
+          throw new Error(
+            `Faltan políticas RLS para subir el logo en el bucket '${LOGO_STORAGE_BUCKET}'.`
+          );
+        }
         throw uploadError;
       }
 
@@ -460,7 +476,7 @@ export default function ConfiguracionPage() {
     } else {
       setEditingPlantilla(null);
       formPlantilla.resetFields();
-      formPlantilla.setFieldsValue({ activo: true });
+      formPlantilla.setFieldsValue({ activa: true });
     }
     setModalPlantillaVisible(true);
   };
@@ -527,11 +543,11 @@ export default function ConfiguracionPage() {
     })),
   ];
 
-  const adminColumns = [
+  const adminColumns: ColumnsType<Admin> = [
     { title: "Nombre", dataIndex: "nombre_completo", key: "name", render: (t: string) => <span><UserOutlined /> {t}</span> },
-    { title: "Email", dataIndex: "email", key: "email" },
-    { title: "Identificación", dataIndex: "identificacion", key: "identificacion" },
-    { title: "Teléfono", dataIndex: "telefono", key: "telefono", render: (t: string) => t || "-" },
+    { title: "Email", dataIndex: "email", key: "email", responsive: ["md" as Breakpoint] },
+    { title: "Identificación", dataIndex: "identificacion", key: "identificacion", responsive: ["lg" as Breakpoint] },
+    { title: "Teléfono", dataIndex: "telefono", key: "telefono", render: (t: string) => t || "-", responsive: ["md" as Breakpoint] },
     {
       title: "Rol",
       dataIndex: "rol",
@@ -551,9 +567,9 @@ export default function ConfiguracionPage() {
     }
   ];
 
-  const mediosPagoColumns = [
+  const mediosPagoColumns: ColumnsType<MedioPago> = [
     { title: "Nombre", dataIndex: "nombre", key: "nombre" },
-    { title: "Tipo", dataIndex: "tipo", key: "tipo" },
+    { title: "Tipo", dataIndex: "tipo", key: "tipo", responsive: ["md" as Breakpoint] },
     {
       title: "Estado",
       dataIndex: "activo",
@@ -572,14 +588,14 @@ export default function ConfiguracionPage() {
     }
   ];
 
-  const plantillasColumns = [
+  const plantillasColumns: ColumnsType<PlantillaWhatsApp> = [
     { title: "Nombre", dataIndex: "nombre", key: "nombre" },
-    { title: "Tipo", dataIndex: "tipo", key: "tipo" },
+    { title: "Descripción", dataIndex: "descripcion", key: "descripcion", responsive: ["md" as Breakpoint] },
     {
       title: "Estado",
-      dataIndex: "activo",
-      key: "activo",
-      render: (activo: boolean) => <Tag color={activo ? "green" : "red"}>{activo ? "Activo" : "Inactivo"}</Tag>
+      dataIndex: "activa",
+      key: "activa",
+      render: (activa: boolean) => <Tag color={activa ? "green" : "red"}>{activa ? "Activo" : "Inactivo"}</Tag>
     },
     {
       title: "Acciones",
@@ -746,48 +762,177 @@ export default function ConfiguracionPage() {
 
   const permisosTab = (
     <Spin spinning={loadingPermisos}>
-      <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between" }}>
-        <h3>Matriz de Permisos por Rol</h3>
+      <div
+        style={{
+          marginBottom: 16,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
+        <h3 style={{ margin: 0 }}>Matriz de Permisos por Rol</h3>
         {hasChangesPermisos && (
-          <Button type="primary" icon={<SaveOutlined />} onClick={guardarPermisos} loading={savingPermisos}>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={guardarPermisos}
+            loading={savingPermisos}
+            block={isMobile}
+          >
             Guardar Cambios
           </Button>
         )}
       </div>
-      <Table dataSource={permisosData} columns={permisosColumns} pagination={false} scroll={{ x: permisosScrollX }} bordered />
+      <Table
+        dataSource={permisosData}
+        columns={permisosColumns}
+        pagination={false}
+        scroll={{ x: permisosScrollX }}
+        bordered
+        size={isMobile ? "small" : "middle"}
+      />
     </Spin>
   );
 
   const administradoresTab = (
     <Spin spinning={loadingAdmins}>
-      <div style={{ marginBottom: 16, textAlign: "right" }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModalAdmin()}>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "flex-end" }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => handleOpenModalAdmin()}
+          block={isMobile}
+        >
           Nuevo Administrador
         </Button>
       </div>
-      <Table dataSource={adminsList} columns={adminColumns} rowKey="id" />
+      {isMobile ? (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          {adminsList.map((admin) => (
+            <Card key={admin.id} size="small">
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                    <UserOutlined /> {admin.nombre_completo}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>{admin.email}</div>
+                  <div style={{ fontSize: 12, marginTop: 6 }}>
+                    ID: {admin.identificacion || "-"}
+                  </div>
+                  <div style={{ fontSize: 12 }}>
+                    Tel: {admin.telefono || "-"}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                  <Tag color={ROLES[admin.rol]?.color || "blue"}>{roleLabels[admin.rol] || admin.rol}</Tag>
+                  <Space size="small">
+                    <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModalAdmin(admin)} />
+                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteAdmin(admin)} />
+                  </Space>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </Space>
+      ) : (
+        <Table
+          dataSource={adminsList}
+          columns={adminColumns}
+          rowKey="id"
+          size={isMobile ? "small" : "middle"}
+          scroll={{ x: 800 }}
+        />
+      )}
     </Spin>
   );
 
   const mediosPagoTab = (
     <Spin spinning={loadingMediosPago}>
-      <div style={{ marginBottom: 16, textAlign: "right" }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModalMedioPago()}>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "flex-end" }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => handleOpenModalMedioPago()}
+          block={isMobile}
+        >
           Nuevo Medio de Pago
         </Button>
       </div>
-      <Table dataSource={mediosPago} columns={mediosPagoColumns} rowKey="id" />
+      {isMobile ? (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          {mediosPago.map((medio) => (
+            <Card key={medio.id} size="small">
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 600 }}>{medio.nombre}</div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>{medio.tipo}</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                  <Tag color={medio.activo ? "green" : "red"}>{medio.activo ? "Activo" : "Inactivo"}</Tag>
+                  <Space size="small">
+                    <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModalMedioPago(medio)} />
+                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteMedioPago(medio)} />
+                  </Space>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </Space>
+      ) : (
+        <Table
+          dataSource={mediosPago}
+          columns={mediosPagoColumns}
+          rowKey="id"
+          size={isMobile ? "small" : "middle"}
+          scroll={{ x: 600 }}
+        />
+      )}
     </Spin>
   );
 
   const plantillasTab = (
     <Spin spinning={loadingPlantillas}>
-      <div style={{ marginBottom: 16, textAlign: "right" }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModalPlantilla()}>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "flex-end" }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => handleOpenModalPlantilla()}
+          block={isMobile}
+        >
           Nueva Plantilla
         </Button>
       </div>
-      <Table dataSource={plantillasWhatsApp} columns={plantillasColumns} rowKey="id" />
+      {isMobile ? (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          {plantillasWhatsApp.map((plantilla) => (
+            <Card key={plantilla.id} size="small">
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600 }}>{plantilla.nombre}</div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>{plantilla.descripcion || "-"}</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                  <Tag color={plantilla.activa ? "green" : "red"}>{plantilla.activa ? "Activo" : "Inactivo"}</Tag>
+                  <Space size="small">
+                    <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModalPlantilla(plantilla)} />
+                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeletePlantilla(plantilla)} />
+                  </Space>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </Space>
+      ) : (
+        <Table
+          dataSource={plantillasWhatsApp}
+          columns={plantillasColumns}
+          rowKey="id"
+          size={isMobile ? "small" : "middle"}
+          scroll={{ x: 600 }}
+        />
+      )}
     </Spin>
   );
 
@@ -840,11 +985,20 @@ export default function ConfiguracionPage() {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: isMobile ? 12 : isTablet ? 16 : 24 }}>
       {contextHolder}
-      <h2 style={{ marginBottom: 24 }}>Configuración del Sistema</h2>
-      <Card>
-        <Tabs activeKey={activeTab} onChange={handleTabChange} items={tabsItems} />
+      <h2 style={{ marginBottom: isMobile ? 16 : 24, fontSize: isMobile ? 18 : 22 }}>Configuración del Sistema</h2>
+      <Card
+        bodyStyle={{ padding: isMobile ? 12 : isTablet ? 16 : 24 }}
+      >
+        <Tabs
+          activeKey={activeTab}
+          onChange={handleTabChange}
+          items={tabsItems}
+          size={isMobile ? "small" : "middle"}
+          tabBarGutter={isMobile ? 8 : 16}
+          tabBarStyle={{ marginBottom: isMobile ? 12 : 16, flexWrap: "wrap" }}
+        />
       </Card>
 
       {/* Modal Administradores */}
@@ -854,6 +1008,7 @@ export default function ConfiguracionPage() {
         onCancel={() => setModalAdminVisible(false)}
         onOk={handleSubmitAdmin}
         confirmLoading={submittingAdmin}
+        forceRender
       >
         <Form form={formAdmin} layout="vertical">
           <Form.Item label="Nombre Completo" name="nombre_completo" rules={[{ required: true }]}>
@@ -892,6 +1047,7 @@ export default function ConfiguracionPage() {
         onCancel={() => setModalMedioPagoVisible(false)}
         onOk={handleSubmitMedioPago}
         confirmLoading={submittingMedioPago}
+        forceRender
       >
         <Form form={formMedioPago} layout="vertical">
           <Form.Item label="Nombre" name="nombre" rules={[{ required: true }]}>
@@ -920,12 +1076,13 @@ export default function ConfiguracionPage() {
         onOk={handleSubmitPlantilla}
         confirmLoading={submittingPlantilla}
         width={600}
+        forceRender
       >
         <Form form={formPlantilla} layout="vertical">
           <Form.Item label="Nombre de la Plantilla" name="nombre" rules={[{ required: true }]}>
             <Input placeholder="Ej: Recordatorio de pago" />
           </Form.Item>
-          <Form.Item label="Tipo" name="tipo" rules={[{ required: true }]}>
+          <Form.Item label="Tipo" name="descripcion" rules={[{ required: true }]}>
             <Select placeholder="Selecciona un tipo">
               <Option value="recordatorio">Recordatorio</Option>
               <Option value="bienvenida">Bienvenida</Option>
@@ -933,10 +1090,10 @@ export default function ConfiguracionPage() {
               <Option value="otro">Otro</Option>
             </Select>
           </Form.Item>
-          <Form.Item label="Mensaje" name="mensaje" rules={[{ required: true }]}>
+          <Form.Item label="Mensaje" name="plantilla" rules={[{ required: true }]}>
             <TextArea rows={6} placeholder="Escribe el mensaje de la plantilla" />
           </Form.Item>
-          <Form.Item label="Activo" name="activo" valuePropName="checked" initialValue={true}>
+          <Form.Item label="Activo" name="activa" valuePropName="checked" initialValue={true}>
             <Switch />
           </Form.Item>
         </Form>

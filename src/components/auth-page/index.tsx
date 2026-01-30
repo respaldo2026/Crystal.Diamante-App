@@ -48,6 +48,28 @@ export const AuthPage = (props: AuthPageProps) => {
       )}
       <AuthPageBase
         {...props}
+        title={null}
+        renderContent={(content) => (
+          <div
+            style={{
+              width: "100%",
+              background: "linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255, 230, 243, 0.95))",
+              padding: isMobile ? 12 : 16,
+              borderRadius: 16,
+              border: "1px solid rgba(255, 42, 161, 0.25)",
+              boxShadow: "0 12px 30px rgba(255, 42, 161, 0.25)",
+            }}
+          >
+            {content}
+          </div>
+        )}
+        contentProps={{
+          styles: {
+            body: {
+              padding: 0,
+            },
+          },
+        }}
         formProps={{
           initialValues: {
             email: "",
@@ -59,17 +81,18 @@ export const AuthPage = (props: AuthPageProps) => {
         wrapperProps={{
           style: {
             maxWidth: "100%",
+            margin: 0,
           }
         }}
       />
 
       {props.type === "login" && (
         <div style={{
-          marginTop: isMobile ? "12px" : "14px",
+          marginTop: isMobile ? "6px" : "8px",
           textAlign: "center"
         }}>
           <Divider plain style={{
-            margin: isMobile ? "10px 0" : "12px 0",
+            margin: isMobile ? "6px 0" : "8px 0",
             fontSize: isMobile ? "12px" : "13px"
           }}>
             o accede con

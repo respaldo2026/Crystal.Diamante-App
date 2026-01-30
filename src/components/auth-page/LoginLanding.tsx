@@ -24,14 +24,14 @@ export function LoginLanding({ children }: { children: ReactNode }) {
       style={{
         minHeight: "100vh",
         width: "100vw",
-        background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 25%, #1e3a8a 50%, #0f172a 75%, #0c0a1a 100%)",
+        background: "linear-gradient(135deg, #ffffff 0%, #ffe6f3 40%, #ffb3db 70%, #ff6fb5 100%)",
         position: "relative",
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: isMobile ? "12px" : isTablet ? "20px" : "40px 24px",
+        padding: isMobile ? "4px" : isTablet ? "8px" : "16px 12px",
       }}
     >
       {/* Animated background gradients */}
@@ -40,9 +40,9 @@ export function LoginLanding({ children }: { children: ReactNode }) {
           position: "absolute",
           inset: 0,
           background: `
-            radial-gradient(circle at 10% 20%, rgba(236, 72, 153, 0.15), transparent 40%),
-            radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.15), transparent 40%),
-            radial-gradient(circle at 40% 40%, rgba(6, 182, 212, 0.1), transparent 50%)
+            radial-gradient(circle at 15% 20%, rgba(255, 0, 153, 0.22), transparent 40%),
+            radial-gradient(circle at 85% 80%, rgba(255, 0, 204, 0.18), transparent 45%),
+            radial-gradient(circle at 45% 45%, rgba(255, 20, 147, 0.12), transparent 50%)
           `,
           pointerEvents: "none",
         }}
@@ -58,7 +58,7 @@ export function LoginLanding({ children }: { children: ReactNode }) {
           maxWidth: isMobile ? "100%" : isTablet ? "900px" : "1400px",
           display: "flex",
           flexDirection: "column",
-          gap: isMobile ? "16px" : isTablet ? "24px" : "32px",
+          gap: isMobile ? "8px" : isTablet ? "10px" : "14px",
           alignItems: "center",
           justifyContent: "center",
           height: "100%",
@@ -67,15 +67,36 @@ export function LoginLanding({ children }: { children: ReactNode }) {
         <div style={{ textAlign: "center" }}>
           <h1
             style={{
-              fontSize: isMobile ? "1.7rem" : isTablet ? "2.2rem" : "2.6rem",
+              fontSize: isMobile ? "1.45rem" : isTablet ? "1.9rem" : "2.2rem",
               fontWeight: 800,
               margin: 0,
-              color: "#f8fafc",
+              color: "#ff2aa1",
               letterSpacing: "0.02em",
             }}
           >
-            Academia Crystal Diamante
+            Academia de Belleza
           </h1>
+          <div
+            style={{
+              marginTop: isMobile ? "4px" : "6px",
+              fontSize: isMobile ? "1.25rem" : isTablet ? "1.6rem" : "1.8rem",
+              fontWeight: 800,
+              color: "#ff2aa1",
+              letterSpacing: "0.02em",
+            }}
+          >
+            Crystal Diamante
+          </div>
+          <p
+            style={{
+              margin: isMobile ? "4px 0 0" : "6px 0 0",
+              fontSize: isMobile ? "0.85rem" : isTablet ? "0.95rem" : "1rem",
+              fontWeight: 500,
+              color: "#ff2aa1",
+            }}
+          >
+            Plataforma Académica
+          </p>
         </div>
 
         {/* Login form container */}

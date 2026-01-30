@@ -542,7 +542,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     () => ({
       algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
       token: {
-        colorPrimary: isDarkMode ? "#A855F7" : "#5B21B6",
+        colorPrimary: "#ff2aa1",
         colorSuccess: "#059669",
         colorWarning: "#D97706",
         colorError: "#DC2626",
@@ -558,8 +558,8 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
         colorBorder: isDarkMode ? "#334155" : "#E5E7EB",
         colorBorderSecondary: isDarkMode ? "#1F2937" : "#E5E7EB",
         colorFillSecondary: isDarkMode ? "#1F2937" : "#E5E7EB",
-        colorPrimaryBg: isDarkMode ? "#2D0F52" : "#EDE9FE",
-        controlOutline: isDarkMode ? "#A855F7" : "#5B21B6",
+        colorPrimaryBg: isDarkMode ? "#3b0823" : "#ffe6f3",
+        controlOutline: "#ff2aa1",
         borderRadius: 8,
         fontSize: 14,
         // Compact global paddings
@@ -639,6 +639,31 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     }),
     [isDarkMode],
   );
+
+  const i18nProvider = useMemo(() => {
+    const messages: Record<string, string> = {
+      "pages.login.title": "Accede a tu cuenta",
+      "pages.login.subtitle": "Plataforma Académica",
+      "pages.login.signin": "Iniciar sesión",
+      "pages.login.buttons.submit": "Entrar",
+      "pages.login.buttons.forgotPassword": "¿Olvidaste tu contraseña?",
+      "pages.login.buttons.remember": "Recordar sesión",
+      "pages.login.fields.email": "Correo electrónico",
+      "pages.login.fields.password": "Contraseña",
+      "pages.login.fields.remember": "Recordarme",
+      "pages.login.divider": "o",
+      "pages.login.buttons.noAccount": "¿No tienes cuenta?",
+      "pages.login.buttons.register": "Crear cuenta",
+      "pages.login.buttons.haveAccount": "¿Ya tienes cuenta?",
+    };
+
+    return {
+      translate: (key: string, defaultValue?: string) =>
+        messages[key] ?? defaultValue ?? key,
+      changeLocale: async () => {},
+      getLocale: () => "es",
+    };
+  }, []);
 
   const normalizedRole = useMemo(() => {
     const rawRole = (user as any)?.rol ?? (user as any)?.role ?? "";
@@ -725,6 +750,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
             routerProvider={routerProvider}
             dataProvider={dataProvider}
             authProvider={authProvider}
+            i18nProvider={i18nProvider}
             resources={resources}
             options={{
               syncWithLocation: true,
