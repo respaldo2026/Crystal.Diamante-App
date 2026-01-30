@@ -30,7 +30,7 @@ import {
   theme,
 } from "antd";
 import type { MenuProps } from "antd";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   DashboardOutlined,
   UserOutlined,
@@ -196,6 +196,7 @@ type CustomSiderProps = {
 };
 
 type MenuClickEvent = Parameters<NonNullable<MenuProps["onClick"]>>[0];
+
 
 const CustomSider: React.FC<CustomSiderProps> = ({
   Title: TitleFromProps,
@@ -368,7 +369,7 @@ const CustomSider: React.FC<CustomSiderProps> = ({
         onClose={() => setMobileSiderOpen(false)}
         placement={direction === "rtl" ? "right" : "left"}
         closable={false}
-        width={200}
+        width={160}
         styles={{
           body: {
             padding: 0,
@@ -683,6 +684,14 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     !["admin", "director", "profesor", "estudiante"].includes(normalizedRole);
 
   const shouldUseLayout = !isAuthRoute && Boolean(user);
+
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (!userLoading && !user && !isAuthRoute) {
+      router.replace("/login");
+    }
+  }, [user, userLoading, isAuthRoute, router]);
 
   const resources = useMemo(() => {
     if (userLoading || !user) {
