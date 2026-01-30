@@ -9,7 +9,7 @@ const supabaseDataProvider = dataProviderSupabase(supabaseBrowserClient);
 export const dataProvider: DataProvider = {
   ...supabaseDataProvider,
   
-  update: async <TData extends BaseRecord = BaseRecord, TVariables = {}>({ resource, id, variables, meta }: UpdateParams<TVariables>) => {
+  update: async <TData extends BaseRecord = BaseRecord, TVariables = {}>({ resource, id, variables, meta }: UpdateParams<TVariables>): Promise<UpdateResponse<TData>> => {
     console.log("🔵 [DATA PROVIDER] UPDATE INICIADO");
     console.log("  📌 Resource:", resource);
     console.log("  📌 ID:", id);
@@ -29,7 +29,7 @@ export const dataProvider: DataProvider = {
     
     try {
       console.log("🟡 [DATA PROVIDER] Enviando a Supabase...");
-      const result = await supabaseDataProvider.update!({ resource, id, variables, meta });
+      const result = await supabaseDataProvider.update!<TData, TVariables>({ resource, id, variables, meta });
       
       console.log("✅ [DATA PROVIDER] UPDATE EXITOSO");
       console.log("  📊 Resultado:", JSON.stringify(result, null, 2));
