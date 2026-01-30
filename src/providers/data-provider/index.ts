@@ -10,21 +10,41 @@ export const dataProvider: DataProvider = {
   ...supabaseDataProvider,
   
   update: async ({ resource, id, variables, meta }) => {
-    console.log("🔵 [DATA PROVIDER] UPDATE iniciado");
-    console.log("  - Resource:", resource);
-    console.log("  - ID:", id);
-    console.log("  - Variables:", variables);
-    console.log("  - Meta:", meta);
+    console.log("🔵 [DATA PROVIDER] UPDATE INICIADO");
+    console.log("  📌 Resource:", resource);
+    console.log("  📌 ID:", id);
+    console.log("  📌 Variables (datos a guardar):", JSON.stringify(variables, null, 2));
+    console.log("  📌 Meta:", meta);
+    console.log("  📌 Timestamp:", new Date().toISOString());
+    
+    if (!id) {
+      console.error("❌ [DATA PROVIDER] ERROR: NO HAY ID!");
+      throw new Error("No hay ID para actualizar");
+    }
+    
+    if (!variables || Object.keys(variables).length === 0) {
+      console.error("❌ [DATA PROVIDER] ERROR: Variables vacías!");
+      throw new Error("No hay datos para actualizar");
+    }
     
     try {
+      console.log("🟡 [DATA PROVIDER] Enviando a Supabase...");
       const result = await supabaseDataProvider.update!({ resource, id, variables, meta });
-      console.log("✅ [DATA PROVIDER] UPDATE exitoso:", result);
+      
+      console.log("✅ [DATA PROVIDER] UPDATE EXITOSO");
+      console.log("  📊 Resultado:", JSON.stringify(result, null, 2));
+      console.log("  📊 Data retornada:", result?.data);
+      console.log("  📊 Tipo de resultado:", typeof result);
+      
       return result;
     } catch (error: any) {
-      console.error("❌ [DATA PROVIDER] UPDATE falló:", error);
-      console.error("  - Error message:", error?.message);
-      console.error("  - Error details:", error?.details);
-      console.error("  - Error hint:", error?.hint);
+      console.error("❌ [DATA PROVIDER] UPDATE FALLÓ");
+      console.error("  💥 Error message:", error?.message);
+      console.error("  💥 Error code:", error?.code);
+      console.error("  💥 Error details:", error?.details);
+      console.error("  💥 Error hint:", error?.hint);
+      console.error("  💥 Error status:", error?.status);
+      console.error("  💥 Error completo:", error);
       throw error;
     }
   },

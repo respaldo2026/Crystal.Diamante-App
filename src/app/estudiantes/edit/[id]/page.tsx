@@ -10,6 +10,9 @@ export default function EditEstudiante() {
   const params = useParams();
   const id = params?.id as string;
 
+  console.log("🟣 [COMPONENTE] EditEstudiante montado");
+  console.log("🟣 [COMPONENTE] ID desde params:", id);
+
   const { formProps, saveButtonProps, formLoading, onFinish } = useForm({
     resource: "perfiles", // Guardamos en la tabla perfiles
     action: "edit",
@@ -19,9 +22,26 @@ export default function EditEstudiante() {
     meta: { select: "*" } 
   });
 
+  console.log("🟣 [COMPONENTE] useForm retornó:");
+  console.log("  - formProps:", formProps ? "OK" : "NULL");
+  console.log("  - saveButtonProps:", saveButtonProps);
+  console.log("  - formLoading:", formLoading);
+  console.log("  - onFinish:", typeof onFinish);
+
   const handleOnFinish = async (values: any) => {
-    console.log("🔵 [EDITAR ESTUDIANTE] Valores del formulario:", values);
-    console.log("🔵 [EDITAR ESTUDIANTE] ID del estudiante:", id);
+    console.log("═══════════════════════════════════════════════");
+    console.log("🔵 [FORM] onFinish EJECUTADO");
+    console.log("═══════════════════════════════════════════════");
+    console.log("📌 ID del estudiante:", id);
+    console.log("📌 Valores del formulario (completos):", values);
+    console.log("📌 Tipo de valores:", typeof values);
+    console.log("📌 Keys de valores:", Object.keys(values));
+    
+    // Verificar que hay datos
+    if (!values || Object.keys(values).length === 0) {
+      console.error("❌ [FORM] ERROR: Formulario vacío!");
+      return;
+    }
     
     const datosListos = {
       ...values,
@@ -29,16 +49,21 @@ export default function EditEstudiante() {
     };
     delete datosListos.created_at;
     delete datosListos.updated_at;
-    delete datosListos.id; // No enviar el ID en el payload
+    delete datosListos.id;
     
-    console.log("🟢 [EDITAR ESTUDIANTE] Datos listos para enviar:", datosListos);
+    console.log("🟢 [FORM] Datos limpios para enviar:", datosListos);
+    console.log("🟢 [FORM] Cantidad de campos:", Object.keys(datosListos).length);
     
     try {
+      console.log("🟡 [FORM] Llamando a onFinish()...");
       const result = await onFinish(datosListos);
-      console.log("✅ [EDITAR ESTUDIANTE] Resultado de la actualización:", result);
+      console.log("✅ [FORM] onFinish retornó:", result);
+      console.log("═══════════════════════════════════════════════");
       return result;
     } catch (error) {
-      console.error("❌ [EDITAR ESTUDIANTE] Error al actualizar:", error);
+      console.error("❌ [FORM] ERROR en onFinish:", error);
+      console.error("❌ [FORM] Error message:", (error as any)?.message);
+      console.error("═══════════════════════════════════════════════");
       throw error;
     }
   };
