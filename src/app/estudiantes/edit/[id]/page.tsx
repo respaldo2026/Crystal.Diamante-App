@@ -19,14 +19,28 @@ export default function EditEstudiante() {
     meta: { select: "*" } 
   });
 
-  const handleOnFinish = (values: any) => {
+  const handleOnFinish = async (values: any) => {
+    console.log("🔵 [EDITAR ESTUDIANTE] Valores del formulario:", values);
+    console.log("🔵 [EDITAR ESTUDIANTE] ID del estudiante:", id);
+    
     const datosListos = {
       ...values,
       fecha_nacimiento: values.fecha_nacimiento ? dayjs(values.fecha_nacimiento).format("YYYY-MM-DD") : null,
     };
     delete datosListos.created_at;
     delete datosListos.updated_at;
-    return onFinish(datosListos);
+    delete datosListos.id; // No enviar el ID en el payload
+    
+    console.log("🟢 [EDITAR ESTUDIANTE] Datos listos para enviar:", datosListos);
+    
+    try {
+      const result = await onFinish(datosListos);
+      console.log("✅ [EDITAR ESTUDIANTE] Resultado de la actualización:", result);
+      return result;
+    } catch (error) {
+      console.error("❌ [EDITAR ESTUDIANTE] Error al actualizar:", error);
+      throw error;
+    }
   };
 
   return (
