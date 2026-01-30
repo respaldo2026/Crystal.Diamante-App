@@ -18,8 +18,11 @@ export default function EditEstudiante() {
     action: "edit",
     id,
     redirect: "list",     // Al terminar, volvemos a la lista
-    // Si falla la carga automática, esto ayuda a depurar:
-    meta: { select: "*" } 
+    // Pedirle a Supabase que retorne los datos actualizados
+    meta: { 
+      select: "*",
+      returning: true 
+    } 
   });
 
   console.log("🟣 [COMPONENTE] useForm retornó:");
@@ -58,6 +61,8 @@ export default function EditEstudiante() {
       console.log("🟡 [FORM] Llamando a onFinish()...");
       const result = await onFinish(datosListos);
       console.log("✅ [FORM] onFinish retornó:", result);
+      console.log("✅ [FORM] result?.data:", result?.data);
+      console.log("✅ [FORM] ¿Tiene datos guardados?:", result?.data ? "SÍ ✅" : "NO ❌");
       console.log("═══════════════════════════════════════════════");
       return result;
     } catch (error) {
