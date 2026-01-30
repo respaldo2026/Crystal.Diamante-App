@@ -28,34 +28,43 @@ export const dataProvider: DataProvider = {
     }
     
     try {
-      console.log("🟡 [DATA PROVIDER] Enviando a Supabase...");
+      console.log("🟡 [DATA PROVIDER] Enviando UPDATE a Supabase...");
       
-      // Hacer el UPDATE directamente con el cliente de Supabase
-      const { data, error } = await supabaseBrowserClient
+      // Paso 1: Hacer el UPDATE sin SELECT
+      const { error: updateError } = await supabaseBrowserClient
         .from(resource)
         .update(variables as any)
-        .eq("id", id)
-        .select("*");
+        .eq("id", id);
       
-      console.log("🟡 [DATA PROVIDER] Respuesta de Supabase:");
-      console.log("  - data:", data);
-      console.log("  - error:", error);
-      
-      if (error) {
-        console.error("❌ [DATA PROVIDER] ERROR DE SUPABASE:", error);
-        throw error;
+      if (updateError) {
+        console.error("❌ [DATA PROVIDER] ERROR en UPDATE:", updateError);
+        throw updateError;
       }
       
-      console.log("✅ [DATA PROVIDER] UPDATE EXITOSO");
-      console.log("  📊 Datos retornados:", data);
-      console.log("  📊 Cantidad de filas actualizadas:", data?.length);
+      console.log("✅ [DATA PROVIDER] UPDATE ejecutado sin errores");
       
-      return { data: (data?.[0] || data) as TData };
+      // Paso 2: Hacer un SELECT separado para obtener los datos actualizados
+      console.log("🟡 [DATA PROVIDER] Obteniendo datos actualizados...");
+      const { data, error: selectError } = await supabaseBrowserClient
+        .from(resource)
+        .select("*")
+        .eq("id", id)
+        .single();
+      
+      if (selectError) {
+        console.error("❌ [DATA PROVIDER] ERROR en SELECT:", selectError);
+        // No lanzamos error aquí porque el UPDATE ya se completó
+        return { data: undefined as any };
+      }
+      
+      console.log("✅ [DATA PROVIDER] DATOS OBTENIDOS");
+      console.log("  📊 Datos actualizados:", data);
+      
+      return { data: data as TData };
     } catch (error: any) {
       console.error("❌ [DATA PROVIDER] UPDATE FALLÓ");
       console.error("  💥 Error message:", error?.message);
       console.error("  💥 Error code:", error?.code);
-      console.error("  💥 Error details:", error?.details);
       console.error("  💥 Error completo:", error);
       throw error;
     }
