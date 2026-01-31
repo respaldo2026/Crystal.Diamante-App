@@ -117,6 +117,8 @@ type ConfiguracionAcademia = {
   ticket_titulo?: string | null;
   ticket_nota?: string | null;
   ticket_pie?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
 };
 
 export default function SecretariaDashboard() {
@@ -210,6 +212,9 @@ export default function SecretariaDashboard() {
   const cargarPanel = useCallback(async () => {
     setLoading(true);
     try {
+      // Cargar también la configuración
+      await cargarConfiguracion();
+      
       const [programasRes, cursosRes, leadsRes, pagosRes] = await Promise.all([
         getProgramasResumen(),
         getCursosSecretaria(),
@@ -269,6 +274,43 @@ export default function SecretariaDashboard() {
     }
 
     return lines.join("\n");
+  };
+
+  const buildMensajeWhatsappCompleto = (programa: any, nombreCliente: string) => {
+    // Saludar con enlace a Instagram al inicio
+    let mensaje = `👋 ¡Hola ${nombreCliente}!\n\n`;
+    
+    // Agregar Instagram al inicio para que sea lo primero
+    if (configuracion?.instagram) {
+      mensaje += `📱 Síguenos en Instagram: ${configuracion.instagram}\n`;
+    }
+    
+    // Agregar Facebook
+    if (configuracion?.facebook) {
+      mensaje += `👥 Encuentra más en Facebook: ${configuracion.facebook}\n`;
+    }
+    
+    // Agregar línea en blanco para separar
+    if (configuracion?.instagram || configuracion?.facebook) {
+      mensaje += `\n`;
+    }
+    
+    // Presentación
+    mensaje += `Soy del equipo de ${configuracion?.nombre_academia || "Academia Crystal Diamante"}.\n`;
+    mensaje += `Te comparto información sobre nuestro programa:\n\n`;
+    
+    // Resumen del programa
+    const resumen = buildProgramaResumen(programa);
+    mensaje += resumen + "\n\n";
+    
+    // Llamada a acción
+    mensaje += `¿Te ayudo a reservar tu cupo?\n`;
+    mensaje += `📱 Contáctanos por aquí o llama al ${configuracion?.telefono || configuracion?.whatsapp || "teléfono de la academia"}\n\n`;
+    
+    // Instrucción para agregar a contactos
+    mensaje += `💾 Agréganos a tus contactos para ver nuestros estados`;
+    
+    return mensaje;
   };
 
   const normalizePhone = (value?: string | null) => (value || "").replace(/\D+/g, "");
@@ -345,12 +387,8 @@ export default function SecretariaDashboard() {
         console.log("[WHATSAPP] Lead ya existe, no se crea duplicado");
       }
 
-      const resumen = buildProgramaResumen(programaWhatsapp);
-      const mensajeBase =
-        `Hola ${values.nombre}, soy del equipo de Academia Crystal.\n` +
-        `Te comparto información del programa:\n${resumen}\n` +
-        `¿Te ayudo a reservar tu cupo?`;
-      enviarWhatsapp(telefono, mensajeBase);
+      const resumen = buildMensajeWhatsappCompleto(programaWhatsapp, values.nombre);
+      enviarWhatsapp(telefono, resumen);
       setWhatsappOpen(false);
     } catch (error: any) {
       console.error("[WHATSAPP] Error enviando WhatsApp:", error);
