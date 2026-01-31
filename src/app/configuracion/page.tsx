@@ -63,6 +63,7 @@ export default function ConfiguracionPage() {
   const [savingAcademia, setSavingAcademia] = useState(false);
   const [logoFileList, setLogoFileList] = useState<UploadFile[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [configuracionId, setConfiguracionId] = useState<string | null>(null);
 
   // Estados para Permisos
   const [permisos, setPermisos] = useState<PermisosPorRol>({});
@@ -200,6 +201,12 @@ export default function ConfiguracionPage() {
       }
 
       if (data) {
+        // Guardar el ID UUID para usarlo en el upsert
+        if (isValidUUID(data.id)) {
+          setConfiguracionId(data.id);
+        } else {
+          setConfiguracionId(null);
+        }
         formAcademia.setFieldsValue(data);
         if (data.logo_url) {
           setLogoFileList([
@@ -226,16 +233,71 @@ export default function ConfiguracionPage() {
     }
   }, [initialized, cargarConfiguracionAcademia]);
 
+  const generateUUID = (): string => {
+    if (typeof crypto !== "undefined") {
+      if (typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+
+      if (typeof crypto.getRandomValues === "function") {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"));
+        return `${hex[0]}${hex[1]}${hex[2]}${hex[3]}-${hex[4]}${hex[5]}-${hex[6]}${hex[7]}-${hex[8]}${hex[9]}-${hex[10]}${hex[11]}${hex[12]}${hex[13]}${hex[14]}${hex[15]}`;
+      }
+    }
+
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
+
+  const isValidUUID = (value?: string | null): boolean => {
+    if (!value) return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  };
+
   const guardarConfiguracionAcademia = async () => {
     try {
       const values = await formAcademia.validateFields();
+      const { id: _ignoredId, ...valuesSinId } = values as { id?: string };
       setSavingAcademia(true);
+
+      // Si no tenemos ID aún, obtener el primero existente o crear uno nuevo
+      let idParaGuardar = isValidUUID(configuracionId) ? configuracionId : null;
+      
+      if (!idParaGuardar) {
+        // Obtener el ID existente de la BD
+        const { data: configs } = await supabaseBrowserClient
+          .from("configuracion")
+          .select("id")
+          .limit(1);
+        
+        const primerId = configs && configs.length > 0 ? configs[0].id : null;
+
+        if (isValidUUID(primerId)) {
+          idParaGuardar = primerId;
+          setConfiguracionId(primerId);
+        } else {
+          // Si no existe, generar un UUID válido
+          idParaGuardar = generateUUID();
+        }
+      }
 
       const { error } = await supabaseBrowserClient
         .from("configuracion")
-        .upsert({ id: 1, ...values });
+        .upsert({ ...valuesSinId, id: idParaGuardar });
 
       if (error) throw error;
+
+      // Actualizar el ID si se acaba de crear
+      if (!configuracionId && idParaGuardar) {
+        setConfiguracionId(idParaGuardar);
+      }
 
       messageApi.success("Configuración guardada correctamente");
     } catch (error: any) {
