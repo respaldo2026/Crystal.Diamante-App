@@ -192,6 +192,8 @@ export default function ConfiguracionPage() {
       const { data, error } = await supabaseBrowserClient
         .from("configuracion")
         .select("*")
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
 
@@ -217,6 +219,19 @@ export default function ConfiguracionPage() {
               url: data.logo_url,
             },
           ]);
+        } else {
+          setLogoFileList([]);
+        }
+      } else {
+        // Si no hay registro, crear uno base para evitar pantalla vacía
+        const nuevoId = generateUUID();
+        const { error: insertError } = await supabaseBrowserClient
+          .from("configuracion")
+          .insert({ id: nuevoId });
+
+        if (!insertError) {
+          setConfiguracionId(nuevoId);
+          formAcademia.resetFields();
         }
       }
     } catch (error) {
@@ -300,6 +315,7 @@ export default function ConfiguracionPage() {
       }
 
       messageApi.success("Configuración guardada correctamente");
+      cargarConfiguracionAcademia();
     } catch (error: any) {
       messageApi.error("Error al guardar: " + error.message);
     } finally {

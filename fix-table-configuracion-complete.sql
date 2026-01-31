@@ -19,7 +19,9 @@ ADD COLUMN IF NOT EXISTS youtube TEXT,
 ADD COLUMN IF NOT EXISTS moneda TEXT,
 ADD COLUMN IF NOT EXISTS impuesto NUMERIC,
 ADD COLUMN IF NOT EXISTS dias_gracia_pago INTEGER,
-ADD COLUMN IF NOT EXISTS mora_por_dia NUMERIC;
+ADD COLUMN IF NOT EXISTS mora_por_dia NUMERIC,
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(),
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
 -- 2. Obtener el id UUID de la fila existente (o crear una si no existe)
 -- El app usa upsert con id específico, así que necesitamos saber cuál es
