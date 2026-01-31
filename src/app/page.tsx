@@ -12,6 +12,7 @@ import {
   GiftOutlined, WarningOutlined, CheckCircleOutlined, SyncOutlined
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { enviarWhatsapp } from "@utils/whatsapp";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { LoginLanding } from "@components/auth-page/LoginLanding";
@@ -713,7 +714,7 @@ export default function DashboardPage() {
                         type="primary" 
                         size="small" 
                         style={{ background: '#25D366', borderColor: '#25D366' }}
-                        onClick={() => window.open(`https://wa.me/${estudiante.telefono}?text=¡Feliz cumpleaños ${estudiante.nombre_completo}! 🎉`, '_blank')}
+                        onClick={() => enviarWhatsapp(estudiante.telefono, `¡Feliz cumpleaños ${estudiante.nombre_completo}! 🎉`)}
                       >
                         Felicitar
                       </Button>

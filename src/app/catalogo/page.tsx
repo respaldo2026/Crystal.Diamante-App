@@ -19,6 +19,7 @@ import {
 } from "antd";
 import { WhatsAppOutlined, ShareAltOutlined, ClockCircleOutlined, BookOutlined, DollarOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { enviarWhatsapp } from "@utils/whatsapp";
 import dayjs from "dayjs";
 
 const { Title, Text, Paragraph } = Typography;
@@ -148,18 +149,16 @@ export default function CatalogoCursosPage() {
         ? `$${Number(selectedPrograma.precio_inscripcion).toLocaleString("es-CO")}`
         : "Consultar";
 
-      const mensaje = encodeURIComponent(
+      const mensaje =
         `Hola ${values.nombre}! Soy del equipo de Academia Crystal.\n` +
-        `Te comparto info de *${selectedPrograma.nombre}*: \n` +
+        `Te comparto info de ${selectedPrograma.nombre}:\n` +
         `${selectedPrograma.descripcion ? selectedPrograma.descripcion + "\n" : ""}` +
         `Duración: ${selectedPrograma.duracion || "Consultar"}.\n` +
         `Mensualidad: ${mensualidad}. Inscripción: ${inscripcion}.\n` +
         `${proximoTexto ? `Próximos grupos:\n${proximoTexto}\n` : ""}` +
-        `¿Te ayudo a reservar tu cupo?`
-      );
+        `¿Te ayudo a reservar tu cupo?`;
 
-      const url = `https://wa.me/${telefono}?text=${mensaje}`;
-      window.open(url, "_blank");
+      enviarWhatsapp(telefono, mensaje);
       setShareOpen(false);
       form.resetFields();
       message.success("Lead guardado y mensaje listo en WhatsApp");

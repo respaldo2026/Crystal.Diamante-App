@@ -737,6 +737,34 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
       ];
     }
 
+    if (normalizedRole === "administrativo") {
+      if (permisosLoading) {
+        return [];
+      }
+
+      const userPermisos = permisos[normalizedRole] || {};
+      const filteredResources = allResources.filter((resource) => {
+        if (!resource.key) return false;
+        if (resource.key === "dashboard") {
+          return userPermisos.dashboard === true;
+        }
+        return userPermisos[resource.key] === true;
+      });
+
+      // Agregar dashboard de secretaria al inicio
+      return [
+        {
+          name: "dashboard-secretaria",
+          list: "/dashboard/secretaria",
+          meta: {
+            label: "Dashboard",
+            icon: <DashboardOutlined />,
+          },
+        },
+        ...filteredResources.filter(r => r.key !== "dashboard"),
+      ];
+    }
+
     if (permisosLoading) {
       return [];
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   App,
   Alert,
@@ -22,6 +22,7 @@ import {
   Timeline,
   Badge,
   Drawer,
+  Modal,
   Form,
   Select,
   DatePicker,
@@ -37,12 +38,15 @@ import {
   CreditCardOutlined,
   InfoCircleOutlined,
   ShoppingCartOutlined,
+  BookOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import localizedFormat from "dayjs/plugin/localizedFormat";
 import { useRouter } from "next/navigation";
 import { construirNombreGrupo } from "@utils/grupos";
+import { enviarWhatsapp } from "@utils/whatsapp";
 import {
   getProgramasResumen,
   getCursosSecretaria,
@@ -136,6 +140,10 @@ export default function SecretariaDashboard() {
   const [registrandoPagos, setRegistrandoPagos] = useState(false);
   const [configuracion, setConfiguracion] = useState<ConfiguracionAcademia | null>(null);
   const [pagoForm] = Form.useForm();
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [programaWhatsapp, setProgramaWhatsapp] = useState<any | null>(null);
+  const [whatsappForm] = Form.useForm();
+  const programasRef = useRef<HTMLDivElement | null>(null);
   const cuotasSeleccionadas = Form.useWatch("cuotas", pagoForm) as string[] | undefined;
   const cuotasSeleccionadasIds = useMemo(
     () => cuotasSeleccionadas ?? [],
@@ -261,6 +269,71 @@ export default function SecretariaDashboard() {
     }
 
     return lines.join("\n");
+  };
+
+  const normalizePhone = (value?: string | null) => (value || "").replace(/\D+/g, "");
+
+  const abrirWhatsappPrograma = (programa: any) => {
+    setProgramaWhatsapp(programa);
+    whatsappForm.resetFields();
+    setWhatsappOpen(true);
+  };
+
+  const enviarWhatsAppPrograma = async () => {
+    if (!programaWhatsapp) return;
+    try {
+      const values = await whatsappForm.validateFields();
+      const telefono = normalizePhone(values.telefono);
+      if (!telefono) {
+        messageApi.error("Ingresa un teléfono válido");
+        return;
+      }
+
+      const payload = {
+        nombre: values.nombre,
+        telefono,
+        email: values.email || null,
+        interes: programaWhatsapp.nombre || null,
+        canal: "WhatsApp",
+        notas: values.notas || `Interesado en ${programaWhatsapp.nombre} (secretaría)`,
+        estado: "nuevo",
+        created_at: new Date().toISOString(),
+      };
+
+      const { data: existing } = await supabaseBrowserClient
+        .from("leads")
+        .select("id")
+        .eq("telefono", telefono)
+        .maybeSingle();
+
+      if (!existing) {
+        const { data, error } = await supabaseBrowserClient
+          .rpc("crear_lead_seguro", {
+            p_nombre: payload.nombre,
+            p_telefono: payload.telefono,
+            p_email: payload.email,
+            p_interes: payload.interes,
+            p_canal: payload.canal,
+            p_notas: payload.notas,
+            p_estado: payload.estado,
+          })
+          .maybeSingle();
+
+        if (error) throw error;
+        if (data) setLeads((prev) => [data, ...prev]);
+      }
+
+      const resumen = buildProgramaResumen(programaWhatsapp);
+      const mensajeBase =
+        `Hola ${values.nombre}, soy del equipo de Academia Crystal.\n` +
+        `Te comparto información del programa:\n${resumen}\n` +
+        `¿Te ayudo a reservar tu cupo?`;
+      enviarWhatsapp(telefono, mensajeBase);
+      setWhatsappOpen(false);
+    } catch (error) {
+      console.error("Error enviando WhatsApp", error);
+      messageApi.error("No se pudo enviar el mensaje");
+    }
   };
 
   const handleCopyPrograma = async (programa: any) => {
@@ -724,6 +797,26 @@ export default function SecretariaDashboard() {
                 <Space size={window.innerWidth < 768 ? [8, 8] : [12, 12]} wrap>
                   <Button
                     type="primary"
+                    icon={<ShoppingCartOutlined />}
+                    onClick={() => router.push("/caja")}
+                    size={window.innerWidth < 768 ? "small" : "middle"}
+                    style={{
+                      fontSize: window.innerWidth < 768 ? "12px" : "14px",
+                    }}
+                  >
+                    {window.innerWidth < 768 ? "Cobrar" : "Cobrar en caja"}
+                  </Button>
+                  <Button
+                    icon={<WhatsAppOutlined />}
+                    onClick={() => programasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    size={window.innerWidth < 768 ? "small" : "middle"}
+                    style={{
+                      fontSize: window.innerWidth < 768 ? "12px" : "14px",
+                    }}
+                  >
+                    {window.innerWidth < 768 ? "Info cursos" : "Enviar info de cursos"}
+                  </Button>
+                  <Button
                     icon={<PlusOutlined />}
                     onClick={() => abrirMatricula()}
                     size={window.innerWidth < 768 ? "small" : "middle"}
@@ -732,28 +825,6 @@ export default function SecretariaDashboard() {
                     }}
                   >
                     {window.innerWidth < 768 ? "Matrícula" : "Registrar matrícula"}
-                  </Button>
-                  <Button
-                    icon={<CreditCardOutlined />}
-                    onClick={() => {
-                      void abrirRegistroPago(pagosPendientes[0]);
-                    }}
-                    size={window.innerWidth < 768 ? "small" : "middle"}
-                    style={{
-                      fontSize: window.innerWidth < 768 ? "12px" : "14px",
-                    }}
-                  >
-                    {window.innerWidth < 768 ? "Pago" : "Registrar pago"}
-                  </Button>
-                  <Button
-                    icon={<ShoppingCartOutlined />}
-                    onClick={() => router.push("/caja")}
-                    size={window.innerWidth < 768 ? "small" : "middle"}
-                    style={{
-                      fontSize: window.innerWidth < 768 ? "12px" : "14px",
-                    }}
-                  >
-                    {window.innerWidth < 768 ? "Caja" : "Abrir caja"}
                   </Button>
                   {!loading && (
                     <Button
@@ -814,6 +885,7 @@ export default function SecretariaDashboard() {
         ) : (
           <Row gutter={[window.innerWidth < 768 ? 12 : 24, window.innerWidth < 768 ? 12 : 24]}>
             <Col xs={24} md={window.innerWidth < 768 ? 24 : 16}>
+              <div ref={programasRef} />
               <Card
                 title={<span style={{ fontSize: window.innerWidth < 768 ? "14px" : "16px" }}>Vista general académica</span>}
                 extra={window.innerWidth >= 768 && <Button type="link" onClick={() => window.open("/programas", "_blank")} size="small">Gestionar programas</Button>}
@@ -837,31 +909,158 @@ export default function SecretariaDashboard() {
                           renderItem={(programa) => (
                             <List.Item>
                               <Card
-                                variant="borderless"
-                                title={programa.nombre}
-                                extra={
-                                  <Button type="link" size="small" onClick={() => handleCopyPrograma(programa)}>
-                                    Copiar info
-                                  </Button>
-                                }
+                                hoverable
+                                style={{
+                                  borderRadius: "12px",
+                                  overflow: "hidden",
+                                  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                                  transition: "all 0.3s ease",
+                                  border: "1px solid rgba(0,0,0,0.06)",
+                                }}
+                                styles={{ body: { padding: "0" } }}
                               >
-                                <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                                  {programa.duracion && <Text type="secondary">Duración: {programa.duracion}</Text>}
-                                  <Space wrap>
-                                    {programa.precio_inscripcion !== null && programa.precio_inscripcion !== undefined && (
-                                      <Tag color="purple">Inscripción: {formatCurrency(programa.precio_inscripcion)}</Tag>
-                                    )}
-                                    {programa.precio_mensualidad !== null && programa.precio_mensualidad !== undefined && (
-                                      <Tag color="green">Mensualidad: {formatCurrency(programa.precio_mensualidad)}</Tag>
-                                    )}
-                                    {programa.total_clases && (
-                                      <Tag color="blue">Clases: {programa.total_clases}</Tag>
+                                {/* Header con gradiente */}
+                                <div style={{
+                                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                                  padding: "20px",
+                                  position: "relative",
+                                  overflow: "hidden",
+                                }}>
+                                  {/* Patrón de fondo */}
+                                  <div style={{
+                                    position: "absolute",
+                                    top: 0,
+                                    right: 0,
+                                    opacity: 0.1,
+                                    fontSize: "80px",
+                                    color: "white",
+                                  }}>
+                                    <BookOutlined />
+                                  </div>
+                                  
+                                  <Space direction="vertical" size={4} style={{ width: "100%", position: "relative", zIndex: 1 }}>
+                                    <Text strong style={{ 
+                                      color: "white", 
+                                      fontSize: "18px",
+                                      display: "block",
+                                      marginBottom: "4px"
+                                    }}>
+                                      {programa.nombre}
+                                    </Text>
+                                    {programa.duracion && (
+                                      <Space size={4}>
+                                        <ClockCircleOutlined style={{ color: "rgba(255,255,255,0.9)", fontSize: "14px" }} />
+                                        <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: "14px" }}>
+                                          {programa.duracion}
+                                        </Text>
+                                      </Space>
                                     )}
                                   </Space>
+                                </div>
+
+                                {/* Contenido */}
+                                <div style={{ padding: "20px" }}>
+                                  {/* Descripción */}
                                   {programa.descripcion && (
-                                    <Text type="secondary" ellipsis={{ tooltip: programa.descripcion }}>{programa.descripcion}</Text>
+                                    <div style={{ marginBottom: "16px" }}>
+                                      <Text type="secondary" style={{ 
+                                        display: "block",
+                                        lineHeight: "1.6",
+                                        fontSize: "14px"
+                                      }}>
+                                        {programa.descripcion.length > 120 
+                                          ? programa.descripcion.substring(0, 120) + "..." 
+                                          : programa.descripcion}
+                                      </Text>
+                                    </div>
                                   )}
-                                </Space>
+
+                                  {/* Información de precios y clases */}
+                                  <Space direction="vertical" size={12} style={{ width: "100%", marginBottom: "16px" }}>
+                                    {(programa.precio_inscripcion !== null && programa.precio_inscripcion !== undefined) && (
+                                      <div style={{
+                                        background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                                        padding: "12px 16px",
+                                        borderRadius: "8px",
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                      }}>
+                                        <Text strong style={{ color: "white", fontSize: "13px" }}>Inscripción</Text>
+                                        <Text strong style={{ color: "white", fontSize: "16px" }}>
+                                          {formatCurrency(programa.precio_inscripcion)}
+                                        </Text>
+                                      </div>
+                                    )}
+                                    
+                                    {(programa.precio_mensualidad !== null && programa.precio_mensualidad !== undefined) && (
+                                      <div style={{
+                                        background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+                                        padding: "12px 16px",
+                                        borderRadius: "8px",
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                      }}>
+                                        <Text strong style={{ color: "white", fontSize: "13px" }}>Mensualidad</Text>
+                                        <Text strong style={{ color: "white", fontSize: "16px" }}>
+                                          {formatCurrency(programa.precio_mensualidad)}
+                                        </Text>
+                                      </div>
+                                    )}
+
+                                    {programa.total_clases && (
+                                      <div style={{
+                                        background: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
+                                        padding: "10px 16px",
+                                        borderRadius: "8px",
+                                        display: "flex",
+                                        justifyContent: "center",
+                                        alignItems: "center",
+                                        gap: "8px"
+                                      }}>
+                                        <TeamOutlined style={{ color: "#764ba2", fontSize: "16px" }} />
+                                        <Text strong style={{ color: "#764ba2", fontSize: "14px" }}>
+                                          {programa.total_clases} clases en total
+                                        </Text>
+                                      </div>
+                                    )}
+                                  </Space>
+
+                                  {/* Botones de acción */}
+                                  <Space size={8} style={{ width: "100%" }}>
+                                    <Button 
+                                      type="default"
+                                      size="middle"
+                                      onClick={() => handleCopyPrograma(programa)}
+                                      style={{
+                                        flex: 1,
+                                        borderRadius: "8px",
+                                        height: "40px",
+                                        fontWeight: 500
+                                      }}
+                                    >
+                                      Copiar info
+                                    </Button>
+                                    <Button
+                                      type="primary"
+                                      size="middle"
+                                      icon={<WhatsAppOutlined />}
+                                      onClick={() => abrirWhatsappPrograma(programa)}
+                                      style={{
+                                        flex: 1,
+                                        background: "linear-gradient(135deg, #25D366 0%, #128C7E 100%)",
+                                        border: "none",
+                                        borderRadius: "8px",
+                                        height: "40px",
+                                        fontWeight: 500,
+                                        boxShadow: "0 2px 8px rgba(37, 211, 102, 0.3)"
+                                      }}
+                                    >
+                                      WhatsApp
+                                    </Button>
+                                  </Space>
+                                </div>
                               </Card>
                             </List.Item>
                           )}
@@ -1074,7 +1273,7 @@ export default function SecretariaDashboard() {
         width={520}
         onClose={cerrarRegistroPago}
         open={pagoDrawerOpen}
-        destroyOnClose
+        destroyOnHidden
         maskClosable={!registrandoPagos}
         closable={!registrandoPagos}
         styles={drawerStyles}
@@ -1230,6 +1429,39 @@ export default function SecretariaDashboard() {
           </Space>
         </Form>
       </Drawer>
+
+      <Modal
+        title="Enviar información por WhatsApp"
+        open={whatsappOpen}
+        onCancel={() => setWhatsappOpen(false)}
+        onOk={enviarWhatsAppPrograma}
+        okText="Enviar"
+        cancelText="Cancelar"
+        destroyOnHidden
+      >
+        <Form form={whatsappForm} layout="vertical">
+          <Form.Item
+            label="Nombre"
+            name="nombre"
+            rules={[{ required: true, message: "Ingresa el nombre" }]}
+          >
+            <Input placeholder="Nombre del interesado" />
+          </Form.Item>
+          <Form.Item
+            label="Teléfono"
+            name="telefono"
+            rules={[{ required: true, message: "Ingresa el teléfono" }]}
+          >
+            <Input placeholder="WhatsApp" />
+          </Form.Item>
+          <Form.Item label="Email" name="email">
+            <Input placeholder="Opcional" />
+          </Form.Item>
+          <Form.Item label="Notas" name="notas">
+            <Input.TextArea rows={3} placeholder="Opcional" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

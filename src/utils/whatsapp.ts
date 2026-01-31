@@ -3,6 +3,83 @@
 import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
 import { supabaseBrowserClient } from "./supabase/client";
 
+const EMOJI = {
+    sparkle: "★",
+    pin: "•",
+    book: "»",
+    clock: "»",
+    money: "$",
+    people: "»",
+    calendar: "»",
+    check: "✓",
+    rocket: "➤",
+    chat: "»",
+    sparkleSmall: "•",
+};
+
+const formatearMensajePersuasivo = (mensaje: string): string => {
+    const cuerpo = (mensaje || "").trim();
+
+    if (!cuerpo) {
+        return "";
+    }
+
+    const lineas = cuerpo
+        .split("\n")
+        .map((linea) => linea.trim())
+        .filter(Boolean)
+        .map((linea) => {
+            const lower = linea.toLowerCase();
+
+            if (lower.startsWith("programa:")) {
+                return `${EMOJI.book} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("duración:") || lower.startsWith("duracion:")) {
+                return `${EMOJI.clock} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("mensualidad:") || lower.startsWith("inscripción:") || lower.startsWith("inscripcion:")) {
+                return `${EMOJI.money} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("clases:") || lower.startsWith("cupos:")) {
+                return `${EMOJI.people} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("inicio:") || lower.startsWith("fecha:") || lower.startsWith("horario:")) {
+                return `${EMOJI.calendar} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("te comparto") || lower.startsWith("hola") || lower.startsWith("soy del equipo")) {
+                return `${EMOJI.sparkleSmall} ${linea}`;
+            }
+
+            if (lower.endsWith("?") || lower.includes("¿")) {
+                return `${EMOJI.check} *${linea.toUpperCase()}*`;
+            }
+
+            return linea;
+        });
+
+    const header = `${EMOJI.sparkle} *ACADEMIA CRYSTAL* ${EMOJI.sparkle}`;
+    const titulo = `${EMOJI.pin} *INFORMACIÓN IMPORTANTE*`;
+    const separador = "====================";
+    const cta = `${EMOJI.rocket} *¡RESERVA TU CUPO HOY!*`;
+    const cierre = `${EMOJI.chat} *RESPONDE ESTE MENSAJE Y TE ASESORO*`;
+
+    return [
+        header,
+        titulo,
+        separador,
+        ...lineas,
+        "",
+        separador,
+        cta,
+        cierre,
+    ].join("\n");
+};
+
 /**
  * Abre un chat de WhatsApp con el mensaje predefinido.
  * @param telefono Número de teléfono (string o number)
@@ -21,7 +98,8 @@ export const enviarWhatsapp = (telefono: string | number, mensaje: string) => {
         phoneStr = `57${phoneStr}`;
     }
 
-    const url = `https://wa.me/${phoneStr}?text=${encodeURIComponent(mensaje)}`;
+    const mensajeFormateado = formatearMensajePersuasivo(mensaje);
+    const url = `https://wa.me/${phoneStr}?text=${encodeURIComponent(mensajeFormateado)}`;
     
     // Abrir en nueva pestaña
     window.open(url, '_blank');
