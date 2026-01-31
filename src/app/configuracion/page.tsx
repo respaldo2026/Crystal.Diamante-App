@@ -277,7 +277,7 @@ export default function ConfiguracionPage() {
           .select("id")
           .limit(1);
         
-        const primerId = configs && configs.length > 0 ? configs[0].id : null;
+        const primerId = configs && configs.length > 0 ? configs[0]?.id ?? null : null;
 
         if (isValidUUID(primerId)) {
           idParaGuardar = primerId;
