@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     siteName: "Academia Crystal Diamante",
     images: [
       {
-        url: "/og-image.svg",
+        url: "/og.png",
         width: 1200,
         height: 630,
         alt: "Academia Crystal Diamante",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Academia de Belleza Crystal Diamante",
     description: "Sistema de gestión académica",
-    images: ["/og-image.svg"],
+    images: ["/og.png"],
   },
   appleWebApp: {
     capable: true,
