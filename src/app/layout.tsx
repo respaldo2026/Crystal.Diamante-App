@@ -15,7 +15,6 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" },
       { url: "/icon.svg", type: "image/svg+xml" },
     ],
     apple: "/icon.svg",
@@ -72,7 +71,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="es">
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="apple-touch-icon" href="/icon.svg" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
