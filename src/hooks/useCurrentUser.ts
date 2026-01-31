@@ -40,11 +40,11 @@ export function useCurrentUser() {
         nombre_completo: perfil.nombre_completo,
       };
     },
-    staleTime: 0,
-    refetchInterval: 3000,
-    refetchIntervalInBackground: true,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000, // 5 minutos
+    refetchInterval: false, // No hacer refetch automático cada 3 segundos
+    refetchIntervalInBackground: false,
+    refetchOnMount: false, // No refetchear al montar
+    refetchOnWindowFocus: false, // No refetchear al cambiar de foco
     retry: 1,
   });
 
