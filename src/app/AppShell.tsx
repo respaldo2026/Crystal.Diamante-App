@@ -677,7 +677,11 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
   const normalizedRole = useMemo(() => {
     const rawRole = (user as any)?.rol ?? (user as any)?.role ?? "";
-    return typeof rawRole === "string" ? rawRole.toLowerCase() : "";
+    const normalized = typeof rawRole === "string" ? rawRole.toLowerCase() : "";
+    console.log("[AppShell] User object:", user);
+    console.log("[AppShell] Raw role:", rawRole);
+    console.log("[AppShell] Normalized role:", normalized);
+    return normalized;
   }, [user]);
 
   const isAuthRoute = useMemo(() => {
@@ -704,14 +708,19 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
   const resources = useMemo(() => {
     if (userLoading || !user) {
+      console.log("[AppShell] Resources - No user or loading, returning []");
       return [];
     }
 
+    console.log("[AppShell] Resources - Building for role:", normalizedRole);
+
     if (normalizedRole === "admin" || normalizedRole === "director") {
+      console.log("[AppShell] Returning admin/director resources");
       return allResources;
     }
 
     if (normalizedRole === "profesor") {
+      console.log("[AppShell] Returning profesor resources");
       return [
         {
           name: "mi-oficina",
@@ -725,6 +734,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     }
 
     if (normalizedRole === "estudiante") {
+      console.log("[AppShell] Returning estudiante resources");
       return [
         {
           name: "portal-estudiante",
