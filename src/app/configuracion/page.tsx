@@ -65,6 +65,31 @@ export default function ConfiguracionPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [configuracionId, setConfiguracionId] = useState<string | null>(null);
 
+  const [ticketFields, setTicketFields] = useState({
+    logo: true,
+    nombreAcademia: true,
+    ruc: true,
+    direccion: true,
+    telefono: true,
+    email: true,
+    fecha: true,
+    concepto: true,
+    monto: true,
+    nota: true,
+    pie: true,
+    titulo: true,
+  });
+
+  const previewNombreAcademia = Form.useWatch("nombre_academia", formAcademia) as string | undefined;
+  const previewRuc = Form.useWatch("ruc", formAcademia) as string | undefined;
+  const previewDireccion = Form.useWatch("direccion", formAcademia) as string | undefined;
+  const previewTelefono = Form.useWatch("telefono", formAcademia) as string | undefined;
+  const previewEmail = Form.useWatch("email", formAcademia) as string | undefined;
+  const previewLogoUrl = Form.useWatch("logo_url", formAcademia) as string | undefined;
+  const previewTicketTitulo = Form.useWatch("ticket_titulo", formAcademia) as string | undefined;
+  const previewTicketPie = Form.useWatch("ticket_pie", formAcademia) as string | undefined;
+  const previewTicketNota = Form.useWatch("ticket_nota", formAcademia) as string | undefined;
+
   // Estados para Permisos
   const [permisos, setPermisos] = useState<PermisosPorRol>({});
   const [loadingPermisos, setLoadingPermisos] = useState(false);
@@ -826,6 +851,107 @@ export default function ConfiguracionPage() {
             <Form.Item label="Mensaje adicional" name="ticket_nota">
               <TextArea rows={3} placeholder="Condiciones, notas o agradecimientos que aparecerán en el ticket" />
             </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={[16, 16]} style={{ marginTop: 8 }}>
+          <Col xs={24} lg={8}>
+            <Card size="small" title="Campos visibles">
+              <Row gutter={[8, 8]}>
+                <Col xs={24} sm={12}>
+                  <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1f2937", textTransform: "uppercase", letterSpacing: 0.5, padding: "4px 8px", background: "#f3f4f6", borderRadius: 6 }}>
+                      Encabezado
+                    </div>
+                    <Switch checked={ticketFields.logo} onChange={(value) => setTicketFields((prev) => ({ ...prev, logo: value }))} /> Logo
+                    <Switch checked={ticketFields.nombreAcademia} onChange={(value) => setTicketFields((prev) => ({ ...prev, nombreAcademia: value }))} /> Nombre academia
+                    <Switch checked={ticketFields.ruc} onChange={(value) => setTicketFields((prev) => ({ ...prev, ruc: value }))} /> RUC/NIT
+                    <Switch checked={ticketFields.direccion} onChange={(value) => setTicketFields((prev) => ({ ...prev, direccion: value }))} /> Dirección
+                    <Switch checked={ticketFields.telefono} onChange={(value) => setTicketFields((prev) => ({ ...prev, telefono: value }))} /> Teléfono
+                    <Switch checked={ticketFields.email} onChange={(value) => setTicketFields((prev) => ({ ...prev, email: value }))} /> Email
+                    <Divider style={{ margin: "6px 0" }} />
+                  </Space>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1f2937", textTransform: "uppercase", letterSpacing: 0.5, padding: "4px 8px", background: "#f3f4f6", borderRadius: 6 }}>
+                      Detalle
+                    </div>
+                    <Switch checked={ticketFields.titulo} onChange={(value) => setTicketFields((prev) => ({ ...prev, titulo: value }))} /> Título ticket
+                    <Switch checked={ticketFields.fecha} onChange={(value) => setTicketFields((prev) => ({ ...prev, fecha: value }))} /> Fecha
+                    <Switch checked={ticketFields.concepto} onChange={(value) => setTicketFields((prev) => ({ ...prev, concepto: value }))} /> Concepto
+                    <Switch checked={ticketFields.monto} onChange={(value) => setTicketFields((prev) => ({ ...prev, monto: value }))} /> Monto
+                    <Divider style={{ margin: "6px 0" }} />
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1f2937", textTransform: "uppercase", letterSpacing: 0.5, padding: "4px 8px", background: "#f3f4f6", borderRadius: 6, marginTop: 6 }}>
+                      Pie
+                    </div>
+                    <Switch checked={ticketFields.nota} onChange={(value) => setTicketFields((prev) => ({ ...prev, nota: value }))} /> Mensaje adicional
+                    <Switch checked={ticketFields.pie} onChange={(value) => setTicketFields((prev) => ({ ...prev, pie: value }))} /> Texto del pie
+                  </Space>
+                </Col>
+              </Row>
+            </Card>
+          </Col>
+          <Col xs={24} lg={16}>
+            <Card
+              size="small"
+              style={{ borderStyle: "dashed" }}
+              title="Previsualización del ticket (80mm)"
+            >
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <div style={{ width: "80mm", background: "#fff", padding: 12, border: "1px dashed #e5e7eb" }}>
+                  <div style={{ textAlign: "center", marginBottom: 12 }}>
+                    {ticketFields.logo && previewLogoUrl ? (
+                      <img src={previewLogoUrl} alt="Logo" style={{ maxHeight: 56, maxWidth: 160, objectFit: "contain" }} />
+                    ) : null}
+                    {ticketFields.nombreAcademia ? (
+                      <div style={{ fontWeight: 700, fontSize: 16, marginTop: 6 }}>
+                        {previewNombreAcademia || "Nombre de la Academia"}
+                      </div>
+                    ) : null}
+                    {ticketFields.ruc && previewRuc ? <div style={{ fontSize: 12, color: "#6b7280" }}>RUC/NIT: {previewRuc}</div> : null}
+                    {ticketFields.direccion && previewDireccion ? <div style={{ fontSize: 12, color: "#6b7280" }}>{previewDireccion}</div> : null}
+                    {ticketFields.telefono && previewTelefono ? <div style={{ fontSize: 12, color: "#6b7280" }}>Tel: {previewTelefono}</div> : null}
+                    {ticketFields.email && previewEmail ? <div style={{ fontSize: 12, color: "#6b7280" }}>{previewEmail}</div> : null}
+                  </div>
+
+                  <div style={{ borderTop: "1px dashed #e5e7eb", paddingTop: 8 }}>
+                    {ticketFields.titulo ? (
+                      <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                        {previewTicketTitulo || "Recibo de Pago"}
+                      </div>
+                    ) : null}
+                    {ticketFields.fecha ? (
+                      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+                        Fecha: {new Date().toLocaleDateString("es-CO")}
+                      </div>
+                    ) : null}
+                    {ticketFields.concepto ? (
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}>
+                        <span>Concepto</span>
+                        <span>Pago de matrícula</span>
+                      </div>
+                    ) : null}
+                    {ticketFields.monto ? (
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}>
+                        <span>Monto</span>
+                        <span>$120.000</span>
+                      </div>
+                    ) : null}
+                    {ticketFields.nota && previewTicketNota ? (
+                      <div style={{ fontSize: 12, color: "#374151", marginTop: 8 }}>
+                        {previewTicketNota}
+                      </div>
+                    ) : null}
+                    {ticketFields.pie ? (
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 10 }}>
+                        {previewTicketPie || "Gracias por tu preferencia"}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </Card>
           </Col>
         </Row>
 
