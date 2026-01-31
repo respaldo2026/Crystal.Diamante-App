@@ -165,6 +165,15 @@ const allResources = [
     },
   },
   {
+    key: "caja",
+    name: "caja",
+    list: "/caja",
+    meta: {
+      label: "Caja / POS",
+      icon: <DollarCircleOutlined />,
+    },
+  },
+  {
     key: "tesoreria",
     name: "tesoreria",
     list: "/tesoreria",

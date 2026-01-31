@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Suspense } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@refinedev/antd/dist/reset.css";
 import "@utils/suppress-warnings";
 import { AppShell } from "./AppShell";
@@ -9,6 +9,7 @@ import { LoginLanding } from "@components/auth-page/LoginLanding";
 import { AuthPage } from "@components/auth-page";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"),
   title: "Academia Crystal Diamante",
   description: "Sistema de gestión académica - Academia de Belleza Crystal Diamante",
   icons: {
@@ -19,7 +20,6 @@ export const metadata: Metadata = {
     apple: "/icon.svg",
   },
   manifest: "/manifest.webmanifest",
-  themeColor: "#ff2aa1",
   openGraph: {
     type: "website",
     title: "Academia de Belleza Crystal Diamante",
@@ -45,6 +45,10 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Crystal Diamante",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#ff2aa1",
 };
 
 const LayoutFallback = () => (

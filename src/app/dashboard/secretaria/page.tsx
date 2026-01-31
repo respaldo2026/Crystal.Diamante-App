@@ -36,6 +36,7 @@ import {
   TeamOutlined,
   CreditCardOutlined,
   InfoCircleOutlined,
+  ShoppingCartOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
@@ -743,6 +744,16 @@ export default function SecretariaDashboard() {
                     }}
                   >
                     {window.innerWidth < 768 ? "Pago" : "Registrar pago"}
+                  </Button>
+                  <Button
+                    icon={<ShoppingCartOutlined />}
+                    onClick={() => router.push("/caja")}
+                    size={window.innerWidth < 768 ? "small" : "middle"}
+                    style={{
+                      fontSize: window.innerWidth < 768 ? "12px" : "14px",
+                    }}
+                  >
+                    {window.innerWidth < 768 ? "Caja" : "Abrir caja"}
                   </Button>
                   {!loading && (
                     <Button

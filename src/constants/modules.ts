@@ -12,6 +12,7 @@ export const MODULES: ModuleDefinition[] = [
   { key: "asistencias", label: "Asistencias" },
   { key: "profesores", label: "Profesores" },
   { key: "tesoreria", label: "Tesorería/Pagos" },
+  { key: "caja", label: "Caja / POS" },
   { key: "nomina", label: "Nómina" },
   { key: "perfiles", label: "Perfiles" },
   { key: "leads", label: "Leads" },
