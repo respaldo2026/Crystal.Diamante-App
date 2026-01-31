@@ -307,6 +307,16 @@ export default function SecretariaDashboard() {
         .maybeSingle();
 
       if (!existing) {
+        console.log("[WHATSAPP] Creando lead con datos:", {
+          p_nombre: payload.nombre,
+          p_telefono: payload.telefono,
+          p_email: payload.email,
+          p_interes: payload.interes,
+          p_canal: payload.canal,
+          p_notas: payload.notas,
+          p_estado: payload.estado,
+        });
+
         const { data, error } = await supabaseBrowserClient
           .rpc("crear_lead_seguro", {
             p_nombre: payload.nombre,
@@ -319,8 +329,20 @@ export default function SecretariaDashboard() {
           })
           .maybeSingle();
 
-        if (error) throw error;
+        console.log("[WHATSAPP] Respuesta RPC:", { data, error });
+
+        if (error) {
+          console.error("[WHATSAPP] Error detallado:", {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          });
+          throw error;
+        }
         if (data) setLeads((prev) => [data, ...prev]);
+      } else {
+        console.log("[WHATSAPP] Lead ya existe, no se crea duplicado");
       }
 
       const resumen = buildProgramaResumen(programaWhatsapp);
@@ -330,9 +352,9 @@ export default function SecretariaDashboard() {
         `¿Te ayudo a reservar tu cupo?`;
       enviarWhatsapp(telefono, mensajeBase);
       setWhatsappOpen(false);
-    } catch (error) {
-      console.error("Error enviando WhatsApp", error);
-      messageApi.error("No se pudo enviar el mensaje");
+    } catch (error: any) {
+      console.error("[WHATSAPP] Error enviando WhatsApp:", error);
+      messageApi.error(error?.message || "No se pudo enviar el mensaje");
     }
   };
 
