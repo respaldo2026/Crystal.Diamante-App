@@ -1,23 +1,8 @@
-import { AuthPage } from "@components/auth-page";
-import { authProviderServer } from "@providers/auth-provider/auth-provider.server";
 import { redirect } from "next/navigation";
 
 export default async function Register() {
-  const data = await getData();
-
-  if (data.authenticated) {
-    redirect(data?.redirectTo || "/");
-  }
-
-  return <AuthPage type="register" />;
+  // Redirigir a login porque solo se pueden registrar usuarios
+  // que hayan pagado o que sean creados por directivos desde la app
+  redirect("/login");
 }
 
-async function getData() {
-  const { authenticated, redirectTo, error } = await authProviderServer.check();
-
-  return {
-    authenticated,
-    redirectTo,
-    error,
-  };
-}

@@ -6,6 +6,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { email, password, rol, user_metadata } = body;
 
+    console.log("[CREATE-USER] Request received:", { email, rol });
+
     if (!email || !password) {
       return NextResponse.json({ error: 'Email y contraseña son obligatorios' }, { status: 400 });
     }
@@ -22,6 +24,8 @@ export async function POST(request: Request) {
       }
     );
 
+    console.log("[CREATE-USER] Supabase admin client initialized");
+
     // 1. Crear usuario en Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -34,12 +38,16 @@ export async function POST(request: Request) {
     });
 
     if (authError) {
+      console.error("[CREATE-USER] Auth error:", authError);
       return NextResponse.json({ error: authError.message }, { status: 400 });
     }
 
     const userId = authData.user.id;
+    console.log("[CREATE-USER] User created with ID:", userId);
 
     // 2. Crear/actualizar el perfil público (con upsert para asegurar que exista)
+    console.log("[CREATE-USER] Upserting profile with data:", { id: userId, ...user_metadata, rol, email });
+    
     const { error: profileError } = await supabaseAdmin
       .from('perfiles')
       .upsert({
@@ -50,10 +58,12 @@ export async function POST(request: Request) {
       }, { onConflict: 'id' });
 
     if (profileError) {
-        console.error("Error actualizando perfil:", profileError);
+        console.error("[CREATE-USER] Profile error:", profileError);
         // No retornamos error 500 porque el usuario Auth ya se creó, es mejor avisar
         return NextResponse.json({ user: authData.user, warning: "Usuario creado pero hubo un error actualizando detalles del perfil." });
     }
+
+    console.log("[CREATE-USER] Profile created successfully");
 
     const { data: perfil } = await supabaseAdmin
       .from('perfiles')
@@ -61,6 +71,7 @@ export async function POST(request: Request) {
       .eq('id', userId)
       .maybeSingle();
 
+    console.log("[CREATE-USER] Profile verification:", perfil);
 
     // 3. Registrar acción en audit_logs (no bloquear si falta URL)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
@@ -80,10 +91,11 @@ export async function POST(request: Request) {
       console.warn('Audit log fallo (se continúa):', logErr);
     }
 
+    console.log("[CREATE-USER] Success");
     return NextResponse.json({ user: authData.user, perfil, message: 'Usuario creado exitosamente' });
 
   } catch (error: any) {
-    console.error("API Error:", error);
+    console.error("[CREATE-USER] Fatal error:", error);
     return NextResponse.json({ error: error.message || 'Error interno del servidor' }, { status: 500 });
   }
 }
