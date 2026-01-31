@@ -294,7 +294,6 @@ export default function CatalogoCursosPage() {
                         onClick={() => abrirShare(programa)}
                         style={{ background: "#22c55e", borderColor: "#16a34a" }}
                       >
-                        Compartir
                       </Button>
                     </Space>
                   </Card>

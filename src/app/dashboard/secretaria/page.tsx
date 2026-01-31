@@ -1057,7 +1057,7 @@ export default function SecretariaDashboard() {
                                         boxShadow: "0 2px 8px rgba(37, 211, 102, 0.3)"
                                       }}
                                     >
-                                      WhatsApp
+                                      
                                     </Button>
                                   </Space>
                                 </div>
@@ -1465,3 +1465,5 @@ export default function SecretariaDashboard() {
     </div>
   );
 }
+
+

@@ -68,11 +68,22 @@ const formatearMensajePersuasivo = (mensaje: string): string => {
     const cta = `${EMOJI.rocket} *¡RESERVA TU CUPO HOY!*`;
     const cierre = `${EMOJI.chat} *RESPONDE ESTE MENSAJE Y TE ASESORO*`;
 
+    const queIncluye = [
+        "",
+        `${EMOJI.check} *QUE INCLUYE:*`,
+        "• Certificado Fisico y Digital",
+        "• Ceremonia de Grado",
+        "• Camiseta Uniforme",
+        "• Alquiler de Toga",
+        "• Kit de Productos",
+    ];
+
     return [
         header,
         titulo,
         separador,
         ...lineas,
+        ...queIncluye,
         "",
         separador,
         cta,
@@ -177,3 +188,4 @@ export const enviarWhatsappConPlantilla = async (
         );
     }
 };
+
