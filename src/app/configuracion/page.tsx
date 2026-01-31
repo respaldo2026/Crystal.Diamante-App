@@ -234,6 +234,9 @@ export default function ConfiguracionPage() {
         } else {
           setConfiguracionId(null);
         }
+        if (data.ticket_campos && typeof data.ticket_campos === "object") {
+          setTicketFields((prev) => ({ ...prev, ...data.ticket_campos }));
+        }
         formAcademia.setFieldsValue(data);
         if (data.logo_url) {
           setLogoFileList([
@@ -330,7 +333,7 @@ export default function ConfiguracionPage() {
 
       const { error } = await supabaseBrowserClient
         .from("configuracion")
-        .upsert({ ...valuesSinId, id: idParaGuardar });
+        .upsert({ ...valuesSinId, id: idParaGuardar, ticket_campos: ticketFields });
 
       if (error) throw error;
 
