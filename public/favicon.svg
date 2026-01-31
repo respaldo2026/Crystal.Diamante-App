@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <style>
+      .crystal { fill: #d946ef; }
+      .text { fill: #fff; font-weight: bold; }
+    </style>
+  </defs>
+  <!-- Fondo -->
+  <rect width="32" height="32" class="crystal"/>
+  <!-- Diamante -->
+  <path d="M16 4 L24 16 L16 28 L8 16 Z" fill="#fff" opacity="0.9"/>
+  <!-- Reflejo -->
+  <path d="M16 4 L20 12 L16 20 L12 12 Z" fill="#f0f" opacity="0.3"/>
+</svg>
