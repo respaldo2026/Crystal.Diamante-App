@@ -184,6 +184,15 @@ const allResources = [
     },
   },
   {
+    key: "rentabilidad",
+    name: "rentabilidad",
+    list: "/rentabilidad",
+    meta: {
+      label: "Análisis de Rentabilidad",
+      icon: <CalculatorOutlined />,
+    },
+  },
+  {
     key: "configuracion",
     name: "configuracion",
     list: "/configuracion",

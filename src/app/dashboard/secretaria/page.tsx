@@ -256,60 +256,115 @@ export default function SecretariaDashboard() {
     [programas.length, cursosActivos.length, cursosProximos.length, leads.length, pagosPendientes.length]
   );
   const buildProgramaResumen = (programa: any) => {
-    const lines = [
-      `Programa: ${programa.nombre}`,
-      programa.duracion ? `Duración: ${programa.duracion}` : undefined,
-      programa.total_clases ? `Clases: ${programa.total_clases}` : undefined,
-      programa.precio_inscripcion !== null && programa.precio_inscripcion !== undefined
-        ? `Inscripción: ${formatCurrency(programa.precio_inscripcion)}`
-        : undefined,
-      programa.precio_mensualidad !== null && programa.precio_mensualidad !== undefined
-        ? `Mensualidad: ${formatCurrency(programa.precio_mensualidad)}`
-        : undefined,
-      programa.descripcion ? `Descripción: ${programa.descripcion}` : undefined,
-    ].filter(Boolean);
+    let mensaje = "";
 
-    if (programa.contenido) {
-      lines.push(`Contenido: ${programa.contenido}`);
+    // Bloque 1: Nombre del programa
+    mensaje += `✨ ${programa.nombre}\n`;
+    mensaje += `${"─".repeat(40)}\n\n`;
+
+    // Bloque 2: Duración y estructura
+    if (programa.duracion || programa.total_clases) {
+      mensaje += `📅 ESTRUCTURA DEL PROGRAMA\n`;
+      if (programa.duracion) {
+        mensaje += `• Duración: ${programa.duracion}\n`;
+      }
+      if (programa.total_clases) {
+        mensaje += `• Total de clases: ${programa.total_clases}\n`;
+      }
+      mensaje += `\n`;
     }
 
-    return lines.join("\n");
+    // Bloque 3: Temario/Contenido
+    if (programa.contenido) {
+      mensaje += `📚 QUÉ APRENDERÁS\n`;
+      mensaje += `${programa.contenido}\n`;
+      mensaje += `\nDominarás todas las técnicas necesarias para destacar en esta especialidad.\n\n`;
+    }
+
+    // Bloque 4: Kit de productos
+    mensaje += `📦 KIT DE PRODUCTOS\n`;
+    mensaje += `• Recibirás un kit completo cada mes\n`;
+    mensaje += `• Todos los materiales incluidos en tu mensualidad\n\n`;
+
+    // Bloque 5: Precios
+    if (
+      programa.precio_inscripcion !== null &&
+      programa.precio_inscripcion !== undefined &&
+      programa.precio_inscripcion > 0
+    ) {
+      mensaje += `💰 INVERSIÓN\n`;
+      if (programa.precio_inscripcion > 0) {
+        mensaje += `• Inscripción: ${formatCurrency(programa.precio_inscripcion)}\n`;
+      }
+      if (
+        programa.precio_mensualidad !== null &&
+        programa.precio_mensualidad !== undefined &&
+        programa.precio_mensualidad > 0
+      ) {
+        mensaje += `• Mensualidad: ${formatCurrency(programa.precio_mensualidad)}\n`;
+      }
+      mensaje += `\n`;
+    } else if (
+      programa.precio_mensualidad !== null &&
+      programa.precio_mensualidad !== undefined &&
+      programa.precio_mensualidad > 0
+    ) {
+      mensaje += `💰 INVERSIÓN\n`;
+      mensaje += `• Mensualidad: ${formatCurrency(programa.precio_mensualidad)}\n\n`;
+    }
+
+    // Bloque 6: Descripción adicional
+    if (programa.descripcion) {
+      mensaje += `ℹ️ DETALLES\n`;
+      mensaje += `${programa.descripcion}\n\n`;
+    }
+
+    return mensaje.trim();
   };
 
   const buildMensajeWhatsappCompleto = (programa: any, nombreCliente: string) => {
-    // Saludar con enlace a Instagram al inicio
-    let mensaje = `👋 ¡Hola ${nombreCliente}!\n\n`;
-    
-    // Agregar Instagram al inicio para que sea lo primero
-    if (configuracion?.instagram) {
-      mensaje += `📱 Síguenos en Instagram: ${configuracion.instagram}\n`;
-    }
-    
-    // Agregar Facebook
-    if (configuracion?.facebook) {
-      mensaje += `👥 Encuentra más en Facebook: ${configuracion.facebook}\n`;
-    }
-    
-    // Agregar línea en blanco para separar
+    let mensaje = "";
+
+    // BLOQUE 1: Saludo + Redes sociales
+    mensaje += `👋 ¡Hola ${nombreCliente}!\n\n`;
+
     if (configuracion?.instagram || configuracion?.facebook) {
+      mensaje += `📱 SÍGUENOS EN REDES\n`;
+      if (configuracion?.instagram) {
+        console.log("[WhatsApp] Instagram config:", configuracion.instagram);
+        mensaje += `📸 Instagram: ${configuracion.instagram}\n`;
+      }
+      if (configuracion?.facebook) {
+        mensaje += `👍 Facebook: ${configuracion.facebook}\n`;
+      }
       mensaje += `\n`;
     }
-    
-    // Presentación
-    mensaje += `Soy del equipo de ${configuracion?.nombre_academia || "Academia Crystal Diamante"}.\n`;
-    mensaje += `Te comparto información sobre nuestro programa:\n\n`;
-    
-    // Resumen del programa
+
+    // BLOQUE 2: Presentación de la academia
+    mensaje += `✨ ACADEMIA ${(configuracion?.nombre_academia || "CRYSTAL DIAMANTE").toUpperCase()}\n`;
+    mensaje += `Formamos profesionales en belleza y estética.\n\n`;
+
+    // BLOQUE 3: Contenido del programa
     const resumen = buildProgramaResumen(programa);
-    mensaje += resumen + "\n\n";
-    
-    // Llamada a acción
-    mensaje += `¿Te ayudo a reservar tu cupo?\n`;
-    mensaje += `📱 Contáctanos por aquí o llama al ${configuracion?.telefono || configuracion?.whatsapp || "teléfono de la academia"}\n\n`;
-    
-    // Instrucción para agregar a contactos
-    mensaje += `💾 Agréganos a tus contactos para ver nuestros estados`;
-    
+    if (resumen) {
+      mensaje += resumen + "\n\n";
+    }
+
+    // BLOQUE 4: Contacto y CTA
+    mensaje += `${"─".repeat(40)}\n`;
+    mensaje += `¿Deseas más información? 💬\n\n`;
+
+    if (configuracion?.telefono) {
+      mensaje += `📱 ${configuracion.telefono}\n`;
+    }
+
+    if (configuracion?.email) {
+      mensaje += `📧 ${configuracion.email}\n`;
+    }
+
+    mensaje += `\n¡Te esperamos! 🎉\n`;
+    mensaje += `💾 Agréganos a contactos para ver nuestros estados`;
+
     return mensaje;
   };
 
@@ -474,6 +529,14 @@ export default function SecretariaDashboard() {
         .maybeSingle();
 
       if (!error && data) {
+        console.log("[Secretaria] Configuración completa cargada:", {
+          nombre_academia: data.nombre_academia,
+          instagram: data.instagram,
+          facebook: data.facebook,
+          telefono: data.telefono,
+          email: data.email,
+          whatsapp: data.whatsapp,
+        });
         setConfiguracion(data as ConfiguracionAcademia);
       }
     } catch (error) {
