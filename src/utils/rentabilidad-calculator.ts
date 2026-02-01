@@ -26,6 +26,69 @@ export interface ResultadosRentabilidad {
 }
 
 /**
+ * Representa un escenario guardado de análisis de rentabilidad
+ */
+export interface EscenarioRentabilidad {
+  id: string;
+  nombre: string;
+  fechaCreacion: string;
+  // Datos de entrada
+  datos: DatosCurso;
+  // Resultados calculados
+  resultados: ResultadosRentabilidad;
+}
+
+/**
+ * Niveles de rentabilidad para indicadores visuales
+ */
+export type NivelRentabilidad = "alta" | "media" | "baja" | "perdida";
+
+/**
+ * Determina el nivel de rentabilidad basado en el margen de ganancia
+ */
+export const determinarNivelRentabilidad = (
+  margenGanancia: number,
+  esRentable: boolean
+): NivelRentabilidad => {
+  if (!esRentable) return "perdida";
+  if (margenGanancia >= 30) return "alta";
+  if (margenGanancia >= 15) return "media";
+  return "baja";
+};
+
+/**
+ * Obtiene el color asociado a un nivel de rentabilidad
+ */
+export const obtenerColorRentabilidad = (nivel: NivelRentabilidad): string => {
+  switch (nivel) {
+    case "alta":
+      return "#52c41a"; // Verde
+    case "media":
+      return "#faad14"; // Amarillo
+    case "baja":
+      return "#ff7a45"; // Naranja
+    case "perdida":
+      return "#ff4d4f"; // Rojo
+  }
+};
+
+/**
+ * Obtiene la etiqueta de texto para un nivel de rentabilidad
+ */
+export const obtenerEtiquetaRentabilidad = (nivel: NivelRentabilidad): string => {
+  switch (nivel) {
+    case "alta":
+      return "Alta";
+    case "media":
+      return "Media";
+    case "baja":
+      return "Baja";
+    case "perdida":
+      return "Pérdida";
+  }
+};
+
+/**
  * Calcula el costo mensual del profesor
  */
 export const calcularCostoMensualProfesor = (
