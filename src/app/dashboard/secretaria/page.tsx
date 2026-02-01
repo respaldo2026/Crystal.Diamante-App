@@ -120,6 +120,7 @@ type ConfiguracionAcademia = {
   ticket_pie?: string | null;
   instagram?: string | null;
   facebook?: string | null;
+  youtube?: string | null;
 };
 
 export default function SecretariaDashboard() {
