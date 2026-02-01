@@ -262,7 +262,13 @@ export default function SecretariaDashboard() {
     mensaje += `✨ ${programa.nombre}\n`;
     mensaje += `${"─".repeat(40)}\n\n`;
 
-    // Bloque 2: Duración y estructura
+    // Bloque 2: Resumen del programa (descripción)
+    if (programa.descripcion) {
+      mensaje += `📝 RESUMEN\n`;
+      mensaje += `${programa.descripcion}\n\n`;
+    }
+
+    // Bloque 3: Duración y estructura
     if (programa.duracion || programa.total_clases) {
       mensaje += `📅 ESTRUCTURA DEL PROGRAMA\n`;
       if (programa.duracion) {
@@ -274,17 +280,11 @@ export default function SecretariaDashboard() {
       mensaje += `\n`;
     }
 
-    // Bloque 3: Temario/Contenido
-    if (programa.contenido) {
-      mensaje += `📚 QUÉ APRENDERÁS\n`;
-      mensaje += `${programa.contenido}\n`;
-      mensaje += `\nDominarás todas las técnicas necesarias para destacar en esta especialidad.\n\n`;
-    }
-
     // Bloque 4: Kit de productos
-    mensaje += `📦 KIT DE PRODUCTOS\n`;
-    mensaje += `• Recibirás un kit completo cada mes\n`;
-    mensaje += `• Todos los materiales incluidos en tu mensualidad\n\n`;
+    mensaje += `📦 QUÉ INCLUYE\n`;
+    mensaje += `• Kit completo de productos cada mes\n`;
+    mensaje += `• Todos los materiales necesarios\n`;
+    mensaje += `• Certificación al finalizar\n\n`;
 
     // Bloque 5: Precios
     if (
@@ -311,12 +311,6 @@ export default function SecretariaDashboard() {
     ) {
       mensaje += `💰 INVERSIÓN\n`;
       mensaje += `• Mensualidad: ${formatCurrency(programa.precio_mensualidad)}\n\n`;
-    }
-
-    // Bloque 6: Descripción adicional
-    if (programa.descripcion) {
-      mensaje += `ℹ️ DETALLES\n`;
-      mensaje += `${programa.descripcion}\n\n`;
     }
 
     return mensaje.trim();
@@ -387,6 +381,7 @@ export default function SecretariaDashboard() {
       const { data: configFresca, error: configError } = await supabaseBrowserClient
         .from("configuracion")
         .select("*")
+        .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
@@ -396,13 +391,14 @@ export default function SecretariaDashboard() {
 
       const configParaUsar = configFresca || configuracion;
       
-      console.log("[WhatsApp] Configuración fresca obtenida:", {
-        instagram: configParaUsar?.instagram,
-        facebook: configParaUsar?.facebook,
-        telefono: configParaUsar?.telefono,
-        whatsapp: configParaUsar?.whatsapp,
-        nombre_academia: configParaUsar?.nombre_academia,
-      });
+      console.log("[WhatsApp] ===== CONFIG FRESCA PARA MENSAJE =====");
+      console.log("[WhatsApp] TODOS los campos:", configFresca);
+      console.log("[WhatsApp] Instagram:", configParaUsar?.instagram);
+      console.log("[WhatsApp] Facebook:", configParaUsar?.facebook);
+      console.log("[WhatsApp] Teléfono:", configParaUsar?.telefono);
+      console.log("[WhatsApp] WhatsApp:", configParaUsar?.whatsapp);
+      console.log("[WhatsApp] Nombre academia:", configParaUsar?.nombre_academia);
+      console.log("[WhatsApp] ==========================================");
 
       const values = await whatsappForm.validateFields();
       const telefono = normalizePhone(values.telefono);
@@ -553,19 +549,22 @@ export default function SecretariaDashboard() {
       const { data, error } = await supabaseBrowserClient
         .from("configuracion")
         .select("*")
+        .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (!error && data) {
-        console.log("[Secretaria] Configuración completa cargada:", {
-          nombre_academia: data.nombre_academia,
-          instagram: data.instagram,
-          facebook: data.facebook,
-          telefono: data.telefono,
-          email: data.email,
-          whatsapp: data.whatsapp,
-        });
+        console.log("[Secretaria] ===== CONFIGURACIÓN COMPLETA DESDE BD =====");
+        console.log("[Secretaria] TODOS LOS CAMPOS:", data);
+        console.log("[Secretaria] Instagram específico:", data.instagram);
+        console.log("[Secretaria] Facebook específico:", data.facebook);
+        console.log("[Secretaria] Teléfono específico:", data.telefono);
+        console.log("[Secretaria] WhatsApp específico:", data.whatsapp);
+        console.log("[Secretaria] Email específico:", data.email);
+        console.log("[Secretaria] ============================================");
         setConfiguracion(data as ConfiguracionAcademia);
+      } else if (error) {
+        console.error("[Secretaria] Error cargando configuración:", error);
       }
     } catch (error) {
       console.error("Error cargando la configuración de la academia", error);
