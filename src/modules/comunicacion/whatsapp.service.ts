@@ -1,11 +1,41 @@
-// Servicio de comunicación: envío de mensajes WhatsApp
-export function enviarWhatsapp(numero: string, mensaje: string) {
-  // Implementación real puede usar API externa o window.open
+/**
+ * Envía un mensaje por WhatsApp usando la API de WhatsApp Cloud
+ * IMPORTANTE: Ahora usa la API oficial desde el número configurado, no WhatsApp Web
+ */
+export async function enviarWhatsapp(numero: string, mensaje: string) {
   if (!numero) return;
-  let phoneStr = String(numero).replace(/[^\d]/g, "");
-  if (!phoneStr.startsWith("57")) {
-    phoneStr = `57${phoneStr}`;
+
+  try {
+    // Normalizar número
+    let phoneStr = String(numero).replace(/[^\d]/g, "");
+    if (!phoneStr.startsWith("57")) {
+      phoneStr = `57${phoneStr}`;
+    }
+
+    // Llamar a la API de WhatsApp Cloud (sin API key, viene del frontend)
+    const response = await fetch('/api/whatsapp/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        phone: phoneStr,
+        type: 'text',
+        message: mensaje,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      console.log('[WhatsApp] ✓ Mensaje enviado desde número API Cloud:', result.messageId);
+      return result;
+    } else {
+      console.error('[WhatsApp] ✗ Error al enviar:', result.error);
+      throw new Error(result.error);
+    }
+  } catch (error) {
+    console.error('[WhatsApp] Error crítico al enviar mensaje:', error);
+    throw error; // Propagar el error para manejo en el componente
   }
-  const url = `https://wa.me/${phoneStr}?text=${encodeURIComponent(mensaje)}`;
-  window.open(url, "_blank");
 }

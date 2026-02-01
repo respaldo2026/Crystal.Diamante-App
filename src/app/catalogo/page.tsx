@@ -230,11 +230,18 @@ Formamos profesionales en belleza y estética.
       const mensaje = procesarPlantilla(plantillaAUsar, variables);
       console.log("[Catálogo] Mensaje procesado desde plantilla:", plantillaData ? "BD" : "Por defecto");
 
-      enviarWhatsapp(telefono, mensaje);
-      setShareOpen(false);
-      form.resetFields();
-      message.success("Lead guardado y mensaje listo en WhatsApp");
+      // Enviar por WhatsApp Cloud API
+      const resultado = await enviarWhatsapp(telefono, mensaje);
+      
+      if (resultado?.success) {
+        setShareOpen(false);
+        form.resetFields();
+        message.success("Lead guardado y mensaje enviado desde tu número de WhatsApp");
+      } else {
+        message.warning("Lead guardado, pero hubo un problema al enviar el mensaje");
+      }
     } catch (err: any) {
+      console.error("[Catálogo] Error:", err);
       message.error(err?.message || "No se pudo guardar el lead");
     }
   };
