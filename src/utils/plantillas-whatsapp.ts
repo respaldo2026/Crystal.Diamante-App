@@ -43,7 +43,7 @@ export const procesarPlantilla = (plantilla: string, variables: VariablesPlantil
 /**
  * Construye la cadena de redes sociales para la plantilla
  */
-export const construirRedesSociales = (instagram?: string, facebook?: string, youtube?: string): string => {
+export const construirRedesSociales = (instagram?: string | null, facebook?: string | null, youtube?: string | null): string => {
   const redes = [];
   
   if (instagram) {
