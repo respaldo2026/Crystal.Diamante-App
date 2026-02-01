@@ -109,8 +109,8 @@ export const enviarWhatsapp = (telefono: string | number, mensaje: string) => {
         phoneStr = `57${phoneStr}`;
     }
 
-    const mensajeFormateado = formatearMensajePersuasivo(mensaje);
-    const url = `https://wa.me/${phoneStr}?text=${encodeURIComponent(mensajeFormateado)}`;
+    // Ya NO formateamos el mensaje con estrellas, enviamos tal cual viene (desde la plantilla)
+    const url = `https://wa.me/${phoneStr}?text=${encodeURIComponent(mensaje)}`;
     
     // Abrir en nueva pestaña
     window.open(url, '_blank');
