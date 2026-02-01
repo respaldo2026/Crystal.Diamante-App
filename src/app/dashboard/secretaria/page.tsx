@@ -317,9 +317,18 @@ export default function SecretariaDashboard() {
     return mensaje.trim();
   };
 
-  const buildMensajeWhatsappCompleto = (programa: any, nombreCliente: string, configActual?: ConfiguracionAcademia) => {
+  const buildMensajeWhatsappCompleto = async (programa: any, nombreCliente: string, configActual?: ConfiguracionAcademia) => {
     // Usar la configuración pasada o la del estado
     const config = configActual || configuracion;
+    
+    // Intentar cargar la plantilla desde la base de datos
+    const { data: plantillaData } = await supabaseBrowserClient
+      .from("plantillas_whatsapp")
+      .select("plantilla")
+      .eq("tipo", "programa")
+      .eq("activa", true)
+      .limit(1)
+      .maybeSingle();
     
     // Construir redes sociales
     const redesSociales = construirRedesSociales(config?.instagram, config?.facebook, config?.youtube);
@@ -372,10 +381,13 @@ Formamos profesionales en belleza y estética.
 ¡Te esperamos! 🎉
 💾 Agréganos a contactos para ver nuestros estados`;
 
+    // Usar la plantilla de BD o la por defecto
+    const plantillaAUsar = plantillaData?.plantilla || plantillaDefecto;
+
     // Procesar plantilla con las variables
-    const mensaje = procesarPlantilla(plantillaDefecto, variables);
+    const mensaje = procesarPlantilla(plantillaAUsar, variables);
     
-    console.log("[WhatsApp] Mensaje procesado desde plantilla");
+    console.log("[WhatsApp] Mensaje procesado desde plantilla:", plantillaData ? "BD" : "Por defecto");
     return mensaje;
   };
 
@@ -478,8 +490,8 @@ Formamos profesionales en belleza y estética.
         console.log("[WHATSAPP] Lead ya existe, no se crea duplicado");
       }
 
-      // Construir mensaje con la configuración fresca
-      const resumen = buildMensajeWhatsappCompleto(programaWhatsapp, values.nombre, configParaUsar as ConfiguracionAcademia);
+      // Construir mensaje con la configuración fresca (ahora es async)
+      const resumen = await buildMensajeWhatsappCompleto(programaWhatsapp, values.nombre, configParaUsar as ConfiguracionAcademia);
       console.log("[WhatsApp] Mensaje construido:", resumen.substring(0, 200) + "...");
       
       enviarWhatsapp(telefono, resumen);
