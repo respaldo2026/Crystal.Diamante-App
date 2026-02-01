@@ -47,6 +47,7 @@ import localizedFormat from "dayjs/plugin/localizedFormat";
 import { useRouter } from "next/navigation";
 import { construirNombreGrupo } from "@utils/grupos";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { procesarPlantilla, construirRedesSociales } from "@utils/plantillas-whatsapp";
 import {
   getProgramasResumen,
   getCursosSecretaria,
@@ -319,48 +320,62 @@ export default function SecretariaDashboard() {
   const buildMensajeWhatsappCompleto = (programa: any, nombreCliente: string, configActual?: ConfiguracionAcademia) => {
     // Usar la configuración pasada o la del estado
     const config = configActual || configuracion;
-    let mensaje = "";
+    
+    // Construir redes sociales
+    const redesSociales = construirRedesSociales(config?.instagram, config?.facebook, config?.youtube);
+    
+    // Variables para reemplazar en la plantilla
+    const variables = {
+      nombre: nombreCliente,
+      nombre_academia: config?.nombre_academia || "CRYSTAL DIAMANTE",
+      redes_sociales: redesSociales,
+      telefono: config?.telefono || "",
+      email: config?.email || "",
+      programa_nombre: programa.nombre || "",
+      programa_descripcion: programa.descripcion || "",
+      programa_duracion: programa.duracion || "",
+      programa_clases: programa.total_clases || "",
+      programa_inscripcion: formatCurrency(programa.precio_inscripcion) || "Consultar",
+      programa_mensualidad: formatCurrency(programa.precio_mensualidad) || "Consultar",
+    };
 
-    // BLOQUE 1: Saludo + Redes sociales
-    mensaje += `👋 ¡Hola ${nombreCliente}!\n\n`;
+    // Plantilla por defecto si no se carga desde BD
+    const plantillaDefecto = `👋 ¡Hola {nombre}!
 
-    if (config?.instagram || config?.facebook) {
-      mensaje += `📱 SÍGUENOS EN REDES\n`;
-      if (config?.instagram) {
-        console.log("[WhatsApp] Instagram config:", config.instagram);
-        mensaje += `📸 Instagram: ${config.instagram}\n`;
-      }
-      if (config?.facebook) {
-        mensaje += `👍 Facebook: ${config.facebook}\n`;
-      }
-      mensaje += `\n`;
-    }
+📱 SÍGUENOS EN REDES
+{redes_sociales}
 
-    // BLOQUE 2: Presentación de la academia
-    mensaje += `✨ ACADEMIA ${(config?.nombre_academia || "CRYSTAL DIAMANTE").toUpperCase()}\n`;
-    mensaje += `Formamos profesionales en belleza y estética.\n\n`;
+✨ ACADEMIA {nombre_academia}
+Formamos profesionales en belleza y estética.
 
-    // BLOQUE 3: Contenido del programa
-    const resumen = buildProgramaResumen(programa);
-    if (resumen) {
-      mensaje += resumen + "\n\n";
-    }
+📝 {programa_nombre}
+{programa_descripcion}
 
-    // BLOQUE 4: Contacto y CTA
-    mensaje += `${"─".repeat(40)}\n`;
-    mensaje += `¿Deseas más información? 💬\n\n`;
+📅 ESTRUCTURA DEL PROGRAMA
+• Duración: {programa_duracion}
+• Total de clases: {programa_clases}
 
-    if (config?.telefono) {
-      mensaje += `📱 ${config.telefono}\n`;
-    }
+📦 QUÉ INCLUYE
+• Kit completo de productos cada mes
+• Todos los materiales necesarios
+• Certificación al finalizar
 
-    if (config?.email) {
-      mensaje += `📧 ${config.email}\n`;
-    }
+💰 INVERSIÓN
+• Inscripción: {programa_inscripcion}
+• Mensualidad: {programa_mensualidad}
 
-    mensaje += `\n¡Te esperamos! 🎉\n`;
-    mensaje += `💾 Agréganos a contactos para ver nuestros estados`;
+¿Deseas más información? 💬
 
+📱 {telefono}
+📧 {email}
+
+¡Te esperamos! 🎉
+💾 Agréganos a contactos para ver nuestros estados`;
+
+    // Procesar plantilla con las variables
+    const mensaje = procesarPlantilla(plantillaDefecto, variables);
+    
+    console.log("[WhatsApp] Mensaje procesado desde plantilla");
     return mensaje;
   };
 
