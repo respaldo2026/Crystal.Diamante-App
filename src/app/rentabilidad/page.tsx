@@ -159,11 +159,11 @@ export default function RentabilidadPage() {
                 name="pagoPorHoraProfesor"
                 rules={[{ required: true, message: "Requerido" }]}
               >
-                <InputNumber
+                <InputNumber<number>
                   min={0}
                   style={{ width: "100%" }}
                   formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                  parser={(value) => value!.replace(/\$\s?|(,*)/g, "")}
+                  parser={(value) => Number(value!.replace(/\$\s?|(,*)/g, "")) || 0}
                   placeholder="25000"
                 />
               </Form.Item>
@@ -173,11 +173,11 @@ export default function RentabilidadPage() {
                 name="precioMensualEstudiante"
                 rules={[{ required: true, message: "Requerido" }]}
               >
-                <InputNumber
+                <InputNumber<number>
                   min={0}
                   style={{ width: "100%" }}
                   formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                  parser={(value) => value!.replace(/\$\s?|(,*)/g, "")}
+                  parser={(value) => Number(value!.replace(/\$\s?|(,*)/g, "")) || 0}
                   placeholder="200000"
                 />
               </Form.Item>
@@ -187,11 +187,11 @@ export default function RentabilidadPage() {
                 name="costoMaterialesPorEstudiante"
                 rules={[{ required: true, message: "Requerido" }]}
               >
-                <InputNumber
+                <InputNumber<number>
                   min={0}
                   style={{ width: "100%" }}
                   formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                  parser={(value) => value!.replace(/\$\s?|(,*)/g, "")}
+                  parser={(value) => Number(value!.replace(/\$\s?|(,*)/g, "")) || 0}
                   placeholder="30000"
                 />
               </Form.Item>
