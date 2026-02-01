@@ -20,6 +20,7 @@ import {
 import { WhatsAppOutlined, ShareAltOutlined, ClockCircleOutlined, BookOutlined, DollarOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { procesarPlantilla, construirRedesSociales } from "@utils/plantillas-whatsapp";
 import dayjs from "dayjs";
 
 const { Title, Text, Paragraph } = Typography;
@@ -133,12 +134,68 @@ export default function CatalogoCursosPage() {
       const { error } = await supabaseBrowserClient.from("leads").insert(payload);
       if (error) throw error;
 
+      // Cargar configuración de la academia
+      const { data: configData } = await supabaseBrowserClient
+        .from("configuracion_academia")
+        .select("*")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      console.log("[Catálogo] ===== CONFIG FRESCA PARA MENSAJE =====", configData);
+
+      // Cargar plantilla activa desde BD
+      const { data: plantillaData } = await supabaseBrowserClient
+        .from("plantillas_whatsapp")
+        .select("plantilla")
+        .eq("tipo", "programa")
+        .eq("activa", true)
+        .limit(1)
+        .maybeSingle();
+
+      console.log("[Catálogo] Plantilla desde BD:", plantillaData ? "✓ Cargada" : "✗ No encontrada");
+
+      // Plantilla por defecto si no hay en BD
+      const plantillaPorDefecto = `👋 ¡Hola {nombre}!
+
+📱 SÍGUENOS EN REDES
+{redes_sociales}
+
+✨ ACADEMIA {nombre_academia}
+Formamos profesionales en belleza y estética.
+
+📝 {programa_nombre}
+{programa_descripcion}
+
+📅 ESTRUCTURA DEL PROGRAMA
+• Duración: {programa_duracion}
+• Total de clases: {programa_clases}
+
+📦 QUÉ INCLUYE
+• Kit completo de productos cada mes
+• Todos los materiales necesarios
+• Certificación al finalizar
+
+💰 INVERSIÓN
+• Inscripción: {programa_inscripcion}
+• Mensualidad: {programa_mensualidad}
+
+¿Deseas más información? 💬
+
+📱 {telefono}
+📧 {email}
+
+¡Te esperamos! 🎉
+💾 Agréganos a contactos para ver nuestros estados`;
+
+      const plantillaAUsar = plantillaData?.plantilla || plantillaPorDefecto;
+
       const proximos = proximosPorPrograma[selectedPrograma.id] || [];
       const proximoTexto = proximos
         .slice(0, 2)
         .map((g) => {
           const fecha = g.fecha_inicio ? dayjs(g.fecha_inicio).format("DD MMM") : "Próximo";
-          return `• ${g.nombre || "Grupo"} (${fecha})`;
+          return `• ${g.nombre || "Grupo"} - ${fecha}`;
         })
         .join("\n");
 
@@ -149,14 +206,29 @@ export default function CatalogoCursosPage() {
         ? `$${Number(selectedPrograma.precio_inscripcion).toLocaleString("es-CO")}`
         : "Consultar";
 
-      const mensaje =
-        `Hola ${values.nombre}! Soy del equipo de Academia Crystal.\n` +
-        `Te comparto info de ${selectedPrograma.nombre}:\n` +
-        `${selectedPrograma.descripcion ? selectedPrograma.descripcion + "\n" : ""}` +
-        `Duración: ${selectedPrograma.duracion || "Consultar"}.\n` +
-        `Mensualidad: ${mensualidad}. Inscripción: ${inscripcion}.\n` +
-        `${proximoTexto ? `Próximos grupos:\n${proximoTexto}\n` : ""}` +
-        `¿Te ayudo a reservar tu cupo?`;
+      const redesSociales = construirRedesSociales(
+        configData?.instagram,
+        configData?.facebook,
+        configData?.youtube
+      );
+
+      const variables = {
+        nombre: values.nombre,
+        nombre_academia: configData?.nombre || "Academia Crystal",
+        redes_sociales: redesSociales,
+        telefono: configData?.telefono || "3001234567",
+        email: configData?.email || "info@crystaldiamante.com",
+        programa_nombre: selectedPrograma.nombre,
+        programa_descripcion: selectedPrograma.descripcion || "Programa diseñado para potenciar tu carrera.",
+        programa_duracion: selectedPrograma.duracion || "Consultar",
+        programa_clases: selectedPrograma.total_clases ? `${selectedPrograma.total_clases} clases` : "Consultar",
+        programa_inscripcion: inscripcion,
+        programa_mensualidad: mensualidad,
+        programa_proximos: proximoTexto || "Próximamente se anunciarán fechas"
+      };
+
+      const mensaje = procesarPlantilla(plantillaAUsar, variables);
+      console.log("[Catálogo] Mensaje procesado desde plantilla:", plantillaData ? "BD" : "Por defecto");
 
       enviarWhatsapp(telefono, mensaje);
       setShareOpen(false);
