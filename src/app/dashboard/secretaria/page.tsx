@@ -322,26 +322,28 @@ export default function SecretariaDashboard() {
     return mensaje.trim();
   };
 
-  const buildMensajeWhatsappCompleto = (programa: any, nombreCliente: string) => {
+  const buildMensajeWhatsappCompleto = (programa: any, nombreCliente: string, configActual?: ConfiguracionAcademia) => {
+    // Usar la configuración pasada o la del estado
+    const config = configActual || configuracion;
     let mensaje = "";
 
     // BLOQUE 1: Saludo + Redes sociales
     mensaje += `👋 ¡Hola ${nombreCliente}!\n\n`;
 
-    if (configuracion?.instagram || configuracion?.facebook) {
+    if (config?.instagram || config?.facebook) {
       mensaje += `📱 SÍGUENOS EN REDES\n`;
-      if (configuracion?.instagram) {
-        console.log("[WhatsApp] Instagram config:", configuracion.instagram);
-        mensaje += `📸 Instagram: ${configuracion.instagram}\n`;
+      if (config?.instagram) {
+        console.log("[WhatsApp] Instagram config:", config.instagram);
+        mensaje += `📸 Instagram: ${config.instagram}\n`;
       }
-      if (configuracion?.facebook) {
-        mensaje += `👍 Facebook: ${configuracion.facebook}\n`;
+      if (config?.facebook) {
+        mensaje += `👍 Facebook: ${config.facebook}\n`;
       }
       mensaje += `\n`;
     }
 
     // BLOQUE 2: Presentación de la academia
-    mensaje += `✨ ACADEMIA ${(configuracion?.nombre_academia || "CRYSTAL DIAMANTE").toUpperCase()}\n`;
+    mensaje += `✨ ACADEMIA ${(config?.nombre_academia || "CRYSTAL DIAMANTE").toUpperCase()}\n`;
     mensaje += `Formamos profesionales en belleza y estética.\n\n`;
 
     // BLOQUE 3: Contenido del programa
@@ -354,12 +356,12 @@ export default function SecretariaDashboard() {
     mensaje += `${"─".repeat(40)}\n`;
     mensaje += `¿Deseas más información? 💬\n\n`;
 
-    if (configuracion?.telefono) {
-      mensaje += `📱 ${configuracion.telefono}\n`;
+    if (config?.telefono) {
+      mensaje += `📱 ${config.telefono}\n`;
     }
 
-    if (configuracion?.email) {
-      mensaje += `📧 ${configuracion.email}\n`;
+    if (config?.email) {
+      mensaje += `📧 ${config.email}\n`;
     }
 
     mensaje += `\n¡Te esperamos! 🎉\n`;
@@ -370,15 +372,38 @@ export default function SecretariaDashboard() {
 
   const normalizePhone = (value?: string | null) => (value || "").replace(/\D+/g, "");
 
-  const abrirWhatsappPrograma = (programa: any) => {
+  const abrirWhatsappPrograma = async (programa: any) => {
     setProgramaWhatsapp(programa);
     whatsappForm.resetFields();
+    // Recargar configuración para asegurar que tenemos los datos más recientes
+    await cargarConfiguracion();
     setWhatsappOpen(true);
   };
 
   const enviarWhatsAppPrograma = async () => {
     if (!programaWhatsapp) return;
     try {
+      // Obtener configuración fresca directamente de la base de datos
+      const { data: configFresca, error: configError } = await supabaseBrowserClient
+        .from("configuracion")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+
+      if (configError) {
+        console.error("[WhatsApp] Error cargando configuración:", configError);
+      }
+
+      const configParaUsar = configFresca || configuracion;
+      
+      console.log("[WhatsApp] Configuración fresca obtenida:", {
+        instagram: configParaUsar?.instagram,
+        facebook: configParaUsar?.facebook,
+        telefono: configParaUsar?.telefono,
+        whatsapp: configParaUsar?.whatsapp,
+        nombre_academia: configParaUsar?.nombre_academia,
+      });
+
       const values = await whatsappForm.validateFields();
       const telefono = normalizePhone(values.telefono);
       if (!telefono) {
@@ -442,7 +467,10 @@ export default function SecretariaDashboard() {
         console.log("[WHATSAPP] Lead ya existe, no se crea duplicado");
       }
 
-      const resumen = buildMensajeWhatsappCompleto(programaWhatsapp, values.nombre);
+      // Construir mensaje con la configuración fresca
+      const resumen = buildMensajeWhatsappCompleto(programaWhatsapp, values.nombre, configParaUsar as ConfiguracionAcademia);
+      console.log("[WhatsApp] Mensaje construido:", resumen.substring(0, 200) + "...");
+      
       enviarWhatsapp(telefono, resumen);
       setWhatsappOpen(false);
     } catch (error: any) {
