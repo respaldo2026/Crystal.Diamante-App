@@ -36,25 +36,79 @@ export async function getCursosSecretaria() {
 }
 
 export async function getPagosPendientes() {
-  const { data, error } = await supabaseBrowserClient
-    .from("pagos")
-    .select(`
-      id,
-      monto,
-      fecha_vencimiento,
-      referencia,
-      estado,
-      numero_cuota,
-      periodo_pagado,
-      matricula_id,
-      estudiante_id,
-      perfiles:estudiante_id ( id, nombre_completo ),
-      matriculas:matricula_id ( id, cursos ( nombre ) )
-    `)
-    .in("estado", ["pendiente", "vencido"])
-    .order("fecha_vencimiento", { ascending: true, nullsFirst: true });
+  try {
+    const { data, error } = await supabaseBrowserClient
+      .from("pagos")
+      .select(`
+        id,
+        monto,
+        fecha_vencimiento,
+        referencia,
+        estado,
+        numero_cuota,
+        periodo_pagado,
+        matricula_id,
+        estudiante_id
+      `)
+      .in("estado", ["pendiente", "vencido"])
+      .order("fecha_vencimiento", { ascending: true, nullsFirst: true });
 
-  return { data, error };
+    if (error) {
+      console.error("Error en getPagosPendientes:", error);
+      return { data: [], error };
+    }
+
+    // Obtener datos relacionados de forma separada para evitar problemas con RLS
+    if (data && data.length > 0) {
+      const estudianteIds = [...new Set(data.map(p => p.estudiante_id).filter(Boolean))];
+      const matriculaIds = [...new Set(data.map(p => p.matricula_id).filter(Boolean))];
+
+      let estudiantesMap: Record<string, any> = {};
+      let matriculasMap: Record<string, any> = {};
+
+      // Cargar estudiantes
+      if (estudianteIds.length > 0) {
+        const { data: estudiantes } = await supabaseBrowserClient
+          .from("perfiles")
+          .select("id, nombre_completo")
+          .in("id", estudianteIds);
+
+        if (estudiantes) {
+          estudiantes.forEach(e => {
+            estudiantesMap[e.id] = e;
+          });
+        }
+      }
+
+      // Cargar matrículas
+      if (matriculaIds.length > 0) {
+        const { data: matriculas } = await supabaseBrowserClient
+          .from("matriculas")
+          .select("id, cursos ( nombre )")
+          .in("id", matriculaIds);
+
+        if (matriculas) {
+          matriculas.forEach(m => {
+            matriculasMap[m.id] = m;
+          });
+        }
+      }
+
+      // Enriquecer datos de pagos con relaciones
+      const enrichedData = data.map(pago => ({
+        ...pago,
+        perfiles: estudiantesMap[pago.estudiante_id] || null,
+        matriculas: matriculasMap[pago.matricula_id] || null,
+      }));
+
+      return { data: enrichedData, error: null };
+    }
+
+    return { data, error };
+  } catch (err) {
+    console.error("Exception en getPagosPendientes:", err);
+    return { data: [], error: err };
+  }
 }
 
 export async function getLeadsPendientes(limit = 6) {

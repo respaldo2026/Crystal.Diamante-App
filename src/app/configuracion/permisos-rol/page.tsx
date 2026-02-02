@@ -28,6 +28,7 @@ export default function PermisosRolPage() {
     { key: "matriculas", label: "Matrículas" },
     { key: "nomina", label: "Nómina" },
     { key: "tesoreria", label: "Tesorería" },
+    { key: "caja", label: "Caja / POS" },
     { key: "configuracion", label: "Configuración" },
   ], []);
 

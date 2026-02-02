@@ -72,6 +72,8 @@ export interface TicketPagoData {
     fecha: string;
     periodo?: string | null;
     numeroCuota?: number | null;
+    valorEntregado?: number | null;
+    cambio?: number | null;
   };
   curso?: {
     nombre?: string | null;
@@ -139,6 +141,18 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
           <>
             <Text style={styles.label}>Referencia:</Text>
             <Text style={styles.value}>{pago.referencia}</Text>
+          </>
+        ) : null}
+        {pago.valorEntregado ? (
+          <>
+            <Text style={styles.label}>Valor entregado:</Text>
+            <Text style={styles.value}>{formatearCOP(pago.valorEntregado)}</Text>
+          </>
+        ) : null}
+        {pago.cambio !== undefined && pago.cambio !== null ? (
+          <>
+            <Text style={styles.label}>Cambio:</Text>
+            <Text style={styles.value}>{formatearCOP(pago.cambio)}</Text>
           </>
         ) : null}
       </View>

@@ -4,18 +4,81 @@ import React from "react";
 import { Edit, useForm } from "@refinedev/antd";
 import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select } from "antd";
 import dayjs from "dayjs";
+import { useParams } from "next/navigation";
 
 export default function EditEstudiante() {
-  const { formProps, saveButtonProps, formLoading } = useForm({
+  const params = useParams();
+  const id = params?.id as string;
+
+  console.log("🟣 [COMPONENTE] EditEstudiante montado");
+  console.log("🟣 [COMPONENTE] ID desde params:", id);
+
+  const { formProps, saveButtonProps, formLoading, onFinish } = useForm({
     resource: "perfiles", // Guardamos en la tabla perfiles
+    action: "edit",
+    id,
     redirect: "list",     // Al terminar, volvemos a la lista
-    // Si falla la carga automática, esto ayuda a depurar:
-    meta: { select: "*" } 
+    // Pedirle a Supabase que retorne los datos actualizados
+    meta: { 
+      select: "*",
+      returning: true 
+    } 
   });
+
+  console.log("🟣 [COMPONENTE] useForm retornó:");
+  console.log("  - formProps:", formProps ? "OK" : "NULL");
+  console.log("  - saveButtonProps:", saveButtonProps);
+  console.log("  - formLoading:", formLoading);
+  console.log("  - onFinish:", typeof onFinish);
+
+  const handleOnFinish = async (values: any) => {
+    console.log("═══════════════════════════════════════════════");
+    console.log("🔵 [FORM] onFinish EJECUTADO");
+    console.log("═══════════════════════════════════════════════");
+    console.log("📌 ID del estudiante:", id);
+    console.log("📌 Valores del formulario (completos):", values);
+    console.log("📌 Tipo de valores:", typeof values);
+    console.log("📌 Keys de valores:", Object.keys(values));
+    
+    // Verificar que hay datos
+    if (!values || Object.keys(values).length === 0) {
+      console.error("❌ [FORM] ERROR: Formulario vacío!");
+      return;
+    }
+    
+    const datosListos = {
+      ...values,
+      fecha_nacimiento: values.fecha_nacimiento ? dayjs(values.fecha_nacimiento).format("YYYY-MM-DD") : null,
+    };
+    delete datosListos.created_at;
+    delete datosListos.updated_at;
+    delete datosListos.id;
+    
+    console.log("🟢 [FORM] Datos limpios para enviar:", datosListos);
+    console.log("🟢 [FORM] Cantidad de campos:", Object.keys(datosListos).length);
+    
+    try {
+      console.log("🟡 [FORM] Llamando a onFinish()...");
+      const result = await onFinish(datosListos);
+      console.log("✅ [FORM] onFinish retornó:", result);
+      console.log("✅ [FORM] result?.data:", result?.data);
+      
+      // Aunque Supabase no devuelva datos, el UPDATE probablemente se guardó
+      // Refine redirigirá a la lista de todas formas porque onFinish se completó
+      console.log("✅ [FORM] UPDATE completado - Redirigiendo a lista...");
+      console.log("═══════════════════════════════════════════════");
+      return result;
+    } catch (error) {
+      console.error("❌ [FORM] ERROR en onFinish:", error);
+      console.error("❌ [FORM] Error message:", (error as any)?.message);
+      console.error("═══════════════════════════════════════════════");
+      throw error;
+    }
+  };
 
   return (
     <Edit saveButtonProps={saveButtonProps} isLoading={formLoading} title="Editar Estudiante">
-    <Form {...formProps} form={formProps.form} layout="vertical">
+    <Form {...formProps} form={formProps.form} layout="vertical" onFinish={handleOnFinish}>
         
         {/* ROL OCULTO (Seguridad) */}
         <Form.Item name="rol" hidden><Input /></Form.Item>

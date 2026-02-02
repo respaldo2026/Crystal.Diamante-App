@@ -3,28 +3,140 @@
 import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
 import { supabaseBrowserClient } from "./supabase/client";
 
+const EMOJI = {
+    sparkle: "★",
+    pin: "•",
+    book: "»",
+    clock: "»",
+    money: "$",
+    people: "»",
+    calendar: "»",
+    check: "✓",
+    rocket: "➤",
+    chat: "»",
+    sparkleSmall: "•",
+};
+
+const formatearMensajePersuasivo = (mensaje: string): string => {
+    const cuerpo = (mensaje || "").trim();
+
+    if (!cuerpo) {
+        return "";
+    }
+
+    const lineas = cuerpo
+        .split("\n")
+        .map((linea) => linea.trim())
+        .filter(Boolean)
+        .map((linea) => {
+            const lower = linea.toLowerCase();
+
+            if (lower.startsWith("programa:")) {
+                return `${EMOJI.book} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("duración:") || lower.startsWith("duracion:")) {
+                return `${EMOJI.clock} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("mensualidad:") || lower.startsWith("inscripción:") || lower.startsWith("inscripcion:")) {
+                return `${EMOJI.money} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("clases:") || lower.startsWith("cupos:")) {
+                return `${EMOJI.people} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("inicio:") || lower.startsWith("fecha:") || lower.startsWith("horario:")) {
+                return `${EMOJI.calendar} *${linea.toUpperCase()}*`;
+            }
+
+            if (lower.startsWith("te comparto") || lower.startsWith("hola") || lower.startsWith("soy del equipo")) {
+                return `${EMOJI.sparkleSmall} ${linea}`;
+            }
+
+            if (lower.endsWith("?") || lower.includes("¿")) {
+                return `${EMOJI.check} *${linea.toUpperCase()}*`;
+            }
+
+            return linea;
+        });
+
+    const header = `${EMOJI.sparkle} *ACADEMIA CRYSTAL* ${EMOJI.sparkle}`;
+    const titulo = `${EMOJI.pin} *INFORMACIÓN IMPORTANTE*`;
+    const separador = "====================";
+    const cta = `${EMOJI.rocket} *¡RESERVA TU CUPO HOY!*`;
+    const cierre = `${EMOJI.chat} *RESPONDE ESTE MENSAJE Y TE ASESORO*`;
+
+    const queIncluye = [
+        "",
+        `${EMOJI.check} *QUE INCLUYE:*`,
+        "• Certificado Fisico y Digital",
+        "• Ceremonia de Grado",
+        "• Camiseta Uniforme",
+        "• Alquiler de Toga",
+        "• Kit de Productos",
+    ];
+
+    return [
+        header,
+        titulo,
+        separador,
+        ...lineas,
+        ...queIncluye,
+        "",
+        separador,
+        cta,
+        cierre,
+    ].join("\n");
+};
+
 /**
- * Abre un chat de WhatsApp con el mensaje predefinido.
+ * Envía un mensaje por WhatsApp usando la API de WhatsApp Cloud
+ * IMPORTANTE: Ahora usa la API oficial desde el número configurado, no WhatsApp Web
  * @param telefono Número de teléfono (string o number)
  * @param mensaje Texto a enviar
  */
-export const enviarWhatsapp = (telefono: string | number, mensaje: string) => {
+export const enviarWhatsapp = async (telefono: string | number, mensaje: string) => {
     if (!telefono) {
         return;
     }
 
-    // Convertir a string y limpiar caracteres no numéricos
-    let phoneStr = String(telefono).replace(/\D/g, '');
+    try {
+        // Normalizar número
+        let phoneStr = String(telefono).replace(/\D/g, '');
+        
+        // Forzar prefijo Colombia (+57) si no tiene código de país
+        if (!phoneStr.startsWith('57')) {
+            phoneStr = `57${phoneStr}`;
+        }
 
-    // Forzar prefijo Colombia (+57) para todos los enlaces
-    if (!phoneStr.startsWith('57')) {
-        phoneStr = `57${phoneStr}`;
+        // Llamar a la API de WhatsApp Cloud (sin API key, viene del frontend)
+        const response = await fetch('/api/whatsapp/send', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                phone: phoneStr,
+                type: 'text',
+                message: mensaje,
+            }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            console.log('[WhatsApp] ✓ Mensaje enviado desde número API Cloud:', result.messageId);
+            return result;
+        } else {
+            console.error('[WhatsApp] ✗ Error al enviar:', result.error);
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('[WhatsApp] Error crítico al enviar mensaje:', error);
+        throw error; // Propagar el error para que se maneje en el componente
     }
-
-    const url = `https://wa.me/${phoneStr}?text=${encodeURIComponent(mensaje)}`;
-    
-    // Abrir en nueva pestaña
-    window.open(url, '_blank');
 };
 
 /**
@@ -99,3 +211,4 @@ export const enviarWhatsappConPlantilla = async (
         );
     }
 };
+

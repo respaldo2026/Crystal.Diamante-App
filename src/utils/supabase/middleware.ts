@@ -70,10 +70,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Si YA hay usuario y trata de entrar a login, mandar al Dashboard
-  if (user && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname === '/')) {
+  // Si YA hay usuario y trata de entrar a login/registro, mandar al inicio
+  if (user && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/register'))) {
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard'; // O la ruta principal que uses
+    url.pathname = '/';
     return NextResponse.redirect(url);
   }
 

@@ -252,7 +252,18 @@ export const fetchProfessorDashboardData = async (
     return total;
   }, 0);
 
-  const valorHora = profesorInfoResult.data?.valor_hora ? Number(profesorInfoResult.data.valor_hora) : null;
+  let valorHora = profesorInfoResult.data?.valor_hora ? Number(profesorInfoResult.data.valor_hora) : null;
+  if (valorHora === null) {
+    const { data: perfilValorData, error: perfilValorError } = await supabaseBrowserClient
+      .from("perfiles")
+      .select("valor_hora")
+      .eq("id", profesorId)
+      .maybeSingle();
+
+    if (!perfilValorError && perfilValorData?.valor_hora !== null && typeof perfilValorData?.valor_hora !== "undefined") {
+      valorHora = Number(perfilValorData.valor_hora);
+    }
+  }
   const proyeccionQuincena = valorHora ? Number((valorHora * horasQuincena).toFixed(2)) : 0;
 
   const pagosNominaData = pagosNominaResult.data || [];

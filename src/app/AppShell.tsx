@@ -30,7 +30,7 @@ import {
   theme,
 } from "antd";
 import type { MenuProps } from "antd";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   DashboardOutlined,
   UserOutlined,
@@ -165,6 +165,15 @@ const allResources = [
     },
   },
   {
+    key: "caja",
+    name: "caja",
+    list: "/caja",
+    meta: {
+      label: "Caja / POS",
+      icon: <DollarCircleOutlined />,
+    },
+  },
+  {
     key: "tesoreria",
     name: "tesoreria",
     list: "/tesoreria",
@@ -172,6 +181,15 @@ const allResources = [
     meta: {
       label: "Tesorería",
       icon: <DollarCircleOutlined />,
+    },
+  },
+  {
+    key: "rentabilidad",
+    name: "rentabilidad",
+    list: "/rentabilidad",
+    meta: {
+      label: "Análisis de Rentabilidad",
+      icon: <CalculatorOutlined />,
     },
   },
   {
@@ -196,6 +214,7 @@ type CustomSiderProps = {
 };
 
 type MenuClickEvent = Parameters<NonNullable<MenuProps["onClick"]>>[0];
+
 
 const CustomSider: React.FC<CustomSiderProps> = ({
   Title: TitleFromProps,
@@ -368,7 +387,7 @@ const CustomSider: React.FC<CustomSiderProps> = ({
         onClose={() => setMobileSiderOpen(false)}
         placement={direction === "rtl" ? "right" : "left"}
         closable={false}
-        width={200}
+        width={160}
         styles={{
           body: {
             padding: 0,
@@ -667,7 +686,11 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
   const normalizedRole = useMemo(() => {
     const rawRole = (user as any)?.rol ?? (user as any)?.role ?? "";
-    return typeof rawRole === "string" ? rawRole.toLowerCase() : "";
+    const normalized = typeof rawRole === "string" ? rawRole.toLowerCase() : "";
+    console.log("[AppShell] User object:", user);
+    console.log("[AppShell] Raw role:", rawRole);
+    console.log("[AppShell] Normalized role:", normalized);
+    return normalized;
   }, [user]);
 
   const isAuthRoute = useMemo(() => {
@@ -684,16 +707,29 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
   const shouldUseLayout = !isAuthRoute && Boolean(user);
 
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (!userLoading && !user && !isAuthRoute) {
+      router.replace("/login");
+    }
+  }, [user, userLoading, isAuthRoute, router]);
+
   const resources = useMemo(() => {
     if (userLoading || !user) {
+      console.log("[AppShell] Resources - No user or loading, returning []");
       return [];
     }
 
+    console.log("[AppShell] Resources - Building for role:", normalizedRole);
+
     if (normalizedRole === "admin" || normalizedRole === "director") {
+      console.log("[AppShell] Returning admin/director resources");
       return allResources;
     }
 
     if (normalizedRole === "profesor") {
+      console.log("[AppShell] Returning profesor resources");
       return [
         {
           name: "mi-oficina",
@@ -707,6 +743,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     }
 
     if (normalizedRole === "estudiante") {
+      console.log("[AppShell] Returning estudiante resources");
       return [
         {
           name: "portal-estudiante",
@@ -716,6 +753,34 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
             icon: <BookOutlined />,
           },
         },
+      ];
+    }
+
+    if (normalizedRole === "administrativo") {
+      if (permisosLoading) {
+        return [];
+      }
+
+      const userPermisos = permisos[normalizedRole] || {};
+      const filteredResources = allResources.filter((resource) => {
+        if (!resource.key) return false;
+        if (resource.key === "dashboard") {
+          return userPermisos.dashboard === true;
+        }
+        return userPermisos[resource.key] === true;
+      });
+
+      // Agregar dashboard de secretaria al inicio
+      return [
+        {
+          name: "dashboard-secretaria",
+          list: "/dashboard/secretaria",
+          meta: {
+            label: "Dashboard",
+            icon: <DashboardOutlined />,
+          },
+        },
+        ...filteredResources.filter(r => r.key !== "dashboard"),
       ];
     }
 

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useDelete } from "@refinedev/core";
 import { obtenerDashboardProfesor } from "@modules/academico/profesores.service";
 import { ProfessorDashboardUI } from "../../../../components/profesor/ProfessorDashboardUI";
 import {
@@ -12,6 +13,9 @@ import {
   DashboardOutlined,
   BookOutlined,
   CalendarOutlined,
+  MoreOutlined,
+  EditOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import {
   Avatar,
@@ -28,6 +32,9 @@ import {
   Typography,
   Spin,
   Empty,
+  Dropdown,
+  Modal,
+  message,
 } from "antd";
 import dayjs from "dayjs";
 
@@ -36,10 +43,12 @@ const { Title, Text } = Typography;
 export default function ShowProfesorDashboard() {
   const params = useParams();
   const router = useRouter();
+  const { mutate: deleteProfesor } = useDelete();
   const idProfesor = params?.id as string;
   const [activeKey, setActiveKey] = React.useState("perfil");
   const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
+  const [deleteLoading, setDeleteLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!idProfesor) return;
@@ -70,6 +79,58 @@ export default function ShowProfesorDashboard() {
     const section = action && action !== "default" ? `?section=${encodeURIComponent(action)}` : "";
     router.push(`/cursos/show/${id}${section}`);
   };
+
+  const handleEditProfesor = () => {
+    if (idProfesor) {
+      router.push(`/profesores/edit/${idProfesor}`);
+    }
+  };
+
+  const handleDeleteProfesor = () => {
+    Modal.confirm({
+      title: "Eliminar profesor",
+      content: `¿Estás seguro de que deseas eliminar a ${perfil?.nombre_completo}? Esta acción no se puede deshacer.`,
+      okText: "Eliminar",
+      okType: "danger",
+      cancelText: "Cancelar",
+      onOk() {
+        setDeleteLoading(true);
+        deleteProfesor(
+          {
+            resource: "perfiles",
+            id: idProfesor,
+          },
+          {
+            onSuccess: () => {
+              message.success("Profesor eliminado exitosamente");
+              setDeleteLoading(false);
+              router.push("/profesores");
+            },
+            onError: (error: any) => {
+              message.error(error?.message || "Error al eliminar el profesor");
+              setDeleteLoading(false);
+            },
+          }
+        );
+      },
+    });
+  };
+
+  const menuItems = [
+    {
+      key: "edit",
+      icon: <EditOutlined />,
+      label: "Editar",
+      onClick: handleEditProfesor,
+    },
+    {
+      key: "delete",
+      icon: <DeleteOutlined />,
+      label: "Eliminar",
+      danger: true,
+      onClick: handleDeleteProfesor,
+    },
+  ];
 
   const dashboard = data
     ? {
@@ -130,6 +191,15 @@ export default function ShowProfesorDashboard() {
       <Space size="large" style={{ marginBottom: 24 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => router.push("/profesores")}>Regresar</Button>
         <Title level={3} style={{ margin: 0 }}>Ficha del profesor</Title>
+        <Dropdown menu={{ items: menuItems }} trigger={["click"]}>
+          <Button 
+            icon={<MoreOutlined />} 
+            loading={deleteLoading}
+            style={{ marginLeft: "auto" }}
+          >
+            Acciones
+          </Button>
+        </Dropdown>
       </Space>
 
       <Tabs activeKey={activeKey} onChange={setActiveKey} items={[

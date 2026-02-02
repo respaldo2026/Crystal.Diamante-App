@@ -2,9 +2,10 @@
 
 import React, { useEffect } from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Select, DatePicker, Row, Col, Divider, message, Alert, InputNumber, Spin } from "antd";
+import { Form, Input, DatePicker, Row, Col, Divider, message, InputNumber, Spin } from "antd";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 import { 
     UserOutlined, PhoneOutlined, MailOutlined, HomeOutlined, 
     IdcardOutlined, FileTextOutlined
@@ -26,7 +27,28 @@ export default function ProfesorEdit() {
         }
     });
 
-    const handleOnFinish = (values: any) => {
+    useEffect(() => {
+        if (!id) return;
+        const cargarInfoProfesor = async () => {
+            const { data, error } = await supabaseBrowserClient
+                .from("profesores_info")
+                .select("valor_hora, tipo_contrato, especialidad")
+                .eq("perfil_id", id)
+                .maybeSingle();
+
+            if (!error && data) {
+                formProps.form?.setFieldsValue({
+                    valor_hora: data.valor_hora ?? undefined,
+                    tipo_contrato: data.tipo_contrato ?? undefined,
+                    especialidad: data.especialidad ?? undefined,
+                });
+            }
+        };
+
+        cargarInfoProfesor();
+    }, [id, formProps.form]);
+
+    const handleOnFinish = async (values: any) => {
         try {
             const datosListos = {
                 ...values,
@@ -35,7 +57,29 @@ export default function ProfesorEdit() {
             // Remover campos que no deben actualizarse
             delete datosListos.created_at;
             delete datosListos.updated_at;
-            onFinish(datosListos);
+            const { tipo_contrato, especialidad } = datosListos;
+            const valorHora = datosListos.valor_hora;
+
+            if (id && (typeof valorHora !== "undefined" || typeof tipo_contrato !== "undefined" || typeof especialidad !== "undefined")) {
+                const { error: infoError } = await supabaseBrowserClient
+                    .from("profesores_info")
+                    .upsert(
+                        {
+                            perfil_id: id,
+                            valor_hora: typeof valorHora !== "undefined" ? valorHora : null,
+                            tipo_contrato: typeof tipo_contrato !== "undefined" ? (tipo_contrato || null) : null,
+                            especialidad: typeof especialidad !== "undefined" ? (especialidad || null) : null,
+                        },
+                        { onConflict: "perfil_id" },
+                    );
+                if (infoError) {
+                    throw infoError;
+                }
+            }
+            const perfilData = { ...datosListos };
+            delete perfilData.tipo_contrato;
+            delete perfilData.especialidad;
+            await onFinish(perfilData);
         } catch (err) {
             message.error("Error procesando el formulario");
         }
@@ -123,6 +167,20 @@ export default function ProfesorEdit() {
                                     return parsed ? parseInt(parsed, 10) : 0;
                                 }) as any}
                             />
+                        </Form.Item>
+                    </Col>
+                </Row>
+
+                <Divider orientation="left" style={{ borderColor: '#722ed1', color: '#722ed1' }}>📄 Datos de Contrato</Divider>
+                <Row gutter={24}>
+                    <Col span={12}>
+                        <Form.Item label="Tipo de Contrato" name="tipo_contrato">
+                            <Input placeholder="Ej: Por horas, Prestación de servicios" />
+                        </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                        <Form.Item label="Especialidad" name="especialidad">
+                            <Input placeholder="Ej: Uñas, Barbería, Maquillaje" />
                         </Form.Item>
                     </Col>
                 </Row>

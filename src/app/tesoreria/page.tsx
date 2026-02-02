@@ -273,127 +273,141 @@ export default function TesoreriaPage() {
                 />
             )}
 
-            <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
                 <Col xs={24} sm={8}>
-                    <Card variant="borderless" style={{ background: "#f6ffed", borderColor: "#b7eb8f" }}>
+                    <Card 
+                        variant="borderless" 
+                        style={{ background: "#f6ffed", borderColor: "#b7eb8f" }}
+                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
+                    >
                         <Statistic
-                            title="Ingresos filtrados"
+                            title={isMobile ? "Ingresos" : "Ingresos filtrados"}
                             value={formatoCOP(totalIngresos)}
-                            valueStyle={{ color: "#3f8600", fontSize: isMobile ? 16 : 20 }}
+                            valueStyle={{ color: "#3f8600", fontSize: isMobile ? 18 : 24 }}
                             prefix={<DollarCircleOutlined />}
                         />
                     </Card>
                 </Col>
                 <Col xs={24} sm={8}>
-                    <Card variant="borderless" style={{ background: "#fff1f0", borderColor: "#ffa39e" }}>
+                    <Card 
+                        variant="borderless" 
+                        style={{ background: "#fff1f0", borderColor: "#ffa39e" }}
+                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
+                    >
                         <Statistic
-                            title="Egresos filtrados"
+                            title={isMobile ? "Egresos" : "Egresos filtrados"}
                             value={formatoCOP(totalEgresos)}
-                            valueStyle={{ color: "#cf1322", fontSize: isMobile ? 16 : 20 }}
+                            valueStyle={{ color: "#cf1322", fontSize: isMobile ? 18 : 24 }}
                             prefix={<DollarCircleOutlined />}
                         />
                     </Card>
                 </Col>
                 <Col xs={24} sm={8}>
-                    <Card variant="borderless" style={{ background: "#e6f7ff", borderColor: "#91d5ff" }}>
+                    <Card 
+                        variant="borderless" 
+                        style={{ background: "#e6f7ff", borderColor: "#91d5ff" }}
+                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
+                    >
                         <Statistic
                             title="Saldo neto"
                             value={formatoCOP(saldoNeto)}
-                            valueStyle={{ color: saldoNeto >= 0 ? "#1890ff" : "#cf1322", fontSize: isMobile ? 16 : 20 }}
+                            valueStyle={{ color: saldoNeto >= 0 ? "#1890ff" : "#cf1322", fontSize: isMobile ? 18 : 24 }}
                             prefix={<BankOutlined />}
                         />
                     </Card>
                 </Col>
             </Row>
 
-            <Card style={{ marginBottom: 20 }} title={<Space><FilterOutlined />{isMobile ? "Filtros" : "Filtros"}</Space>}>
-                <Row gutter={[16, 16]}>
-                    <Col xs={24} md={8}>
-                        <label style={{ fontSize: 12, fontWeight: "bold" }}>Rango de fechas</label>
+            <Card 
+                style={{ marginBottom: 16 }} 
+                title={
+                    <Space>
+                        <FilterOutlined />
+                        <span>{isMobile ? "Filtros" : "Filtros de búsqueda"}</span>
+                    </Space>
+                }
+                bodyStyle={{ padding: isMobile ? 12 : 24 }}
+            >
+                <Row gutter={[12, 12]}>
+                    <Col xs={24} md={12} lg={8}>
+                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Rango de fechas</label>
                         <RangePicker
                             style={{ width: "100%" }}
                             value={filtroRango as any}
                             onChange={(value) => setFiltroRango(value as any)}
-                            size={isMobile ? "middle" : "large"}
+                            size="middle"
                         />
                     </Col>
-                    <Col xs={12} sm={6} md={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold" }}>Tipo</label>
+                    <Col xs={12} sm={6} md={6} lg={4}>
+                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Tipo</label>
                         <Select
                             allowClear
                             placeholder="Todos"
                             value={filtroTipo ?? undefined}
                             onChange={(val) => setFiltroTipo(val ?? null)}
                             style={{ width: "100%" }}
-                            size={isMobile ? "middle" : "large"}
+                            size="middle"
                             options={[
                                 { label: MOVIMIENTO_TIPO_LABEL[MOVIMIENTO_TIPO.INGRESO], value: MOVIMIENTO_TIPO.INGRESO },
                                 { label: MOVIMIENTO_TIPO_LABEL[MOVIMIENTO_TIPO.EGRESO], value: MOVIMIENTO_TIPO.EGRESO },
                             ]}
                         />
                     </Col>
-                    <Col xs={12} sm={6} md={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold" }}>Categoría</label>
+                    <Col xs={12} sm={6} md={6} lg={4}>
+                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Categoría</label>
                         <Select
                             allowClear
                             placeholder="Todas"
                             value={filtroCategoria ?? undefined}
                             onChange={(val) => setFiltroCategoria(val ?? null)}
                             style={{ width: "100%" }}
-                            size={isMobile ? "middle" : "large"}
+                            size="middle"
                             options={categoriasDisponibles.map((cat) => ({ label: cat, value: cat }))}
                         />
                     </Col>
-                    <Col xs={12} sm={6} md={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold" }}>Método</label>
+                    <Col xs={12} sm={6} md={6} lg={4}>
+                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Método</label>
                         <Select
                             allowClear
                             placeholder="Todos"
                             value={filtroMetodo ?? undefined}
                             onChange={(val) => setFiltroMetodo(val ?? null)}
                             style={{ width: "100%" }}
-                            size={isMobile ? "middle" : "large"}
+                            size="middle"
                             options={metodosDisponibles.map((met) => ({ label: met, value: met }))}
                         />
                     </Col>
-                    <Col xs={12} sm={6} md={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold" }}>Conciliación</label>
+                    <Col xs={12} sm={6} md={6} lg={4}>
+                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Conciliación</label>
                         <Select
                             allowClear
                             placeholder="Todos"
                             value={filtroConciliado ?? undefined}
                             onChange={(val) => setFiltroConciliado(val ?? null)}
                             style={{ width: "100%" }}
-                            size={isMobile ? "middle" : "large"}
+                            size="middle"
                             options={[
                                 { label: "Conciliados", value: "conciliado" },
                                 { label: "Pendientes", value: "pendiente" },
                             ]}
                         />
                     </Col>
-                    <Col xs={24} md={4} style={{ display: "flex", alignItems: "flex-end" }}>
-                        {isMobile ? (
-                            <Dropdown
-                                trigger={["click"]}
-                                menu={{
-                                    items: [
-                                        {
-                                            key: "reset-filtros",
-                                            label: "Limpiar filtros",
-                                            onClick: resetFiltros,
-                                        },
-                                    ],
-                                }}
-                            >
-                                <Button icon={<EllipsisOutlined />} style={{ width: "100%" }} size="middle">
-                                    Opciones
-                                </Button>
-                            </Dropdown>
-                        ) : (
-                            <Button onClick={resetFiltros} style={{ width: "100%" }} size="large">
-                                Limpiar filtros
-                            </Button>
-                        )}
+                    <Col xs={24} sm={12} md={12} lg={8}>
+                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Buscar</label>
+                        <Input
+                            placeholder="Buscar por concepto..."
+                            prefix={<SearchOutlined />}
+                            value={busqueda}
+                            onChange={(e) => setBusqueda(e.target.value)}
+                            allowClear
+                            size="middle"
+                        />
+                    </Col>
+                    <Col xs={12} sm={6} md={6} lg={4}>
+                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4, opacity: 0 }}>.</label>
+                        <Button onClick={resetFiltros} style={{ width: "100%" }} size="middle">
+                            {isMobile ? "Limpiar" : "Limpiar filtros"}
+                        </Button>
                     </Col>
                 </Row>
             </Card>
@@ -408,29 +422,36 @@ export default function TesoreriaPage() {
                 <Table
                     rowKey="id"
                     dataSource={movimientosFiltrados}
-                                        scroll={{ x: isMobile ? 900 : true }}
+                    scroll={{ x: isMobile ? 700 : 1000 }}
                     size={isMobile ? "small" : "middle"}
                     pagination={{ 
-                      pageSize: 15,
+                      pageSize: isMobile ? 10 : 15,
                       simple: isMobile,
-                      showSizeChanger: !isMobile 
+                      showSizeChanger: !isMobile,
+                      position: ["bottomCenter"]
                     }}
                 >
                     <Table.Column
                         title="Fecha"
                         dataIndex="fecha"
+                        width={isMobile ? 100 : 140}
                         render={(value) => (
-                            <Space>
-                                <CalendarOutlined style={{ color: "#999" }} />
-                                <span>{value ? dayjs(value).format("DD MMM YYYY") : "-"}</span>
+                            <Space size={4}>
+                                {!isMobile && <CalendarOutlined style={{ color: "#999" }} />}
+                                <span style={{ fontSize: isMobile ? 11 : 14 }}>
+                                    {value ? dayjs(value).format(isMobile ? "DD/MM/YY" : "DD MMM YYYY") : "-"}
+                                </span>
                             </Space>
                         )}
                     />
                     <Table.Column
                         title="Tipo"
                         dataIndex="tipo"
+                        width={isMobile ? 70 : 100}
                         render={(tipo: MovimientoFinanciero["tipo"]) => (
-                            <Tag color={MOVIMIENTO_TIPO_COLOR[tipo] || "default"}>{MOVIMIENTO_TIPO_LABEL[tipo] || tipo}</Tag>
+                            <Tag color={MOVIMIENTO_TIPO_COLOR[tipo] || "default"}>
+                                {isMobile ? (tipo === "ingreso" ? "+" : "-") : (MOVIMIENTO_TIPO_LABEL[tipo] || tipo)}
+                            </Tag>
                         )}
                     />
                     <Table.Column
@@ -458,10 +479,17 @@ export default function TesoreriaPage() {
                         title="Monto"
                         dataIndex="monto"
                         align="right"
+                        width={isMobile ? 90 : 140}
                         render={(monto: number, record: MovimientoFinanciero) => (
-                            <Text strong style={{ color: record.tipo === MOVIMIENTO_TIPO.INGRESO ? "#3f8600" : "#cf1322" }}>
+                            <Text 
+                                strong 
+                                style={{ 
+                                    color: record.tipo === MOVIMIENTO_TIPO.INGRESO ? "#3f8600" : "#cf1322",
+                                    fontSize: isMobile ? 11 : 14
+                                }}
+                            >
                                 {record.tipo === MOVIMIENTO_TIPO.EGRESO ? "-" : "+"}
-                                {formatoCOP(monto)}
+                                {isMobile ? `$${(monto/1000).toFixed(0)}k` : formatoCOP(monto)}
                             </Text>
                         )}
                     />
@@ -558,7 +586,7 @@ export default function TesoreriaPage() {
 
             <Drawer
                 title="Registrar movimiento"
-                width={isMobile ? "100%" : isTablet ? 380 : 420}
+                width={isMobile ? "100%" : isTablet ? 400 : 480}
                 open={drawerVisible}
                 onClose={() => {
                     if (registrando) return;
@@ -566,7 +594,7 @@ export default function TesoreriaPage() {
                 }}
                 destroyOnClose
                 placement={isMobile ? "bottom" : "right"}
-                height={isMobile ? "90%" : undefined}
+                height={isMobile ? "95%" : undefined}
                 extra={
                     <Space>
                         <Button onClick={() => setDrawerVisible(false)} disabled={registrando}>
