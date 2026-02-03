@@ -89,6 +89,24 @@ export async function POST(request: NextRequest) {
         response = await WhatsAppService.sendText(body.phone, body.message);
         break;
 
+      case "template":
+        if (!body.template || !body.templateVariables) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "El tipo 'template' requiere 'template' (nombre) y 'templateVariables' (array)",
+            } as WhatsAppSendResponse,
+            { status: 400 }
+          );
+        }
+        response = await WhatsAppService.sendTemplate(
+          body.phone,
+          body.template,
+          body.templateVariables,
+          body.templateLanguage || "es"
+        );
+        break;
+
       case "image":
         if (!body.mediaUrl) {
           return NextResponse.json(

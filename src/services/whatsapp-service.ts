@@ -303,6 +303,55 @@ export const WhatsAppService = {
   },
 
   /**
+   * Envía un mensaje usando template aprobado (recomendado para producción)
+   * 
+   * @param phone - Número de teléfono en formato internacional
+   * @param templateName - Nombre del template en Meta Business Manager
+   * @param variables - Array de valores para reemplazar {{1}}, {{2}}, etc.
+   * @param languageCode - Código de idioma (default: "es")
+   */
+  async sendTemplate(
+    phone: string,
+    templateName: string,
+    variables: string[] = [],
+    languageCode: string = "es"
+  ): Promise<WhatsAppAPIResponse> {
+    const normalizedPhone = phone.replace(/\D/g, "");
+
+    const payload = {
+      messaging_product: "whatsapp",
+      to: normalizedPhone,
+      type: "template",
+      template: {
+        name: templateName,
+        language: {
+          code: languageCode,
+        },
+        ...(variables.length > 0 && {
+          parameters: {
+            body: {
+              parameters: variables.map((value) => ({
+                type: "text",
+                text: String(value),
+              })),
+            },
+          },
+        }),
+      },
+    };
+
+    console.log(
+      `[WhatsApp] Enviando template '${templateName}' a ${normalizedPhone} con ${variables.length} variables`
+    );
+    const response = await sendToWhatsAppAPI(payload as any);
+    console.log(
+      `[WhatsApp] ✓ Template enviado. ID: ${response.messages?.[0]?.id}`
+    );
+
+    return response;
+  },
+
+  /**
    * Verifica que las credenciales estén configuradas
    */
   checkCredentials(): { valid: boolean; error?: string } {

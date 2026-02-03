@@ -354,16 +354,23 @@ export default function PagoCreate() {
             }
 
             if (estudianteSeleccionado?.telefono && (estudianteSeleccionado?.notif_whatsapp ?? true)) {
-                await enviarWhatsappConPlantilla(
-                    estudianteSeleccionado.telefono,
-                    "pago_confirmado",
-                    {
-                        nombre: estudianteSeleccionado.nombre_completo,
-                        curso: cursoRelacionado?.cursos?.nombre ?? "tu curso",
-                        monto: formatoCOP(montoNumero),
-                        periodo: periodoLegible,
-                    }
-                );
+                try {
+                  const { enviarConfirmacionPago } = await import('@/services/whatsapp-messages-module');
+                  
+                  await enviarConfirmacionPago(estudianteSeleccionado.id, {
+                    nombre: estudianteSeleccionado.nombre_completo,
+                    telefono: estudianteSeleccionado.telefono,
+                    referenciaPago: referencia || 'Pago registrado',
+                    monto: montoNumero,
+                    fechaPago: dayjs().format('DD/MM/YYYY'),
+                    concepto: cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`,
+                    nombreCurso: cursoRelacionado?.cursos?.nombre ?? 'Curso',
+                    fechaVigencia: dayjs().add(1, 'month').format('DD/MM/YYYY'),
+                    fechaProximaClase: 'Por confirmar'
+                  });
+                } catch (error) {
+                  console.error('Error enviando confirmación de pago:', error);
+                }
             }
 
             await cargarCuotasPendientes(String(cuota.matricula_id));

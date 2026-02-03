@@ -11,7 +11,11 @@
     "start": "refine start",
     "lint": "next lint",
     "refine": "refine",
-    "postinstall": "node scripts/ensure-tsconfig-build.js"
+    "postinstall": "node scripts/ensure-tsconfig-build.js",
+    "validar:config": "node scripts/validar-config-whatsapp.js",
+    "templates:crear": "node scripts/crear-templates-meta.js",
+    "templates:listar": "node scripts/listar-templates.js",
+    "templates:probar": "node scripts/probar-template-simple.js"
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.1",

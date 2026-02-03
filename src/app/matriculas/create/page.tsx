@@ -454,16 +454,28 @@ export default function MatriculaCreate() {
             setPagoInscripcionData(pagoInscripcion);
             setInscripcionCreada(true);
 
-            // Enviar WhatsApp con plantilla
+            // Enviar WhatsApp con nueva plantilla mejorada
             if (estudiante?.telefono && (estudiante?.notif_whatsapp ?? true)) {
-                await enviarWhatsappConPlantilla(
-                    estudiante.telefono,
-                    'inscripcion_academica',
-                    {
+                try {
+                    const { enviarConfirmacionInscripcion } = await import('@/services/whatsapp-messages-module');
+                    
+                    await enviarConfirmacionInscripcion(estudiante.id, {
                         nombre: estudiante.nombre_completo,
-                        curso: matricula?.cursos?.nombre ?? "Curso"
-                    }
-                );
+                        telefono: estudiante.telefono,
+                        nombreCurso: matricula?.cursos?.nombre ?? "Curso",
+                        fechaInicio: matricula?.cursos?.fecha_inicio ? 
+                            new Date(matricula.cursos.fecha_inicio).toLocaleDateString('es-CO') : 'Por confirmar',
+                        horario: matricula?.cursos?.horario || 'Por confirmar',
+                        mensualidad: matricula?.cursos?.precio_mensualidad ? 
+                            Number(matricula.cursos.precio_mensualidad) : 0,
+                        instructor: matricula?.cursos?.profesor_id ? 'Pendiente asignación' : 'Pendiente',
+                        fechaPago: pagoInscripcion?.fecha_vencimiento ? 
+                            new Date(pagoInscripcion.fecha_vencimiento).toLocaleDateString('es-CO') : 'Próximamente'
+                    });
+                } catch (error) {
+                    console.error('Error enviando WhatsApp de inscripción:', error);
+                    // No rompe el flujo si WhatsApp falla
+                }
             }
 
             // Inicializar formulario de pago
@@ -512,27 +524,30 @@ export default function MatriculaCreate() {
             if (errMat) throw errMat;
 
             message.success("✅ Pago registrado y matrícula activada");
-
-            // Enviar WhatsApp de confirmación con plantilla
+            // Enviar confirmación de pago con nueva plantilla
             if (estudianteData?.telefono && (estudianteData?.notif_whatsapp ?? true)) {
-                await enviarWhatsappConPlantilla(
-                    estudianteData.telefono,
-                    'pago_confirmado',
-                    {
+                try {
+                    const { enviarConfirmacionPago } = await import('@/services/whatsapp-messages-module');
+                    
+                    await enviarConfirmacionPago(estudianteData.id, {
                         nombre: estudianteData.nombre_completo,
-                        curso: cursoData?.nombre ?? "Curso",
-                        monto: formatoCOP(montoNumero || Number(pagoInscripcionData?.monto) || 0),
-                        periodo: "la inscripción",
-                    }
-                );
+                        telefono: estudianteData.telefono,
+                        referenciaPago: referencia || 'Contado',
+                        monto: montoNumero,
+                        fechaPago: dayjs().format('DD/MM/YYYY'),
+                        concepto: 'Inscripción',
+                        nombreCurso: cursoData?.nombre ?? 'Curso',
+                        fechaVigencia: dayjs().add(1, 'month').format('DD/MM/YYYY'),
+                        fechaProximaClase: cursoData?.fecha_inicio ? 
+                            new Date(cursoData.fecha_inicio).toLocaleDateString('es-CO') : 'Por confirmar'
+                    });
+                } catch (error) {
+                    console.error('Error enviando confirmación de pago:', error);
+                }
+            }
 
-                const identificacionLimpia = estudianteData.identificacion
-                    ? String(estudianteData.identificacion).replace(/[^0-9]/g, "")
-                    : "";
-                const usuarioPortal =
-                    estudianteData.email ?? (identificacionLimpia || estudianteData.identificacion || "tu usuario registrado");
-                const contrasenaPortal = identificacionLimpia || (estudianteData.identificacion ?? "tu número de cédula");
-
+            // Enviar bienvenida al portal
+            if (estudianteData?.telefono && (estudianteData?.notif_whatsapp !== false)) {
                 await enviarWhatsappConPlantilla(
                     estudianteData.telefono,
                     'bienvenida_portal_estudiante',
@@ -540,8 +555,8 @@ export default function MatriculaCreate() {
                         nombre: estudianteData.nombre_completo,
                         curso: cursoData?.nombre ?? "tu curso",
                         enlace_portal: PORTAL_ESTUDIANTE_URL,
-                        usuario: usuarioPortal,
-                        contrasena: contrasenaPortal,
+                        usuario: (estudianteData.email || estudianteData.identificacion) || "tu usuario registrado",
+                        contrasena: (String(estudianteData.identificacion).replace(/[^0-9]/g, "")) || "tu número de cédula",
                     },
                 );
             }

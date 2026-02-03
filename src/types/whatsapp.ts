@@ -7,7 +7,7 @@
 // TIPOS PARA ENVÍO DE MENSAJES
 // ============================================
 
-export type WhatsAppMessageType = "text" | "image" | "pdf" | "buttons";
+export type WhatsAppMessageType = "text" | "image" | "pdf" | "buttons" | "template";
 
 /**
  * Payload genérico para solicitud de envío desde Make
@@ -19,6 +19,9 @@ export interface WhatsAppSendRequest {
   mediaUrl?: string;
   caption?: string;
   buttons?: WhatsAppButton[];
+  template?: string;
+  templateVariables?: string[];
+  templateLanguage?: string;
 }
 
 /**

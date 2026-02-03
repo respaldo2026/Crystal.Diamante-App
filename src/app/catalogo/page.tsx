@@ -131,8 +131,32 @@ export default function CatalogoCursosPage() {
         notas: values.notas || `Interesado en ${selectedPrograma.nombre} (catálogo)`
       };
 
-      const { error } = await supabaseBrowserClient.from("leads").insert(payload);
+      const { data: leadData, error } = await supabaseBrowserClient.from("leads").insert(payload).select('id').single();
       if (error) throw error;
+
+      // Enviar WhatsApp de formulario interés automáticamente
+      if (selectedPrograma && leadData?.id) {
+        try {
+          const { enviarFormularioInteres } = await import('@/services/whatsapp-messages-module');
+          
+          await enviarFormularioInteres(telefono, leadData.id, {
+            nombre: values.nombre,
+            cursoInteres: selectedPrograma.nombre,
+            ciudad: 'Cali', // TODO: detectar dinámicamente si es necesario
+            beneficioPrincipal: `Formación profesional en ${selectedPrograma.nombre}`,
+            beneficio1: 'Instrucción de calidad y certificada',
+            beneficio2: 'Materiales incluidos cada mes',
+            beneficio3: 'Certificación profesional',
+            fechaInicio: 'Próximamente',
+            cupos: 5,
+            linkCatalogo: window.location.origin + '/catalogo',
+            telefonoSoporte: '+573006402575'
+          });
+        } catch (error) {
+          console.error('Error enviando WhatsApp de interés:', error);
+          // No rompe el flujo si WhatsApp falla
+        }
+      }
 
       // Cargar configuración de la academia
       const { data: configData } = await supabaseBrowserClient

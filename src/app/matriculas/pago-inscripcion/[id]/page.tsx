@@ -152,18 +152,26 @@ export default function PagoInscripcionPage() {
 
             message.success("✅ Pago registrado y matrícula activada");
 
-            // Enviar WhatsApp de confirmación
+            // Enviar confirmación de pago con nueva plantilla
             if (estudiante?.telefono && (estudiante?.notif_whatsapp ?? true)) {
-                await enviarWhatsappConPlantilla(
-                    estudiante.telefono,
-                    "pago_confirmado",
-                    {
+                try {
+                    const { enviarConfirmacionPago } = await import('@/services/whatsapp-messages-module');
+                    
+                    await enviarConfirmacionPago(estudiante.id, {
                         nombre: estudiante.nombre_completo,
-                        curso: curso?.nombre ?? "Curso",
-                        monto: formatoCOP(montoNumero),
-                        periodo: "la inscripción",
-                    }
-                );
+                        telefono: estudiante.telefono,
+                        referenciaPago: referencia || 'Contado',
+                        monto: montoNumero,
+                        fechaPago: dayjs().format('DD/MM/YYYY'),
+                        concepto: 'Inscripción',
+                        nombreCurso: curso?.nombre ?? 'Curso',
+                        fechaVigencia: dayjs().add(1, 'month').format('DD/MM/YYYY'),
+                        fechaProximaClase: curso?.fecha_inicio ? 
+                            new Date(curso.fecha_inicio).toLocaleDateString('es-CO') : 'Por confirmar'
+                    });
+                } catch (error) {
+                    console.error('Error enviando confirmación de pago:', error);
+                }
             }
 
             // Recargar datos
