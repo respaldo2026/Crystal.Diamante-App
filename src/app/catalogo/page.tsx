@@ -55,16 +55,14 @@ const gradientBg = "linear-gradient(135deg, #111827 0%, #1e1b4b 45%, #312e81 100
 
 const normalizePhone = (value: string) => {
   const cleanPhone = value.replace(/\D+/g, "");
-  // Si el número ya empieza con 57, usarlo tal cual
+  // WhatsApp Cloud espera formato E.164 sin el símbolo + (ej: 573001234567)
   if (cleanPhone.startsWith("57")) {
-    return "+" + cleanPhone;
+    return cleanPhone;
   }
-  // Si empieza con 3 (Colombia móvil), agregar +57
   if (cleanPhone.startsWith("3")) {
-    return "+57" + cleanPhone;
+    return "57" + cleanPhone;
   }
-  // En otro caso, agregar +57 asumiendo Colombia
-  return "+57" + cleanPhone;
+  return "57" + cleanPhone;
 };
 
 export default function CatalogoCursosPage() {
