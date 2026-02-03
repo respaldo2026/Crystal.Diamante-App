@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { 
   Typography, Row, Col, Card, Statistic, Button, Spin, Tag, Progress, 
-  Empty, Space, Segmented, Tooltip, Badge, Grid
+  Empty, Space, Segmented, Tooltip, Badge, Grid, Skeleton
 } from "antd";
 import {
   DollarCircleOutlined, TeamOutlined, BookOutlined, RiseOutlined,
@@ -329,34 +329,14 @@ export default function DashboardPage() {
     };
   }, [cargarDashboard, normalizedRole, userLoading]);
 
-  if (userLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '60vh',
-        background: '#f0f2f5'
-      }}>
-        <Spin size="large" tip="Cargando dashboard..." />
-      </div>
-    );
-  }
-
   if (user && !isAdminRole) {
     return null;
   }
 
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '60vh',
-        background: '#f0f2f5'
-      }}>
-        <Spin size="large" tip="Cargando indicadores..." />
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 10 }} />
       </div>
     );
   }
