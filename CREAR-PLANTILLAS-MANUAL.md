@@ -181,6 +181,47 @@ Te contactaremos pronto.
 
 ---
 
+### PLANTILLA 7: formulario_interes_v3 (con botones)
+
+**Tipo:** MARKETING (Promocional)  
+**Idioma:** Spanish
+
+**Nombre de la plantilla:**
+```
+formulario_interes_v3
+```
+
+**Contenido del cuerpo del mensaje:**
+```
+Hola {{1}},
+
+Gracias por tu interes en {{2}}.
+
+Inicio: {{3}}
+Duracion: {{4}}
+Modalidad: {{5}}
+
+Si respondes, te enviamos el detalle de horarios y costos.
+```
+
+**Variables esperadas:**
+1. Nombre persona
+2. Nombre curso
+3. Fecha inicio o "Por confirmar"
+4. Duracion (ej. "4 meses")
+5. Modalidad (ej. "Presencial Cali" o "Virtual")
+
+**Botones:**
+- Quick reply: "Quiero mas info"
+- CTA URL (opcional, cuando tengas dominio listo): "Ver programa" -> https://tudominio.com/programas
+
+Notas Meta:
+- Texto del boton coincide con el cuerpo.
+- URL con dominio propio, sin acortadores.
+- Sin emojis ni claims agresivos.
+
+---
+
 ## ✅ Pasos para Crear Cada Plantilla
 
 ### Paso 1: Haz clic en "Crear plantilla"

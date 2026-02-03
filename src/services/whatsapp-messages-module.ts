@@ -384,12 +384,14 @@ export async function enviarFormularioInteres(
   datos: {
     nombre: string;
     cursoInteres: string;
+    fechaInicio: string;
+    duracion?: string;
+    modalidad?: string;
     ciudad?: string;
     beneficioPrincipal?: string;
     beneficio1?: string;
     beneficio2?: string;
     beneficio3?: string;
-    fechaInicio: string;
     cupos?: number;
     linkCatalogo?: string;
     telefonoSoporte?: string;
@@ -397,14 +399,40 @@ export async function enviarFormularioInteres(
 ): Promise<ResultadoEnvio> {
   console.log(`[WhatsApp] Enviando formulario interés a lead ${leadId}`);
 
+  const puedeUsarV3 = Boolean(datos.duracion || datos.modalidad);
+
+  const variablesV2 = {
+    nombre: datos.nombre,
+    cursoInteres: datos.cursoInteres,
+    fechaInicio: datos.fechaInicio,
+  };
+
+  const variablesV3 = {
+    nombre: datos.nombre,
+    cursoInteres: datos.cursoInteres,
+    fechaInicio: datos.fechaInicio,
+    duracion: datos.duracion || 'Por confirmar',
+    modalidad: datos.modalidad || 'Por confirmar',
+  };
+
+  if (puedeUsarV3) {
+    const intentoV3 = await enviarMensajeConPlantilla(
+      telefono,
+      'formulario_interes_v3',
+      variablesV3,
+      undefined,
+      { tipo_evento: 'lead_interes', lead_id: leadId }
+    );
+
+    if (intentoV3.exito) return intentoV3;
+
+    console.warn('[WhatsApp] Fallback a formulario_interes_v2 tras fallo en v3:', intentoV3.error);
+  }
+
   return enviarMensajeConPlantilla(
     telefono,
     'formulario_interes_v2',
-    {
-      nombre: datos.nombre,
-      cursoInteres: datos.cursoInteres,
-      fechaInicio: datos.fechaInicio,
-    },
+    variablesV2,
     undefined,
     { tipo_evento: 'lead_interes', lead_id: leadId }
   );

@@ -20,7 +20,6 @@ import {
 import { WhatsAppOutlined, ShareAltOutlined, ClockCircleOutlined, BookOutlined, DollarOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
-import { procesarPlantilla, construirRedesSociales } from "@utils/plantillas-whatsapp";
 import dayjs from "dayjs";
 
 const { Title, Text, Paragraph } = Typography;
@@ -146,30 +145,6 @@ export default function CatalogoCursosPage() {
       const { data: leadData, error } = await supabaseBrowserClient.from("leads").insert(payload).select('id').single();
       if (error) throw error;
 
-      // Enviar WhatsApp de formulario interés automáticamente
-      if (selectedPrograma && leadData?.id) {
-        try {
-          const { enviarFormularioInteres } = await import('@/services/whatsapp-messages-module');
-          
-          await enviarFormularioInteres(telefono, leadData.id, {
-            nombre: values.nombre,
-            cursoInteres: selectedPrograma.nombre,
-            ciudad: 'Cali', // TODO: detectar dinámicamente si es necesario
-            beneficioPrincipal: `Formación profesional en ${selectedPrograma.nombre}`,
-            beneficio1: 'Instrucción de calidad y certificada',
-            beneficio2: 'Materiales incluidos cada mes',
-            beneficio3: 'Certificación profesional',
-            fechaInicio: 'Próximamente',
-            cupos: 5,
-            linkCatalogo: window.location.origin + '/catalogo',
-            telefonoSoporte: '+573006402575'
-          });
-        } catch (error) {
-          console.error('Error enviando WhatsApp de interés:', error);
-          // No rompe el flujo si WhatsApp falla
-        }
-      }
-
       // Cargar configuración de la academia
       const { data: configData } = await supabaseBrowserClient
         .from("configuracion_academia")
@@ -180,58 +155,12 @@ export default function CatalogoCursosPage() {
 
       console.log("[Catálogo] ===== CONFIG FRESCA PARA MENSAJE =====", configData);
 
-      // Cargar plantilla activa desde BD
-      const { data: plantillaData } = await supabaseBrowserClient
-        .from("plantillas_whatsapp")
-        .select("plantilla")
-        .eq("tipo", "programa")
-        .eq("activa", true)
-        .limit(1)
-        .maybeSingle();
-
-      console.log("[Catálogo] Plantilla desde BD:", plantillaData ? "✓ Cargada" : "✗ No encontrada");
-
-      // Plantilla por defecto si no hay en BD
-      const plantillaPorDefecto = `👋 ¡Hola {nombre}!
-
-📱 SÍGUENOS EN REDES
-{redes_sociales}
-
-✨ ACADEMIA {nombre_academia}
-Formamos profesionales en belleza y estética.
-
-📝 {programa_nombre}
-{programa_descripcion}
-
-📅 ESTRUCTURA DEL PROGRAMA
-• Duración: {programa_duracion}
-• Total de clases: {programa_clases}
-
-📦 QUÉ INCLUYE
-• Kit completo de productos cada mes
-• Todos los materiales necesarios
-• Certificación al finalizar
-
-💰 INVERSIÓN
-• Inscripción: {programa_inscripcion}
-• Mensualidad: {programa_mensualidad}
-
-¿Deseas más información? 💬
-
-📱 {telefono}
-📧 {email}
-
-¡Te esperamos! 🎉
-💾 Agréganos a contactos para ver nuestros estados`;
-
-      const plantillaAUsar = plantillaData?.plantilla || plantillaPorDefecto;
-
       const proximos = proximosPorPrograma[selectedPrograma.id] || [];
       const proximoTexto = proximos
         .slice(0, 2)
         .map((g) => {
-          const fecha = g.fecha_inicio ? dayjs(g.fecha_inicio).format("DD MMM") : "Próximo";
-          return `• ${g.nombre || "Grupo"} - ${fecha}`;
+          const fecha = g.fecha_inicio ? dayjs(g.fecha_inicio).format("DD MMM") : "Próximamente";
+          return `${g.nombre || "Grupo"} - ${fecha}`;
         })
         .join("\n");
 
@@ -242,32 +171,39 @@ Formamos profesionales en belleza y estética.
         ? `$${Number(selectedPrograma.precio_inscripcion).toLocaleString("es-CO")}`
         : "Consultar";
 
-      const redesSociales = construirRedesSociales(
-        configData?.instagram,
-        configData?.facebook,
-        configData?.youtube
-      );
+      const duracion = selectedPrograma.duracion || "Por confirmar";
+      const modalidad = (selectedPrograma as any).modalidad || "Por confirmar";
 
-      const variables = {
-        nombre: values.nombre,
-        nombre_academia: configData?.nombre || "Academia Crystal",
-        redes_sociales: redesSociales,
-        telefono: configData?.telefono || "3001234567",
-        email: configData?.email || "info@crystaldiamante.com",
-        programa_nombre: selectedPrograma.nombre,
-        programa_descripcion: selectedPrograma.descripcion || "Programa diseñado para potenciar tu carrera.",
-        programa_duracion: selectedPrograma.duracion || "Consultar",
-        programa_clases: selectedPrograma.total_clases ? `${selectedPrograma.total_clases} clases` : "Consultar",
-        programa_inscripcion: inscripcion,
-        programa_mensualidad: mensualidad,
-        programa_proximos: proximoTexto || "Próximamente se anunciarán fechas"
-      };
+      // Enviar plantilla aprobada (cumple políticas Meta)
+      try {
+        const { enviarFormularioInteres } = await import('@/services/whatsapp-messages-module');
+        await enviarFormularioInteres(telefono, leadData.id, {
+          nombre: values.nombre,
+          cursoInteres: selectedPrograma.nombre,
+          fechaInicio: proximoTexto || 'Fecha por confirmar',
+          duracion,
+          modalidad,
+        });
+      } catch (error) {
+        console.error('[Catálogo] Error enviando plantilla:', error);
+      }
 
-      const mensaje = procesarPlantilla(plantillaAUsar, variables);
-      console.log("[Catálogo] Mensaje procesado desde plantilla:", plantillaData ? "BD" : "Por defecto");
+      // Mensaje breve con datos del curso (sin emojis, acorde a políticas)
+      const mensajeBreve = [
+        `Hola ${values.nombre},`,
+        `Gracias por tu interés en ${selectedPrograma.nombre}.`,
+        duracion ? `Duración: ${duracion}` : undefined,
+        selectedPrograma.total_clases ? `Clases: ${selectedPrograma.total_clases}` : undefined,
+        `Inscripción: ${inscripcion}`,
+        `Mensualidad: ${mensualidad}`,
+        proximoTexto ? `Próximas fechas:\n${proximoTexto}` : 'Próximas fechas: por confirmar',
+        `Contacto: ${configData?.telefono || '3205617714'}`,
+        `Email: ${configData?.email || 'info@crystaldiamante.com'}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
 
-      // Enviar por WhatsApp Cloud API
-      const resultado = await enviarWhatsapp(telefono, mensaje);
+      const resultado = await enviarWhatsapp(telefono, mensajeBreve);
       
       if (resultado?.success) {
         setShareOpen(false);
