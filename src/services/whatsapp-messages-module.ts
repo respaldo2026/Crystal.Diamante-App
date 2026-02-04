@@ -122,7 +122,7 @@ async function enviarPorWhatsAppAPI(
         type: 'template',
         template: templateName,
         templateVariables: variables,
-        templateLanguage: 'es',
+        templateLanguage: 'es_CO', // Código correcto para Spanish (COL)
       }),
     });
 
@@ -154,6 +154,13 @@ async function guardarLog(
   datos: Omit<MensajesRow, 'id' | 'creado_en' | 'actualizado_en'>
 ): Promise<string | null> {
   try {
+    console.log('[WhatsApp] Guardando log en BD con datos:', {
+      telefono: datos.telefono,
+      tipo: datos.tipo,
+      estado: datos.estado,
+      message_id: datos.message_id,
+    });
+
     const { data, error } = await supabaseBrowserClient
       .from('whatsapp_mensajes')
       .insert([datos])
@@ -161,13 +168,21 @@ async function guardarLog(
       .single();
 
     if (error) {
-      console.error('[WhatsApp] Error guardar log:', error);
+      console.error('[WhatsApp] Error guardar log en BD:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+      });
       return null;
     }
 
+    console.log('[WhatsApp] ✓ Log guardado exitosamente:', data.id);
     return data.id;
   } catch (error) {
-    console.error('[WhatsApp] Error crítico guardar log:', error);
+    console.error('[WhatsApp] Error crítico guardar log:', {
+      message: error instanceof Error ? error.message : 'Desconocido',
+      error,
+    });
     return null;
   }
 }
@@ -187,6 +202,12 @@ async function enviarMensajeConPlantilla(
     // Los templates de Meta requieren array de strings en orden correcto
     const variablesArray = Object.values(variables).map(v => String(v || ''));
 
+    console.log(`[WhatsApp] Preparando template ${nombrePlantilla}:`, {
+      telefono,
+      variables: variablesArray,
+      cantidadVariables: variablesArray.length,
+    });
+
     // 2. Enviar por WhatsApp API usando template
     const resultadoEnvio = await enviarPorWhatsAppAPI(
       telefono,
@@ -194,10 +215,12 @@ async function enviarMensajeConPlantilla(
       variablesArray
     );
 
+    console.log(`[WhatsApp] Resultado envío template:`, resultadoEnvio);
+
     // 3. Construir mensaje de texto para logging
     const mensajeTexto = `Template: ${nombrePlantilla} | Variables: ${JSON.stringify(variables)}`;
 
-    // 4. Guardar log
+    // 4. Guardar log (solo campos requeridos y seguros)
     const logId = await guardarLog({
       usuario_id: usuarioId || null,
       telefono,
@@ -206,9 +229,15 @@ async function enviarMensajeConPlantilla(
       mensaje_texto: mensajeTexto,
       estado: resultadoEnvio.exito ? 'enviado' : 'fallido',
       message_id: resultadoEnvio.messageId || null,
-      metadatos: metadatos || null,
+      metadatos: {
+        ...(metadatos || {}),
+        template_version: nombrePlantilla.includes('v3') ? 'v3' : 'v2',
+        variables_count: Object.keys(variables).length,
+      },
       respuesta_esperada: false,
     });
+
+    console.log(`[WhatsApp] Log guardado con ID:`, logId);
 
     return {
       exito: resultadoEnvio.exito,
@@ -395,26 +424,47 @@ export async function enviarFormularioInteres(
     cupos?: number;
     linkCatalogo?: string;
     telefonoSoporte?: string;
+    // Nuevos campos opcionales del programa
+    totalClases?: string | number;
+    precioInscripcion?: string | number;
+    precioMensualidad?: string | number;
+    horario?: string;
   }
 ): Promise<ResultadoEnvio> {
-  console.log(`[WhatsApp] Enviando formulario interés (v3 con botones) a lead ${leadId}`);
+  console.log(`[WhatsApp] Enviando formulario interés (v4 con botones) a lead ${leadId}`);
 
-  // Usar plantilla v3 con botones interactivos para primer contacto
-  const variablesV3 = {
-    nombre: datos.nombre,
-    cursoInteres: datos.cursoInteres,
-    fechaInicio: datos.fechaInicio,
-    duracion: datos.duracion || 'Por confirmar',
-    modalidad: datos.modalidad || 'Por confirmar',
+  // Variables v4 con información completa del programa y botones
+  const variablesV4: VariablesPlantilla = {
+    '1': datos.nombre,                                    // {{1}} - Nombre
+    '2': datos.cursoInteres,                              // {{2}} - Curso
+    '3': datos.fechaInicio,                               // {{3}} - Fecha inicio
+    '4': datos.duracion || 'Por confirmar',               // {{4}} - Duración
+    '5': datos.totalClases || 'Por confirmar',            // {{5}} - Total de clases
+    '6': datos.precioInscripcion || 'Consultar',          // {{6}} - Precio inscripción
   };
 
-  return enviarMensajeConPlantilla(
+  console.log('[WhatsApp] Variables v4:', variablesV4);
+
+  const resultado = await enviarMensajeConPlantilla(
     telefono,
-    'formulario_interes_v3',
-    variablesV3,
+    'formulario_interes_v4',
+    variablesV4,
     undefined,
-    { tipo_evento: 'lead_interes', lead_id: leadId }
+    { 
+      tipo_evento: 'lead_interes', 
+      lead_id: leadId,
+      plantilla_version: 'v4_con_botones',
+      // Guardar info adicional en metadatos
+      duracion: datos.duracion,
+      modalidad: datos.modalidad,
+      total_clases: datos.totalClases,
+      precio_inscripcion: datos.precioInscripcion,
+      precio_mensualidad: datos.precioMensualidad,
+      horario: datos.horario,
+    }
   );
+
+  return resultado;
 }
 
 /**
@@ -609,3 +659,9 @@ export async function obtenerEstadisticaMensajes(
     return [];
   }
 }
+
+/**
+ * Envía un mensaje personalizado a múltiples números (uso proactivo)
+ * Solo disponible para admin, director y secretaria
+ */
+

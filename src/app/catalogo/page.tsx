@@ -170,43 +170,23 @@ export default function CatalogoCursosPage() {
         : "Consultar";
 
       const duracion = selectedPrograma.duracion || "Por confirmar";
-      const modalidad = (selectedPrograma as any).modalidad || "Por confirmar";
 
-      // Enviar plantilla aprobada (cumple políticas Meta)
-      try {
-        const { enviarFormularioInteres } = await import('@/services/whatsapp-messages-module');
-        await enviarFormularioInteres(telefono, leadData.id, {
-          nombre: values.nombre,
-          cursoInteres: selectedPrograma.nombre,
-          fechaInicio: proximoTexto || 'Fecha por confirmar',
-          duracion,
-          modalidad,
-        });
-      } catch (error) {
-        console.error('[Catálogo] Error enviando plantilla:', error);
-      }
+      // Enviar plantilla v4 con datos del programa y botones
+      const { enviarFormularioInteres } = await import('@/services/whatsapp-messages-module');
+      const resultado = await enviarFormularioInteres(telefono, leadData.id, {
+        nombre: values.nombre,
+        cursoInteres: selectedPrograma.nombre,
+        fechaInicio: proximoTexto || 'Fecha por confirmar',
+        duracion,
+        totalClases: selectedPrograma.total_clases ? `${selectedPrograma.total_clases} clases` : undefined,
+        precioInscripcion: inscripcion,
+        precioMensualidad: mensualidad,
+      });
 
-      // Mensaje breve con datos del curso (sin emojis, acorde a políticas)
-      const mensajeBreve = [
-        `Hola ${values.nombre},`,
-        `Gracias por tu interés en ${selectedPrograma.nombre}.`,
-        duracion ? `Duración: ${duracion}` : undefined,
-        selectedPrograma.total_clases ? `Clases: ${selectedPrograma.total_clases}` : undefined,
-        `Inscripción: ${inscripcion}`,
-        `Mensualidad: ${mensualidad}`,
-        proximoTexto ? `Próximas fechas:\n${proximoTexto}` : 'Próximas fechas: por confirmar',
-        `Contacto: ${configData?.telefono || '3205617714'}`,
-        `Email: ${configData?.email || 'info@crystaldiamante.com'}`,
-      ]
-        .filter(Boolean)
-        .join('\n');
-
-      const resultado = await enviarWhatsapp(telefono, mensajeBreve);
-      
-      if (resultado?.success) {
+      if (resultado?.exito) {
         setShareOpen(false);
         form.resetFields();
-        message.success("Lead guardado y mensaje enviado desde tu número de WhatsApp");
+        message.success("Lead guardado y mensaje enviado por WhatsApp");
       } else {
         message.warning("Lead guardado, pero hubo un problema al enviar el mensaje");
       }

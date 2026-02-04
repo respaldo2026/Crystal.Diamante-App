@@ -75,6 +75,8 @@ export async function POST(request: NextRequest) {
     // 5. Ejecutar envío según el tipo
     let response;
 
+    console.log(`[WhatsApp API] Procesando tipo: ${body.type}`, { phone: body.phone, template: body.template });
+
     switch (body.type) {
       case "text":
         if (!body.message) {
@@ -99,12 +101,14 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
+        console.log(`[WhatsApp API] Enviando template '${body.template}' con ${body.templateVariables.length} variables`);
         response = await WhatsAppService.sendTemplate(
           body.phone,
           body.template,
           body.templateVariables,
           body.templateLanguage || "es"
         );
+        console.log(`[WhatsApp API] Respuesta template:`, response);
         break;
 
       case "image":
@@ -176,7 +180,11 @@ export async function POST(request: NextRequest) {
     } as WhatsAppSendResponse);
 
   } catch (error) {
-    console.error("[WhatsApp API] Error:", error);
+    console.error("[WhatsApp API] Error completo:", {
+      message: error instanceof Error ? error.message : "Error desconocido",
+      stack: error instanceof Error ? error.stack : undefined,
+      error,
+    });
 
     return NextResponse.json(
       {

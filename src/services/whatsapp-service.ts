@@ -65,6 +65,8 @@ async function sendToWhatsAppAPI(
   const { accessToken } = getWhatsAppCredentials();
   const endpoint = getMessagesEndpoint();
 
+  console.log('[WhatsApp Service] Payload enviado a Meta API:', JSON.stringify(payload, null, 2));
+
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -318,7 +320,7 @@ export const WhatsAppService = {
   ): Promise<WhatsAppAPIResponse> {
     const normalizedPhone = phone.replace(/\D/g, "");
 
-    const payload = {
+    const payload: any = {
       messaging_product: "whatsapp",
       to: normalizedPhone,
       type: "template",
@@ -327,18 +329,21 @@ export const WhatsAppService = {
         language: {
           code: languageCode,
         },
-        ...(variables.length > 0 && {
-          parameters: {
-            body: {
-              parameters: variables.map((value) => ({
-                type: "text",
-                text: String(value),
-              })),
-            },
-          },
-        }),
       },
     };
+
+    // Si hay variables, agregar components con estructura correcta
+    if (variables.length > 0) {
+      payload.template.components = [
+        {
+          type: "body",
+          parameters: variables.map((value) => ({
+            type: "text",
+            text: String(value),
+          })),
+        },
+      ];
+    }
 
     console.log(
       `[WhatsApp] Enviando template '${templateName}' a ${normalizedPhone} con ${variables.length} variables`
