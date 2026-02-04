@@ -397,19 +397,21 @@ export async function enviarFormularioInteres(
     telefonoSoporte?: string;
   }
 ): Promise<ResultadoEnvio> {
-  console.log(`[WhatsApp] Enviando formulario interés a lead ${leadId}`);
+  console.log(`[WhatsApp] Enviando formulario interés (v3 con botones) a lead ${leadId}`);
 
-  // Forzado a v2 mientras v3 se aprueba
-  const variablesV2 = {
+  // Usar plantilla v3 con botones interactivos para primer contacto
+  const variablesV3 = {
     nombre: datos.nombre,
     cursoInteres: datos.cursoInteres,
     fechaInicio: datos.fechaInicio,
+    duracion: datos.duracion || 'Por confirmar',
+    modalidad: datos.modalidad || 'Por confirmar',
   };
 
   return enviarMensajeConPlantilla(
     telefono,
-    'formulario_interes_v2',
-    variablesV2,
+    'formulario_interes_v3',
+    variablesV3,
     undefined,
     { tipo_evento: 'lead_interes', lead_id: leadId }
   );
