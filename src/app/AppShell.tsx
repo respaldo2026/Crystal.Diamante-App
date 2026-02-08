@@ -125,6 +125,15 @@ const allResources = [
     },
   },
   {
+    key: "marketing-center",
+    name: "marketing-center",
+    list: "/marketing-center",
+    meta: {
+      label: "Marketing Center",
+      icon: <FileTextOutlined />,
+    },
+  },
+  {
     key: "planificador",
     name: "planificador",
     list: "/planificador",
