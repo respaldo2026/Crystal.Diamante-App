@@ -9,44 +9,46 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req: Request) => {
-  // Manejo de CORS
+  // 1. Manejo de CORS (Permitir peticiones desde cualquier origen)
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
+    // 2. Obtener datos del cuerpo de la petición
     const body = await req.json().catch(() => null);
     const phone: string | undefined = body?.phone;
     const name: string | undefined = body?.name;
     const messageBody: string | undefined = body?.message_body;
 
-    // Validación básica
+    // Validación básica: Si no hay teléfono o mensaje, error.
     if (!phone || !messageBody) {
-      return new Response(JSON.stringify({ error: "Faltan datos: phone y message_body" }), {
-        status: 400,
-        headers: corsHeaders,
-      });
+      return new Response(
+        JSON.stringify({ error: "Faltan datos obligatorios: phone y message_body" }),
+        { status: 400, headers: corsHeaders }
+      );
     }
 
-    // Inicializar clientes
+    // 3. Inicializar clientes con Variables de Entorno
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"); // Usa la Service Role Key para permisos de escritura
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
 
     if (!supabaseUrl || !supabaseKey || !geminiKey) {
-      throw new Error("Faltan variables de entorno (SUPABASE_URL, SERVICE_KEY o GEMINI_KEY)");
+      throw new Error("Faltan variables de entorno (SUPABASE_URL, SERVICE_KEY o GEMINI_API_KEY)");
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. GESTIÓN DE LEAD (Buscar o Crear)
+    // 4. GESTIÓN DE LEAD (Upsert: Crear o Actualizar)
+    // Buscamos al usuario por teléfono. Si existe, actualizamos 'ultima_interaccion'. Si no, lo creamos.
     const { data: leadRow, error: leadError } = await supabase
       .from("leads")
       .upsert(
-        { 
-          telefono: phone, 
-          nombre: name ?? null,
-          ultima_interaccion: new Date().toISOString()
+        {
+          telefono: phone,
+          nombre: name ?? null, // Solo actualiza el nombre si viene en la petición
+          ultima_interaccion: new Date().toISOString(),
         },
         { onConflict: "telefono" }
       )
@@ -54,106 +56,112 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (leadError || !leadRow) {
-      console.error("Error en Lead Upsert:", leadError);
-      throw new Error("No se pudo guardar el lead");
+      console.error("Error gestionando Lead:", leadError);
+      throw new Error("No se pudo guardar o recuperar el lead");
     }
 
     const leadId = leadRow.id;
 
-    // 2. GUARDAR MENSAJE DEL USUARIO
-    const { error: userMsgError } = await supabase.from("whatsapp_mensajes").insert({
-      lead_id: leadId,
-      role: "user",
-      mensaje_texto: messageBody,
-      tipo: "text",
-      creado_en: new Date().toISOString()
-    });
+    // 5. PROCESAMIENTO PARALELO (Velocidad)
+    // Ejecutamos 3 tareas al tiempo: Guardar mensaje usuario, Buscar historial, Buscar en FAQ.
+    
+    // Preparamos búsqueda simple en FAQ (coincidencia de texto)
+    const searchTerm = messageBody.slice(0, 100); 
+    const likeQuery = `%${searchTerm}%`;
 
-    if (userMsgError) console.error("Error guardando mensaje usuario:", userMsgError);
+    const [insertUserMsg, historyResult, faqResult] = await Promise.all([
+      // Tarea A: Guardar mensaje del usuario en la base de datos
+      supabase.from("whatsapp_mensajes").insert({
+        lead_id: leadId,
+        role: "user",
+        mensaje_texto: messageBody,
+        tipo: "text",
+        creado_en: new Date().toISOString(),
+      }),
 
-    // 3. RECUPERAR HISTORIAL (Memoria Corto Plazo)
-    const { data: historyRows } = await supabase
-      .from("whatsapp_mensajes")
-      .select("role, mensaje_texto")
-      .eq("lead_id", leadId)
-      .order("creado_en", { ascending: false })
-      .limit(5);
+      // Tarea B: Recuperar los últimos 5 mensajes para contexto (memoria a corto plazo)
+      supabase
+        .from("whatsapp_mensajes")
+        .select("role, mensaje_texto")
+        .eq("lead_id", leadId)
+        .order("creado_en", { ascending: false })
+        .limit(6),
 
-    const conversation = (historyRows ?? [])
+      // Tarea C: Buscar en la base de conocimiento (FAQ)
+      supabase
+        .from("faq")
+        .select("pregunta, respuesta")
+        .or(`pregunta.ilike.${likeQuery},respuesta.ilike.${likeQuery}`)
+        .limit(3),
+    ]);
+
+    if (insertUserMsg.error) console.error("Error guardando mensaje usuario:", insertUserMsg.error);
+
+    // 6. PREPARAR CONTEXTO PARA LA IA
+    
+    // Formatear Historial
+    const conversationHistory = (historyResult.data ?? [])
       .slice()
-      .reverse()
-      .map((m) => ({
-        role: m.role,
-        content: m.mensaje_texto,
-      }));
+      .reverse() // Poner en orden cronológico (antiguo -> nuevo)
+      .map((m) => `${m.role === "assistant" ? "Dany" : "Usuario"}: ${m.mensaje_texto}`)
+      .join("\n");
 
-    // 4. BÚSQUEDA EN FAQ (Memoria Largo Plazo - CORREGIDO)
-    // Usamos 'faq' con 'pregunta' y 'respuesta'
-    const searchTerm = messageBody.slice(0, 200);
-    const like = `%${searchTerm}%`;
-
-    const { data: kbData, error: kbError } = await supabase
-      .from("faq")
-      .select("pregunta, respuesta")
-      .or(`pregunta.ilike.${like},respuesta.ilike.${like}`)
-      .limit(3);
-
-    if (kbError) console.error("Error buscando en FAQ", kbError);
-
-    const faqContext = (kbData ?? [])
+    // Formatear FAQ encontrada
+    const faqContext = (faqResult.data ?? [])
       .map((row) => `P: ${row.pregunta}\nR: ${row.respuesta}`)
       .join("\n\n");
 
-    const historyText = conversation
-      .map((m) => `${m.role === "assistant" ? "Asesor" : "Usuario"}: ${m.content}`)
-      .join("\n");
-
-    // 5. LLAMADA A GEMINI
+    // 7. CONSTRUIR EL PROMPT DE SISTEMA
     const systemPrompt = `
       Eres 'Dany', el asistente virtual experto de la Academia Crystal Diamante.
-      Objetivo: Responder dudas sobre cursos de belleza y agendar citas.
-      
-      Reglas:
-      1. Responde en español, tono amable y profesional.
-      2. Usa la información de 'FAQ' abajo para responder. Si no sabes, no inventes.
-      3. Sé conciso (máximo 3 oraciones).
-      4. Si el usuario pregunta precios y no están en el FAQ, pide que esperen a un asesor humano.
+      Tu misión es responder dudas sobre cursos de belleza, uñas y agendar citas de forma amable y profesional.
 
-      INFORMACIÓN DE LA ACADEMIA (FAQ):
-      ${faqContext}
+      REGLAS DE RESPUESTA:
+      1. Usa la INFORMACIÓN DE FAQ abajo como tu fuente de verdad principal.
+      2. Si la respuesta está en el FAQ, úsala. Si NO está, responde: "Para esa consulta específica, voy a transferirte con un asesor humano 👩‍💻". NO inventes precios ni fechas.
+      3. Sé conciso (máximo 3 oraciones). Usa emojis suaves (✨, 💅, 🎓).
+      4. Habla en español latino (Colombia), trata de "tú" de forma respetuosa.
+      5. Si el usuario saluda, responde el saludo y pregunta en qué puedes ayudar.
 
-      HISTORIAL DE CONVERSACIÓN:
-      ${historyText}
+      INFORMACIÓN DE LA ACADEMIA (FAQ ENCONTRADA):
+      "${faqContext || "No se encontró información específica en la base de datos para esta pregunta."}"
 
-      PREGUNTA ACTUAL:
-      ${messageBody}
+      HISTORIAL RECIENTE DE CHAT:
+      ${conversationHistory}
+
+      USUARIO DICE:
+      "${messageBody}"
+
+      RESPUESTA DE DANY:
     `;
 
+    // 8. LLAMADA A GEMINI
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
+
     const result = await model.generateContent(systemPrompt);
     const replyText = result.response.text().trim();
 
-    // 6. GUARDAR RESPUESTA DEL ASISTENTE
+    // 9. GUARDAR RESPUESTA DEL ASISTENTE (Sin bloquear la respuesta HTTP si es posible, pero await es seguro en Serverless)
     await supabase.from("whatsapp_mensajes").insert({
       lead_id: leadId,
       role: "assistant",
       mensaje_texto: replyText,
       tipo: "text",
-      creado_en: new Date().toISOString()
+      creado_en: new Date().toISOString(),
     });
 
-    // 7. RESPONDER A MAKE
+    // 10. RETORNAR RESPUESTA AL CLIENTE (MAKE / API)
     return new Response(JSON.stringify({ reply: replyText }), {
       status: 200,
       headers: corsHeaders,
     });
 
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected error";
-    console.error("Error fatal en chat-agent:", error);
-    return new Response(JSON.stringify({ error: message }), {
+    const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+    console.error("Error Fatal en Edge Function:", error);
+    
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: corsHeaders,
     });
