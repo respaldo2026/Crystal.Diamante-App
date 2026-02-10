@@ -137,6 +137,12 @@ serve(async (req) => {
       reply = "No tengo datos suficientes ahora; te conecto con un asesor para confirmarte precios, fechas y cupos.";
     }
 
+    // Hardcoded test exit to validate routing (remove after confirming Make → function wiring)
+    return new Response(JSON.stringify({ reply: "TEST_OK_FUNCION" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
     return new Response(JSON.stringify({ reply }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
