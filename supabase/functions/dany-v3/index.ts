@@ -110,36 +110,31 @@ serve(async (req) => {
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
 
-    const construirRespuestaBasica = () => {
-      const base = (marketing && marketing.length > 0) ? marketing[0] : null;
-      if (!base) return "No tengo datos suficientes ahora; te conecto con un asesor.";
-      const precio = base.precio_promocional ?? base.precio_lista ?? "s/p";
-      const inicio = base.fecha_inicio ?? "fecha por definir";
-      const cupos = base.cupos_disponibles ?? "cupos N/D";
-      const horario = base.hora_inicio && base.hora_fin ? `${base.hora_inicio} - ${base.hora_fin}` : "hora por definir";
-      const link = base.url_inscripcion ?? "(pide el enlace de inscripción)";
-      return `Tenemos ${base.titulo}. Inicio: ${inicio}${horario ? ` | Horario: ${horario}` : ""} | Precio: ${precio} ${base.moneda ?? ""} | Cupos: ${cupos} | Inscripción: ${link}`;
+    const construirRespuestaBasica = (curso: any) => {
+      if (!curso) return null;
+      const precio = curso.precio_promocional ?? curso.precio_lista ?? "s/p";
+      const inicio = curso.fecha_inicio ?? "fecha por definir";
+      const cupos = curso.cupos_disponibles ?? "cupos N/D";
+      const horario = curso.hora_inicio && curso.hora_fin ? `${curso.hora_inicio} - ${curso.hora_fin}` : "hora por definir";
+      const link = curso.url_inscripcion ?? "(pide el enlace de inscripción)";
+      return `Tenemos ${curso.titulo}. Inicio: ${inicio}${horario ? ` | Horario: ${horario}` : ""} | Precio: ${precio} ${curso.moneda ?? ""} | Cupos: ${cupos} | Inscripción: ${link}`;
     };
 
-    const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    let reply = construirRespuestaBasica();
+    // Respuesta determinista sin Gemini para evitar frases no deseadas
+    const querySanitized = sanitize(messageBody);
+    const candidatos = (marketing ?? []).filter((m) => sanitize(m.titulo).includes(querySanitized));
+    const pick = candidatos[0] ?? (marketing && marketing[0]);
+    let reply =
+      construirRespuestaBasica(pick) ||
+      (marketing && marketing.length > 0
+        ? construirRespuestaBasica(marketing[0])
+        : (materialsLines[0] ?? "No tengo datos suficientes ahora; te conecto con un asesor."));
 
-    try {
-      const aiResult = await model.generateContent(prompt);
-      reply = aiResult.response.text().trim() || reply;
-    } catch (err) {
-      console.error("Gemini generateContent error", err);
-      reply = "Tuve un problema al generar la respuesta. Te conecto con un asesor para más detalles.";
-    }
-
+    // Filtro final anti-frase prohibida
     const bannedRegex = /(cerebro|algo\s+sal[ií]o\s+mal|brain)/i;
-    const sanitizedReply = sanitize(reply);
-    if (bannedRegex.test(reply) || bannedRegex.test(sanitizedReply)) {
-      reply = construirRespuestaBasica();
-      if (!reply || reply.trim().length === 0) {
-        reply = "No tengo datos suficientes ahora; te conecto con un asesor para confirmarte precios, fechas y cupos.";
-      }
+    const sanitizedReply = sanitize(reply ?? "");
+    if (!reply || bannedRegex.test(reply) || bannedRegex.test(sanitizedReply)) {
+      reply = "No tengo datos suficientes ahora; te conecto con un asesor para confirmarte precios, fechas y cupos.";
     }
 
     return new Response(JSON.stringify({ reply }), {
