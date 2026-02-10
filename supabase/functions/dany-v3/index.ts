@@ -116,6 +116,30 @@ serve(async (req) => {
     const wantsPrice = /precio|costo|vale|inversion/.test(msg);
     const wantsSchedule = /hora|horario/.test(msg);
     const wantsAll = /info|informacion|detalle|completo/.test(msg);
+    const palabrasClave = msg.split(/\s+/).filter((w) => w.length > 2);
+
+    const scoreCurso = (curso: any) => {
+      if (!curso) return -1;
+      let score = 0;
+      const tituloSan = sanitize(curso.titulo ?? "");
+      const tipoSan = sanitize(curso.tipo ?? "");
+      const slugSan = sanitize(curso.slug ?? "");
+      const descSan = sanitize(curso.descripcion_corta ?? "");
+
+      palabrasClave.forEach((w) => {
+        if (tituloSan.includes(w)) score += 2;
+        if (descSan.includes(w)) score += 1;
+        if (slugSan.includes(w)) score += 1;
+        if (tipoSan.includes(w)) score += 1;
+      });
+
+      if (wantsMedia && (curso.url_foto || curso.url_video || (curso.urls_adjuntos && curso.urls_adjuntos.length))) score += 2;
+      if (wantsPrice) score += 1;
+      if (wantsSchedule) score += 1;
+      if (wantsDuration) score += 1;
+
+      return score;
+    };
 
     const construirRespuestaVendedora = (curso: any) => {
       if (!curso) return null;
@@ -173,14 +197,42 @@ serve(async (req) => {
     };
 
     // Respuesta determinista sin Gemini para evitar frases no deseadas
-    const querySanitized = sanitize(messageBody);
-    const candidatos = (marketing ?? []).filter((m) => sanitize(m.titulo).includes(querySanitized));
-    const pick = candidatos[0] ?? (marketing && marketing[0]);
-    let reply =
-      construirRespuestaVendedora(pick) ||
-      (marketing && marketing.length > 0
-        ? construirRespuestaVendedora(marketing[0])
-        : (materialsLines[0] ?? "No tengo datos suficientes ahora; te conecto con un asesor."));
+    const mejor = (marketing ?? []).reduce<{ curso: any; score: number } | null>((best, curso) => {
+      const score = scoreCurso(curso);
+      if (!best || score > best.score) return { curso, score };
+      return best;
+    }, null);
+
+    const pick = mejor && mejor.score > 0 ? mejor.curso : null;
+
+    let reply = "";
+    if (pick) {
+      reply = construirRespuestaVendedora(pick) ?? "";
+    }
+
+    if (!reply && wantsMedia) {
+      const conMedios = (marketing ?? []).find((c) => c.url_foto || c.url_video || (c.urls_adjuntos && c.urls_adjuntos.length));
+      reply = construirRespuestaVendedora(conMedios) ?? "";
+    }
+
+    if (!reply && marketing && marketing.length > 0) {
+      const listado = marketing.slice(0, 3).map((c) => {
+        const precioLinea = c.precio_promocional ?? c.precio_lista ?? "s/p";
+        const linkLinea = c.url_inscripcion ?? "(pide el enlace)";
+        return `- ${c.titulo} | ${precioLinea} ${c.moneda ?? ""} | ${linkLinea}`;
+      });
+      reply = [
+        "No encuentro un curso exacto a lo que pides, pero estas opciones están activas:",
+        ...listado,
+        "¿Cuál te interesa y te paso más detalles?",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    if (!reply) {
+      reply = materialsLines[0] ?? "No tengo datos suficientes ahora; te conecto con un asesor.";
+    }
 
     // Filtro final anti-frase prohibida
     const bannedRegex = /(cerebro|algo\s+sal[ií]o\s+mal|brain)/i;
