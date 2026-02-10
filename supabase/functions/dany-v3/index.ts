@@ -42,11 +42,7 @@ serve(async (req) => {
     // 1. Obtener ofertas (cursos/grupos) desde el Centro de Marketing
     const { data: marketing, error: marketingErr } = await supabase
       .from("marketing_centro")
-      .select(
-        `titulo, tipo, slug, curso_id, fecha_inicio, fecha_fin, hora_inicio, hora_fin,
-         precio_lista, precio_promocional, moneda, cupos_totales, cupos_disponibles,
-         estado, url_inscripcion, url_foto, url_video, urls_adjuntos, descripcion_corta, descripcion_ia`
-      )
+      .select("*, urls_adjuntos")
       .in("estado", ["activo", "proximo"])
       .order("fecha_inicio", { ascending: true })
       .limit(50);
@@ -116,7 +112,11 @@ serve(async (req) => {
     const wantsPrice = /precio|costo|vale|inversion/.test(msg);
     const wantsSchedule = /hora|horario/.test(msg);
     const wantsAll = /info|informacion|detalle|completo/.test(msg);
-    const palabrasClave = msg.split(/\s+/).filter((w) => w.length > 2);
+    const stopWords = new Set(["curso", "cursos", "clase", "clases", "de", "del", "para", "una", "unas", "unos", "un"]);
+    const palabrasClave = msg
+      .split(/\W+/)
+      .map((w) => w.trim())
+      .filter((w) => w.length > 2 && !stopWords.has(w));
 
     const scoreCurso = (curso: any) => {
       if (!curso) return -1;
@@ -125,12 +125,16 @@ serve(async (req) => {
       const tipoSan = sanitize(curso.tipo ?? "");
       const slugSan = sanitize(curso.slug ?? "");
       const descSan = sanitize(curso.descripcion_corta ?? "");
+      const descIaSan = sanitize(curso.descripcion_ia ?? "");
+      const kwsSan = Array.isArray(curso.keywords) ? curso.keywords.map((k: string) => sanitize(String(k))) : [];
 
       palabrasClave.forEach((w) => {
         if (tituloSan.includes(w)) score += 2;
-        if (descSan.includes(w)) score += 1;
+        if (descSan.includes(w)) score += 2;
+        if (descIaSan.includes(w)) score += 2;
         if (slugSan.includes(w)) score += 1;
-        if (tipoSan.includes(w)) score += 1;
+        if (tipoSan.includes(w)) score += 0.5;
+        if (kwsSan.some((kw) => kw.includes(w))) score += 2;
       });
 
       if (wantsMedia && (curso.url_foto || curso.url_video || (curso.urls_adjuntos && curso.urls_adjuntos.length))) score += 2;

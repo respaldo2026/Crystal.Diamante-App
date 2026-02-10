@@ -36,6 +36,7 @@ import {
   FileOutlined,
   ReloadOutlined,
   RobotOutlined,
+  SaveOutlined,
 } from "@ant-design/icons";
 import type { UploadFile, UploadProps } from "antd/es/upload/interface";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -67,6 +68,15 @@ interface MarketingAsset {
 interface Programa {
   id: number;
   nombre: string;
+}
+
+interface MarketingCurso {
+  id: number;
+  titulo: string;
+  tipo?: string;
+  estado?: string;
+  fecha_inicio?: string | null;
+  keywords?: string[];
 }
 
 interface CursoProximo {
@@ -110,6 +120,7 @@ export default function MarketingCenterPage() {
   const isMobile = !screens.md;
   const [assets, setAssets] = useState<MarketingAsset[]>([]);
   const [programas, setProgramas] = useState<Programa[]>([]);
+  const [cursosMarketing, setCursosMarketing] = useState<MarketingCurso[]>([]);
   const [cursosProximos, setCursosProximos] = useState<CursoProximo[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTipo, setFilterTipo] = useState<string | undefined>(undefined);
@@ -124,13 +135,16 @@ export default function MarketingCenterPage() {
   const [uploading, setUploading] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [keywordsDraft, setKeywordsDraft] = useState<Record<number, string>>({});
+  const [savingCursoId, setSavingCursoId] = useState<number | null>(null);
+  const [loadingCursosMarketing, setLoadingCursosMarketing] = useState(false);
 
   useEffect(() => {
     cargarDatos();
   }, []);
 
   const cargarDatos = async () => {
-    await Promise.all([cargarAssets(), cargarProgramas(), cargarCursosProximos()]);
+    await Promise.all([cargarAssets(), cargarProgramas(), cargarCursosProximos(), cargarMarketingCursos()]);
   };
 
   const cargarAssets = async () => {
@@ -397,6 +411,55 @@ export default function MarketingCenterPage() {
     flyers: assets.filter((a) => a.tipo_asset === "flyer").length,
   };
 
+  const cargarMarketingCursos = async () => {
+    try {
+      setLoadingCursosMarketing(true);
+      const { data, error } = await supabaseBrowserClient
+        .from("marketing_centro")
+        .select("id, titulo, tipo, estado, fecha_inicio, keywords")
+        .order("fecha_inicio", { ascending: true });
+
+      if (error) throw error;
+      const items = (data as MarketingCurso[]) || [];
+      setCursosMarketing(items);
+      const draft: Record<number, string> = {};
+      items.forEach((c) => {
+        draft[c.id] = c.keywords?.join(", ") ?? "";
+      });
+      setKeywordsDraft(draft);
+    } catch (error) {
+      console.error("Error cargando marketing_centro:", error);
+      message.error("No se pudieron cargar los cursos del Centro de Marketing");
+    } finally {
+      setLoadingCursosMarketing(false);
+    }
+  };
+
+  const guardarKeywordsCurso = async (id: number) => {
+    const raw = keywordsDraft[id] ?? "";
+    const keywords = raw
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+
+    try {
+      setSavingCursoId(id);
+      const { error } = await supabaseBrowserClient
+        .from("marketing_centro")
+        .update({ keywords })
+        .eq("id", id);
+
+      if (error) throw error;
+      message.success("Keywords actualizadas");
+      await cargarMarketingCursos();
+    } catch (error: any) {
+      console.error("Error guardando keywords:", error);
+      message.error(error.message || "No se pudieron guardar las keywords");
+    } finally {
+      setSavingCursoId(null);
+    }
+  };
+
   const filteredAssets = assets.filter((a) => {
     const matchesSearch = searchTerm
       ? [a.titulo, a.descripcion, a.descripcion_ia, a.nombre_archivo, (a.keywords || []).join(" ")]
@@ -457,7 +520,8 @@ export default function MarketingCenterPage() {
       .slice(0, 25)
       .map((a) => {
         const pesoMb = a.tamano_bytes ? `${(a.tamano_bytes / (1024 * 1024)).toFixed(1)}MB` : "";
-        return `- ${a.titulo} [${a.tipo_asset}] ${a.descripcion_ia || a.descripcion || ""} | url: ${a.url_archivo || "N/A"} ${pesoMb}`;
+        const kws = a.keywords && a.keywords.length ? ` | keywords: ${a.keywords.join(", ")}` : "";
+        return `- ${a.titulo} [${a.tipo_asset}] ${a.descripcion_ia || a.descripcion || ""} | url: ${a.url_archivo || "N/A"} ${pesoMb}${kws}`;
       })
       .join("\n");
   };
@@ -503,6 +567,22 @@ export default function MarketingCenterPage() {
       dataIndex: "tipo_asset",
       key: "tipo_asset",
       render: (tipo: string) => <Tag>{tipo}</Tag>,
+    },
+    {
+      title: "Keywords",
+      dataIndex: "keywords",
+      key: "keywords",
+      width: 200,
+      render: (kws?: string[]) =>
+        kws && kws.length ? (
+          <Space wrap>
+            {kws.map((k) => (
+              <Tag key={k}>{k}</Tag>
+            ))}
+          </Space>
+        ) : (
+          <Text type="secondary">—</Text>
+        ),
     },
     {
       title: "IA",
@@ -556,6 +636,61 @@ export default function MarketingCenterPage() {
           >
             <Button icon={<DeleteOutlined />} size="small" danger />
           </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  const columnsCursosMarketing = [
+    {
+      title: "Título",
+      dataIndex: "titulo",
+      key: "titulo",
+      render: (text: string, record: MarketingCurso) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{text}</Text>
+          {record.tipo && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {record.tipo}
+            </Text>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: "Estado",
+      dataIndex: "estado",
+      key: "estado",
+      render: (estado?: string) => <Tag color={estadoColors[estado ?? ""] || "blue"}>{estado || "-"}</Tag>,
+    },
+    {
+      title: "Inicio",
+      dataIndex: "fecha_inicio",
+      key: "fecha_inicio",
+      render: (fecha?: string | null) => (fecha ? dayjs(fecha).format("DD/MM/YYYY") : "Fecha por definir"),
+    },
+    {
+      title: "Keywords (IA)",
+      key: "keywords",
+      width: 320,
+      render: (_: any, record: MarketingCurso) => (
+        <Space align="start" wrap>
+          <Input.TextArea
+            autoSize={{ minRows: 1, maxRows: 3 }}
+            style={{ minWidth: 200 }}
+            value={keywordsDraft[record.id] ?? ""}
+            placeholder="uñas, manicure, gel"
+            onChange={(e) => setKeywordsDraft((prev) => ({ ...prev, [record.id]: e.target.value }))}
+          />
+          <Button
+            type="primary"
+            size="small"
+            icon={<SaveOutlined />}
+            loading={savingCursoId === record.id}
+            onClick={() => guardarKeywordsCurso(record.id)}
+          >
+            Guardar
+          </Button>
         </Space>
       ),
     },
@@ -693,6 +828,28 @@ export default function MarketingCenterPage() {
           </Card>
         )}
       </Space>
+
+      {/* Cursos/Grupos (marketing_centro) */}
+      <Card
+        title="Cursos y grupos (Centro de Marketing)"
+        extra={
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarMarketingCursos}>
+              Recargar cursos
+            </Button>
+          </Space>
+        }
+      >
+        <Table
+          columns={columnsCursosMarketing}
+          dataSource={cursosMarketing}
+          rowKey="id"
+          loading={loadingCursosMarketing}
+          size={isMobile ? "small" : "middle"}
+          pagination={{ pageSize: isMobile ? 5 : 8 }}
+          scroll={{ x: 720 }}
+        />
+      </Card>
 
       {/* Tabla */}
       <Card
