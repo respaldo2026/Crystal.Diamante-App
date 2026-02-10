@@ -142,14 +142,30 @@ export default function MarketingCenterPage() {
   const [iaTargetCurso, setIaTargetCurso] = useState<MarketingCurso | null>(null);
   const [iaLoading, setIaLoading] = useState(false);
   const [iaResult, setIaResult] = useState<{ promo?: string; keywords?: string[] }>({});
+  const [iaError, setIaError] = useState<string | null>(null);
   const [iaForm] = Form.useForm();
+  const [agentPrompt, setAgentPrompt] = useState("");
+  const [loadingAgentPrompt, setLoadingAgentPrompt] = useState(false);
+  const [savingAgentPrompt, setSavingAgentPrompt] = useState(false);
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [ingestLoading, setIngestLoading] = useState(false);
+  const [ingestForm] = Form.useForm();
+  const [deletingDocId, setDeletingDocId] = useState<number | null>(null);
 
   useEffect(() => {
     cargarDatos();
   }, []);
 
   const cargarDatos = async () => {
-    await Promise.all([cargarAssets(), cargarProgramas(), cargarCursosProximos(), cargarMarketingCursos()]);
+    await Promise.all([
+      cargarAssets(),
+      cargarProgramas(),
+      cargarCursosProximos(),
+      cargarMarketingCursos(),
+      cargarAgentPrompt(),
+      cargarDocs(),
+    ]);
   };
 
   const cargarAssets = async () => {
@@ -439,6 +455,122 @@ export default function MarketingCenterPage() {
     }
   };
 
+  const cargarAgentPrompt = async () => {
+    try {
+      setLoadingAgentPrompt(true);
+      const { data, error } = await supabaseBrowserClient
+        .from("agent_settings")
+        .select("system_prompt")
+        .eq("id", 1)
+        .maybeSingle();
+
+      if (error) throw error;
+      setAgentPrompt(data?.system_prompt || "");
+    } catch (error: any) {
+      console.error("Error cargando prompt del agente:", error);
+      message.error("No se pudo cargar el prompt del agente");
+    } finally {
+      setLoadingAgentPrompt(false);
+    }
+  };
+
+  const guardarAgentPrompt = async () => {
+    try {
+      setSavingAgentPrompt(true);
+      const { error } = await supabaseBrowserClient
+        .from("agent_settings")
+        .upsert({ id: 1, system_prompt: agentPrompt })
+        .eq("id", 1);
+
+      if (error) throw error;
+      message.success("Prompt del agente guardado");
+    } catch (error: any) {
+      console.error("Error guardando prompt del agente:", error);
+      message.error(error.message || "No se pudo guardar el prompt");
+    } finally {
+      setSavingAgentPrompt(false);
+    }
+  };
+
+  const cargarDocs = async () => {
+    try {
+      setLoadingDocs(true);
+      const { data, error } = await supabaseBrowserClient
+        .from("agent_documents")
+        .select("id, title, source_url, summary, keywords, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setDocs(data || []);
+    } catch (error: any) {
+      console.error("Error cargando docs agente:", error);
+      message.error("No se pudieron cargar los documentos del agente");
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
+  const crearDocAgente = async (values: any) => {
+    try {
+      setIngestLoading(true);
+      let urlArchivo = values.source_url as string | undefined;
+
+      // Si hay archivo, súbelo al bucket agent-knowledge
+      const files = values.file as UploadFile[] | undefined;
+      if (files && files.length > 0) {
+        const fileItem = files[0] as any;
+        const file = (fileItem instanceof File) ? fileItem : (fileItem?.originFileObj as File | undefined);
+        if (!file) throw new Error("No se pudo leer el archivo");
+
+        const ext = file.name.split(".").pop() || "bin";
+        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { data: uploadData, error: uploadError } = await supabaseBrowserClient.storage
+          .from("agent-knowledge")
+          .upload(fileName, file, { upsert: false });
+        if (uploadError) throw uploadError;
+        const { data: publicData } = supabaseBrowserClient.storage.from("agent-knowledge").getPublicUrl(uploadData.path);
+        urlArchivo = publicData.publicUrl;
+      }
+
+      const res = await fetch("/api/ai/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: values.title,
+          url: urlArchivo,
+          raw_text: values.raw_text,
+          mime_type: fileList[0]?.type,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo procesar");
+      message.success("Documento indexado para el agente");
+      ingestForm.resetFields();
+      setFileList([]);
+      await cargarDocs();
+    } catch (error: any) {
+      console.error("Ingest error:", error);
+      message.error(error.message || "Error al indexar documento");
+    } finally {
+      setIngestLoading(false);
+    }
+  };
+
+  const eliminarDocAgente = async (id: number) => {
+    try {
+      setDeletingDocId(id);
+      const { error } = await supabaseBrowserClient.from("agent_documents").delete().eq("id", id);
+      if (error) throw error;
+      message.success("Documento eliminado");
+      await cargarDocs();
+    } catch (error: any) {
+      console.error("Delete doc error:", error);
+      message.error(error.message || "No se pudo eliminar");
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
+
   const guardarKeywordsCurso = async (id: number) => {
     const raw = keywordsDraft[id] ?? "";
     const keywords = raw
@@ -467,6 +599,7 @@ export default function MarketingCenterPage() {
   const abrirAsistenteIA = (curso: MarketingCurso) => {
     setIaTargetCurso(curso);
     setIaResult({});
+    setIaError(null);
     iaForm.setFieldsValue({
       titulo: curso.titulo,
       tipo: curso.tipo || "",
@@ -483,6 +616,7 @@ export default function MarketingCenterPage() {
   const generarTextoIA = async (values: any) => {
     setIaLoading(true);
     setIaResult({});
+    setIaError(null);
     try {
       const res = await fetch("/api/ai/generate", {
         method: "POST",
@@ -494,12 +628,15 @@ export default function MarketingCenterPage() {
       if (!res.ok) throw new Error(data.error || "No se pudo generar con IA");
 
       setIaResult({ promo: data.promo_text, keywords: data.keywords });
+      message.success("Texto generado con IA");
       if (iaTargetCurso?.id && data.keywords?.length) {
         setKeywordsDraft((prev) => ({ ...prev, [iaTargetCurso.id]: data.keywords.join(", ") }));
       }
     } catch (error: any) {
       console.error("Error IA:", error);
-      message.error(error.message || "Error generando con IA");
+      const msg = error?.message || "Error generando con IA";
+      setIaError(msg);
+      message.error(msg);
     } finally {
       setIaLoading(false);
     }
@@ -821,6 +958,131 @@ export default function MarketingCenterPage() {
         </Col>
       </Row>
 
+      {/* Prompt del agente */}
+      <Card title="Prompt del agente (sistema)" bodyStyle={{ padding: isMobile ? "12px" : "16px" }}>
+        <Space direction="vertical" style={{ width: "100%" }} size="small">
+          <Text type="secondary">
+            Define el mensaje de sistema del agente. No inventes datos; recuerda incluir tono y restricciones. El bot leerá esto antes de responder.
+          </Text>
+          <TextArea
+            rows={5}
+            value={agentPrompt}
+            onChange={(e) => setAgentPrompt(e.target.value)}
+            placeholder="Eres Dany, asistente de la academia..."
+            disabled={loadingAgentPrompt}
+          />
+          <Space wrap>
+            <Button type="primary" onClick={guardarAgentPrompt} loading={savingAgentPrompt}>
+              Guardar prompt
+            </Button>
+            <Button onClick={cargarAgentPrompt} icon={<ReloadOutlined />} disabled={savingAgentPrompt}>
+              Recargar
+            </Button>
+          </Space>
+        </Space>
+      </Card>
+
+      {/* Conocimiento del agente: PDFs/texto */}
+      <Card
+        title="Conocimiento del agente (PDF/texto)"
+        bodyStyle={{ padding: isMobile ? "12px" : "16px" }}
+        extra={<Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarDocs}>Recargar</Button>}
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <Text type="secondary">Sube un PDF o pega texto. Se indexa y se resume para que el agente lo use.</Text>
+          <Form layout="vertical" form={ingestForm} onFinish={crearDocAgente}>
+            <Row gutter={[12, 12]}>
+              <Col xs={24} md={12}>
+                <Form.Item name="title" label="Título" rules={[{ required: true, message: "Ingresa un título" }] }>
+                  <Input placeholder="Manual de WhatsApp" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="source_url" label="URL pública (opcional)">
+                  <Input placeholder="https://..." />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item name="file" label="PDF/DOCX (opcional)">
+              <Upload
+                maxCount={1}
+                beforeUpload={(file) => {
+                  setFileList([file as any]);
+                  return false;
+                }}
+                fileList={fileList}
+                onRemove={() => setFileList([])}
+              >
+                <Button icon={<UploadOutlined />} block={isMobile}>Seleccionar PDF/DOCX</Button>
+              </Upload>
+            </Form.Item>
+            <Form.Item name="raw_text" label="Texto plano (opcional)">
+              <TextArea rows={3} placeholder="Pega aquí texto si no hay PDF" />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" loading={ingestLoading}>Indexar para el agente</Button>
+          </Form>
+
+          <Table
+            size={isMobile ? "small" : "middle"}
+            dataSource={docs}
+            loading={loadingDocs}
+            rowKey="id"
+            pagination={{ pageSize: isMobile ? 5 : 8 }}
+            columns={[
+              {
+                title: "Título",
+                dataIndex: "title",
+                key: "title",
+              },
+              {
+                title: "Resumen",
+                dataIndex: "summary",
+                key: "summary",
+                render: (text: string) => <Text ellipsis style={{ maxWidth: 360 }}>{text || "(sin resumen)"}</Text>,
+              },
+              {
+                title: "Keywords",
+                dataIndex: "keywords",
+                key: "keywords",
+                render: (kws?: string[]) => kws?.length ? <Space wrap>{kws.map((k) => <Tag key={k}>{k}</Tag>)}</Space> : <Text type="secondary">—</Text>,
+              },
+              {
+                title: "Fuente",
+                dataIndex: "source_url",
+                key: "source_url",
+                render: (url: string) => url ? <a href={url} target="_blank" rel="noreferrer">Ver</a> : <Text type="secondary">—</Text>,
+              },
+              {
+                title: "Fecha",
+                dataIndex: "created_at",
+                key: "created_at",
+                render: (f: string) => dayjs(f).format("DD/MM/YY"),
+              },
+              {
+                title: "Acciones",
+                key: "acciones",
+                render: (_: any, record: any) => (
+                  <Popconfirm
+                    title="¿Eliminar este documento?"
+                    onConfirm={() => eliminarDocAgente(record.id)}
+                    okText="Sí"
+                    cancelText="No"
+                  >
+                    <Button
+                      size={isMobile ? "small" : "middle"}
+                      danger
+                      loading={deletingDocId === record.id}
+                    >
+                      Eliminar
+                    </Button>
+                  </Popconfirm>
+                ),
+              },
+            ]}
+          />
+        </Space>
+      </Card>
+
       {/* Contexto IA: Programas, Cursos y Materiales (oculto por defecto) */}
       <Space direction="vertical" style={{ width: "100%" }}>
         <Button
@@ -1003,6 +1265,9 @@ export default function MarketingCenterPage() {
             showIcon
             message="Describe el curso y la IA sugerirá un texto promocional y keywords para el bot."
           />
+          {iaError && (
+            <Alert type="error" showIcon message={iaError} />
+          )}
 
           <Form form={iaForm} layout="vertical" onFinish={generarTextoIA}>
             <Row gutter={[12, 12]}>

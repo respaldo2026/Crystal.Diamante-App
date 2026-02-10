@@ -33,7 +33,9 @@ export async function POST(req: Request) {
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      return NextResponse.json({ error: "Falta GEMINI_API_KEY en el servidor" }, { status: 500 });
+      return NextResponse.json({
+        error: "Falta GEMINI_API_KEY en el servidor. Define GEMINI_API_KEY en las variables de entorno de Vercel/Next y reinicia el deploy.",
+      }, { status: 500 });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);

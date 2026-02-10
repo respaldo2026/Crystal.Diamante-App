@@ -52,6 +52,17 @@ serve(async (req) => {
       }
     }
 
+    // 0. Obtener prompt del agente (si existe)
+    let agentPrompt: string | null = null;
+    const { data: agentData, error: agentErr } = await supabase
+      .from("agent_settings")
+      .select("system_prompt")
+      .eq("id", 1)
+      .maybeSingle();
+    if (!agentErr && agentData?.system_prompt) {
+      agentPrompt = agentData.system_prompt;
+    }
+
     // 1. Obtener ofertas (cursos/grupos) desde el Centro de Marketing
     const { data: marketing, error: marketingErr } = await supabase
       .from("marketing_centro")
@@ -71,6 +82,41 @@ serve(async (req) => {
       .eq("visible_para_ia", true)
       .order("created_at", { ascending: false })
       .limit(30);
+
+    // 3. Documentos indexados para el agente (resumenes)
+    const { data: agentDocs, error: docsErr } = await supabase
+      .from("agent_documents")
+      .select("title, summary, keywords")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (docsErr) {
+      console.error("Error agent_documents", docsErr);
+    }
+
+    // 4. Recuperar chunks por similitud (embedding) para el mensaje
+    const fetchSimilarChunks = async () => {
+      try {
+        const embedModel = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: "text-embedding-004" });
+        const embedRes = await embedModel.embedContent(messageBody.slice(0, 2000));
+        const queryEmbedding = embedRes.embedding.values;
+
+        const { data, error } = await supabase.rpc("match_agent_chunks", {
+          query_embedding: queryEmbedding,
+          match_count: 5,
+          similarity_threshold: 0.6,
+        });
+        if (error) {
+          console.error("match_agent_chunks error", error);
+          return [] as any[];
+        }
+        return data ?? [];
+      } catch (e) {
+        console.error("embedding retrieval error", e);
+        return [] as any[];
+      }
+    };
+
+    const similarChunks = await fetchSimilarChunks();
 
     if (assetsErr) {
       console.error("Error marketing_assets", assetsErr);
@@ -93,6 +139,13 @@ serve(async (req) => {
       return `- ${a.titulo} [${a.tipo_asset}] ${a.descripcion_ia ?? ""} | url: ${a.url_archivo ?? "N/A"}${kws}`;
     });
 
+    const agentDocsLines = (agentDocs ?? []).map((d) => {
+      const kws = d.keywords && Array.isArray(d.keywords) ? ` | keywords: ${d.keywords.join(", ")}` : "";
+      return `- ${d.title}: ${d.summary ?? "(sin resumen)"}${kws}`;
+    });
+
+    const chunkLines = (similarChunks ?? []).map((c: any) => `- ${c.content?.slice(0, 280) ?? ""}`);
+
     if ((!marketing || marketing.length === 0) && (!assets || assets.length === 0)) {
       return new Response(
         JSON.stringify({ reply: "No tengo cursos ni materiales cargados en este momento. Dime qué curso te interesa y lo consulto con un asesor." }),
@@ -100,13 +153,20 @@ serve(async (req) => {
       );
     }
 
+    const promptBase =
+      agentPrompt ||
+      "Eres Dany, asistente de la academia. Responde solo con los datos disponibles; si algo falta, di que lo consultas con un asesor y NO inventes ni uses frases como 'algo salió mal con mi cerebro'. Prioriza precios, fechas, horarios, cupos y links solo si están en el contexto. Si no están, di que consultarás a un asesor.";
+
     const prompt = [
-      "Eres Dany, asistente de la academia. Responde solo con los datos disponibles; si algo falta, di que lo consultas con un asesor y NO inventes ni uses frases como 'algo salió mal con mi cerebro'.",
-      "Prioridad: da precios, fechas, horarios, cupos y links solo si están en el contexto. Si no están, di que consultarás a un asesor.",
+      promptBase,
       "Contexto cursos/grupos:",
       contextLines.join("\n") || "(sin cursos activos/próximos)",
       "Contexto materiales:",
       materialsLines.join("\n") || "(sin materiales IA)",
+      "Contexto documentos (resúmenes):",
+      agentDocsLines.join("\n") || "(sin documentos)",
+      "Contexto recuperado (chunks relevantes):",
+      chunkLines.join("\n") || "(sin resultados de búsqueda)",
       "Pregunta del usuario:",
       messageBody,
     ]
