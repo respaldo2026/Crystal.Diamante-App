@@ -92,7 +92,8 @@ serve(async (req) => {
     }
 
     const prompt = [
-      "Eres Dany, asistente de la academia. Responde solo con los datos disponibles; si algo falta, di que lo consultas con un asesor y no inventes.",
+      "Eres Dany, asistente de la academia. Responde solo con los datos disponibles; si algo falta, di que lo consultas con un asesor y NO inventes ni uses frases como 'algo salió mal con mi cerebro'.",
+      "Prioridad: da precios, fechas, horarios, cupos y links solo si están en el contexto. Si no están, di que consultarás a un asesor.",
       "Contexto cursos/grupos:",
       contextLines.join("\n") || "(sin cursos activos/próximos)",
       "Contexto materiales:",
@@ -113,6 +114,13 @@ serve(async (req) => {
     } catch (err) {
       console.error("Gemini generateContent error", err);
       reply = "Tuve un problema al generar la respuesta. Te conecto con un asesor para más detalles.";
+    }
+
+    const lower = reply.toLowerCase();
+    const banned = ["cerebro", "algo salio mal", "algo salió mal", "brain"];
+    const containsBanned = banned.some((w) => lower.includes(w));
+    if (containsBanned) {
+      reply = "No tengo datos suficientes ahora; te conecto con un asesor para confirmarte precios, fechas y cupos.";
     }
 
     return new Response(JSON.stringify({ reply }), {
