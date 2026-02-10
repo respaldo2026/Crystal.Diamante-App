@@ -126,7 +126,24 @@ serve(async (req) => {
     const wantsSchedule = /hora|horario/.test(msg);
     const wantsAll = /info|informacion|detalle|completo/.test(msg);
     const isGreeting = /\b(hola|buenas|hello|hey|hi)\b/.test(msg);
-    const stopWords = new Set(["curso", "cursos", "clase", "clases", "de", "del", "para", "una", "unas", "unos", "un"]);
+    const stopWords = new Set([
+      "curso",
+      "cursos",
+      "clase",
+      "clases",
+      "de",
+      "del",
+      "para",
+      "una",
+      "unas",
+      "unos",
+      "un",
+      "hola",
+      "buenas",
+      "hello",
+      "hey",
+      "hi",
+    ]);
     const palabrasClave = msg
       .split(/\W+/)
       .map((w) => w.trim())
@@ -291,9 +308,13 @@ serve(async (req) => {
       reply = construirRespuestaVendedora(marketing[0]) ?? "";
     }
 
-    if (!reply && isGreeting && marketing && marketing.length > 0) {
-      // Si solo saludan, responde con el mejor curso disponible (primero en la lista)
-      reply = construirRespuestaVendedora(marketing[0]) ?? "";
+    if (!reply && isGreeting) {
+      const saludo = name ? `👋 Hola ${name}, soy Dany del equipo Crystal Diamante ✨` : "👋 Hola, soy Dany del equipo Crystal Diamante ✨";
+      const titulos = (marketing ?? []).map((c) => c.titulo).filter(Boolean).slice(0, 3);
+      const lineaCursos = titulos.length > 0 ? `Tengo ${titulos.join(", ")}.` : "";
+      reply = [saludo, "Estoy aquí para ayudarte rápido y bien.", lineaCursos ? `${lineaCursos} Dime el curso o si buscas precio/horario y te respondo al toque.` : "Cuéntame qué curso te interesa o si quieres precio/horario y te respondo al toque."]
+        .filter(Boolean)
+        .join("\n");
     }
 
     if (!reply && marketing && marketing.length > 0) {
