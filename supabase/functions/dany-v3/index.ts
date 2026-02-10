@@ -110,14 +110,29 @@ serve(async (req) => {
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
 
-    const construirRespuestaBasica = (curso: any) => {
+    const construirRespuestaVendedora = (curso: any) => {
       if (!curso) return null;
-      const precio = curso.precio_promocional ?? curso.precio_lista ?? "s/p";
+      const precioValor = curso.precio_promocional ?? curso.precio_lista;
+      const precioTexto = precioValor ? `${precioValor} ${curso.moneda ?? ""}`.trim() : "(consúltame el precio)";
       const inicio = curso.fecha_inicio ?? "fecha por definir";
-      const cupos = curso.cupos_disponibles ?? "cupos N/D";
+      const cupos = curso.cupos_disponibles;
       const horario = curso.hora_inicio && curso.hora_fin ? `${curso.hora_inicio} - ${curso.hora_fin}` : "hora por definir";
       const link = curso.url_inscripcion ?? "(pide el enlace de inscripción)";
-      return `Tenemos ${curso.titulo}. Inicio: ${inicio}${horario ? ` | Horario: ${horario}` : ""} | Precio: ${precio} ${curso.moneda ?? ""} | Cupos: ${cupos} | Inscripción: ${link}`;
+      const cuposTexto =
+        typeof cupos === "number"
+          ? cupos <= 5
+            ? `Quedan ${cupos} cupos, suele llenarse rápido.`
+            : `Cupos disponibles: ${cupos}.`
+          : "Verifico cupos contigo en un minuto.";
+      const saludo = name ? `Hola ${name}, soy Dany del equipo Crystal Diamante.` : "Hola, soy Dany del equipo Crystal Diamante.";
+      return [
+        saludo,
+        `Mira, ${curso.titulo} arranca ${inicio}${horario ? ` | Horario: ${horario}` : ""}.`,
+        `Inversión: ${precioTexto}. ${cuposTexto}`,
+        `Te paso el link para asegurar tu lugar: ${link}. ¿Te ayudo a reservarlo?`,
+      ]
+        .filter(Boolean)
+        .join(" ");
     };
 
     // Respuesta determinista sin Gemini para evitar frases no deseadas
@@ -125,9 +140,9 @@ serve(async (req) => {
     const candidatos = (marketing ?? []).filter((m) => sanitize(m.titulo).includes(querySanitized));
     const pick = candidatos[0] ?? (marketing && marketing[0]);
     let reply =
-      construirRespuestaBasica(pick) ||
+      construirRespuestaVendedora(pick) ||
       (marketing && marketing.length > 0
-        ? construirRespuestaBasica(marketing[0])
+        ? construirRespuestaVendedora(marketing[0])
         : (materialsLines[0] ?? "No tengo datos suficientes ahora; te conecto con un asesor."));
 
     // Filtro final anti-frase prohibida
@@ -136,12 +151,6 @@ serve(async (req) => {
     if (!reply || bannedRegex.test(reply) || bannedRegex.test(sanitizedReply)) {
       reply = "No tengo datos suficientes ahora; te conecto con un asesor para confirmarte precios, fechas y cupos.";
     }
-
-    // Hardcoded test exit to validate routing (remove after confirming Make → function wiring)
-    return new Response(JSON.stringify({ reply: "TEST_OK_FUNCION" }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
 
     return new Response(JSON.stringify({ reply }), {
       status: 200,
