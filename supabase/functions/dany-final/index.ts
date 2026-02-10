@@ -30,7 +30,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Faltan datos: phone y message_body" }), { status: 400, headers: corsHeaders });
     }
 
-    // Inicializar clientes con las claves hardcodeadas
+    // Inicializar clientes
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // 1. GESTION DE LEAD
@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
     if (leadError || !leadRow) throw new Error("Error guardando el lead");
     const leadId = leadRow.id;
 
-    // 2. BUSQUEDA PARALELA (Historial + FAQ + Guardar mensaje)
+    // 2. BUSQUEDA PARALELA
     const searchTerm = messageBody.slice(0, 100);
     const likeQuery = `%${searchTerm}%`;
 
@@ -55,16 +55,16 @@ Deno.serve(async (req: Request) => {
       supabase.from("faq").select("pregunta, respuesta").or(`pregunta.ilike.${likeQuery},respuesta.ilike.${likeQuery}`).limit(3)
     ]);
 
-    // 3. PREPARAR RESPUESTA IA
+    // 3. IA
     const conversation = (historyResult.data ?? []).reverse().map((m) => `${m.role === "assistant" ? "Dany" : "Cliente"}: ${m.mensaje_texto}`).join("\n");
     const faqContext = (faqResult.data ?? []).map((row) => `P: ${row.pregunta}\nR: ${row.respuesta}`).join("\n\n");
 
     const systemPrompt = `
-      Eres 'Dany', asistente de Academia Crystal Diamante.
+      Eres 'Dany', asistente virtual de la Academia Crystal Diamante.
       Objetivo: Responder dudas sobre cursos de belleza y uñas.
       
       BASE DE CONOCIMIENTO (FAQ):
-      ${faqContext || "No hay información específica en la base de datos."}
+      ${faqContext || "No hay información específica."}
 
       HISTORIAL:
       ${conversation}
@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
       - Si preguntan precios y NO están en la FAQ, di: "Déjame contactar a un asesor humano para darte el precio exacto 👩‍💻".
     `;
 
-    // 4. LLAMADA A GEMINI
+    // 4. GENERAR
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(systemPrompt);
