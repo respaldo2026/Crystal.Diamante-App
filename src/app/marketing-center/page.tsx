@@ -138,6 +138,11 @@ export default function MarketingCenterPage() {
   const [keywordsDraft, setKeywordsDraft] = useState<Record<number, string>>({});
   const [savingCursoId, setSavingCursoId] = useState<number | null>(null);
   const [loadingCursosMarketing, setLoadingCursosMarketing] = useState(false);
+  const [iaModalVisible, setIaModalVisible] = useState(false);
+  const [iaTargetCurso, setIaTargetCurso] = useState<MarketingCurso | null>(null);
+  const [iaLoading, setIaLoading] = useState(false);
+  const [iaResult, setIaResult] = useState<{ promo?: string; keywords?: string[] }>({});
+  const [iaForm] = Form.useForm();
 
   useEffect(() => {
     cargarDatos();
@@ -459,6 +464,53 @@ export default function MarketingCenterPage() {
     }
   };
 
+  const abrirAsistenteIA = (curso: MarketingCurso) => {
+    setIaTargetCurso(curso);
+    setIaResult({});
+    iaForm.setFieldsValue({
+      titulo: curso.titulo,
+      tipo: curso.tipo || "",
+      estado: curso.estado || "",
+      fecha_inicio: curso.fecha_inicio ? dayjs(curso.fecha_inicio).format("YYYY-MM-DD") : "",
+      beneficios: "",
+      publico: "",
+      tono: "Cercano, claro y vendedor sin sonar robot",
+      oferta: "",
+    });
+    setIaModalVisible(true);
+  };
+
+  const generarTextoIA = async (values: any) => {
+    setIaLoading(true);
+    setIaResult({});
+    try {
+      const res = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...values, modo: "curso" }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo generar con IA");
+
+      setIaResult({ promo: data.promo_text, keywords: data.keywords });
+      if (iaTargetCurso?.id && data.keywords?.length) {
+        setKeywordsDraft((prev) => ({ ...prev, [iaTargetCurso.id]: data.keywords.join(", ") }));
+      }
+    } catch (error: any) {
+      console.error("Error IA:", error);
+      message.error(error.message || "Error generando con IA");
+    } finally {
+      setIaLoading(false);
+    }
+  };
+
+  const usarKeywordsIA = () => {
+    if (!iaTargetCurso?.id || !iaResult.keywords?.length) return;
+    setKeywordsDraft((prev) => ({ ...prev, [iaTargetCurso.id]: iaResult.keywords!.join(", ") }));
+    message.success("Keywords aplicadas al curso");
+  };
+
   const filteredAssets = assets.filter((a) => {
     const matchesSearch = searchTerm
       ? [a.titulo, a.descripcion, a.descripcion_ia, a.nombre_archivo, (a.keywords || []).join(" ")]
@@ -693,6 +745,20 @@ export default function MarketingCenterPage() {
         </Space>
       ),
     },
+    {
+      title: "IA",
+      key: "ia",
+      width: 90,
+      render: (_: any, record: MarketingCurso) => (
+        <Button
+          size="small"
+          icon={<RobotOutlined />}
+          onClick={() => abrirAsistenteIA(record)}
+        >
+          IA
+        </Button>
+      ),
+    },
   ];
 
   return (
@@ -915,6 +981,94 @@ export default function MarketingCenterPage() {
           pagination={{ pageSize: isMobile ? 5 : 10 }}
         />
       </Card>
+
+      {/* Modal IA para generar copy y keywords */}
+      <Modal
+        title="Asistente IA: texto y keywords"
+        open={iaModalVisible}
+        onCancel={() => {
+          setIaModalVisible(false);
+          setIaResult({});
+          iaForm.resetFields();
+          setIaTargetCurso(null);
+        }}
+        onOk={() => iaForm.submit()}
+        okText="Generar con IA"
+        confirmLoading={iaLoading}
+        width={isMobile ? 360 : 720}
+      >
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Alert
+            type="info"
+            showIcon
+            message="Describe el curso y la IA sugerirá un texto promocional y keywords para el bot."
+          />
+
+          <Form form={iaForm} layout="vertical" onFinish={generarTextoIA}>
+            <Row gutter={[12, 12]}>
+              <Col xs={24} md={14}>
+                <Form.Item name="titulo" label="Título del curso" rules={[{ required: true, message: "Ingresa un título" }] }>
+                  <Input placeholder="Ej: Miradas Perfectas" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={10}>
+                <Form.Item name="tipo" label="Tipo" tooltip="Diplomado, taller, grupo, etc.">
+                  <Input placeholder="Taller" />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={[12, 12]}>
+              <Col xs={24} md={12}>
+                <Form.Item name="fecha_inicio" label="Fecha de inicio (opcional)">
+                  <Input placeholder="2026-02-20" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="oferta" label="Precio u oferta (opcional)">
+                  <Input placeholder="$350.000 promo lanzamiento" />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item name="beneficios" label="Beneficios o diferenciales" rules={[{ required: true, message: "Añade beneficios" }] }>
+              <TextArea rows={3} placeholder="Ej: incluye kit inicial, certificación, práctica en modelo real" />
+            </Form.Item>
+
+            <Form.Item name="publico" label="Público objetivo" tooltip="A quién va dirigido">
+              <Input placeholder="Principiantes en belleza, estilistas que quieren actualizarse" />
+            </Form.Item>
+
+            <Form.Item name="tono" label="Tono" initialValue="Cercano, claro y vendedor sin exagerar">
+              <Input placeholder="Cercano, claro y vendedor sin exagerar" />
+            </Form.Item>
+          </Form>
+
+          {iaResult.promo && (
+            <Card size="small" title="Texto promocional sugerido">
+              <TextArea value={iaResult.promo} readOnly autoSize={{ minRows: 3, maxRows: 6 }} />
+              <Space style={{ marginTop: 8 }}>
+                <Button onClick={() => navigator.clipboard.writeText(iaResult.promo || "")}>Copiar texto</Button>
+              </Space>
+            </Card>
+          )}
+
+          {iaResult.keywords && iaResult.keywords.length > 0 && (
+            <Card size="small" title="Keywords sugeridas">
+              <Space wrap>
+                {iaResult.keywords.map((k) => (
+                  <Tag key={k}>{k}</Tag>
+                ))}
+              </Space>
+              {iaTargetCurso && (
+                <Button style={{ marginTop: 8 }} type="primary" onClick={usarKeywordsIA}>
+                  Usar en este curso
+                </Button>
+              )}
+            </Card>
+          )}
+        </Space>
+      </Modal>
 
       {/* Modal de Crear/Editar */}
       <Modal
