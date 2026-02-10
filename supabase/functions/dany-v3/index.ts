@@ -286,6 +286,11 @@ serve(async (req) => {
       reply = construirRespuestaVendedora(conMedios) ?? "";
     }
 
+    if (!reply && wantsSchedule && marketing && marketing.length > 0) {
+      // Si preguntan por días/horario y no hubo match por keywords, responde con el primero activo
+      reply = construirRespuestaVendedora(marketing[0]) ?? "";
+    }
+
     if (!reply && isGreeting && marketing && marketing.length > 0) {
       // Si solo saludan, responde con el mejor curso disponible (primero en la lista)
       reply = construirRespuestaVendedora(marketing[0]) ?? "";
