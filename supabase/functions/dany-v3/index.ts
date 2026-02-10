@@ -104,9 +104,26 @@ serve(async (req) => {
       .filter(Boolean)
       .join("\n\n");
 
+    const sanitize = (text: string) =>
+      text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+
+    const construirRespuestaBasica = () => {
+      const base = (marketing && marketing.length > 0) ? marketing[0] : null;
+      if (!base) return "No tengo datos suficientes ahora; te conecto con un asesor.";
+      const precio = base.precio_promocional ?? base.precio_lista ?? "s/p";
+      const inicio = base.fecha_inicio ?? "fecha por definir";
+      const cupos = base.cupos_disponibles ?? "cupos N/D";
+      const horario = base.hora_inicio && base.hora_fin ? `${base.hora_inicio} - ${base.hora_fin}` : "hora por definir";
+      const link = base.url_inscripcion ?? "(pide el enlace de inscripción)";
+      return `Tenemos ${base.titulo}. Inicio: ${inicio}${horario ? ` | Horario: ${horario}` : ""} | Precio: ${precio} ${base.moneda ?? ""} | Cupos: ${cupos} | Inscripción: ${link}`;
+    };
+
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    let reply = "No tengo datos suficientes ahora; te conecto con un asesor.";
+    let reply = construirRespuestaBasica();
 
     try {
       const aiResult = await model.generateContent(prompt);
@@ -117,8 +134,12 @@ serve(async (req) => {
     }
 
     const bannedRegex = /(cerebro|algo\s+sal[ií]o\s+mal|brain)/i;
-    if (bannedRegex.test(reply)) {
-      reply = "No tengo datos suficientes ahora; te conecto con un asesor para confirmarte precios, fechas y cupos.";
+    const sanitizedReply = sanitize(reply);
+    if (bannedRegex.test(reply) || bannedRegex.test(sanitizedReply)) {
+      reply = construirRespuestaBasica();
+      if (!reply || reply.trim().length === 0) {
+        reply = "No tengo datos suficientes ahora; te conecto con un asesor para confirmarte precios, fechas y cupos.";
+      }
     }
 
     return new Response(JSON.stringify({ reply }), {
