@@ -23,6 +23,7 @@ import {
   Image,
   Grid,
   Divider,
+  Alert,
 } from "antd";
 import {
   PlusOutlined,
@@ -622,6 +623,7 @@ export default function MarketingCenterPage() {
       {/* Contexto IA: Programas, Cursos y Materiales */}
       <Card
         title="Contexto IA: Programas, cursos próximos y materiales"
+        bodyStyle={{ padding: isMobile ? "16px" : "20px", background: "#f7f9fc" }}
         extra={
           <Space wrap>
             <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarProgramas}>
@@ -637,18 +639,33 @@ export default function MarketingCenterPage() {
         }
       >
         <Space direction="vertical" size="small" style={{ width: "100%" }}>
-          <Text type="secondary">
-            Copia este texto al contexto de la IA para que responda con datos actualizados de programas, cursos y materiales.
-          </Text>
-          <Text code style={{ whiteSpace: "pre-wrap", width: "100%" }}>
+          <Alert
+            type="info"
+            showIcon
+            message="Guía rápida"
+            description="Recarga, revisa y copia el contexto para que el agente IA responda con datos actuales (programas, cursos, materiales)."
+          />
+
+          <Divider style={{ margin: "12px 0" }} plain>
+            Programas y cursos
+          </Divider>
+          <Text
+            code
+            style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
+          >
             {contextoIA()}
           </Text>
-          <Divider style={{ margin: "8px 0" }} />
-          <Text strong>Materiales visibles para IA</Text>
-          <Text code style={{ whiteSpace: "pre-wrap", width: "100%" }}>
+
+          <Divider style={{ margin: "12px 0" }} plain>
+            Materiales visibles para IA
+          </Divider>
+          <Text
+            code
+            style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
+          >
             {contextoAssetsIA()}
           </Text>
-          <Divider style={{ margin: "8px 0" }} />
+
           <Space wrap>
             <Button onClick={() => navigator.clipboard.writeText(contextoIA())} size={isMobile ? "small" : "middle"}>
               Copiar contexto IA

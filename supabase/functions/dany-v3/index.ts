@@ -53,6 +53,17 @@ serve(async (req) => {
 
     if (marketingErr) {
       console.error("Error marketing_centro", marketingErr);
+      return new Response(
+        JSON.stringify({ reply: "No puedo acceder a los cursos ahora mismo. Consulta a un asesor." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!marketing || marketing.length === 0) {
+      return new Response(
+        JSON.stringify({ reply: "No tengo cursos activos o próximos cargados. Avísame qué curso buscas y lo consulto con un asesor." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const contextLines = (marketing ?? []).map((m) => {
@@ -80,7 +91,7 @@ serve(async (req) => {
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const aiResult = await model.generateContent(prompt);
-    const reply = aiResult.response.text().trim();
+    const reply = aiResult.response.text().trim() || "No tengo datos suficientes ahora; te conecto con un asesor.";
 
     return new Response(JSON.stringify({ reply }), {
       status: 200,
