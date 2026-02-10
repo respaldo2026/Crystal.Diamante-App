@@ -164,15 +164,15 @@ serve(async (req) => {
 
       const precioOferta = curso.precio_promocional ?? curso.precio_lista;
       const precioLista = curso.precio_lista && curso.precio_promocional ? `${curso.precio_lista} ${curso.moneda ?? ""}`.trim() : "";
-      const precioTexto = precioOferta ? `${precioOferta} ${curso.moneda ?? ""}`.trim() : "(consúltame el precio)";
+      const precioTexto = precioOferta ? `${precioOferta} ${curso.moneda ?? ""}`.trim() : "Te confirmo el precio en un momento.";
       const mensualidadTexto = curso.precio_mensualidad
         ? `${curso.precio_mensualidad} ${curso.moneda ?? ""}`.trim()
         : "Te confirmo la mensualidad en un momento.";
 
-      const inicio = curso.fecha_inicio ?? "fecha por definir";
+      const inicio = curso.fecha_inicio ?? "(te confirmo fecha exacta en un momento)";
       const cupos = curso.cupos_disponibles;
-      const horario = curso.hora_inicio && curso.hora_fin ? `${curso.hora_inicio} - ${curso.hora_fin}` : "hora por definir";
-      const link = curso.url_inscripcion ?? "(pide el enlace de inscripción)";
+      const horario = curso.hora_inicio && curso.hora_fin ? `${curso.hora_inicio} - ${curso.hora_fin}` : "(te confirmo el horario enseguida)";
+      const link = curso.url_inscripcion ?? "(te paso el enlace apenas lo tenga)";
 
       const cuposTexto =
         typeof cupos === "number"
@@ -210,14 +210,28 @@ serve(async (req) => {
         }
         if (wantsDuration || wantsAll) {
           if (curso.descripcion_corta) partes.push(`ℹ️ ${curso.descripcion_corta}`);
+          else partes.push("ℹ️ Ese detalle no lo tengo cargado, te lo confirmo ya mismo.");
         }
         if (wantsMedia) {
-          if (curso.url_foto) partes.push(`📸 Foto: ${curso.url_foto}`);
-          if (curso.url_video) partes.push(`🎥 Video: ${curso.url_video}`);
+          let anyMedia = false;
+          if (curso.url_foto) {
+            partes.push(`📸 Foto: ${curso.url_foto}`);
+            anyMedia = true;
+          }
+          if (curso.url_video) {
+            partes.push(`🎥 Video: ${curso.url_video}`);
+            anyMedia = true;
+          }
           if (curso.urls_adjuntos && Array.isArray(curso.urls_adjuntos)) {
             curso.urls_adjuntos.forEach((a: any) => {
-              if (a?.url) partes.push(`📎 ${a?.label ?? "Adjunto"}: ${a.url}`);
+              if (a?.url) {
+                partes.push(`📎 ${a?.label ?? "Adjunto"}: ${a.url}`);
+                anyMedia = true;
+              }
             });
+          }
+          if (!anyMedia) {
+            partes.push("No tengo foto/video cargado aquí, te lo paso en seguida.");
           }
         }
         if (partes.length <= 3) {
