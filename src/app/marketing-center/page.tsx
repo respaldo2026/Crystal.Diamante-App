@@ -21,6 +21,7 @@ import {
   Tooltip,
   Switch,
   Image,
+  Grid,
 } from "antd";
 import {
   PlusOutlined,
@@ -91,6 +92,8 @@ const estadoColors: Record<string, string> = {
 };
 
 export default function MarketingCenterPage() {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const [assets, setAssets] = useState<MarketingAsset[]>([]);
   const [programas, setProgramas] = useState<Programa[]>([]);
   const [loading, setLoading] = useState(false);
@@ -450,16 +453,21 @@ export default function MarketingCenterPage() {
   ];
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%", padding: "24px" }}>
+    <Space
+      direction="vertical"
+      size="large"
+      style={{ width: "100%", padding: isMobile ? "16px" : "24px" }}
+    >
       {/* Header */}
       <Card
         style={{
           background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
           border: "none",
         }}
+        bodyStyle={{ padding: isMobile ? "16px" : "24px" }}
       >
         <Space direction="vertical" size="small">
-          <Space align="center">
+          <Space align="center" wrap>
             <RobotOutlined style={{ fontSize: 32, color: "#fff" }} />
             <Title level={2} style={{ margin: 0, color: "#fff" }}>
               Marketing Center
@@ -472,13 +480,13 @@ export default function MarketingCenterPage() {
       </Card>
 
       {/* Estadísticas */}
-      <Row gutter={16}>
-        <Col xs={12} sm={6}>
+      <Row gutter={[12, 12]}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic title="Total Assets" value={stats.total} prefix={<FileOutlined />} />
           </Card>
         </Col>
-        <Col xs={12} sm={6}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
               title="Activos"
@@ -487,7 +495,7 @@ export default function MarketingCenterPage() {
             />
           </Card>
         </Col>
-        <Col xs={12} sm={6}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
               title="Visibles para IA"
@@ -497,7 +505,7 @@ export default function MarketingCenterPage() {
             />
           </Card>
         </Col>
-        <Col xs={12} sm={6}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic title="Flyers" value={stats.flyers} prefix={<FileImageOutlined />} />
           </Card>
@@ -508,13 +516,14 @@ export default function MarketingCenterPage() {
       <Card
         title="Assets de Marketing"
         extra={
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={cargarAssets}>
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} onClick={cargarAssets} size={isMobile ? "small" : "middle"}>
               Recargar
             </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
+              size={isMobile ? "small" : "middle"}
               onClick={() => {
                 setEditingAsset(null);
                 form.resetFields();
@@ -532,7 +541,9 @@ export default function MarketingCenterPage() {
           dataSource={assets}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 10 }}
+          size={isMobile ? "small" : "middle"}
+          scroll={{ x: 960 }}
+          pagination={{ pageSize: isMobile ? 5 : 10 }}
         />
       </Card>
 
@@ -549,7 +560,7 @@ export default function MarketingCenterPage() {
         onOk={() => form.submit()}
         okText={editingAsset ? "Actualizar" : "Crear"}
         cancelText="Cancelar"
-        width={700}
+        width={isMobile ? 360 : 700}
         confirmLoading={uploading}
       >
         <Form form={form} layout="vertical" onFinish={handleUpload}>
@@ -582,8 +593,8 @@ export default function MarketingCenterPage() {
             />
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12}>
               <Form.Item
                 name="tipo_asset"
                 label="Tipo de archivo"
@@ -592,7 +603,7 @@ export default function MarketingCenterPage() {
                 <Select placeholder="Selecciona tipo" options={tipoAssetOptions} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="categoria" label="Categoría">
                 <Select
                   placeholder="Selecciona categoría"
@@ -607,8 +618,8 @@ export default function MarketingCenterPage() {
             <Input placeholder="manicure, promoción, febrero, descuento" />
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12}>
               <Form.Item name="programa_id" label="Programa relacionado">
                 <Select
                   placeholder="Selecciona programa"
@@ -621,7 +632,7 @@ export default function MarketingCenterPage() {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="estado" label="Estado" initialValue="activo">
                 <Select
                   options={[
@@ -645,7 +656,7 @@ export default function MarketingCenterPage() {
 
           <Form.Item label="Archivo" tooltip="Max 10MB">
             <Upload {...uploadProps}>
-              <Button icon={<UploadOutlined />}>
+              <Button icon={<UploadOutlined />} block={isMobile}>
                 {editingAsset ? "Cambiar archivo (opcional)" : "Seleccionar archivo"}
               </Button>
             </Upload>
