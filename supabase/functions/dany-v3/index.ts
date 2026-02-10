@@ -110,6 +110,13 @@ serve(async (req) => {
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
 
+    const msg = sanitize(messageBody);
+    const wantsMedia = /foto|imagen|video|adjunto|material|brochure/.test(msg);
+    const wantsDuration = /duracion|dura/.test(msg);
+    const wantsPrice = /precio|costo|vale|inversion/.test(msg);
+    const wantsSchedule = /hora|horario/.test(msg);
+    const wantsAll = /info|informacion|detalle|completo/.test(msg);
+
     const construirRespuestaVendedora = (curso: any) => {
       if (!curso) return null;
 
@@ -134,6 +141,23 @@ serve(async (req) => {
 
       const saludo = name ? `Hola ${name}, soy Dany del equipo Crystal Diamante ✨` : "Hola, soy Dany del equipo Crystal Diamante ✨";
 
+      const extras: string[] = [];
+      if (curso.descripcion_corta && (wantsAll || wantsDuration)) {
+        extras.push(`ℹ️ ${curso.descripcion_corta}`);
+      }
+      if (wantsSchedule && horario && !curso.descripcion_corta) {
+        extras.push(`⏰ Horario: ${horario}`);
+      }
+      if (wantsMedia) {
+        if (curso.url_foto) extras.push(`📸 Foto: ${curso.url_foto}`);
+        if (curso.url_video) extras.push(`🎥 Video: ${curso.url_video}`);
+        if (curso.urls_adjuntos && Array.isArray(curso.urls_adjuntos)) {
+          curso.urls_adjuntos.forEach((a: any) => {
+            if (a?.url) extras.push(`📎 ${a?.label ?? "Adjunto"}: ${a.url}`);
+          });
+        }
+      }
+
       return [
         `${saludo}`,
         `*${curso.titulo}* arranca ${inicio}${horario ? ` | Horario: ${horario}` : ""}.`,
@@ -142,6 +166,7 @@ serve(async (req) => {
         `🎯 ${cuposTexto}`,
         `🔗 Link para asegurar tu cupo: ${link}`,
         "¿Te ayudo a reservar ahora mismo?",
+        ...extras,
       ]
         .filter(Boolean)
         .join("\n");
