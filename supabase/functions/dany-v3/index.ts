@@ -112,6 +112,7 @@ serve(async (req) => {
     const wantsPrice = /precio|costo|vale|inversion/.test(msg);
     const wantsSchedule = /hora|horario/.test(msg);
     const wantsAll = /info|informacion|detalle|completo/.test(msg);
+    const isGreeting = /\b(hola|buenas|hello|hey|hi)\b/.test(msg);
     const stopWords = new Set(["curso", "cursos", "clase", "clases", "de", "del", "para", "una", "unas", "unos", "un"]);
     const palabrasClave = msg
       .split(/\W+/)
@@ -168,6 +169,7 @@ serve(async (req) => {
           : "Verifico cupos contigo en un minuto.";
 
       const saludo = name ? `Hola ${name}, soy Dany del equipo Crystal Diamante ✨` : "Hola, soy Dany del equipo Crystal Diamante ✨";
+      const tonoHumano = "Te escribo yo misma, así de cerca como si estuviéramos hablando por WhatsApp.";
 
       const extras: string[] = [];
       if (curso.descripcion_corta && (wantsAll || wantsDuration)) {
@@ -188,12 +190,13 @@ serve(async (req) => {
 
       return [
         `${saludo}`,
-        `*${curso.titulo}* arranca ${inicio}${horario ? ` | Horario: ${horario}` : ""}.`,
+        tonoHumano,
+        `Te cuento en corto: *${curso.titulo}* arranca ${inicio}${horario ? ` | Horario: ${horario}` : ""}.`,
         `💰 Inscripción/curso: ${precioTexto}${precioLista ? ` (normal ${precioLista})` : ""}.`,
         `📅 Mensualidad: ${mensualidadTexto}`,
         `🎯 ${cuposTexto}`,
-        `🔗 Link para asegurar tu cupo: ${link}`,
-        "¿Te ayudo a reservar ahora mismo?",
+        `🔗 Te paso el link para asegurar tu cupo: ${link}`,
+        "¿Te ayudo a reservar o tienes alguna duda puntual?",
         ...extras,
       ]
         .filter(Boolean)
@@ -217,6 +220,11 @@ serve(async (req) => {
     if (!reply && wantsMedia) {
       const conMedios = (marketing ?? []).find((c) => c.url_foto || c.url_video || (c.urls_adjuntos && c.urls_adjuntos.length));
       reply = construirRespuestaVendedora(conMedios) ?? "";
+    }
+
+    if (!reply && isGreeting && marketing && marketing.length > 0) {
+      // Si solo saludan, responde con el mejor curso disponible (primero en la lista)
+      reply = construirRespuestaVendedora(marketing[0]) ?? "";
     }
 
     if (!reply && marketing && marketing.length > 0) {

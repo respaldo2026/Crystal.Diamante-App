@@ -215,7 +215,6 @@ export default function MarketingCenterPage() {
     }
 
     setUploading(true);
-
     try {
       let urlArchivo = editingAsset?.url_archivo;
       let nombreArchivo = editingAsset?.nombre_archivo;
@@ -839,6 +838,7 @@ export default function MarketingCenterPage() {
             </Button>
           </Space>
         }
+        bodyStyle={{ padding: isMobile ? "12px" : "20px" }}
       >
         <Table
           columns={columnsCursosMarketing}
