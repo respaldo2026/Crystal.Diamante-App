@@ -22,6 +22,7 @@ import {
   Switch,
   Image,
   Grid,
+  Divider,
 } from "antd";
 import {
   PlusOutlined,
@@ -67,6 +68,18 @@ interface Programa {
   nombre: string;
 }
 
+interface CursoProximo {
+  id: number;
+  nombre: string;
+  fecha_inicio: string;
+  cupos?: number;
+  estado?: string;
+  dias_semana?: string[];
+  hora_inicio?: string | null;
+  hora_fin?: string | null;
+  programas?: { nombre: string } | null;
+}
+
 const tipoAssetOptions = [
   { value: "flyer", label: "Flyer", icon: <FileImageOutlined /> },
   { value: "pdf", label: "PDF", icon: <FilePdfOutlined /> },
@@ -96,6 +109,7 @@ export default function MarketingCenterPage() {
   const isMobile = !screens.md;
   const [assets, setAssets] = useState<MarketingAsset[]>([]);
   const [programas, setProgramas] = useState<Programa[]>([]);
+  const [cursosProximos, setCursosProximos] = useState<CursoProximo[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAsset, setEditingAsset] = useState<MarketingAsset | null>(null);
@@ -110,7 +124,7 @@ export default function MarketingCenterPage() {
   }, []);
 
   const cargarDatos = async () => {
-    await Promise.all([cargarAssets(), cargarProgramas()]);
+    await Promise.all([cargarAssets(), cargarProgramas(), cargarCursosProximos()]);
   };
 
   const cargarAssets = async () => {
@@ -143,6 +157,25 @@ export default function MarketingCenterPage() {
       setProgramas((data as Programa[]) || []);
     } catch (error) {
       console.error("Error cargando programas:", error);
+    }
+  };
+
+  const cargarCursosProximos = async () => {
+    try {
+      const hoy = dayjs().format("YYYY-MM-DD");
+      const { data, error } = await supabaseBrowserClient
+        .from("cursos")
+        .select("id, nombre, fecha_inicio, cupos, estado, dias_semana, hora_inicio, hora_fin, programas(nombre)")
+        .gte("fecha_inicio", hoy)
+        .in("estado", ["proximo", "activo"])
+        .order("fecha_inicio", { ascending: true })
+        .limit(12);
+
+      if (error) throw error;
+      setCursosProximos((data as CursoProximo[]) || []);
+    } catch (error) {
+      console.error("Error cargando cursos próximos:", error);
+      message.error("No se pudieron cargar los cursos próximos");
     }
   };
 
@@ -353,6 +386,45 @@ export default function MarketingCenterPage() {
     flyers: assets.filter((a) => a.tipo_asset === "flyer").length,
   };
 
+  const formatoHorario = (curso: CursoProximo) => {
+    const diasLista = Array.isArray(curso.dias_semana)
+      ? curso.dias_semana
+      : typeof curso.dias_semana === "string" && curso.dias_semana.length > 0
+        ? [curso.dias_semana]
+        : [];
+
+    const dias = diasLista.length > 0 ? diasLista.join(", ") : "Horario por confirmar";
+    const hora = curso.hora_inicio && curso.hora_fin ? `${curso.hora_inicio} - ${curso.hora_fin}` : "Hora por confirmar";
+    return `${dias} | ${hora}`;
+  };
+
+  const contextoIA = () => {
+    const programasText = programas.length
+      ? programas.map((p) => `- Programa: ${p.nombre}`).join("\n")
+      : "(Sin programas cargados)";
+
+    const cursosText = cursosProximos.length
+      ? cursosProximos
+          .map((c) => {
+            const inicio = c.fecha_inicio ? dayjs(c.fecha_inicio).format("DD/MM") : "Fecha por confirmar";
+            const programaNombre = c.programas?.nombre ? ` | Programa: ${c.programas.nombre}` : "";
+            const cupos = c.cupos ? ` | Cupos: ${c.cupos}` : "";
+            return `- ${c.nombre}${programaNombre} | Inicio: ${inicio} | ${formatoHorario(c)}${cupos}`;
+          })
+          .join("\n")
+      : "(Sin cursos próximos)";
+
+    return [
+      "Contexto para IA: Programas y Cursos",
+      "Programas activos:",
+      programasText,
+      "Próximos cursos:",
+      cursosText,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  };
+
   const columns = [
     {
       title: "Archivo",
@@ -511,6 +583,39 @@ export default function MarketingCenterPage() {
           </Card>
         </Col>
       </Row>
+
+      {/* Contexto IA: Programas y Cursos */}
+      <Card
+        title="Contexto IA: Programas y cursos próximos"
+        extra={
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarProgramas}>
+              Recargar programas
+            </Button>
+            <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarCursosProximos}>
+              Recargar cursos
+            </Button>
+          </Space>
+        }
+      >
+        <Space direction="vertical" size="small" style={{ width: "100%" }}>
+          <Text type="secondary">
+            Copia este texto al contexto de la IA para que responda con datos actualizados de programas y próximos cursos.
+          </Text>
+          <Text code style={{ whiteSpace: "pre-wrap", width: "100%" }}>
+            {contextoIA()}
+          </Text>
+          <Divider style={{ margin: "8px 0" }} />
+          <Space wrap>
+            <Button onClick={() => navigator.clipboard.writeText(contextoIA())} size={isMobile ? "small" : "middle"}>
+              Copiar contexto IA
+            </Button>
+            <Button onClick={cargarDatos} icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"}>
+              Refrescar todo
+            </Button>
+          </Space>
+        </Space>
+      </Card>
 
       {/* Tabla */}
       <Card
