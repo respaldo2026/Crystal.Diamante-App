@@ -39,6 +39,19 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Estado por lead (para recordar último curso y responder más corto)
+    let leadState: { last_curso_id?: number | null } | null = null;
+    if (phone) {
+      const { data: stateData, error: stateErr } = await supabase
+        .from("lead_state")
+        .select("last_curso_id")
+        .eq("phone", phone)
+        .maybeSingle();
+      if (!stateErr && stateData) {
+        leadState = stateData;
+      }
+    }
+
     // 1. Obtener ofertas (cursos/grupos) desde el Centro de Marketing
     const { data: marketing, error: marketingErr } = await supabase
       .from("marketing_centro")
@@ -188,6 +201,36 @@ serve(async (req) => {
         }
       }
 
+      const respuestaCorta = () => {
+        const partes: string[] = [`${saludo}`, tonoHumano, ""];
+        if (wantsSchedule) partes.push(`📆 *Inicio:* ${inicio}${horario ? ` | ⏰ *Horario:* ${horario}` : ""}`);
+        if (wantsPrice) {
+          partes.push(`💰 *Inscripción/curso:* ${precioTexto}${precioLista ? ` (normal ${precioLista})` : ""}`);
+          partes.push(`📅 *Mensualidad:* ${mensualidadTexto}`);
+        }
+        if (wantsDuration || wantsAll) {
+          if (curso.descripcion_corta) partes.push(`ℹ️ ${curso.descripcion_corta}`);
+        }
+        if (wantsMedia) {
+          if (curso.url_foto) partes.push(`📸 Foto: ${curso.url_foto}`);
+          if (curso.url_video) partes.push(`🎥 Video: ${curso.url_video}`);
+          if (curso.urls_adjuntos && Array.isArray(curso.urls_adjuntos)) {
+            curso.urls_adjuntos.forEach((a: any) => {
+              if (a?.url) partes.push(`📎 ${a?.label ?? "Adjunto"}: ${a.url}`);
+            });
+          }
+        }
+        if (partes.length <= 3) {
+          // Si no se pidió nada específico, regresar null para usar la completa
+          return null;
+        }
+        partes.push("", `🔗 ${link}`, "¿Te ayudo con algo más de este curso?");
+        return partes.filter(Boolean).join("\n");
+      };
+
+      const corta = respuestaCorta();
+      if (corta) return corta;
+
       return [
         `${saludo}`,
         tonoHumano,
@@ -213,7 +256,11 @@ serve(async (req) => {
       return best;
     }, null);
 
-    const pick = mejor && mejor.score > 0 ? mejor.curso : null;
+    const cursoFromState = leadState?.last_curso_id
+      ? (marketing ?? []).find((c: any) => c.id === leadState?.last_curso_id)
+      : null;
+
+    const pick = mejor && mejor.score > 0 ? mejor.curso : cursoFromState ?? null;
 
     let reply = "";
     if (pick) {
@@ -247,6 +294,13 @@ serve(async (req) => {
 
     if (!reply) {
       reply = materialsLines[0] ?? "No tengo datos suficientes ahora; te conecto con un asesor.";
+    }
+
+    // Guardar estado de lead
+    if (phone && pick?.id) {
+      await supabase
+        .from("lead_state")
+        .upsert({ phone, last_curso_id: pick.id, last_updated: new Date().toISOString() });
     }
 
     // Filtro final anti-frase prohibida
