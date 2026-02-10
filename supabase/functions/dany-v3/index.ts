@@ -112,27 +112,39 @@ serve(async (req) => {
 
     const construirRespuestaVendedora = (curso: any) => {
       if (!curso) return null;
-      const precioValor = curso.precio_promocional ?? curso.precio_lista;
-      const precioTexto = precioValor ? `${precioValor} ${curso.moneda ?? ""}`.trim() : "(consúltame el precio)";
+
+      const precioOferta = curso.precio_promocional ?? curso.precio_lista;
+      const precioLista = curso.precio_lista && curso.precio_promocional ? `${curso.precio_lista} ${curso.moneda ?? ""}`.trim() : "";
+      const precioTexto = precioOferta ? `${precioOferta} ${curso.moneda ?? ""}`.trim() : "(consúltame el precio)";
+      const mensualidadTexto = curso.precio_mensualidad
+        ? `${curso.precio_mensualidad} ${curso.moneda ?? ""}`.trim()
+        : "Te confirmo la mensualidad en un momento.";
+
       const inicio = curso.fecha_inicio ?? "fecha por definir";
       const cupos = curso.cupos_disponibles;
       const horario = curso.hora_inicio && curso.hora_fin ? `${curso.hora_inicio} - ${curso.hora_fin}` : "hora por definir";
       const link = curso.url_inscripcion ?? "(pide el enlace de inscripción)";
+
       const cuposTexto =
         typeof cupos === "number"
           ? cupos <= 5
-            ? `Quedan ${cupos} cupos, suele llenarse rápido.`
+            ? `🔥 Quedan ${cupos} cupos, suele llenarse rápido.`
             : `Cupos disponibles: ${cupos}.`
           : "Verifico cupos contigo en un minuto.";
-      const saludo = name ? `Hola ${name}, soy Dany del equipo Crystal Diamante.` : "Hola, soy Dany del equipo Crystal Diamante.";
+
+      const saludo = name ? `Hola ${name}, soy Dany del equipo Crystal Diamante ✨` : "Hola, soy Dany del equipo Crystal Diamante ✨";
+
       return [
-        saludo,
-        `Mira, ${curso.titulo} arranca ${inicio}${horario ? ` | Horario: ${horario}` : ""}.`,
-        `Inversión: ${precioTexto}. ${cuposTexto}`,
-        `Te paso el link para asegurar tu lugar: ${link}. ¿Te ayudo a reservarlo?`,
+        `${saludo}`,
+        `*${curso.titulo}* arranca ${inicio}${horario ? ` | Horario: ${horario}` : ""}.`,
+        `💰 Inscripción/curso: ${precioTexto}${precioLista ? ` (normal ${precioLista})` : ""}.`,
+        `📅 Mensualidad: ${mensualidadTexto}`,
+        `🎯 ${cuposTexto}`,
+        `🔗 Link para asegurar tu cupo: ${link}`,
+        "¿Te ayudo a reservar ahora mismo?",
       ]
         .filter(Boolean)
-        .join(" ");
+        .join("\n");
     };
 
     // Respuesta determinista sin Gemini para evitar frases no deseadas
