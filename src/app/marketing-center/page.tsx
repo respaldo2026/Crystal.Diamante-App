@@ -74,7 +74,7 @@ interface CursoProximo {
   fecha_inicio: string;
   cupos?: number;
   estado?: string;
-  dias_semana?: string[];
+  dias_semana?: string[] | string | null;
   hora_inicio?: string | null;
   hora_fin?: string | null;
   programas?: { nombre: string }[] | null;
@@ -179,6 +179,7 @@ export default function MarketingCenterPage() {
       const normalizados = (data || []).map((c: any) => ({
         ...c,
         programas: Array.isArray(c.programas) ? c.programas : c.programas ? [c.programas] : [],
+        dias_semana: c.dias_semana ?? null,
       }));
       setCursosProximos(normalizados as CursoProximo[]);
     } catch (error) {
@@ -409,7 +410,7 @@ export default function MarketingCenterPage() {
   const formatoHorario = (curso: CursoProximo) => {
     const diasLista = Array.isArray(curso.dias_semana)
       ? curso.dias_semana
-      : typeof curso.dias_semana === "string" && curso.dias_semana && curso.dias_semana.length > 0
+      : typeof curso.dias_semana === "string" && curso.dias_semana
         ? [curso.dias_semana]
         : [];
 
