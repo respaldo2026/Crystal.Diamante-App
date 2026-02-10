@@ -115,6 +115,7 @@ export default function MarketingCenterPage() {
   const [filterTipo, setFilterTipo] = useState<string | undefined>(undefined);
   const [filterCategoria, setFilterCategoria] = useState<string | undefined>(undefined);
   const [soloIA, setSoloIA] = useState(false);
+  const [mostrarContextoIA, setMostrarContextoIA] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAsset, setEditingAsset] = useState<MarketingAsset | null>(null);
@@ -620,65 +621,78 @@ export default function MarketingCenterPage() {
         </Col>
       </Row>
 
-      {/* Contexto IA: Programas, Cursos y Materiales */}
-      <Card
-        title="Contexto IA: Programas, cursos próximos y materiales"
-        bodyStyle={{ padding: isMobile ? "16px" : "20px", background: "#f7f9fc" }}
-        extra={
-          <Space wrap>
-            <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarProgramas}>
-              Recargar programas
-            </Button>
-            <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarCursosProximos}>
-              Recargar cursos
-            </Button>
-            <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarAssets}>
-              Recargar materiales
-            </Button>
-          </Space>
-        }
-      >
-        <Space direction="vertical" size="small" style={{ width: "100%" }}>
-          <Alert
-            type="info"
-            showIcon
-            message="Guía rápida"
-            description="Recarga, revisa y copia el contexto para que el agente IA responda con datos actuales (programas, cursos, materiales)."
-          />
+      {/* Contexto IA: Programas, Cursos y Materiales (oculto por defecto) */}
+      <Space direction="vertical" style={{ width: "100%" }}>
+        <Button
+          type="default"
+          onClick={() => setMostrarContextoIA((v) => !v)}
+          size={isMobile ? "small" : "middle"}
+          style={{ alignSelf: "flex-start" }}
+        >
+          {mostrarContextoIA ? "Ocultar contexto IA" : "Mostrar contexto IA"}
+        </Button>
 
-          <Divider style={{ margin: "12px 0" }} plain>
-            Programas y cursos
-          </Divider>
-          <Text
-            code
-            style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
+        {mostrarContextoIA && (
+          <Card
+            title="Contexto IA: Programas, cursos próximos y materiales"
+            bodyStyle={{ padding: isMobile ? "16px" : "20px", background: "#f7f9fc" }}
+            extra={
+              <Space wrap>
+                <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarProgramas}>
+                  Recargar programas
+                </Button>
+                <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarCursosProximos}>
+                  Recargar cursos
+                </Button>
+                <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarAssets}>
+                  Recargar materiales
+                </Button>
+              </Space>
+            }
           >
-            {contextoIA()}
-          </Text>
+            <Space direction="vertical" size="small" style={{ width: "100%" }}>
+              <Alert
+                type="info"
+                showIcon
+                message="Guía rápida"
+                description="Recarga, revisa y copia el contexto para que el agente IA responda con datos actuales (programas, cursos, materiales)."
+              />
 
-          <Divider style={{ margin: "12px 0" }} plain>
-            Materiales visibles para IA
-          </Divider>
-          <Text
-            code
-            style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
-          >
-            {contextoAssetsIA()}
-          </Text>
+              <Divider style={{ margin: "12px 0" }} plain>
+                Programas y cursos
+              </Divider>
+              <Text
+                code
+                style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
+              >
+                {contextoIA()}
+              </Text>
 
-          <Space wrap>
-            <Button onClick={() => navigator.clipboard.writeText(contextoIA())} size={isMobile ? "small" : "middle"}>
-              Copiar contexto IA
-            </Button>
-            <Button onClick={() => navigator.clipboard.writeText(contextoAssetsIA())} size={isMobile ? "small" : "middle"}>
-              Copiar materiales IA
-            </Button>
-            <Button onClick={cargarDatos} icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"}>
-              Refrescar todo
-            </Button>
-          </Space>
-        </Space>
-      </Card>
+              <Divider style={{ margin: "12px 0" }} plain>
+                Materiales visibles para IA
+              </Divider>
+              <Text
+                code
+                style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
+              >
+                {contextoAssetsIA()}
+              </Text>
+
+              <Space wrap>
+                <Button onClick={() => navigator.clipboard.writeText(contextoIA())} size={isMobile ? "small" : "middle"}>
+                  Copiar contexto IA
+                </Button>
+                <Button onClick={() => navigator.clipboard.writeText(contextoAssetsIA())} size={isMobile ? "small" : "middle"}>
+                  Copiar materiales IA
+                </Button>
+                <Button onClick={cargarDatos} icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"}>
+                  Refrescar todo
+                </Button>
+              </Space>
+            </Space>
+          </Card>
+        )}
+      </Space>
 
       {/* Tabla */}
       <Card

@@ -39,7 +39,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Obtener materiales y ofertas desde el Centro de Marketing
+    // 1. Obtener ofertas (cursos/grupos) desde el Centro de Marketing
     const { data: marketing, error: marketingErr } = await supabase
       .from("marketing_centro")
       .select(
@@ -53,17 +53,18 @@ serve(async (req) => {
 
     if (marketingErr) {
       console.error("Error marketing_centro", marketingErr);
-      return new Response(
-        JSON.stringify({ reply: "No puedo acceder a los cursos ahora mismo. Consulta a un asesor." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
     }
 
-    if (!marketing || marketing.length === 0) {
-      return new Response(
-        JSON.stringify({ reply: "No tengo cursos activos o próximos cargados. Avísame qué curso buscas y lo consulto con un asesor." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    // 2. Obtener materiales visibles para IA como respaldo
+    const { data: assets, error: assetsErr } = await supabase
+      .from("marketing_assets")
+      .select("titulo, descripcion_ia, url_archivo, tipo_asset, categoria, keywords")
+      .eq("visible_para_ia", true)
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (assetsErr) {
+      console.error("Error marketing_assets", assetsErr);
     }
 
     const contextLines = (marketing ?? []).map((m) => {
@@ -78,10 +79,24 @@ serve(async (req) => {
       return `- ${m.titulo} (${m.tipo}) | inicio: ${inicio} ${horario ? "| " + horario : ""} | precio: ${precio} ${m.moneda ?? ""} | cupos: ${cupos} | estado: ${m.estado} | inscripciones: ${m.url_inscripcion ?? "N/A"}${medios ? " | medios: " + medios : ""}${adjuntos ? " | adjuntos: " + adjuntos : ""}`;
     });
 
+    const materialsLines = (assets ?? []).map((a) => {
+      const kws = a.keywords && Array.isArray(a.keywords) ? ` | keywords: ${a.keywords.join(", ")}` : "";
+      return `- ${a.titulo} [${a.tipo_asset}] ${a.descripcion_ia ?? ""} | url: ${a.url_archivo ?? "N/A"}${kws}`;
+    });
+
+    if ((!marketing || marketing.length === 0) && (!assets || assets.length === 0)) {
+      return new Response(
+        JSON.stringify({ reply: "No tengo cursos ni materiales cargados en este momento. Dime qué curso te interesa y lo consulto con un asesor." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const prompt = [
-      "Eres Dany, asistente de la academia. Responde solo con datos del Centro de Marketing; si falta información, indica que consultarás a un asesor y no inventes.",
-      "Contexto marketing:",
-      contextLines.join("\n") || "(sin registros activos)",
+      "Eres Dany, asistente de la academia. Responde solo con los datos disponibles; si algo falta, di que lo consultas con un asesor y no inventes.",
+      "Contexto cursos/grupos:",
+      contextLines.join("\n") || "(sin cursos activos/próximos)",
+      "Contexto materiales:",
+      materialsLines.join("\n") || "(sin materiales IA)",
       "Pregunta del usuario:",
       messageBody,
     ]
@@ -90,8 +105,15 @@ serve(async (req) => {
 
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const aiResult = await model.generateContent(prompt);
-    const reply = aiResult.response.text().trim() || "No tengo datos suficientes ahora; te conecto con un asesor.";
+    let reply = "No tengo datos suficientes ahora; te conecto con un asesor.";
+
+    try {
+      const aiResult = await model.generateContent(prompt);
+      reply = aiResult.response.text().trim() || reply;
+    } catch (err) {
+      console.error("Gemini generateContent error", err);
+      reply = "Tuve un problema al generar la respuesta. Te conecto con un asesor para más detalles.";
+    }
 
     return new Response(JSON.stringify({ reply }), {
       status: 200,
