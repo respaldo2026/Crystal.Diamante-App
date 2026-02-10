@@ -110,6 +110,10 @@ export default function MarketingCenterPage() {
   const [assets, setAssets] = useState<MarketingAsset[]>([]);
   const [programas, setProgramas] = useState<Programa[]>([]);
   const [cursosProximos, setCursosProximos] = useState<CursoProximo[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterTipo, setFilterTipo] = useState<string | undefined>(undefined);
+  const [filterCategoria, setFilterCategoria] = useState<string | undefined>(undefined);
+  const [soloIA, setSoloIA] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAsset, setEditingAsset] = useState<MarketingAsset | null>(null);
@@ -386,6 +390,18 @@ export default function MarketingCenterPage() {
     flyers: assets.filter((a) => a.tipo_asset === "flyer").length,
   };
 
+  const filteredAssets = assets.filter((a) => {
+    const matchesSearch = searchTerm
+      ? [a.titulo, a.descripcion, a.descripcion_ia, a.nombre_archivo, (a.keywords || []).join(" ")]
+          .filter(Boolean)
+          .some((t) => String(t).toLowerCase().includes(searchTerm.toLowerCase()))
+      : true;
+    const matchesTipo = filterTipo ? a.tipo_asset === filterTipo : true;
+    const matchesCategoria = filterCategoria ? a.categoria === filterCategoria : true;
+    const matchesIA = soloIA ? a.visible_para_ia : true;
+    return matchesSearch && matchesTipo && matchesCategoria && matchesIA;
+  });
+
   const formatoHorario = (curso: CursoProximo) => {
     const diasLista = Array.isArray(curso.dias_semana)
       ? curso.dias_semana
@@ -422,6 +438,18 @@ export default function MarketingCenterPage() {
       cursosText,
     ]
       .filter(Boolean)
+      .join("\n");
+  };
+
+  const contextoAssetsIA = () => {
+    const iaAssets = filteredAssets.filter((a) => a.visible_para_ia);
+    if (!iaAssets.length) return "(Sin materiales visibles para la IA)";
+    return iaAssets
+      .slice(0, 25)
+      .map((a) => {
+        const pesoMb = a.tamano_bytes ? `${(a.tamano_bytes / (1024 * 1024)).toFixed(1)}MB` : "";
+        return `- ${a.titulo} [${a.tipo_asset}] ${a.descripcion_ia || a.descripcion || ""} | url: ${a.url_archivo || "N/A"} ${pesoMb}`;
+      })
       .join("\n");
   };
 
@@ -584,9 +612,9 @@ export default function MarketingCenterPage() {
         </Col>
       </Row>
 
-      {/* Contexto IA: Programas y Cursos */}
+      {/* Contexto IA: Programas, Cursos y Materiales */}
       <Card
-        title="Contexto IA: Programas y cursos próximos"
+        title="Contexto IA: Programas, cursos próximos y materiales"
         extra={
           <Space wrap>
             <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarProgramas}>
@@ -595,20 +623,31 @@ export default function MarketingCenterPage() {
             <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarCursosProximos}>
               Recargar cursos
             </Button>
+            <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarAssets}>
+              Recargar materiales
+            </Button>
           </Space>
         }
       >
         <Space direction="vertical" size="small" style={{ width: "100%" }}>
           <Text type="secondary">
-            Copia este texto al contexto de la IA para que responda con datos actualizados de programas y próximos cursos.
+            Copia este texto al contexto de la IA para que responda con datos actualizados de programas, cursos y materiales.
           </Text>
           <Text code style={{ whiteSpace: "pre-wrap", width: "100%" }}>
             {contextoIA()}
           </Text>
           <Divider style={{ margin: "8px 0" }} />
+          <Text strong>Materiales visibles para IA</Text>
+          <Text code style={{ whiteSpace: "pre-wrap", width: "100%" }}>
+            {contextoAssetsIA()}
+          </Text>
+          <Divider style={{ margin: "8px 0" }} />
           <Space wrap>
             <Button onClick={() => navigator.clipboard.writeText(contextoIA())} size={isMobile ? "small" : "middle"}>
               Copiar contexto IA
+            </Button>
+            <Button onClick={() => navigator.clipboard.writeText(contextoAssetsIA())} size={isMobile ? "small" : "middle"}>
+              Copiar materiales IA
             </Button>
             <Button onClick={cargarDatos} icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"}>
               Refrescar todo
@@ -622,6 +661,36 @@ export default function MarketingCenterPage() {
         title="Assets de Marketing"
         extra={
           <Space wrap>
+            <Input.Search
+              placeholder="Buscar título, descripción, keywords"
+              allowClear
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ width: isMobile ? 220 : 260 }}
+              size={isMobile ? "small" : "middle"}
+            />
+            <Select
+              allowClear
+              placeholder="Tipo"
+              options={tipoAssetOptions}
+              onChange={(v) => setFilterTipo(v as string | undefined)}
+              style={{ width: 120 }}
+              size={isMobile ? "small" : "middle"}
+            />
+            <Select
+              allowClear
+              placeholder="Categoría"
+              options={categoriaOptions.map((c) => ({ value: c, label: c }))}
+              onChange={(v) => setFilterCategoria(v as string | undefined)}
+              style={{ width: 140 }}
+              size={isMobile ? "small" : "middle"}
+            />
+            <Switch
+              checked={soloIA}
+              onChange={(v) => setSoloIA(v)}
+              checkedChildren="Solo IA"
+              unCheckedChildren="Todos"
+              size={isMobile ? "small" : "default"}
+            />
             <Button icon={<ReloadOutlined />} onClick={cargarAssets} size={isMobile ? "small" : "middle"}>
               Recargar
             </Button>
@@ -643,7 +712,7 @@ export default function MarketingCenterPage() {
       >
         <Table
           columns={columns}
-          dataSource={assets}
+          dataSource={filteredAssets}
           rowKey="id"
           loading={loading}
           size={isMobile ? "small" : "middle"}
