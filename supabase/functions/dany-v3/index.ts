@@ -168,8 +168,8 @@ serve(async (req) => {
             : `Cupos disponibles: ${cupos}.`
           : "Verifico cupos contigo en un minuto.";
 
-      const saludo = name ? `Hola ${name}, soy Dany del equipo Crystal Diamante ✨` : "Hola, soy Dany del equipo Crystal Diamante ✨";
-      const tonoHumano = "Te escribo yo misma, así de cerca como si estuviéramos hablando por WhatsApp.";
+      const saludo = name ? `👋 Hola ${name}, soy Dany del equipo Crystal Diamante ✨` : "👋 Hola, soy Dany del equipo Crystal Diamante ✨";
+      const tonoHumano = "Estoy aquí para ayudarte rápido y bien.";
 
       const extras: string[] = [];
       if (curso.descripcion_corta && (wantsAll || wantsDuration)) {
@@ -191,13 +191,16 @@ serve(async (req) => {
       return [
         `${saludo}`,
         tonoHumano,
-        `Te cuento en corto: *${curso.titulo}* arranca ${inicio}${horario ? ` | Horario: ${horario}` : ""}.`,
-        `💰 Inscripción/curso: ${precioTexto}${precioLista ? ` (normal ${precioLista})` : ""}.`,
-        `📅 Mensualidad: ${mensualidadTexto}`,
+        "",
+        `💎 *${curso.titulo}*`,
+        `📆 *Inicio:* ${inicio}${horario ? ` | ⏰ *Horario:* ${horario}` : ""}`,
+        `💰 *Inscripción/curso:* ${precioTexto}${precioLista ? ` (normal ${precioLista})` : ""}`,
+        `📅 *Mensualidad:* ${mensualidadTexto}`,
         `🎯 ${cuposTexto}`,
-        `🔗 Te paso el link para asegurar tu cupo: ${link}`,
-        "¿Te ayudo a reservar o tienes alguna duda puntual?",
+        wantsMedia ? "" : `🔗 Asegura tu cupo: ${link}`,
         ...extras,
+        "",
+        "¿Te ayudo a reservar ya mismo o prefieres que te cuente un detalle más?",
       ]
         .filter(Boolean)
         .join("\n");
