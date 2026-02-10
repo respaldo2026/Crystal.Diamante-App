@@ -4,5 +4,6 @@
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "typescript.problems.exclude": [
     "**/node_modules/**"
-  ]
+  ],
+  "deno.enable": true
 }
