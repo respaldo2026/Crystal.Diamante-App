@@ -116,10 +116,8 @@ serve(async (req) => {
       reply = "Tuve un problema al generar la respuesta. Te conecto con un asesor para más detalles.";
     }
 
-    const lower = reply.toLowerCase();
-    const banned = ["cerebro", "algo salio mal", "algo salió mal", "brain"];
-    const containsBanned = banned.some((w) => lower.includes(w));
-    if (containsBanned) {
+    const bannedRegex = /(cerebro|algo\s+sal[ií]o\s+mal|brain)/i;
+    if (bannedRegex.test(reply)) {
       reply = "No tengo datos suficientes ahora; te conecto con un asesor para confirmarte precios, fechas y cupos.";
     }
 
