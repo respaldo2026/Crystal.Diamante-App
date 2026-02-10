@@ -77,7 +77,7 @@ interface CursoProximo {
   dias_semana?: string[];
   hora_inicio?: string | null;
   hora_fin?: string | null;
-  programas?: { nombre: string } | null;
+  programas?: { nombre: string }[] | null;
 }
 
 const tipoAssetOptions = [
@@ -176,7 +176,11 @@ export default function MarketingCenterPage() {
         .limit(12);
 
       if (error) throw error;
-      setCursosProximos((data as CursoProximo[]) || []);
+      const normalizados = (data || []).map((c: any) => ({
+        ...c,
+        programas: Array.isArray(c.programas) ? c.programas : c.programas ? [c.programas] : [],
+      }));
+      setCursosProximos(normalizados as CursoProximo[]);
     } catch (error) {
       console.error("Error cargando cursos próximos:", error);
       message.error("No se pudieron cargar los cursos próximos");
@@ -423,7 +427,9 @@ export default function MarketingCenterPage() {
       ? cursosProximos
           .map((c) => {
             const inicio = c.fecha_inicio ? dayjs(c.fecha_inicio).format("DD/MM") : "Fecha por confirmar";
-            const programaNombre = c.programas?.nombre ? ` | Programa: ${c.programas.nombre}` : "";
+            const programaNombre = Array.isArray(c.programas) && c.programas[0]?.nombre
+              ? ` | Programa: ${c.programas[0].nombre}`
+              : "";
             const cupos = c.cupos ? ` | Cupos: ${c.cupos}` : "";
             return `- ${c.nombre}${programaNombre} | Inicio: ${inicio} | ${formatoHorario(c)}${cupos}`;
           })
