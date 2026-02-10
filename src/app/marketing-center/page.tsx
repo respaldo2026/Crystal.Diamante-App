@@ -409,7 +409,7 @@ export default function MarketingCenterPage() {
   const formatoHorario = (curso: CursoProximo) => {
     const diasLista = Array.isArray(curso.dias_semana)
       ? curso.dias_semana
-      : typeof curso.dias_semana === "string" && curso.dias_semana.length > 0
+      : typeof curso.dias_semana === "string" && curso.dias_semana && curso.dias_semana.length > 0
         ? [curso.dias_semana]
         : [];
 
