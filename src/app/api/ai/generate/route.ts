@@ -3,9 +3,10 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const dynamic = "force-dynamic";
 
-const parseJsonFromText = (text: string) => {
-  const fenced = text.match(/```json\s*([\s\S]*?)```/i);
-  const candidate = fenced ? fenced[1] : text;
+const parseJsonFromText = (text?: string) => {
+  const base = (text ?? "").toString();
+  const fenced = base.match(/```json\s*([\s\S]*?)```/i);
+  const candidate = fenced?.[1] ?? base;
   const trimmed = candidate.trim();
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
