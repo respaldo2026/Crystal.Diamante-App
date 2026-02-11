@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
+import { getCoursesForAgent, buildCoursesContext } from "@/utils/supabase/agent-courses";
 
 export const dynamic = "force-dynamic";
 
@@ -242,13 +243,14 @@ async function searchKnowledge(supabase: any, query: string, limit = 3): Promise
 }
 
 /**
- * Construir prompt del agente con personalidad + conocimiento + historial
+ * Construir prompt del agente con personalidad + contexto de cursos + conocimiento + historial
  */
 function buildAgentPrompt(
   settings: any,
   userMessage: string,
   knowledgeChunks: string[],
-  conversationHistory: Array<{user: string, agent: string}> = []
+  conversationHistory: Array<{user: string, agent: string}> = [],
+  coursesContext: string = ""
 ): string {
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asistente de la Academia Crystal.";
@@ -270,6 +272,11 @@ function buildAgentPrompt(
 - No inventes datos.
 - Recuerda el contexto de conversaciones anteriores.
 `;
+
+  // Agregar contexto de cursos disponibles
+  if (coursesContext) {
+    prompt += `\n# INFORMACIÓN ACTUAL DE CURSOS:\n${coursesContext}\n`;
+  }
 
   if (conversationHistory.length > 0) {
     prompt += `\n# Historial de conversación reciente:\n`;
@@ -483,12 +490,17 @@ export async function POST(req: NextRequest) {
     console.log("[POST /api/ai/audio] Leyendo historial de conversación...");
     const history = await getConversationHistory(supabase, phone || "unknown", 5);
 
+    // 7.5. Obtener información dinámica de cursos disponibles
+    console.log("[POST /api/ai/audio] Leyendo cursos disponibles...");
+    const courses = await getCoursesForAgent();
+    const coursesContext = buildCoursesContext(courses);
+
     // 8. Buscar conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, transcription, 3);
 
     // 9. Generar respuesta del agente
     console.log("[POST /api/ai/audio] Generando respuesta del agente...");
-    const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks, history);
+    const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks, history, coursesContext);
     const agentResponse = await generateResponse(geminiKey, prompt);
 
     // 10. Guardar en historial de conversación

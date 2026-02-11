@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
+import { getCoursesForAgent, buildCoursesContext } from "@/utils/supabase/agent-courses";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +90,11 @@ async function saveConversation(
     console.warn("[saveConversation] Error:", err);
   }
 }
+
+/**
+ * Buscar conocimiento relevante en agent_chunks
+ */
+async function searchKnowledge(supabase: any, query: string, limit = 3): Promise<string[]> {
   try {
     const keywords = query
       .toLowerCase()
@@ -118,13 +124,14 @@ async function saveConversation(
 }
 
 /**
- * Construir prompt del agente con personalidad + conocimiento + historial
+ * Construir prompt del agente con personalidad + contexto de cursos + conocimiento + historial
  */
 function buildAgentPrompt(
   settings: any,
   userMessage: string,
   knowledgeChunks: string[],
-  conversationHistory: Array<{user: string, agent: string}> = []
+  conversationHistory: Array<{user: string, agent: string}> = [],
+  coursesContext: string = ""
 ): string {
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asistente de la Academia Crystal.";
@@ -146,6 +153,11 @@ function buildAgentPrompt(
 - No inventes datos.
 - Recuerda el contexto de conversaciones anteriores.
 `;
+
+  // Agregar contexto de cursos disponibles
+  if (coursesContext) {
+    prompt += `\n# INFORMACIÓN ACTUAL DE CURSOS:\n${coursesContext}\n`;
+  }
 
   if (conversationHistory.length > 0) {
     prompt += `\n# Historial de conversación reciente:\n`;
@@ -254,11 +266,16 @@ export async function POST(req: NextRequest) {
     console.log("[POST /api/ai/chat] Leyendo historial de conversación...");
     const history = await getConversationHistory(supabase, phone || "unknown", 5);
 
+    // 5.5. Obtener información dinámica de cursos disponibles
+    console.log("[POST /api/ai/chat] Leyendo cursos disponibles...");
+    const courses = await getCoursesForAgent();
+    const coursesContext = buildCoursesContext(courses);
+
     // 6. Buscar conocimiento relevante en agent_chunks
     const knowledgeChunks = await searchKnowledge(supabase, message, 3);
 
-    // 7. Construir prompt con personalidad + conocimiento + historial
-    const prompt = buildAgentPrompt(settings || {}, message, knowledgeChunks, history);
+    // 7. Construir prompt con personalidad + cursos + conocimiento + historial
+    const prompt = buildAgentPrompt(settings || {}, message, knowledgeChunks, history, coursesContext);
 
     // 8. Generar respuesta con Gemini
     const response = await generateResponse(geminiKey, prompt);
