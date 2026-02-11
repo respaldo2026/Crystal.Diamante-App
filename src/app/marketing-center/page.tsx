@@ -985,7 +985,20 @@ export default function MarketingCenterPage() {
             children: (
               <Space direction="vertical" size="large" style={{ width: "100%" }}>
                 {/* Configuración del agente */}
-                <Card title="Agente IA: perfil y prompt" bodyStyle={{ padding: isMobile ? "12px" : "16px" }}>
+                <Card
+                  title="Agente IA: perfil y prompt"
+                  bodyStyle={{ padding: isMobile ? "12px" : "16px" }}
+                  extra={
+                    <Space>
+                      <Button type="primary" icon={<SaveOutlined />} loading={savingAgentPrompt} onClick={() => agentForm.submit()}>
+                        Guardar
+                      </Button>
+                      <Button icon={<ReloadOutlined />} disabled={savingAgentPrompt} onClick={cargarAgentPrompt}>
+                        Recargar
+                      </Button>
+                    </Space>
+                  }
+                >
                   <Form layout="vertical" form={agentForm} onFinish={guardarAgentPrompt}>
                     <Text type="secondary">
                       Ajusta la identidad y el mensaje de sistema del agente. Esto se guarda en Supabase (tabla agent_settings) para que responda con el tono correcto.
