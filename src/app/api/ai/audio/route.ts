@@ -299,7 +299,36 @@ async function uploadAudioToSupabase(
       .from("agent_audio_responses")
       .upload(filename, audioBuffer, {
         contentType: "audio/mpeg",
-        upsemedia_id, audio_url, phone, whatsapp_access_token } = body || {};
+        upsert: false,
+      });
+
+    if (error) {
+      console.error("[uploadAudioToSupabase] Error:", error);
+      throw error;
+    }
+
+    // Obtener URL pública
+    const { data: publicUrl } = supabase.storage
+      .from("agent_audio_responses")
+      .getPublicUrl(data.path);
+
+    return publicUrl?.publicUrl || "";
+  } catch (err) {
+    console.error("[uploadAudioToSupabase] Error:", err);
+    throw err;
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    // 1. Validar autenticación
+    if (!validateRequest(req)) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // 2. Parsear body
+    const body = await req.json();
+    const { media_id, audio_url, phone, whatsapp_access_token } = body || {};
 
     // Aceptar tanto media_id como audio_url para flexibilidad
     if (!media_id && !audio_url) {
@@ -313,6 +342,7 @@ async function uploadAudioToSupabase(
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;
+    const whatsappToken = whatsapp_access_token || process.env.WHATSAPP_ACCESS_TOKEN;
 
     if (!supabaseUrl || !serviceKey) {
       return NextResponse.json({ error: "Faltan credenciales de Supabase" }, { status: 500 });
@@ -328,20 +358,20 @@ async function uploadAudioToSupabase(
     // 4. Descargar audio
     let audioBuffer: Buffer;
 
-    if (media_id && whatsapp_access_token) {
+    if (media_id && whatsappToken) {
       // Opción 2: Descargar desde WhatsApp Cloud API usando media_id
       console.log("[POST /api/ai/audio] Obteniendo URL del media desde WhatsApp...");
-      const mediaUrl = await getWhatsAppMediaUrl(media_id, whatsapp_access_token);
+      const mediaUrl = await getWhatsAppMediaUrl(media_id, whatsappToken);
       
       console.log("[POST /api/ai/audio] Descargando audio desde WhatsApp...");
-      audioBuffer = await downloadAudio(mediaUrl);
+      audioBuffer = await downloadAudio(mediaUrl, whatsappToken);
     } else if (audio_url) {
       // Opción 1: Descargar directamente de la URL
       console.log("[POST /api/ai/audio] Descargando audio desde URL...");
-      audioBuffer = await downloadAudio(audio_url, whatsapp_access_token);
+      audioBuffer = await downloadAudio(audio_url, whatsappToken);
     } else {
       return NextResponse.json(
-        { error: "Necesita media_id+whatsapp_access_token o audio_url" },
+        { error: "Necesita media_id o audio_url, y WHATSAPP_ACCESS_TOKEN" },
         { status: 400 }
       );
     }
