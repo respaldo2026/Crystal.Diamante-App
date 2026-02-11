@@ -555,7 +555,7 @@ export default function MarketingCenterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: values.title,
-          url: urlArchivo,
+          url: urlArchivo || values.source_url,
           raw_text: values.raw_text,
           mime_type: fileList[0]?.type,
         }),

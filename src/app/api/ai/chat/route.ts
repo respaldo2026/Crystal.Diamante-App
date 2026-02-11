@@ -108,7 +108,7 @@ function buildAgentPrompt(
  * Llamar a Gemini para generar respuesta
  */
 async function generateResponse(apiKey: string, prompt: string): Promise<string> {
-  const genAI = new GoogleGenerativeAI({ apiKey, apiVersion: "v1" });
+  const genAI = new GoogleGenerativeAI(apiKey);
   const envModel = process.env.GEMINI_MODEL_CHAT || process.env.GEMINI_MODEL_SUMMARY;
   const modelCandidates = [envModel, "gemini-1.5-pro-002", "gemini-1.5-flash-002", "gemini-1.5-pro-latest"].filter(
     Boolean

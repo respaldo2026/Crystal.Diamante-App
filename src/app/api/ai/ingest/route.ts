@@ -73,7 +73,7 @@ const chunkText = (text: string, size = 1200, overlap = 100) => {
 
 const embedTexts = async (apiKey: string, texts: string[]) => {
   if (!texts.length) return [] as number[][];
-  const genAI = new GoogleGenerativeAI({ apiKey, apiVersion: "v1" });
+  const genAI = new GoogleGenerativeAI(apiKey);
   const embedModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
   const vectors: number[][] = [];
   for (const t of texts) {
