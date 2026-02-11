@@ -30,6 +30,35 @@ function validateRequest(request: NextRequest): boolean {
 }
 
 /**
+ * Obtener URL de descarga del media desde WhatsApp Cloud API
+ */
+async function getWhatsAppMediaUrl(mediaId: string, accessToken: string): Promise<string> {
+  try {
+    console.log(`[getWhatsAppMediaUrl] Obteniendo URL para media: ${mediaId}`);
+    
+    const response = await fetch(
+      `https://graph.instagram.com/v18.0/${mediaId}?fields=url&access_token=${accessToken}`
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`WhatsApp API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    if (!data.url) {
+      throw new Error("No URL returned from WhatsApp API");
+    }
+
+    console.log("[getWhatsAppMediaUrl] URL obtenida exitosamente");
+    return data.url;
+  } catch (err) {
+    console.error("[getWhatsAppMediaUrl] Error:", err);
+    throw err;
+  }
+}
+
+/**
  * Descargar archivo de audio desde URL
  */
 async function downloadAudio(audioUrl: string, bearerToken?: string): Promise<Buffer> {
@@ -270,39 +299,14 @@ async function uploadAudioToSupabase(
       .from("agent_audio_responses")
       .upload(filename, audioBuffer, {
         contentType: "audio/mpeg",
-        upsert: false,
-      });
+        upsemedia_id, audio_url, phone, whatsapp_access_token } = body || {};
 
-    if (error) {
-      console.error("[uploadAudioToSupabase] Error:", error);
-      throw error;
-    }
-
-    // Obtener URL pública
-    const { data: publicUrl } = supabase.storage
-      .from("agent_audio_responses")
-      .getPublicUrl(data.path);
-
-    return publicUrl?.publicUrl || "";
-  } catch (err) {
-    console.error("[uploadAudioToSupabase] Error:", err);
-    throw err;
-  }
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    // 1. Validar autenticación
-    if (!validateRequest(req)) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
-    // 2. Parsear body
-    const body = await req.json();
-    const { audio_url, phone, bearer_token } = body || {};
-
-    if (!audio_url) {
-      return NextResponse.json({ error: "Falta 'audio_url' en el body" }, { status: 400 });
+    // Aceptar tanto media_id como audio_url para flexibilidad
+    if (!media_id && !audio_url) {
+      return NextResponse.json(
+        { error: "Falta 'media_id' o 'audio_url' en el body" },
+        { status: 400 }
+      );
     }
 
     // 3. Validar credenciales
@@ -321,9 +325,27 @@ export async function POST(req: NextRequest) {
 
     console.log("[POST /api/ai/audio] Iniciando procesamiento de audio...");
 
-    // 4. Descargar audio (usar bearer_token si se proporciona)
-    console.log("[POST /api/ai/audio] Descargando audio desde WhatsApp...");
-    const audioBuffer = await downloadAudio(audio_url, bearer_token);
+    // 4. Descargar audio
+    let audioBuffer: Buffer;
+
+    if (media_id && whatsapp_access_token) {
+      // Opción 2: Descargar desde WhatsApp Cloud API usando media_id
+      console.log("[POST /api/ai/audio] Obteniendo URL del media desde WhatsApp...");
+      const mediaUrl = await getWhatsAppMediaUrl(media_id, whatsapp_access_token);
+      
+      console.log("[POST /api/ai/audio] Descargando audio desde WhatsApp...");
+      audioBuffer = await downloadAudio(mediaUrl);
+    } else if (audio_url) {
+      // Opción 1: Descargar directamente de la URL
+      console.log("[POST /api/ai/audio] Descargando audio desde URL...");
+      audioBuffer = await downloadAudio(audio_url, whatsapp_access_token);
+    } else {
+      return NextResponse.json(
+        { error: "Necesita media_id+whatsapp_access_token o audio_url" },
+        { status: 400 }
+      );
+    }
+
     console.log(`[POST /api/ai/audio] Audio descargado: ${audioBuffer.length} bytes`);
 
     // 5. STT: Convertir audio a texto
@@ -331,6 +353,44 @@ export async function POST(req: NextRequest) {
     const transcription = await speechToText(geminiKey, audioBuffer);
 
     // 6. Leer configuración del agente
+    const { data: settings } = await supabase
+      .from("agent_settings")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle();
+
+    // 7. Buscar conocimiento relevante
+    const knowledgeChunks = await searchKnowledge(supabase, transcription, 3);
+
+    // 8. Generar respuesta del agente
+    console.log("[POST /api/ai/audio] Generando respuesta del agente...");
+    const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks);
+    const agentResponse = await generateResponse(geminiKey, prompt);
+
+    // 9. TTS: Convertir respuesta a audio (OPCIONAL - solo si Elevenlabs está configurado)
+    let audioUrl = "";
+    try {
+      if (process.env.ELEVENLABS_API_KEY) {
+        console.log("[POST /api/ai/audio] Convirtiendo respuesta a audio (TTS)...");
+        const responseAudioBuffer = await textToSpeech(agentResponse);
+
+        // 10. Subir audio a Supabase storage
+        const timestamp = Date.now();
+        const filename = `responses/${timestamp}-${phone || "unknown"}.mp3`;
+        console.log("[POST /api/ai/audio] Subiendo audio a Supabase:", filename);
+        audioUrl = await uploadAudioToSupabase(supabase, responseAudioBuffer, filename);
+      } else {
+        console.warn("[POST /api/ai/audio] ELEVENLABS_API_KEY no configurada, omitiendo TTS");
+      }
+    } catch (ttsErr) {
+      console.warn("[POST /api/ai/audio] Error en TTS, continuando sin audio:", ttsErr);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      transcription,
+      agent_response: agentResponse,
+      audio_url: audioUrl || nulción del agente
     const { data: settings } = await supabase
       .from("agent_settings")
       .select("*")
