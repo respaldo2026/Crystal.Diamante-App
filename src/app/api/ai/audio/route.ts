@@ -32,19 +32,28 @@ function validateRequest(request: NextRequest): boolean {
 /**
  * Descargar archivo de audio desde URL
  */
-async function downloadAudio(audioUrl: string): Promise<Buffer> {
+async function downloadAudio(audioUrl: string, bearerToken?: string): Promise<Buffer> {
   try {
-    const response = await fetch(audioUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-      },
-    });
+    const headers: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0",
+    };
+
+    // Si hay bearer token, agregarlo para autenticación de WhatsApp
+    if (bearerToken) {
+      headers["Authorization"] = `Bearer ${bearerToken}`;
+    }
+
+    console.log(`[downloadAudio] Descargando desde: ${audioUrl.split('?')[0]}...`);
+    
+    const response = await fetch(audioUrl, { headers });
 
     if (!response.ok) {
+      console.error(`[downloadAudio] Status ${response.status}`);
       throw new Error(`Failed to download audio: ${response.status}`);
     }
 
     const arrayBuffer = await response.arrayBuffer();
+    console.log(`[downloadAudio] Descargado: ${arrayBuffer.byteLength} bytes`);
     return Buffer.from(arrayBuffer);
   } catch (err) {
     console.error("[downloadAudio] Error:", err);
@@ -290,7 +299,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Parsear body
     const body = await req.json();
-    const { audio_url, phone } = body || {};
+    const { audio_url, phone, bearer_token } = body || {};
 
     if (!audio_url) {
       return NextResponse.json({ error: "Falta 'audio_url' en el body" }, { status: 400 });
@@ -312,9 +321,9 @@ export async function POST(req: NextRequest) {
 
     console.log("[POST /api/ai/audio] Iniciando procesamiento de audio...");
 
-    // 4. Descargar audio
-    console.log("[POST /api/ai/audio] Descargando audio desde:", audio_url);
-    const audioBuffer = await downloadAudio(audio_url);
+    // 4. Descargar audio (usar bearer_token si se proporciona)
+    console.log("[POST /api/ai/audio] Descargando audio desde WhatsApp...");
+    const audioBuffer = await downloadAudio(audio_url, bearer_token);
     console.log(`[POST /api/ai/audio] Audio descargado: ${audioBuffer.length} bytes`);
 
     // 5. STT: Convertir audio a texto
