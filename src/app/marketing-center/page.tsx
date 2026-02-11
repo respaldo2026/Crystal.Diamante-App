@@ -24,6 +24,7 @@ import {
   Grid,
   Divider,
   Alert,
+  Tabs,
 } from "antd";
 import {
   PlusOutlined,
@@ -144,7 +145,7 @@ export default function MarketingCenterPage() {
   const [iaResult, setIaResult] = useState<{ promo?: string; keywords?: string[] }>({});
   const [iaError, setIaError] = useState<string | null>(null);
   const [iaForm] = Form.useForm();
-  const [agentPrompt, setAgentPrompt] = useState("");
+  const [agentForm] = Form.useForm();
   const [loadingAgentPrompt, setLoadingAgentPrompt] = useState(false);
   const [savingAgentPrompt, setSavingAgentPrompt] = useState(false);
   const [docs, setDocs] = useState<any[]>([]);
@@ -460,12 +461,19 @@ export default function MarketingCenterPage() {
       setLoadingAgentPrompt(true);
       const { data, error } = await supabaseBrowserClient
         .from("agent_settings")
-        .select("system_prompt")
+        .select("system_prompt, persona_name, persona_bio, speaking_style, greeting, fallback_response")
         .eq("id", 1)
         .maybeSingle();
 
       if (error) throw error;
-      setAgentPrompt(data?.system_prompt || "");
+      agentForm.setFieldsValue({
+        system_prompt: data?.system_prompt || "",
+        persona_name: data?.persona_name || "Dany",
+        persona_bio: data?.persona_bio || "",
+        speaking_style: data?.speaking_style || "",
+        greeting: data?.greeting || "",
+        fallback_response: data?.fallback_response || "",
+      });
     } catch (error: any) {
       console.error("Error cargando prompt del agente:", error);
       message.error("No se pudo cargar el prompt del agente");
@@ -477,9 +485,19 @@ export default function MarketingCenterPage() {
   const guardarAgentPrompt = async () => {
     try {
       setSavingAgentPrompt(true);
+      const values = agentForm.getFieldsValue();
+      const payload = {
+        id: 1,
+        system_prompt: values.system_prompt || "",
+        persona_name: values.persona_name || "Dany",
+        persona_bio: values.persona_bio || null,
+        speaking_style: values.speaking_style || null,
+        greeting: values.greeting || null,
+        fallback_response: values.fallback_response || null,
+      };
       const { error } = await supabaseBrowserClient
         .from("agent_settings")
-        .upsert({ id: 1, system_prompt: agentPrompt })
+        .upsert(payload)
         .eq("id", 1);
 
       if (error) throw error;
@@ -958,291 +976,349 @@ export default function MarketingCenterPage() {
         </Col>
       </Row>
 
-      {/* Prompt del agente */}
-      <Card title="Prompt del agente (sistema)" bodyStyle={{ padding: isMobile ? "12px" : "16px" }}>
-        <Space direction="vertical" style={{ width: "100%" }} size="small">
-          <Text type="secondary">
-            Define el mensaje de sistema del agente. No inventes datos; recuerda incluir tono y restricciones. El bot leerá esto antes de responder.
-          </Text>
-          <TextArea
-            rows={5}
-            value={agentPrompt}
-            onChange={(e) => setAgentPrompt(e.target.value)}
-            placeholder="Eres Dany, asistente de la academia..."
-            disabled={loadingAgentPrompt}
-          />
-          <Space wrap>
-            <Button type="primary" onClick={guardarAgentPrompt} loading={savingAgentPrompt}>
-              Guardar prompt
-            </Button>
-            <Button onClick={cargarAgentPrompt} icon={<ReloadOutlined />} disabled={savingAgentPrompt}>
-              Recargar
-            </Button>
-          </Space>
-        </Space>
-      </Card>
+      <Tabs
+        defaultActiveKey="agent"
+        items={[
+          {
+            key: "agent",
+            label: "Agente IA",
+            children: (
+              <Space direction="vertical" size="large" style={{ width: "100%" }}>
+                {/* Configuración del agente */}
+                <Card title="Agente IA: perfil y prompt" bodyStyle={{ padding: isMobile ? "12px" : "16px" }}>
+                  <Form layout="vertical" form={agentForm} onFinish={guardarAgentPrompt}>
+                    <Text type="secondary">
+                      Ajusta la identidad y el mensaje de sistema del agente. Esto se guarda en Supabase (tabla agent_settings) para que responda con el tono correcto.
+                    </Text>
 
-      {/* Conocimiento del agente: PDFs/texto */}
-      <Card
-        title="Conocimiento del agente (PDF/texto)"
-        bodyStyle={{ padding: isMobile ? "12px" : "16px" }}
-        extra={<Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarDocs}>Recargar</Button>}
-      >
-        <Space direction="vertical" style={{ width: "100%" }} size="middle">
-          <Text type="secondary">Sube un PDF o pega texto. Se indexa y se resume para que el agente lo use.</Text>
-          <Form layout="vertical" form={ingestForm} onFinish={crearDocAgente}>
-            <Row gutter={[12, 12]}>
-              <Col xs={24} md={12}>
-                <Form.Item name="title" label="Título" rules={[{ required: true, message: "Ingresa un título" }] }>
-                  <Input placeholder="Manual de WhatsApp" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={12}>
-                <Form.Item name="source_url" label="URL pública (opcional)">
-                  <Input placeholder="https://..." />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Form.Item name="file" label="PDF/DOCX (opcional)">
-              <Upload
-                maxCount={1}
-                beforeUpload={(file) => {
-                  setFileList([file as any]);
-                  return false;
-                }}
-                fileList={fileList}
-                onRemove={() => setFileList([])}
-              >
-                <Button icon={<UploadOutlined />} block={isMobile}>Seleccionar PDF/DOCX</Button>
-              </Upload>
-            </Form.Item>
-            <Form.Item name="raw_text" label="Texto plano (opcional)">
-              <TextArea rows={3} placeholder="Pega aquí texto si no hay PDF" />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" loading={ingestLoading}>Indexar para el agente</Button>
-          </Form>
+                    <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
+                      <Col xs={24} md={12}>
+                        <Form.Item name="persona_name" label="Nombre del agente" initialValue="Dany">
+                          <Input placeholder="Dany" disabled={loadingAgentPrompt} />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} md={12}>
+                        <Form.Item name="speaking_style" label="Estilo / tono">
+                          <Input
+                            placeholder="Cálido, preciso, no inventa datos, CTA breve"
+                            disabled={loadingAgentPrompt}
+                          />
+                        </Form.Item>
+                      </Col>
+                    </Row>
 
-          <Table
-            size={isMobile ? "small" : "middle"}
-            dataSource={docs}
-            loading={loadingDocs}
-            rowKey="id"
-            pagination={{ pageSize: isMobile ? 5 : 8 }}
-            columns={[
-              {
-                title: "Título",
-                dataIndex: "title",
-                key: "title",
-              },
-              {
-                title: "Resumen",
-                dataIndex: "summary",
-                key: "summary",
-                render: (text: string) => <Text ellipsis style={{ maxWidth: 360 }}>{text || "(sin resumen)"}</Text>,
-              },
-              {
-                title: "Keywords",
-                dataIndex: "keywords",
-                key: "keywords",
-                render: (kws?: string[]) => kws?.length ? <Space wrap>{kws.map((k) => <Tag key={k}>{k}</Tag>)}</Space> : <Text type="secondary">—</Text>,
-              },
-              {
-                title: "Fuente",
-                dataIndex: "source_url",
-                key: "source_url",
-                render: (url: string) => url ? <a href={url} target="_blank" rel="noreferrer">Ver</a> : <Text type="secondary">—</Text>,
-              },
-              {
-                title: "Fecha",
-                dataIndex: "created_at",
-                key: "created_at",
-                render: (f: string) => dayjs(f).format("DD/MM/YY"),
-              },
-              {
-                title: "Acciones",
-                key: "acciones",
-                render: (_: any, record: any) => (
-                  <Popconfirm
-                    title="¿Eliminar este documento?"
-                    onConfirm={() => eliminarDocAgente(record.id)}
-                    okText="Sí"
-                    cancelText="No"
-                  >
-                    <Button
+                    <Form.Item name="persona_bio" label="Bio / personalidad" tooltip="Contexto breve sobre quién es y cómo ayuda">
+                      <TextArea
+                        rows={3}
+                        placeholder="Asistente de la Academia Crystal, experto en cursos, pagos y WhatsApp corporativo. Transparente, amable y directo."
+                        disabled={loadingAgentPrompt}
+                      />
+                    </Form.Item>
+
+                    <Row gutter={[12, 12]}>
+                      <Col xs={24} md={12}>
+                        <Form.Item name="greeting" label="Saludo inicial">
+                          <Input placeholder="¡Hola! Soy Dany, ¿en qué te ayudo hoy?" disabled={loadingAgentPrompt} />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} md={12}>
+                        <Form.Item name="fallback_response" label="Respuesta cuando falte info">
+                          <Input placeholder="Déjame confirmarlo y te respondo en breve. No quiero inventar datos." disabled={loadingAgentPrompt} />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
+                    <Form.Item name="system_prompt" label="Prompt de sistema" rules={[{ required: true, message: "Define un prompt" }]}>
+                      <TextArea
+                        rows={5}
+                        placeholder="Eres Dany, asistente de la academia..."
+                        disabled={loadingAgentPrompt}
+                      />
+                    </Form.Item>
+
+                    <Space wrap>
+                      <Button type="primary" htmlType="submit" loading={savingAgentPrompt}>
+                        Guardar configuración
+                      </Button>
+                      <Button onClick={cargarAgentPrompt} icon={<ReloadOutlined />} disabled={savingAgentPrompt}>
+                        Recargar
+                      </Button>
+                    </Space>
+                  </Form>
+                </Card>
+
+                {/* Conocimiento del agente: PDFs/texto */}
+                <Card
+                  title="Conocimiento del agente (PDF/texto)"
+                  bodyStyle={{ padding: isMobile ? "12px" : "16px" }}
+                  extra={<Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarDocs}>Recargar</Button>}
+                >
+                  <Space direction="vertical" style={{ width: "100%" }} size="middle">
+                    <Text type="secondary">Sube un PDF o pega texto. Se indexa y se resume para que el agente lo use.</Text>
+                    <Form layout="vertical" form={ingestForm} onFinish={crearDocAgente}>
+                      <Row gutter={[12, 12]}>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="title" label="Título" rules={[{ required: true, message: "Ingresa un título" }] }>
+                            <Input placeholder="Manual de WhatsApp" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="source_url" label="URL pública (opcional)">
+                            <Input placeholder="https://..." />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                      <Form.Item name="file" label="PDF/DOCX (opcional)">
+                        <Upload
+                          maxCount={1}
+                          beforeUpload={(file) => {
+                            setFileList([file as any]);
+                            return false;
+                          }}
+                          fileList={fileList}
+                          onRemove={() => setFileList([])}
+                        >
+                          <Button icon={<UploadOutlined />} block={isMobile}>Seleccionar PDF/DOCX</Button>
+                        </Upload>
+                      </Form.Item>
+                      <Form.Item name="raw_text" label="Texto plano (opcional)">
+                        <TextArea rows={3} placeholder="Pega aquí texto si no hay PDF" />
+                      </Form.Item>
+                      <Button type="primary" htmlType="submit" loading={ingestLoading}>Indexar para el agente</Button>
+                    </Form>
+
+                    <Table
                       size={isMobile ? "small" : "middle"}
-                      danger
-                      loading={deletingDocId === record.id}
+                      dataSource={docs}
+                      loading={loadingDocs}
+                      rowKey="id"
+                      pagination={{ pageSize: isMobile ? 5 : 8 }}
+                      columns={[
+                        {
+                          title: "Título",
+                          dataIndex: "title",
+                          key: "title",
+                        },
+                        {
+                          title: "Resumen",
+                          dataIndex: "summary",
+                          key: "summary",
+                          render: (text: string) => <Text ellipsis style={{ maxWidth: 360 }}>{text || "(sin resumen)"}</Text>,
+                        },
+                        {
+                          title: "Keywords",
+                          dataIndex: "keywords",
+                          key: "keywords",
+                          render: (kws?: string[]) => kws?.length ? <Space wrap>{kws.map((k) => <Tag key={k}>{k}</Tag>)}</Space> : <Text type="secondary">—</Text>,
+                        },
+                        {
+                          title: "Fuente",
+                          dataIndex: "source_url",
+                          key: "source_url",
+                          render: (url: string) => url ? <a href={url} target="_blank" rel="noreferrer">Ver</a> : <Text type="secondary">—</Text>,
+                        },
+                        {
+                          title: "Fecha",
+                          dataIndex: "created_at",
+                          key: "created_at",
+                          render: (f: string) => dayjs(f).format("DD/MM/YY"),
+                        },
+                        {
+                          title: "Acciones",
+                          key: "acciones",
+                          render: (_: any, record: any) => (
+                            <Popconfirm
+                              title="¿Eliminar este documento?"
+                              onConfirm={() => eliminarDocAgente(record.id)}
+                              okText="Sí"
+                              cancelText="No"
+                            >
+                              <Button
+                                size={isMobile ? "small" : "middle"}
+                                danger
+                                loading={deletingDocId === record.id}
+                              >
+                                Eliminar
+                              </Button>
+                            </Popconfirm>
+                          ),
+                        },
+                      ]}
+                    />
+                  </Space>
+                </Card>
+
+                {/* Contexto IA: Programas, Cursos y Materiales (oculto por defecto) */}
+                <Space direction="vertical" style={{ width: "100%" }}>
+                  <Button
+                    type="default"
+                    onClick={() => setMostrarContextoIA((v) => !v)}
+                    size={isMobile ? "small" : "middle"}
+                    style={{ alignSelf: "flex-start" }}
+                  >
+                    {mostrarContextoIA ? "Ocultar contexto IA" : "Mostrar contexto IA"}
+                  </Button>
+
+                  {mostrarContextoIA && (
+                    <Card
+                      title="Contexto IA: Programas, cursos próximos y materiales"
+                      bodyStyle={{ padding: isMobile ? "16px" : "20px", background: "#f7f9fc" }}
+                      extra={
+                        <Space wrap>
+                          <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarProgramas}>
+                            Recargar programas
+                          </Button>
+                          <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarCursosProximos}>
+                            Recargar cursos
+                          </Button>
+                          <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarAssets}>
+                            Recargar materiales
+                          </Button>
+                        </Space>
+                      }
                     >
-                      Eliminar
-                    </Button>
-                  </Popconfirm>
-                ),
-              },
-            ]}
-          />
-        </Space>
-      </Card>
+                      <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                        <Alert
+                          type="info"
+                          showIcon
+                          message="Guía rápida"
+                          description="Recarga, revisa y copia el contexto para que el agente IA responda con datos actuales (programas, cursos, materiales)."
+                        />
 
-      {/* Contexto IA: Programas, Cursos y Materiales (oculto por defecto) */}
-      <Space direction="vertical" style={{ width: "100%" }}>
-        <Button
-          type="default"
-          onClick={() => setMostrarContextoIA((v) => !v)}
-          size={isMobile ? "small" : "middle"}
-          style={{ alignSelf: "flex-start" }}
-        >
-          {mostrarContextoIA ? "Ocultar contexto IA" : "Mostrar contexto IA"}
-        </Button>
+                        <Divider style={{ margin: "12px 0" }} plain>
+                          Programas y cursos
+                        </Divider>
+                        <Text
+                          code
+                          style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
+                        >
+                          {contextoIA()}
+                        </Text>
 
-        {mostrarContextoIA && (
-          <Card
-            title="Contexto IA: Programas, cursos próximos y materiales"
-            bodyStyle={{ padding: isMobile ? "16px" : "20px", background: "#f7f9fc" }}
-            extra={
-              <Space wrap>
-                <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarProgramas}>
-                  Recargar programas
-                </Button>
-                <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarCursosProximos}>
-                  Recargar cursos
-                </Button>
-                <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarAssets}>
-                  Recargar materiales
-                </Button>
+                        <Divider style={{ margin: "12px 0" }} plain>
+                          Materiales visibles para IA
+                        </Divider>
+                        <Text
+                          code
+                          style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
+                        >
+                          {contextoAssetsIA()}
+                        </Text>
+
+                        <Space wrap>
+                          <Button onClick={() => navigator.clipboard.writeText(contextoIA())} size={isMobile ? "small" : "middle"}>
+                            Copiar contexto IA
+                          </Button>
+                          <Button onClick={() => navigator.clipboard.writeText(contextoAssetsIA())} size={isMobile ? "small" : "middle"}>
+                            Copiar materiales IA
+                          </Button>
+                          <Button onClick={cargarDatos} icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"}>
+                            Refrescar todo
+                          </Button>
+                        </Space>
+                      </Space>
+                    </Card>
+                  )}
+                </Space>
+
+                {/* Cursos/Grupos (marketing_centro) */}
+                <Card
+                  title="Cursos y grupos (Centro de Marketing)"
+                  extra={
+                    <Space wrap>
+                      <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarMarketingCursos}>
+                        Recargar cursos
+                      </Button>
+                    </Space>
+                  }
+                  bodyStyle={{ padding: isMobile ? "12px" : "20px" }}
+                >
+                  <Table
+                    columns={columnsCursosMarketing}
+                    dataSource={cursosMarketing}
+                    rowKey="id"
+                    loading={loadingCursosMarketing}
+                    size={isMobile ? "small" : "middle"}
+                    pagination={{ pageSize: isMobile ? 5 : 8 }}
+                    scroll={{ x: 720 }}
+                  />
+                </Card>
               </Space>
-            }
-          >
-            <Space direction="vertical" size="small" style={{ width: "100%" }}>
-              <Alert
-                type="info"
-                showIcon
-                message="Guía rápida"
-                description="Recarga, revisa y copia el contexto para que el agente IA responda con datos actuales (programas, cursos, materiales)."
-              />
-
-              <Divider style={{ margin: "12px 0" }} plain>
-                Programas y cursos
-              </Divider>
-              <Text
-                code
-                style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
-              >
-                {contextoIA()}
-              </Text>
-
-              <Divider style={{ margin: "12px 0" }} plain>
-                Materiales visibles para IA
-              </Divider>
-              <Text
-                code
-                style={{ whiteSpace: "pre-wrap", width: "100%", display: "block", padding: "8px", background: "#fff" }}
-              >
-                {contextoAssetsIA()}
-              </Text>
-
-              <Space wrap>
-                <Button onClick={() => navigator.clipboard.writeText(contextoIA())} size={isMobile ? "small" : "middle"}>
-                  Copiar contexto IA
-                </Button>
-                <Button onClick={() => navigator.clipboard.writeText(contextoAssetsIA())} size={isMobile ? "small" : "middle"}>
-                  Copiar materiales IA
-                </Button>
-                <Button onClick={cargarDatos} icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"}>
-                  Refrescar todo
-                </Button>
+            ),
+          },
+          {
+            key: "assets",
+            label: "Materiales",
+            children: (
+              <Space direction="vertical" size="large" style={{ width: "100%" }}>
+                <Card
+                  title="Assets de Marketing"
+                  extra={
+                    <Space wrap>
+                      <Input.Search
+                        placeholder="Buscar título, descripción, keywords"
+                        allowClear
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        style={{ width: isMobile ? 220 : 260 }}
+                        size={isMobile ? "small" : "middle"}
+                      />
+                      <Select
+                        allowClear
+                        placeholder="Tipo"
+                        options={tipoAssetOptions}
+                        onChange={(v) => setFilterTipo(v as string | undefined)}
+                        style={{ width: 120 }}
+                        size={isMobile ? "small" : "middle"}
+                      />
+                      <Select
+                        allowClear
+                        placeholder="Categoría"
+                        options={categoriaOptions.map((c) => ({ value: c, label: c }))}
+                        onChange={(v) => setFilterCategoria(v as string | undefined)}
+                        style={{ width: 140 }}
+                        size={isMobile ? "small" : "middle"}
+                      />
+                      <Switch
+                        checked={soloIA}
+                        onChange={(v) => setSoloIA(v)}
+                        checkedChildren="Solo IA"
+                        unCheckedChildren="Todos"
+                        size={isMobile ? "small" : "default"}
+                      />
+                      <Button icon={<ReloadOutlined />} onClick={cargarAssets} size={isMobile ? "small" : "middle"}>
+                        Recargar
+                      </Button>
+                      <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        size={isMobile ? "small" : "middle"}
+                        onClick={() => {
+                          setEditingAsset(null);
+                          form.resetFields();
+                          setFileList([]);
+                          setModalVisible(true);
+                        }}
+                      >
+                        Nuevo Asset
+                      </Button>
+                    </Space>
+                  }
+                >
+                  <Table
+                    columns={columns}
+                    dataSource={filteredAssets}
+                    rowKey="id"
+                    loading={loading}
+                    size={isMobile ? "small" : "middle"}
+                    scroll={{ x: 960 }}
+                    pagination={{ pageSize: isMobile ? 5 : 10 }}
+                  />
+                </Card>
               </Space>
-            </Space>
-          </Card>
-        )}
-      </Space>
-
-      {/* Cursos/Grupos (marketing_centro) */}
-      <Card
-        title="Cursos y grupos (Centro de Marketing)"
-        extra={
-          <Space wrap>
-            <Button icon={<ReloadOutlined />} size={isMobile ? "small" : "middle"} onClick={cargarMarketingCursos}>
-              Recargar cursos
-            </Button>
-          </Space>
-        }
-        bodyStyle={{ padding: isMobile ? "12px" : "20px" }}
-      >
-        <Table
-          columns={columnsCursosMarketing}
-          dataSource={cursosMarketing}
-          rowKey="id"
-          loading={loadingCursosMarketing}
-          size={isMobile ? "small" : "middle"}
-          pagination={{ pageSize: isMobile ? 5 : 8 }}
-          scroll={{ x: 720 }}
-        />
-      </Card>
-
-      {/* Tabla */}
-      <Card
-        title="Assets de Marketing"
-        extra={
-          <Space wrap>
-            <Input.Search
-              placeholder="Buscar título, descripción, keywords"
-              allowClear
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ width: isMobile ? 220 : 260 }}
-              size={isMobile ? "small" : "middle"}
-            />
-            <Select
-              allowClear
-              placeholder="Tipo"
-              options={tipoAssetOptions}
-              onChange={(v) => setFilterTipo(v as string | undefined)}
-              style={{ width: 120 }}
-              size={isMobile ? "small" : "middle"}
-            />
-            <Select
-              allowClear
-              placeholder="Categoría"
-              options={categoriaOptions.map((c) => ({ value: c, label: c }))}
-              onChange={(v) => setFilterCategoria(v as string | undefined)}
-              style={{ width: 140 }}
-              size={isMobile ? "small" : "middle"}
-            />
-            <Switch
-              checked={soloIA}
-              onChange={(v) => setSoloIA(v)}
-              checkedChildren="Solo IA"
-              unCheckedChildren="Todos"
-              size={isMobile ? "small" : "default"}
-            />
-            <Button icon={<ReloadOutlined />} onClick={cargarAssets} size={isMobile ? "small" : "middle"}>
-              Recargar
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              size={isMobile ? "small" : "middle"}
-              onClick={() => {
-                setEditingAsset(null);
-                form.resetFields();
-                setFileList([]);
-                setModalVisible(true);
-              }}
-            >
-              Nuevo Asset
-            </Button>
-          </Space>
-        }
-      >
-        <Table
-          columns={columns}
-          dataSource={filteredAssets}
-          rowKey="id"
-          loading={loading}
-          size={isMobile ? "small" : "middle"}
-          scroll={{ x: 960 }}
-          pagination={{ pageSize: isMobile ? 5 : 10 }}
-        />
-      </Card>
+            ),
+          },
+        ]}
+      />
 
       {/* Modal IA para generar copy y keywords */}
       <Modal
