@@ -37,7 +37,12 @@ async function getWhatsAppMediaUrl(mediaId: string, accessToken: string): Promis
     console.log(`[getWhatsAppMediaUrl] Obteniendo URL para media: ${mediaId}`);
     
     const response = await fetch(
-      `https://graph.instagram.com/v18.0/${mediaId}?fields=url&access_token=${accessToken}`
+      `https://graph.facebook.com/v18.0/${mediaId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
     );
 
     if (!response.ok) {
