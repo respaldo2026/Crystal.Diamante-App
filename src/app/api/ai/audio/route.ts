@@ -99,39 +99,58 @@ async function downloadAudio(audioUrl: string, bearerToken?: string): Promise<Bu
  * Convertir audio a texto (STT) usando Google Generative AI
  */
 async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string> {
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const genAI = new GoogleGenerativeAI(apiKey);
+  
+  // Lista de modelos que soportan audio
+  const modelCandidates = [
+    "gemini-2.0-flash-exp",
+    "gemini-1.5-pro",
+    "gemini-1.5-pro-002",
+  ];
 
-    // Convertir buffer a base64
-    const base64Audio = audioBuffer.toString("base64");
+  const base64Audio = audioBuffer.toString("base64");
+  let lastError: any = null;
 
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                mimeType: "audio/mpeg",
-                data: base64Audio,
+  for (const modelName of modelCandidates) {
+    try {
+      console.log(`[speechToText] Intentando modelo: ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+
+      const result = await model.generateContent({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  mimeType: "audio/ogg",
+                  data: base64Audio,
+                },
               },
-            },
-            {
-              text: "Transcribe this audio to text. Return only the transcription, nothing else.",
-            },
-          ],
-        },
-      ],
-    });
+              {
+                text: "Transcribe este audio de WhatsApp a texto. Devuelve SOLO la transcripción, sin comentarios adicionales.",
+              },
+            ],
+          },
+        ],
+      });
 
-    const transcription = result.response.text().trim();
-    console.log("[speechToText] Transcripción:", transcription);
-    return transcription;
-  } catch (err) {
-    console.error("[speechToText] Error:", err);
-    throw err;
+      const transcription = result.response.text().trim();
+      console.log("[speechToText] Transcripción exitosa:", transcription.substring(0, 100));
+      return transcription;
+    } catch (err: any) {
+      lastError = err;
+      const errorMsg = String(err?.message || "").toLowerCase();
+      console.warn(`[speechToText] Error con ${modelName}:`, errorMsg);
+
+      if (errorMsg.includes("404") || errorMsg.includes("not found")) {
+        continue;
+      }
+      throw err;
+    }
   }
+
+  throw lastError || new Error("No available Gemini model for speech-to-text");
 }
 
 /**
