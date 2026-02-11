@@ -30,14 +30,21 @@ const summarize = async (apiKey: string, text: string) => {
 Texto:
 ${text.slice(0, 12000)}`;
 
-  const envModel = process.env.GEMINI_MODEL_SUMMARY;
-  const modelCandidates = [envModel, "gemini-1.5-flash-002", "gemini-1.5-flash-latest", "gemini-1.5-pro-002", "gemini-1.5-pro-latest"]
-    .filter(Boolean) as string[];
+  // Lista de modelos válidos en orden de preferencia
+  const modelCandidates = [
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-002",
+    "gemini-1.5-pro",
+    "gemini-1.5-pro-002",
+    process.env.GEMINI_MODEL_SUMMARY,
+  ].filter(Boolean) as string[];
 
   let lastError: any = null;
 
   for (const candidate of modelCandidates) {
     try {
+      console.log(`[summarize] Intentando modelo: ${candidate}`);
       const model = genAI.getGenerativeModel({ model: candidate });
       const result = await model.generateContent(prompt);
       const raw = result.response.text();
@@ -49,7 +56,10 @@ ${text.slice(0, 12000)}`;
       }
     } catch (err: any) {
       lastError = err;
-      if (String(err?.message || "").includes("404") || String(err?.message || "").toLowerCase().includes("not found")) {
+      const errorMsg = String(err?.message || "").toLowerCase();
+      console.warn(`[summarize] Error con ${candidate}:`, errorMsg);
+      
+      if (errorMsg.includes("404") || errorMsg.includes("not found")) {
         continue;
       }
       throw err;

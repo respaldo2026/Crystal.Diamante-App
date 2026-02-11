@@ -109,27 +109,38 @@ function buildAgentPrompt(
  */
 async function generateResponse(apiKey: string, prompt: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const envModel = process.env.GEMINI_MODEL_CHAT || process.env.GEMINI_MODEL_SUMMARY;
-  const modelCandidates = [envModel, "gemini-1.5-pro-002", "gemini-1.5-flash-002", "gemini-1.5-pro-latest"].filter(
-    Boolean
-  ) as string[];
+  
+  // Lista de modelos en orden de preferencia (solo modelos que existen en v1/v1beta)
+  const modelCandidates = [
+    "gemini-2.0-flash",           // Último modelo 2.0
+    "gemini-1.5-pro",             // Pro estable
+    "gemini-1.5-flash",           // Flash estable (rápido y económico)
+    "gemini-1.5-flash-002",       // Flash con versión
+    "gemini-1.5-pro-002",         // Pro con versión
+    process.env.GEMINI_MODEL_CHAT,
+    process.env.GEMINI_MODEL_SUMMARY,
+  ].filter(Boolean) as string[];
 
   let lastError: any = null;
 
   for (const candidate of modelCandidates) {
     try {
+      console.log(`[generateResponse] Intentando modelo: ${candidate}`);
       const model = genAI.getGenerativeModel({ model: candidate });
       const result = await model.generateContent(prompt);
       const text = result.response.text();
+      console.log(`[generateResponse] Éxito con modelo: ${candidate}`);
       return text || "Lo siento, no pude generar una respuesta en este momento.";
     } catch (err: any) {
       lastError = err;
-      if (
-        String(err?.message || "").includes("404") ||
-        String(err?.message || "").toLowerCase().includes("not found")
-      ) {
+      const errorMsg = String(err?.message || "").toLowerCase();
+      console.warn(`[generateResponse] Error con ${candidate}:`, errorMsg);
+      
+      // Si es 404 o "not found", continuar con siguiente modelo
+      if (errorMsg.includes("404") || errorMsg.includes("not found")) {
         continue;
       }
+      // Para otros errores, lanzar inmediatamente
       throw err;
     }
   }
