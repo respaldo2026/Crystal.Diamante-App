@@ -101,12 +101,14 @@ async function downloadAudio(audioUrl: string, bearerToken?: string): Promise<Bu
 async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
   
-  // Lista de modelos que soportan audio
+  // Usar la misma lista de modelos que funciona en el endpoint de chat
   const modelCandidates = [
-    "gemini-2.0-flash-exp",
+    "gemini-2.0-flash",
     "gemini-1.5-pro",
+    "gemini-1.5-flash-002",
     "gemini-1.5-pro-002",
-  ];
+    process.env.GEMINI_MODEL_SUMMARY,
+  ].filter(Boolean) as string[];
 
   const base64Audio = audioBuffer.toString("base64");
   let lastError: any = null;
@@ -136,7 +138,8 @@ async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string
       });
 
       const transcription = result.response.text().trim();
-      console.log("[speechToText] Transcripción exitosa:", transcription.substring(0, 100));
+      console.log(`[speechToText] Éxito con modelo: ${modelName}`);
+      console.log("[speechToText] Transcripción:", transcription.substring(0, 100));
       return transcription;
     } catch (err: any) {
       lastError = err;
