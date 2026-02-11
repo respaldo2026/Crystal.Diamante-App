@@ -12,7 +12,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
-import { getCoursesForAgent, buildCoursesContext } from "@/utils/supabase/agent-courses";
+import { 
+  getProgramsForAgent, 
+  getCoursesForQuery, 
+  detectProgramFromMessage,
+  buildHierarchicalContext 
+} from "@/utils/supabase/agent-courses";
 
 export const dynamic = "force-dynamic";
 
@@ -490,17 +495,24 @@ export async function POST(req: NextRequest) {
     console.log("[POST /api/ai/audio] Leyendo historial de conversación...");
     const history = await getConversationHistory(supabase, phone || "unknown", 5);
 
-    // 7.5. Obtener información dinámica de cursos disponibles
-    console.log("[POST /api/ai/audio] Leyendo cursos disponibles...");
-    const courses = await getCoursesForAgent();
-    const coursesContext = buildCoursesContext(courses);
+    // 7.5. Obtener información JERÁRQUICA: todos los programas (primaria)
+    console.log("[POST /api/ai/audio] Leyendo programas disponibles...");
+    const programs = await getProgramsForAgent();
+
+    // 7.6. Obtener cursos/grupos basado en lo que pregunta el usuario
+    console.log("[POST /api/ai/audio] Detectando programa específico...");
+    const detectedProgram = detectProgramFromMessage(transcription, programs);
+    const courses = await getCoursesForQuery(transcription, programs);
+    
+    // Contexto jerárquico: todos los programas + grupos del programa que pregunta (si detecta)
+    const hierarchicalContext = buildHierarchicalContext(programs, courses, detectedProgram);
 
     // 8. Buscar conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, transcription, 3);
 
     // 9. Generar respuesta del agente
     console.log("[POST /api/ai/audio] Generando respuesta del agente...");
-    const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks, history, coursesContext);
+    const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks, history, hierarchicalContext);
     const agentResponse = await generateResponse(geminiKey, prompt);
 
     // 10. Guardar en historial de conversación
