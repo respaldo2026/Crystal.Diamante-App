@@ -25,19 +25,39 @@ const fetchDocxText = async (url: string) => {
 };
 
 const summarize = async (apiKey: string, text: string) => {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  // Fuerza API v1, que es la compatible con los modelos recientes
+  const genAI = new GoogleGenerativeAI({ apiKey, apiVersion: "v1" });
   const prompt = `Resume en 3 viñetas breves y devuelve keywords (máx 10, minúsculas). Devuelve solo JSON: {"summary": string, "keywords": string[]}
 Texto:
 ${text.slice(0, 12000)}`;
-  const result = await model.generateContent(prompt);
-  const raw = result.response.text();
-  try {
-    const json = JSON.parse(raw.replace(/```json|```/g, ""));
-    return { summary: json.summary || raw, keywords: Array.isArray(json.keywords) ? json.keywords.slice(0, 12) : [] };
-  } catch (_e) {
-    return { summary: raw, keywords: [] };
+
+  const envModel = process.env.GEMINI_MODEL_SUMMARY;
+  const modelCandidates = [envModel, "gemini-1.5-flash-002", "gemini-1.5-flash-latest", "gemini-1.5-pro-002", "gemini-1.5-pro-latest"]
+    .filter(Boolean) as string[];
+
+  let lastError: any = null;
+
+  for (const candidate of modelCandidates) {
+    try {
+      const model = genAI.getGenerativeModel({ model: candidate });
+      const result = await model.generateContent(prompt);
+      const raw = result.response.text();
+      try {
+        const json = JSON.parse(raw.replace(/```json|```/g, ""));
+        return { summary: json.summary || raw, keywords: Array.isArray(json.keywords) ? json.keywords.slice(0, 12) : [] };
+      } catch (_e) {
+        return { summary: raw, keywords: [] };
+      }
+    } catch (err: any) {
+      lastError = err;
+      if (String(err?.message || "").includes("404") || String(err?.message || "").toLowerCase().includes("not found")) {
+        continue;
+      }
+      throw err;
+    }
   }
+
+  throw lastError || new Error("No available Gemini model for summarize");
 };
 
 const chunkText = (text: string, size = 1200, overlap = 100) => {
@@ -53,7 +73,7 @@ const chunkText = (text: string, size = 1200, overlap = 100) => {
 
 const embedTexts = async (apiKey: string, texts: string[]) => {
   if (!texts.length) return [] as number[][];
-  const genAI = new GoogleGenerativeAI(apiKey);
+  const genAI = new GoogleGenerativeAI({ apiKey, apiVersion: "v1" });
   const embedModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
   const vectors: number[][] = [];
   for (const t of texts) {
