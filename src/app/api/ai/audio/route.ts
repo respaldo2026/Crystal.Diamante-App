@@ -420,36 +420,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       transcription,
       agent_response: agentResponse,
-      audio_url: audioUrl || nulción del agente
-    const { data: settings } = await supabase
-      .from("agent_settings")
-      .select("*")
-      .eq("id", 1)
-      .maybeSingle();
-
-    // 7. Buscar conocimiento relevante
-    const knowledgeChunks = await searchKnowledge(supabase, transcription, 3);
-
-    // 8. Generar respuesta del agente
-    console.log("[POST /api/ai/audio] Generando respuesta del agente...");
-    const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks);
-    const agentResponse = await generateResponse(geminiKey, prompt);
-
-    // 9. TTS: Convertir respuesta a audio
-    console.log("[POST /api/ai/audio] Convirtiendo respuesta a audio (TTS)...");
-    const responseAudioBuffer = await textToSpeech(agentResponse);
-
-    // 10. Subir audio a Supabase storage
-    const timestamp = Date.now();
-    const filename = `responses/${timestamp}-${phone || "unknown"}.mp3`;
-    console.log("[POST /api/ai/audio] Subiendo audio a Supabase:", filename);
-    const audioUrl = await uploadAudioToSupabase(supabase, responseAudioBuffer, filename);
-
-    return NextResponse.json({
-      ok: true,
-      transcription,
-      agent_response: agentResponse,
-      audio_url: audioUrl,
+      audio_url: audioUrl || null,
       agent: settings?.persona_name || "Dany",
     });
   } catch (error: any) {
