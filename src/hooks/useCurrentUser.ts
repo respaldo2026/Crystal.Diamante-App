@@ -15,37 +15,58 @@ export interface CurrentUser {
  */
 export function useCurrentUser() {
   const queryClient = useQueryClient();
-  const { data: user, isLoading } = useQuery({
+  const { data: user, isLoading, error } = useQuery({
     queryKey: ["current-user"],
     queryFn: async (): Promise<CurrentUser | null> => {
-      const { data: { user: authUser } } = await supabaseBrowserClient.auth.getUser();
+      console.log('[useCurrentUser] Iniciando query...');
       
-      if (!authUser) return null;
+      try {
+        const { data: { user: authUser }, error: authError } = await supabaseBrowserClient.auth.getUser();
+        
+        if (authError) {
+          console.error('[useCurrentUser] Error de auth:', authError);
+          throw authError;
+        }
+        
+        if (!authUser) {
+          console.log('[useCurrentUser] No hay usuario autenticado');
+          return null;
+        }
 
-      const { data: perfil, error } = await supabaseBrowserClient
-        .from("perfiles")
-        .select("id, email, rol, nombre_completo")
-        .eq("id", authUser.id)
-        .maybeSingle();
+        console.log('[useCurrentUser] Usuario auth encontrado:', authUser.id);
 
-      if (error || !perfil) {
-        return { id: authUser.id, email: authUser.email, rol: undefined };
+        const { data: perfil, error } = await supabaseBrowserClient
+          .from("perfiles")
+          .select("id, email, rol, nombre_completo")
+          .eq("id", authUser.id)
+          .maybeSingle();
+
+        if (error || !perfil) {
+          console.warn('[useCurrentUser] No se encontró perfil, usando datos de auth');
+          return { id: authUser.id, email: authUser.email, rol: undefined };
+        }
+
+        console.log('[useCurrentUser] Perfil cargado:', perfil.rol);
+        
+        return {
+          id: perfil.id,
+          email: perfil.email || authUser.email,
+          rol: perfil.rol || authUser.role || undefined,
+          nombre_completo: perfil.nombre_completo,
+        };
+      } catch (err) {
+        console.error('[useCurrentUser] Error en queryFn:', err);
+        throw err;
       }
-
-      // Si el campo rol viene vacío, intenta obtenerlo del authUser (por si acaso)
-      return {
-        id: perfil.id,
-        email: perfil.email || authUser.email,
-        rol: perfil.rol || authUser.role || undefined,
-        nombre_completo: perfil.nombre_completo,
-      };
     },
-    staleTime: 5 * 60 * 1000, // 5 minutos
-    refetchInterval: false, // No hacer refetch automático cada 3 segundos
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: false,
     refetchIntervalInBackground: false,
-    refetchOnMount: false, // No refetchear al montar
-    refetchOnWindowFocus: false, // No refetchear al cambiar de foco
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: 1,
+    retryDelay: 500,
+    gcTime: 10 * 60 * 1000,
   });
 
   useEffect(() => {
@@ -78,10 +99,14 @@ export function useCurrentUser() {
   }, [queryClient, user?.id]);
 
   // Memorizamos el resultado para evitar re-renders innecesarios
-  const result = useMemo(() => ({
-    user: user ?? null,
-    loading: isLoading
-  }), [user, isLoading]);
+  const result = useMemo(() => {
+    console.log('[useCurrentUser] Estado actual:', { user: user?.id, loading: isLoading, error });
+    return {
+      user: user ?? null,
+      loading: isLoading,
+      error
+    };
+  }, [user, isLoading, error]);
 
   return result;
 }

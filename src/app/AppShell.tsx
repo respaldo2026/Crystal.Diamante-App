@@ -811,8 +811,11 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   }, [user, userLoading, normalizedRole, permisosLoading, permisos]);
 
   if (userLoading || (roleNeedsPermissions && permisosLoading)) {
+    console.log('[AppShell] Mostrando loader:', { userLoading, permisosLoading, roleNeedsPermissions });
     return <FullScreenLoader />;
   }
+  
+  console.log('[AppShell] Renderizando app con usuario:', user?.id, 'rol:', normalizedRole);
 
   return (
     <RefineKbarProvider>
