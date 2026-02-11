@@ -33,9 +33,62 @@ function validateRequest(request: NextRequest): boolean {
 }
 
 /**
- * Buscar chunks relevantes por keywords (búsqueda simple por palabras clave)
+ * Obtener historial reciente de conversación
  */
-async function searchKnowledge(supabase: any, query: string, limit = 3): Promise<string[]> {
+async function getConversationHistory(supabase: any, phone: string, limit = 5): Promise<Array<{user: string, agent: string}>> {
+  try {
+    const { data, error } = await supabase
+      .from("agent_conversations")
+      .select("user_message, agent_response")
+      .eq("phone_number", phone)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("[getConversationHistory] Error:", error);
+      return [];
+    }
+
+    // Invertir para que sea cronológico (antiguo a nuevo)
+    return (data || []).reverse().map((row: any) => ({
+      user: row.user_message,
+      agent: row.agent_response,
+    }));
+  } catch (err) {
+    console.error("[getConversationHistory] Error:", err);
+    return [];
+  }
+}
+
+/**
+ * Guardar mensaje en historial de conversación
+ */
+async function saveConversation(
+  supabase: any,
+  phone: string,
+  userMessage: string,
+  agentResponse: string,
+  transcription?: string
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("agent_conversations")
+      .insert({
+        phone_number: phone,
+        user_message: userMessage,
+        agent_response: agentResponse,
+        transcription: transcription || null,
+      });
+
+    if (error) {
+      console.warn("[saveConversation] Error guardando:", error);
+    } else {
+      console.log("[saveConversation] Conversación guardada");
+    }
+  } catch (err) {
+    console.warn("[saveConversation] Error:", err);
+  }
+}
   try {
     const keywords = query
       .toLowerCase()
@@ -65,12 +118,13 @@ async function searchKnowledge(supabase: any, query: string, limit = 3): Promise
 }
 
 /**
- * Construir prompt del agente con personalidad + conocimiento
+ * Construir prompt del agente con personalidad + conocimiento + historial
  */
 function buildAgentPrompt(
   settings: any,
   userMessage: string,
-  knowledgeChunks: string[]
+  knowledgeChunks: string[],
+  conversationHistory: Array<{user: string, agent: string}> = []
 ): string {
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asistente de la Academia Crystal.";
@@ -90,7 +144,15 @@ function buildAgentPrompt(
 - Usa el contexto de conocimiento si está disponible.
 - Sé breve, claro y amable.
 - No inventes datos.
+- Recuerda el contexto de conversaciones anteriores.
 `;
+
+  if (conversationHistory.length > 0) {
+    prompt += `\n# Historial de conversación reciente:\n`;
+    conversationHistory.forEach((msg, idx) => {
+      prompt += `\nUsuario: ${msg.user}\n${persona}: ${msg.agent}\n`;
+    });
+  }
 
   if (knowledgeChunks.length > 0) {
     prompt += `\n# Contexto disponible (base de conocimiento):\n`;
@@ -188,16 +250,23 @@ export async function POST(req: NextRequest) {
       console.error("Error leyendo agent_settings:", settingsErr);
     }
 
-    // 5. Buscar conocimiento relevante en agent_chunks
+    // 5. Obtener historial de conversación
+    console.log("[POST /api/ai/chat] Leyendo historial de conversación...");
+    const history = await getConversationHistory(supabase, phone || "unknown", 5);
+
+    // 6. Buscar conocimiento relevante en agent_chunks
     const knowledgeChunks = await searchKnowledge(supabase, message, 3);
 
-    // 6. Construir prompt con personalidad + conocimiento
-    const prompt = buildAgentPrompt(settings || {}, message, knowledgeChunks);
+    // 7. Construir prompt con personalidad + conocimiento + historial
+    const prompt = buildAgentPrompt(settings || {}, message, knowledgeChunks, history);
 
-    // 7. Generar respuesta con Gemini
+    // 8. Generar respuesta con Gemini
     const response = await generateResponse(geminiKey, prompt);
 
-    // 8. Opcional: registrar conversación en logs
+    // 9. Guardar en historial de conversación
+    await saveConversation(supabase, phone || "unknown", message, response);
+
+    // 10. Opcional: registrar conversación en logs
     // await supabase.from("whatsapp_conversaciones").insert({...})
 
     return NextResponse.json({
@@ -205,6 +274,7 @@ export async function POST(req: NextRequest) {
       response,
       agent: settings?.persona_name || "Dany",
       knowledgeUsed: knowledgeChunks.length > 0,
+      historyLength: history.length,
     });
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);

@@ -30,8 +30,62 @@ function validateRequest(request: NextRequest): boolean {
 }
 
 /**
- * Obtener URL de descarga del media desde WhatsApp Cloud API
+ * Obtener historial reciente de conversación
  */
+async function getConversationHistory(supabase: any, phone: string, limit = 5): Promise<Array<{user: string, agent: string}>> {
+  try {
+    const { data, error } = await supabase
+      .from("agent_conversations")
+      .select("user_message, agent_response")
+      .eq("phone_number", phone)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("[getConversationHistory] Error:", error);
+      return [];
+    }
+
+    return (data || []).reverse().map((row: any) => ({
+      user: row.user_message,
+      agent: row.agent_response,
+    }));
+  } catch (err) {
+    console.error("[getConversationHistory] Error:", err);
+    return [];
+  }
+}
+
+/**
+ * Guardar mensaje en historial de conversación
+ */
+async function saveConversation(
+  supabase: any,
+  phone: string,
+  userMessage: string,
+  agentResponse: string,
+  transcription?: string
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("agent_conversations")
+      .insert({
+        phone_number: phone,
+        user_message: userMessage,
+        agent_response: agentResponse,
+        transcription: transcription || null,
+      });
+
+    if (error) {
+      console.warn("[saveConversation] Error guardando:", error);
+    } else {
+      console.log("[saveConversation] Conversación guardada");
+    }
+  } catch (err) {
+    console.warn("[saveConversation] Error:", err);
+  }
+}
+
 async function getWhatsAppMediaUrl(mediaId: string, accessToken: string): Promise<string> {
   try {
     console.log(`[getWhatsAppMediaUrl] Obteniendo URL para media: ${mediaId}`);
@@ -188,12 +242,13 @@ async function searchKnowledge(supabase: any, query: string, limit = 3): Promise
 }
 
 /**
- * Construir prompt del agente
+ * Construir prompt del agente con personalidad + conocimiento + historial
  */
 function buildAgentPrompt(
   settings: any,
   userMessage: string,
-  knowledgeChunks: string[]
+  knowledgeChunks: string[],
+  conversationHistory: Array<{user: string, agent: string}> = []
 ): string {
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asistente de la Academia Crystal.";
@@ -211,9 +266,17 @@ function buildAgentPrompt(
 # Reglas
 - Si no sabes algo con certeza, responde: "${fallback}"
 - Usa el contexto de conocimiento si está disponible.
-- Sé breve, claro y amable.
+- Sé breve, claro y amable (máx 2 líneas).
 - No inventes datos.
+- Recuerda el contexto de conversaciones anteriores.
 `;
+
+  if (conversationHistory.length > 0) {
+    prompt += `\n# Historial de conversación reciente:\n`;
+    conversationHistory.forEach((msg) => {
+      prompt += `\nUsuario: ${msg.user}\n${persona}: ${msg.agent}\n`;
+    });
+  }
 
   if (knowledgeChunks.length > 0) {
     prompt += `\n# Contexto disponible (base de conocimiento):\n`;
@@ -416,22 +479,29 @@ export async function POST(req: NextRequest) {
       .eq("id", 1)
       .maybeSingle();
 
-    // 7. Buscar conocimiento relevante
+    // 7. Obtener historial de conversación
+    console.log("[POST /api/ai/audio] Leyendo historial de conversación...");
+    const history = await getConversationHistory(supabase, phone || "unknown", 5);
+
+    // 8. Buscar conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, transcription, 3);
 
-    // 8. Generar respuesta del agente
+    // 9. Generar respuesta del agente
     console.log("[POST /api/ai/audio] Generando respuesta del agente...");
-    const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks);
+    const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks, history);
     const agentResponse = await generateResponse(geminiKey, prompt);
 
-    // 9. TTS: Convertir respuesta a audio (OPCIONAL - solo si Elevenlabs está configurado)
+    // 10. Guardar en historial de conversación
+    await saveConversation(supabase, phone || "unknown", transcription, agentResponse, transcription);
+
+    // 11. TTS: Convertir respuesta a audio (OPCIONAL - solo si Elevenlabs está configurado)
     let audioUrl = "";
     try {
       if (process.env.ELEVENLABS_API_KEY) {
         console.log("[POST /api/ai/audio] Convirtiendo respuesta a audio (TTS)...");
         const responseAudioBuffer = await textToSpeech(agentResponse);
 
-        // 10. Subir audio a Supabase storage
+        // 12. Subir audio a Supabase storage
         const timestamp = Date.now();
         const filename = `responses/${timestamp}-${phone || "unknown"}.mp3`;
         console.log("[POST /api/ai/audio] Subiendo audio a Supabase:", filename);
@@ -449,6 +519,7 @@ export async function POST(req: NextRequest) {
       agent_response: agentResponse,
       audio_url: audioUrl || null,
       agent: settings?.persona_name || "Dany",
+      historyLength: history.length,
     });
   } catch (error: any) {
     console.error("[POST /api/ai/audio] Error:", error);
