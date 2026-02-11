@@ -25,8 +25,7 @@ const fetchDocxText = async (url: string) => {
 };
 
 const summarize = async (apiKey: string, text: string) => {
-  // Fuerza API v1, que es la compatible con los modelos recientes
-  const genAI = new GoogleGenerativeAI({ apiKey, apiVersion: "v1" });
+  const genAI = new GoogleGenerativeAI(apiKey);
   const prompt = `Resume en 3 viñetas breves y devuelve keywords (máx 10, minúsculas). Devuelve solo JSON: {"summary": string, "keywords": string[]}
 Texto:
 ${text.slice(0, 12000)}`;
