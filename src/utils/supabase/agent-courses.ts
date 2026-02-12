@@ -27,9 +27,42 @@ interface ProgramInfo {
   precio: number | null
   precio_inscripcion: number | null
   precio_mensualidad: number | null
+  contenido: string | null
   requisitos: string | null
   certificacion: string | null
   activo: boolean
+  total_clases: number | null
+}
+
+interface PensumCiclo {
+  id: string
+  numero_ciclo: number
+  nombre_ciclo: string | null
+  descripcion: string | null
+  duracion_semanas: number | null
+  total_horas: number | null
+  orden: number | null
+  cursos: PensumCurso[]
+}
+
+interface PensumCurso {
+  id: string
+  nombre_curso: string
+  descripcion: string | null
+  horas: number | null
+  creditos: number | null
+  tipo_curso: string | null
+  orden: number | null
+}
+
+interface MedioPago {
+  id: number
+  nombre: string
+  codigo: string
+  descripcion: string | null
+  icono: string | null
+  activo: boolean
+  orden: number
 }
 
 interface CourseInfo {
@@ -50,6 +83,51 @@ interface CourseInfo {
   matriculados: number
   cupos_disponibles: number
   programa_id: number
+}
+
+/**
+ * Obtener medios de pago activos
+ */
+export async function getMediosPago(): Promise<MedioPago[]> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+    const { data, error } = await supabase
+      .from('medios_pago')
+      .select('*')
+      .eq('activo', true)
+      .order('orden', { ascending: true })
+
+    if (error) {
+      console.error('[getMediosPago] Error:', error)
+      return []
+    }
+
+    return data as MedioPago[]
+  } catch (err) {
+    console.error('[getMediosPago] Error:', err)
+    return []
+  }
+}
+
+/**
+ * Formatear medios de pago para el agente
+ */
+export function formatMediosPago(mediosPago: MedioPago[]): string {
+  if (!mediosPago.length) {
+    return ''
+  }
+
+  let info = `\n## MEDIOS DE PAGO ACEPTADOS\n\n`
+  info += `Aceptamos los siguientes medios de pago:\n`
+  
+  mediosPago.forEach(medio => {
+    const descripcion = medio.descripcion ? ` - ${medio.descripcion}` : ''
+    info += `  💳 **${medio.nombre}**${descripcion}\n`
+  })
+  
+  info += `\n`
+  return info
 }
 
 /**
@@ -75,6 +153,66 @@ export async function getAcademyInfo(): Promise<AcademyInfo | null> {
   } catch (err) {
     console.error('[getAcademyInfo] Error:', err)
     return null
+  }
+}
+
+/**
+ * Obtener pensum (temario) de un programa específico
+ */
+export async function getPensumByProgram(programaId: number): Promise<PensumCiclo[]> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+    // Obtener ciclos del pensum
+    const { data: ciclos, error: errorCiclos } = await supabase
+      .from('pensum')
+      .select('*')
+      .eq('programa_id', programaId)
+      .eq('activo', true)
+      .order('orden', { ascending: true })
+
+    if (errorCiclos) {
+      console.error('[getPensumByProgram] Error obteniendo ciclos:', errorCiclos)
+      return []
+    }
+
+    if (!ciclos || ciclos.length === 0) {
+      return []
+    }
+
+    // Para cada ciclo, obtener sus cursos
+    const pensumCompleto: PensumCiclo[] = []
+    for (const ciclo of ciclos) {
+      const { data: cursos, error: errorCursos } = await supabase
+        .from('pensum_cursos')
+        .select('*')
+        .eq('pensum_id', ciclo.id)
+        .order('orden', { ascending: true })
+
+      pensumCompleto.push({
+        id: ciclo.id,
+        numero_ciclo: ciclo.numero_ciclo,
+        nombre_ciclo: ciclo.nombre_ciclo,
+        descripcion: ciclo.descripcion,
+        duracion_semanas: ciclo.duracion_semanas,
+        total_horas: ciclo.total_horas,
+        orden: ciclo.orden,
+        cursos: (cursos || []).map((c: any) => ({
+          id: c.id,
+          nombre_curso: c.nombre_curso,
+          descripcion: c.descripcion,
+          horas: c.horas,
+          creditos: c.creditos,
+          tipo_curso: c.tipo_curso,
+          orden: c.orden,
+        }))
+      })
+    }
+
+    return pensumCompleto
+  } catch (err) {
+    console.error('[getPensumByProgram] Error:', err)
+    return []
   }
 }
 
@@ -288,6 +426,8 @@ ${programs
       ? `(${prog.duracion})`
       : ''
     
+    const clasesText = prog.total_clases ? ` - ${prog.total_clases} clases` : ''
+    
     const priceText = prog.precio 
       ? `$${prog.precio} COP`
       : prog.precio_inscripcion &&  prog.precio_mensualidad
@@ -296,13 +436,15 @@ ${programs
     
     const reqText = prog.requisitos ? `Requisitos: ${prog.requisitos}` : ''
     const certText = prog.certificacion ? `Certificación: ${prog.certificacion}` : ''
+    const contenidoText = prog.contenido ? `Temario: ${prog.contenido.substring(0, 200)}${prog.contenido.length > 200 ? '...' : ''}` : ''
     
     return `
-- **${prog.nombre}** ${durationText}
+- **${prog.nombre}** ${durationText}${clasesText}
   Descripción: ${prog.descripcion || 'N/A'}
+  ${contenidoText ? `${contenidoText}` : ''}
   ${reqText ? `${reqText}` : ''}
   ${certText ? `${certText}` : ''}
-  Inversi­ón: ${priceText}`
+  Inversión: ${priceText}`
   })
   .join('\n')}
 
@@ -329,8 +471,127 @@ ${courses.length > 0
 ` : ''}
 
 Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y disponibilidad.
-Si pregunta "¿Qué programas tienen?", lista todos los programas.
-Si pregunta "¿Cuáles son los grupos de [nombre]?", muestra solo grupos de ese programa.
+Si pregunta "¿Qué programas tienen?", lista todos los programas y su temario.
+Si pregunta "¿Cuáles son los grupos de [nombre]?", muestra solo grupos de ese programa con su temario detallado.
+`
+
+  return context.trim()
+}
+
+/**
+ * Versión async de buildHierarchicalContext que incluye información detallada del pensum
+ * cuando se detecta un programa específico
+ */
+export async function buildHierarchicalContextWithPensum(
+  programs: ProgramInfo[],
+  courses: CourseInfo[],
+  detectedProgram: ProgramInfo | null,
+  academy: AcademyInfo | null = null,
+  mediosPago: MedioPago[] = []
+): Promise<string> {
+  let context = ``
+
+  // Agregar información de la academia si está disponible
+  if (academy) {
+    context += formatAcademyInfo(academy)
+  }
+  
+  // Agregar medios de pago si están disponibles
+  if (mediosPago.length > 0) {
+    context += formatMediosPago(mediosPago)
+  }
+
+  context += `
+## PROGRAMAS Y GRUPOS DISPONIBLES
+
+### 📚 Programas Activos:
+`
+
+  for (const prog of programs) {
+    const durationText = prog.duracion_horas 
+      ? `${prog.duracion_horas} horas`
+      : prog.duracion 
+      ? prog.duracion
+      : 'Duración a definir'
+    
+    const clasesText = prog.total_clases ? ` (${prog.total_clases} clases)` : ''
+    
+    const priceText = prog.precio 
+      ? `$${prog.precio} COP`
+      : prog.precio_inscripcion && prog.precio_mensualidad
+      ? `Inscripción: $${prog.precio_inscripcion} + Mensualidad: $${prog.precio_mensualidad}`
+      : 'Precio a definir'
+    
+    context += `
+- **${prog.nombre}**
+  Duración: ${durationText}${clasesText}
+  Descripción: ${prog.descripcion || 'N/A'}`
+    
+    if (prog.requisitos) {
+      context += `\n  Requisitos: ${prog.requisitos}`
+    }
+    if (prog.certificacion) {
+      context += `\n  Certificación: ${prog.certificacion}`
+    }
+    context += `\n  Inversión: ${priceText}\n`
+    
+    // Mostrar temario si existe (solo para el programa detectado o si es general)
+    if (detectedProgram && detectedProgram.id === prog.id) {
+      // Si hay contenido general, mostrarlo
+      if (prog.contenido) {
+        context += `  📝 Temario: ${prog.contenido}\n`
+      }
+      
+      // Obtener pensum estructurado
+      const pensum = await getPensumByProgram(prog.id)
+      if (pensum.length > 0) {
+        context += `  📚 **Contenido Detallado por Ciclos:**\n`
+        pensum.forEach(ciclo => {
+          const cicloNombre = ciclo.nombre_ciclo || `Ciclo ${ciclo.numero_ciclo}`
+          const cicloHoras = ciclo.total_horas ? ` (${ciclo.total_horas}h)` : ''
+          const cicloSemanas = ciclo.duracion_semanas ? ` - ${ciclo.duracion_semanas} semanas` : ''
+          context += `    • ${cicloNombre}${cicloHoras}${cicloSemanas}\n`
+          if (ciclo.cursos.length > 0) {
+            ciclo.cursos.forEach(curso => {
+              const cursoHoras = curso.horas ? ` (${curso.horas}h)` : ''
+              context += `      - ${curso.nombre_curso}${cursoHoras}\n`
+            })
+          }
+        })
+      }
+    } else if (prog.contenido) {
+      // Para programas no detectados, solo mostrar un resumen del contenido
+      const contenidoResumen = prog.contenido.substring(0, 150)
+      context += `  📝 Temario: ${contenidoResumen}${prog.contenido.length > 150 ? '...' : ''}\n`
+    }
+  }
+
+  // Mostrar grupos disponibles si hay un programa detectado
+  if (detectedProgram) {
+    context += `\n### 📖 Grupos del Programa "${detectedProgram.nombre}":\n`
+    if (courses.length > 0) {
+      courses.forEach(course => {
+        const matriculados = course.matriculados || 0
+        const cupos = course.cupos || 0
+        const disponibles = course.cupos_disponibles || 0
+        
+        context += `
+- **${course.nombre}**
+  Horario: ${course.horario || 'A confirmar'}
+  Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
+  Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
+  Profesor: ${course.profesor_nombre || 'A confirmar'}
+  Precio: $${course.precio_inscripcion || course.precio || 'A definir'}\n`
+      })
+    } else {
+      context += `No hay grupos disponibles para este programa en este momento.\n`
+    }
+  }
+
+  context += `
+Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y el temario detallado.
+Si pregunta "¿Qué programas tienen?", lista todos los programas con su información general.
+Si pregunta "¿Cuál es el contenido de [programa]?" o "¿Qué se ve en [programa]?", muestra el temario completo por ciclos.
 `
 
   return context.trim()

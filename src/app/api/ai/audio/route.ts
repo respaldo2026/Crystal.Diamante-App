@@ -17,7 +17,9 @@ import {
   getCoursesForQuery, 
   detectProgramFromMessage,
   buildHierarchicalContext,
-  getAcademyInfo
+  buildHierarchicalContextWithPensum,
+  getAcademyInfo,
+  getMediosPago
 } from "@/utils/supabase/agent-courses";
 
 export const dynamic = "force-dynamic";
@@ -272,11 +274,13 @@ function buildAgentPrompt(
 - Estilo: ${style}
 
 # Reglas
+- IMPORTANTE: Esta conversación es por AUDIO/VOZ. NO uses emojis, íconos o símbolos especiales.
 - Si no sabes algo con certeza, responde: "${fallback}"
 - Usa el contexto de conocimiento si está disponible.
 - Sé breve, claro y amable (máx 2 líneas).
 - No inventes datos.
 - Recuerda el contexto de conversaciones anteriores.
+- Responde en un lenguaje natural apto para ser pronunciado.
 `;
 
   // Agregar contexto de cursos disponibles
@@ -387,6 +391,24 @@ async function textToSpeech(text: string): Promise<Buffer> {
     console.error("[textToSpeech] Error:", err);
     throw err;
   }
+}
+
+/**
+ * Eliminar emojis del texto para texto-a-voz (TTS)
+ * Los emojis no se pronuncian bien en audio
+ */
+function removeEmojis(text: string): string {
+  // Expresión regular usando códigos Unicode hexadecimales
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Emojis misceláneos y símbolos
+    .replace(/[\u{2600}-\u{26FF}]/gu, '')   // Símbolos misceláneos
+    .replace(/[\u{2700}-\u{27BF}]/gu, '')   // Dingbats
+    .replace(/[\u{1F600}-\u{1F64F}]/gu, '') // Emoticones
+    .replace(/[\u{1F680}-\u{1F6FF}]/gu, '') // Transporte y símbolos de mapa
+    .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '') // Banderas
+    // Limpiar espacios múltiples que quedan
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -509,8 +531,15 @@ export async function POST(req: NextRequest) {
     console.log("[POST /api/ai/audio] Obteniendo información de la academia...");
     const academy = await getAcademyInfo();
     
-    // 7.8. Contexto jerárquico: info academia + todos los programas + grupos del programa que pregunta
-    const hierarchicalContext = buildHierarchicalContext(programs, courses, detectedProgram, academy);
+    // 7.8. Obtener medios de pago disponibles
+    console.log("[POST /api/ai/audio] Obteniendo medios de pago...");
+    const mediosPago = await getMediosPago();
+    
+    // 7.9. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
+    let hierarchicalContext = await buildHierarchicalContextWithPensum(programs, courses, detectedProgram, academy, mediosPago);
+    
+    // 7.10. IMPORTANTE: Eliminar emojis del contexto para que el agente no los use en respuestas de audio
+    hierarchicalContext = removeEmojis(hierarchicalContext);
 
     // 8. Buscar conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, transcription, 3);
@@ -518,9 +547,12 @@ export async function POST(req: NextRequest) {
     // 9. Generar respuesta del agente
     console.log("[POST /api/ai/audio] Generando respuesta del agente...");
     const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks, history, hierarchicalContext);
-    const agentResponse = await generateResponse(geminiKey, prompt);
+    let agentResponse = await generateResponse(geminiKey, prompt);
+    
+    // 9.5. IMPORTANTE: Eliminar emojis de la respuesta antes de convertir a audio
+    const agentResponseClean = removeEmojis(agentResponse);
 
-    // 10. Guardar en historial de conversación
+    // 10. Guardar en historial de conversación (con emojis originales)
     await saveConversation(supabase, phone || "unknown", transcription, agentResponse, transcription);
 
     // 11. TTS: Convertir respuesta a audio (OPCIONAL - solo si Elevenlabs está configurado)
@@ -528,7 +560,8 @@ export async function POST(req: NextRequest) {
     try {
       if (process.env.ELEVENLABS_API_KEY) {
         console.log("[POST /api/ai/audio] Convirtiendo respuesta a audio (TTS)...");
-        const responseAudioBuffer = await textToSpeech(agentResponse);
+        // Usar la versión sin emojis para TTS
+        const responseAudioBuffer = await textToSpeech(agentResponseClean);
 
         // 12. Subir audio a Supabase storage
         const timestamp = Date.now();

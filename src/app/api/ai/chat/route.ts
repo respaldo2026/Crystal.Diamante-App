@@ -13,7 +13,9 @@ import {
   getCoursesForQuery, 
   detectProgramFromMessage,
   buildHierarchicalContext,
-  getAcademyInfo
+  buildHierarchicalContextWithPensum,
+  getAcademyInfo,
+  getMediosPago
 } from "@/utils/supabase/agent-courses";
 
 export const dynamic = "force-dynamic";
@@ -252,8 +254,11 @@ export async function POST(req: NextRequest) {
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
     
-    // 4. Contexto jerárquico: info academia + todos programas + grupos del programa detectado
-    const hierarchicalContext = buildHierarchicalContext(programs, courses, detectedProgram, academy);
+    // 4. Obtener medios de pago disponibles
+    const mediosPago = await getMediosPago();
+    
+    // 5. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
+    const hierarchicalContext = await buildHierarchicalContextWithPensum(programs, courses, detectedProgram, academy, mediosPago);
 
     // Obtener conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, message, 3);
