@@ -111,7 +111,7 @@ export default function ConfiguracionPage() {
     if (platform === 'facebook') {
       let cleaned = cleanUrl.replace(/facebook\.com/, 'fb.com');
       cleaned = cleaned.replace(/\/pages\/([^\/]+)\/\d+/, '/$1');
-      cleaned = cleaned.split('?')[0];
+      cleaned = cleaned.split('?')[0] || cleaned;
       return cleaned;
     }
     
@@ -119,7 +119,7 @@ export default function ConfiguracionPage() {
       const atMatch = cleanUrl.match(/youtube\.com\/@([^\/\?\s]+)/);
       if (atMatch && atMatch[1]) return `@${atMatch[1]}`;
       let cleaned = cleanUrl.replace(/youtube\.com/, 'yt.com');
-      cleaned = cleaned.split('?')[0];
+      cleaned = cleaned.split('?')[0] || cleaned;
       return cleaned;
     }
     

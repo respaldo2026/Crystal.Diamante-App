@@ -391,7 +391,7 @@ function shortenSocialUrl(url: string, platform: 'instagram' | 'facebook' | 'you
     // Simplificar /pages/name/id a /name
     cleaned = cleaned.replace(/\/pages\/([^\/]+)\/\d+/, '/$1')
     // Remover parámetros query
-    cleaned = cleaned.split('?')[0]
+    cleaned = cleaned.split('?')[0] || cleaned
     return cleaned
   }
   
@@ -405,7 +405,7 @@ function shortenSocialUrl(url: string, platform: 'instagram' | 'facebook' | 'you
     
     // Acortar youtube a yt para canales
     let cleaned = cleanUrl.replace(/youtube\.com/, 'yt.com')
-    cleaned = cleaned.split('?')[0]
+    cleaned = cleaned.split('?')[0] || cleaned
     return cleaned
   }
   
