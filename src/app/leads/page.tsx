@@ -242,14 +242,16 @@ export default function LeadsPage() {
       okText: "Sí, eliminar",
       okType: "danger",
       cancelText: "Cancelar",
-      onOk: async () => {
+      async onOk() {
         try {
+          setLoading(true);
           const { error } = await supabaseBrowserClient
             .from("leads")
             .delete()
             .eq("id", lead.id);
 
           if (error) {
+            console.error("Error Supabase:", error);
             message.error("No se pudo eliminar el lead");
             return;
           }
@@ -257,55 +259,72 @@ export default function LeadsPage() {
           setLeads((prev) => prev.filter((l) => l.id !== lead.id));
           message.success("Lead eliminado");
         } catch (err) {
-          console.error("Error eliminando lead", err);
+          console.error("Error eliminando lead:", err);
           message.error("No se pudo eliminar el lead");
+        } finally {
+          setLoading(false);
         }
       },
     });
   };
 
-  const eliminarTodosLeads = async () => {
+  const eliminarTodosLeads = () => {
+    let confirmInput = "";
+    const totalLeads = leads.length;
+
     Modal.confirm({
       title: "¿ELIMINAR TODOS LOS LEADS?",
       icon: <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />,
+      width: 500,
       content: (
         <div>
-          <p><strong>Se eliminarán {leads.length} leads de forma permanente.</strong></p>
-          <p style={{ color: "#ff4d4f" }}>⚠️ Esta acción NO se puede deshacer.</p>
-          <p>Escribe <strong>&quot;ELIMINAR&quot;</strong> para confirmar:</p>
+          <p><strong>Se eliminarán {totalLeads} leads de forma permanente.</strong></p>
+          <p style={{ color: "#ff4d4f", marginBottom: 16 }}>⚠️ Esta acción NO se puede deshacer.</p>
+          <p style={{ marginBottom: 8 }}>Escribe <strong>&quot;ELIMINAR&quot;</strong> para confirmar:</p>
           <Input
-            id="confirm-delete-input"
             placeholder="Escribe ELIMINAR"
-            style={{ marginTop: 8 }}
+            onChange={(e) => { confirmInput = e.target.value; }}
+            onPressEnter={(e) => {
+              e.preventDefault();
+              const btn = document.querySelector('.ant-modal-confirm-btns .ant-btn-primary') as HTMLButtonElement;
+              btn?.click();
+            }}
+            autoFocus
           />
         </div>
       ),
       okText: "Confirmar eliminación",
       okType: "danger",
       cancelText: "Cancelar",
-      onOk: async () => {
-        const input = document.getElementById("confirm-delete-input") as HTMLInputElement;
-        if (input?.value !== "ELIMINAR") {
-          message.warning("Debes escribir ELIMINAR para confirmar");
-          return Promise.reject();
+      async onOk() {
+        if (confirmInput.trim() !== "ELIMINAR") {
+          message.warning('Debes escribir "ELIMINAR" para confirmar');
+          return Promise.reject(new Error("Confirmación incorrecta"));
         }
 
         try {
+          setLoading(true);
+          
+          // Eliminar todos los leads de la base de datos
           const { error } = await supabaseBrowserClient
             .from("leads")
             .delete()
-            .neq("id", "00000000-0000-0000-0000-000000000000"); // Elimina todos
+            .neq("id", "00000000-0000-0000-0000-000000000000");
 
           if (error) {
+            console.error("Error Supabase:", error);
             message.error("No se pudieron eliminar los leads");
-            return;
+            return Promise.reject(error);
           }
 
           setLeads([]);
-          message.success(`${leads.length} leads eliminados`);
+          message.success(`${totalLeads} leads eliminados correctamente`);
         } catch (err) {
-          console.error("Error eliminando todos los leads", err);
+          console.error("Error eliminando todos los leads:", err);
           message.error("No se pudieron eliminar los leads");
+          return Promise.reject(err);
+        } finally {
+          setLoading(false);
         }
       },
     });
