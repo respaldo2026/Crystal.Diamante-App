@@ -192,13 +192,15 @@ export default function CursoCreate() {
 
         try {
             await validarConflictos(datosLimpios);
+            
+            // Si no hay conflictos, llamar a la función onFinish de formProps
+            if (formProps.onFinish) {
+                return await formProps.onFinish(datosLimpios);
+            }
         } catch (err: any) {
             message.error(err?.message || "Conflicto de horario detectado");
-            throw err;
+            return Promise.reject(err);
         }
-        
-        // Llamar a la función onFinish de formProps (la que guarda en Refine/Supabase)
-        return formProps.onFinish?.(datosLimpios);
     };
 
     return (
