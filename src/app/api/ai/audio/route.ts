@@ -563,12 +563,18 @@ function removeEmojis(text: string): string {
  * Solo remover caracteres de control problemáticos
  * JSON.stringify ya maneja escape de comillas, saltos de línea, etc.
  */
-function sanitizeForJSON(text: string): string {
+function sanitizeForJSON(text: string | null | undefined): string {
   if (!text) return '';
-  // Solo remover caracteres de control problemáticos
-  // JSON.stringify se encargará del resto
-  return text
+  
+  // Convertir a string si no lo es
+  const str = String(text);
+  
+  // Remover caracteres de control problemáticos
+  return str
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\\n/g, ' ')  // Reemplazar \n literales con espacios
+    .replace(/\\r/g, '')   // Remover \r literales
+    .replace(/\\t/g, ' ')  // Reemplazar \t literales con espacios
     .trim();
 }
 
@@ -609,7 +615,10 @@ export async function POST(req: NextRequest) {
   try {
     // 1. Validar autenticación
     if (!validateRequest(req)) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      return NextResponse.json({ 
+        ok: false,
+        error: "No autorizado" 
+      }, { status: 401 });
     }
 
     // 2. Parsear body
@@ -626,7 +635,10 @@ export async function POST(req: NextRequest) {
     // Aceptar tanto media_id como audio_url para flexibilidad
     if (!media_id && !audio_url) {
       return NextResponse.json(
-        { error: "Falta 'media_id' o 'audio_url' en el body" },
+        { 
+          ok: false,
+          error: "Falta 'media_id' o 'audio_url' en el body" 
+        },
         { status: 400 }
       );
     }
@@ -638,10 +650,16 @@ export async function POST(req: NextRequest) {
     const whatsappToken = whatsapp_access_token || process.env.WHATSAPP_ACCESS_TOKEN;
 
     if (!supabaseUrl || !serviceKey) {
-      return NextResponse.json({ error: "Faltan credenciales de Supabase" }, { status: 500 });
+      return NextResponse.json({ 
+        ok: false,
+        error: "Faltan credenciales de Supabase" 
+      }, { status: 500 });
     }
     if (!geminiKey) {
-      return NextResponse.json({ error: "Falta GEMINI_API_KEY" }, { status: 500 });
+      return NextResponse.json({ 
+        ok: false,
+        error: "Falta GEMINI_API_KEY" 
+      }, { status: 500 });
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -745,19 +763,25 @@ export async function POST(req: NextRequest) {
 
     // Sanitizar respuesta para JSON válido
     const sanitizedResponse = sanitizeForJSON(agentResponse);
+    const sanitizedTranscription = sanitizeForJSON(transcription);
+    const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
 
     return NextResponse.json({
       ok: true,
-      transcription: sanitizeForJSON(transcription),
-      agent_response: sanitizedResponse,
-      audio_url: audioUrl || null,
-      agent: sanitizeForJSON(settings?.persona_name || "Dany"),
-      historyLength: history.length,
+      transcription: sanitizedTranscription || "",
+      agent_response: sanitizedResponse || "",
+      audio_url: audioUrl || "",
+      agent: sanitizedAgent || "Dany",
+      historyLength: Number(history.length) || 0,
     });
   } catch (error: any) {
     console.error("[POST /api/ai/audio] Error:", error);
+    const errorMessage = error?.message || "Error procesando audio";
     return NextResponse.json(
-      { error: error?.message || "Error procesando audio" },
+      { 
+        ok: false,
+        error: String(errorMessage).substring(0, 200) // Limitar longitud del error
+      },
       { status: 500 }
     );
   }

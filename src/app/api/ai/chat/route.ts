@@ -71,12 +71,19 @@ async function markMessageAsRead(messageId: string): Promise<boolean> {
  * Solo remover caracteres de control problemáticos
  * JSON.stringify ya maneja escape de comillas, saltos de línea, etc.
  */
-function sanitizeForJSON(text: string): string {
+function sanitizeForJSON(text: string | null | undefined): string {
   if (!text) return '';
-  // Solo remover caracteres de control problemáticos
+  
+  // Convertir a string si no lo es
+  const str = String(text);
+  
+  // Remover caracteres de control problemáticos
   // JSON.stringify se encargará del resto
-  return text
+  return str
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\\n/g, ' ')  // Reemplazar \n literales con espacios
+    .replace(/\\r/g, '')   // Remover \r literales
+    .replace(/\\t/g, ' ')  // Reemplazar \t literales con espacios
     .trim();
 }
 
@@ -464,7 +471,10 @@ async function generateResponse(apiKey: string, prompt: string, timeoutMs: numbe
 export async function POST(req: NextRequest) {
   try {
     if (!validateRequest(req)) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      return NextResponse.json({ 
+        ok: false,
+        error: "No autorizado" 
+      }, { status: 401 });
     }
 
     const body = await req.json();
@@ -480,14 +490,20 @@ export async function POST(req: NextRequest) {
     // Validar entrada del usuario
     const inputValidation = validateUserInput(message, 2000);
     if (!inputValidation.valid) {
-      return NextResponse.json({ error: inputValidation.error }, { status: 400 });
+      return NextResponse.json({ 
+        ok: false,
+        error: String(inputValidation.error || "Entrada inválida")
+      }, { status: 400 });
     }
 
     // Verificar rate limit
     const rateLimit = checkRateLimit(phone || "unknown");
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: "Demasiadas solicitudes. Por favor, espera un momento." },
+        { 
+          ok: false,
+          error: "Demasiadas solicitudes. Por favor, espera un momento."
+        },
         { status: 429, headers: { "Retry-After": "60" } }
       );
     }
@@ -497,10 +513,16 @@ export async function POST(req: NextRequest) {
     const geminiKey = process.env.GEMINI_API_KEY;
 
     if (!supabaseUrl || !serviceKey) {
-      return NextResponse.json({ error: "Faltan credenciales Supabase" }, { status: 500 });
+      return NextResponse.json({ 
+        ok: false,
+        error: "Faltan credenciales Supabase" 
+      }, { status: 500 });
     }
     if (!geminiKey) {
-      return NextResponse.json({ error: "Falta GEMINI_API_KEY" }, { status: 500 });
+      return NextResponse.json({ 
+        ok: false,
+        error: "Falta API Key de Gemini" 
+      }, { status: 500 });
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -549,20 +571,26 @@ export async function POST(req: NextRequest) {
 
     // Sanitizar respuesta para JSON válido
     const sanitizedResponse = sanitizeForJSON(truncatedResponse);
+    const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
+    const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
     return NextResponse.json({
       ok: true,
-      response: sanitizedResponse,
-      agent: sanitizeForJSON(settings?.persona_name || "Dany"),
-      knowledgeUsed: knowledgeChunks.length > 0,
-      historyLength: history.length,
-      programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
-      rateLimitRemaining: rateLimit.remaining,
+      response: sanitizedResponse || "",
+      agent: sanitizedAgent || "Dany",
+      knowledgeUsed: Boolean(knowledgeChunks.length > 0),
+      historyLength: Number(history.length) || 0,
+      programDetected: sanitizedProgram || null,
+      rateLimitRemaining: Number(rateLimit.remaining) || 0,
     });
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);
+    const errorMessage = error?.message || "Error generando respuesta";
     return NextResponse.json(
-      { error: error?.message || "Error generando respuesta" },
+      { 
+        ok: false,
+        error: String(errorMessage).substring(0, 200) // Limitar longitud del error
+      },
       { status: 500 }
     );
   }
