@@ -34,6 +34,81 @@ function sanitizeForJSON(text: string): string {
     .trim();
 }
 
+/**
+ * Validar entrada del usuario antes de procesar
+ */
+function validateUserInput(message: string, maxLength: number = 2000): { valid: boolean; error?: string; message?: string } {
+  if (!message) {
+    return { valid: false, error: "Mensaje vacío" };
+  }
+  
+  const trimmed = message.trim();
+  
+  if (trimmed.length === 0) {
+    return { valid: false, error: "Mensaje contiene solo espacios" };
+  }
+  
+  if (trimmed.length > maxLength) {
+    return { valid: false, error: `Mensaje demasiado largo (máx ${maxLength} caracteres)` };
+  }
+  
+  return { valid: true, message: trimmed };
+}
+
+/**
+ * Rate limiting simple por teléfono (máx 20 mensajes por minuto)
+ */
+const requestLimits = new Map<string, number[]>();
+
+function checkRateLimit(phone: string, maxRequests: number = 20, windowMs: number = 60000): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const key = phone || "unknown";
+  
+  if (!requestLimits.has(key)) {
+    requestLimits.set(key, []);
+  }
+  
+  const timestamps = requestLimits.get(key)!;
+  
+  // Limpiar timestamps antiguos
+  const recentTimestamps = timestamps.filter(ts => now - ts < windowMs);
+  requestLimits.set(key, recentTimestamps);
+  
+  const allowed = recentTimestamps.length < maxRequests;
+  
+  if (allowed) {
+    recentTimestamps.push(now);
+  }
+  
+  return {
+    allowed,
+    remaining: Math.max(0, maxRequests - recentTimestamps.length)
+  };
+}
+
+/**
+ * Truncar respuesta si es demasiado larga (máx 1000 caracteres para chat)
+ */
+function truncateResponse(text: string, maxLength: number = 1000): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  
+  // Buscar último punto/pregunta antes del límite
+  const truncated = text.substring(0, maxLength);
+  const lastPeriod = Math.max(
+    truncated.lastIndexOf('.'),
+    truncated.lastIndexOf('?'),
+    truncated.lastIndexOf('!')
+  );
+  
+  if (lastPeriod > maxLength * 0.7) {
+    return truncated.substring(0, lastPeriod + 1);
+  }
+  
+  return truncated + '...';
+}
+
 function validateRequest(request: NextRequest): boolean {
   const apiKey = request.headers.get("x-api-key");
   const expectedKey = process.env.WHATSAPP_API_KEY;
@@ -199,7 +274,7 @@ function buildAgentPrompt(
   return prompt;
 }
 
-async function generateResponse(apiKey: string, prompt: string): Promise<string> {
+async function generateResponse(apiKey: string, prompt: string, timeoutMs: number = 25000): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
   
   const modelCandidates = [
@@ -218,8 +293,17 @@ async function generateResponse(apiKey: string, prompt: string): Promise<string>
     try {
       console.log(`[generateResponse] Modelo: ${candidate}`);
       const model = genAI.getGenerativeModel({ model: candidate });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
+      
+      // Agregar timeout a la generación de contenido
+      const timeoutPromise = new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error(`Timeout después de ${timeoutMs}ms`)), timeoutMs)
+      );
+      
+      const contentPromise = model.generateContent(prompt)
+        .then(result => result.response.text());
+      
+      const text = await Promise.race([contentPromise, timeoutPromise]);
+      
       console.log(`[generateResponse] Éxito: ${candidate}`);
       return text || "No pude generar una respuesta en este momento.";
     } catch (err: any) {
@@ -246,8 +330,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { message, phone } = body || {};
 
-    if (!message) {
-      return NextResponse.json({ error: "Falta 'message'" }, { status: 400 });
+    // Validar entrada del usuario
+    const inputValidation = validateUserInput(message, 2000);
+    if (!inputValidation.valid) {
+      return NextResponse.json({ error: inputValidation.error }, { status: 400 });
+    }
+
+    // Verificar rate limit
+    const rateLimit = checkRateLimit(phone || "unknown");
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes. Por favor, espera un momento." },
+        { status: 429, headers: { "Retry-After": "60" } }
+      );
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -299,11 +394,14 @@ export async function POST(req: NextRequest) {
     // Generar respuesta
     const response = await generateResponse(geminiKey, prompt);
 
-    // Guardar en historiales
-    await saveConversation(supabase, phone || "unknown", message, response);
+    // Truncar respuesta si es muy larga (máx 1000 caracteres para chat)
+    const truncatedResponse = truncateResponse(response, 1000);
+
+    // Guardar en historiales (guardar la versión truncada)
+    await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
 
     // Sanitizar respuesta para JSON válido
-    const sanitizedResponse = sanitizeForJSON(response);
+    const sanitizedResponse = sanitizeForJSON(truncatedResponse);
 
     return NextResponse.json({
       ok: true,
@@ -312,6 +410,7 @@ export async function POST(req: NextRequest) {
       knowledgeUsed: knowledgeChunks.length > 0,
       historyLength: history.length,
       programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
+      rateLimitRemaining: rateLimit.remaining,
     });
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);

@@ -35,6 +35,8 @@ interface MedioPago {
   id: string;
   nombre: string;
   tipo: string;
+  descripcion?: string; // Instrucciones o detalles del medio de pago
+  informacion?: string; // Información adicional (número cuenta, etc)
   activo: boolean;
   detalles?: any;
   created_at?: string;
@@ -674,17 +676,30 @@ export default function ConfiguracionPage() {
   ];
 
   const mediosPagoColumns: ColumnsType<MedioPago> = [
-    { title: "Nombre", dataIndex: "nombre", key: "nombre" },
-    { title: "Tipo", dataIndex: "tipo", key: "tipo", responsive: ["md" as Breakpoint] },
+    { title: "Nombre", dataIndex: "nombre", key: "nombre", width: 150 },
+    { title: "Tipo", dataIndex: "tipo", key: "tipo", responsive: ["md" as Breakpoint], width: 120 },
+    {
+      title: "Descripción",
+      dataIndex: "descripcion",
+      key: "descripcion",
+      responsive: ["lg" as Breakpoint],
+      render: (desc: string) => (
+        <span style={{ color: "#666", fontSize: 12 }}>
+          {desc ? (desc.length > 50 ? `${desc.substring(0, 50)}...` : desc) : "-"}
+        </span>
+      )
+    },
     {
       title: "Estado",
       dataIndex: "activo",
       key: "activo",
+      width: 80,
       render: (activo: boolean) => <Tag color={activo ? "green" : "red"}>{activo ? "Activo" : "Inactivo"}</Tag>
     },
     {
       title: "Acciones",
       key: "acciones",
+      width: 90,
       render: (_: any, record: MedioPago) => (
         <>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModalMedioPago(record)} style={{ marginRight: 8 }} />
@@ -1072,9 +1087,14 @@ export default function ConfiguracionPage() {
           {mediosPago.map((medio) => (
             <Card key={medio.id} size="small">
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{medio.nombre}</div>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>{medio.tipo}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{medio.nombre}</div>
+                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{medio.tipo}</div>
+                  {medio.descripcion && (
+                    <div style={{ fontSize: 11, color: "#666", marginBottom: 4, fontStyle: "italic" }}>
+                      {medio.descripcion}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                   <Tag color={medio.activo ? "green" : "red"}>{medio.activo ? "Activo" : "Inactivo"}</Tag>
@@ -1093,7 +1113,7 @@ export default function ConfiguracionPage() {
           columns={mediosPagoColumns}
           rowKey="id"
           size={isMobile ? "small" : "middle"}
-          scroll={{ x: 600 }}
+          scroll={{ x: 900 }}
         />
       )}
     </Spin>
@@ -1254,20 +1274,35 @@ export default function ConfiguracionPage() {
         onCancel={() => setModalMedioPagoVisible(false)}
         onOk={handleSubmitMedioPago}
         confirmLoading={submittingMedioPago}
+        width={600}
         forceRender
       >
         <Form form={formMedioPago} layout="vertical">
           <Form.Item label="Nombre" name="nombre" rules={[{ required: true }]}>
-            <Input placeholder="Ej: Efectivo, Transferencia Bancolombia" />
+            <Input placeholder="Ej: Efectivo, Transferencia Bancolombia, Nequi" />
           </Form.Item>
           <Form.Item label="Tipo" name="tipo" rules={[{ required: true }]}>
             <Select>
               <Option value="efectivo">Efectivo</Option>
               <Option value="transferencia">Transferencia Bancaria</Option>
+              <Option value="nequi">Nequi</Option>
               <Option value="tarjeta">Tarjeta de Crédito/Débito</Option>
               <Option value="datafono">Datáfono</Option>
+              <Option value="sistemacredito">Sistema de Crédito</Option>
               <Option value="otro">Otro</Option>
             </Select>
+          </Form.Item>
+          <Form.Item label="Descripción/Instrucciones" name="descripcion">
+            <TextArea 
+              rows={3} 
+              placeholder="Ej: Se aceptan pagos en efectivo en caja, horario 7am - 7pm de lunes a viernes"
+            />
+          </Form.Item>
+          <Form.Item label="Información Adicional" name="informacion">
+            <TextArea 
+              rows={4} 
+              placeholder="Ej: Banco: Bancolombia | Cuenta: 123456789 | Titular: Academia Crystal | CCI/CLABE: 098765432..."
+            />
           </Form.Item>
           <Form.Item label="Activo" name="activo" valuePropName="checked" initialValue={true}>
             <Switch />
