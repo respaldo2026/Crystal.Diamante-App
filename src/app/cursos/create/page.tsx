@@ -233,8 +233,22 @@ export default function CursoCreate() {
 
     return (
         <Create 
-            saveButtonProps={{ loading }}
             title="Crear nuevo grupo"
+            footerButtons={({ saveButtonProps: defaultSaveProps }) => (
+                <>
+                    <Button onClick={() => router.push('/cursos')}>
+                        Cancelar
+                    </Button>
+                    <Button
+                        type="primary"
+                        {...defaultSaveProps}
+                        loading={loading}
+                        onClick={() => form.submit()}
+                    >
+                        Guardar
+                    </Button>
+                </>
+            )}
         >
             <Form 
                 form={form}
