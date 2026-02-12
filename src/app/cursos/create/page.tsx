@@ -1,32 +1,20 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Create, useForm } from "@refinedev/antd";
-import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, TimePicker } from "antd";
+import { Create } from "@refinedev/antd";
+import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, TimePicker, Button } from "antd";
 import { UserOutlined, BookOutlined } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { useRouter } from "next/navigation";
 import "dayjs/locale/es";
 
 dayjs.locale("es");
 
 export default function CursoCreate() {
-    const { formProps, saveButtonProps } = useForm({
-        redirect: "list",
-        onMutationError: (error: any) => {
-            console.error("❌ Error completo de Supabase:", error);
-            const errorMsg = error?.message || error?.details || error?.hint || "Error desconocido";
-            message.error(`Error al guardar: ${errorMsg}`);
-            
-            // Si es error 403, mostrar instrucciones específicas
-            if (error?.code === "403" || error?.message?.includes("403") || error?.message?.includes("policy")) {
-                message.error({
-                    content: "Error de permisos RLS. Ejecuta el script FIX-403-PASO-A-PASO.sql en Supabase",
-                    duration: 10
-                });
-            }
-        },
-    });
+    const [form] = Form.useForm();
+    const router = useRouter();
+    const [loading, setLoading] = useState(false);
     
     const [profesores, setProfesores] = useState<any[]>([]);
     const [programas, setProgramas] = useState<any[]>([]);
@@ -59,16 +47,16 @@ export default function CursoCreate() {
     useEffect(() => {
         const fechaCalculada = calcularFechaFin(fechaInicio, diasSeleccionados, clasesPrograma);
         if (fechaCalculada) {
-            formProps.form?.setFieldValue("fecha_fin", fechaCalculada);
+            form.setFieldValue("fecha_fin", fechaCalculada);
         } else {
-            formProps.form?.setFieldValue("fecha_fin", null);
+            form.setFieldValue("fecha_fin", null);
         }
-    }, [fechaInicio, diasSeleccionados, clasesPrograma, formProps.form]);
+    }, [fechaInicio, diasSeleccionados, clasesPrograma, form]);
 
     useEffect(() => {
-        const programaId = formProps.form?.getFieldValue("programa_id");
+        const programaId = form.getFieldValue("programa_id");
         const programa = programas.find(p => p.id === programaId);
-        const horaInicioValue = formProps.form?.getFieldValue("hora_inicio");
+        const horaInicioValue = form.getFieldValue("hora_inicio");
         
         if (!programa) return;
 
@@ -94,15 +82,15 @@ export default function CursoCreate() {
             }
         }
         
-        formProps.form?.setFieldValue("nombre", nombreGenerado);
-    }, [diasSeleccionados, formProps.form, programas, horaInicio]);
+        form.setFieldValue("nombre", nombreGenerado);
+    }, [diasSeleccionados, form, programas, horaInicio]);
 
     useEffect(() => {
         if (horaInicio) {
             const horaFin = horaInicio.add(3, 'hour');
-            formProps.form?.setFieldValue("hora_fin", horaFin);
+            form.setFieldValue("hora_fin", horaFin);
         }
-    }, [horaInicio, formProps.form]);
+    }, [horaInicio, form]);
 
     const seSolapanHoras = (inicioA: string | null, finA: string | null, inicioB: string | null, finB: string | null) => {
         const startA = inicioA ? dayjs(inicioA, "HH:mm:ss") : null;
@@ -204,25 +192,40 @@ export default function CursoCreate() {
         };
 
         try {
+            setLoading(true);
             await validarConflictos(datosLimpios);
             
-            // Si no hay conflictos, llamar a la función onFinish de formProps
-            if (formProps.onFinish) {
-                return await formProps.onFinish(datosLimpios);
+            // Llamar al endpoint API que bypasea RLS
+            const response = await fetch('/api/cursos/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datosLimpios),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Error al crear el grupo');
             }
+
+            message.success('Grupo creado exitosamente');
+            router.push('/cursos');
         } catch (err: any) {
-            message.error(err?.message || "Conflicto de horario detectado");
+            console.error('Error al crear grupo:', err);
+            message.error(err?.message || "Error al crear el grupo");
             return Promise.reject(err);
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
         <Create 
-            saveButtonProps={saveButtonProps}
+            saveButtonProps={{ loading }}
             title="Crear nuevo grupo"
         >
             <Form 
-                {...formProps}
+                form={form}
                 layout="vertical" 
                 onFinish={handleOnFinish}
             >
