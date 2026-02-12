@@ -361,6 +361,57 @@ export function formatCoursesForAgent(courses: CourseInfo[]): string {
  * 1. Todos los programas disponibles (información primaria)
  * 2. Si el usuario pregunta por un programa específico, sus cursos
  */
+
+/**
+ * Convertir URLs de redes sociales a formato corto y amigable
+ */
+function shortenSocialUrl(url: string, platform: 'instagram' | 'facebook' | 'youtube'): string {
+  if (!url) return url
+  
+  // Limpiar URL
+  let cleanUrl = url.trim()
+  
+  // Remover protocolo
+  cleanUrl = cleanUrl.replace(/^https?:\/\/(www\.)?/, '')
+  
+  // Procesar según plataforma
+  if (platform === 'instagram') {
+    // instagram.com/username → @username
+    const match = cleanUrl.match(/instagram\.com\/([^\/\?\s]+)/)
+    if (match && match[1]) {
+      return `@${match[1]}`
+    }
+    return cleanUrl
+  }
+  
+  if (platform === 'facebook') {
+    // facebook.com/username → fb.com/username
+    // facebook.com/pages/name/123 → fb.com/name
+    let cleaned = cleanUrl.replace(/facebook\.com/, 'fb.com')
+    // Simplificar /pages/name/id a /name
+    cleaned = cleaned.replace(/\/pages\/([^\/]+)\/\d+/, '/$1')
+    // Remover parámetros query
+    cleaned = cleaned.split('?')[0]
+    return cleaned
+  }
+  
+  if (platform === 'youtube') {
+    // youtube.com/channel/UC123 → youtube.com/c/NombreCanal (si existe)
+    // youtube.com/@username → @username
+    const atMatch = cleanUrl.match(/youtube\.com\/@([^\/\?\s]+)/)
+    if (atMatch && atMatch[1]) {
+      return `@${atMatch[1]}`
+    }
+    
+    // Acortar youtube a yt para canales
+    let cleaned = cleanUrl.replace(/youtube\.com/, 'yt.com')
+    cleaned = cleaned.split('?')[0]
+    return cleaned
+  }
+  
+  return cleanUrl
+}
+
 /**
  * Formatear información de la academia para el agente
  */
@@ -388,11 +439,20 @@ export function formatAcademyInfo(academy: AcademyInfo | null): string {
     info += `### Contacto:\n${contactInfo.join('\n')}\n\n`
   }
 
-  // Redes sociales
+  // Redes sociales (URLs cortas y amigables)
   const socialMedia = []
-  if (academy.instagram) socialMedia.push(`📸 Instagram: ${academy.instagram}`)
-  if (academy.facebook) socialMedia.push(`👤 Facebook: ${academy.facebook}`)
-  if (academy.youtube) socialMedia.push(`🎥 YouTube: ${academy.youtube}`)
+  if (academy.instagram) {
+    const shortUrl = shortenSocialUrl(academy.instagram, 'instagram')
+    socialMedia.push(`📸 Instagram: ${shortUrl}`)
+  }
+  if (academy.facebook) {
+    const shortUrl = shortenSocialUrl(academy.facebook, 'facebook')
+    socialMedia.push(`👤 Facebook: ${shortUrl}`)
+  }
+  if (academy.youtube) {
+    const shortUrl = shortenSocialUrl(academy.youtube, 'youtube')
+    socialMedia.push(`🎥 YouTube: ${shortUrl}`)
+  }
 
   if (socialMedia.length > 0) {
     info += `### Redes Sociales:\n${socialMedia.join('\n')}\n\n`

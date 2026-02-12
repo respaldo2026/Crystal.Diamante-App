@@ -91,6 +91,40 @@ export default function ConfiguracionPage() {
   const previewTicketTitulo = Form.useWatch("ticket_titulo", formAcademia) as string | undefined;
   const previewTicketPie = Form.useWatch("ticket_pie", formAcademia) as string | undefined;
   const previewTicketNota = Form.useWatch("ticket_nota", formAcademia) as string | undefined;
+  const previewInstagram = Form.useWatch("instagram", formAcademia) as string | undefined;
+  const previewFacebook = Form.useWatch("facebook", formAcademia) as string | undefined;
+  const previewYoutube = Form.useWatch("youtube", formAcademia) as string | undefined;
+
+  // Función para acortar URLs de redes sociales
+  const shortenSocialUrl = (url: string | undefined, platform: 'instagram' | 'facebook' | 'youtube'): string => {
+    if (!url || url.trim() === '') return '';
+    
+    let cleanUrl = url.trim();
+    cleanUrl = cleanUrl.replace(/^https?:\/\/(www\.)?/, '');
+    
+    if (platform === 'instagram') {
+      const match = cleanUrl.match(/instagram\.com\/([^\/\?\s]+)/);
+      if (match && match[1]) return `@${match[1]}`;
+      return cleanUrl;
+    }
+    
+    if (platform === 'facebook') {
+      let cleaned = cleanUrl.replace(/facebook\.com/, 'fb.com');
+      cleaned = cleaned.replace(/\/pages\/([^\/]+)\/\d+/, '/$1');
+      cleaned = cleaned.split('?')[0];
+      return cleaned;
+    }
+    
+    if (platform === 'youtube') {
+      const atMatch = cleanUrl.match(/youtube\.com\/@([^\/\?\s]+)/);
+      if (atMatch && atMatch[1]) return `@${atMatch[1]}`;
+      let cleaned = cleanUrl.replace(/youtube\.com/, 'yt.com');
+      cleaned = cleaned.split('?')[0];
+      return cleaned;
+    }
+    
+    return cleanUrl;
+  };
 
   // Estados para Permisos
   const [permisos, setPermisos] = useState<PermisosPorRol>({});
@@ -806,16 +840,37 @@ export default function ConfiguracionPage() {
                 <Form.Item label="Instagram" name="instagram">
                   <Input prefix={<InstagramOutlined />} placeholder="https://instagram.com/academia" />
                 </Form.Item>
+                {previewInstagram && (
+                  <div style={{ marginTop: -16, marginBottom: 8 }}>
+                    <Tag color="purple" style={{ fontSize: 11 }}>
+                      Se mostrará: {shortenSocialUrl(previewInstagram, 'instagram')}
+                    </Tag>
+                  </div>
+                )}
               </Col>
               <Col xs={24} sm={12}>
                 <Form.Item label="Facebook" name="facebook">
                   <Input prefix={<FacebookOutlined />} placeholder="https://facebook.com/academia" />
                 </Form.Item>
+                {previewFacebook && (
+                  <div style={{ marginTop: -16, marginBottom: 8 }}>
+                    <Tag color="blue" style={{ fontSize: 11 }}>
+                      Se mostrará: {shortenSocialUrl(previewFacebook, 'facebook')}
+                    </Tag>
+                  </div>
+                )}
               </Col>
               <Col xs={24} sm={12}>
                 <Form.Item label="YouTube" name="youtube">
                   <Input prefix={<YoutubeOutlined />} placeholder="https://youtube.com/@academia" />
                 </Form.Item>
+                {previewYoutube && (
+                  <div style={{ marginTop: -16, marginBottom: 8 }}>
+                    <Tag color="red" style={{ fontSize: 11 }}>
+                      Se mostrará: {shortenSocialUrl(previewYoutube, 'youtube')}
+                    </Tag>
+                  </div>
+                )}
               </Col>
               <Col xs={24} sm={12}>
                 <Form.Item label="WhatsApp" name="whatsapp">

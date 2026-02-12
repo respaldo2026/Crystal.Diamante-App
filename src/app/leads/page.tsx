@@ -30,6 +30,8 @@ import {
   PhoneOutlined,
   UserOutlined,
   InfoCircleOutlined,
+  DeleteOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -227,6 +229,88 @@ export default function LeadsPage() {
     }
   };
 
+  const eliminarLead = async (lead: Lead) => {
+    Modal.confirm({
+      title: "¿Eliminar este lead?",
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p><strong>{lead.nombre}</strong></p>
+          <p>Esta acción no se puede deshacer.</p>
+        </div>
+      ),
+      okText: "Sí, eliminar",
+      okType: "danger",
+      cancelText: "Cancelar",
+      onOk: async () => {
+        try {
+          const { error } = await supabaseBrowserClient
+            .from("leads")
+            .delete()
+            .eq("id", lead.id);
+
+          if (error) {
+            message.error("No se pudo eliminar el lead");
+            return;
+          }
+
+          setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+          message.success("Lead eliminado");
+        } catch (err) {
+          console.error("Error eliminando lead", err);
+          message.error("No se pudo eliminar el lead");
+        }
+      },
+    });
+  };
+
+  const eliminarTodosLeads = async () => {
+    Modal.confirm({
+      title: "¿ELIMINAR TODOS LOS LEADS?",
+      icon: <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />,
+      content: (
+        <div>
+          <p><strong>Se eliminarán {leads.length} leads de forma permanente.</strong></p>
+          <p style={{ color: "#ff4d4f" }}>⚠️ Esta acción NO se puede deshacer.</p>
+          <p>Escribe <strong>"ELIMINAR"</strong> para confirmar:</p>
+          <Input
+            id="confirm-delete-input"
+            placeholder="Escribe ELIMINAR"
+            style={{ marginTop: 8 }}
+          />
+        </div>
+      ),
+      okText: "Confirmar eliminación",
+      okType: "danger",
+      cancelText: "Cancelar",
+      onOk: async () => {
+        const input = document.getElementById("confirm-delete-input") as HTMLInputElement;
+        if (input?.value !== "ELIMINAR") {
+          message.warning("Debes escribir ELIMINAR para confirmar");
+          return Promise.reject();
+        }
+
+        try {
+          const { error } = await supabaseBrowserClient
+            .from("leads")
+            .delete()
+            .neq("id", "00000000-0000-0000-0000-000000000000"); // Elimina todos
+
+          if (error) {
+            message.error("No se pudieron eliminar los leads");
+            return;
+          }
+
+          setLeads([]);
+          message.success(`${leads.length} leads eliminados`);
+        } catch (err) {
+          console.error("Error eliminando todos los leads", err);
+          message.error("No se pudieron eliminar los leads");
+        }
+      },
+    });
+  };
+
   const sendTemplate = (lead: Lead, plantillaKey: string, canal: "whatsapp" | "email") => {
     const plantilla = plantillaOptions.find((p) => p.key === plantillaKey);
     if (!plantilla) return;
@@ -321,17 +405,25 @@ export default function LeadsPage() {
               icon={<WhatsAppOutlined />}
               type="primary"
               ghost
-              block
+              size="small"
               onClick={() => sendTemplate(record, "bienvenida", "whatsapp")}
             >
               WhatsApp
             </Button>
             <Button
               icon={<SendOutlined />}
-              block
+              size="small"
               onClick={() => sendTemplate(record, "bienvenida", "email")}
             >
               Email
+            </Button>
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              onClick={() => eliminarLead(record)}
+            >
+              Eliminar
             </Button>
           </Space>
         </Space>
@@ -423,6 +515,14 @@ export default function LeadsPage() {
               suffixIcon={<SendOutlined />}
             />
           </Tooltip>
+          <Tooltip title="Eliminar lead">
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              onClick={() => eliminarLead(record)}
+            />
+          </Tooltip>
         </Space>
       ),
     },
@@ -460,6 +560,16 @@ export default function LeadsPage() {
                 block={isMobile}
               >
                 Recargar
+              </Button>
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                onClick={eliminarTodosLeads}
+                size={isMobile ? "middle" : "large"}
+                block={isMobile}
+                disabled={leads.length === 0}
+              >
+                Eliminar todos
               </Button>
               <Button
                 type="primary"

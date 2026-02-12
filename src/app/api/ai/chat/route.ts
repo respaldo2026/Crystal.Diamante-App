@@ -220,6 +220,64 @@ function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: s
   return conversationHistory.some(msg => greetings.test(msg.agent));
 }
 
+/**
+ * Detectar señales de intención de compra o cierre
+ * Retorna true si el usuario muestra intención de inscribirse/comprar
+ */
+function detectBuyingIntent(
+  userMessage: string,
+  conversationHistory: Array<{user: string, agent: string}> = []
+): boolean {
+  const message = userMessage.toLowerCase();
+  
+  // Señales directas de compra
+  const directBuyingSignals = [
+    /\b(quiero\s+(inscribirme|matricularme|inscribir|apuntarme|registrarme))/i,
+    /\b(cómo\s+(me\s+inscribo|hago\s+para\s+inscribirme|puedo\s+inscribirme))/i,
+    /\b(dónde\s+(me\s+inscribo|puedo\s+inscribirme|pago))/i,
+    /\b(cuándo\s+puedo\s+(empezar|iniciar|comenzar))/i,
+    /\b(me\s+(interesa|gustaría|quiero)\s+(el\s+)?curso)/i,
+    /\b(quiero\s+(información|más\s+info)\s+para\s+inscribirme)/i,
+    /\b(voy\s+a\s+(inscribirme|matricularme|apuntarme))/i,
+    /\b(quiero\s+agendar|agendar\s+(una\s+)?(cita|visita))/i,
+    /\b(puedo\s+ir\s+a\s+(ver|visitar|conocer))/i,
+    /\b(cuál\s+es\s+(la|su)\s+dirección)/i,
+    /\b(dónde\s+(están\s+ubicados|quedan|se\s+encuentran))/i,
+    /\b(me\s+convence|estoy\s+convencido|me\s+decidí)/i,
+    /\b(sí\s+(quiero|me\s+interesa))/i,
+    /\b(listo|perfecto|excelente),?\s+(quiero|me\s+inscribo)/i,
+  ];
+  
+  // Verificar señales directas
+  if (directBuyingSignals.some(pattern => pattern.test(message))) {
+    return true;
+  }
+  
+  // Señales indirectas: ha preguntado por costos Y horarios
+  const hasAskedAboutPrice = conversationHistory.some(msg =>
+    /\b(precio|costo|cuánto|valor|inversión|pago|cuota)/i.test(msg.user)
+  );
+  
+  const hasAskedAboutSchedule = conversationHistory.some(msg =>
+    /\b(horario|hora|cuándo|día|fecha|grupo|disponible|inicio)/i.test(msg.user)
+  );
+  
+  // Si ya preguntó sobre precio y horarios, y ahora hace una pregunta positiva
+  if (hasAskedAboutPrice && hasAskedAboutSchedule) {
+    const positiveSignals = [
+      /\b(perfecto|bien|entiendo|ok|vale|genial|excelente)/i,
+      /\b(gracias|muchas\s+gracias)/i,
+      /\b(me\s+(sirve|funciona|conviene))/i,
+    ];
+    
+    if (positiveSignals.some(pattern => pattern.test(message))) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 function buildAgentPrompt(
   settings: any,
   userMessage: string,
@@ -235,6 +293,9 @@ function buildAgentPrompt(
   
   // Detectar si ya hay un saludo previo
   const alreadyGreeted = hasGreetingInHistory(conversationHistory);
+  
+  // Detectar intención de compra/cierre
+  const showsBuyingIntent = detectBuyingIntent(userMessage, conversationHistory);
 
   let prompt = `${systemPrompt}
 
@@ -243,12 +304,45 @@ function buildAgentPrompt(
 - Bio: ${bio}
 - Estilo: ${style}
 
-# Reglas
+# Reglas Generales
 - Si no sabes algo con certeza, responde: "${fallback}"
 - Usa el contexto de conocimiento si está disponible.
 - Sé breve, claro y amable.
 - No inventes datos.
 - Recuerda el contexto de conversaciones anteriores.${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
+
+# PROTOCOLO DE CIERRE DE VENTAS 🎯
+${showsBuyingIntent ? `
+✅ DETECTADO: El usuario muestra INTENCIÓN DE COMPRA o está listo para inscribirse.
+
+ACCIÓN OBLIGATORIA:
+1. Confirma su interés de forma positiva
+2. Menciona que un asesor de Admisiones lo guiará en el proceso de inscripción
+3. Proporciona el número de contacto de Admisiones: **+57 301 203 8582** (WhatsApp)
+4. Invítalo a escribir directamente para agendar su inscripción o visita
+
+EJEMPLO DE CIERRE:
+"¡Perfecto! Me encanta que estés listo para dar este paso. 🎓
+
+Para finalizar tu inscripción y separar tu cupo, te pongo en contacto directo con nuestro equipo de Admisiones:
+
+📱 WhatsApp: +57 301 203 8582
+
+Escríbeles y te guiarán en el proceso de pago, te confirmarán tu grupo y responderán cualquier duda de último momento. ¡Nos vemos pronto en la academia! 💎✨"
+` : `
+⚠️ IMPORTANTE: NO proporciones el número de Admisiones AÚN.
+
+El usuario aún está en fase de información. Ayúdale a:
+- Conocer los cursos disponibles
+- Entender costos (inscripción + mensualidad)
+- Ver horarios de grupos disponibles
+- Resolver dudas sobre el programa
+
+Solo darás el número de contacto (+57 301 203 8582) cuando:
+✓ Ya haya preguntado por precios
+✓ Ya haya preguntado por horarios
+✓ Muestre señales claras de querer inscribirse (ej: "quiero inscribirme", "cómo me inscribo", "dónde pago", "cuándo puedo empezar")
+`}
 `;
 
   if (hierarchicalContext) {
