@@ -13,6 +13,19 @@ dayjs.locale("es");
 export default function CursoCreate() {
     const { formProps, saveButtonProps } = useForm({
         redirect: "list",
+        onMutationError: (error: any) => {
+            console.error("❌ Error completo de Supabase:", error);
+            const errorMsg = error?.message || error?.details || error?.hint || "Error desconocido";
+            message.error(`Error al guardar: ${errorMsg}`);
+            
+            // Si es error 403, mostrar instrucciones específicas
+            if (error?.code === "403" || error?.message?.includes("403") || error?.message?.includes("policy")) {
+                message.error({
+                    content: "Error de permisos RLS. Ejecuta el script FIX-403-PASO-A-PASO.sql en Supabase",
+                    duration: 10
+                });
+            }
+        },
     });
     
     const [profesores, setProfesores] = useState<any[]>([]);
