@@ -68,8 +68,7 @@ async function markMessageAsRead(messageId: string): Promise<boolean> {
 
 /**
  * Sanitizar texto para JSON válido
- * Solo remover caracteres de control problemáticos
- * JSON.stringify ya maneja escape de comillas, saltos de línea, etc.
+ * Remover/reemplazar caracteres problemáticos antes de JSON.stringify
  */
 function sanitizeForJSON(text: string | null | undefined): string {
   if (!text) return '';
@@ -77,13 +76,11 @@ function sanitizeForJSON(text: string | null | undefined): string {
   // Convertir a string si no lo es
   const str = String(text);
   
-  // Remover caracteres de control problemáticos
-  // JSON.stringify se encargará del resto
+  // Remover caracteres de control y reemplazar saltos de línea
   return str
-    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
-    .replace(/\\n/g, ' ')  // Reemplazar \n literales con espacios
-    .replace(/\\r/g, '')   // Remover \r literales
-    .replace(/\\t/g, ' ')  // Reemplazar \t literales con espacios
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remover caracteres de control
+    .replace(/[\r\n]+/g, ' ')  // Reemplazar saltos de línea reales con espacios
+    .replace(/\s+/g, ' ')  // Normalizar múltiples espacios a uno solo
     .trim();
 }
 
