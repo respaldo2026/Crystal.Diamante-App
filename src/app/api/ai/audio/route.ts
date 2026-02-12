@@ -412,6 +412,27 @@ function removeEmojis(text: string): string {
 }
 
 /**
+ * Sanitizar texto para JSON válido
+ * Escapa caracteres especiales y asegura que sea seguro enviar en JSON
+ */
+function sanitizeForJSON(text: string): string {
+  if (!text) return '';
+  return text
+    // Escapar backslashes primero
+    .replace(/\\/g, '\\\\')
+    // Escapar comillas dobles
+    .replace(/"/g, '\\"')
+    // Escapar saltos de línea y retornos de carro
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    // Escapar tabulaciones
+    .replace(/\t/g, '\\t')
+    // Remover caracteres de control problemáticos
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+}
+
+/**
  * Subir audio a Supabase storage y obtener URL pública
  */
 async function uploadAudioToSupabase(
@@ -575,12 +596,15 @@ export async function POST(req: NextRequest) {
       console.warn("[POST /api/ai/audio] Error en TTS, continuando sin audio:", ttsErr);
     }
 
+    // Sanitizar respuesta para JSON válido
+    const sanitizedResponse = sanitizeForJSON(agentResponse);
+
     return NextResponse.json({
       ok: true,
-      transcription,
-      agent_response: agentResponse,
+      transcription: sanitizeForJSON(transcription),
+      agent_response: sanitizedResponse,
       audio_url: audioUrl || null,
-      agent: settings?.persona_name || "Dany",
+      agent: sanitizeForJSON(settings?.persona_name || "Dany"),
       historyLength: history.length,
     });
   } catch (error: any) {

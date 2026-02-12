@@ -20,6 +20,27 @@ import {
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Sanitizar texto para JSON válido
+ * Escapa caracteres especiales y asegura que sea seguro enviar en JSON
+ */
+function sanitizeForJSON(text: string): string {
+  if (!text) return '';
+  return text
+    // Escapar backslashes primero
+    .replace(/\\/g, '\\\\')
+    // Escapar comillas dobles
+    .replace(/"/g, '\\"')
+    // Escapar saltos de línea y retornos de carro
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    // Escapar tabulaciones
+    .replace(/\t/g, '\\t')
+    // Remover caracteres de control problemáticos
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+}
+
 function validateRequest(request: NextRequest): boolean {
   const apiKey = request.headers.get("x-api-key");
   const expectedKey = process.env.WHATSAPP_API_KEY;
@@ -272,13 +293,16 @@ export async function POST(req: NextRequest) {
     // Guardar en historiales
     await saveConversation(supabase, phone || "unknown", message, response);
 
+    // Sanitizar respuesta para JSON válido
+    const sanitizedResponse = sanitizeForJSON(response);
+
     return NextResponse.json({
       ok: true,
-      response,
-      agent: settings?.persona_name || "Dany",
+      response: sanitizedResponse,
+      agent: sanitizeForJSON(settings?.persona_name || "Dany"),
       knowledgeUsed: knowledgeChunks.length > 0,
       historyLength: history.length,
-      programDetected: detectedProgram ? detectedProgram.nombre : null,
+      programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
     });
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);
