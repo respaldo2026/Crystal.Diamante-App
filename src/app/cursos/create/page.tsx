@@ -193,6 +193,8 @@ export default function CursoCreate() {
 
         try {
             setLoading(true);
+            
+            // Validar conflictos de horario
             await validarConflictos(datosLimpios);
             
             // Llamar al endpoint API que bypasea RLS
@@ -208,12 +210,22 @@ export default function CursoCreate() {
                 throw new Error(result.error || 'Error al crear el grupo');
             }
 
+            console.log('✅ Grupo creado exitosamente:', result.data);
+            
+            // Mostrar mensaje de éxito
             message.success('Grupo creado exitosamente');
+            
+            // Esperar un momento para que el usuario vea el mensaje
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Redirigir a la lista de cursos
+            console.log('🔄 Redirigiendo a /cursos...');
             router.push('/cursos');
+            
         } catch (err: any) {
-            console.error('Error al crear grupo:', err);
+            console.error('❌ Error al crear grupo:', err);
             message.error(err?.message || "Error al crear el grupo");
-            return Promise.reject(err);
+            throw err; // Re-lanzar para que el formulario sepa que falló
         } finally {
             setLoading(false);
         }
