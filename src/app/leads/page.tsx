@@ -272,7 +272,7 @@ export default function LeadsPage() {
         <div>
           <p><strong>Se eliminarán {leads.length} leads de forma permanente.</strong></p>
           <p style={{ color: "#ff4d4f" }}>⚠️ Esta acción NO se puede deshacer.</p>
-          <p>Escribe <strong>"ELIMINAR"</strong> para confirmar:</p>
+          <p>Escribe <strong>&quot;ELIMINAR&quot;</strong> para confirmar:</p>
           <Input
             id="confirm-delete-input"
             placeholder="Escribe ELIMINAR"
