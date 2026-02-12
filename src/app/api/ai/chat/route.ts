@@ -12,7 +12,8 @@ import {
   getProgramsForAgent, 
   getCoursesForQuery, 
   detectProgramFromMessage,
-  buildHierarchicalContext 
+  buildHierarchicalContext,
+  getAcademyInfo
 } from "@/utils/supabase/agent-courses";
 
 export const dynamic = "force-dynamic";
@@ -248,8 +249,11 @@ export async function POST(req: NextRequest) {
     const detectedProgram = detectProgramFromMessage(message, programs);
     const courses = await getCoursesForQuery(message, programs);
     
-    // 3. Contexto jerárquico: todos programas + grupos del programa detectado
-    const hierarchicalContext = buildHierarchicalContext(programs, courses, detectedProgram);
+    // 3. Obtener información de la academia (dirección, redes, contacto)
+    const academy = await getAcademyInfo();
+    
+    // 4. Contexto jerárquico: info academia + todos programas + grupos del programa detectado
+    const hierarchicalContext = buildHierarchicalContext(programs, courses, detectedProgram, academy);
 
     // Obtener conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, message, 3);

@@ -3,6 +3,21 @@ import { createClient } from "@supabase/supabase-js"
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://sdrdcpnqcqazxnhnjxyj.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkcmRjcG5xY3Fhenhuo2h0dHBzOi8vc2RyZGNwbnFjcWF6eG5obmp4eWouc3VwYWJhc2UuY28iLCJpYXQiOjE3MzA3NzkyMzgsImV4cCI6MjA0NjM1OTIzOH0.nZ_Q2J7u-sIAm9_HZEoG0fL8LiDo-a6XfP_R8CgKnOE'
 
+interface AcademyInfo {
+  id: string
+  nombre_academia: string | null
+  direccion: string | null
+  telefono: string | null
+  email: string | null
+  ruc: string | null
+  logo_url: string | null
+  instagram: string | null
+  facebook: string | null
+  youtube: string | null
+  website: string | null
+  whatsapp: string | null
+}
+
 interface ProgramInfo {
   id: number
   nombre: string
@@ -35,6 +50,32 @@ interface CourseInfo {
   matriculados: number
   cupos_disponibles: number
   programa_id: number
+}
+
+/**
+ * Obtener información de la academia (dirección, redes sociales, contacto)
+ */
+export async function getAcademyInfo(): Promise<AcademyInfo | null> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+    const { data, error } = await supabase
+      .from('configuracion')
+      .select('*')
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) {
+      console.error('[getAcademyInfo] Error:', error)
+      return null
+    }
+
+    return data as AcademyInfo | null
+  } catch (err) {
+    console.error('[getAcademyInfo] Error:', err)
+    return null
+  }
 }
 
 /**
@@ -182,12 +223,60 @@ export function formatCoursesForAgent(courses: CourseInfo[]): string {
  * 1. Todos los programas disponibles (información primaria)
  * 2. Si el usuario pregunta por un programa específico, sus cursos
  */
+/**
+ * Formatear información de la academia para el agente
+ */
+export function formatAcademyInfo(academy: AcademyInfo | null): string {
+  if (!academy) {
+    return ''
+  }
+
+  let info = `\n## INFORMACIÓN DE LA ACADEMIA\n\n`
+
+  if (academy.nombre_academia) {
+    info += `**${academy.nombre_academia}**\n\n`
+  }
+
+  // Datos de contacto
+  const contactInfo = []
+  if (academy.direccion) contactInfo.push(`📍 Dirección: ${academy.direccion}`)
+  if (academy.telefono) contactInfo.push(`📞 Teléfono: ${academy.telefono}`)
+  if (academy.whatsapp) contactInfo.push(`💬 WhatsApp: ${academy.whatsapp}`)
+  if (academy.email) contactInfo.push(`📧 Email: ${academy.email}`)
+  if (academy.website) contactInfo.push(`🌐 Web: ${academy.website}`)
+  if (academy.ruc) contactInfo.push(`🏢 RUC/NIT: ${academy.ruc}`)
+
+  if (contactInfo.length > 0) {
+    info += `### Contacto:\n${contactInfo.join('\n')}\n\n`
+  }
+
+  // Redes sociales
+  const socialMedia = []
+  if (academy.instagram) socialMedia.push(`📸 Instagram: ${academy.instagram}`)
+  if (academy.facebook) socialMedia.push(`👤 Facebook: ${academy.facebook}`)
+  if (academy.youtube) socialMedia.push(`🎥 YouTube: ${academy.youtube}`)
+
+  if (socialMedia.length > 0) {
+    info += `### Redes Sociales:\n${socialMedia.join('\n')}\n\n`
+  }
+
+  return info
+}
+
 export function buildHierarchicalContext(
   programs: ProgramInfo[],
   courses: CourseInfo[],
-  detectedProgram: ProgramInfo | null
+  detectedProgram: ProgramInfo | null,
+  academy: AcademyInfo | null = null
 ): string {
-  let context = `
+  let context = ``
+
+  // Agregar información de la academia si está disponible
+  if (academy) {
+    context += formatAcademyInfo(academy)
+  }
+
+  context += `
 ## PROGRAMAS Y GRUPOS DISPONIBLES
 
 ### 📚 Programas Activos:
