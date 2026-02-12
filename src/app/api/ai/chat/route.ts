@@ -132,6 +132,19 @@ async function searchKnowledge(
   }
 }
 
+/**
+ * Detectar si ya hay un saludo en el historial de conversación
+ */
+function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: string}>): boolean {
+  if (!conversationHistory || conversationHistory.length === 0) return false;
+  
+  // Palabras de saludo comunes
+  const greetings = /\b(hola|buenos|buenas|bienvenido|bienvenida|hallo|¿qué tal|hey|saludos|encantado|encantada)\b/gi;
+  
+  // Revisar todas las respuestas del agente en el historial
+  return conversationHistory.some(msg => greetings.test(msg.agent));
+}
+
 function buildAgentPrompt(
   settings: any,
   userMessage: string,
@@ -144,6 +157,9 @@ function buildAgentPrompt(
   const style = settings?.speaking_style || "Cálido y preciso.";
   const systemPrompt = settings?.system_prompt || "Eres un asistente útil.";
   const fallback = settings?.fallback_response || "Déjame confirmarlo y te respondo pronto.";
+  
+  // Detectar si ya hay un saludo previo
+  const alreadyGreeted = hasGreetingInHistory(conversationHistory);
 
   let prompt = `${systemPrompt}
 
@@ -157,7 +173,7 @@ function buildAgentPrompt(
 - Usa el contexto de conocimiento si está disponible.
 - Sé breve, claro y amable.
 - No inventes datos.
-- Recuerda el contexto de conversaciones anteriores.
+- Recuerda el contexto de conversaciones anteriores.${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
 `;
 
   if (hierarchicalContext) {

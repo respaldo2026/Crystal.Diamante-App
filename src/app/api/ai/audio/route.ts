@@ -251,6 +251,19 @@ async function searchKnowledge(supabase: any, query: string, limit = 3): Promise
 }
 
 /**
+ * Detectar si ya hay un saludo en el historial de conversación
+ */
+function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: string}>): boolean {
+  if (!conversationHistory || conversationHistory.length === 0) return false;
+  
+  // Palabras de saludo comunes
+  const greetings = /\b(hola|buenos|buenas|bienvenido|bienvenida|hallo|¿qué tal|hey|saludos|encantado|encantada)\b/gi;
+  
+  // Revisar todas las respuestas del agente en el historial
+  return conversationHistory.some(msg => greetings.test(msg.agent));
+}
+
+/**
  * Construir prompt del agente con personalidad + contexto de cursos + conocimiento + historial
  */
 function buildAgentPrompt(
@@ -265,6 +278,9 @@ function buildAgentPrompt(
   const style = settings?.speaking_style || "Cálido y preciso.";
   const systemPrompt = settings?.system_prompt || "Eres un asistente útil.";
   const fallback = settings?.fallback_response || "Déjame confirmarlo y te respondo pronto.";
+  
+  // Detectar si ya hay un saludo previo
+  const alreadyGreeted = hasGreetingInHistory(conversationHistory);
 
   let prompt = `${systemPrompt}
 
@@ -280,7 +296,7 @@ function buildAgentPrompt(
 - Sé breve, claro y amable (máx 2 líneas).
 - No inventes datos.
 - Recuerda el contexto de conversaciones anteriores.
-- Responde en un lenguaje natural apto para ser pronunciado.
+- Responde en un lenguaje natural apto para ser pronunciado.${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
 `;
 
   // Agregar contexto de cursos disponibles
