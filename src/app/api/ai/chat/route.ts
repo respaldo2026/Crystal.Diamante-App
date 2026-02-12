@@ -21,6 +21,52 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
+ * Marcar mensaje como leído en WhatsApp (doble check azul)
+ */
+async function markMessageAsRead(messageId: string): Promise<boolean> {
+  try {
+    const phoneNumberId = process.env.NEXT_PUBLIC_WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = process.env.NEXT_PUBLIC_WHATSAPP_ACCESS_TOKEN;
+
+    if (!phoneNumberId || !accessToken || !messageId) {
+      console.warn("[markMessageAsRead] Configuración incompleta o messageId vacío");
+      return false;
+    }
+
+    console.log(`[markMessageAsRead] Marcando mensaje ${messageId} como leído...`);
+
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: messageId,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error(`[markMessageAsRead] Error ${response.status}: ${error}`);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log("[markMessageAsRead] ✅ Mensaje marcado como leído (doble check azul)");
+    return result.success === true;
+  } catch (err) {
+    console.error("[markMessageAsRead] Error:", err);
+    return false;
+  }
+}
+
+/**
  * Sanitizar texto para JSON válido
  * Solo remover caracteres de control problemáticos
  * JSON.stringify ya maneja escape de comillas, saltos de línea, etc.
@@ -422,7 +468,14 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { message, phone } = body || {};
+    const { message, phone, messageId } = body || {};
+
+    // Marcar mensaje como leído inmediatamente (doble check azul)
+    if (messageId) {
+      markMessageAsRead(messageId).catch(err => 
+        console.warn("[POST chat] Error al marcar como leído:", err)
+      );
+    }
 
     // Validar entrada del usuario
     const inputValidation = validateUserInput(message, 2000);
