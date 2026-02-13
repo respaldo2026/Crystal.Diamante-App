@@ -85,6 +85,78 @@ interface CourseInfo {
   programa_id: number
 }
 
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function extractUsefulTokens(value: string): string[] {
+  const stopwords = new Set([
+    'curso', 'cursos', 'de', 'del', 'la', 'el', 'los', 'las', 'en', 'para', 'con',
+    'quiero', 'informacion', 'info', 'sobre', 'me', 'interesa', 'tienen', 'hay',
+    'que', 'como', 'cuando', 'cuanto', 'precio', 'costa', 'valor'
+  ])
+
+  return normalizeText(value)
+    .split(' ')
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3 && !stopwords.has(t))
+}
+
+const PROGRAM_SYNONYM_GROUPS: Record<string, string[]> = {
+  unas: [
+    'unas', 'uñas', 'nails', 'manicure', 'pedicure', 'acrilico', 'acrilicas', 'acrylic',
+    'gel', 'semipermanente', 'polygel', 'nailart', 'nail', 'esmaltado'
+  ],
+  pestanas: [
+    'pestanas', 'pestañas', 'lashes', 'lash', 'lifting', 'laminado', 'extensiones',
+    'rimel', 'cejas', 'brow', 'microblading'
+  ],
+  maquillaje: [
+    'maquillaje', 'makeup', 'make', 'visagismo', 'novias', 'social', 'artistico'
+  ],
+  barberia: [
+    'barberia', 'barbería', 'barber', 'corte', 'fade', 'degradado', 'afeitado'
+  ],
+  peluqueria: [
+    'peluqueria', 'peluquería', 'cabello', 'hair', 'peinado', 'colorimetria', 'balayage',
+    'alisado', 'keratina'
+  ],
+  esteticafacial: [
+    'facial', 'estetica', 'estética', 'limpieza', 'piel', 'skincare', 'cosmetologia'
+  ]
+}
+
+function findSynonymGroup(token: string): string | null {
+  const normalizedToken = normalizeText(token)
+  for (const [group, words] of Object.entries(PROGRAM_SYNONYM_GROUPS)) {
+    if (words.some((word) => normalizeText(word) === normalizedToken)) {
+      return group
+    }
+  }
+  return null
+}
+
+function expandTokensWithSynonyms(tokens: string[]): string[] {
+  const expanded = new Set<string>(tokens.map((t) => normalizeText(t)))
+
+  for (const token of tokens) {
+    const group = findSynonymGroup(token)
+    if (!group) continue
+
+    for (const synonym of PROGRAM_SYNONYM_GROUPS[group]) {
+      expanded.add(normalizeText(synonym))
+    }
+  }
+
+  return Array.from(expanded).filter(Boolean)
+}
+
 /**
  * Obtener medios de pago activos
  */
@@ -271,19 +343,71 @@ export async function getCoursesByProgram(programId: number): Promise<CourseInfo
  * Detectar qué programa menciona el usuario en su mensaje
  */
 export function detectProgramFromMessage(message: string, programs: ProgramInfo[]): ProgramInfo | null {
-  const lowerMessage = message.toLowerCase()
-  
-  // Buscar coincidencias con nombres de programas
+  const normalizedMessage = normalizeText(message)
+  const messageTokens = extractUsefulTokens(message)
+  const messageTokensExpanded = expandTokensWithSynonyms(messageTokens)
+
+  if (!normalizedMessage || programs.length === 0) {
+    return null
+  }
+
+  let bestMatch: ProgramInfo | null = null
+  let bestScore = 0
+
   for (const program of programs) {
-    const programName = program.nombre.toLowerCase()
-    // Búsqueda flexible: contiene el nombre completo o es bastante similar
-    if (lowerMessage.includes(programName) || 
-        (programName.length > 5 && lowerMessage.includes(programName.substring(0, 5)))) {
+    const normalizedProgramName = normalizeText(program.nombre)
+
+    // Coincidencia exacta del nombre completo
+    if (normalizedProgramName && normalizedMessage.includes(normalizedProgramName)) {
       return program
     }
+
+    // Coincidencia por palabras clave del nombre del programa
+    const programTokens = extractUsefulTokens(program.nombre)
+    if (programTokens.length === 0) continue
+
+    let score = 0
+    for (const token of programTokens) {
+      const normalizedToken = normalizeText(token)
+      if (normalizedMessage.includes(normalizedToken) || messageTokensExpanded.includes(normalizedToken)) {
+        score += 1
+      }
+    }
+
+    // Bono por sinónimos compartidos entre mensaje y nombre de programa
+    const programGroups = new Set(
+      programTokens
+        .map((t) => findSynonymGroup(t))
+        .filter((g): g is string => Boolean(g))
+    )
+    const messageGroups = new Set(
+      messageTokensExpanded
+        .map((t) => findSynonymGroup(t))
+        .filter((g): g is string => Boolean(g))
+    )
+    for (const group of messageGroups) {
+      if (programGroups.has(group)) {
+        score += 2
+      }
+    }
+
+    // Bono por frases típicas: "curso de uñas", "info pestañas", etc.
+    const phraseMatch = /(curso|info|informacion)\s+de\s+([a-z0-9\s]+)/i.exec(normalizedMessage)
+    if (phraseMatch?.[2]) {
+      const requestedTopic = phraseMatch[2].trim()
+      if (requestedTopic && normalizedProgramName.includes(requestedTopic)) {
+        score += 2
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score
+      bestMatch = program
+    }
   }
-  
-  return null
+
+  // Umbral mínimo para evitar falsos positivos
+  return bestScore >= 1 ? bestMatch : null
 }
 
 /**
@@ -297,7 +421,7 @@ export async function getCoursesForQuery(message: string, programs: ProgramInfo[
     return getCoursesByProgram(detectedProgram.id)
   }
   
-  // Si no menciona programa específico, obtener todos los cursos
+  // Si no menciona programa específico, intentar filtrar por palabras clave
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
     const { data, error } = await supabase
@@ -312,7 +436,24 @@ export async function getCoursesForQuery(message: string, programs: ProgramInfo[
       return []
     }
 
-    return data as CourseInfo[]
+    const allCourses = (data || []) as CourseInfo[]
+    const messageTokens = extractUsefulTokens(message)
+    const messageTokensExpanded = expandTokensWithSynonyms(messageTokens)
+
+    if (messageTokensExpanded.length === 0) {
+      return allCourses
+    }
+
+    const filteredCourses = allCourses.filter((course) => {
+      const normalizedCourseName = normalizeText(course.nombre || '')
+      const normalizedProgramName = normalizeText(course.programa_nombre || '')
+      return messageTokensExpanded.some((token) =>
+        normalizedCourseName.includes(token) || normalizedProgramName.includes(token)
+      )
+    })
+
+    // Si el filtro no encontró nada, devolver todos para no perder contexto
+    return filteredCourses.length > 0 ? filteredCourses : allCourses
   } catch (error) {
     console.error('[getCoursesForQuery] Exception:', error)
     return []

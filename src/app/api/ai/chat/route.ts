@@ -11,6 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import { 
   getProgramsForAgent, 
   getCoursesForQuery, 
+  getCoursesByProgram,
   detectProgramFromMessage,
   buildHierarchicalContext,
   buildHierarchicalContextWithPensum,
@@ -237,10 +238,15 @@ function detectBuyingIntent(
   // Señales directas de compra
   const directBuyingSignals = [
     /\b(quiero\s+(inscribirme|matricularme|inscribir|apuntarme|registrarme))/i,
+    /\b(quiero\s+(registrar|registrarme|registrase|registrasse|inscribirme|inscribirse|inscribisse))/i,
+    /\b(me\s+quiero\s+(inscribir|registrar))/i,
     /\b(cómo\s+(me\s+inscribo|hago\s+para\s+inscribirme|puedo\s+inscribirme))/i,
+    /\b(como\s+me\s+(registro|registr[oó]))/i,
     /\b(dónde\s+(me\s+inscribo|puedo\s+inscribirme|pago))/i,
+    /\b(donde\s+me\s+(registro|registr[oó]))/i,
     /\b(cuándo\s+puedo\s+(empezar|iniciar|comenzar))/i,
     /\b(me\s+(interesa|gustaría|quiero)\s+(el\s+)?curso)/i,
+    /\b(ya\s+quiero\s+(iniciar|empezar|inscribirme|registrarme))/i,
     /\b(quiero\s+(información|más\s+info)\s+para\s+inscribirme)/i,
     /\b(voy\s+a\s+(inscribirme|matricularme|apuntarme))/i,
     /\b(quiero\s+agendar|agendar\s+(una\s+)?(cita|visita))/i,
@@ -287,7 +293,8 @@ function buildAgentPrompt(
   userMessage: string,
   knowledgeChunks: string[],
   conversationHistory: Array<{user: string, agent: string}> = [],
-  hierarchicalContext: string = ""
+  hierarchicalContext: string = "",
+  contextualDirective: string = ""
 ): string {
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asesor experto masculino de la Academia de Belleza Crystal Diamante en Cali.";
@@ -393,7 +400,13 @@ Ayuda al usuario a conocer:
 ⚠️ Solo usa información del contexto jerárquico abajo
 ⚠️ Si un curso/grupo NO aparece en el contexto, di que no está disponible actualmente
 ⚠️ No inventes horarios, precios, fechas o nombres de cursos
+⚠️ Si el usuario ya pidió un curso específico (ej: "curso de uñas"), NO respondas con "¿en qué curso estás interesado?".
+⚠️ En ese caso, responde DIRECTO con la información del curso solicitado usando los bloques requeridos.
 `;
+
+  if (contextualDirective) {
+    prompt += `\n\n## 6. Contexto de intención del usuario (OBLIGATORIO)\n${contextualDirective}\n`;
+  }
 
   if (hierarchicalContext) {
     prompt += `\n${hierarchicalContext}\n`;
@@ -422,6 +435,152 @@ NO inventes horarios, precios ni fechas que no estén en el contexto.
   prompt += `\n# Mensaje del usuario:\n${userMessage}\n\n# Tu respuesta (como ${persona}):`;
 
   return prompt;
+}
+
+function detectUserIntent(message: string): "precio" | "horario" | "temario" | "inscripcion" | "general" {
+  const text = message.toLowerCase();
+
+  if (/\b(precio|costo|cuanto|vale|valor|mensualidad|inscripcion|cuota|inversion)\b/i.test(text)) {
+    return "precio";
+  }
+  if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo)\b/i.test(text)) {
+    return "horario";
+  }
+  if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
+    return "temario";
+  }
+  if (/\b(inscrib|matricul|pago|admisiones|contacto|numero|whatsapp|separar\s+cupo)\b/i.test(text)) {
+    return "inscripcion";
+  }
+  return "general";
+}
+
+type ObjectionType = "precio" | "tiempo" | "confianza" | "posponer" | "none";
+
+function detectObjectionType(message: string): ObjectionType {
+  const text = message.toLowerCase();
+
+  if (/\b(caro|costoso|muy\s+caro|no\s+tengo\s+dinero|no\s+me\s+alcanza|esta\s+costoso)\b/i.test(text)) {
+    return "precio";
+  }
+  if (/\b(no\s+tengo\s+tiempo|trabajo\s+todo\s+el\s+dia|no\s+puedo\s+por\s+horario|muy\s+ocupad[oa])\b/i.test(text)) {
+    return "tiempo";
+  }
+  if (/\b(no\s+se\s+si\s+sirva|es\s+confiable|tienen\s+certificacion|es\s+legal|no\s+confio|me\s+da\s+duda)\b/i.test(text)) {
+    return "confianza";
+  }
+  if (/\b(luego|despues|mas\s+adelante|lo\s+voy\s+a\s+pensar|te\s+aviso|otro\s+dia|por\s+ahora\s+no)\b/i.test(text)) {
+    return "posponer";
+  }
+
+  return "none";
+}
+
+function resolveProgramFromContext(
+  userMessage: string,
+  programs: any[],
+  conversationHistory: Array<{ user: string; agent: string }>
+): any | null {
+  const directProgram = detectProgramFromMessage(userMessage, programs);
+  if (directProgram) return directProgram;
+
+  const isLikelyFollowUp = /\b(ese|esa|ese\s+curso|esa\s+carrera|horario|precio|cuanto|cuando|inscripcion|mensualidad|cupos|duracion)\b/i.test(
+    userMessage
+  );
+
+  if (!isLikelyFollowUp || !conversationHistory.length) {
+    return null;
+  }
+
+  for (let i = conversationHistory.length - 1; i >= 0; i--) {
+    const current = conversationHistory[i];
+    if (!current) continue;
+
+    const fromUser = detectProgramFromMessage(current.user || "", programs);
+    if (fromUser) return fromUser;
+
+    const fromAgent = detectProgramFromMessage(current.agent || "", programs);
+    if (fromAgent) return fromAgent;
+  }
+
+  return null;
+}
+
+function buildContextualDirective(
+  userMessage: string,
+  detectedProgram: any | null,
+  courses: any[]
+): string {
+  const intent = detectUserIntent(userMessage);
+  const objection = detectObjectionType(userMessage);
+  const explicitBuyingIntent = detectBuyingIntent(userMessage, []);
+  const programName = detectedProgram?.nombre || null;
+
+  const intentInstructionMap: Record<string, string> = {
+    precio:
+      'Responde priorizando SOLO el bloque de inversión (inscripción + mensualidad). No des precio total salvo que lo pidan explícitamente.',
+    horario:
+      'Responde priorizando fechas, días, horario y cupos del grupo activo relacionado.',
+    temario:
+      'Responde priorizando temario/contenido por ciclos o módulos del programa solicitado.',
+    inscripcion:
+      'Responde con mini-resumen del curso y guía de inscripción. Si ya hay interés claro, cierra con Admisiones (+57 301 203 8582).',
+    general:
+      'Responde con información completa en bloques, enfocada en el curso solicitado.'
+  };
+
+  const dominantProgram = (() => {
+    if (!courses.length) return null;
+    const countByProgram = new Map<string, number>();
+    for (const course of courses) {
+      const name = course?.programa_nombre;
+      if (!name) continue;
+      countByProgram.set(name, (countByProgram.get(name) || 0) + 1);
+    }
+    let topName: string | null = null;
+    let topCount = 0;
+    for (const [name, count] of countByProgram.entries()) {
+      if (count > topCount) {
+        topName = name;
+        topCount = count;
+      }
+    }
+    if (!topName) return null;
+    return { name: topName, ratio: topCount / Math.max(courses.length, 1) };
+  })();
+
+  const focusLine = programName
+    ? `Curso detectado y solicitado por el usuario: "${programName}". Debes responder enfocado en este curso, no en lista general.`
+    : dominantProgram && dominantProgram.ratio >= 0.7
+    ? `La consulta apunta mayoritariamente al programa "${dominantProgram.name}". Responde enfocado en ese programa.`
+    : 'Si no puedes identificar un curso específico, pregunta UNA aclaración corta con máximo 2 opciones relevantes.';
+
+  const objectionInstructionMap: Record<ObjectionType, string> = {
+    precio:
+      'El usuario tiene objeción de precio. Responde con empatía, refuerza valor del curso, evita presión y ofrece opción de iniciar con inscripción + mensualidad.',
+    tiempo:
+      'El usuario tiene objeción de tiempo/horario. Responde con empatía y propone alternativas de horario o próximo grupo disponible.',
+    confianza:
+      'El usuario tiene objeción de confianza. Responde con señales de respaldo (certificación, trayectoria, profesor, testimonios) usando solo datos disponibles.',
+    posponer:
+      'El usuario está posponiendo decisión. Responde suave, resume beneficios clave y cierra con una pregunta simple para mantener la conversación activa.',
+    none:
+      'No se detecta objeción explícita. Mantén un tono consultivo y enfocado a avance de inscripción sin ser invasivo.'
+  };
+
+  return [
+    `Intención detectada: ${intent.toUpperCase()}.`,
+    `Objeción detectada: ${objection.toUpperCase()}.`,
+    `Señal de compra explícita: ${explicitBuyingIntent ? "SÍ" : "NO"}.`,
+    focusLine,
+    intentInstructionMap[intent],
+    objectionInstructionMap[objection],
+    explicitBuyingIntent
+      ? 'ACCIÓN OBLIGATORIA: Entrega el número de la academia/admisiones (+57 301 203 8582) y guía el siguiente paso de inscripción.'
+      : 'Si no hay señal explícita de compra, continúa en modo informativo y consultivo.',
+    'Si hay objeción, estructura la respuesta en: 1) Empatía breve, 2) Dato concreto del curso, 3) Propuesta clara, 4) CTA corta.',
+    'Prohibido responder con: "¿En qué curso estás interesado?" cuando el usuario ya mencionó un curso o tema específico.'
+  ].join('\n');
 }
 
 async function generateResponse(apiKey: string, prompt: string, timeoutMs: number = 25000): Promise<string> {
@@ -538,8 +697,10 @@ export async function POST(req: NextRequest) {
     const programs = await getProgramsForAgent();
 
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
-    const detectedProgram = detectProgramFromMessage(message, programs);
-    const courses = await getCoursesForQuery(message, programs);
+    const detectedProgram = resolveProgramFromContext(message, programs, history);
+    const courses = detectedProgram
+      ? await getCoursesByProgram(detectedProgram.id)
+      : await getCoursesForQuery(message, programs);
     
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
@@ -567,8 +728,17 @@ export async function POST(req: NextRequest) {
     // Obtener conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, message, 3);
 
+    const contextualDirective = buildContextualDirective(message, detectedProgram, courses);
+
     // Construir prompt con contexto jerárquico
-    const prompt = buildAgentPrompt(settings || {}, message, knowledgeChunks, history, hierarchicalContext);
+    const prompt = buildAgentPrompt(
+      settings || {},
+      message,
+      knowledgeChunks,
+      history,
+      hierarchicalContext,
+      contextualDirective
+    );
 
     // Generar respuesta
     const response = await generateResponse(geminiKey, prompt);
