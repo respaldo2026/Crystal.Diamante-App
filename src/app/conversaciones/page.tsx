@@ -28,7 +28,8 @@ import {
   PhoneOutlined,
   ClockCircleOutlined,
   MessageOutlined,
-  BotOutlined,
+  RobotOutlined,
+  BarsOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@/utils/supabase/client";
 import dayjs from "dayjs";
@@ -308,7 +309,7 @@ export default function ConversacionesPage() {
         style={{ borderRadius: "12px" }}
         title={
           <Space>
-            <BotOutlined />
+            <BarsOutlined />
             Historial de Conversaciones ({conversationsFiltradas.length})
           </Space>
         }
@@ -358,7 +359,7 @@ export default function ConversacionesPage() {
           <Timeline
             items={phoneConversations.map((conv, idx) => ({
               key: conv.id,
-              dot: idx % 2 === 0 ? <PhoneOutlined style={{ color: "#1890ff" }} /> : <BotOutlined style={{ color: "#52c41a" }} />,
+              dot: idx % 2 === 0 ? <PhoneOutlined style={{ color: "#1890ff" }} /> : <RobotOutlined style={{ color: "#52c41a" }} />,
               children: (
                 <Card
                   size="small"
