@@ -248,6 +248,9 @@ export default function LeadsPage() {
         okText: "Sí, eliminar",
         okType: "danger",
         cancelText: "Cancelar",
+        centered: true,
+        getContainer: () => document.body,
+        zIndex: 9999,
         async onOk() {
           console.log("✅ Modal confirmado, iniciando eliminación...");
           try {
