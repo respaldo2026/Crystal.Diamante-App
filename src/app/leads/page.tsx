@@ -128,6 +128,7 @@ export default function LeadsPage() {
   const [filtroPrograma, setFiltroPrograma] = useState<string | undefined>();
   const [programas, setProgramas] = useState<string[]>([]);
   const [tablaInexistente, setTablaInexistente] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   useEffect(() => {
     cargarProgramas();
@@ -268,6 +269,56 @@ export default function LeadsPage() {
     });
   };
 
+  const eliminarSeleccionados = () => {
+    const totalSeleccionados = selectedRowKeys.length;
+    
+    if (totalSeleccionados === 0) {
+      message.warning("Selecciona al menos un lead para eliminar");
+      return;
+    }
+
+    Modal.confirm({
+      title: `¿Eliminar ${totalSeleccionados} lead${totalSeleccionados > 1 ? 's' : ''}?`,
+      icon: <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />,
+      content: (
+        <div>
+          <p><strong>Se eliminarán {totalSeleccionados} leads seleccionados.</strong></p>
+          <p style={{ color: "#ff4d4f" }}>⚠️ Esta acción NO se puede deshacer.</p>
+        </div>
+      ),
+      okText: "Sí, eliminar",
+      okType: "danger",
+      cancelText: "Cancelar",
+      async onOk() {
+        try {
+          setLoading(true);
+          
+          // Eliminar en lote
+          const { error } = await supabaseBrowserClient
+            .from("leads")
+            .delete()
+            .in("id", selectedRowKeys);
+
+          if (error) {
+            console.error("Error Supabase:", error);
+            message.error("No se pudieron eliminar algunos leads");
+            return;
+          }
+
+          // Actualizar estado local
+          setLeads((prev) => prev.filter((l) => !selectedRowKeys.includes(l.id)));
+          setSelectedRowKeys([]);
+          message.success(`${totalSeleccionados} lead${totalSeleccionados > 1 ? 's' : ''} eliminado${totalSeleccionados > 1 ? 's' : ''}`);
+        } catch (err) {
+          console.error("Error eliminando leads:", err);
+          message.error("No se pudieron eliminar los leads");
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
   const eliminarTodosLeads = () => {
     let confirmInput = "";
     const totalLeads = leads.length;
@@ -374,21 +425,40 @@ export default function LeadsPage() {
     return estadoOptions.find((e) => e.value === (estado || ""))?.color || "default";
   };
 
-  const renderLeadCard = (record: Lead) => (
-    <Card
-      key={record.id}
-      hoverable
-      style={{ borderRadius: 14, border: "1px solid #f0f0f0" }}
-      bodyStyle={{ padding: 16 }}
-    >
-      <Space direction="vertical" size={8} style={{ width: "100%" }}>
-        <Space style={{ justifyContent: "space-between", width: "100%" }}>
-          <Space>
-            <UserOutlined />
-            <Text strong>{record.nombre}</Text>
+  const renderLeadCard = (record: Lead) => {
+    const isSelected = selectedRowKeys.includes(record.id);
+    
+    return (
+      <Card
+        key={record.id}
+        hoverable
+        style={{ 
+          borderRadius: 14, 
+          border: isSelected ? "2px solid #1890ff" : "1px solid #f0f0f0",
+          backgroundColor: isSelected ? "#f0f7ff" : "#fff"
+        }}
+        bodyStyle={{ padding: 16 }}
+      >
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+          <Space style={{ justifyContent: "space-between", width: "100%" }}>
+            <Space>
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedRowKeys([...selectedRowKeys, record.id]);
+                  } else {
+                    setSelectedRowKeys(selectedRowKeys.filter(k => k !== record.id));
+                  }
+                }}
+                style={{ width: 16, height: 16, cursor: 'pointer' }}
+              />
+              <UserOutlined />
+              <Text strong>{record.nombre}</Text>
+            </Space>
+            <Tag color={getEstadoColor(record.estado)}>{record.estado || "nuevo"}</Tag>
           </Space>
-          <Tag color={getEstadoColor(record.estado)}>{record.estado || "nuevo"}</Tag>
-        </Space>
 
         <Space size={6} wrap>
           {record.telefono && (
@@ -448,7 +518,8 @@ export default function LeadsPage() {
         </Space>
       </Space>
     </Card>
-  );
+    );
+  };
 
   const columns = [
     {
@@ -690,6 +761,36 @@ export default function LeadsPage() {
         )}
 
         <Card style={{ borderRadius: 16 }}>
+          {selectedRowKeys.length > 0 && (
+            <Alert
+              message={
+                <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: "100%", justifyContent: "space-between" }}>
+                  <Text>
+                    <strong>{selectedRowKeys.length}</strong> lead{selectedRowKeys.length > 1 ? 's' : ''} seleccionado{selectedRowKeys.length > 1 ? 's' : ''}
+                  </Text>
+                  <Space wrap>
+                    <Button
+                      size="small"
+                      onClick={() => setSelectedRowKeys([])}
+                    >
+                      Limpiar selección
+                    </Button>
+                    <Button
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      onClick={eliminarSeleccionados}
+                    >
+                      Eliminar seleccionados
+                    </Button>
+                  </Space>
+                </Space>
+              }
+              type="info"
+              style={{ marginBottom: 16 }}
+            />
+          )}
+          
           {isMobile ? (
             <Space direction="vertical" size="middle" style={{ width: "100%" }}>
               {leadsFiltrados.length === 0 && (
@@ -709,6 +810,18 @@ export default function LeadsPage() {
                 pageSize: 10,
                 simple: false,
                 showSizeChanger: true 
+              }}
+              rowSelection={{
+                type: 'checkbox',
+                selectedRowKeys,
+                onChange: (selectedKeys) => {
+                  setSelectedRowKeys(selectedKeys);
+                },
+                selections: [
+                  Table.SELECTION_ALL,
+                  Table.SELECTION_INVERT,
+                  Table.SELECTION_NONE,
+                ],
               }}
               locale={{ emptyText: tablaInexistente ? "Crea la tabla 'leads' y recarga." : "Sin leads" }}
             />
