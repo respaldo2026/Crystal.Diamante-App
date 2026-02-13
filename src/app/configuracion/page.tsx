@@ -32,7 +32,7 @@ interface PermisosPorRol {
 }
 
 interface MedioPago {
-  id: string;
+  id: number;
   nombre: string;
   tipo: string;
   descripcion?: string; // Instrucciones o detalles del medio de pago
@@ -165,6 +165,27 @@ export default function ConfiguracionPage() {
     return acc;
   }, {});
   const adminAssignableRoles = ["admin", "director", "secretaria"];
+  const infoSeparator = "\n\nInformacion adicional:\n";
+
+  const splitDescripcion = (value?: string | null) => {
+    const raw = value || "";
+    if (!raw.includes(infoSeparator)) {
+      return { descripcion: raw, informacion: "" };
+    }
+
+    const [descripcion, informacion] = raw.split(infoSeparator);
+    return {
+      descripcion: (descripcion || "").trim(),
+      informacion: (informacion || "").trim(),
+    };
+  };
+
+  const buildDescripcion = (descripcion?: string, informacion?: string) => {
+    const base = (descripcion || "").trim();
+    const extra = (informacion || "").trim();
+    if (!extra) return base;
+    return `${base}${base ? infoSeparator : "Informacion adicional:\n"}${extra}`;
+  };
 
   const handleLogoUpload = async (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -531,7 +552,16 @@ export default function ConfiguracionPage() {
         .from("medios_pago")
         .select("*")
         .order("nombre", { ascending: true });
-      setMediosPago(data || []);
+      const normalizados = (data || []).map((medio: any) => {
+        const parsed = splitDescripcion(medio?.descripcion);
+        return {
+          ...medio,
+          tipo: medio?.codigo || medio?.tipo || "",
+          descripcion: parsed.descripcion,
+          informacion: parsed.informacion,
+        } as MedioPago;
+      });
+      setMediosPago(normalizados);
     } catch (error) {
       console.error(error);
     } finally {
@@ -542,7 +572,10 @@ export default function ConfiguracionPage() {
   const handleOpenModalMedioPago = (medio?: MedioPago) => {
     if (medio) {
       setEditingMedioPago(medio);
-      formMedioPago.setFieldsValue(medio);
+      formMedioPago.setFieldsValue({
+        ...medio,
+        tipo: medio.tipo || (medio as any).codigo || "",
+      });
     } else {
       setEditingMedioPago(null);
       formMedioPago.resetFields();
@@ -555,23 +588,32 @@ export default function ConfiguracionPage() {
     try {
       setSubmittingMedioPago(true);
       const values = await formMedioPago.validateFields();
+      const payload = {
+        nombre: values.nombre,
+        codigo: values.tipo,
+        descripcion: buildDescripcion(values.descripcion, values.informacion),
+        activo: values.activo ?? true,
+      };
 
       if (editingMedioPago) {
-        await supabaseBrowserClient
+        const { error } = await supabaseBrowserClient
           .from("medios_pago")
-          .update(values)
+          .update(payload)
           .eq("id", editingMedioPago.id);
+        if (error) throw error;
         messageApi.success("Medio de pago actualizado");
       } else {
-        await supabaseBrowserClient
+        const { error } = await supabaseBrowserClient
           .from("medios_pago")
-          .insert(values);
+          .insert(payload);
+        if (error) throw error;
         messageApi.success("Medio de pago creado");
       }
       setModalMedioPagoVisible(false);
       cargarMediosPago();
     } catch (error: any) {
-      messageApi.error("Error: " + error.message);
+      const errorMessage = error?.message || "No se pudo guardar el medio de pago";
+      messageApi.error(`Error: ${errorMessage}`);
     } finally {
       setSubmittingMedioPago(false);
     }

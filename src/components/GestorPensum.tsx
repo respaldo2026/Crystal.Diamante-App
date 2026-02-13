@@ -342,6 +342,7 @@ export default function GestorPensum({
 
       formCurso.resetFields();
       setEditingCurso(null);
+      setModalCursoVisible(false);
       cargarCursosPensum(selectedCicloId);
     } catch (error) {
       if (error instanceof Error) {

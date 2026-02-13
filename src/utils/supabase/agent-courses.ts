@@ -1,7 +1,16 @@
 import { createClient } from "@supabase/supabase-js"
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://sdrdcpnqcqazxnhnjxyj.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkcmRjcG5xY3Fhenhuo2h0dHBzOi8vc2RyZGNwbnFjcWF6eG5obmp4eWouc3VwYWJhc2UuY28iLCJpYXQiOjE3MzA3NzkyMzgsImV4cCI6MjA0NjM1OTIzOH0.nZ_Q2J7u-sIAm9_HZEoG0fL8LiDo-a6XfP_R8CgKnOE'
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+
+function getSupabaseClient() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.error("[agent-courses] Missing Supabase credentials. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
+    throw new Error("Missing Supabase credentials")
+  }
+
+  return createClient(SUPABASE_URL, SUPABASE_KEY)
+}
 
 interface AcademyInfo {
   id: string
@@ -27,6 +36,7 @@ interface ProgramInfo {
   precio: number | null
   precio_inscripcion: number | null
   precio_mensualidad: number | null
+  horas_por_clase: number | null
   contenido: string | null
   requisitos: string | null
   certificacion: string | null
@@ -85,12 +95,156 @@ interface CourseInfo {
   programa_id: number
 }
 
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function extractUsefulTokens(value: string): string[] {
+  const stopwords = new Set([
+    'curso', 'cursos', 'de', 'del', 'la', 'el', 'los', 'las', 'en', 'para', 'con',
+    'quiero', 'informacion', 'info', 'sobre', 'me', 'interesa', 'tienen', 'hay',
+    'que', 'como', 'cuando', 'cuanto', 'precio', 'costa', 'valor'
+  ])
+
+  return normalizeText(value)
+    .split(' ')
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3 && !stopwords.has(t))
+}
+
+function buildProgramPriceText(
+  programa: ProgramInfo,
+  fallback?: { precio_inscripcion?: number | null; precio_mensualidad?: number | null }
+): string {
+  const inscripcion = Number(programa.precio_inscripcion ?? fallback?.precio_inscripcion ?? 0)
+  const mensualidad = Number(programa.precio_mensualidad ?? fallback?.precio_mensualidad ?? 0)
+
+  if (inscripcion > 0 || mensualidad > 0) {
+    const parts: string[] = []
+    if (inscripcion > 0) parts.push(`Inscripcion: $${inscripcion} COP`)
+    if (mensualidad > 0) parts.push(`Mensualidad: $${mensualidad} COP`)
+    return parts.join(' | ')
+  }
+
+  if (programa.precio) {
+    return `Precio: $${programa.precio} COP`
+  }
+
+  return 'Precio a definir'
+}
+
+function formatSchedule(horaInicio?: string | null, horaFin?: string | null, diasSemana?: string | null): string | null {
+  const timeRange = [horaInicio, horaFin].filter(Boolean).join(' - ')
+  const dias = diasSemana
+    ? diasSemana
+        .split(',')
+        .map((d) => d.trim())
+        .filter(Boolean)
+        .join(', ')
+    : ''
+
+  if (timeRange && dias) return `${timeRange} (${dias})`
+  if (timeRange) return timeRange
+  if (dias) return dias
+  return null
+}
+
+function normalizeMatriculasCount(value: any): number {
+  const list = Array.isArray(value) ? value : value ? [value] : []
+  return list.reduce((acc, item) => acc + Number(item?.count || 0), 0)
+}
+
+function normalizeCursoRow(row: any): CourseInfo {
+  const programa = Array.isArray(row.programas) ? row.programas[0] ?? null : row.programas
+  const profesor = Array.isArray(row.profesor) ? row.profesor[0] ?? null : row.profesor
+  const matriculados = normalizeMatriculasCount(row.matriculas)
+  const cupos = Number(row.cupos || 0)
+
+  return {
+    id: row.id,
+    nombre: row.nombre,
+    descripcion: row.descripcion ?? null,
+    horario: formatSchedule(row.hora_inicio, row.hora_fin, row.dias_semana),
+    cupos,
+    precio: row.precio ?? null,
+    precio_inscripcion: row.precio_inscripcion ?? null,
+    precio_mensualidad: row.precio_mensualidad ?? null,
+    estado: row.estado ?? 'sin_estado',
+    fecha_inicio: row.fecha_inicio ?? null,
+    fecha_fin: row.fecha_fin ?? null,
+    profesor_nombre: profesor?.nombre_completo ?? null,
+    programa_nombre: programa?.nombre ?? null,
+    resumen_texto_ia: null,
+    matriculados,
+    cupos_disponibles: Math.max(cupos - matriculados, 0),
+    programa_id: row.programa_id,
+  }
+}
+
+const PROGRAM_SYNONYM_GROUPS: Record<string, string[]> = {
+  unas: [
+    'unas', 'uñas', 'nails', 'manicure', 'pedicure', 'acrilico', 'acrilicas', 'acrylic',
+    'gel', 'semipermanente', 'polygel', 'nailart', 'nail', 'esmaltado'
+  ],
+  pestanas: [
+    'pestanas', 'pestañas', 'lashes', 'lash', 'lifting', 'laminado', 'extensiones',
+    'rimel', 'cejas', 'brow', 'microblading'
+  ],
+  maquillaje: [
+    'maquillaje', 'makeup', 'make', 'visagismo', 'novias', 'social', 'artistico'
+  ],
+  barberia: [
+    'barberia', 'barbería', 'barber', 'corte', 'fade', 'degradado', 'afeitado'
+  ],
+  peluqueria: [
+    'peluqueria', 'peluquería', 'cabello', 'hair', 'peinado', 'colorimetria', 'balayage',
+    'alisado', 'keratina'
+  ],
+  esteticafacial: [
+    'facial', 'estetica', 'estética', 'limpieza', 'piel', 'skincare', 'cosmetologia'
+  ]
+}
+
+function findSynonymGroup(token: string): string | null {
+  const normalizedToken = normalizeText(token)
+  for (const [group, words] of Object.entries(PROGRAM_SYNONYM_GROUPS)) {
+    if (words.some((word) => normalizeText(word) === normalizedToken)) {
+      return group
+    }
+  }
+  return null
+}
+
+function expandTokensWithSynonyms(tokens: string[]): string[] {
+  const expanded = new Set<string>(tokens.map((t) => normalizeText(t)))
+
+  for (const token of tokens) {
+    const group = findSynonymGroup(token)
+    if (!group) continue
+
+    const synonyms = PROGRAM_SYNONYM_GROUPS[group as keyof typeof PROGRAM_SYNONYM_GROUPS]
+    if (!synonyms) continue
+
+    for (const synonym of synonyms) {
+      expanded.add(normalizeText(synonym))
+    }
+  }
+
+  return Array.from(expanded).filter(Boolean)
+}
+
 /**
  * Obtener medios de pago activos
  */
 export async function getMediosPago(): Promise<MedioPago[]> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     const { data, error } = await supabase
       .from('medios_pago')
@@ -135,7 +289,7 @@ export function formatMediosPago(mediosPago: MedioPago[]): string {
  */
 export async function getAcademyInfo(): Promise<AcademyInfo | null> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     const { data, error } = await supabase
       .from('configuracion')
@@ -161,7 +315,7 @@ export async function getAcademyInfo(): Promise<AcademyInfo | null> {
  */
 export async function getPensumByProgram(programaId: number): Promise<PensumCiclo[]> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     // Obtener ciclos del pensum
     const { data: ciclos, error: errorCiclos } = await supabase
@@ -221,7 +375,7 @@ export async function getPensumByProgram(programaId: number): Promise<PensumCicl
  */
 export async function getProgramsForAgent(): Promise<ProgramInfo[]> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     const { data, error } = await supabase
       .from('programas')
@@ -246,21 +400,41 @@ export async function getProgramsForAgent(): Promise<ProgramInfo[]> {
  */
 export async function getCoursesByProgram(programId: number): Promise<CourseInfo[]> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     const { data, error } = await supabase
-      .from('vw_cursos_para_ia')
-      .select('*')
+      .from('cursos')
+      .select(`
+        id,
+        nombre,
+        descripcion,
+        estado,
+        fecha_inicio,
+        fecha_fin,
+        dias_semana,
+        hora_inicio,
+        hora_fin,
+        cupos,
+        precio,
+        precio_inscripcion,
+        precio_mensualidad,
+        programa_id,
+        profesor_id,
+        programas:programa_id ( id, nombre ),
+        profesor:profesor_id ( id, nombre_completo ),
+        matriculas:matriculas ( count )
+      `)
       .eq('programa_id', programId)
-      .eq('estado', 'activo')
-      .order('fecha_inicio', { ascending: true })
+      .in('estado', ['activo', 'proximo'])
+      .order('fecha_inicio', { ascending: true, nullsFirst: true })
+      .order('hora_inicio', { ascending: true, nullsFirst: true })
 
     if (error) {
       console.error('[getCoursesByProgram] Error:', error)
       return []
     }
 
-    return data as CourseInfo[]
+    return (data || []).map(normalizeCursoRow)
   } catch (error) {
     console.error('[getCoursesByProgram] Exception:', error)
     return []
@@ -271,19 +445,71 @@ export async function getCoursesByProgram(programId: number): Promise<CourseInfo
  * Detectar qué programa menciona el usuario en su mensaje
  */
 export function detectProgramFromMessage(message: string, programs: ProgramInfo[]): ProgramInfo | null {
-  const lowerMessage = message.toLowerCase()
-  
-  // Buscar coincidencias con nombres de programas
+  const normalizedMessage = normalizeText(message)
+  const messageTokens = extractUsefulTokens(message)
+  const messageTokensExpanded = expandTokensWithSynonyms(messageTokens)
+
+  if (!normalizedMessage || programs.length === 0) {
+    return null
+  }
+
+  let bestMatch: ProgramInfo | null = null
+  let bestScore = 0
+
   for (const program of programs) {
-    const programName = program.nombre.toLowerCase()
-    // Búsqueda flexible: contiene el nombre completo o es bastante similar
-    if (lowerMessage.includes(programName) || 
-        (programName.length > 5 && lowerMessage.includes(programName.substring(0, 5)))) {
+    const normalizedProgramName = normalizeText(program.nombre)
+
+    // Coincidencia exacta del nombre completo
+    if (normalizedProgramName && normalizedMessage.includes(normalizedProgramName)) {
       return program
     }
+
+    // Coincidencia por palabras clave del nombre del programa
+    const programTokens = extractUsefulTokens(program.nombre)
+    if (programTokens.length === 0) continue
+
+    let score = 0
+    for (const token of programTokens) {
+      const normalizedToken = normalizeText(token)
+      if (normalizedMessage.includes(normalizedToken) || messageTokensExpanded.includes(normalizedToken)) {
+        score += 1
+      }
+    }
+
+    // Bono por sinónimos compartidos entre mensaje y nombre de programa
+    const programGroups = new Set(
+      programTokens
+        .map((t) => findSynonymGroup(t))
+        .filter((g): g is string => Boolean(g))
+    )
+    const messageGroups = new Set(
+      messageTokensExpanded
+        .map((t) => findSynonymGroup(t))
+        .filter((g): g is string => Boolean(g))
+    )
+    for (const group of messageGroups) {
+      if (programGroups.has(group)) {
+        score += 2
+      }
+    }
+
+    // Bono por frases típicas: "curso de uñas", "info pestañas", etc.
+    const phraseMatch = /(curso|info|informacion)\s+de\s+([a-z0-9\s]+)/i.exec(normalizedMessage)
+    if (phraseMatch?.[2]) {
+      const requestedTopic = phraseMatch[2].trim()
+      if (requestedTopic && normalizedProgramName.includes(requestedTopic)) {
+        score += 2
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score
+      bestMatch = program
+    }
   }
-  
-  return null
+
+  // Umbral mínimo para evitar falsos positivos
+  return bestScore >= 1 ? bestMatch : null
 }
 
 /**
@@ -297,22 +523,59 @@ export async function getCoursesForQuery(message: string, programs: ProgramInfo[
     return getCoursesByProgram(detectedProgram.id)
   }
   
-  // Si no menciona programa específico, obtener todos los cursos
+  // Si no menciona programa específico, intentar filtrar por palabras clave
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
-      .from('vw_cursos_para_ia')
-      .select('*')
-      .eq('estado', 'activo')
-      .order('programa_nombre', { ascending: true })
-      .order('fecha_inicio', { ascending: true })
+      .from('cursos')
+      .select(`
+        id,
+        nombre,
+        descripcion,
+        estado,
+        fecha_inicio,
+        fecha_fin,
+        dias_semana,
+        hora_inicio,
+        hora_fin,
+        cupos,
+        precio,
+        precio_inscripcion,
+        precio_mensualidad,
+        programa_id,
+        profesor_id,
+        programas:programa_id ( id, nombre ),
+        profesor:profesor_id ( id, nombre_completo ),
+        matriculas:matriculas ( count )
+      `)
+      .in('estado', ['activo', 'proximo'])
+      .order('programa_id', { ascending: true })
+      .order('fecha_inicio', { ascending: true, nullsFirst: true })
+      .order('hora_inicio', { ascending: true, nullsFirst: true })
 
     if (error) {
       console.error('[getCoursesForQuery] Error:', error)
       return []
     }
 
-    return data as CourseInfo[]
+    const allCourses = (data || []).map(normalizeCursoRow)
+    const messageTokens = extractUsefulTokens(message)
+    const messageTokensExpanded = expandTokensWithSynonyms(messageTokens)
+
+    if (messageTokensExpanded.length === 0) {
+      return allCourses
+    }
+
+    const filteredCourses = allCourses.filter((course) => {
+      const normalizedCourseName = normalizeText(course.nombre || '')
+      const normalizedProgramName = normalizeText(course.programa_nombre || '')
+      return messageTokensExpanded.some((token) =>
+        normalizedCourseName.includes(token) || normalizedProgramName.includes(token)
+      )
+    })
+
+    // Si el filtro no encontró nada, devolver todos para no perder contexto
+    return filteredCourses.length > 0 ? filteredCourses : allCourses
   } catch (error) {
     console.error('[getCoursesForQuery] Exception:', error)
     return []
@@ -469,6 +732,19 @@ export function buildHierarchicalContext(
 ): string {
   let context = ``
 
+  const priceFallbackByProgram = new Map<number, { precio_inscripcion?: number | null; precio_mensualidad?: number | null }>();
+  courses.forEach((course) => {
+    if (!course.programa_id) return;
+    if (course.precio_inscripcion || course.precio_mensualidad) {
+      if (!priceFallbackByProgram.has(course.programa_id)) {
+        priceFallbackByProgram.set(course.programa_id, {
+          precio_inscripcion: course.precio_inscripcion ?? null,
+          precio_mensualidad: course.precio_mensualidad ?? null,
+        });
+      }
+    }
+  });
+
   // Agregar información de la academia si está disponible
   if (academy) {
     context += formatAcademyInfo(academy)
@@ -488,11 +764,7 @@ ${programs
     
     const clasesText = prog.total_clases ? ` - ${prog.total_clases} clases` : ''
     
-    const priceText = prog.precio 
-      ? `$${prog.precio} COP`
-      : prog.precio_inscripcion &&  prog.precio_mensualidad
-      ? `Inscripción: $${prog.precio_inscripcion} + Mensualidad: $${prog.precio_mensualidad}`
-      : 'Precio a definir'
+    const priceText = buildProgramPriceText(prog, priceFallbackByProgram.get(prog.id))
     
     const reqText = prog.requisitos ? `Requisitos: ${prog.requisitos}` : ''
     const certText = prog.certificacion ? `Certificación: ${prog.certificacion}` : ''
@@ -509,7 +781,7 @@ ${programs
   .join('\n')}
 
 ${detectedProgram ? `
-### 📖 Grupos del Programa "${detectedProgram.nombre}":
+### 📖 Grupos Disponibles del Programa "${detectedProgram.nombre}":
 ${courses.length > 0 
   ? courses
       .map((course) => {
@@ -519,20 +791,33 @@ ${courses.length > 0
         
         return `
 - **${course.nombre}**
-  Horario: ${course.horario || 'A confirmar'}
-  Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
-  Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
-  Profesor: ${course.profesor_nombre || 'A confirmar'}
-  Precio: $${course.precio_inscripcion || course.precio || 'A definir'}`
+  📅 Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
+  ⏰ Horario: ${course.horario || 'A confirmar'}
+  👥 Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
+  👨‍🏫 Profesor: ${course.profesor_nombre || 'A confirmar'}`
       })
-      .join('\n')
+      .join('\n') + '\n\n💰 Inversión: Ver información del programa arriba'
   : 'No hay grupos disponibles para este programa en este momento.'
 }
 ` : ''}
 
-Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y disponibilidad.
-Si pregunta "¿Qué programas tienen?", lista todos los programas y su temario.
-Si pregunta "¿Cuáles son los grupos de [nombre]?", muestra solo grupos de ese programa con su temario detallado.
+${!detectedProgram && courses.length === 1 && courses[0] ? `
+### 📖 Grupo Activo Actual (Total: 1):
+- **${courses[0].nombre}** (${courses[0].programa_nombre || 'Programa'})
+  📅 Inicio: ${courses[0].fecha_inicio || 'A confirmar'} | Fin: ${courses[0].fecha_fin || 'A confirmar'}
+  ⏰ Horario: ${courses[0].horario || 'A confirmar'}
+  👥 Cupos: ${courses[0].matriculados || 0}/${courses[0].cupos || 0} (${courses[0].cupos_disponibles || 0} disponibles)
+  👨‍🏫 Profesor: ${courses[0].profesor_nombre || 'A confirmar'}
+
+` : ''}
+
+Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y cupos disponibles.
+Los PRECIOS están en el PROGRAMA (nivel superior), NO en los grupos individuales.
+Si pregunta "¿Qué programas tienen?", lista todos los programas con precios y temario.
+Si pregunta "¿Cuándo inicia [programa]?", muestra los grupos disponibles con fechas y horarios específicos.
+Si pregunta "¿Cuánto cuesta [programa]?", usa el precio del PROGRAMA, no del grupo.
+Si solo hay 1 grupo activo en total, dilo directo y muestra sus detalles.
+Si preguntan por el profesor, usa el nombre del profesor del grupo mostrado (si no hay, responde "A confirmar").
 `
 
   return context.trim()
@@ -550,6 +835,19 @@ export async function buildHierarchicalContextWithPensum(
   mediosPago: MedioPago[] = []
 ): Promise<string> {
   let context = ``
+
+  const priceFallbackByProgram = new Map<number, { precio_inscripcion?: number | null; precio_mensualidad?: number | null }>();
+  courses.forEach((course) => {
+    if (!course.programa_id) return;
+    if (course.precio_inscripcion || course.precio_mensualidad) {
+      if (!priceFallbackByProgram.has(course.programa_id)) {
+        priceFallbackByProgram.set(course.programa_id, {
+          precio_inscripcion: course.precio_inscripcion ?? null,
+          precio_mensualidad: course.precio_mensualidad ?? null,
+        });
+      }
+    }
+  });
 
   // Agregar información de la academia si está disponible
   if (academy) {
@@ -576,11 +874,7 @@ export async function buildHierarchicalContextWithPensum(
     
     const clasesText = prog.total_clases ? ` (${prog.total_clases} clases)` : ''
     
-    const priceText = prog.precio 
-      ? `$${prog.precio} COP`
-      : prog.precio_inscripcion && prog.precio_mensualidad
-      ? `Inscripción: $${prog.precio_inscripcion} + Mensualidad: $${prog.precio_mensualidad}`
-      : 'Precio a definir'
+    const priceText = buildProgramPriceText(prog, priceFallbackByProgram.get(prog.id))
     
     context += `
 - **${prog.nombre}**
@@ -628,7 +922,7 @@ export async function buildHierarchicalContextWithPensum(
 
   // Mostrar grupos disponibles si hay un programa detectado
   if (detectedProgram) {
-    context += `\n### 📖 Grupos del Programa "${detectedProgram.nombre}":\n`
+    context += `\n### 📖 Grupos Disponibles del Programa "${detectedProgram.nombre}":\n`
     if (courses.length > 0) {
       courses.forEach(course => {
         const matriculados = course.matriculados || 0
@@ -637,21 +931,38 @@ export async function buildHierarchicalContextWithPensum(
         
         context += `
 - **${course.nombre}**
-  Horario: ${course.horario || 'A confirmar'}
-  Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
-  Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
-  Profesor: ${course.profesor_nombre || 'A confirmar'}
-  Precio: $${course.precio_inscripcion || course.precio || 'A definir'}\n`
+  📅 Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
+  ⏰ Horario: ${course.horario || 'A confirmar'}
+  👥 Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
+  👨‍🏫 Profesor: ${course.profesor_nombre || 'A confirmar'}\n`
       })
+      context += `\n💰 Inversión: Ver información del programa arriba\n`
     } else {
       context += `No hay grupos disponibles para este programa en este momento.\n`
     }
+  } else if (courses.length === 1) {
+    const course = courses[0]!
+    const matriculados = course.matriculados || 0
+    const cupos = course.cupos || 0
+    const disponibles = course.cupos_disponibles || 0
+
+    context += `\n### 📖 Grupo Activo Actual (Total: 1):\n`
+    context += `- **${course.nombre}** (${course.programa_nombre || 'Programa'})\n`
+    context += `  📅 Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}\n`
+    context += `  ⏰ Horario: ${course.horario || 'A confirmar'}\n`
+    context += `  👥 Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)\n`
+    context += `  👨‍🏫 Profesor: ${course.profesor_nombre || 'A confirmar'}\n`
   }
 
   context += `
-Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y el temario detallado.
-Si pregunta "¿Qué programas tienen?", lista todos los programas con su información general.
-Si pregunta "¿Cuál es el contenido de [programa]?" o "¿Qué se ve en [programa]?", muestra el temario completo por ciclos.
+Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios, fechas y cupos disponibles.
+Los PRECIOS están siempre en el PROGRAMA (nivel superior), NO en los grupos individuales.
+Si pregunta "¿Qué programas tienen?", lista todos los programas con precios, duración y temario.
+Si pregunta "¿Cuándo inicia [programa]?", muestra los grupos disponibles con sus fechas y horarios específicos.
+Si pregunta "¿Cuánto cuesta [programa]?", usa el precio del PROGRAMA (inscripción + mensualidad).
+Si pregunta "¿Qué se ve en [programa]?", muestra el temario detallado por ciclos que aparece arriba.
+Si solo hay 1 grupo activo en total, dilo directo y muestra sus detalles.
+Si preguntan por el profesor, usa el nombre del profesor del grupo mostrado (si no hay, responde "A confirmar").
 `
 
   return context.trim()

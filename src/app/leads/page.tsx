@@ -128,6 +128,7 @@ export default function LeadsPage() {
   const [filtroPrograma, setFiltroPrograma] = useState<string | undefined>();
   const [programas, setProgramas] = useState<string[]>([]);
   const [tablaInexistente, setTablaInexistente] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   useEffect(() => {
     cargarProgramas();
@@ -230,42 +231,163 @@ export default function LeadsPage() {
   };
 
   const eliminarLead = async (lead: Lead) => {
-    Modal.confirm({
-      title: "¿Eliminar este lead?",
-      icon: <ExclamationCircleOutlined />,
-      content: (
-        <div>
-          <p><strong>{lead.nombre}</strong></p>
-          <p>Esta acción no se puede deshacer.</p>
-        </div>
-      ),
-      okText: "Sí, eliminar",
-      okType: "danger",
-      cancelText: "Cancelar",
-      async onOk() {
-        try {
-          setLoading(true);
-          const { error } = await supabaseBrowserClient
-            .from("leads")
-            .delete()
-            .eq("id", lead.id);
+    console.log("🗑️ eliminarLead llamado para:", lead.nombre, "ID:", lead.id);
+    
+    // TEMPORAL: Sin modal de confirmación para testing
+    const confirmDelete = window.confirm(`¿Eliminar a ${lead.nombre}?\n\nEsta acción no se puede deshacer.`);
+    
+    if (!confirmDelete) {
+      console.log("❌ Usuario canceló con browser confirm");
+      return;
+    }
+    
+    console.log("✅ Usuario confirmó, iniciando eliminación...");
+    
+    try {
+      setLoading(true);
+      console.log("📡 Llamando a Supabase DELETE para ID:", lead.id);
+      
+      const { data, error, status, statusText } = await supabaseBrowserClient
+        .from("leads")
+        .delete()
+        .eq("id", lead.id)
+        .select();
 
-          if (error) {
-            console.error("Error Supabase:", error);
+      console.log("📊 Respuesta Supabase:", { data, error, status, statusText });
+
+      if (error) {
+        console.error("❌ Error Supabase:", error);
+        console.error("❌ Error details:", error.details);
+        console.error("❌ Error hint:", error.hint);
+        console.error("❌ Error code:", error.code);
+        message.error("No se pudo eliminar el lead: " + error.message);
+        return;
+      }
+
+      console.log("✅ Lead eliminado exitosamente:", data);
+      setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+      message.success("Lead eliminado");
+    } catch (err) {
+      console.error("💥 Error catch eliminando lead:", err);
+      message.error("No se pudo eliminar el lead");
+    } finally {
+      setLoading(false);
+      console.log("🏁 Proceso de eliminación finalizado");
+    }
+  };
+  
+  /*
+  // VERSIÓN CON MODAL (deshabilitada temporalmente)
+  const eliminarLeadConModal = async (lead: Lead) => {
+    console.log("🗑️ eliminarLead llamado para:", lead.nombre, "ID:", lead.id);
+    
+    try {
+      console.log("🔨 Intentando abrir Modal.confirm...");
+      
+      const modalInstance = Modal.confirm({
+        title: "¿Eliminar este lead?",
+        icon: <ExclamationCircleOutlined />,
+        content: (
+          <div>
+            <p><strong>{lead.nombre}</strong></p>
+            <p>Esta acción no se puede deshacer.</p>
+          </div>
+        ),
+        okText: "Sí, eliminar",
+        okType: "danger",
+        cancelText: "Cancelar",
+        centered: true,
+        getContainer: () => document.body,
+        zIndex: 9999,
+        async onOk() {
+          console.log("✅ Modal confirmado, iniciando eliminación...");
+          try {
+            setLoading(true);
+            console.log("📡 Llamando a Supabase DELETE para ID:", lead.id);
+            
+            const { data, error, status, statusText } = await supabaseBrowserClient
+              .from("leads")
+              .delete()
+              .eq("id", lead.id)
+              .select();
+
+            console.log("📊 Respuesta Supabase:", { data, error, status, statusText });
+
+            if (error) {
+              console.error("❌ Error Supabase:", error);
+              console.error("❌ Error details:", error.details);
+              console.error("❌ Error hint:", error.hint);
+              console.error("❌ Error code:", error.code);
+              message.error("No se pudo eliminar el lead: " + error.message);
+              return;
+            }
+
+            console.log("✅ Lead eliminado exitosamente:", data);
+            setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+            message.success("Lead eliminado");
+          } catch (err) {
+            console.error("💥 Error catch eliminando lead:", err);
             message.error("No se pudo eliminar el lead");
-            return;
+          } finally {
+            setLoading(false);
+            console.log("🏁 Proceso de eliminación finalizado");
           }
-
-          setLeads((prev) => prev.filter((l) => l.id !== lead.id));
-          message.success("Lead eliminado");
-        } catch (err) {
-          console.error("Error eliminando lead:", err);
-          message.error("No se pudo eliminar el lead");
-        } finally {
-          setLoading(false);
+        },
+        onCancel() {
+          console.log("❌ Usuario canceló la eliminación");
         }
-      },
-    });
+      });
+      
+      console.log("📦 Modal instance creado:", modalInstance ? "✅ OK" : "❌ NULL");
+    } catch (error) {
+      console.error("💥 ERROR al crear modal:", error);
+    }
+  };
+  */
+
+  const eliminarSeleccionados = () => {
+    const totalSeleccionados = selectedRowKeys.length;
+    
+    if (totalSeleccionados === 0) {
+      message.warning("Selecciona al menos un lead para eliminar");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Eliminar ${totalSeleccionados} lead${totalSeleccionados > 1 ? "s" : ""}?\n\nEsta acción no se puede deshacer.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const selectedIds = selectedRowKeys.map((key) => String(key));
+
+    (async () => {
+      try {
+        setLoading(true);
+
+        const { error } = await supabaseBrowserClient
+          .from("leads")
+          .delete()
+          .in("id", selectedIds);
+
+        if (error) {
+          console.error("Error Supabase:", error);
+          message.error("No se pudieron eliminar algunos leads");
+          return;
+        }
+
+        setLeads((prev) => prev.filter((l) => !selectedIds.includes(String(l.id))));
+        setSelectedRowKeys([]);
+        message.success(`${totalSeleccionados} lead${totalSeleccionados > 1 ? 's' : ''} eliminado${totalSeleccionados > 1 ? 's' : ''}`);
+      } catch (err) {
+        console.error("Error eliminando leads:", err);
+        message.error("No se pudieron eliminar los leads");
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   const eliminarTodosLeads = () => {
@@ -374,21 +496,40 @@ export default function LeadsPage() {
     return estadoOptions.find((e) => e.value === (estado || ""))?.color || "default";
   };
 
-  const renderLeadCard = (record: Lead) => (
-    <Card
-      key={record.id}
-      hoverable
-      style={{ borderRadius: 14, border: "1px solid #f0f0f0" }}
-      bodyStyle={{ padding: 16 }}
-    >
-      <Space direction="vertical" size={8} style={{ width: "100%" }}>
-        <Space style={{ justifyContent: "space-between", width: "100%" }}>
-          <Space>
-            <UserOutlined />
-            <Text strong>{record.nombre}</Text>
+  const renderLeadCard = (record: Lead) => {
+    const isSelected = selectedRowKeys.includes(record.id);
+    
+    return (
+      <Card
+        key={record.id}
+        hoverable
+        style={{ 
+          borderRadius: 14, 
+          border: isSelected ? "2px solid #1890ff" : "1px solid #f0f0f0",
+          backgroundColor: isSelected ? "#f0f7ff" : "#fff"
+        }}
+        bodyStyle={{ padding: 16 }}
+      >
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+          <Space style={{ justifyContent: "space-between", width: "100%" }}>
+            <Space>
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedRowKeys([...selectedRowKeys, record.id]);
+                  } else {
+                    setSelectedRowKeys(selectedRowKeys.filter(k => k !== record.id));
+                  }
+                }}
+                style={{ width: 16, height: 16, cursor: 'pointer' }}
+              />
+              <UserOutlined />
+              <Text strong>{record.nombre}</Text>
+            </Space>
+            <Tag color={getEstadoColor(record.estado)}>{record.estado || "nuevo"}</Tag>
           </Space>
-          <Tag color={getEstadoColor(record.estado)}>{record.estado || "nuevo"}</Tag>
-        </Space>
 
         <Space size={6} wrap>
           {record.telefono && (
@@ -448,7 +589,8 @@ export default function LeadsPage() {
         </Space>
       </Space>
     </Card>
-  );
+    );
+  };
 
   const columns = [
     {
@@ -690,6 +832,36 @@ export default function LeadsPage() {
         )}
 
         <Card style={{ borderRadius: 16 }}>
+          {selectedRowKeys.length > 0 && (
+            <Alert
+              message={
+                <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: "100%", justifyContent: "space-between" }}>
+                  <Text>
+                    <strong>{selectedRowKeys.length}</strong> lead{selectedRowKeys.length > 1 ? 's' : ''} seleccionado{selectedRowKeys.length > 1 ? 's' : ''}
+                  </Text>
+                  <Space wrap>
+                    <Button
+                      size="small"
+                      onClick={() => setSelectedRowKeys([])}
+                    >
+                      Limpiar selección
+                    </Button>
+                    <Button
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      onClick={eliminarSeleccionados}
+                    >
+                      Eliminar seleccionados
+                    </Button>
+                  </Space>
+                </Space>
+              }
+              type="info"
+              style={{ marginBottom: 16 }}
+            />
+          )}
+          
           {isMobile ? (
             <Space direction="vertical" size="middle" style={{ width: "100%" }}>
               {leadsFiltrados.length === 0 && (
@@ -709,6 +881,18 @@ export default function LeadsPage() {
                 pageSize: 10,
                 simple: false,
                 showSizeChanger: true 
+              }}
+              rowSelection={{
+                type: 'checkbox',
+                selectedRowKeys,
+                onChange: (selectedKeys) => {
+                  setSelectedRowKeys(selectedKeys);
+                },
+                selections: [
+                  Table.SELECTION_ALL,
+                  Table.SELECTION_INVERT,
+                  Table.SELECTION_NONE,
+                ],
               }}
               locale={{ emptyText: tablaInexistente ? "Crea la tabla 'leads' y recarga." : "Sin leads" }}
             />

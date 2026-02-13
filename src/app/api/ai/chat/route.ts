@@ -11,6 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import { 
   getProgramsForAgent, 
   getCoursesForQuery, 
+  getCoursesByProgram,
   detectProgramFromMessage,
   buildHierarchicalContext,
   buildHierarchicalContextWithPensum,
@@ -26,15 +27,17 @@ export const dynamic = "force-dynamic";
  */
 function sanitizeForJSON(text: string | null | undefined): string {
   if (!text) return '';
-  
-  // Convertir a string si no lo es
+
   const str = String(text);
-  
-  // Remover caracteres de control y reemplazar saltos de línea
+
+  // Preserve line breaks for WhatsApp readability while removing control chars
   return str
-    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remover caracteres de control
-    .replace(/[\r\n]+/g, ' ')  // Reemplazar saltos de línea reales con espacios
-    .replace(/\s+/g, ' ')  // Normalizar múltiples espacios a uno solo
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
 
@@ -113,6 +116,48 @@ function truncateResponse(text: string, maxLength: number = 1000): string {
   return truncated + '...';
 }
 
+function normalizeForComparison(text: string): string {
+  return (text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function wordOverlapRatio(a: string, b: string): number {
+  const wordsA = new Set(normalizeForComparison(a).split(" ").filter(Boolean));
+  const wordsB = new Set(normalizeForComparison(b).split(" ").filter(Boolean));
+  if (!wordsA.size || !wordsB.size) return 0;
+
+  let intersection = 0;
+  for (const w of wordsA) {
+    if (wordsB.has(w)) intersection += 1;
+  }
+
+  const base = Math.min(wordsA.size, wordsB.size);
+  return base ? intersection / base : 0;
+}
+
+function isRepetitiveResponse(
+  newResponse: string,
+  history: Array<{ user: string; agent: string }>,
+  newUserMessage: string
+): boolean {
+  const last = history[history.length - 1];
+  if (!last?.agent) return false;
+
+  const normalizedNewUser = normalizeForComparison(newUserMessage);
+  const normalizedLastUser = normalizeForComparison(last.user || "");
+  const userMessagesAreDifferent = normalizedNewUser && normalizedLastUser && normalizedNewUser !== normalizedLastUser;
+
+  const overlap = wordOverlapRatio(newResponse, last.agent);
+  const almostEqual = normalizeForComparison(newResponse) === normalizeForComparison(last.agent);
+
+  return (almostEqual || overlap >= 0.9) && Boolean(userMessagesAreDifferent);
+}
+
 function validateRequest(request: NextRequest): boolean {
   const apiKey = request.headers.get("x-api-key");
   const expectedKey = process.env.WHATSAPP_API_KEY;
@@ -122,6 +167,213 @@ function validateRequest(request: NextRequest): boolean {
   if (authHeader?.includes("Bearer")) return true;
 
   return false;
+}
+
+function isPlaceholderMessage(value: string | null | undefined): boolean {
+  if (!value) return true;
+  const normalized = value.toLowerCase().trim();
+  return [
+    "text",
+    "audio",
+    "image",
+    "video",
+    "document",
+    "sticker",
+    "message",
+    "mensaje",
+    "type",
+  ].includes(normalized);
+}
+
+function applyTemplate(template: string, tokens: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    return Object.prototype.hasOwnProperty.call(tokens, key)
+      ? String(tokens[key] ?? "")
+      : match;
+  });
+}
+
+const DEFAULT_AGENT_SYSTEM_PROMPT = `# System Prompt: Agente {{persona_name}} (v3.0 - Optimizado para Lectura Rapida)
+
+## Identidad
+Eres {{persona_name}}, {{persona_bio}}. Tu mision es convertir interesados en estudiantes mediante una comunicacion clara, estructurada y motivadora.
+
+## 1. Reglas de Oro de Interaccion
+
+**Memoria de Saludo:** {{greeting_rule}}
+
+**Estilo Visual (WhatsApp Friendly):**
+• Usa espacios en blanco (doble salto de linea) para separar bloques de informacion
+• Usa viñetas para listas
+• Usa negrilla exclusivamente para: **Precios**, **Fechas**, **Horarios** y **Nombres de Cursos**
+• **Estilo / tono preferido:** {{speaking_style}}
+
+**Restriccion de Precios:** No des el valor total del curso a menos que el usuario lo pida explicitamente. Enfocate siempre en: **Valor de Inscripcion** y **Valor de la Mensualidad**.
+
+**Datos Faltantes:** Si no aparece en el sistema, di: "{{fallback_response}}"
+
+## 2. Estructura de Bloques (Orden de Respuesta)
+
+Cuando entregues informacion de un curso, separala siempre en estos bloques:
+
+**Bloque 1 - Presentacion del Curso:**
+Nombre del curso y duracion (Ej: 5 meses / 20 clases).
+
+**Bloque 2 - Fechas y Horarios:**
+🗓️ **Proximo Inicio:** [Fecha]
+📅 **Dias:** [Lunes/Martes/etc]
+⏰ **Horario:** [Hora inicio - Hora fin]
+
+**Bloque 3 - Inversion:**
+💰 **Inscripcion:** $[valor]
+💰 **Mensualidad:** $[valor]
+
+**Bloque 4 - Temario (breve lista):**
+📚 **¿Que aprenderas?**
+• [Tema 1]
+• [Tema 2]
+• [Tema 3]
+
+**Bloque 5 - Beneficios Adicionales:**
+🎁 **Beneficios Especiales:**
+✅ [Kit/Uniforme/etc]
+✅ [Certificacion]
+
+**Bloque 6 - Cierre (CTA):**
+Pregunta estrategica para visita o inscripcion.
+
+## 2.1 Entrega por etapas (OBLIGATORIO)
+
+- NO entregues toda la informacion en un solo mensaje.
+- Maximo 2 bloques por respuesta.
+- Separa con parrafos (doble salto de linea).
+- Al final pregunta si desea la siguiente parte.
+
+Ejemplo corto:
+"Aqui tienes lo esencial del curso. ¿Quieres que te comparta horarios y fechas?"
+
+## 2.2 Cierre con redes (OPCIONAL)
+
+- Al finalizar una interaccion (cuando el usuario queda satisfecho o al cerrar con CTA), invita a seguirnos en redes.
+- Usa el bloque corto con emoji: "📲 Si quieres ver trabajos y novedades, siguenos en nuestras redes.".
+- Si el contexto trae Instagram/Facebook/YouTube, menciona SOLO las que existan con su handle/URL corto.
+  Ejemplo: "📸 Instagram: @usuario | 👤 Facebook: fb.com/usuario | 🎥 YouTube: @usuario".
+
+## 3. Manejo de Datos (Supabase / App)
+
+• **Estatico:** Duracion, clases, horas por clase, temario, beneficios
+• **Dinamico:** Cupos, fechas de inicio, dias y horas
+• **Falta de datos:** "{{fallback_response}}"
+
+⚠️ **NUNCA inventes informacion.** Solo usa informacion que este EXPLICITAMENTE en el contexto jerarquico proporcionado abajo.
+
+## 4. PROTOCOLO DE CIERRE DE VENTAS
+
+{{sales_protocol}}
+
+## 5. Restricciones de Contenido
+
+⚠️ Solo usa informacion del contexto jerarquico abajo
+⚠️ Si un curso/grupo NO aparece en el contexto, di que no esta disponible actualmente
+⚠️ No inventes horarios, precios, fechas o nombres de cursos
+⚠️ Si el usuario ya pidio un curso especifico (ej: "curso de uñas"), NO respondas con "¿en que curso estas interesado?".
+⚠️ En ese caso, responde DIRECTO con la informacion del curso solicitado usando los bloques requeridos.
+⚠️ Si el usuario pregunta por "proximos grupos" pero NO menciona programa, pide aclaracion corta y muestra 2-3 programas disponibles. No digas "no hay grupos" sin verificar.
+`;
+
+function pickFirstNonEmptyString(...candidates: Array<any>): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return "";
+}
+
+function extractStringsDeep(input: any, maxDepth = 4): string[] {
+  const result: string[] = [];
+  const visited = new Set<any>();
+
+  const walk = (value: any, depth: number) => {
+    if (depth < 0 || value == null) return;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) result.push(trimmed);
+      return;
+    }
+    if (typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, depth - 1);
+      return;
+    }
+
+    for (const v of Object.values(value)) {
+      walk(v, depth - 1);
+    }
+  };
+
+  walk(input, maxDepth);
+  return result;
+}
+
+function extractMessageAndPhone(body: any): { message: string; phone: string } {
+  const webhookMessage = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
+  const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
+
+  const nestedMessage = body?.messages?.[0]?.text?.body;
+  const nestedPhone = body?.messages?.[0]?.from;
+
+  const deepCandidates = extractStringsDeep({
+    text: body?.text,
+    message: body?.message,
+    messages: body?.messages,
+    entry: body?.entry,
+    data: body?.data,
+    payload: body?.payload,
+  });
+
+  const rawMessage = pickFirstNonEmptyString(
+    body?.message,
+    body?.user_message,
+    body?.text?.body,
+    body?.text?.text,
+    body?.text,
+    body?.prompt,
+    nestedMessage,
+    webhookMessage,
+    ...deepCandidates
+  );
+
+  const fallbackMessage = pickFirstNonEmptyString(
+    body?.query,
+    body?.question,
+    body?.content
+  );
+
+  const message = isPlaceholderMessage(rawMessage)
+    ? pickFirstNonEmptyString(
+        fallbackMessage,
+        ...deepCandidates.filter((candidate) => !isPlaceholderMessage(candidate))
+      )
+    : rawMessage;
+
+  const phone = pickFirstNonEmptyString(
+    body?.phone,
+    body?.phone_number,
+    body?.contact?.phone,
+    body?.contact?.wa_id,
+    body?.from,
+    body?.wa_id,
+    body?.contact,
+    nestedPhone,
+    webhookPhone,
+    "unknown"
+  );
+
+  return { message, phone };
 }
 
 async function getConversationHistory(
@@ -237,10 +489,15 @@ function detectBuyingIntent(
   // Señales directas de compra
   const directBuyingSignals = [
     /\b(quiero\s+(inscribirme|matricularme|inscribir|apuntarme|registrarme))/i,
+    /\b(quiero\s+(registrar|registrarme|registrase|registrasse|inscribirme|inscribirse|inscribisse))/i,
+    /\b(me\s+quiero\s+(inscribir|registrar))/i,
     /\b(cómo\s+(me\s+inscribo|hago\s+para\s+inscribirme|puedo\s+inscribirme))/i,
+    /\b(como\s+me\s+(registro|registr[oó]))/i,
     /\b(dónde\s+(me\s+inscribo|puedo\s+inscribirme|pago))/i,
+    /\b(donde\s+me\s+(registro|registr[oó]))/i,
     /\b(cuándo\s+puedo\s+(empezar|iniciar|comenzar))/i,
     /\b(me\s+(interesa|gustaría|quiero)\s+(el\s+)?curso)/i,
+    /\b(ya\s+quiero\s+(iniciar|empezar|inscribirme|registrarme))/i,
     /\b(quiero\s+(información|más\s+info)\s+para\s+inscribirme)/i,
     /\b(voy\s+a\s+(inscribirme|matricularme|apuntarme))/i,
     /\b(quiero\s+agendar|agendar\s+(una\s+)?(cita|visita))/i,
@@ -287,13 +544,14 @@ function buildAgentPrompt(
   userMessage: string,
   knowledgeChunks: string[],
   conversationHistory: Array<{user: string, agent: string}> = [],
-  hierarchicalContext: string = ""
+  hierarchicalContext: string = "",
+  contextualDirective: string = ""
 ): string {
   const persona = settings?.persona_name || "Dany";
-  const bio = settings?.persona_bio || "Asistente de la Academia Crystal.";
-  const style = settings?.speaking_style || "Cálido y preciso.";
-  const systemPrompt = settings?.system_prompt || "Eres un asistente útil.";
-  const fallback = settings?.fallback_response || "Déjame confirmarlo y te respondo pronto.";
+  const bio = settings?.persona_bio || "Asesor experto masculino de la Academia de Belleza Crystal Diamante en Cali.";
+  const style = settings?.speaking_style || "";
+  const greeting = settings?.greeting || "";
+  const fallback = settings?.fallback_response || "Para darte el dato exacto, voy a consultar con el Director y te confirmo de inmediato";
   
   // Detectar si ya hay un saludo previo
   const alreadyGreeted = hasGreetingInHistory(conversationHistory);
@@ -301,53 +559,54 @@ function buildAgentPrompt(
   // Detectar intención de compra/cierre
   const showsBuyingIntent = detectBuyingIntent(userMessage, conversationHistory);
 
-  let prompt = `${systemPrompt}
+  const greetingRule = alreadyGreeted
+    ? '⚠️ YA HAS SALUDADO EN ESTA CONVERSACIÓN. Ve directo a la respuesta. PROHIBIDO repetir "Hola" o saludos de cortesía. Sé natural y conversacional.'
+    : greeting
+    ? `Saluda SOLO UNA VEZ al inicio del contacto usando este saludo exacto: "${greeting}". Si el usuario ya habló contigo, ve directo a la respuesta.`
+    : 'Saluda SOLO UNA VEZ al inicio del contacto. Si el usuario ya habló contigo, ve directo a la respuesta.';
 
-# Identidad
-- Nombre: ${persona}
-- Bio: ${bio}
-- Estilo: ${style}
+  const salesProtocol = showsBuyingIntent
+    ? `✅ **DETECTADO: El usuario muestra INTENCION DE COMPRA**
 
-# Reglas Generales
-- Si no sabes algo con certeza, responde: "${fallback}"
-- Usa el contexto de conocimiento si está disponible.
-- Sé breve, claro y amable.
-- No inventes datos.
-- Recuerda el contexto de conversaciones anteriores.${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
+**ACCION OBLIGATORIA:**
+1. Confirma su interes de forma positiva y motivadora
+2. Proporciona el numero de Admisiones: **+57 301 203 8582** (WhatsApp)
+3. Invitalo a escribir para agendar inscripcion o visita
 
-# PROTOCOLO DE CIERRE DE VENTAS 🎯
-${showsBuyingIntent ? `
-✅ DETECTADO: El usuario muestra INTENCIÓN DE COMPRA o está listo para inscribirse.
+**EJEMPLO DE CIERRE:**
+"¡Perfecto! Me encanta que estes listo para convertirte en profesional. 🎓
 
-ACCIÓN OBLIGATORIA:
-1. Confirma su interés de forma positiva
-2. Menciona que un asesor de Admisiones lo guiará en el proceso de inscripción
-3. Proporciona el número de contacto de Admisiones: **+57 301 203 8582** (WhatsApp)
-4. Invítalo a escribir directamente para agendar su inscripción o visita
+Para finalizar tu inscripcion y reservar tu cupo, escribe directamente a nuestro equipo de Admisiones:
 
-EJEMPLO DE CIERRE:
-"¡Perfecto! Me encanta que estés listo para dar este paso. 🎓
+📱 **WhatsApp Admisiones: +57 301 203 8582**
 
-Para finalizar tu inscripción y separar tu cupo, te pongo en contacto directo con nuestro equipo de Admisiones:
+Ellos te guiaran en el proceso de pago, confirmaran tu grupo y resolveran cualquier duda. ¡Nos vemos pronto en la academia! 💎✨"`
+    : `⚠️ **FASE DE INFORMACION** - NO proporciones el numero de Admisiones aun.
 
-📱 WhatsApp: +57 301 203 8582
+Ayuda al usuario a conocer:
+• Cursos disponibles
+• Costos (inscripcion + mensualidad)
+• Horarios de grupos disponibles
+• Beneficios del programa
 
-Escríbeles y te guiarán en el proceso de pago, te confirmarán tu grupo y responderán cualquier duda de último momento. ¡Nos vemos pronto en la academia! 💎✨"
-` : `
-⚠️ IMPORTANTE: NO proporciones el número de Admisiones AÚN.
-
-El usuario aún está en fase de información. Ayúdale a:
-- Conocer los cursos disponibles
-- Entender costos (inscripción + mensualidad)
-- Ver horarios de grupos disponibles
-- Resolver dudas sobre el programa
-
-Solo darás el número de contacto (+57 301 203 8582) cuando:
+**Solo daras el numero de contacto (+57 301 203 8582) cuando:**
 ✓ Ya haya preguntado por precios
 ✓ Ya haya preguntado por horarios
-✓ Muestre señales claras de querer inscribirse (ej: "quiero inscribirme", "cómo me inscribo", "dónde pago", "cuándo puedo empezar")
-`}
-`;
+✓ Muestre señales claras: "quiero inscribirme", "como me inscribo", "donde pago", "cuando puedo empezar"`;
+
+  const systemPromptTemplate = (settings?.system_prompt || "").trim() || DEFAULT_AGENT_SYSTEM_PROMPT;
+  let prompt = applyTemplate(systemPromptTemplate, {
+    persona_name: persona,
+    persona_bio: bio,
+    speaking_style: style,
+    greeting_rule: greetingRule,
+    fallback_response: fallback,
+    sales_protocol: salesProtocol,
+  });
+
+  if (contextualDirective) {
+    prompt += `\n\n## 6. Contexto de intención del usuario (OBLIGATORIO)\n${contextualDirective}\n`;
+  }
 
   if (hierarchicalContext) {
     prompt += `\n${hierarchicalContext}\n`;
@@ -367,9 +626,161 @@ Solo darás el número de contacto (+57 301 203 8582) cuando:
     });
   }
 
+  prompt += `\n# 🎯 INSTRUCCIÓN DE RESPUESTA:
+Responde SOLO con información explícita del contexto anterior (programas, grupos, horarios, precios).
+Si el usuario pregunta por un curso/programa que NO está listado arriba, responde: "Actualmente no tengo ese programa disponible. Puedo ofrecerte información sobre [listar programas disponibles]."
+NO inventes horarios, precios ni fechas que no estén en el contexto.
+`;
+
   prompt += `\n# Mensaje del usuario:\n${userMessage}\n\n# Tu respuesta (como ${persona}):`;
 
   return prompt;
+}
+
+function detectUserIntent(message: string): "precio" | "horario" | "temario" | "inscripcion" | "general" {
+  const text = message.toLowerCase();
+
+  if (/\b(precio|costo|cuanto|vale|valor|mensualidad|inscripcion|cuota|inversion)\b/i.test(text)) {
+    return "precio";
+  }
+  if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo)\b/i.test(text)) {
+    return "horario";
+  }
+  if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
+    return "temario";
+  }
+  if (/\b(inscrib|matricul|pago|admisiones|contacto|numero|whatsapp|separar\s+cupo)\b/i.test(text)) {
+    return "inscripcion";
+  }
+  return "general";
+}
+
+type ObjectionType = "precio" | "tiempo" | "confianza" | "posponer" | "none";
+
+function detectObjectionType(message: string): ObjectionType {
+  const text = message.toLowerCase();
+
+  if (/\b(caro|costoso|muy\s+caro|no\s+tengo\s+dinero|no\s+me\s+alcanza|esta\s+costoso)\b/i.test(text)) {
+    return "precio";
+  }
+  if (/\b(no\s+tengo\s+tiempo|trabajo\s+todo\s+el\s+dia|no\s+puedo\s+por\s+horario|muy\s+ocupad[oa])\b/i.test(text)) {
+    return "tiempo";
+  }
+  if (/\b(no\s+se\s+si\s+sirva|es\s+confiable|tienen\s+certificacion|es\s+legal|no\s+confio|me\s+da\s+duda)\b/i.test(text)) {
+    return "confianza";
+  }
+  if (/\b(luego|despues|mas\s+adelante|lo\s+voy\s+a\s+pensar|te\s+aviso|otro\s+dia|por\s+ahora\s+no)\b/i.test(text)) {
+    return "posponer";
+  }
+
+  return "none";
+}
+
+function resolveProgramFromContext(
+  userMessage: string,
+  programs: any[],
+  conversationHistory: Array<{ user: string; agent: string }>
+): any | null {
+  const directProgram = detectProgramFromMessage(userMessage, programs);
+  if (directProgram) return directProgram;
+
+  const isLikelyFollowUp = /\b(ese|esa|ese\s+curso|esa\s+carrera|horario|precio|cuanto|cuando|inscripcion|mensualidad|cupos|duracion)\b/i.test(
+    userMessage
+  );
+
+  if (!isLikelyFollowUp || !conversationHistory.length) {
+    return null;
+  }
+
+  for (let i = conversationHistory.length - 1; i >= 0; i--) {
+    const current = conversationHistory[i];
+    if (!current) continue;
+
+    const fromUser = detectProgramFromMessage(current.user || "", programs);
+    if (fromUser) return fromUser;
+
+    const fromAgent = detectProgramFromMessage(current.agent || "", programs);
+    if (fromAgent) return fromAgent;
+  }
+
+  return null;
+}
+
+function buildContextualDirective(
+  userMessage: string,
+  detectedProgram: any | null,
+  courses: any[]
+): string {
+  const intent = detectUserIntent(userMessage);
+  const objection = detectObjectionType(userMessage);
+  const explicitBuyingIntent = detectBuyingIntent(userMessage, []);
+  const programName = detectedProgram?.nombre || null;
+
+  const intentInstructionMap: Record<string, string> = {
+    precio:
+      'Responde priorizando SOLO el bloque de inversión (inscripción + mensualidad). No des precio total salvo que lo pidan explícitamente.',
+    horario:
+      'Responde priorizando fechas, días, horario y cupos del grupo activo relacionado.',
+    temario:
+      'Responde priorizando temario/contenido por ciclos o módulos del programa solicitado.',
+    inscripcion:
+      'Responde con mini-resumen del curso y guía de inscripción. Si ya hay interés claro, cierra con Admisiones (+57 301 203 8582).',
+    general:
+      'Responde con información completa en bloques, enfocada en el curso solicitado.'
+  };
+
+  const dominantProgram = (() => {
+    if (!courses.length) return null;
+    const countByProgram = new Map<string, number>();
+    for (const course of courses) {
+      const name = course?.programa_nombre;
+      if (!name) continue;
+      countByProgram.set(name, (countByProgram.get(name) || 0) + 1);
+    }
+    let topName: string | null = null;
+    let topCount = 0;
+    for (const [name, count] of countByProgram.entries()) {
+      if (count > topCount) {
+        topName = name;
+        topCount = count;
+      }
+    }
+    if (!topName) return null;
+    return { name: topName, ratio: topCount / Math.max(courses.length, 1) };
+  })();
+
+  const focusLine = programName
+    ? `Curso detectado y solicitado por el usuario: "${programName}". Debes responder enfocado en este curso, no en lista general.`
+    : dominantProgram && dominantProgram.ratio >= 0.7
+    ? `La consulta apunta mayoritariamente al programa "${dominantProgram.name}". Responde enfocado en ese programa.`
+    : 'Si no puedes identificar un curso específico, pregunta UNA aclaración corta con máximo 2 opciones relevantes.';
+
+  const objectionInstructionMap: Record<ObjectionType, string> = {
+    precio:
+      'El usuario tiene objeción de precio. Responde con empatía, refuerza valor del curso, evita presión y ofrece opción de iniciar con inscripción + mensualidad.',
+    tiempo:
+      'El usuario tiene objeción de tiempo/horario. Responde con empatía y propone alternativas de horario o próximo grupo disponible.',
+    confianza:
+      'El usuario tiene objeción de confianza. Responde con señales de respaldo (certificación, trayectoria, profesor, testimonios) usando solo datos disponibles.',
+    posponer:
+      'El usuario está posponiendo decisión. Responde suave, resume beneficios clave y cierra con una pregunta simple para mantener la conversación activa.',
+    none:
+      'No se detecta objeción explícita. Mantén un tono consultivo y enfocado a avance de inscripción sin ser invasivo.'
+  };
+
+  return [
+    `Intención detectada: ${intent.toUpperCase()}.`,
+    `Objeción detectada: ${objection.toUpperCase()}.`,
+    `Señal de compra explícita: ${explicitBuyingIntent ? "SÍ" : "NO"}.`,
+    focusLine,
+    intentInstructionMap[intent],
+    objectionInstructionMap[objection],
+    explicitBuyingIntent
+      ? 'ACCIÓN OBLIGATORIA: Entrega el número de la academia/admisiones (+57 301 203 8582) y guía el siguiente paso de inscripción.'
+      : 'Si no hay señal explícita de compra, continúa en modo informativo y consultivo.',
+    'Si hay objeción, estructura la respuesta en: 1) Empatía breve, 2) Dato concreto del curso, 3) Propuesta clara, 4) CTA corta.',
+    'Prohibido responder con: "¿En qué curso estás interesado?" cuando el usuario ya mencionó un curso o tema específico.'
+  ].join('\n');
 }
 
 async function generateResponse(apiKey: string, prompt: string, timeoutMs: number = 25000): Promise<string> {
@@ -429,7 +840,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { message, phone } = body || {};
+    const { message, phone } = extractMessageAndPhone(body || {});
+
+    console.log("[chat] Input extraído:", {
+      phone,
+      messagePreview: message?.slice(0, 80) || "",
+      bodyMessage: body?.message,
+      bodyText: body?.text,
+      nestedMessage: body?.messages?.[0]?.text?.body,
+    });
 
     // Validar entrada del usuario
     const inputValidation = validateUserInput(message, 2000);
@@ -486,8 +905,21 @@ export async function POST(req: NextRequest) {
     const programs = await getProgramsForAgent();
 
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
-    const detectedProgram = detectProgramFromMessage(message, programs);
-    const courses = await getCoursesForQuery(message, programs);
+    let detectedProgram = resolveProgramFromContext(message, programs, history);
+    let courses = detectedProgram
+      ? await getCoursesByProgram(detectedProgram.id)
+      : await getCoursesForQuery(message, programs);
+
+    if (!detectedProgram && courses.length > 0) {
+      const uniqueProgramIds = Array.from(new Set(courses.map((c) => c.programa_id).filter(Boolean)));
+      if (uniqueProgramIds.length === 1) {
+        const inferred = programs.find((p) => p.id === uniqueProgramIds[0]) || null;
+        if (inferred) {
+          detectedProgram = inferred;
+          courses = await getCoursesByProgram(inferred.id);
+        }
+      }
+    }
     
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
@@ -498,14 +930,50 @@ export async function POST(req: NextRequest) {
     // 5. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
     const hierarchicalContext = await buildHierarchicalContextWithPensum(programs, courses, detectedProgram, academy, mediosPago);
 
+    // 🔍 DEBUG: Ver qué información tiene el agente
+    console.log('=== CONTEXTO DEL AGENTE ===');
+    console.log(`📚 Programas encontrados: ${programs.length}`);
+    console.log(`📖 Cursos/Grupos encontrados: ${courses.length}`);
+    if (courses.length > 0) {
+      courses.forEach(c => {
+        console.log(`  - ${c.nombre} | Programa: ${c.programa_nombre} | Horario: ${c.horario} | Precio: $${c.precio_inscripcion || c.precio} | Inicio: ${c.fecha_inicio}`);
+      });
+    }
+    if (detectedProgram) {
+      console.log(`🎯 Programa detectado: ${detectedProgram.nombre}`);
+    }
+    console.log(`📝 Contexto jerárquico (primeros 500 chars): ${hierarchicalContext.substring(0, 500)}`);
+
     // Obtener conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, message, 3);
 
+    const contextualDirective = buildContextualDirective(message, detectedProgram, courses);
+
     // Construir prompt con contexto jerárquico
-    const prompt = buildAgentPrompt(settings || {}, message, knowledgeChunks, history, hierarchicalContext);
+    const prompt = buildAgentPrompt(
+      settings || {},
+      message,
+      knowledgeChunks,
+      history,
+      hierarchicalContext,
+      contextualDirective
+    );
 
     // Generar respuesta
-    const response = await generateResponse(geminiKey, prompt);
+    let response = await generateResponse(geminiKey, prompt);
+
+    if (isRepetitiveResponse(response, history, message)) {
+      console.warn("[anti-repeat] Respuesta muy parecida a la anterior. Regenerando...");
+      const antiRepeatPrompt = `${prompt}
+
+# ANTI-REPETICIÓN (OBLIGATORIO)
+- Tu última respuesta fue muy parecida a una previa y eso NO está permitido.
+- Responde específicamente a la NUEVA pregunta del usuario.
+- NO repitas frases de cierre ni texto genérico ya usado.
+- Mantén el formato, pero cambia el contenido con datos concretos del contexto actual.`;
+
+      response = await generateResponse(geminiKey, antiRepeatPrompt);
+    }
 
     // Truncar respuesta si es muy larga (máx 1000 caracteres para chat)
     const truncatedResponse = truncateResponse(response, 1000);

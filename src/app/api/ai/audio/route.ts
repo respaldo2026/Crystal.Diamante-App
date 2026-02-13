@@ -15,6 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 import { 
   getProgramsForAgent, 
   getCoursesForQuery, 
+  getCoursesByProgram,
   detectProgramFromMessage,
   buildHierarchicalContext,
   buildHierarchicalContextWithPensum,
@@ -263,6 +264,14 @@ function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: s
   return conversationHistory.some(msg => greetings.test(msg.agent));
 }
 
+function applyTemplate(template: string, tokens: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    return Object.prototype.hasOwnProperty.call(tokens, key)
+      ? String(tokens[key] ?? "")
+      : match;
+  });
+}
+
 /**
  * Detectar señales de intención de compra o cierre
  * Retorna true si el usuario muestra intención de inscribirse/comprar
@@ -276,10 +285,15 @@ function detectBuyingIntent(
   // Señales directas de compra
   const directBuyingSignals = [
     /\b(quiero\s+(inscribirme|matricularme|inscribir|apuntarme|registrarme))/i,
+    /\b(quiero\s+(registrar|registrarme|registrase|registrasse|inscribirme|inscribirse|inscribisse))/i,
+    /\b(me\s+quiero\s+(inscribir|registrar))/i,
     /\b(cómo\s+(me\s+inscribo|hago\s+para\s+inscribirme|puedo\s+inscribirme))/i,
+    /\b(como\s+me\s+(registro|registr[oó]))/i,
     /\b(dónde\s+(me\s+inscribo|puedo\s+inscribirme|pago))/i,
+    /\b(donde\s+me\s+(registro|registr[oó]))/i,
     /\b(cuándo\s+puedo\s+(empezar|iniciar|comenzar))/i,
     /\b(me\s+(interesa|gustaría|quiero)\s+(el\s+)?curso)/i,
+    /\b(ya\s+quiero\s+(iniciar|empezar|inscribirme|registrarme))/i,
     /\b(quiero\s+(información|más\s+info)\s+para\s+inscribirme)/i,
     /\b(voy\s+a\s+(inscribirme|matricularme|apuntarme))/i,
     /\b(quiero\s+agendar|agendar\s+(una\s+)?(cita|visita))/i,
@@ -329,19 +343,35 @@ function buildAgentPrompt(
   userMessage: string,
   knowledgeChunks: string[],
   conversationHistory: Array<{user: string, agent: string}> = [],
-  coursesContext: string = ""
+  coursesContext: string = "",
+  contextualDirective: string = ""
 ): string {
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asistente de la Academia Crystal.";
   const style = settings?.speaking_style || "Cálido y preciso.";
-  const systemPrompt = settings?.system_prompt || "Eres un asistente útil.";
+  const systemPromptTemplate = settings?.system_prompt || "Eres un asistente útil.";
   const fallback = settings?.fallback_response || "Déjame confirmarlo y te respondo pronto.";
+  const greeting = settings?.greeting || "";
   
   // Detectar si ya hay un saludo previo
   const alreadyGreeted = hasGreetingInHistory(conversationHistory);
   
   // Detectar intención de compra/cierre
   const showsBuyingIntent = detectBuyingIntent(userMessage, conversationHistory);
+
+  const greetingRule = alreadyGreeted
+    ? "YA HAS SALUDADO EN ESTA CONVERSACION. No repitas saludos."
+    : greeting
+    ? `Usa este saludo exacto al iniciar: "${greeting}".`
+    : "Saluda SOLO UNA VEZ al inicio del contacto. Si ya hablaron, ve directo al punto.";
+
+  const systemPrompt = applyTemplate(systemPromptTemplate, {
+    persona_name: persona,
+    persona_bio: bio,
+    speaking_style: style,
+    fallback_response: fallback,
+    greeting_rule: greetingRule,
+  });
 
   let prompt = `${systemPrompt}
 
@@ -358,6 +388,12 @@ function buildAgentPrompt(
 - No invent datos.
 - Recuerda el contexto de conversaciones anteriores.
 - Responde en un lenguaje natural apto para ser pronunciado.${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
+- Entrega la información por etapas. Máximo 2 bloques cortos por respuesta.
+- Cierra preguntando si desea la siguiente parte (horarios, inversión o temario).
+- Al finalizar (si el usuario ya quedó satisfecho), invita a seguirnos en redes en una sola frase.
+- Si hay redes en el contexto, menciónalas por nombre (Instagram/Facebook/YouTube) con el handle o URL corto.
+- No uses emojis en audio; di los nombres de las redes de forma clara.
+- ${greetingRule}
 
 # PROTOCOLO DE CIERRE DE VENTAS
 ${showsBuyingIntent ? `
@@ -384,6 +420,10 @@ Solo darás el número de contacto (más 57 301 203 8582) cuando muestre señale
 `}
 `;
 
+  if (contextualDirective) {
+    prompt += `\n# Contexto de intención del usuario (OBLIGATORIO):\n${contextualDirective}\n`;
+  }
+
   // Agregar contexto de cursos disponibles
   if (coursesContext) {
     prompt += `\n# INFORMACIÓN ACTUAL DE CURSOS:\n${coursesContext}\n`;
@@ -406,6 +446,106 @@ Solo darás el número de contacto (más 57 301 203 8582) cuando muestre señale
   prompt += `\n# Mensaje del usuario:\n${userMessage}\n\n# Tu respuesta (como ${persona}):`;
 
   return prompt;
+}
+
+function detectUserIntent(message: string): "precio" | "horario" | "temario" | "inscripcion" | "general" {
+  const text = message.toLowerCase();
+
+  if (/\b(precio|costo|cuanto|vale|valor|mensualidad|inscripcion|cuota|inversion)\b/i.test(text)) return "precio";
+  if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo)\b/i.test(text)) return "horario";
+  if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) return "temario";
+  if (/\b(inscrib|matricul|pago|admisiones|contacto|numero|whatsapp|separar\s+cupo)\b/i.test(text)) return "inscripcion";
+  return "general";
+}
+
+type ObjectionType = "precio" | "tiempo" | "confianza" | "posponer" | "none";
+
+function detectObjectionType(message: string): ObjectionType {
+  const text = message.toLowerCase();
+
+  if (/\b(caro|costoso|muy\s+caro|no\s+tengo\s+dinero|no\s+me\s+alcanza|esta\s+costoso)\b/i.test(text)) {
+    return "precio";
+  }
+  if (/\b(no\s+tengo\s+tiempo|trabajo\s+todo\s+el\s+dia|no\s+puedo\s+por\s+horario|muy\s+ocupad[oa])\b/i.test(text)) {
+    return "tiempo";
+  }
+  if (/\b(no\s+se\s+si\s+sirva|es\s+confiable|tienen\s+certificacion|es\s+legal|no\s+confio|me\s+da\s+duda)\b/i.test(text)) {
+    return "confianza";
+  }
+  if (/\b(luego|despues|mas\s+adelante|lo\s+voy\s+a\s+pensar|te\s+aviso|otro\s+dia|por\s+ahora\s+no)\b/i.test(text)) {
+    return "posponer";
+  }
+
+  return "none";
+}
+
+function resolveProgramFromContext(
+  userMessage: string,
+  programs: any[],
+  conversationHistory: Array<{ user: string; agent: string }>
+): any | null {
+  const directProgram = detectProgramFromMessage(userMessage, programs);
+  if (directProgram) return directProgram;
+
+  const isLikelyFollowUp = /\b(ese|esa|ese\s+curso|esa\s+carrera|horario|precio|cuanto|cuando|inscripcion|mensualidad|cupos|duracion)\b/i.test(
+    userMessage
+  );
+
+  if (!isLikelyFollowUp || !conversationHistory.length) return null;
+
+  for (let i = conversationHistory.length - 1; i >= 0; i--) {
+    const current = conversationHistory[i];
+    if (!current) continue;
+
+    const fromUser = detectProgramFromMessage(current.user || "", programs);
+    if (fromUser) return fromUser;
+
+    const fromAgent = detectProgramFromMessage(current.agent || "", programs);
+    if (fromAgent) return fromAgent;
+  }
+
+  return null;
+}
+
+function buildContextualDirective(userMessage: string, detectedProgram: any | null): string {
+  const intent = detectUserIntent(userMessage);
+  const objection = detectObjectionType(userMessage);
+  const explicitBuyingIntent = detectBuyingIntent(userMessage, []);
+  const programName = detectedProgram?.nombre || null;
+
+  const intentInstructionMap: Record<string, string> = {
+    precio: 'Responde priorizando inscripción y mensualidad del curso solicitado. No des valor total salvo solicitud explícita.',
+    horario: 'Responde priorizando fechas de inicio, días, horarios y cupos del curso solicitado.',
+    temario: 'Responde priorizando contenido/temario por ciclos o módulos del curso solicitado.',
+    inscripcion: 'Responde con resumen breve y guía de inscripción; si hay interés claro, cierra con Admisiones (más 57 301 203 8582).',
+    general: 'Responde en formato claro por bloques enfocado en el curso solicitado.'
+  };
+
+  const focusLine = programName
+    ? `Curso detectado: "${programName}". Debes responder enfocado en este curso y evitar respuestas genéricas.`
+    : 'Si no detectas curso específico, pide solo una aclaración breve y concreta.';
+
+  const objectionInstructionMap: Record<ObjectionType, string> = {
+    precio: 'Objeción de precio detectada: responde con empatía, valor del curso y opción de iniciar con inscripción y mensualidad.',
+    tiempo: 'Objeción de tiempo detectada: responde con empatía y propone horario o próximo grupo compatible.',
+    confianza: 'Objeción de confianza detectada: responde con respaldo y credenciales usando solo datos disponibles.',
+    posponer: 'Usuario pospone decisión: responde suave, resume valor y deja CTA corta para siguiente paso.',
+    none: 'Sin objeción explícita: mantén tono consultivo y guía hacia avance natural de inscripción.'
+  };
+
+  return [
+    `Intención detectada: ${intent.toUpperCase()}.`,
+    `Objeción detectada: ${objection.toUpperCase()}.`,
+    `Señal de compra explícita: ${explicitBuyingIntent ? "SÍ" : "NO"}.`,
+    focusLine,
+    intentInstructionMap[intent],
+    objectionInstructionMap[objection],
+    explicitBuyingIntent
+      ? 'ACCIÓN OBLIGATORIA EN VOZ: Entrega el número de la academia/admisiones (más 57 301 203 8582) y guía el siguiente paso de inscripción.'
+      : 'Si no hay señal explícita de compra, mantén modo informativo y consultivo.',
+    'Si hay objeción, usa esta secuencia en voz: empatía breve, dato concreto, propuesta simple, cierre con pregunta corta.',
+    'Prohibido responder con frases genéricas como: "¿en qué curso estás interesado?" si el usuario ya mencionó uno.'
+  ].join('\n');
 }
 
 /**
@@ -523,16 +663,60 @@ function removeEmojis(text: string): string {
  */
 function sanitizeForJSON(text: string | null | undefined): string {
   if (!text) return '';
-  
-  // Convertir a string si no lo es
+
   const str = String(text);
-  
-  // Remover caracteres de control y reemplazar saltos de línea
+
+  // Preserve line breaks for WhatsApp readability while removing control chars
   return str
-    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remover caracteres de control
-    .replace(/[\r\n]+/g, ' ')  // Reemplazar saltos de línea reales con espacios
-    .replace(/\s+/g, ' ')  // Normalizar múltiples espacios a uno solo
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
     .trim();
+}
+
+function normalizeForComparison(text: string): string {
+  return (text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function wordOverlapRatio(a: string, b: string): number {
+  const wordsA = new Set(normalizeForComparison(a).split(" ").filter(Boolean));
+  const wordsB = new Set(normalizeForComparison(b).split(" ").filter(Boolean));
+  if (!wordsA.size || !wordsB.size) return 0;
+
+  let intersection = 0;
+  for (const w of wordsA) {
+    if (wordsB.has(w)) intersection += 1;
+  }
+
+  const base = Math.min(wordsA.size, wordsB.size);
+  return base ? intersection / base : 0;
+}
+
+function isRepetitiveResponse(
+  newResponse: string,
+  history: Array<{ user: string; agent: string }>,
+  newUserMessage: string
+): boolean {
+  const last = history[history.length - 1];
+  if (!last?.agent) return false;
+
+  const normalizedNewUser = normalizeForComparison(newUserMessage);
+  const normalizedLastUser = normalizeForComparison(last.user || "");
+  const userMessagesAreDifferent = normalizedNewUser && normalizedLastUser && normalizedNewUser !== normalizedLastUser;
+
+  const overlap = wordOverlapRatio(newResponse, last.agent);
+  const almostEqual = normalizeForComparison(newResponse) === normalizeForComparison(last.agent);
+
+  return (almostEqual || overlap >= 0.9) && Boolean(userMessagesAreDifferent);
 }
 
 /**
@@ -660,8 +844,21 @@ export async function POST(req: NextRequest) {
 
     // 7.6. Obtener cursos/grupos basado en lo que pregunta el usuario
     console.log("[POST /api/ai/audio] Detectando programa específico...");
-    const detectedProgram = detectProgramFromMessage(transcription, programs);
-    const courses = await getCoursesForQuery(transcription, programs);
+    let detectedProgram = resolveProgramFromContext(transcription, programs, history);
+    let courses = detectedProgram
+      ? await getCoursesByProgram(detectedProgram.id)
+      : await getCoursesForQuery(transcription, programs);
+
+    if (!detectedProgram && courses.length > 0) {
+      const uniqueProgramIds = Array.from(new Set(courses.map((c) => c.programa_id).filter(Boolean)));
+      if (uniqueProgramIds.length === 1) {
+        const inferred = programs.find((p) => p.id === uniqueProgramIds[0]) || null;
+        if (inferred) {
+          detectedProgram = inferred;
+          courses = await getCoursesByProgram(inferred.id);
+        }
+      }
+    }
     
     // 7.7. Obtener información de la academia (dirección, redes, contacto)
     console.log("[POST /api/ai/audio] Obteniendo información de la academia...");
@@ -682,8 +879,29 @@ export async function POST(req: NextRequest) {
 
     // 9. Generar respuesta del agente
     console.log("[POST /api/ai/audio] Generando respuesta del agente...");
-    const prompt = buildAgentPrompt(settings || {}, transcription, knowledgeChunks, history, hierarchicalContext);
+    const contextualDirective = buildContextualDirective(transcription, detectedProgram);
+    const prompt = buildAgentPrompt(
+      settings || {},
+      transcription,
+      knowledgeChunks,
+      history,
+      hierarchicalContext,
+      contextualDirective
+    );
     let agentResponse = await generateResponse(geminiKey, prompt);
+
+    if (isRepetitiveResponse(agentResponse, history, transcription)) {
+      console.warn("[anti-repeat-audio] Respuesta muy parecida. Regenerando...");
+      const antiRepeatPrompt = `${prompt}
+
+# ANTI-REPETICIÓN (OBLIGATORIO)
+- Tu última respuesta fue demasiado parecida a la anterior.
+- Responde específicamente a la nueva pregunta del usuario.
+- Evita frases genéricas repetidas.
+- Mantén respuesta natural para audio, concreta y útil.`;
+
+      agentResponse = await generateResponse(geminiKey, antiRepeatPrompt);
+    }
     
     // 9.5. IMPORTANTE: Eliminar emojis de la respuesta antes de convertir a audio
     const agentResponseClean = removeEmojis(agentResponse);
