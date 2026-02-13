@@ -233,56 +233,64 @@ export default function LeadsPage() {
   const eliminarLead = async (lead: Lead) => {
     console.log("🗑️ eliminarLead llamado para:", lead.nombre, "ID:", lead.id);
     
-    Modal.confirm({
-      title: "¿Eliminar este lead?",
-      icon: <ExclamationCircleOutlined />,
-      content: (
-        <div>
-          <p><strong>{lead.nombre}</strong></p>
-          <p>Esta acción no se puede deshacer.</p>
-        </div>
-      ),
-      okText: "Sí, eliminar",
-      okType: "danger",
-      cancelText: "Cancelar",
-      async onOk() {
-        console.log("✅ Modal confirmado, iniciando eliminación...");
-        try {
-          setLoading(true);
-          console.log("📡 Llamando a Supabase DELETE para ID:", lead.id);
-          
-          const { data, error, status, statusText } = await supabaseBrowserClient
-            .from("leads")
-            .delete()
-            .eq("id", lead.id)
-            .select();
+    try {
+      console.log("🔨 Intentando abrir Modal.confirm...");
+      
+      const modalInstance = Modal.confirm({
+        title: "¿Eliminar este lead?",
+        icon: <ExclamationCircleOutlined />,
+        content: (
+          <div>
+            <p><strong>{lead.nombre}</strong></p>
+            <p>Esta acción no se puede deshacer.</p>
+          </div>
+        ),
+        okText: "Sí, eliminar",
+        okType: "danger",
+        cancelText: "Cancelar",
+        async onOk() {
+          console.log("✅ Modal confirmado, iniciando eliminación...");
+          try {
+            setLoading(true);
+            console.log("📡 Llamando a Supabase DELETE para ID:", lead.id);
+            
+            const { data, error, status, statusText } = await supabaseBrowserClient
+              .from("leads")
+              .delete()
+              .eq("id", lead.id)
+              .select();
 
-          console.log("📊 Respuesta Supabase:", { data, error, status, statusText });
+            console.log("📊 Respuesta Supabase:", { data, error, status, statusText });
 
-          if (error) {
-            console.error("❌ Error Supabase:", error);
-            console.error("❌ Error details:", error.details);
-            console.error("❌ Error hint:", error.hint);
-            console.error("❌ Error code:", error.code);
-            message.error("No se pudo eliminar el lead: " + error.message);
-            return;
+            if (error) {
+              console.error("❌ Error Supabase:", error);
+              console.error("❌ Error details:", error.details);
+              console.error("❌ Error hint:", error.hint);
+              console.error("❌ Error code:", error.code);
+              message.error("No se pudo eliminar el lead: " + error.message);
+              return;
+            }
+
+            console.log("✅ Lead eliminado exitosamente:", data);
+            setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+            message.success("Lead eliminado");
+          } catch (err) {
+            console.error("💥 Error catch eliminando lead:", err);
+            message.error("No se pudo eliminar el lead");
+          } finally {
+            setLoading(false);
+            console.log("🏁 Proceso de eliminación finalizado");
           }
-
-          console.log("✅ Lead eliminado exitosamente:", data);
-          setLeads((prev) => prev.filter((l) => l.id !== lead.id));
-          message.success("Lead eliminado");
-        } catch (err) {
-          console.error("💥 Error catch eliminando lead:", err);
-          message.error("No se pudo eliminar el lead");
-        } finally {
-          setLoading(false);
-          console.log("🏁 Proceso de eliminación finalizado");
+        },
+        onCancel() {
+          console.log("❌ Usuario canceló la eliminación");
         }
-      },
-      onCancel() {
-        console.log("❌ Usuario canceló la eliminación");
-      }
-    });
+      });
+      
+      console.log("📦 Modal instance creado:", modalInstance ? "✅ OK" : "❌ NULL");
+    } catch (error) {
+      console.error("💥 ERROR al crear modal:", error);
+    }
   };
 
   const eliminarSeleccionados = () => {
