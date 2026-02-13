@@ -118,34 +118,22 @@ function extractUsefulTokens(value: string): string[] {
     .filter((t) => t.length >= 3 && !stopwords.has(t))
 }
 
-function parseMesesDuracion(duracion?: string | null): number {
-  if (!duracion) return 0
-  const match = duracion.match(/\d+/)
-  return match ? Number(match[0]) : 0
-}
-
-function buildProgramPriceText(programa: ProgramInfo): string {
-  if (programa.precio) {
-    return `$${programa.precio} COP`
-  }
-
-  const inscripcion = Number(programa.precio_inscripcion || 0)
-  const mensualidad = Number(programa.precio_mensualidad || 0)
-  const meses = parseMesesDuracion(programa.duracion)
-
-  if (mensualidad > 0 && meses > 0) {
-    const total = (mensualidad * meses) + inscripcion
-    const desglose = inscripcion > 0
-      ? ` (incluye inscripcion $${inscripcion} + $${mensualidad}/mes x ${meses})`
-      : ` ($${mensualidad}/mes x ${meses})`
-    return `$${total} COP${desglose}`
-  }
+function buildProgramPriceText(
+  programa: ProgramInfo,
+  fallback?: { precio_inscripcion?: number | null; precio_mensualidad?: number | null }
+): string {
+  const inscripcion = Number(programa.precio_inscripcion ?? fallback?.precio_inscripcion ?? 0)
+  const mensualidad = Number(programa.precio_mensualidad ?? fallback?.precio_mensualidad ?? 0)
 
   if (inscripcion > 0 || mensualidad > 0) {
     const parts: string[] = []
-    if (inscripcion > 0) parts.push(`Inscripcion: $${inscripcion}`)
-    if (mensualidad > 0) parts.push(`Mensualidad: $${mensualidad}`)
-    return parts.join(' + ')
+    if (inscripcion > 0) parts.push(`Inscripcion: $${inscripcion} COP`)
+    if (mensualidad > 0) parts.push(`Mensualidad: $${mensualidad} COP`)
+    return parts.join(' | ')
+  }
+
+  if (programa.precio) {
+    return `Precio: $${programa.precio} COP`
   }
 
   return 'Precio a definir'
@@ -184,9 +172,9 @@ function normalizeCursoRow(row: any): CourseInfo {
     descripcion: row.descripcion ?? null,
     horario: formatSchedule(row.hora_inicio, row.hora_fin, row.dias_semana),
     cupos,
-    precio: null,
-    precio_inscripcion: null,
-    precio_mensualidad: null,
+    precio: row.precio ?? null,
+    precio_inscripcion: row.precio_inscripcion ?? null,
+    precio_mensualidad: row.precio_mensualidad ?? null,
     estado: row.estado ?? 'sin_estado',
     fecha_inicio: row.fecha_inicio ?? null,
     fecha_fin: row.fecha_fin ?? null,
@@ -427,6 +415,9 @@ export async function getCoursesByProgram(programId: number): Promise<CourseInfo
         hora_inicio,
         hora_fin,
         cupos,
+        precio,
+        precio_inscripcion,
+        precio_mensualidad,
         programa_id,
         profesor_id,
         programas:programa_id ( id, nombre ),
@@ -548,6 +539,9 @@ export async function getCoursesForQuery(message: string, programs: ProgramInfo[
         hora_inicio,
         hora_fin,
         cupos,
+        precio,
+        precio_inscripcion,
+        precio_mensualidad,
         programa_id,
         profesor_id,
         programas:programa_id ( id, nombre ),
@@ -738,6 +732,19 @@ export function buildHierarchicalContext(
 ): string {
   let context = ``
 
+  const priceFallbackByProgram = new Map<number, { precio_inscripcion?: number | null; precio_mensualidad?: number | null }>();
+  courses.forEach((course) => {
+    if (!course.programa_id) return;
+    if (course.precio_inscripcion || course.precio_mensualidad) {
+      if (!priceFallbackByProgram.has(course.programa_id)) {
+        priceFallbackByProgram.set(course.programa_id, {
+          precio_inscripcion: course.precio_inscripcion ?? null,
+          precio_mensualidad: course.precio_mensualidad ?? null,
+        });
+      }
+    }
+  });
+
   // Agregar información de la academia si está disponible
   if (academy) {
     context += formatAcademyInfo(academy)
@@ -757,7 +764,7 @@ ${programs
     
     const clasesText = prog.total_clases ? ` - ${prog.total_clases} clases` : ''
     
-    const priceText = buildProgramPriceText(prog)
+    const priceText = buildProgramPriceText(prog, priceFallbackByProgram.get(prog.id))
     
     const reqText = prog.requisitos ? `Requisitos: ${prog.requisitos}` : ''
     const certText = prog.certificacion ? `Certificación: ${prog.certificacion}` : ''
@@ -829,6 +836,19 @@ export async function buildHierarchicalContextWithPensum(
 ): Promise<string> {
   let context = ``
 
+  const priceFallbackByProgram = new Map<number, { precio_inscripcion?: number | null; precio_mensualidad?: number | null }>();
+  courses.forEach((course) => {
+    if (!course.programa_id) return;
+    if (course.precio_inscripcion || course.precio_mensualidad) {
+      if (!priceFallbackByProgram.has(course.programa_id)) {
+        priceFallbackByProgram.set(course.programa_id, {
+          precio_inscripcion: course.precio_inscripcion ?? null,
+          precio_mensualidad: course.precio_mensualidad ?? null,
+        });
+      }
+    }
+  });
+
   // Agregar información de la academia si está disponible
   if (academy) {
     context += formatAcademyInfo(academy)
@@ -854,7 +874,7 @@ export async function buildHierarchicalContextWithPensum(
     
     const clasesText = prog.total_clases ? ` (${prog.total_clases} clases)` : ''
     
-    const priceText = buildProgramPriceText(prog)
+    const priceText = buildProgramPriceText(prog, priceFallbackByProgram.get(prog.id))
     
     context += `
 - **${prog.nombre}**
