@@ -114,6 +114,48 @@ function truncateResponse(text: string, maxLength: number = 1000): string {
   return truncated + '...';
 }
 
+function normalizeForComparison(text: string): string {
+  return (text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function wordOverlapRatio(a: string, b: string): number {
+  const wordsA = new Set(normalizeForComparison(a).split(" ").filter(Boolean));
+  const wordsB = new Set(normalizeForComparison(b).split(" ").filter(Boolean));
+  if (!wordsA.size || !wordsB.size) return 0;
+
+  let intersection = 0;
+  for (const w of wordsA) {
+    if (wordsB.has(w)) intersection += 1;
+  }
+
+  const base = Math.min(wordsA.size, wordsB.size);
+  return base ? intersection / base : 0;
+}
+
+function isRepetitiveResponse(
+  newResponse: string,
+  history: Array<{ user: string; agent: string }>,
+  newUserMessage: string
+): boolean {
+  const last = history[history.length - 1];
+  if (!last?.agent) return false;
+
+  const normalizedNewUser = normalizeForComparison(newUserMessage);
+  const normalizedLastUser = normalizeForComparison(last.user || "");
+  const userMessagesAreDifferent = normalizedNewUser && normalizedLastUser && normalizedNewUser !== normalizedLastUser;
+
+  const overlap = wordOverlapRatio(newResponse, last.agent);
+  const almostEqual = normalizeForComparison(newResponse) === normalizeForComparison(last.agent);
+
+  return (almostEqual || overlap >= 0.9) && Boolean(userMessagesAreDifferent);
+}
+
 function validateRequest(request: NextRequest): boolean {
   const apiKey = request.headers.get("x-api-key");
   const expectedKey = process.env.WHATSAPP_API_KEY;
@@ -123,6 +165,69 @@ function validateRequest(request: NextRequest): boolean {
   if (authHeader?.includes("Bearer")) return true;
 
   return false;
+}
+
+function isPlaceholderMessage(value: string | null | undefined): boolean {
+  if (!value) return true;
+  const normalized = value.toLowerCase().trim();
+  return [
+    "text",
+    "audio",
+    "image",
+    "video",
+    "document",
+    "sticker",
+    "message",
+    "mensaje",
+    "type",
+  ].includes(normalized);
+}
+
+function pickFirstNonEmptyString(...candidates: Array<any>): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return "";
+}
+
+function extractMessageAndPhone(body: any): { message: string; phone: string } {
+  const webhookMessage = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
+  const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
+
+  const nestedMessage = body?.messages?.[0]?.text?.body;
+  const nestedPhone = body?.messages?.[0]?.from;
+
+  const rawMessage = pickFirstNonEmptyString(
+    body?.message,
+    body?.user_message,
+    body?.text,
+    body?.prompt,
+    nestedMessage,
+    webhookMessage
+  );
+
+  const fallbackMessage = pickFirstNonEmptyString(
+    body?.query,
+    body?.question,
+    body?.content
+  );
+
+  const message = isPlaceholderMessage(rawMessage) ? fallbackMessage : rawMessage;
+
+  const phone = pickFirstNonEmptyString(
+    body?.phone,
+    body?.phone_number,
+    body?.from,
+    body?.wa_id,
+    body?.contact,
+    nestedPhone,
+    webhookPhone,
+    "unknown"
+  );
+
+  return { message, phone };
 }
 
 async function getConversationHistory(
@@ -640,7 +745,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { message, phone } = body || {};
+    const { message, phone } = extractMessageAndPhone(body || {});
+
+    console.log("[chat] Input extraído:", {
+      phone,
+      messagePreview: message?.slice(0, 80) || "",
+      bodyMessage: body?.message,
+      bodyText: body?.text,
+      nestedMessage: body?.messages?.[0]?.text?.body,
+    });
 
     // Validar entrada del usuario
     const inputValidation = validateUserInput(message, 2000);
@@ -741,7 +854,20 @@ export async function POST(req: NextRequest) {
     );
 
     // Generar respuesta
-    const response = await generateResponse(geminiKey, prompt);
+    let response = await generateResponse(geminiKey, prompt);
+
+    if (isRepetitiveResponse(response, history, message)) {
+      console.warn("[anti-repeat] Respuesta muy parecida a la anterior. Regenerando...");
+      const antiRepeatPrompt = `${prompt}
+
+# ANTI-REPETICIÓN (OBLIGATORIO)
+- Tu última respuesta fue muy parecida a una previa y eso NO está permitido.
+- Responde específicamente a la NUEVA pregunta del usuario.
+- NO repitas frases de cierre ni texto genérico ya usado.
+- Mantén el formato, pero cambia el contenido con datos concretos del contexto actual.`;
+
+      response = await generateResponse(geminiKey, antiRepeatPrompt);
+    }
 
     // Truncar respuesta si es muy larga (máx 1000 caracteres para chat)
     const truncatedResponse = truncateResponse(response, 1000);

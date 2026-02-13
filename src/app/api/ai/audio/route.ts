@@ -646,6 +646,48 @@ function sanitizeForJSON(text: string | null | undefined): string {
     .trim();
 }
 
+function normalizeForComparison(text: string): string {
+  return (text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function wordOverlapRatio(a: string, b: string): number {
+  const wordsA = new Set(normalizeForComparison(a).split(" ").filter(Boolean));
+  const wordsB = new Set(normalizeForComparison(b).split(" ").filter(Boolean));
+  if (!wordsA.size || !wordsB.size) return 0;
+
+  let intersection = 0;
+  for (const w of wordsA) {
+    if (wordsB.has(w)) intersection += 1;
+  }
+
+  const base = Math.min(wordsA.size, wordsB.size);
+  return base ? intersection / base : 0;
+}
+
+function isRepetitiveResponse(
+  newResponse: string,
+  history: Array<{ user: string; agent: string }>,
+  newUserMessage: string
+): boolean {
+  const last = history[history.length - 1];
+  if (!last?.agent) return false;
+
+  const normalizedNewUser = normalizeForComparison(newUserMessage);
+  const normalizedLastUser = normalizeForComparison(last.user || "");
+  const userMessagesAreDifferent = normalizedNewUser && normalizedLastUser && normalizedNewUser !== normalizedLastUser;
+
+  const overlap = wordOverlapRatio(newResponse, last.agent);
+  const almostEqual = normalizeForComparison(newResponse) === normalizeForComparison(last.agent);
+
+  return (almostEqual || overlap >= 0.9) && Boolean(userMessagesAreDifferent);
+}
+
 /**
  * Subir audio a Supabase storage y obtener URL pública
  */
@@ -805,6 +847,19 @@ export async function POST(req: NextRequest) {
       contextualDirective
     );
     let agentResponse = await generateResponse(geminiKey, prompt);
+
+    if (isRepetitiveResponse(agentResponse, history, transcription)) {
+      console.warn("[anti-repeat-audio] Respuesta muy parecida. Regenerando...");
+      const antiRepeatPrompt = `${prompt}
+
+# ANTI-REPETICIÓN (OBLIGATORIO)
+- Tu última respuesta fue demasiado parecida a la anterior.
+- Responde específicamente a la nueva pregunta del usuario.
+- Evita frases genéricas repetidas.
+- Mantén respuesta natural para audio, concreta y útil.`;
+
+      agentResponse = await generateResponse(geminiKey, antiRepeatPrompt);
+    }
     
     // 9.5. IMPORTANTE: Eliminar emojis de la respuesta antes de convertir a audio
     const agentResponseClean = removeEmojis(agentResponse);
