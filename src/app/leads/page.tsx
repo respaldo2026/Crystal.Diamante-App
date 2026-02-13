@@ -231,6 +231,8 @@ export default function LeadsPage() {
   };
 
   const eliminarLead = async (lead: Lead) => {
+    console.log("🗑️ eliminarLead llamado para:", lead.nombre, "ID:", lead.id);
+    
     Modal.confirm({
       title: "¿Eliminar este lead?",
       icon: <ExclamationCircleOutlined />,
@@ -244,28 +246,42 @@ export default function LeadsPage() {
       okType: "danger",
       cancelText: "Cancelar",
       async onOk() {
+        console.log("✅ Modal confirmado, iniciando eliminación...");
         try {
           setLoading(true);
-          const { error } = await supabaseBrowserClient
+          console.log("📡 Llamando a Supabase DELETE para ID:", lead.id);
+          
+          const { data, error, status, statusText } = await supabaseBrowserClient
             .from("leads")
             .delete()
-            .eq("id", lead.id);
+            .eq("id", lead.id)
+            .select();
+
+          console.log("📊 Respuesta Supabase:", { data, error, status, statusText });
 
           if (error) {
-            console.error("Error Supabase:", error);
-            message.error("No se pudo eliminar el lead");
+            console.error("❌ Error Supabase:", error);
+            console.error("❌ Error details:", error.details);
+            console.error("❌ Error hint:", error.hint);
+            console.error("❌ Error code:", error.code);
+            message.error("No se pudo eliminar el lead: " + error.message);
             return;
           }
 
+          console.log("✅ Lead eliminado exitosamente:", data);
           setLeads((prev) => prev.filter((l) => l.id !== lead.id));
           message.success("Lead eliminado");
         } catch (err) {
-          console.error("Error eliminando lead:", err);
+          console.error("💥 Error catch eliminando lead:", err);
           message.error("No se pudo eliminar el lead");
         } finally {
           setLoading(false);
+          console.log("🏁 Proceso de eliminación finalizado");
         }
       },
+      onCancel() {
+        console.log("❌ Usuario canceló la eliminación");
+      }
     });
   };
 
