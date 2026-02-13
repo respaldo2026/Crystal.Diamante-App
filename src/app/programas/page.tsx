@@ -84,8 +84,7 @@ export default function ProgramasPage() {
           if (error) throw error;
           message.success("Programa creado correctamente");
         }
-        handleCloseModal();
-        cargarProgramas();
+        await handleCloseModal({ refresh: true });
       } catch (error: any) {
         message.error("Error al guardar: " + (error?.message || "Desconocido"));
         console.error(error);
@@ -103,10 +102,13 @@ export default function ProgramasPage() {
     setModalVisible(true);
   };
 
-  const handleCloseModal = () => {
+  const handleCloseModal = async (options?: { refresh?: boolean }) => {
     setModalVisible(false);
     setEditingPrograma(null);
     form.resetFields();
+    if (options?.refresh) {
+      await cargarProgramas();
+    }
   };
 
   const handleToggleActivo = async (programa: any) => {
@@ -823,7 +825,7 @@ export default function ProgramasPage() {
         }
         open={modalVisible}
         onOk={handleSubmit}
-        onCancel={handleCloseModal}
+        onCancel={() => handleCloseModal({ refresh: true })}
         width={isMobile ? "100%" : isTablet ? 600 : 750}
         style={isMobile ? { top: 0, paddingBottom: 0, maxHeight: "100vh" } : undefined}
         bodyStyle={isMobile ? { maxHeight: "calc(100vh - 110px)", overflowY: "auto" } : { padding: 24 }}

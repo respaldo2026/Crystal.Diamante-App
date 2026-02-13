@@ -61,9 +61,6 @@ export const authProvider: AuthProvider = {
           } else if (perfil.rol === "administrativo") {
             redirectTo = "/";
           }
-        } else if (perfilError) {
-          // If RLS blocks reading perfiles, still allow login but redirect to home
-          console.warn("[AUTH] Could not fetch user role from perfiles:", perfilError.message);
         }
 
         console.log("[AUTH] Final redirectTo:", redirectTo);
