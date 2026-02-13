@@ -149,7 +149,10 @@ function expandTokensWithSynonyms(tokens: string[]): string[] {
     const group = findSynonymGroup(token)
     if (!group) continue
 
-    for (const synonym of PROGRAM_SYNONYM_GROUPS[group]) {
+    const synonyms = PROGRAM_SYNONYM_GROUPS[group as keyof typeof PROGRAM_SYNONYM_GROUPS]
+    if (!synonyms) continue
+
+    for (const synonym of synonyms) {
       expanded.add(normalizeText(synonym))
     }
   }
