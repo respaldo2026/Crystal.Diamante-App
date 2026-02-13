@@ -639,15 +639,17 @@ function removeEmojis(text: string): string {
  */
 function sanitizeForJSON(text: string | null | undefined): string {
   if (!text) return '';
-  
-  // Convertir a string si no lo es
+
   const str = String(text);
-  
-  // Remover caracteres de control y reemplazar saltos de línea
+
+  // Preserve line breaks for WhatsApp readability while removing control chars
   return str
-    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remover caracteres de control
-    .replace(/[\r\n]+/g, ' ')  // Reemplazar saltos de línea reales con espacios
-    .replace(/\s+/g, ' ')  // Normalizar múltiples espacios a uno solo
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
 
