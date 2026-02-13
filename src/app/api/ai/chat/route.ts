@@ -133,6 +133,22 @@ function removeCOPCurrency(text: string): string {
 }
 
 /**
+ * Forzar formato legible en WhatsApp (bloques y viñetas)
+ */
+function normalizeWhatsAppBlocks(text: string): string {
+  if (!text) return '';
+
+  const output = text
+    .replace(/\s*(🗓️|📅|⏰|💰|📚|🎁)/g, '\n\n$1')
+    .replace(/\s*✅\s*/g, '\n✅ ')
+    .replace(/\s*•\s*/g, '\n• ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return output;
+}
+
+/**
  * Validar entrada del usuario antes de procesar
  */
 function validateUserInput(message: string, maxLength: number = 2000): { valid: boolean; error?: string; message?: string } {
@@ -1083,6 +1099,9 @@ export async function POST(req: NextRequest) {
     
     // Remover la palabra COP de precios
     whatsappResponse = removeCOPCurrency(whatsappResponse);
+
+    // Forzar bloques y saltos de linea para WhatsApp
+    whatsappResponse = normalizeWhatsAppBlocks(whatsappResponse);
     
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
     const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
