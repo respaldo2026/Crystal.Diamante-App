@@ -192,6 +192,35 @@ function pickFirstNonEmptyString(...candidates: Array<any>): string {
   return "";
 }
 
+function extractStringsDeep(input: any, maxDepth = 4): string[] {
+  const result: string[] = [];
+  const visited = new Set<any>();
+
+  const walk = (value: any, depth: number) => {
+    if (depth < 0 || value == null) return;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) result.push(trimmed);
+      return;
+    }
+    if (typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, depth - 1);
+      return;
+    }
+
+    for (const v of Object.values(value)) {
+      walk(v, depth - 1);
+    }
+  };
+
+  walk(input, maxDepth);
+  return result;
+}
+
 function extractMessageAndPhone(body: any): { message: string; phone: string } {
   const webhookMessage = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
   const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
@@ -199,13 +228,25 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
   const nestedMessage = body?.messages?.[0]?.text?.body;
   const nestedPhone = body?.messages?.[0]?.from;
 
+  const deepCandidates = extractStringsDeep({
+    text: body?.text,
+    message: body?.message,
+    messages: body?.messages,
+    entry: body?.entry,
+    data: body?.data,
+    payload: body?.payload,
+  });
+
   const rawMessage = pickFirstNonEmptyString(
     body?.message,
     body?.user_message,
+    body?.text?.body,
+    body?.text?.text,
     body?.text,
     body?.prompt,
     nestedMessage,
-    webhookMessage
+    webhookMessage,
+    ...deepCandidates
   );
 
   const fallbackMessage = pickFirstNonEmptyString(
@@ -214,11 +255,18 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     body?.content
   );
 
-  const message = isPlaceholderMessage(rawMessage) ? fallbackMessage : rawMessage;
+  const message = isPlaceholderMessage(rawMessage)
+    ? pickFirstNonEmptyString(
+        fallbackMessage,
+        ...deepCandidates.filter((candidate) => !isPlaceholderMessage(candidate))
+      )
+    : rawMessage;
 
   const phone = pickFirstNonEmptyString(
     body?.phone,
     body?.phone_number,
+    body?.contact?.phone,
+    body?.contact?.wa_id,
     body?.from,
     body?.wa_id,
     body?.contact,
