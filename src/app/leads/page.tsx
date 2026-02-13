@@ -233,6 +233,54 @@ export default function LeadsPage() {
   const eliminarLead = async (lead: Lead) => {
     console.log("🗑️ eliminarLead llamado para:", lead.nombre, "ID:", lead.id);
     
+    // TEMPORAL: Sin modal de confirmación para testing
+    const confirmDelete = window.confirm(`¿Eliminar a ${lead.nombre}?\n\nEsta acción no se puede deshacer.`);
+    
+    if (!confirmDelete) {
+      console.log("❌ Usuario canceló con browser confirm");
+      return;
+    }
+    
+    console.log("✅ Usuario confirmó, iniciando eliminación...");
+    
+    try {
+      setLoading(true);
+      console.log("📡 Llamando a Supabase DELETE para ID:", lead.id);
+      
+      const { data, error, status, statusText } = await supabaseBrowserClient
+        .from("leads")
+        .delete()
+        .eq("id", lead.id)
+        .select();
+
+      console.log("📊 Respuesta Supabase:", { data, error, status, statusText });
+
+      if (error) {
+        console.error("❌ Error Supabase:", error);
+        console.error("❌ Error details:", error.details);
+        console.error("❌ Error hint:", error.hint);
+        console.error("❌ Error code:", error.code);
+        message.error("No se pudo eliminar el lead: " + error.message);
+        return;
+      }
+
+      console.log("✅ Lead eliminado exitosamente:", data);
+      setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+      message.success("Lead eliminado");
+    } catch (err) {
+      console.error("💥 Error catch eliminando lead:", err);
+      message.error("No se pudo eliminar el lead");
+    } finally {
+      setLoading(false);
+      console.log("🏁 Proceso de eliminación finalizado");
+    }
+  };
+  
+  /*
+  // VERSIÓN CON MODAL (deshabilitada temporalmente)
+  const eliminarLeadConModal = async (lead: Lead) => {
+    console.log("🗑️ eliminarLead llamado para:", lead.nombre, "ID:", lead.id);
+    
     try {
       console.log("🔨 Intentando abrir Modal.confirm...");
       
@@ -295,6 +343,7 @@ export default function LeadsPage() {
       console.error("💥 ERROR al crear modal:", error);
     }
   };
+  */
 
   const eliminarSeleccionados = () => {
     const totalSeleccionados = selectedRowKeys.length;
