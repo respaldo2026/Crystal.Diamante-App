@@ -133,7 +133,7 @@ export default function ConversacionesPage() {
 
       if (error) throw error;
 
-      setConversaciones((prev) => prev.filter((c) => c.id !== id));
+      setConversations((prev) => prev.filter((c) => c.id !== id));
       alert("Conversación eliminada");
     } catch (err) {
       console.error("Error eliminando:", err);
