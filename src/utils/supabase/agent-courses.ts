@@ -921,7 +921,7 @@ export async function buildHierarchicalContextWithPensum(
       context += `No hay grupos disponibles para este programa en este momento.\n`
     }
   } else if (courses.length === 1) {
-    const course = courses[0]
+    const course = courses[0]!
     const matriculados = course.matriculados || 0
     const cupos = course.cupos || 0
     const disponibles = course.cupos_disponibles || 0
