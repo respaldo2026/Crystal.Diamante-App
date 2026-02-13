@@ -140,8 +140,10 @@ function normalizeWhatsAppBlocks(text: string): string {
 
   const output = text
     .replace(/\s*(🗓️|📅|⏰|💰|📚|🎁)/g, '\n\n$1')
+    .replace(/\s*(\*[^*]+\*\s*:)/g, '\n\n$1')
     .replace(/\s*✅\s*/g, '\n✅ ')
     .replace(/\s*•\s*/g, '\n• ')
+    .replace(/([.!?])\s+(¿)/g, '$1\n\n$2')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
