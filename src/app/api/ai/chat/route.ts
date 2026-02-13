@@ -572,6 +572,7 @@ Ayuda al usuario a conocer:
 ⚠️ No inventes horarios, precios, fechas o nombres de cursos
 ⚠️ Si el usuario ya pidió un curso específico (ej: "curso de uñas"), NO respondas con "¿en qué curso estás interesado?".
 ⚠️ En ese caso, responde DIRECTO con la información del curso solicitado usando los bloques requeridos.
+⚠️ Si el usuario pregunta por "próximos grupos" pero NO menciona programa, pide aclaración corta y muestra 2-3 programas disponibles. No digas "no hay grupos" sin verificar.
 `;
 
   if (contextualDirective) {
@@ -875,10 +876,21 @@ export async function POST(req: NextRequest) {
     const programs = await getProgramsForAgent();
 
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
-    const detectedProgram = resolveProgramFromContext(message, programs, history);
-    const courses = detectedProgram
+    let detectedProgram = resolveProgramFromContext(message, programs, history);
+    let courses = detectedProgram
       ? await getCoursesByProgram(detectedProgram.id)
       : await getCoursesForQuery(message, programs);
+
+    if (!detectedProgram && courses.length > 0) {
+      const uniqueProgramIds = Array.from(new Set(courses.map((c) => c.programa_id).filter(Boolean)));
+      if (uniqueProgramIds.length === 1) {
+        const inferred = programs.find((p) => p.id === uniqueProgramIds[0]) || null;
+        if (inferred) {
+          detectedProgram = inferred;
+          courses = await getCoursesByProgram(inferred.id);
+        }
+      }
+    }
     
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();

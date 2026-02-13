@@ -818,10 +818,21 @@ export async function POST(req: NextRequest) {
 
     // 7.6. Obtener cursos/grupos basado en lo que pregunta el usuario
     console.log("[POST /api/ai/audio] Detectando programa específico...");
-    const detectedProgram = resolveProgramFromContext(transcription, programs, history);
-    const courses = detectedProgram
+    let detectedProgram = resolveProgramFromContext(transcription, programs, history);
+    let courses = detectedProgram
       ? await getCoursesByProgram(detectedProgram.id)
       : await getCoursesForQuery(transcription, programs);
+
+    if (!detectedProgram && courses.length > 0) {
+      const uniqueProgramIds = Array.from(new Set(courses.map((c) => c.programa_id).filter(Boolean)));
+      if (uniqueProgramIds.length === 1) {
+        const inferred = programs.find((p) => p.id === uniqueProgramIds[0]) || null;
+        if (inferred) {
+          detectedProgram = inferred;
+          courses = await getCoursesByProgram(inferred.id);
+        }
+      }
+    }
     
     // 7.7. Obtener información de la academia (dirección, redes, contacto)
     console.log("[POST /api/ai/audio] Obteniendo información de la academia...");

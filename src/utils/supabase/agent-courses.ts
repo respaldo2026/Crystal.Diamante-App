@@ -36,6 +36,7 @@ interface ProgramInfo {
   precio: number | null
   precio_inscripcion: number | null
   precio_mensualidad: number | null
+  horas_por_clase: number | null
   contenido: string | null
   requisitos: string | null
   certificacion: string | null
@@ -115,6 +116,87 @@ function extractUsefulTokens(value: string): string[] {
     .split(' ')
     .map((t) => t.trim())
     .filter((t) => t.length >= 3 && !stopwords.has(t))
+}
+
+function parseMesesDuracion(duracion?: string | null): number {
+  if (!duracion) return 0
+  const match = duracion.match(/\d+/)
+  return match ? Number(match[0]) : 0
+}
+
+function buildProgramPriceText(programa: ProgramInfo): string {
+  if (programa.precio) {
+    return `$${programa.precio} COP`
+  }
+
+  const inscripcion = Number(programa.precio_inscripcion || 0)
+  const mensualidad = Number(programa.precio_mensualidad || 0)
+  const meses = parseMesesDuracion(programa.duracion)
+
+  if (mensualidad > 0 && meses > 0) {
+    const total = (mensualidad * meses) + inscripcion
+    const desglose = inscripcion > 0
+      ? ` (incluye inscripcion $${inscripcion} + $${mensualidad}/mes x ${meses})`
+      : ` ($${mensualidad}/mes x ${meses})`
+    return `$${total} COP${desglose}`
+  }
+
+  if (inscripcion > 0 || mensualidad > 0) {
+    const parts: string[] = []
+    if (inscripcion > 0) parts.push(`Inscripcion: $${inscripcion}`)
+    if (mensualidad > 0) parts.push(`Mensualidad: $${mensualidad}`)
+    return parts.join(' + ')
+  }
+
+  return 'Precio a definir'
+}
+
+function formatSchedule(horaInicio?: string | null, horaFin?: string | null, diasSemana?: string | null): string | null {
+  const timeRange = [horaInicio, horaFin].filter(Boolean).join(' - ')
+  const dias = diasSemana
+    ? diasSemana
+        .split(',')
+        .map((d) => d.trim())
+        .filter(Boolean)
+        .join(', ')
+    : ''
+
+  if (timeRange && dias) return `${timeRange} (${dias})`
+  if (timeRange) return timeRange
+  if (dias) return dias
+  return null
+}
+
+function normalizeMatriculasCount(value: any): number {
+  const list = Array.isArray(value) ? value : value ? [value] : []
+  return list.reduce((acc, item) => acc + Number(item?.count || 0), 0)
+}
+
+function normalizeCursoRow(row: any): CourseInfo {
+  const programa = Array.isArray(row.programas) ? row.programas[0] ?? null : row.programas
+  const profesor = Array.isArray(row.profesor) ? row.profesor[0] ?? null : row.profesor
+  const matriculados = normalizeMatriculasCount(row.matriculas)
+  const cupos = Number(row.cupos || 0)
+
+  return {
+    id: row.id,
+    nombre: row.nombre,
+    descripcion: row.descripcion ?? null,
+    horario: formatSchedule(row.hora_inicio, row.hora_fin, row.dias_semana),
+    cupos,
+    precio: null,
+    precio_inscripcion: null,
+    precio_mensualidad: null,
+    estado: row.estado ?? 'sin_estado',
+    fecha_inicio: row.fecha_inicio ?? null,
+    fecha_fin: row.fecha_fin ?? null,
+    profesor_nombre: profesor?.nombre_completo ?? null,
+    programa_nombre: programa?.nombre ?? null,
+    resumen_texto_ia: null,
+    matriculados,
+    cupos_disponibles: Math.max(cupos - matriculados, 0),
+    programa_id: row.programa_id,
+  }
 }
 
 const PROGRAM_SYNONYM_GROUPS: Record<string, string[]> = {
@@ -333,18 +415,35 @@ export async function getCoursesByProgram(programId: number): Promise<CourseInfo
     const supabase = getSupabaseClient()
 
     const { data, error } = await supabase
-      .from('vw_cursos_para_ia')
-      .select('*')
+      .from('cursos')
+      .select(`
+        id,
+        nombre,
+        descripcion,
+        estado,
+        fecha_inicio,
+        fecha_fin,
+        dias_semana,
+        hora_inicio,
+        hora_fin,
+        cupos,
+        programa_id,
+        profesor_id,
+        programas:programa_id ( id, nombre ),
+        profesor:profesor_id ( id, nombre_completo ),
+        matriculas:matriculas ( count )
+      `)
       .eq('programa_id', programId)
-      .eq('estado', 'activo')
-      .order('fecha_inicio', { ascending: true })
+      .in('estado', ['activo', 'proximo'])
+      .order('fecha_inicio', { ascending: true, nullsFirst: true })
+      .order('hora_inicio', { ascending: true, nullsFirst: true })
 
     if (error) {
       console.error('[getCoursesByProgram] Error:', error)
       return []
     }
 
-    return data as CourseInfo[]
+    return (data || []).map(normalizeCursoRow)
   } catch (error) {
     console.error('[getCoursesByProgram] Exception:', error)
     return []
@@ -437,18 +536,35 @@ export async function getCoursesForQuery(message: string, programs: ProgramInfo[
   try {
     const supabase = getSupabaseClient()
     const { data, error } = await supabase
-      .from('vw_cursos_para_ia')
-      .select('*')
-      .eq('estado', 'activo')
-      .order('programa_nombre', { ascending: true })
-      .order('fecha_inicio', { ascending: true })
+      .from('cursos')
+      .select(`
+        id,
+        nombre,
+        descripcion,
+        estado,
+        fecha_inicio,
+        fecha_fin,
+        dias_semana,
+        hora_inicio,
+        hora_fin,
+        cupos,
+        programa_id,
+        profesor_id,
+        programas:programa_id ( id, nombre ),
+        profesor:profesor_id ( id, nombre_completo ),
+        matriculas:matriculas ( count )
+      `)
+      .in('estado', ['activo', 'proximo'])
+      .order('programa_id', { ascending: true })
+      .order('fecha_inicio', { ascending: true, nullsFirst: true })
+      .order('hora_inicio', { ascending: true, nullsFirst: true })
 
     if (error) {
       console.error('[getCoursesForQuery] Error:', error)
       return []
     }
 
-    const allCourses = (data || []) as CourseInfo[]
+    const allCourses = (data || []).map(normalizeCursoRow)
     const messageTokens = extractUsefulTokens(message)
     const messageTokensExpanded = expandTokensWithSynonyms(messageTokens)
 
@@ -641,11 +757,7 @@ ${programs
     
     const clasesText = prog.total_clases ? ` - ${prog.total_clases} clases` : ''
     
-    const priceText = prog.precio 
-      ? `$${prog.precio} COP`
-      : prog.precio_inscripcion &&  prog.precio_mensualidad
-      ? `Inscripción: $${prog.precio_inscripcion} + Mensualidad: $${prog.precio_mensualidad}`
-      : 'Precio a definir'
+    const priceText = buildProgramPriceText(prog)
     
     const reqText = prog.requisitos ? `Requisitos: ${prog.requisitos}` : ''
     const certText = prog.certificacion ? `Certificación: ${prog.certificacion}` : ''
@@ -682,11 +794,23 @@ ${courses.length > 0
 }
 ` : ''}
 
+${!detectedProgram && courses.length === 1 ? `
+### 📖 Grupo Activo Actual (Total: 1):
+- **${courses[0].nombre}** (${courses[0].programa_nombre || 'Programa'})
+  📅 Inicio: ${courses[0].fecha_inicio || 'A confirmar'} | Fin: ${courses[0].fecha_fin || 'A confirmar'}
+  ⏰ Horario: ${courses[0].horario || 'A confirmar'}
+  👥 Cupos: ${courses[0].matriculados || 0}/${courses[0].cupos || 0} (${courses[0].cupos_disponibles || 0} disponibles)
+  👨‍🏫 Profesor: ${courses[0].profesor_nombre || 'A confirmar'}
+
+` : ''}
+
 Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y cupos disponibles.
 Los PRECIOS están en el PROGRAMA (nivel superior), NO en los grupos individuales.
 Si pregunta "¿Qué programas tienen?", lista todos los programas con precios y temario.
 Si pregunta "¿Cuándo inicia [programa]?", muestra los grupos disponibles con fechas y horarios específicos.
 Si pregunta "¿Cuánto cuesta [programa]?", usa el precio del PROGRAMA, no del grupo.
+Si solo hay 1 grupo activo en total, dilo directo y muestra sus detalles.
+Si preguntan por el profesor, usa el nombre del profesor del grupo mostrado (si no hay, responde "A confirmar").
 `
 
   return context.trim()
@@ -730,11 +854,7 @@ export async function buildHierarchicalContextWithPensum(
     
     const clasesText = prog.total_clases ? ` (${prog.total_clases} clases)` : ''
     
-    const priceText = prog.precio 
-      ? `$${prog.precio} COP`
-      : prog.precio_inscripcion && prog.precio_mensualidad
-      ? `Inscripción: $${prog.precio_inscripcion} + Mensualidad: $${prog.precio_mensualidad}`
-      : 'Precio a definir'
+    const priceText = buildProgramPriceText(prog)
     
     context += `
 - **${prog.nombre}**
@@ -800,6 +920,18 @@ export async function buildHierarchicalContextWithPensum(
     } else {
       context += `No hay grupos disponibles para este programa en este momento.\n`
     }
+  } else if (courses.length === 1) {
+    const course = courses[0]
+    const matriculados = course.matriculados || 0
+    const cupos = course.cupos || 0
+    const disponibles = course.cupos_disponibles || 0
+
+    context += `\n### 📖 Grupo Activo Actual (Total: 1):\n`
+    context += `- **${course.nombre}** (${course.programa_nombre || 'Programa'})\n`
+    context += `  📅 Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}\n`
+    context += `  ⏰ Horario: ${course.horario || 'A confirmar'}\n`
+    context += `  👥 Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)\n`
+    context += `  👨‍🏫 Profesor: ${course.profesor_nombre || 'A confirmar'}\n`
   }
 
   context += `
@@ -809,6 +941,8 @@ Si pregunta "¿Qué programas tienen?", lista todos los programas con precios, d
 Si pregunta "¿Cuándo inicia [programa]?", muestra los grupos disponibles con sus fechas y horarios específicos.
 Si pregunta "¿Cuánto cuesta [programa]?", usa el precio del PROGRAMA (inscripción + mensualidad).
 Si pregunta "¿Qué se ve en [programa]?", muestra el temario detallado por ciclos que aparece arriba.
+Si solo hay 1 grupo activo en total, dilo directo y muestra sus detalles.
+Si preguntan por el profesor, usa el nombre del profesor del grupo mostrado (si no hay, responde "A confirmar").
 `
 
   return context.trim()
