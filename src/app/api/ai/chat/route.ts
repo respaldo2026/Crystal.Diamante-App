@@ -42,6 +42,17 @@ function sanitizeForJSON(text: string | null | undefined): string {
 }
 
 /**
+ * Limpiar markdown de respuesta para WhatsApp
+ * Convierte **texto** a *texto* (negrita en WhatsApp)
+ */
+function cleanMarkdownForWhatsApp(text: string): string {
+  if (!text) return '';
+  
+  // Convertir **texto** a *texto* (negrita en WhatsApp)
+  return text.replace(/\*\*([^*]+)\*\*/g, '*$1*');
+}
+
+/**
  * Validar entrada del usuario antes de procesar
  */
 function validateUserInput(message: string, maxLength: number = 2000): { valid: boolean; error?: string; message?: string } {
@@ -983,12 +994,16 @@ export async function POST(req: NextRequest) {
 
     // Sanitizar respuesta para JSON válido
     const sanitizedResponse = sanitizeForJSON(truncatedResponse);
+    
+    // Limpiar markdown para WhatsApp (**texto** → *texto*)
+    const whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
+    
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
     const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
     return NextResponse.json({
       ok: true,
-      response: sanitizedResponse || "",
+      response: whatsappResponse || "",
       agent: sanitizedAgent || "Dany",
       knowledgeUsed: Boolean(knowledgeChunks.length > 0),
       historyLength: Number(history.length) || 0,
