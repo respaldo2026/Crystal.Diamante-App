@@ -53,6 +53,35 @@ function cleanMarkdownForWhatsApp(text: string): string {
 }
 
 /**
+ * Formatear precios colombianos con separador de mil
+ * 1000000 → $1.000.000
+ */
+function formatPrices(text: string): string {
+  if (!text) return '';
+  
+  // Buscar patrones: $123456 o números después de $
+  return text.replace(/\$(\d+)(?![\d,.])/g, (match, number) => {
+    const num = parseInt(number, 10);
+    if (isNaN(num)) return match;
+    
+    // Formatear con separador de mil (punto en Colombia)
+    const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `$${formatted}`;
+  });
+}
+
+/**
+ * Remover la palabra COP de precios
+ * "$1.000.000 COP" → "$1.000.000"
+ */
+function removeCOPCurrency(text: string): string {
+  if (!text) return '';
+  
+  // Remover COP con espacios opcionales antes o después
+  return text.replace(/\s*COP\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
  * Validar entrada del usuario antes de procesar
  */
 function validateUserInput(message: string, maxLength: number = 2000): { valid: boolean; error?: string; message?: string } {
@@ -996,7 +1025,13 @@ export async function POST(req: NextRequest) {
     const sanitizedResponse = sanitizeForJSON(truncatedResponse);
     
     // Limpiar markdown para WhatsApp (**texto** → *texto*)
-    const whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
+    let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
+    
+    // Formatear precios con separador de mil
+    whatsappResponse = formatPrices(whatsappResponse);
+    
+    // Remover la palabra COP de precios
+    whatsappResponse = removeCOPCurrency(whatsappResponse);
     
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
     const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
