@@ -264,6 +264,12 @@ function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: s
   return conversationHistory.some(msg => greetings.test(msg.agent));
 }
 
+function applyTemplate(template: string, tokens: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    return Object.prototype.hasOwnProperty.call(tokens, key) ? tokens[key] : match;
+  });
+}
+
 /**
  * Detectar señales de intención de compra o cierre
  * Retorna true si el usuario muestra intención de inscribirse/comprar
@@ -341,14 +347,29 @@ function buildAgentPrompt(
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asistente de la Academia Crystal.";
   const style = settings?.speaking_style || "Cálido y preciso.";
-  const systemPrompt = settings?.system_prompt || "Eres un asistente útil.";
+  const systemPromptTemplate = settings?.system_prompt || "Eres un asistente útil.";
   const fallback = settings?.fallback_response || "Déjame confirmarlo y te respondo pronto.";
+  const greeting = settings?.greeting || "";
   
   // Detectar si ya hay un saludo previo
   const alreadyGreeted = hasGreetingInHistory(conversationHistory);
   
   // Detectar intención de compra/cierre
   const showsBuyingIntent = detectBuyingIntent(userMessage, conversationHistory);
+
+  const greetingRule = alreadyGreeted
+    ? "YA HAS SALUDADO EN ESTA CONVERSACION. No repitas saludos."
+    : greeting
+    ? `Usa este saludo exacto al iniciar: "${greeting}".`
+    : "Saluda SOLO UNA VEZ al inicio del contacto. Si ya hablaron, ve directo al punto.";
+
+  const systemPrompt = applyTemplate(systemPromptTemplate, {
+    persona_name: persona,
+    persona_bio: bio,
+    speaking_style: style,
+    fallback_response: fallback,
+    greeting_rule: greetingRule,
+  });
 
   let prompt = `${systemPrompt}
 
@@ -370,6 +391,7 @@ function buildAgentPrompt(
 - Al finalizar (si el usuario ya quedó satisfecho), invita a seguirnos en redes en una sola frase.
 - Si hay redes en el contexto, menciónalas por nombre (Instagram/Facebook/YouTube) con el handle o URL corto.
 - No uses emojis en audio; di los nombres de las redes de forma clara.
+- ${greetingRule}
 
 # PROTOCOLO DE CIERRE DE VENTAS
 ${showsBuyingIntent ? `
