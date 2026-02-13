@@ -794,7 +794,7 @@ ${courses.length > 0
 }
 ` : ''}
 
-${!detectedProgram && courses.length === 1 ? `
+${!detectedProgram && courses.length === 1 && courses[0] ? `
 ### 📖 Grupo Activo Actual (Total: 1):
 - **${courses[0].nombre}** (${courses[0].programa_nombre || 'Programa'})
   📅 Inicio: ${courses[0].fecha_inicio || 'A confirmar'} | Fin: ${courses[0].fecha_fin || 'A confirmar'}
