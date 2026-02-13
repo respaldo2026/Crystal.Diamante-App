@@ -41,6 +41,55 @@ function sanitizeForJSON(text: string | null | undefined): string {
     .trim();
 }
 
+function safeJsonParse(raw: string): any | null {
+  try {
+    return JSON.parse(raw);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function parseKeyValueLines(raw: string): Record<string, string> {
+  const output: Record<string, string> = {};
+  const lines = raw.split(/\r?\n/);
+  for (const line of lines) {
+    const match = line.match(/^\s*([A-Za-z0-9_\-]+)\s*[:=]\s*(.+?)\s*$/);
+    if (match) {
+      const key = match[1].toLowerCase();
+      const value = match[2];
+      output[key] = value;
+    }
+  }
+  return output;
+}
+
+async function readRequestBody(req: NextRequest): Promise<any> {
+  const contentType = req.headers.get("content-type") || "";
+  const raw = await req.text();
+
+  if (!raw) return {};
+
+  if (contentType.includes("application/json")) {
+    const parsed = safeJsonParse(raw);
+    if (parsed) return parsed;
+  }
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const params = new URLSearchParams(raw);
+    return Object.fromEntries(params.entries());
+  }
+
+  const parsed = safeJsonParse(raw);
+  if (parsed) return parsed;
+
+  const kv = parseKeyValueLines(raw);
+  if (Object.keys(kv).length > 0) {
+    return kv;
+  }
+
+  return { message: raw };
+}
+
 /**
  * Limpiar markdown de respuesta para WhatsApp
  * Convierte **texto** a *texto* (negrita en WhatsApp)
@@ -879,7 +928,7 @@ export async function POST(req: NextRequest) {
       }, { status: 401 });
     }
 
-    const body = await req.json();
+    const body = await readRequestBody(req);
     const { message, phone } = extractMessageAndPhone(body || {});
 
     console.log("[chat] Input extraído:", {
