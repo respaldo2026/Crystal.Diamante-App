@@ -71,7 +71,7 @@ export default function ConversacionesPage() {
         return;
       }
 
-      setConversaciones(data || []);
+      setConversations(data || []);
 
       // Extraer lista única de números de teléfono
       const phones = [...new Set((data || []).map((c) => c.phone_number))];
