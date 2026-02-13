@@ -266,7 +266,9 @@ function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: s
 
 function applyTemplate(template: string, tokens: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    return Object.prototype.hasOwnProperty.call(tokens, key) ? tokens[key] : match;
+    return Object.prototype.hasOwnProperty.call(tokens, key)
+      ? String(tokens[key] ?? "")
+      : match;
   });
 }
 
