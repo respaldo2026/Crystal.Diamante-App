@@ -353,46 +353,41 @@ export default function LeadsPage() {
       return;
     }
 
-    Modal.confirm({
-      title: `¿Eliminar ${totalSeleccionados} lead${totalSeleccionados > 1 ? 's' : ''}?`,
-      icon: <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />,
-      content: (
-        <div>
-          <p><strong>Se eliminarán {totalSeleccionados} leads seleccionados.</strong></p>
-          <p style={{ color: "#ff4d4f" }}>⚠️ Esta acción NO se puede deshacer.</p>
-        </div>
-      ),
-      okText: "Sí, eliminar",
-      okType: "danger",
-      cancelText: "Cancelar",
-      async onOk() {
-        try {
-          setLoading(true);
-          
-          // Eliminar en lote
-          const { error } = await supabaseBrowserClient
-            .from("leads")
-            .delete()
-            .in("id", selectedRowKeys);
+    const confirmed = window.confirm(
+      `¿Eliminar ${totalSeleccionados} lead${totalSeleccionados > 1 ? "s" : ""}?\n\nEsta acción no se puede deshacer.`
+    );
 
-          if (error) {
-            console.error("Error Supabase:", error);
-            message.error("No se pudieron eliminar algunos leads");
-            return;
-          }
+    if (!confirmed) {
+      return;
+    }
 
-          // Actualizar estado local
-          setLeads((prev) => prev.filter((l) => !selectedRowKeys.includes(l.id)));
-          setSelectedRowKeys([]);
-          message.success(`${totalSeleccionados} lead${totalSeleccionados > 1 ? 's' : ''} eliminado${totalSeleccionados > 1 ? 's' : ''}`);
-        } catch (err) {
-          console.error("Error eliminando leads:", err);
-          message.error("No se pudieron eliminar los leads");
-        } finally {
-          setLoading(false);
+    const selectedIds = selectedRowKeys.map((key) => String(key));
+
+    (async () => {
+      try {
+        setLoading(true);
+
+        const { error } = await supabaseBrowserClient
+          .from("leads")
+          .delete()
+          .in("id", selectedIds);
+
+        if (error) {
+          console.error("Error Supabase:", error);
+          message.error("No se pudieron eliminar algunos leads");
+          return;
         }
-      },
-    });
+
+        setLeads((prev) => prev.filter((l) => !selectedIds.includes(String(l.id))));
+        setSelectedRowKeys([]);
+        message.success(`${totalSeleccionados} lead${totalSeleccionados > 1 ? 's' : ''} eliminado${totalSeleccionados > 1 ? 's' : ''}`);
+      } catch (err) {
+        console.error("Error eliminando leads:", err);
+        message.error("No se pudieron eliminar los leads");
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   const eliminarTodosLeads = () => {
