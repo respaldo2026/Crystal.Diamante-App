@@ -365,6 +365,11 @@ function buildAgentPrompt(
 - No invent datos.
 - Recuerda el contexto de conversaciones anteriores.
 - Responde en un lenguaje natural apto para ser pronunciado.${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
+- Entrega la información por etapas. Máximo 2 bloques cortos por respuesta.
+- Cierra preguntando si desea la siguiente parte (horarios, inversión o temario).
+- Al finalizar (si el usuario ya quedó satisfecho), invita a seguirnos en redes en una sola frase.
+- Si hay redes en el contexto, menciónalas por nombre (Instagram/Facebook/YouTube) con el handle o URL corto.
+- No uses emojis en audio; di los nombres de las redes de forma clara.
 
 # PROTOCOLO DE CIERRE DE VENTAS
 ${showsBuyingIntent ? `
