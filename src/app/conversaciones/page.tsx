@@ -39,6 +39,28 @@ import "dayjs/locale/es";
 dayjs.extend(relativeTime);
 dayjs.locale("es");
 
+// Función para procesar markdown simple (**texto** → <strong>)
+const formatAgentResponse = (text: string) => {
+  if (!text) return text;
+  
+  const parts = text.split(/(\*\*[^*]+\*\*)/);
+  
+  return (
+    <span>
+      {parts.map((part, idx) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <strong key={idx}>
+              {part.slice(2, -2)}
+            </strong>
+          );
+        }
+        return part;
+      })}
+    </span>
+  );
+};
+
 interface Conversation {
   id: string;
   phone_number: string;
@@ -207,8 +229,8 @@ export default function ConversacionesPage() {
       key: "agent_response",
       ellipsis: true,
       render: (text: string) => (
-        <Tooltip title={text}>
-          <span>{text.substring(0, 60)}...</span>
+        <Tooltip title={formatAgentResponse(text)}>
+          <span>{formatAgentResponse(text.substring(0, 60))}...</span>
         </Tooltip>
       ),
     },
@@ -458,7 +480,7 @@ export default function ConversacionesPage() {
                       }}
                     >
                       <p style={{ margin: 0 }}>
-                        {idx % 2 === 0 ? conv.user_message : conv.agent_response}
+                        {idx % 2 === 0 ? conv.user_message : formatAgentResponse(conv.agent_response)}
                       </p>
                     </div>
 
