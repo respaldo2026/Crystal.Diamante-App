@@ -55,9 +55,11 @@ function parseKeyValueLines(raw: string): Record<string, string> {
   for (const line of lines) {
     const match = line.match(/^\s*([A-Za-z0-9_\-]+)\s*[:=]\s*(.+?)\s*$/);
     if (match) {
-      const key = match[1].toLowerCase();
-      const value = match[2];
-      output[key] = value;
+      const key = (match[1] || "").toLowerCase();
+      const value = match[2] || "";
+      if (key) {
+        output[key] = value;
+      }
     }
   }
   return output;
