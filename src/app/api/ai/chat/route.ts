@@ -308,10 +308,12 @@ function buildAgentPrompt(
 - Bio: ${bio}
 - Estilo: ${style}
 
-# Reglas de Contenido
-- Si no sabes algo con certeza, responde: "${fallback}"
-- Usa el contexto de conocimiento disponible
-- No inventes datos ni horarios
+# Reglas de Contenido - CRÍTICO
+⚠️ NUNCA inventes información. Si el contexto no contiene un dato específico (horario, precio, fecha), di "${fallback}"
+⚠️ Solo usa información que esté EXPLÍCITAMENTE en el contexto jerárquico proporcionado abajo
+⚠️ Si preguntan por un curso/grupo y NO aparece en el contexto, di que no está disponible actualmente
+- Usa SOLO el contexto de conocimiento disponible (programas y grupos listados abajo)
+- No inventes horarios, precios, fechas o nombres de cursos que no estén en el contexto
 - Recuerda el contexto de conversaciones anteriores${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
 
 # FORMATO DE RESPUESTA - OBLIGATORIO
@@ -384,6 +386,12 @@ Solo darás el número de contacto (+57 301 203 8582) cuando:
       prompt += `\n## Fragmento ${idx + 1}:\n${chunk.slice(0, 600)}\n`;
     });
   }
+
+  prompt += `\n# 🎯 INSTRUCCIÓN DE RESPUESTA:
+Responde SOLO con información explícita del contexto anterior (programas, grupos, horarios, precios).
+Si el usuario pregunta por un curso/programa que NO está listado arriba, responde: "Actualmente no tengo ese programa disponible. Puedo ofrecerte información sobre [listar programas disponibles]."
+NO inventes horarios, precios ni fechas que no estén en el contexto.
+`;
 
   prompt += `\n# Mensaje del usuario:\n${userMessage}\n\n# Tu respuesta (como ${persona}):`;
 
@@ -515,6 +523,20 @@ export async function POST(req: NextRequest) {
     
     // 5. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
     const hierarchicalContext = await buildHierarchicalContextWithPensum(programs, courses, detectedProgram, academy, mediosPago);
+
+    // 🔍 DEBUG: Ver qué información tiene el agente
+    console.log('=== CONTEXTO DEL AGENTE ===');
+    console.log(`📚 Programas encontrados: ${programs.length}`);
+    console.log(`📖 Cursos/Grupos encontrados: ${courses.length}`);
+    if (courses.length > 0) {
+      courses.forEach(c => {
+        console.log(`  - ${c.nombre} | Programa: ${c.programa_nombre} | Horario: ${c.horario} | Precio: $${c.precio_inscripcion || c.precio} | Inicio: ${c.fecha_inicio}`);
+      });
+    }
+    if (detectedProgram) {
+      console.log(`🎯 Programa detectado: ${detectedProgram.nombre}`);
+    }
+    console.log(`📝 Contexto jerárquico (primeros 500 chars): ${hierarchicalContext.substring(0, 500)}`);
 
     // Obtener conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, message, 3);
