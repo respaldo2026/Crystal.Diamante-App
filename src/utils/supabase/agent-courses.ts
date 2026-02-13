@@ -1,7 +1,16 @@
 import { createClient } from "@supabase/supabase-js"
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://sdrdcpnqcqazxnhnjxyj.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkcmRjcG5xY3Fhenhuo2h0dHBzOi8vc2RyZGNwbnFjcWF6eG5obmp4eWouc3VwYWJhc2UuY28iLCJpYXQiOjE3MzA3NzkyMzgsImV4cCI6MjA0NjM1OTIzOH0.nZ_Q2J7u-sIAm9_HZEoG0fL8LiDo-a6XfP_R8CgKnOE'
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+
+function getSupabaseClient() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.error("[agent-courses] Missing Supabase credentials. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
+    throw new Error("Missing Supabase credentials")
+  }
+
+  return createClient(SUPABASE_URL, SUPABASE_KEY)
+}
 
 interface AcademyInfo {
   id: string
@@ -165,7 +174,7 @@ function expandTokensWithSynonyms(tokens: string[]): string[] {
  */
 export async function getMediosPago(): Promise<MedioPago[]> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     const { data, error } = await supabase
       .from('medios_pago')
@@ -210,7 +219,7 @@ export function formatMediosPago(mediosPago: MedioPago[]): string {
  */
 export async function getAcademyInfo(): Promise<AcademyInfo | null> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     const { data, error } = await supabase
       .from('configuracion')
@@ -236,7 +245,7 @@ export async function getAcademyInfo(): Promise<AcademyInfo | null> {
  */
 export async function getPensumByProgram(programaId: number): Promise<PensumCiclo[]> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     // Obtener ciclos del pensum
     const { data: ciclos, error: errorCiclos } = await supabase
@@ -296,7 +305,7 @@ export async function getPensumByProgram(programaId: number): Promise<PensumCicl
  */
 export async function getProgramsForAgent(): Promise<ProgramInfo[]> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     const { data, error } = await supabase
       .from('programas')
@@ -321,7 +330,7 @@ export async function getProgramsForAgent(): Promise<ProgramInfo[]> {
  */
 export async function getCoursesByProgram(programId: number): Promise<CourseInfo[]> {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
 
     const { data, error } = await supabase
       .from('vw_cursos_para_ia')
@@ -426,7 +435,7 @@ export async function getCoursesForQuery(message: string, programs: ProgramInfo[
   
   // Si no menciona programa específico, intentar filtrar por palabras clave
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('vw_cursos_para_ia')
       .select('*')
