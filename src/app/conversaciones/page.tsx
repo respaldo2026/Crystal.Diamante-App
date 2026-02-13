@@ -56,6 +56,8 @@ export default function ConversacionesPage() {
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [phoneList, setPhoneList] = useState<string[]>([]);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [loadingDelete, setLoadingDelete] = useState(false);
 
   // Cargar conversaciones
   const cargarConversaciones = async () => {
@@ -138,6 +140,39 @@ export default function ConversacionesPage() {
     } catch (err) {
       console.error("Error eliminando:", err);
       alert("Error al eliminar");
+    }
+  };
+
+  // Eliminar múltiples conversaciones
+  const eliminarMultiples = async () => {
+    if (selectedRows.length === 0) {
+      alert("Selecciona al menos una conversación");
+      return;
+    }
+
+    if (!window.confirm(`¿Eliminar ${selectedRows.length} conversaciones?`)) {
+      return;
+    }
+
+    try {
+      setLoadingDelete(true);
+      const { error } = await supabaseBrowserClient
+        .from("agent_conversations")
+        .delete()
+        .in("id", selectedRows);
+
+      if (error) throw error;
+
+      setConversations((prev) =>
+        prev.filter((c) => !selectedRows.includes(c.id))
+      );
+      setSelectedRows([]);
+      alert(`${selectedRows.length} conversaciones eliminadas`);
+    } catch (err) {
+      console.error("Error eliminando múltiples:", err);
+      alert("Error al eliminar conversaciones");
+    } finally {
+      setLoadingDelete(false);
     }
   };
 
@@ -304,6 +339,33 @@ export default function ConversacionesPage() {
         </Space>
       </Card>
 
+      {/* Acciones en lote */}
+      {selectedRows.length > 0 && (
+        <Card
+          style={{
+            marginBottom: "24px",
+            backgroundColor: "#e6f7ff",
+            borderRadius: "12px",
+            border: "1px solid #1890ff",
+          }}
+        >
+          <Space>
+            <span style={{ fontSize: "14px", fontWeight: "600" }}>
+              {selectedRows.length} conversación(es) seleccionada(s)
+            </span>
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              loading={loadingDelete}
+              onClick={eliminarMultiples}
+            >
+              Eliminar seleccionadas
+            </Button>
+            <Button onClick={() => setSelectedRows([])}>Limpiar selección</Button>
+          </Space>
+        </Card>
+      )}
+
       {/* Tabla de Conversaciones */}
       <Card
         style={{ borderRadius: "12px" }}
@@ -332,6 +394,15 @@ export default function ConversacionesPage() {
               pagination={{ pageSize: 20, showSizeChanger: true }}
               size="middle"
               scroll={{ x: 1200 }}
+              rowSelection={{
+                selectedRowKeys: selectedRows,
+                onChange: (keys) => setSelectedRows(keys as string[]),
+                selections: [
+                  Table.SELECTION_ALL,
+                  Table.SELECTION_INVERT,
+                  Table.SELECTION_NONE,
+                ],
+              }}
             />
           )}
         </Spin>
