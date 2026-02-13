@@ -308,12 +308,30 @@ function buildAgentPrompt(
 - Bio: ${bio}
 - Estilo: ${style}
 
-# Reglas Generales
+# Reglas de Contenido
 - Si no sabes algo con certeza, responde: "${fallback}"
-- Usa el contexto de conocimiento si está disponible.
-- Sé breve, claro y amable.
-- No inventes datos.
-- Recuerda el contexto de conversaciones anteriores.${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
+- Usa el contexto de conocimiento disponible
+- No inventes datos ni horarios
+- Recuerda el contexto de conversaciones anteriores${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
+
+# FORMATO DE RESPUESTA - OBLIGATORIO
+✅ Usa emojis al inicio de cada sección
+✅ Separa con líneas en blanco entre secciones  
+✅ Usa listas con viñetas (✅, 📍, ⏰, 💰, 🎓, etc.)
+✅ NUNCA agrupes todo en un solo párrafo denso
+✅ Haz que sea fácil de leer en WhatsApp/móvil
+
+Ejemplo de formato correcto:
+🗓 INICIAMOS: Este miércoles 18 de febrero
+⏰ HORARIO: 4:30 PM
+⏳ DURACIÓN: 5 meses
+
+🎁 ¿QUÉ INCLUYE?
+✅ Kit de productos mensuales
+✅ Camiseta oficial
+✅ Certificación profesional
+
+📍 Ubicación en Cali
 
 # PROTOCOLO DE CIERRE DE VENTAS 🎯
 ${showsBuyingIntent ? `
