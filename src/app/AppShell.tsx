@@ -202,6 +202,15 @@ const allResources = [
     },
   },
   {
+    key: "conversaciones",
+    name: "conversaciones",
+    list: "/conversaciones",
+    meta: {
+      label: "Conversaciones IA",
+      icon: <UnorderedListOutlined />,
+    },
+  },
+  {
     key: "configuracion",
     name: "configuracion",
     list: "/configuracion",
