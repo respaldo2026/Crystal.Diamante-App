@@ -509,7 +509,7 @@ ${programs
   .join('\n')}
 
 ${detectedProgram ? `
-### 📖 Grupos del Programa "${detectedProgram.nombre}":
+### 📖 Grupos Disponibles del Programa "${detectedProgram.nombre}":
 ${courses.length > 0 
   ? courses
       .map((course) => {
@@ -519,20 +519,21 @@ ${courses.length > 0
         
         return `
 - **${course.nombre}**
-  Horario: ${course.horario || 'A confirmar'}
-  Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
-  Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
-  Profesor: ${course.profesor_nombre || 'A confirmar'}
-  Precio: $${course.precio_inscripcion || course.precio || 'A definir'}`
+  📅 Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
+  ⏰ Horario: ${course.horario || 'A confirmar'}
+  👥 Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
+  👨‍🏫 Profesor: ${course.profesor_nombre || 'A confirmar'}`
       })
-      .join('\n')
+      .join('\n') + '\n\n💰 Inversión: Ver información del programa arriba'
   : 'No hay grupos disponibles para este programa en este momento.'
 }
 ` : ''}
 
-Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y disponibilidad.
-Si pregunta "¿Qué programas tienen?", lista todos los programas y su temario.
-Si pregunta "¿Cuáles son los grupos de [nombre]?", muestra solo grupos de ese programa con su temario detallado.
+Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y cupos disponibles.
+Los PRECIOS están en el PROGRAMA (nivel superior), NO en los grupos individuales.
+Si pregunta "¿Qué programas tienen?", lista todos los programas con precios y temario.
+Si pregunta "¿Cuándo inicia [programa]?", muestra los grupos disponibles con fechas y horarios específicos.
+Si pregunta "¿Cuánto cuesta [programa]?", usa el precio del PROGRAMA, no del grupo.
 `
 
   return context.trim()
@@ -628,7 +629,7 @@ export async function buildHierarchicalContextWithPensum(
 
   // Mostrar grupos disponibles si hay un programa detectado
   if (detectedProgram) {
-    context += `\n### 📖 Grupos del Programa "${detectedProgram.nombre}":\n`
+    context += `\n### 📖 Grupos Disponibles del Programa "${detectedProgram.nombre}":\n`
     if (courses.length > 0) {
       courses.forEach(course => {
         const matriculados = course.matriculados || 0
@@ -637,21 +638,24 @@ export async function buildHierarchicalContextWithPensum(
         
         context += `
 - **${course.nombre}**
-  Horario: ${course.horario || 'A confirmar'}
-  Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
-  Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
-  Profesor: ${course.profesor_nombre || 'A confirmar'}
-  Precio: $${course.precio_inscripcion || course.precio || 'A definir'}\n`
+  📅 Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
+  ⏰ Horario: ${course.horario || 'A confirmar'}
+  👥 Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
+  👨‍🏫 Profesor: ${course.profesor_nombre || 'A confirmar'}\n`
       })
+      context += `\n💰 Inversión: Ver información del programa arriba\n`
     } else {
       context += `No hay grupos disponibles para este programa en este momento.\n`
     }
   }
 
   context += `
-Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y el temario detallado.
-Si pregunta "¿Qué programas tienen?", lista todos los programas con su información general.
-Si pregunta "¿Cuál es el contenido de [programa]?" o "¿Qué se ve en [programa]?", muestra el temario completo por ciclos.
+Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios, fechas y cupos disponibles.
+Los PRECIOS están siempre en el PROGRAMA (nivel superior), NO en los grupos individuales.
+Si pregunta "¿Qué programas tienen?", lista todos los programas con precios, duración y temario.
+Si pregunta "¿Cuándo inicia [programa]?", muestra los grupos disponibles con sus fechas y horarios específicos.
+Si pregunta "¿Cuánto cuesta [programa]?", usa el precio del PROGRAMA (inscripción + mensualidad).
+Si pregunta "¿Qué se ve en [programa]?", muestra el temario detallado por ciclos que aparece arriba.
 `
 
   return context.trim()
