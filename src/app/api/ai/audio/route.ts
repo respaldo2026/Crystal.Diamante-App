@@ -612,10 +612,12 @@ async function textToSpeech(text: string): Promise<Buffer> {
         },
         body: JSON.stringify({
           text,
-          model_id: "eleven_monolingual_v1",
+          model_id: "eleven_multilingual_v2",
           voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
+            stability: 0.35,
+            similarity_boost: 0.7,
+            style: 0.2,
+            use_speaker_boost: true,
           },
         }),
       }
@@ -650,6 +652,35 @@ function removeEmojis(text: string): string {
     // Limpiar espacios múltiples que quedan
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Limpiar texto para TTS y evitar pausas extra o caracteres raros
+ */
+function cleanForTTS(text: string): string {
+  if (!text) return '';
+
+  let output = removeEmojis(text);
+
+  // Quitar markdown simple y símbolos comunes
+  output = output
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/[~`_]/g, '')
+    .replace(/^\s*[•\-]\s+/gm, '')
+    .replace(/\s*✅\s*/g, ' ')
+    .replace(/\s*•\s*/g, ' ');
+
+  // Unificar saltos y evitar pausas largas
+  output = output
+    .replace(/\n+/g, '. ')
+    .replace(/\s*\.\s*\.\s*\.+/g, '. ')
+    .replace(/([!?])\1+/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s*([,.!?])\s*/g, '$1 ')
+    .trim();
+
+  return output;
 }
 
 /**
@@ -904,7 +935,7 @@ export async function POST(req: NextRequest) {
     }
     
     // 9.5. IMPORTANTE: Eliminar emojis de la respuesta antes de convertir a audio
-    const agentResponseClean = removeEmojis(agentResponse);
+    const agentResponseClean = cleanForTTS(agentResponse);
 
     // 10. Guardar en historial de conversación (con emojis originales)
     await saveConversation(supabase, phone || "unknown", transcription, agentResponse, transcription);

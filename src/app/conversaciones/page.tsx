@@ -19,6 +19,7 @@ import {
   Badge,
   Timeline,
   Divider,
+  Tabs,
 } from "antd";
 import {
   SearchOutlined,
@@ -78,6 +79,9 @@ interface ConversationThread {
   last_date: string;
   last_user_message: string;
   last_agent_response: string;
+  is_high_intent: boolean;
+  asked_contact: boolean;
+  asked_payment: boolean;
 }
 
 export default function ConversacionesPage() {
@@ -89,6 +93,16 @@ export default function ConversacionesPage() {
   const [phoneList, setPhoneList] = useState<string[]>([]);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [loadingDelete, setLoadingDelete] = useState(false);
+  const [activeTab, setActiveTab] = useState("todos");
+
+  const normalizeText = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  const matchesAny = (text: string, patterns: RegExp[]) =>
+    patterns.some((pattern) => pattern.test(text));
 
   // Cargar conversaciones
   const cargarConversaciones = async () => {
@@ -136,6 +150,56 @@ export default function ConversacionesPage() {
         .slice()
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       const last = sorted[sorted.length - 1];
+      const combined = sorted
+        .map((item) => `${item.user_message} ${item.agent_response}`)
+        .join(" ");
+      const combinedNormalized = normalizeText(combined);
+
+      const highIntentPatterns = [
+        /quiero\s+(inscribirme|matricularme|inscribir|registrarme)/i,
+        /quiero\s+matricularme/i,
+        /quiero\s+inscribirme/i,
+        /quiero\s+estudiar/i,
+        /quiero\s+estudiarlo/i,
+        /quiero\s+hacer\s+el\s+curso/i,
+        /me\s+quiero\s+inscribir/i,
+        /me\s+quiero\s+matricular/i,
+        /como\s+me\s+(inscribo|registro)/i,
+        /como\s+me\s+matriculo/i,
+        /cuando\s+empieza/i,
+        /cuando\s+inicia/i,
+        /cuando\s+arranca/i,
+        /como\s+hago\s+el\s+pago/i,
+        /como\s+pago/i,
+        /donde\s+(me\s+inscribo|pago)/i,
+        /quiero\s+separar\s+cupo/i,
+        /ya\s+quiero\s+(empezar|iniciar)/i,
+      ];
+
+      const contactPatterns = [
+        /numero/i,
+        /whatsapp/i,
+        /admisiones/i,
+        /contacto/i,
+        /telefono/i,
+      ];
+
+      const paymentPatterns = [
+        /medios\s+de\s+pago/i,
+        /pago/i,
+        /cuenta/i,
+        /transferencia/i,
+        /tarjeta/i,
+        /nequi/i,
+        /daviplata/i,
+        /bancolombia/i,
+        /cuota/i,
+      ];
+
+      const isHighIntent = matchesAny(combinedNormalized, highIntentPatterns);
+      const askedContact = matchesAny(combinedNormalized, contactPatterns);
+      const askedPayment = matchesAny(combinedNormalized, paymentPatterns);
+
       result.push({
         phone_number: phone,
         messages: sorted,
@@ -143,6 +207,9 @@ export default function ConversacionesPage() {
         last_date: last?.created_at || "",
         last_user_message: last?.user_message || "",
         last_agent_response: last?.agent_response || "",
+        is_high_intent: isHighIntent,
+        asked_contact: askedContact,
+        asked_payment: askedPayment,
       });
     }
 
@@ -155,6 +222,10 @@ export default function ConversacionesPage() {
   const conversationsFiltradas = useMemo(() => {
     const query = searchText.toLowerCase();
     return threads.filter((thread) => {
+      if (activeTab === "high" && !thread.is_high_intent) return false;
+      if (activeTab === "contact" && !thread.asked_contact) return false;
+      if (activeTab === "payment" && !thread.asked_payment) return false;
+
       const matchPhone = !selectedPhone || thread.phone_number === selectedPhone;
       if (!matchPhone) return false;
 
@@ -167,7 +238,7 @@ export default function ConversacionesPage() {
         conv.agent_response.toLowerCase().includes(query)
       );
     });
-  }, [threads, searchText, selectedPhone]);
+  }, [threads, searchText, selectedPhone, activeTab]);
 
   // Estadísticas
   const stats = useMemo(() => {
@@ -179,6 +250,15 @@ export default function ConversacionesPage() {
       ).length,
     };
   }, [conversations, phoneList]);
+
+  const tabCounts = useMemo(() => {
+    return {
+      all: threads.length,
+      high: threads.filter((t) => t.is_high_intent).length,
+      contact: threads.filter((t) => t.asked_contact).length,
+      payment: threads.filter((t) => t.asked_payment).length,
+    };
+  }, [threads]);
 
   // Obtener conversación por teléfono
   const phoneConversations = useMemo(() => {
@@ -449,6 +529,17 @@ export default function ConversacionesPage() {
           </Space>
         }
       >
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            { key: "todos", label: `Todos (${tabCounts.all})` },
+            { key: "high", label: `Alta intencion (${tabCounts.high})` },
+            { key: "contact", label: `Pidio contacto (${tabCounts.contact})` },
+            { key: "payment", label: `Medios de pago (${tabCounts.payment})` },
+          ]}
+          style={{ marginBottom: "12px" }}
+        />
         <Spin spinning={loading}>
           {conversationsFiltradas.length === 0 ? (
             <Empty
