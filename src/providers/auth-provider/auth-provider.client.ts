@@ -22,9 +22,23 @@ export const authProvider: AuthProvider = {
       if (data?.user) {
         const { data: perfil, error: perfilError } = await supabaseBrowserClient
           .from("perfiles")
-          .select("rol")
+          .select("rol, email")
           .eq("id", data.user.id)
           .maybeSingle();
+
+        const perfilEmail = (perfil?.email || "").toLowerCase();
+        const authEmail = (data.user.email || "").toLowerCase();
+
+        if (perfilError || !perfil || !perfilEmail || perfilEmail !== authEmail) {
+          await supabaseBrowserClient.auth.signOut();
+          return {
+            success: false,
+            error: {
+              name: "LoginError",
+              message: "Solo puedes iniciar sesion con el correo registrado en tu ficha de inscripcion.",
+            },
+          };
+        }
 
         console.log("[AUTH] Login - User ID:", data.user.id);
         console.log("[AUTH] Login - Perfil Error:", perfilError);

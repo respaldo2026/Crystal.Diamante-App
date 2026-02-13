@@ -5,6 +5,7 @@ import { Alert, Button, Divider, Input, Form } from "antd";
 import { GoogleOutlined, LockOutlined, MailOutlined, EyeOutlined, EyeInvisibleOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 
 export const AuthPage = (props: AuthPageProps) => {
   const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
@@ -12,6 +13,8 @@ export const AuthPage = (props: AuthPageProps) => {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [form] = Form.useForm();
   const { mutate: login, isPending } = useLogin();
+  const searchParams = useSearchParams();
+  const authError = searchParams.get("error");
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -128,6 +131,19 @@ export const AuthPage = (props: AuthPageProps) => {
               }}
             />
           </Form.Item>
+
+          {authError === "email-no-registrado" && !passwordError && (
+            <Alert
+              message="Solo puedes iniciar sesion con el correo registrado en tu ficha de inscripcion."
+              type="error"
+              showIcon
+              style={{
+                marginBottom: isMobile ? "12px" : "16px",
+                fontSize: isMobile ? "12px" : "13px",
+                borderRadius: 8,
+              }}
+            />
+          )}
 
           {passwordError && (
             <Alert

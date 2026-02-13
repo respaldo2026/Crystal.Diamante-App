@@ -40,16 +40,45 @@ export async function GET(request: NextRequest) {
 
     // Always redirect to home (or / after successful exchange)
     const redirectTo = url.searchParams.get("redirect") || "/";
+
+    if (error) {
+      const response = NextResponse.redirect(url.origin + "/login?error=oauth");
+      pendingCookies.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options);
+      });
+      response.headers.set("x-auth-error", error.message);
+      return response;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    const authEmail = (userData?.user?.email || "").toLowerCase();
+
+    let emailOk = false;
+    if (userData?.user?.id && authEmail) {
+      const { data: perfil } = await supabase
+        .from("perfiles")
+        .select("email")
+        .eq("id", userData.user.id)
+        .maybeSingle();
+
+      const perfilEmail = (perfil?.email || "").toLowerCase();
+      emailOk = Boolean(perfilEmail && perfilEmail === authEmail);
+    }
+
+    if (!emailOk) {
+      await supabase.auth.signOut();
+      const response = NextResponse.redirect(url.origin + "/login?error=email-no-registrado");
+      pendingCookies.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options);
+      });
+      return response;
+    }
+
     const response = NextResponse.redirect(url.origin + redirectTo);
 
     pendingCookies.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, options);
     });
-
-    if (error) {
-      // Preserve cookies even on error; add error marker for debugging
-      response.headers.set("x-auth-error", error.message);
-    }
 
     return response;
   } catch (e: any) {
