@@ -454,8 +454,26 @@ function pickFirstNonEmptyString(...candidates: Array<any>): string {
     if (typeof candidate === "string" && candidate.trim()) {
       return candidate.trim();
     }
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return String(candidate);
+    }
   }
   return "";
+}
+
+function normalizePhoneIdentifier(raw: string): string {
+  const digits = (raw || "").replace(/\D/g, "");
+  if (!digits) return "unknown";
+
+  if (digits.length === 10 && digits.startsWith("3")) {
+    return `57${digits}`;
+  }
+
+  if (digits.startsWith("00") && digits.length > 2) {
+    return digits.slice(2);
+  }
+
+  return digits;
 }
 
 function extractStringsDeep(input: any, maxDepth = 4): string[] {
@@ -490,6 +508,7 @@ function extractStringsDeep(input: any, maxDepth = 4): string[] {
 function extractMessageAndPhone(body: any): { message: string; phone: string } {
   const webhookMessage = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
   const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
+  const webhookContactPhone = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.wa_id;
 
   const nestedMessage = body?.messages?.[0]?.text?.body;
   const nestedPhone = body?.messages?.[0]?.from;
@@ -538,10 +557,11 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     body?.contact,
     nestedPhone,
     webhookPhone,
+    webhookContactPhone,
     "unknown"
   );
 
-  return { message, phone };
+  return { message, phone: normalizePhoneIdentifier(phone) };
 }
 
 async function getConversationHistory(

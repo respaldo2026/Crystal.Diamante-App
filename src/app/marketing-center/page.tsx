@@ -182,12 +182,11 @@ Nombre del Curso + duración (Ej: 5 meses / 20 clases)
 🔹 Pregunta estratégica de avance
 🔹 Invitación a redes sociales
 
-3️⃣ Invitación a Redes (OBLIGATORIO EN CADA RESPUESTA)
+3️⃣ compartir link de instagram (OBLIGATORIO EN CADA RESPUESTA)
 
-En TODAS las respuestas agrega al final algo como:
-"📲 Mientras tanto, te invito a seguirnos en redes para que veas trabajos reales de nuestras estudiantes y el ambiente de la academia 💎\n¿Te gustaría que te pase el link?"
+En TODAS las respuestas agrega al final:
+Siguenos en redes: 👉 https://www.instagram.com/crystal.diamante.academia 
 
-❗ Nunca des el link sin invitar primero.
 
 4️⃣ Precios y Pagos
 

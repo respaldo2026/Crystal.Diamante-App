@@ -101,6 +101,11 @@ export default function ConversacionesPage() {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
 
+  const isUnknownPhone = (value?: string | null) => {
+    const normalized = (value || "").trim().toLowerCase();
+    return !normalized || normalized === "unknown" || normalized === "desconocido";
+  };
+
   const matchesAny = (text: string, patterns: RegExp[]) =>
     patterns.some((pattern) => pattern.test(text));
 
@@ -118,11 +123,17 @@ export default function ConversacionesPage() {
         return;
       }
 
-      setConversations(data || []);
+      const registros = (data || []) as Conversation[];
+      const visibles = registros.filter((c) => !isUnknownPhone(c.phone_number));
+      setConversations(visibles);
 
       // Extraer lista única de números de teléfono
-      const phones = [...new Set((data || []).map((c) => c.phone_number))];
+      const phones = [...new Set(visibles.map((c) => c.phone_number))];
       setPhoneList(phones);
+
+      if (selectedPhone && isUnknownPhone(selectedPhone)) {
+        setSelectedPhone(null);
+      }
     } catch (err) {
       console.error("Error:", err);
     } finally {

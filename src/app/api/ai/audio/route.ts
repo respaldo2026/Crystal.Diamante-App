@@ -44,15 +44,34 @@ function pickFirstNonEmptyString(...candidates: Array<any>): string {
     if (typeof candidate === "string" && candidate.trim()) {
       return candidate.trim();
     }
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return String(candidate);
+    }
   }
   return "";
 }
 
+function normalizePhoneIdentifier(raw: string): string {
+  const digits = (raw || "").replace(/\D/g, "");
+  if (!digits) return "unknown";
+
+  if (digits.length === 10 && digits.startsWith("3")) {
+    return `57${digits}`;
+  }
+
+  if (digits.startsWith("00") && digits.length > 2) {
+    return digits.slice(2);
+  }
+
+  return digits;
+}
+
 function extractPhoneFromAudioBody(body: any): string {
   const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
+  const webhookContactPhone = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.wa_id;
   const nestedPhone = body?.messages?.[0]?.from;
 
-  return pickFirstNonEmptyString(
+  const phone = pickFirstNonEmptyString(
     body?.phone,
     body?.phone_number,
     body?.contact?.phone,
@@ -61,8 +80,11 @@ function extractPhoneFromAudioBody(body: any): string {
     body?.wa_id,
     nestedPhone,
     webhookPhone,
+    webhookContactPhone,
     "unknown"
   );
+
+  return normalizePhoneIdentifier(phone);
 }
 
 /**
