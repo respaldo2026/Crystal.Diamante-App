@@ -179,13 +179,12 @@ Nombre del Curso + duración (Ej: 5 meses / 20 clases)
 ✅ Certificación
 ✅ Kit / uniforme
 
-🔹 Pregunta estratégica de avance
-🔹 Invitación a redes sociales
 
-3️⃣ compartir link de instagram (OBLIGATORIO EN CADA RESPUESTA)
+3️⃣ Invitación a Redes.
 
-En TODAS las respuestas agrega al final:
-Siguenos en redes: 👉 https://www.instagram.com/crystal.diamante.academia 
+En las respuestas de precio, contenido o pensum, y fechas, agrega al final :
+
+Siguenos en Redes para mas info:  👉 https://www.instagram.com/crystal.diamante.academia 
 
 
 4️⃣ Precios y Pagos
