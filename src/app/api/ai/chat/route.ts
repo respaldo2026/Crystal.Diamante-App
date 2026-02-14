@@ -128,8 +128,13 @@ function formatPrices(text: string): string {
 function removeCOPCurrency(text: string): string {
   if (!text) return '';
   
-  // Remover COP con espacios opcionales antes o después
-  return text.replace(/\s*COP\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+  // Remover COP preservando saltos de línea para formato WhatsApp-friendly
+  return text
+    .replace(/[ \t]*COP\b/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /**

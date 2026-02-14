@@ -39,6 +39,32 @@ function validateRequest(request: NextRequest): boolean {
   return false;
 }
 
+function pickFirstNonEmptyString(...candidates: Array<any>): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return "";
+}
+
+function extractPhoneFromAudioBody(body: any): string {
+  const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
+  const nestedPhone = body?.messages?.[0]?.from;
+
+  return pickFirstNonEmptyString(
+    body?.phone,
+    body?.phone_number,
+    body?.contact?.phone,
+    body?.contact?.wa_id,
+    body?.from,
+    body?.wa_id,
+    nestedPhone,
+    webhookPhone,
+    "unknown"
+  );
+}
+
 /**
  * Obtener historial reciente de conversación
  */
@@ -744,7 +770,8 @@ export async function POST(req: NextRequest) {
 
     // 2. Parsear body
     const body = await req.json();
-    const { media_id, audio_url, phone, whatsapp_access_token } = body || {};
+    const { media_id, audio_url, whatsapp_access_token } = body || {};
+    const resolvedPhone = extractPhoneFromAudioBody(body || {});
 
     // Aceptar tanto media_id como audio_url para flexibilidad
     if (!media_id && !audio_url) {
@@ -827,7 +854,7 @@ export async function POST(req: NextRequest) {
 
     // 7. Obtener historial de conversación
     console.log("[POST /api/ai/audio] Leyendo historial de conversación...");
-    const history = await getConversationHistory(supabase, phone || "unknown", 5);
+    const history = await getConversationHistory(supabase, resolvedPhone, 5);
 
     // 7.5. Obtener información JERÁRQUICA: todos los programas (primaria)
     console.log("[POST /api/ai/audio] Leyendo programas disponibles...");
@@ -896,7 +923,7 @@ export async function POST(req: NextRequest) {
     const agentResponseClean = cleanForTTS(agentResponse);
 
     // 10. Guardar en historial de conversación (con emojis originales)
-    await saveConversation(supabase, phone || "unknown", transcription, agentResponse, transcription);
+    await saveConversation(supabase, resolvedPhone, transcription, agentResponse, transcription);
 
     // 11. TTS: Convertir respuesta a audio (OPCIONAL - solo si Elevenlabs está configurado)
     let audioUrl = "";
@@ -908,7 +935,7 @@ export async function POST(req: NextRequest) {
 
         // 12. Subir audio a Supabase storage
         const timestamp = Date.now();
-        const filename = `responses/${timestamp}-${phone || "unknown"}.mp3`;
+        const filename = `responses/${timestamp}-${resolvedPhone}.mp3`;
         console.log("[POST /api/ai/audio] Subiendo audio a Supabase:", filename);
         audioUrl = await uploadAudioToSupabase(supabase, responseAudioBuffer, filename);
       } else {
