@@ -70,6 +70,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [savingCalificacionId, setSavingCalificacionId] = useState<string | null>(null);
   const [temas, setTemas] = useState<Tema[]>([]);
   const [materiales, setMateriales] = useState<any[]>([]);
+  const [materialesClase, setMaterialesClase] = useState<any[]>([]);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalTemaVisible, setModalTemaVisible] = useState(false);
@@ -433,9 +434,23 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           .eq("programa_id", cursoConProfesor.programa_id)
           .order("orden", { ascending: true });
         setMateriales(materialesData || []);
+
+        const { data: materialesClaseData } = await supabaseBrowserClient
+          .from("materiales_clase")
+          .select(`
+            *,
+            pensum_cursos: pensum_curso_id (id, nombre_curso, orden),
+            pensum: pensum_id (id, nombre_ciclo, numero_ciclo)
+          `)
+          .eq("programa_id", cursoConProfesor.programa_id)
+          .eq("activo", true)
+          .order("orden", { ascending: true })
+          .order("created_at", { ascending: true });
+        setMaterialesClase(materialesClaseData || []);
       } else {
         setTemas([]);
         setMateriales([]);
+        setMaterialesClase([]);
       }
 
       // Sesiones de clase
@@ -924,7 +939,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   type="info"
                   showIcon
                 />
-                {materiales.length > 0 ? (
+                {materiales.length > 0 || materialesClase.length > 0 ? (
                   (() => {
                     const pensumNombre = (pensumId?: string | number | null) => {
                       if (pensumId == null) return "Sin ciclo";
@@ -948,6 +963,47 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
                     return (
                       <Space direction="vertical" size={16} style={{ marginTop: 16, width: "100%" }}>
+                        {materialesClase.length > 0 ? (
+                          (() => {
+                            const agrupadosPorTema = materialesClase.reduce<Record<string, any[]>>((acc, material) => {
+                              const key = String(material.pensum_curso_id || "sin-tema");
+                              if (!acc[key]) acc[key] = [];
+                              acc[key].push(material);
+                              return acc;
+                            }, {});
+
+                            return (
+                              <Card type="inner" title="Materiales necesarios por clase" style={{ marginBottom: 8 }}>
+                                <List
+                                  dataSource={Object.entries(agrupadosPorTema)}
+                                  renderItem={([temaId, items]) => {
+                                    const temaNombre = (items?.[0] as any)?.pensum_cursos?.nombre_curso || "Clase";
+                                    return (
+                                      <List.Item key={`req-${temaId}`}>
+                                        <List.Item.Meta
+                                          title={<Text strong>{temaNombre}</Text>}
+                                          description={
+                                            <Space direction="vertical" size={4}>
+                                              {(items as any[]).map((item: any) => (
+                                                <Text key={item.id} type="secondary">
+                                                  • {item.nombre_material}
+                                                  {item.cantidad ? ` (${item.cantidad}${item.unidad ? ` ${item.unidad}` : ""})` : ""}
+                                                  {item.obligatorio ? " • obligatorio" : " • opcional"}
+                                                  {item.observaciones ? ` — ${item.observaciones}` : ""}
+                                                </Text>
+                                              ))}
+                                            </Space>
+                                          }
+                                        />
+                                      </List.Item>
+                                    );
+                                  }}
+                                />
+                              </Card>
+                            );
+                          })()
+                        ) : null}
+
                         {Object.entries(grupos).map(([key, mats]) => (
                           <Card
                             key={key}

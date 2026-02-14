@@ -19,7 +19,8 @@ import {
   Divider,
   List,
   Collapse,
-  Typography
+  Typography,
+  Space
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -38,7 +39,7 @@ import {
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import { formatDate } from "@utils/date";
-import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas } from "@modules/academico/pensum.service";
+import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas, obtenerMaterialesClasePorProgramas } from "@modules/academico/pensum.service";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
@@ -59,6 +60,7 @@ export default function PortalEstudiante() {
   const [pagos, setPagos] = useState<any[]>([]);
   const [pensum, setPensum] = useState<any[]>([]);
   const [materiales, setMateriales] = useState<any[]>([]);
+  const [materialesClase, setMaterialesClase] = useState<any[]>([]);
   const [matriculas, setMatriculas] = useState<any[]>([]);
 
   useEffect(() => {
@@ -142,6 +144,9 @@ export default function PortalEstudiante() {
 
         const materialesData = await obtenerMaterialesPorProgramas(programaIds);
         setMateriales(materialesData);
+
+        const materialesClaseData = await obtenerMaterialesClasePorProgramas(programaIds);
+        setMaterialesClase(materialesClaseData);
       }
 
       // 5. Calcular Avance y Certificados
@@ -274,6 +279,7 @@ export default function PortalEstudiante() {
           const programa = matriculas.find(m => m.cursos?.programa_id === progId)?.cursos?.programas;
           const pensumProg = pensum.filter(p => p.programa_id === progId);
           const matProg = materiales.filter(m => m.programa_id === progId);
+          const matClaseProg = materialesClase.filter((m) => m.programa_id === progId);
 
           return (
             <Card key={progId} title={`Plan de Estudios: ${programa?.nombre}`} style={{ marginBottom: 20 }}>
@@ -310,6 +316,49 @@ export default function PortalEstudiante() {
                   label: 'Material Didáctico',
                   children: (
                     <div>
+                      {pensumProg.map(ciclo => {
+                        const materialesClaseCiclo = matClaseProg.filter((m) => m.pensum_id === ciclo.id);
+                        if (materialesClaseCiclo.length === 0) return null;
+
+                        const materialesPorTema = materialesClaseCiclo.reduce((acc: Record<string, any[]>, material: any) => {
+                          const temaKey = material.pensum_curso_id || 'sin-tema';
+                          if (!acc[temaKey]) acc[temaKey] = [];
+                          acc[temaKey].push(material);
+                          return acc;
+                        }, {});
+
+                        return (
+                          <div key={`lista-clase-${ciclo.id}`} style={{ marginBottom: 24 }}>
+                            <Divider orientation="left">Materiales necesarios por clase • {ciclo.nombre_ciclo}</Divider>
+                            <Collapse>
+                              {Object.entries(materialesPorTema).map(([temaId, items]: [string, any]) => {
+                                const temaNombre = items?.[0]?.pensum_cursos?.nombre_curso || 'Clase';
+                                return (
+                                  <Panel header={temaNombre} key={`${ciclo.id}-${temaId}`}>
+                                    <List
+                                      size="small"
+                                      dataSource={items}
+                                      renderItem={(item: any) => (
+                                        <List.Item>
+                                          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                                            <Text strong>{item.nombre_material}</Text>
+                                            <Text type="secondary" style={{ fontSize: 12 }}>
+                                              {item.cantidad ? `${item.cantidad}${item.unidad ? ` ${item.unidad}` : ''}` : 'Cantidad por definir'}
+                                              {item.obligatorio ? ' • Obligatorio' : ' • Opcional'}
+                                            </Text>
+                                            {item.observaciones ? <Text type="secondary">{item.observaciones}</Text> : null}
+                                          </Space>
+                                        </List.Item>
+                                      )}
+                                    />
+                                  </Panel>
+                                );
+                              })}
+                            </Collapse>
+                          </div>
+                        );
+                      })}
+
                       {pensumProg.map(ciclo => {
                         const matsCiclo = matProg.filter(m => m.pensum_id === ciclo.id);
                         if (matsCiclo.length === 0) return null;

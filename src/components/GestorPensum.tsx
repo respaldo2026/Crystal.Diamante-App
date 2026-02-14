@@ -83,6 +83,20 @@ interface MaterialDidactico {
   programa_nombre?: string | null;
 }
 
+interface MaterialClase {
+  id: string;
+  programa_id: number;
+  pensum_id?: string | null;
+  pensum_curso_id: string;
+  nombre_material: string;
+  cantidad?: string | null;
+  unidad?: string | null;
+  observaciones?: string | null;
+  obligatorio: boolean;
+  orden: number;
+  activo: boolean;
+}
+
 interface GestorPensumProps {
   programaId: string;
   programaNombre: string;
@@ -98,6 +112,7 @@ export default function GestorPensum({
   const [formCurso] = Form.useForm();
   const [formMaterial] = Form.useForm();
   const [formCiclo] = Form.useForm();
+  const [formMaterialClase] = Form.useForm();
 
   // Estados para pensum
   const [pensums, setPensums] = useState<Pensum[]>([]);
@@ -123,10 +138,14 @@ export default function GestorPensum({
   // Estados para material didáctico
   const [materiales, setMateriales] = useState<MaterialDidactico[]>([]);
   const [loadingMateriales, setLoadingMateriales] = useState(false);
+  const [materialesClase, setMaterialesClase] = useState<MaterialClase[]>([]);
+  const [loadingMaterialesClase, setLoadingMaterialesClase] = useState(false);
   const [drawerMaterialesVisible, setDrawerMaterialesVisible] = useState(false);
   const [uploadingMaterial, setUploadingMaterial] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [editingMaterial, setEditingMaterial] = useState<MaterialDidactico | null>(null);
+  const [modalMaterialClaseVisible, setModalMaterialClaseVisible] = useState(false);
+  const [editingMaterialClase, setEditingMaterialClase] = useState<MaterialClase | null>(null);
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace'>('archivo');
 
   // Estados para navegación
@@ -400,6 +419,113 @@ export default function GestorPensum({
     }
   }, [programaId, message]);
 
+  const cargarMaterialesClase = useCallback(async () => {
+    setLoadingMaterialesClase(true);
+    try {
+      const { data, error } = await supabaseBrowserClient
+        .from("materiales_clase")
+        .select("id, programa_id, pensum_id, pensum_curso_id, nombre_material, cantidad, unidad, observaciones, obligatorio, orden, activo")
+        .eq("programa_id", programaId)
+        .eq("activo", true)
+        .order("orden", { ascending: true });
+
+      if (error) throw error;
+      setMaterialesClase(data || []);
+    } catch (error) {
+      message.error("Error al cargar materiales por clase");
+      logger.error(error);
+    } finally {
+      setLoadingMaterialesClase(false);
+    }
+  }, [programaId, message]);
+
+  const abrirModalMaterialClase = (cursoId: string, material?: MaterialClase) => {
+    setEditingMaterialClase(material || null);
+    formMaterialClase.setFieldsValue({
+      pensum_curso_id: material?.pensum_curso_id || cursoId,
+      nombre_material: material?.nombre_material || "",
+      cantidad: material?.cantidad || "",
+      unidad: material?.unidad || "",
+      observaciones: material?.observaciones || "",
+      obligatorio: material?.obligatorio ?? true,
+      orden: material?.orden ?? 1,
+      activo: material?.activo ?? true,
+    });
+    setModalMaterialClaseVisible(true);
+  };
+
+  const handleGuardarMaterialClase = async () => {
+    try {
+      if (!selectedCicloId) return;
+      const values = await formMaterialClase.validateFields();
+
+      const payload = {
+        programa_id: Number(programaId),
+        pensum_id: selectedCicloId,
+        pensum_curso_id: values.pensum_curso_id,
+        nombre_material: values.nombre_material,
+        cantidad: values.cantidad || null,
+        unidad: values.unidad || null,
+        observaciones: values.observaciones || null,
+        obligatorio: values.obligatorio,
+        orden: values.orden || 1,
+        activo: true,
+      };
+
+      if (editingMaterialClase) {
+        const { error } = await supabaseBrowserClient
+          .from("materiales_clase")
+          .update(payload)
+          .eq("id", editingMaterialClase.id);
+        if (error) throw error;
+        message.success("Material necesario actualizado");
+      } else {
+        const { error } = await supabaseBrowserClient
+          .from("materiales_clase")
+          .insert([payload]);
+        if (error) throw error;
+        message.success("Material necesario agregado");
+      }
+
+      setModalMaterialClaseVisible(false);
+      setEditingMaterialClase(null);
+      formMaterialClase.resetFields();
+      await cargarMaterialesClase();
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message || "Error al guardar material necesario");
+      } else {
+        message.error("Error al guardar material necesario");
+      }
+    }
+  };
+
+  const handleEliminarMaterialClase = (materialId: string) => {
+    modal.confirm({
+      title: "Eliminar material necesario",
+      content: "¿Estás seguro?",
+      okText: "Eliminar",
+      okType: "danger",
+      onOk: async () => {
+        try {
+          const { error } = await supabaseBrowserClient
+            .from("materiales_clase")
+            .update({ activo: false })
+            .eq("id", materialId);
+          if (error) throw error;
+          message.success("Material necesario eliminado");
+          await cargarMaterialesClase();
+        } catch (error) {
+          if (error instanceof Error) {
+            message.error(error.message || "Error");
+          } else {
+            message.error("Error");
+          }
+        }
+      },
+    });
+  };
+
   useEffect(() => {
     cargarPrograma();
   }, [cargarPrograma]);
@@ -426,6 +552,10 @@ export default function GestorPensum({
   useEffect(() => {
     cargarMateriales();
   }, [cargarMateriales]);
+
+  useEffect(() => {
+    cargarMaterialesClase();
+  }, [cargarMaterialesClase]);
 
   const parseTemaFromTitulo = (titulo: string) => {
     const match = titulo.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
@@ -468,6 +598,10 @@ export default function GestorPensum({
   const materialesCiclo = useMemo(() => {
     return materiales.filter(m => m.pensum_id === selectedCicloId);
   }, [materiales, selectedCicloId]);
+
+  const materialesClaseCiclo = useMemo(() => {
+    return materialesClase.filter((material) => material.pensum_id === selectedCicloId);
+  }, [materialesClase, selectedCicloId]);
 
 
   const handleEliminarMaterial = (materialId: string) => {
@@ -781,6 +915,9 @@ export default function GestorPensum({
                   const { tema: temaMaterial } = parseTemaFromTitulo(material.titulo);
                   return (temaMaterial || "").toLowerCase() === curso.nombre_curso.toLowerCase();
                 });
+                const materialesNecesariosTema = materialesClaseCiclo.filter(
+                  (material) => material.pensum_curso_id === curso.id,
+                );
 
                 return (
                   <Card
@@ -812,6 +949,12 @@ export default function GestorPensum({
                               },
                             },
                             {
+                              key: `agregar-material-necesario-${curso.id}`,
+                              label: "Agregar material necesario",
+                              icon: <PlusOutlined />,
+                              onClick: () => abrirModalMaterialClase(curso.id),
+                            },
+                            {
                               key: `eliminar-tema-${curso.id}`,
                               label: "Eliminar tema",
                               icon: <DeleteOutlined />,
@@ -830,6 +973,17 @@ export default function GestorPensum({
                                       onClick: () => editarMaterial(material, curso.nombre_curso),
                                     };
                                   }),
+                                ]
+                              : []),
+                            ...(materialesNecesariosTema.length > 0
+                              ? [
+                                  { type: "divider" as const },
+                                  ...materialesNecesariosTema.map((material) => ({
+                                    key: `editar-material-necesario-${material.id}`,
+                                    label: `Editar insumo: ${material.nombre_material}`,
+                                    icon: <EditOutlined />,
+                                    onClick: () => abrirModalMaterialClase(curso.id, material),
+                                  })),
                                 ]
                               : []),
                           ],
@@ -910,6 +1064,57 @@ export default function GestorPensum({
                       />
                     )}
 
+                    <Divider style={{ margin: "10px 0" }} />
+                    <Text strong style={{ fontSize: 13 }}>Materiales necesarios</Text>
+                    {materialesNecesariosTema.length === 0 ? (
+                      <Text type="secondary" style={{ display: "block", marginTop: 6 }}>
+                        Sin materiales necesarios registrados
+                      </Text>
+                    ) : (
+                      <List
+                        size="small"
+                        dataSource={materialesNecesariosTema}
+                        loading={loadingMaterialesClase}
+                        style={{ marginTop: 8 }}
+                        renderItem={(material: MaterialClase) => (
+                          <List.Item
+                            actions={[
+                              <Button
+                                key={`editar-necesario-${material.id}`}
+                                type="link"
+                                icon={<EditOutlined />}
+                                onClick={() => abrirModalMaterialClase(curso.id, material)}
+                                style={{ padding: 0, height: "auto" }}
+                              />,
+                              <Button
+                                key={`eliminar-necesario-${material.id}`}
+                                type="link"
+                                danger
+                                icon={<DeleteOutlined />}
+                                onClick={() => handleEliminarMaterialClase(material.id)}
+                                style={{ padding: 0, height: "auto" }}
+                              />,
+                            ]}
+                          >
+                            <List.Item.Meta
+                              title={
+                                <Space size={6} wrap>
+                                  <Text>{material.nombre_material}</Text>
+                                  {material.obligatorio ? <Tag color="red">Obligatorio</Tag> : <Tag>Opcional</Tag>}
+                                </Space>
+                              }
+                              description={
+                                <Text type="secondary">
+                                  {[material.cantidad, material.unidad].filter(Boolean).join(" ") || "Cantidad no especificada"}
+                                  {material.observaciones ? ` · ${material.observaciones}` : ""}
+                                </Text>
+                              }
+                            />
+                          </List.Item>
+                        )}
+                      />
+                    )}
+
                   </Card>
                 );
               })}
@@ -983,6 +1188,66 @@ export default function GestorPensum({
           </Form.Item>
           <Form.Item name="descripcion" label="Descripción">
             <Input.TextArea rows={3} placeholder="¿Qué se aprenderá en este ciclo?" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editingMaterialClase ? "Editar material necesario" : "Agregar material necesario"}
+        open={modalMaterialClaseVisible}
+        onOk={handleGuardarMaterialClase}
+        onCancel={() => {
+          setModalMaterialClaseVisible(false);
+          setEditingMaterialClase(null);
+          formMaterialClase.resetFields();
+        }}
+      >
+        <Form form={formMaterialClase} layout="vertical">
+          <Form.Item
+            name="pensum_curso_id"
+            label="Tema"
+            rules={[{ required: true, message: "Selecciona un tema" }]}
+          >
+            <Select
+              options={cursosPensum.map((curso) => ({
+                value: curso.id,
+                label: curso.nombre_curso,
+              }))}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="nombre_material"
+            label="Material requerido"
+            rules={[{ required: true, message: "El material es requerido" }]}
+          >
+            <Input placeholder="Ej: Cuaderno de dibujo" />
+          </Form.Item>
+
+          <Space style={{ width: "100%" }} align="start">
+            <Form.Item name="cantidad" label="Cantidad" style={{ flex: 1 }}>
+              <Input placeholder="Ej: 1" />
+            </Form.Item>
+            <Form.Item name="unidad" label="Unidad" style={{ flex: 1 }}>
+              <Input placeholder="Ej: unidad(es), paquete" />
+            </Form.Item>
+          </Space>
+
+          <Form.Item name="orden" label="Orden">
+            <InputNumber min={1} style={{ width: "100%" }} />
+          </Form.Item>
+
+          <Form.Item name="obligatorio" label="Tipo" initialValue={true}>
+            <Select
+              options={[
+                { value: true, label: "Obligatorio" },
+                { value: false, label: "Opcional" },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item name="observaciones" label="Observaciones">
+            <Input.TextArea rows={3} placeholder="Detalles adicionales del material" />
           </Form.Item>
         </Form>
       </Modal>
