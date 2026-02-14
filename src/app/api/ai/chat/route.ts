@@ -41,6 +41,57 @@ function sanitizeForJSON(text: string | null | undefined): string {
     .trim();
 }
 
+function safeJsonParse(raw: string): any | null {
+  try {
+    return JSON.parse(raw);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function parseKeyValueLines(raw: string): Record<string, string> {
+  const output: Record<string, string> = {};
+  const lines = raw.split(/\r?\n/);
+  for (const line of lines) {
+    const match = line.match(/^\s*([A-Za-z0-9_\-]+)\s*[:=]\s*(.+?)\s*$/);
+    if (match) {
+      const key = (match[1] || "").toLowerCase();
+      const value = match[2] || "";
+      if (key) {
+        output[key] = value;
+      }
+    }
+  }
+  return output;
+}
+
+async function readRequestBody(req: NextRequest): Promise<any> {
+  const contentType = req.headers.get("content-type") || "";
+  const raw = await req.text();
+
+  if (!raw) return {};
+
+  if (contentType.includes("application/json")) {
+    const parsed = safeJsonParse(raw);
+    if (parsed) return parsed;
+  }
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const params = new URLSearchParams(raw);
+    return Object.fromEntries(params.entries());
+  }
+
+  const parsed = safeJsonParse(raw);
+  if (parsed) return parsed;
+
+  const kv = parseKeyValueLines(raw);
+  if (Object.keys(kv).length > 0) {
+    return kv;
+  }
+
+  return { message: raw };
+}
+
 /**
  * Limpiar markdown de respuesta para WhatsApp
  * Convierte **texto** a *texto* (negrita en WhatsApp)
@@ -79,28 +130,6 @@ function removeCOPCurrency(text: string): string {
   
   // Remover COP con espacios opcionales antes o después
   return text.replace(/\s*COP\s*/gi, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function toAmPmTime(hoursRaw: string, minutesRaw?: string): string {
-  const hours = Number(hoursRaw);
-  const minutes = Number(minutesRaw ?? "0");
-
-  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    return minutesRaw ? `${hoursRaw}:${minutesRaw}` : hoursRaw;
-  }
-
-  const suffix = hours >= 12 ? "PM" : "AM";
-  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-  return `${hour12}:${String(minutes).padStart(2, "0")} ${suffix}`;
-}
-
-function forceAmPmTimeFormat(text: string): string {
-  if (!text) return "";
-
-  return text.replace(
-    /\b([01]?\d|2[0-3]):([0-5]\d)\b(?!\s?(?:AM|PM|a\.?m\.?|p\.?m\.?))/gi,
-    (_match, hh, mm) => toAmPmTime(hh, mm)
-  );
 }
 
 /**
@@ -159,19 +188,22 @@ function checkRateLimit(phone: string, maxRequests: number = 20, windowMs: numbe
  * Truncar respuesta si es demasiado larga (máx 1000 caracteres para chat)
  */
 function truncateResponse(text: string, maxLength: number = 1000): string {
-  if (text.length <= maxLength) {
+  const hasDetailedTemario = /TEMARIO DETALLADO POR CLASES/i.test(text);
+  const limit = hasDetailedTemario ? 3000 : maxLength;
+
+  if (text.length <= limit) {
     return text;
   }
   
   // Buscar último punto/pregunta antes del límite
-  const truncated = text.substring(0, maxLength);
+  const truncated = text.substring(0, limit);
   const lastPeriod = Math.max(
     truncated.lastIndexOf('.'),
     truncated.lastIndexOf('?'),
     truncated.lastIndexOf('!')
   );
   
-  if (lastPeriod > maxLength * 0.7) {
+  if (lastPeriod > limit * 0.7) {
     return truncated.substring(0, lastPeriod + 1);
   }
   
@@ -965,7 +997,7 @@ export async function POST(req: NextRequest) {
       }, { status: 401 });
     }
 
-    const body = await req.json();
+    const body = await readRequestBody(req);
     const { message, phone } = extractMessageAndPhone(body || {});
 
     console.log("[chat] Input extraído:", {
@@ -1126,9 +1158,6 @@ export async function POST(req: NextRequest) {
     
     // Remover la palabra COP de precios
     whatsappResponse = removeCOPCurrency(whatsappResponse);
-
-    // Forzar formato de hora AM/PM (nunca horario militar)
-    whatsappResponse = forceAmPmTimeFormat(whatsappResponse);
     
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
     const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";

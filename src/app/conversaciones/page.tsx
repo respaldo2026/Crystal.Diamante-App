@@ -19,6 +19,7 @@ import {
   Badge,
   Timeline,
   Divider,
+  Tabs,
 } from "antd";
 import {
   SearchOutlined,
@@ -71,6 +72,18 @@ interface Conversation {
   updated_at: string;
 }
 
+interface ConversationThread {
+  phone_number: string;
+  messages: Conversation[];
+  total: number;
+  last_date: string;
+  last_user_message: string;
+  last_agent_response: string;
+  is_high_intent: boolean;
+  asked_contact: boolean;
+  asked_payment: boolean;
+}
+
 export default function ConversacionesPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +93,16 @@ export default function ConversacionesPage() {
   const [phoneList, setPhoneList] = useState<string[]>([]);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [loadingDelete, setLoadingDelete] = useState(false);
+  const [activeTab, setActiveTab] = useState("todos");
+
+  const normalizeText = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  const matchesAny = (text: string, patterns: RegExp[]) =>
+    patterns.some((pattern) => pattern.test(text));
 
   // Cargar conversaciones
   const cargarConversaciones = async () => {
@@ -111,19 +134,111 @@ export default function ConversacionesPage() {
     cargarConversaciones();
   }, []);
 
-  // Filtrar conversaciones
+  const threads = useMemo<ConversationThread[]>(() => {
+    const grouped = new Map<string, Conversation[]>();
+
+    for (const conv of conversations) {
+      if (!grouped.has(conv.phone_number)) {
+        grouped.set(conv.phone_number, []);
+      }
+      grouped.get(conv.phone_number)!.push(conv);
+    }
+
+    const result: ConversationThread[] = [];
+    for (const [phone, items] of grouped.entries()) {
+      const sorted = items
+        .slice()
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const last = sorted[sorted.length - 1];
+      const combined = sorted
+        .map((item) => `${item.user_message} ${item.agent_response}`)
+        .join(" ");
+      const combinedNormalized = normalizeText(combined);
+
+      const highIntentPatterns = [
+        /quiero\s+(inscribirme|matricularme|inscribir|registrarme)/i,
+        /quiero\s+matricularme/i,
+        /quiero\s+inscribirme/i,
+        /quiero\s+estudiar/i,
+        /quiero\s+estudiarlo/i,
+        /quiero\s+hacer\s+el\s+curso/i,
+        /me\s+quiero\s+inscribir/i,
+        /me\s+quiero\s+matricular/i,
+        /como\s+me\s+(inscribo|registro)/i,
+        /como\s+me\s+matriculo/i,
+        /cuando\s+empieza/i,
+        /cuando\s+inicia/i,
+        /cuando\s+arranca/i,
+        /como\s+hago\s+el\s+pago/i,
+        /como\s+pago/i,
+        /donde\s+(me\s+inscribo|pago)/i,
+        /quiero\s+separar\s+cupo/i,
+        /ya\s+quiero\s+(empezar|iniciar)/i,
+      ];
+
+      const contactPatterns = [
+        /numero/i,
+        /whatsapp/i,
+        /admisiones/i,
+        /contacto/i,
+        /telefono/i,
+      ];
+
+      const paymentPatterns = [
+        /medios\s+de\s+pago/i,
+        /pago/i,
+        /cuenta/i,
+        /transferencia/i,
+        /tarjeta/i,
+        /nequi/i,
+        /daviplata/i,
+        /bancolombia/i,
+        /cuota/i,
+      ];
+
+      const isHighIntent = matchesAny(combinedNormalized, highIntentPatterns);
+      const askedContact = matchesAny(combinedNormalized, contactPatterns);
+      const askedPayment = matchesAny(combinedNormalized, paymentPatterns);
+
+      result.push({
+        phone_number: phone,
+        messages: sorted,
+        total: sorted.length,
+        last_date: last?.created_at || "",
+        last_user_message: last?.user_message || "",
+        last_agent_response: last?.agent_response || "",
+        is_high_intent: isHighIntent,
+        asked_contact: askedContact,
+        asked_payment: askedPayment,
+      });
+    }
+
+    return result.sort(
+      (a, b) => new Date(b.last_date).getTime() - new Date(a.last_date).getTime()
+    );
+  }, [conversations]);
+
+  // Filtrar conversaciones por hilo
   const conversationsFiltradas = useMemo(() => {
-    return conversations.filter((conv) => {
-      const matchSearch =
-        conv.phone_number.toLowerCase().includes(searchText.toLowerCase()) ||
-        conv.user_message.toLowerCase().includes(searchText.toLowerCase()) ||
-        conv.agent_response.toLowerCase().includes(searchText.toLowerCase());
+    const query = searchText.toLowerCase();
+    return threads.filter((thread) => {
+      if (activeTab === "high" && !thread.is_high_intent) return false;
+      if (activeTab === "contact" && !thread.asked_contact) return false;
+      if (activeTab === "payment" && !thread.asked_payment) return false;
 
-      const matchPhone = !selectedPhone || conv.phone_number === selectedPhone;
+      const matchPhone = !selectedPhone || thread.phone_number === selectedPhone;
+      if (!matchPhone) return false;
 
-      return matchSearch && matchPhone;
+      if (!query) return true;
+
+      if (thread.phone_number.toLowerCase().includes(query)) return true;
+
+      return thread.messages.some((conv) =>
+        conv.user_message.toLowerCase().includes(query) ||
+        conv.agent_response.toLowerCase().includes(query)
+      );
     });
-  }, [conversations, searchText, selectedPhone]);
+  }, [threads, searchText, selectedPhone, activeTab]);
 
   // Estadísticas
   const stats = useMemo(() => {
@@ -136,6 +251,15 @@ export default function ConversacionesPage() {
     };
   }, [conversations, phoneList]);
 
+  const tabCounts = useMemo(() => {
+    return {
+      all: threads.length,
+      high: threads.filter((t) => t.is_high_intent).length,
+      contact: threads.filter((t) => t.asked_contact).length,
+      payment: threads.filter((t) => t.asked_payment).length,
+    };
+  }, [threads]);
+
   // Obtener conversación por teléfono
   const phoneConversations = useMemo(() => {
     if (!selectedPhone) return [];
@@ -147,17 +271,17 @@ export default function ConversacionesPage() {
       );
   }, [conversations, selectedPhone]);
 
-  // Eliminar conversación
-  const eliminarConversacion = async (id: string) => {
+  // Eliminar conversaciones por número
+  const eliminarConversacionesPorTelefono = async (phone: string) => {
     try {
       const { error } = await supabaseBrowserClient
         .from("agent_conversations")
         .delete()
-        .eq("id", id);
+        .eq("phone_number", phone);
 
       if (error) throw error;
 
-      setConversations((prev) => prev.filter((c) => c.id !== id));
+      setConversations((prev) => prev.filter((c) => c.phone_number !== phone));
       alert("Conversación eliminada");
     } catch (err) {
       console.error("Error eliminando:", err);
@@ -181,12 +305,12 @@ export default function ConversacionesPage() {
       const { error } = await supabaseBrowserClient
         .from("agent_conversations")
         .delete()
-        .in("id", selectedRows);
+        .in("phone_number", selectedRows);
 
       if (error) throw error;
 
       setConversations((prev) =>
-        prev.filter((c) => !selectedRows.includes(c.id))
+        prev.filter((c) => !selectedRows.includes(c.phone_number))
       );
       setSelectedRows([]);
       alert(`${selectedRows.length} conversaciones eliminadas`);
@@ -213,9 +337,9 @@ export default function ConversacionesPage() {
       width: 150,
     },
     {
-      title: "Pregunta del Lead",
-      dataIndex: "user_message",
-      key: "user_message",
+      title: "Ultima Pregunta",
+      dataIndex: "last_user_message",
+      key: "last_user_message",
       ellipsis: true,
       render: (text: string) => (
         <Tooltip title={text}>
@@ -224,9 +348,9 @@ export default function ConversacionesPage() {
       ),
     },
     {
-      title: "Respuesta del Agente",
-      dataIndex: "agent_response",
-      key: "agent_response",
+      title: "Ultima Respuesta",
+      dataIndex: "last_agent_response",
+      key: "last_agent_response",
       ellipsis: true,
       render: (text: string) => (
         <Tooltip title={formatAgentResponse(text)}>
@@ -235,9 +359,16 @@ export default function ConversacionesPage() {
       ),
     },
     {
+      title: "Mensajes",
+      dataIndex: "total",
+      key: "total",
+      width: 110,
+      render: (total: number) => <Tag color="blue">{total}</Tag>,
+    },
+    {
       title: "Fecha",
-      dataIndex: "created_at",
-      key: "created_at",
+      dataIndex: "last_date",
+      key: "last_date",
       render: (date: string) => (
         <Space size="small" direction="vertical">
           <span>{dayjs(date).format("DD/MM/YYYY HH:mm")}</span>
@@ -250,7 +381,7 @@ export default function ConversacionesPage() {
       title: "Acciones",
       key: "actions",
       width: 120,
-      render: (_: any, record: Conversation) => (
+      render: (_: any, record: ConversationThread) => (
         <Space size="small">
           <Tooltip title="Ver conversación completa">
             <Button
@@ -269,8 +400,8 @@ export default function ConversacionesPage() {
               size="small"
               icon={<DeleteOutlined />}
               onClick={() => {
-                if (window.confirm("¿Eliminar esta conversación?")) {
-                  eliminarConversacion(record.id);
+                if (window.confirm("¿Eliminar esta conversación completa?")) {
+                  eliminarConversacionesPorTelefono(record.phone_number);
                 }
               }}
             />
@@ -398,6 +529,17 @@ export default function ConversacionesPage() {
           </Space>
         }
       >
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            { key: "todos", label: `Todos (${tabCounts.all})` },
+            { key: "high", label: `Alta intencion (${tabCounts.high})` },
+            { key: "contact", label: `Pidio contacto (${tabCounts.contact})` },
+            { key: "payment", label: `Medios de pago (${tabCounts.payment})` },
+          ]}
+          style={{ marginBottom: "12px" }}
+        />
         <Spin spinning={loading}>
           {conversationsFiltradas.length === 0 ? (
             <Empty
@@ -412,7 +554,7 @@ export default function ConversacionesPage() {
             <Table
               columns={columns}
               dataSource={conversationsFiltradas}
-              rowKey="id"
+              rowKey="phone_number"
               pagination={{ pageSize: 20, showSizeChanger: true }}
               size="middle"
               scroll={{ x: 1200 }}
@@ -450,67 +592,91 @@ export default function ConversacionesPage() {
           <Empty description="No hay conversaciones para este número" />
         ) : (
           <Timeline
-            items={phoneConversations.map((conv, idx) => ({
-              key: conv.id,
-              dot: idx % 2 === 0 ? <PhoneOutlined style={{ color: "#1890ff" }} /> : <RobotOutlined style={{ color: "#52c41a" }} />,
-              children: (
-                <Card
-                  size="small"
-                  style={{
-                    marginBottom: "16px",
-                    backgroundColor: idx % 2 === 0 ? "#f0f5ff" : "#f6ffed",
-                  }}
-                >
-                  <Space direction="vertical" style={{ width: "100%" }} size="small">
-                    <div>
-                      <Badge
-                        status={idx % 2 === 0 ? "processing" : "success"}
-                        text={
-                          <strong>{idx % 2 === 0 ? "🙋 Lead" : "🤖 Agente"}</strong>
-                        }
-                      />
-                    </div>
+            items={phoneConversations.flatMap((conv) => {
+              const items = [] as Array<{ key: string; dot: React.ReactNode; children: React.ReactNode }>;
 
-                    <div
-                      style={{
-                        backgroundColor: "#fff",
-                        padding: "12px",
-                        borderRadius: "6px",
-                        borderLeft: `3px solid ${idx % 2 === 0 ? "#1890ff" : "#52c41a"}`,
-                      }}
-                    >
-                      <p style={{ margin: 0 }}>
-                        {idx % 2 === 0 ? conv.user_message : formatAgentResponse(conv.agent_response)}
-                      </p>
-                    </div>
-
-                    <div style={{ fontSize: "12px", color: "#999" }}>
-                      <ClockCircleOutlined /> {dayjs(conv.created_at).format("DD/MM/YYYY HH:mm:ss")}
-                    </div>
-
-                    {conv.transcription && (
-                      <div style={{ fontSize: "12px", color: "#666", fontStyle: "italic" }}>
-                        <strong>Transcripción:</strong> {conv.transcription}
-                      </div>
-                    )}
-
-                    <Button
-                      type="text"
+              if (conv.user_message) {
+                items.push({
+                  key: `${conv.id}-user`,
+                  dot: <PhoneOutlined style={{ color: "#1890ff" }} />,
+                  children: (
+                    <Card
                       size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => {
-                        if (window.confirm("¿Eliminar este mensaje?")) {
-                          eliminarConversacion(conv.id);
-                        }
+                      style={{
+                        marginBottom: "16px",
+                        backgroundColor: "#f0f5ff",
                       }}
                     >
-                      Eliminar
-                    </Button>
-                  </Space>
-                </Card>
-              ),
-            }))}
+                      <Space direction="vertical" style={{ width: "100%" }} size="small">
+                        <div>
+                          <Badge status="processing" text={<strong>🙋 Lead</strong>} />
+                        </div>
+
+                        <div
+                          style={{
+                            backgroundColor: "#fff",
+                            padding: "12px",
+                            borderRadius: "6px",
+                            borderLeft: "3px solid #1890ff",
+                          }}
+                        >
+                          <p style={{ margin: 0 }}>{conv.user_message}</p>
+                        </div>
+
+                        <div style={{ fontSize: "12px", color: "#999" }}>
+                          <ClockCircleOutlined /> {dayjs(conv.created_at).format("DD/MM/YYYY HH:mm:ss")}
+                        </div>
+
+                        {conv.transcription && (
+                          <div style={{ fontSize: "12px", color: "#666", fontStyle: "italic" }}>
+                            <strong>Transcripción:</strong> {conv.transcription}
+                          </div>
+                        )}
+                      </Space>
+                    </Card>
+                  ),
+                });
+              }
+
+              if (conv.agent_response) {
+                items.push({
+                  key: `${conv.id}-agent`,
+                  dot: <RobotOutlined style={{ color: "#52c41a" }} />,
+                  children: (
+                    <Card
+                      size="small"
+                      style={{
+                        marginBottom: "16px",
+                        backgroundColor: "#f6ffed",
+                      }}
+                    >
+                      <Space direction="vertical" style={{ width: "100%" }} size="small">
+                        <div>
+                          <Badge status="success" text={<strong>🤖 Agente</strong>} />
+                        </div>
+
+                        <div
+                          style={{
+                            backgroundColor: "#fff",
+                            padding: "12px",
+                            borderRadius: "6px",
+                            borderLeft: "3px solid #52c41a",
+                          }}
+                        >
+                          <p style={{ margin: 0 }}>{formatAgentResponse(conv.agent_response)}</p>
+                        </div>
+
+                        <div style={{ fontSize: "12px", color: "#999" }}>
+                          <ClockCircleOutlined /> {dayjs(conv.created_at).format("DD/MM/YYYY HH:mm:ss")}
+                        </div>
+                      </Space>
+                    </Card>
+                  ),
+                });
+              }
+
+              return items;
+            })}
           />
         )}
       </Drawer>

@@ -912,7 +912,7 @@ export async function buildHierarchicalContextWithPensum(
     if (detectedProgram && detectedProgram.id === prog.id) {
       // Si hay contenido general, mostrarlo
       if (prog.contenido) {
-        context += `  📝 Temario: ${prog.contenido}\n`
+        context += `  📚 TEMARIO DETALLADO POR CLASES:\n${prog.contenido}\n`
       }
       
       // Obtener pensum estructurado
