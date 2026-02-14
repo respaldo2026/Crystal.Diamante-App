@@ -171,6 +171,28 @@ function normalizeWhatsAppBlocks(text: string): string {
       formatTemarioLine(label, list)
     );
 
+  output = output
+    .replace(/\bTEMARIO DETALLADO POR CLASES\b:?/gi, '📚 *TEMARIO DETALLADO POR CLASES*')
+    .replace(/\s*(Mes\s+\d+\s*[:.-])/gi, '\n\n$1')
+    .replace(/\s*(\d+\.)\s+/g, '\n$1 ');
+
+  output = output
+    .replace(/\s*📲\s*/g, '\n\n📲 ')
+    .replace(/\binstagram\s*:\s*/gi, '📸 Instagram: ')
+    .replace(/\bfacebook\s*:\s*/gi, '👤 Facebook: ')
+    .replace(/\byoutube\s*:\s*/gi, '🎥 YouTube: ')
+    .replace(/\s*\|\s*/g, '\n');
+
+  output = output
+    .replace(/(medios\s+de\s+pago|formas\s+de\s+pago|metodos\s+de\s+pago)\s*:/gi, '\n\n💳 *Medios de pago:*')
+    .replace(/\bnequi\b/gi, '✅ Nequi')
+    .replace(/\bdaviplata\b/gi, '✅ Daviplata')
+    .replace(/\bbancolombia\b/gi, '✅ Bancolombia')
+    .replace(/\btransferencia\b/gi, '✅ Transferencia')
+    .replace(/\btarjeta\b/gi, '✅ Tarjeta')
+    .replace(/\s*;\s*/g, '\n')
+    .replace(/\s*\/\s*/g, '\n');
+
   return output;
 }
 
