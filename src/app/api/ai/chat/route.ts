@@ -186,11 +186,16 @@ function normalizeWhatsAppBlocks(text: string): string {
 
   output = output
     .replace(/(medios\s+de\s+pago|formas\s+de\s+pago|metodos\s+de\s+pago)\s*:/gi, '\n\n💳 *Medios de pago:*')
-    .replace(/\bnequi\b/gi, '✅ Nequi')
-    .replace(/\bdaviplata\b/gi, '✅ Daviplata')
-    .replace(/\bbancolombia\b/gi, '✅ Bancolombia')
+    .replace(/\befectivo\b/gi, '💵 Efectivo')
+    .replace(/\bnequi\b\s*:?\s*([0-9]+)/gi, '💜 Nequi: $1')
+    .replace(/\bnequi\b/gi, '💜 Nequi')
+    .replace(/\bdaviplata\b\s*:?\s*([0-9]+)/gi, '🟣 Daviplata: $1')
+    .replace(/\bdaviplata\b/gi, '🟣 Daviplata')
+    .replace(/\bbancolombia\b\s*:?\s*([0-9]+)/gi, '🟡 Bancolombia: $1')
+    .replace(/\bbancolombia\b/gi, '🟡 Bancolombia')
+    .replace(/\bsistecredito\b/gi, '🟢 Sistecredito')
     .replace(/\btransferencia\b/gi, '✅ Transferencia')
-    .replace(/\btarjeta\b/gi, '✅ Tarjeta')
+    .replace(/\btarjeta\b/gi, '💳 Tarjeta')
     .replace(/\s*;\s*/g, '\n')
     .replace(/\s*\/\s*/g, '\n');
 
