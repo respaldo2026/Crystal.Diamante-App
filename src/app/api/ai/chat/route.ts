@@ -138,7 +138,23 @@ function removeCOPCurrency(text: string): string {
 function normalizeWhatsAppBlocks(text: string): string {
   if (!text) return '';
 
-  const output = text
+  const formatTemarioLine = (label: string, list: string) => {
+    const cleanLabel = label.toLowerCase().includes("aprender")
+      ? "📚 *¿Qué aprenderás?:*"
+      : "📚 *Temario:*";
+    const items = list
+      .split(/\s*[;|]\s*|\s+-\s+|\s+•\s+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (items.length <= 1) {
+      return `${cleanLabel} ${list.trim()}`.trim();
+    }
+
+    return `${cleanLabel}\n• ${items.join("\n• ")}`;
+  };
+
+  let output = text
     .replace(/\s*(🗓️|📅|⏰|💰|📚|🎁)/g, '\n\n$1')
     .replace(/\s*(\*[^*]+\*\s*:)/g, '\n\n$1')
     .replace(/\s*✅\s*/g, '\n✅ ')
@@ -146,6 +162,14 @@ function normalizeWhatsAppBlocks(text: string): string {
     .replace(/([.!?])\s+(¿)/g, '$1\n\n$2')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  output = output
+    .replace(/(temario|pensum)\s*:\s*([^\n]+)/gi, (_match, label, list) =>
+      formatTemarioLine(label, list)
+    )
+    .replace(/(¿?que\s+aprender[aá]s\??)\s*:\s*([^\n]+)/gi, (_match, label, list) =>
+      formatTemarioLine(label, list)
+    );
 
   return output;
 }
