@@ -343,14 +343,13 @@ function buildAgentPrompt(
   userMessage: string,
   knowledgeChunks: string[],
   conversationHistory: Array<{user: string, agent: string}> = [],
-  coursesContext: string = "",
-  contextualDirective: string = ""
+  coursesContext: string = ""
 ): string {
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asistente de la Academia Crystal.";
-  const style = settings?.speaking_style || "Cálido y preciso.";
-  const systemPromptTemplate = settings?.system_prompt || "Eres un asistente útil.";
-  const fallback = settings?.fallback_response || "Déjame confirmarlo y te respondo pronto.";
+  const style = settings?.speaking_style || "";
+  const systemPromptTemplate = (settings?.system_prompt || "").trim();
+  const fallback = settings?.fallback_response || "";
   const greeting = settings?.greeting || "";
   
   // Detectar si ya hay un saludo previo
@@ -365,64 +364,14 @@ function buildAgentPrompt(
     ? `Usa este saludo exacto al iniciar: "${greeting}".`
     : "Saluda SOLO UNA VEZ al inicio del contacto. Si ya hablaron, ve directo al punto.";
 
-  const systemPrompt = applyTemplate(systemPromptTemplate, {
+  let prompt = applyTemplate(systemPromptTemplate, {
     persona_name: persona,
     persona_bio: bio,
     speaking_style: style,
     fallback_response: fallback,
     greeting_rule: greetingRule,
+    sales_protocol: "",
   });
-
-  let prompt = `${systemPrompt}
-
-# Identidad
-- Nombre: ${persona}
-- Bio: ${bio}
-- Estilo: ${style}
-
-# Reglas Generales
-- IMPORTANTE: Esta conversación es por AUDIO/VOZ. NO uses emojis, íconos o símbolos especiales.
-- Si no sabes algo con certeza, responde: "${fallback}"
-- Usa el contexto de conocimiento si está disponible.
-- Sé breve, claro y amable (máx 3 líneas).
-- No invent datos.
-- Recuerda el contexto de conversaciones anteriores.
-- Responde en un lenguaje natural apto para ser pronunciado.${alreadyGreeted ? "\n- YA HAS SALUDADO EN ESTA CONVERSACIÓN. No repitas saludos (no digas 'hola', 'buenos días', etc.). Ir directo al punto de forma natural y conversacional." : ""}
-- Entrega la información por etapas. Máximo 2 bloques cortos por respuesta.
-- Cierra preguntando si desea la siguiente parte (horarios, inversión o temario).
-- Al finalizar (si el usuario ya quedó satisfecho), invita a seguirnos en redes en una sola frase.
-- Si hay redes en el contexto, menciónalas por nombre (Instagram/Facebook/YouTube) con el handle o URL corto.
-- No uses emojis en audio; di los nombres de las redes de forma clara.
-- ${greetingRule}
-
-# PROTOCOLO DE CIERRE DE VENTAS
-${showsBuyingIntent ? `
-DETECTADO: El usuario muestra INTENCIÓN DE COMPRA o está listo para inscribirse.
-
-ACCIÓN OBLIGATORIA:
-1. Confırma su interés de forma positiva
-2. Menciona que un asesor de Admisiones lo guiará
-3. Proporciona el número de WhatsApp de Admisiones: más 57 301 203 8582
-4. Invítalo a escribir para agendar su inscripción
-
-EJEMPLO DE CIERRE (VERSIÓN AUDIO):
-"Perfecto, me encanta que estés listo para dar este paso. Para finalizar tu inscripción y separar tu cupo, te pongo en contacto con nuestro equipo de Admisiones. El número es: más 57, 301, 203, 8582. Es por WhatsApp. Escríbeles y te guiarán en el proceso de pago. Nos vemos pronto en la academia."
-` : `
-IMPORTANTE: NO proporciones el número de Admisiones AÚN.
-
-El usuario aún está en fase de información. Ayúdale con:
-- Cursos disponibles
-- Costos (inscripción y mensualidad)
-- Horarios de grupos
-- Resolver dudas
-
-Solo darás el número de contacto (más 57 301 203 8582) cuando muestre señales claras de querer inscribirse.
-`}
-`;
-
-  if (contextualDirective) {
-    prompt += `\n# Contexto de intención del usuario (OBLIGATORIO):\n${contextualDirective}\n`;
-  }
 
   // Agregar contexto de cursos disponibles
   if (coursesContext) {
@@ -834,6 +783,17 @@ export async function POST(req: NextRequest) {
       .eq("id", 1)
       .maybeSingle();
 
+    const configuredSystemPrompt = (settings?.system_prompt || "").trim();
+    if (!configuredSystemPrompt) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "No hay prompt configurado. Defínelo en Marketing Center antes de usar el agente.",
+        },
+        { status: 400 }
+      );
+    }
+
     // 7. Obtener historial de conversación
     console.log("[POST /api/ai/audio] Leyendo historial de conversación...");
     const history = await getConversationHistory(supabase, phone || "unknown", 5);
@@ -879,14 +839,12 @@ export async function POST(req: NextRequest) {
 
     // 9. Generar respuesta del agente
     console.log("[POST /api/ai/audio] Generando respuesta del agente...");
-    const contextualDirective = buildContextualDirective(transcription, detectedProgram);
     const prompt = buildAgentPrompt(
       settings || {},
       transcription,
       knowledgeChunks,
       history,
-      hierarchicalContext,
-      contextualDirective
+      hierarchicalContext
     );
     let agentResponse = await generateResponse(geminiKey, prompt);
 

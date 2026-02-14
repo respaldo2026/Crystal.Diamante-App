@@ -139,8 +139,27 @@ function buildProgramPriceText(
   return 'Precio a definir'
 }
 
+function formatTimeToAmPm(value?: string | null): string | null {
+  if (!value) return null
+
+  const normalized = value.trim()
+  const match = normalized.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+  if (!match) return normalized
+
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return normalized
+  }
+
+  const suffix = hours >= 12 ? 'PM' : 'AM'
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12
+  return `${hour12}:${String(minutes).padStart(2, '0')} ${suffix}`
+}
+
 function formatSchedule(horaInicio?: string | null, horaFin?: string | null, diasSemana?: string | null): string | null {
-  const timeRange = [horaInicio, horaFin].filter(Boolean).join(' - ')
+  const timeRange = [formatTimeToAmPm(horaInicio), formatTimeToAmPm(horaFin)].filter(Boolean).join(' - ')
   const dias = diasSemana
     ? diasSemana
         .split(',')
