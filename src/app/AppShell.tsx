@@ -51,6 +51,8 @@ import {
   RightOutlined,
   MoonOutlined,
   SunOutlined,
+  NotificationOutlined,
+  ShoppingCartOutlined,
 } from "@ant-design/icons";
 import routerProvider from "@refinedev/nextjs-router";
 import { dataProvider } from "@/providers/data-provider";
@@ -130,7 +132,7 @@ const allResources = [
     list: "/marketing-center",
     meta: {
       label: "Marketing Center",
-      icon: <FileTextOutlined />,
+      icon: <NotificationOutlined />,
     },
   },
   {
@@ -179,7 +181,7 @@ const allResources = [
     list: "/caja",
     meta: {
       label: "Caja / POS",
-      icon: <DollarCircleOutlined />,
+      icon: <ShoppingCartOutlined />,
     },
   },
   {
