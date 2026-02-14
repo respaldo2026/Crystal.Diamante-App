@@ -145,6 +145,19 @@ export const AuthPage = (props: AuthPageProps) => {
             />
           )}
 
+          {authError === "cuenta-existente" && !passwordError && (
+            <Alert
+              message="Este correo ya existe con otro método de acceso. Usa tu método original o contacta soporte para vincular Google sin duplicados."
+              type="warning"
+              showIcon
+              style={{
+                marginBottom: isMobile ? "12px" : "16px",
+                fontSize: isMobile ? "12px" : "13px",
+                borderRadius: 8,
+              }}
+            />
+          )}
+
           {passwordError && (
             <Alert
               message={passwordError}
@@ -177,6 +190,24 @@ export const AuthPage = (props: AuthPageProps) => {
             {isPending ? "Iniciando sesión..." : "Iniciar sesión"}
           </Button>
         </Form>
+
+        <Divider style={{ margin: isMobile ? "12px 0" : "16px 0", color: "#999" }}>o</Divider>
+
+        <Button
+          block
+          icon={<GoogleOutlined />}
+          onClick={handleGoogleLogin}
+          disabled={isPending}
+          size={isMobile ? "small" : "middle"}
+          style={{
+            height: isMobile ? "36px" : "40px",
+            borderRadius: 8,
+            borderColor: "#d9d9d9",
+            fontWeight: 600,
+          }}
+        >
+          Continuar con Google
+        </Button>
       </div>
 
       {props.type === "login" && (

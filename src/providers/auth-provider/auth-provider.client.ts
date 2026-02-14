@@ -1,6 +1,31 @@
 import type { AuthProvider } from "@refinedev/core";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
+async function getPerfilByIdOrEmail(userId?: string, userEmail?: string | null) {
+  if (userId) {
+    const { data: perfilById } = await supabaseBrowserClient
+      .from("perfiles")
+      .select("id, rol, email, nombre_completo, foto_url")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (perfilById) return perfilById;
+  }
+
+  const normalizedEmail = (userEmail || "").toLowerCase().trim();
+  if (!normalizedEmail) return null;
+
+  const { data: perfilesByEmail } = await supabaseBrowserClient
+    .from("perfiles")
+    .select("id, rol, email, nombre_completo, foto_url")
+    .ilike("email", normalizedEmail)
+    .limit(2);
+
+  if (!perfilesByEmail || perfilesByEmail.length === 0) return null;
+  if (perfilesByEmail.length > 1) return null;
+  return perfilesByEmail[0] || null;
+}
+
 export const authProvider: AuthProvider = {
   login: async ({ email, password }) => {
     try {
@@ -20,11 +45,8 @@ export const authProvider: AuthProvider = {
       }
 
       if (data?.user) {
-        const { data: perfil, error: perfilError } = await supabaseBrowserClient
-          .from("perfiles")
-          .select("rol, email")
-          .eq("id", data.user.id)
-          .maybeSingle();
+        const perfil = await getPerfilByIdOrEmail(data.user.id, data.user.email);
+        const perfilError = !perfil ? new Error("Perfil no encontrado o duplicado por email") : null;
 
         const perfilEmail = (perfil?.email || "").toLowerCase();
         const authEmail = (data.user.email || "").toLowerCase();
@@ -150,11 +172,7 @@ export const authProvider: AuthProvider = {
       const { data: { user } } = await supabaseBrowserClient.auth.getUser();
       
       if (user) {
-        const { data: perfil } = await supabaseBrowserClient
-          .from("perfiles")
-          .select("rol")
-          .eq("id", user.id)
-          .single();
+        const perfil = await getPerfilByIdOrEmail(user.id, user.email);
 
         return perfil?.rol || null;
       }
@@ -173,11 +191,8 @@ export const authProvider: AuthProvider = {
       
       if (user) {
         console.log("[AUTH] getIdentity - Querying perfiles table with id:", user.id);
-        const { data: perfil, error } = await supabaseBrowserClient
-          .from("perfiles")
-          .select("nombre_completo, email, rol, foto_url")
-          .eq("id", user.id)
-          .maybeSingle();
+        const perfil = await getPerfilByIdOrEmail(user.id, user.email);
+        const error = !perfil ? new Error("Perfil no encontrado o duplicado por email") : null;
 
         console.log("[AUTH] getIdentity - Perfil fetch error:", error);
         console.log("[AUTH] getIdentity - Perfil data:", perfil);

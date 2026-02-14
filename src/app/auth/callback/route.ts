@@ -52,17 +52,33 @@ export async function GET(request: NextRequest) {
 
     const { data: userData } = await supabase.auth.getUser();
     const authEmail = (userData?.user?.email || "").toLowerCase();
+    const authUserId = userData?.user?.id || "";
 
     let emailOk = false;
-    if (userData?.user?.id && authEmail) {
-      const { data: perfil } = await supabase
+    if (authUserId && authEmail) {
+      const { data: perfiles } = await supabase
         .from("perfiles")
-        .select("email")
-        .eq("id", userData.user.id)
-        .maybeSingle();
+        .select("id, email")
+        .ilike("email", authEmail)
+        .limit(2);
 
-      const perfilEmail = (perfil?.email || "").toLowerCase();
-      emailOk = Boolean(perfilEmail && perfilEmail === authEmail);
+      if (perfiles && perfiles.length === 1) {
+        const perfil = perfiles[0]!;
+        const perfilEmail = (perfil.email || "").toLowerCase();
+        const sameIdentity = perfil.id === authUserId;
+        emailOk = Boolean(perfilEmail && perfilEmail === authEmail && sameIdentity);
+
+        if (!sameIdentity) {
+          await supabase.auth.signOut();
+          const response = NextResponse.redirect(url.origin + "/login?error=cuenta-existente");
+          pendingCookies.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+          return response;
+        }
+      } else {
+        emailOk = false;
+      }
     }
 
     if (!emailOk) {
