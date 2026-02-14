@@ -173,8 +173,9 @@ function normalizeWhatsAppBlocks(text: string): string {
 
   output = output
     .replace(/\bTEMARIO DETALLADO POR CLASES\b:?/gi, '📚 *TEMARIO DETALLADO POR CLASES*')
-    .replace(/\s*(Mes\s+\d+\s*[:.-])/gi, '\n\n$1')
-    .replace(/\s*(\d+\.)\s+/g, '\n$1 ');
+    .replace(/\s*(Mes\s+\d+\s*[:.-])/gi, '\n\n*$1*')
+    .replace(/\s*(\d+\.)\s+/g, '\n$1 ')
+    .replace(/\s*\(\s*\d+\s*h\s*\)/gi, '');
 
   output = output
     .replace(/\s*📲\s*/g, '\n\n📲 ')
@@ -252,19 +253,22 @@ function checkRateLimit(phone: string, maxRequests: number = 20, windowMs: numbe
  * Truncar respuesta si es demasiado larga (máx 1000 caracteres para chat)
  */
 function truncateResponse(text: string, maxLength: number = 1000): string {
-  if (text.length <= maxLength) {
+  const hasDetailedTemario = /TEMARIO DETALLADO POR CLASES/i.test(text);
+  const limit = hasDetailedTemario ? 3000 : maxLength;
+
+  if (text.length <= limit) {
     return text;
   }
   
   // Buscar último punto/pregunta antes del límite
-  const truncated = text.substring(0, maxLength);
+  const truncated = text.substring(0, limit);
   const lastPeriod = Math.max(
     truncated.lastIndexOf('.'),
     truncated.lastIndexOf('?'),
     truncated.lastIndexOf('!')
   );
   
-  if (lastPeriod > maxLength * 0.7) {
+  if (lastPeriod > limit * 0.7) {
     return truncated.substring(0, lastPeriod + 1);
   }
   
