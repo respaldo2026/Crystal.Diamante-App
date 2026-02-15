@@ -120,12 +120,19 @@ export async function actualizarMovimiento(id: string, payload: Partial<Omit<Mov
 }
 
 export async function eliminarMovimiento(id: string) {
-    const { error } = await supabaseBrowserClient
+    const { data, error } = await supabaseBrowserClient
         .from("movimientos_financieros")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
 
     if (error) throw error;
+
+    if (!data?.id) {
+        throw new Error("No se pudo eliminar el movimiento. Verifica permisos o que el registro exista.");
+    }
+
     return true;
 }
 
