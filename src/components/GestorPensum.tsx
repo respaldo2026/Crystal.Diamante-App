@@ -187,12 +187,32 @@ export default function GestorPensum({
 
       const { data, error } = await supabaseBrowserClient
         .from("perfiles")
-        .select("rol")
+        .select("rol, email")
         .eq("id", user.id)
         .maybeSingle();
 
       if (error) throw error;
-      setCurrentRole(String(data?.rol || "").toLowerCase());
+
+      let rolDetectado = String(data?.rol || "").toLowerCase();
+
+      if (!rolDetectado && user.email) {
+        const { data: perfilPorEmail, error: errorEmail } = await supabaseBrowserClient
+          .from("perfiles")
+          .select("rol")
+          .eq("email", user.email)
+          .maybeSingle();
+
+        if (!errorEmail && perfilPorEmail?.rol) {
+          rolDetectado = String(perfilPorEmail.rol).toLowerCase();
+        }
+      }
+
+      if (!rolDetectado) {
+        const rolMeta = (user.user_metadata as any)?.rol || (user.app_metadata as any)?.rol;
+        rolDetectado = String(rolMeta || "").toLowerCase();
+      }
+
+      setCurrentRole(rolDetectado);
     } catch (error) {
       logger.error("Error al cargar rol actual", error);
       setCurrentRole("");
@@ -939,7 +959,7 @@ export default function GestorPensum({
             message="Temas + Material en una sola vista"
             description={
               <div>
-                Cada tarjeta de tema muestra sus materiales. Así se ve de un solo vistazo lo que tiene cada tema.
+                Cada tarjeta de tema muestra sus materiales. Usa el botón "Agregar Material Necesario" para abrir el formulario.
               </div>
             }
             style={{ marginBottom: 16 }}
@@ -956,17 +976,31 @@ export default function GestorPensum({
           )}
 
           <div style={{ marginBottom: 16 }}>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditingCurso(null);
-                formCurso.resetFields();
-                setModalCursoVisible(true);
-              }}
-            >
-              Agregar Tema
-            </Button>
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingCurso(null);
+                  formCurso.resetFields();
+                  setModalCursoVisible(true);
+                }}
+              >
+                Agregar Tema
+              </Button>
+              <Button
+                icon={<GiftOutlined />}
+                onClick={() => {
+                  if (cursosPensum.length === 0) {
+                    message.warning("Primero debes crear al menos un tema para asociar materiales.");
+                    return;
+                  }
+                  abrirModalMaterialClase(cursosPensum[0].id);
+                }}
+              >
+                Agregar Material Necesario
+              </Button>
+            </Space>
           </div>
 
           {cursosPensum.length === 0 ? (
