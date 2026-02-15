@@ -147,6 +147,42 @@ async function enviarPorWhatsAppAPI(
   }
 }
 
+async function enviarTextoPorWhatsAppAPI(
+  telefono: string,
+  mensaje: string
+): Promise<{ exito: boolean; messageId?: string; error?: string }> {
+  try {
+    const response = await fetch('/api/whatsapp/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: telefono,
+        type: 'text',
+        message: mensaje,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        exito: false,
+        error: data.error || 'Error desconocido al enviar WhatsApp',
+      };
+    }
+
+    return {
+      exito: true,
+      messageId: data.messageId,
+    };
+  } catch (error) {
+    return {
+      exito: false,
+      error: `Error crítico: ${error instanceof Error ? error.message : 'Desconocido'}`,
+    };
+  }
+}
+
 /**
  * Guarda un log del mensaje en la BD
  */
@@ -247,6 +283,42 @@ async function enviarMensajeConPlantilla(
     };
   } catch (error) {
     console.error('[WhatsApp] Error crítico en enviarMensajeConPlantilla:', error);
+    return {
+      exito: false,
+      error: `Error crítico: ${error instanceof Error ? error.message : 'Desconocido'}`,
+    };
+  }
+}
+
+async function enviarMensajeTexto(
+  telefono: string,
+  tipo: string,
+  mensaje: string,
+  usuarioId?: string,
+  metadatos?: Record<string, any>
+): Promise<ResultadoEnvio> {
+  try {
+    const resultadoEnvio = await enviarTextoPorWhatsAppAPI(telefono, mensaje);
+
+    const logId = await guardarLog({
+      usuario_id: usuarioId || null,
+      telefono,
+      tipo,
+      plantilla_id: null,
+      mensaje_texto: mensaje,
+      estado: resultadoEnvio.exito ? 'enviado' : 'fallido',
+      message_id: resultadoEnvio.messageId || null,
+      metadatos: metadatos || null,
+      respuesta_esperada: false,
+    });
+
+    return {
+      exito: resultadoEnvio.exito,
+      mensajeId: resultadoEnvio.messageId,
+      error: resultadoEnvio.error,
+      logId: logId || undefined,
+    };
+  } catch (error) {
     return {
       exito: false,
       error: `Error crítico: ${error instanceof Error ? error.message : 'Desconocido'}`,
@@ -551,21 +623,43 @@ export async function enviarBienvenidaPortalEstudiante(
     nombreCurso: string;
     enlacePortal: string;
     usuario: string;
+    genero?: string | null;
   }
 ): Promise<ResultadoEnvio> {
   console.log(`[WhatsApp] Enviando bienvenida de portal a ${datos.nombre}`);
 
-  return enviarMensajeConPlantilla(
+  const generoNormalizado = String(datos.genero || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  const tratamiento = ['femenino', 'femenina', 'mujer'].includes(generoNormalizado)
+    ? 'bienvenida'
+    : ['masculino', 'masculina', 'hombre'].includes(generoNormalizado)
+      ? 'bienvenido'
+      : 'bienvenido(a)';
+
+  const mensaje = [
+    `Hola ${datos.nombre}, ¡${tratamiento} al Curso: ${datos.nombreCurso}!`,
+    '',
+    `*Ya puedes ingresar a la app:* ${datos.enlacePortal}`,
+    '',
+    `*Usuario*: ${datos.usuario}`,
+    '',
+    '*En la app podrás ver:*',
+    '• Asistencias',
+    '• Notas',
+    '• Material didáctico',
+    '• Materiales necesarios por clase',
+  ].join('\n');
+
+  return enviarMensajeTexto(
     datos.telefono,
     'bienvenida_portal_estudiante',
-    {
-      nombre: datos.nombre,
-      curso: datos.nombreCurso,
-      enlace_portal: datos.enlacePortal,
-      usuario: datos.usuario,
-    },
+    mensaje,
     usuarioId,
-    { tipo_evento: 'bienvenida_portal_estudiante', curso_id: null }
+    { tipo_evento: 'bienvenida_portal_estudiante', curso_id: null, canal: 'text_dinamico_genero' }
   );
 }
 

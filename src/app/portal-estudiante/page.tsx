@@ -20,7 +20,8 @@ import {
   List,
   Collapse,
   Typography,
-  Space
+  Space,
+  Dropdown
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -41,7 +42,6 @@ import "dayjs/locale/es";
 import { formatDate } from "@utils/date";
 import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas, obtenerMaterialesClasePorProgramas } from "@modules/academico/pensum.service";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { enviarWhatsapp } from "@utils/whatsapp";
 import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
 
@@ -62,6 +62,55 @@ export default function PortalEstudiante() {
   const [materiales, setMateriales] = useState<any[]>([]);
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
   const [matriculas, setMatriculas] = useState<any[]>([]);
+  const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
+  const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
+
+  const obtenerSaludoBienvenida = (genero?: string | null) => {
+    const generoNormalizado = String(genero || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    if (["femenino", "femenina", "mujer"].includes(generoNormalizado)) {
+      return "Bienvenida";
+    }
+
+    if (["masculino", "masculina", "hombre"].includes(generoNormalizado)) {
+      return "Bienvenido";
+    }
+
+    return "Te damos la bienvenida";
+  };
+
+  const normalizarTelefonoWhatsapp = (valor?: string | null): string | null => {
+    if (!valor) return null;
+
+    const texto = String(valor).trim();
+    if (!texto) return null;
+
+    const matchWa = texto.match(/wa\.me\/(\d+)/i);
+    const base = matchWa?.[1] || texto;
+    let digitos = base.replace(/\D/g, "");
+
+    if (!digitos) return null;
+
+    if (digitos.length === 10) {
+      digitos = `57${digitos}`;
+    }
+
+    return digitos;
+  };
+
+  const abrirWhatsapp = (telefono: string | null, mensajeBase: string) => {
+    if (!telefono) {
+      message.warning("No hay número de WhatsApp configurado");
+      return;
+    }
+
+    const enlace = `https://wa.me/${telefono}?text=${encodeURIComponent(mensajeBase)}`;
+    window.open(enlace, "_blank", "noopener,noreferrer");
+  };
 
   useEffect(() => {
     cargarDatos();
@@ -89,6 +138,20 @@ export default function PortalEstudiante() {
       }
 
       setEstudiante(perfil);
+
+      const { data: config } = await supabaseBrowserClient
+        .from("configuracion")
+        .select("*")
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+
+      const numeroAgente = normalizarTelefonoWhatsapp((config as any)?.whatsapp_agente || (config as any)?.whatsapp || null);
+      const numeroAdmisiones = normalizarTelefonoWhatsapp((config as any)?.whatsapp_admisiones || (config as any)?.telefono || (config as any)?.whatsapp || null);
+
+      setWhatsappAgente(numeroAgente);
+      setWhatsappAdmisiones(numeroAdmisiones);
 
       // 1. Cargar Matrículas con Cursos y Programas
       const { data: dataMatriculas } = await supabaseBrowserClient
@@ -442,20 +505,47 @@ export default function PortalEstudiante() {
       <Card style={{ marginBottom: 20 }}>
         <Row gutter={16} className="header-row">
           <Col xs={24} sm={12}>
-            <Title level={2}>Bienvenido, {estudiante?.nombre_completo}! 🎓</Title>
+            <Title level={2}>{obtenerSaludoBienvenida(estudiante?.genero)}, {estudiante?.nombre_completo}! 🎓</Title>
             <Text type="secondary">Portal de Estudiante - Academy Crystal</Text>
           </Col>
           <Col xs={24} sm={12} className="header-actions" style={{ textAlign: "right" }}>
-            {estudiante?.telefono && (
-              <Button
-                icon={<WhatsAppOutlined />}
-                type="primary"
-                size="large"
-                style={{ backgroundColor: "#25D366", borderColor: "#25D366" }}
-                onClick={() => enviarWhatsapp(estudiante.telefono, "Hola, tengo una consulta sobre mis cursos")}
+            {(whatsappAgente || whatsappAdmisiones) && (
+              <Dropdown
+                trigger={["click"]}
+                menu={{
+                  items: [
+                    {
+                      key: "agente",
+                      label: "Hablar con Agente",
+                      onClick: () =>
+                        abrirWhatsapp(
+                          whatsappAgente,
+                          `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Tengo una consulta sobre mis cursos en el portal.`
+                        ),
+                      disabled: !whatsappAgente,
+                    },
+                    {
+                      key: "admisiones",
+                      label: "Hablar con Admisiones",
+                      onClick: () =>
+                        abrirWhatsapp(
+                          whatsappAdmisiones,
+                          `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo de Admisiones.`
+                        ),
+                      disabled: !whatsappAdmisiones,
+                    },
+                  ],
+                }}
               >
-                Contactar
-              </Button>
+                <Button
+                  icon={<WhatsAppOutlined />}
+                  type="primary"
+                  size="large"
+                  style={{ backgroundColor: "#25D366", borderColor: "#25D366" }}
+                >
+                  Contactar por WhatsApp
+                </Button>
+              </Dropdown>
             )}
           </Col>
         </Row>

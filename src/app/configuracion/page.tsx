@@ -830,8 +830,12 @@ export default function ConfiguracionPage() {
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item label="Teléfono" name="telefono">
-              <Input placeholder="0987654321" />
+            <Form.Item
+              label="Teléfono / WhatsApp Admisiones"
+              name="telefono"
+              extra="Este número se usa en el portal estudiantil para la opción 'Hablar con Admisiones'."
+            >
+              <Input placeholder="+57 301 203 8582" />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
@@ -915,7 +919,11 @@ export default function ConfiguracionPage() {
                 )}
               </Col>
               <Col xs={24} sm={12}>
-                <Form.Item label="WhatsApp" name="whatsapp">
+                <Form.Item
+                  label="WhatsApp Agente"
+                  name="whatsapp"
+                  extra="Este número se usa en el portal estudiantil para la opción 'Hablar con Agente'."
+                >
                   <Input prefix={<WhatsAppOutlined />} placeholder="https://wa.me/573001112233" />
                 </Form.Item>
               </Col>

@@ -529,6 +529,7 @@ export default function MatriculaCreate() {
                         nombreCurso: cursoData?.nombre ?? 'Curso',
                         enlacePortal: PORTAL_ESTUDIANTE_URL,
                         usuario: (estudianteData.email || estudianteData.identificacion) || 'tu usuario registrado',
+                        genero: estudianteData.genero ?? null,
                     });
                 } catch (error) {
                     console.error('Error enviando mensajes post-pago:', error);
