@@ -236,13 +236,13 @@ export default function PortalEstudiante() {
 
         const materialesData = await obtenerMaterialesPorProgramas(programaIds);
         const materialesUnicos = deduplicarLista(materialesData || [], (m: any) =>
-          String(m?.id || `${m?.programa_id || ''}-${m?.pensum_id || ''}-${m?.titulo || ''}-${m?.url_archivo || ''}`)
+          String(`${m?.programa_id || ''}-${m?.pensum_id || ''}-${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
         );
         setMateriales(materialesUnicos);
 
         const materialesClaseData = await obtenerMaterialesClasePorProgramas(programaIds);
         const materialesClaseUnicos = deduplicarLista(materialesClaseData || [], (m: any) =>
-          String(m?.id || `${m?.programa_id || ''}-${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${m?.nombre_material || ''}-${m?.cantidad || ''}-${m?.unidad || ''}`)
+          String(`${m?.programa_id || ''}-${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${(m?.nombre_material || '').trim().toLowerCase()}-${m?.cantidad || ''}-${(m?.unidad || '').trim().toLowerCase()}-${(m?.observaciones || '').trim().toLowerCase()}`)
         );
         setMaterialesClase(materialesClaseUnicos);
       }
@@ -375,9 +375,18 @@ export default function PortalEstudiante() {
       <div>
         {programasIds.map((progId: any) => {
           const programa = matriculas.find(m => m.cursos?.programa_id === progId)?.cursos?.programas;
-          const pensumProg = pensum.filter(p => p.programa_id === progId);
-          const matProg = materiales.filter(m => m.programa_id === progId);
-          const matClaseProg = materialesClase.filter((m) => m.programa_id === progId);
+          const pensumProg = deduplicarLista(
+            pensum.filter(p => p.programa_id === progId),
+            (ciclo: any) => String(ciclo?.id || `${ciclo?.programa_id || ''}-${ciclo?.nombre_ciclo || ''}-${ciclo?.numero_ciclo || ''}`)
+          );
+          const matProg = deduplicarLista(
+            materiales.filter(m => m.programa_id === progId),
+            (m: any) => String(`${m?.pensum_id || ''}-${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
+          );
+          const matClaseProg = deduplicarLista(
+            materialesClase.filter((m) => m.programa_id === progId),
+            (m: any) => String(`${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${(m?.nombre_material || '').trim().toLowerCase()}-${m?.cantidad || ''}-${(m?.unidad || '').trim().toLowerCase()}-${(m?.observaciones || '').trim().toLowerCase()}`)
+          );
 
           return (
             <Card key={progId} title={`Plan de Estudios: ${programa?.nombre}`} style={{ marginBottom: 20 }}>
@@ -417,11 +426,11 @@ export default function PortalEstudiante() {
                       {pensumProg.map(ciclo => {
                         const materialesClaseCiclo = deduplicarLista(
                           matClaseProg.filter((m) => m.pensum_id === ciclo.id),
-                          (m: any) => String(m?.id || `${m?.pensum_curso_id || ''}-${m?.nombre_material || ''}-${m?.cantidad || ''}`)
+                          (m: any) => String(`${m?.pensum_curso_id || ''}-${(m?.nombre_material || '').trim().toLowerCase()}-${m?.cantidad || ''}-${(m?.unidad || '').trim().toLowerCase()}-${(m?.observaciones || '').trim().toLowerCase()}`)
                         );
                         const matsCiclo = deduplicarLista(
                           matProg.filter((m) => m.pensum_id === ciclo.id),
-                          (m: any) => String(m?.id || `${m?.titulo || ''}-${m?.url_archivo || ''}-${m?.tipo_material || ''}`)
+                          (m: any) => String(`${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
                         );
 
                         if (materialesClaseCiclo.length === 0 && matsCiclo.length === 0) return null;
@@ -514,12 +523,18 @@ export default function PortalEstudiante() {
                         );
                       })}
 
-                      {matProg.filter(m => !m.pensum_id).length > 0 && (
+                      {deduplicarLista(
+                        matProg.filter(m => !m.pensum_id),
+                        (m: any) => String(`${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
+                      ).length > 0 && (
                         <div style={{marginBottom: 24}}>
                           <Divider orientation="left">Material general (no asociado a ciclo)</Divider>
                           <List
                             grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
-                            dataSource={matProg.filter(m => !m.pensum_id)}
+                            dataSource={deduplicarLista(
+                              matProg.filter(m => !m.pensum_id),
+                              (m: any) => String(`${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
+                            )}
                             renderItem={(item: any) => {
                               let Icon = FileTextOutlined;
                               if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
