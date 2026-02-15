@@ -628,6 +628,17 @@ export default function GestorPensum({
     return { tema, tituloLimpio };
   };
 
+  const normalizarTema = (valor?: string) =>
+    String(valor || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/^\d+\s*[\.)\-:]\s*/, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
   const buildTituloConTema = (titulo: string, tema?: string) => {
     if (!tema) return titulo;
     if (/^\s*tema[:\-]/i.test(titulo) || /^\s*\[tema[:\-]/i.test(titulo)) return titulo;
@@ -1017,7 +1028,9 @@ export default function GestorPensum({
               {cursosPensum.map((curso) => {
                 const materialesTema = materialesCiclo.filter((material) => {
                   const { tema: temaMaterial } = parseTemaFromTitulo(material.titulo);
-                  return (temaMaterial || "").toLowerCase() === curso.nombre_curso.toLowerCase();
+                  const temaMaterialNorm = normalizarTema(temaMaterial || material.titulo);
+                  const temaCursoNorm = normalizarTema(curso.nombre_curso);
+                  return temaMaterialNorm === temaCursoNorm;
                 });
                 const materialesNecesariosTema = materialesClaseCiclo.filter(
                   (material) => material.pensum_curso_id === curso.id,

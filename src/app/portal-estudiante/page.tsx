@@ -77,6 +77,32 @@ export default function PortalEstudiante() {
     return resultado;
   };
 
+  const normalizarTexto = (valor?: string | null) =>
+    String(valor || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const parseTemaTituloMaterial = (titulo?: string | null) => {
+    const raw = String(titulo || "").trim();
+    const match = raw.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
+    if (!match) {
+      return {
+        tema: "",
+        tituloLimpio: raw,
+      };
+    }
+
+    return {
+      tema: String(match[1] || "").trim(),
+      tituloLimpio: String(match[2] || raw).trim(),
+    };
+  };
+
   const obtenerSaludoBienvenida = (genero?: string | null) => {
     const generoNormalizado = String(genero || "")
       .trim()
@@ -236,7 +262,12 @@ export default function PortalEstudiante() {
 
         const materialesData = await obtenerMaterialesPorProgramas(programaIds);
         const materialesUnicos = deduplicarLista(materialesData || [], (m: any) =>
-          String(`${m?.programa_id || ''}-${m?.pensum_id || ''}-${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
+          (() => {
+            const parsed = parseTemaTituloMaterial(m?.titulo);
+            const temaKey = normalizarTexto(parsed.tema);
+            const tituloKey = normalizarTexto(parsed.tituloLimpio);
+            return String(`${m?.programa_id || ''}-${m?.pensum_id || ''}-${temaKey}-${tituloKey}-${normalizarTexto(m?.tipo_material || '')}`);
+          })()
         );
         setMateriales(materialesUnicos);
 
@@ -430,7 +461,10 @@ export default function PortalEstudiante() {
                         );
                         const matsCiclo = deduplicarLista(
                           matProg.filter((m) => m.pensum_id === ciclo.id),
-                          (m: any) => String(`${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
+                          (m: any) => {
+                            const parsed = parseTemaTituloMaterial(m?.titulo);
+                            return String(`${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`);
+                          }
                         );
 
                         if (materialesClaseCiclo.length === 0 && matsCiclo.length === 0) return null;
@@ -525,7 +559,10 @@ export default function PortalEstudiante() {
 
                       {deduplicarLista(
                         matProg.filter(m => !m.pensum_id),
-                        (m: any) => String(`${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
+                        (m: any) => {
+                          const parsed = parseTemaTituloMaterial(m?.titulo);
+                          return String(`${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`);
+                        }
                       ).length > 0 && (
                         <div style={{marginBottom: 24}}>
                           <Divider orientation="left">Material general (no asociado a ciclo)</Divider>
@@ -533,7 +570,10 @@ export default function PortalEstudiante() {
                             grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
                             dataSource={deduplicarLista(
                               matProg.filter(m => !m.pensum_id),
-                              (m: any) => String(`${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
+                              (m: any) => {
+                                const parsed = parseTemaTituloMaterial(m?.titulo);
+                                return String(`${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`);
+                              }
                             )}
                             renderItem={(item: any) => {
                               let Icon = FileTextOutlined;
