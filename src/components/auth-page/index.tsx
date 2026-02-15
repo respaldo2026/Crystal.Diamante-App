@@ -6,6 +6,7 @@ import { GoogleOutlined, LockOutlined, MailOutlined, EyeOutlined, EyeInvisibleOu
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 export const AuthPage = (props: AuthPageProps) => {
   const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
@@ -62,13 +63,26 @@ export const AuthPage = (props: AuthPageProps) => {
       <div
         style={{
           width: "100%",
-          background: "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255, 245, 250, 0.98))",
-          padding: isMobile ? 16 : 20,
-          borderRadius: 16,
-          border: "1px solid rgba(200, 129, 65, 0.15)",
-          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
+          background: "rgba(255,255,255,0.94)",
+          padding: isMobile ? 18 : 24,
+          borderRadius: 20,
+          border: "1px solid rgba(255, 153, 204, 0.35)",
+          boxShadow: "0 20px 36px rgba(140, 36, 97, 0.18)",
+          backdropFilter: "blur(6px)",
         }}
       >
+        <div style={{ marginBottom: isMobile ? 12 : 16 }}>
+          <div style={{ color: "#8f295f", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            Ingreso al sistema
+          </div>
+          <h2 style={{ margin: "4px 0 4px", fontSize: isMobile ? 20 : 24, lineHeight: 1.2, color: "#3c1d2e" }}>
+            Inicia sesión
+          </h2>
+          <p style={{ margin: 0, fontSize: 13, color: "#6a5a64" }}>
+            Usa tu correo institucional y contraseña para acceder.
+          </p>
+        </div>
+
         <Form
           form={form}
           layout="vertical"
@@ -90,8 +104,9 @@ export const AuthPage = (props: AuthPageProps) => {
               prefix={<MailOutlined style={{ color: "#999" }} />}
               disabled={isPending}
               style={{
-                borderRadius: 8,
-                borderColor: "#ddd",
+                borderRadius: 10,
+                borderColor: "#e7d4df",
+                height: isMobile ? 36 : 40,
               }}
             />
           </Form.Item>
@@ -126,11 +141,18 @@ export const AuthPage = (props: AuthPageProps) => {
               }
               disabled={isPending}
               style={{
-                borderRadius: 8,
-                borderColor: "#ddd",
+                borderRadius: 10,
+                borderColor: "#e7d4df",
+                height: isMobile ? 36 : 40,
               }}
             />
           </Form.Item>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: -6, marginBottom: 12 }}>
+            <Link href="/forgot-password" style={{ fontSize: 12, fontWeight: 600, color: "#9b2a67" }}>
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
 
           {authError === "email-no-registrado" && !passwordError && (
             <Alert
@@ -179,19 +201,20 @@ export const AuthPage = (props: AuthPageProps) => {
             size={isMobile ? "small" : "middle"}
             style={{
               fontSize: isMobile ? "13px" : "14px",
-              height: isMobile ? "36px" : "40px",
-              background: "#ff2aa1",
+              height: isMobile ? "38px" : "42px",
+              background: "linear-gradient(135deg, #ff2aa1 0%, #d81b87 100%)",
               border: "none",
-              borderRadius: 8,
-              fontWeight: 600,
+              borderRadius: 10,
+              fontWeight: 700,
               color: "#ffffff",
+              boxShadow: "0 8px 20px rgba(216, 27, 135, 0.35)",
             }}
           >
             {isPending ? "Iniciando sesión..." : "Iniciar sesión"}
           </Button>
         </Form>
 
-        <Divider style={{ margin: isMobile ? "12px 0" : "16px 0", color: "#999" }}>o</Divider>
+        <Divider style={{ margin: isMobile ? "14px 0" : "18px 0", color: "#a07b90" }}>o</Divider>
 
         <Button
           block
@@ -200,9 +223,10 @@ export const AuthPage = (props: AuthPageProps) => {
           disabled={isPending}
           size={isMobile ? "small" : "middle"}
           style={{
-            height: isMobile ? "36px" : "40px",
-            borderRadius: 8,
-            borderColor: "#d9d9d9",
+            height: isMobile ? "38px" : "42px",
+            borderRadius: 10,
+            borderColor: "#e3d2dc",
+            color: "#4c3441",
             fontWeight: 600,
           }}
         >

@@ -23,99 +23,146 @@ export function LoginLanding({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        height: "100vh",
+        minHeight: "100vh",
         width: "100vw",
-        background: "linear-gradient(135deg, #ffffff 0%, #ffe6f3 40%, #ffb3db 70%, #ff6fb5 100%)",
+        background: "linear-gradient(140deg, #fff8fc 0%, #ffe7f3 35%, #ffd2e9 70%, #ffc2e0 100%)",
         position: "relative",
-        overflow: "auto",
+        overflow: "hidden",
         display: "flex",
-        flexDirection: "column",
+        flexDirection: isMobile ? "column" : "row",
         alignItems: "center",
-        justifyContent: "flex-start",
-        paddingTop: isMobile ? "20px" : isTablet ? "30px" : "40px",
-        paddingBottom: isMobile ? "20px" : isTablet ? "30px" : "40px",
-        paddingLeft: isMobile ? "12px" : "20px",
-        paddingRight: isMobile ? "12px" : "20px",
+        justifyContent: "center",
+        paddingTop: isMobile ? "20px" : "32px",
+        paddingBottom: isMobile ? "20px" : "32px",
+        paddingLeft: isMobile ? "12px" : "28px",
+        paddingRight: isMobile ? "12px" : "28px",
       }}
     >
-      {/* Animated background gradients */}
+      {/* Background glow */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           background: `
-            radial-gradient(circle at 15% 20%, rgba(255, 0, 153, 0.22), transparent 40%),
-            radial-gradient(circle at 85% 80%, rgba(255, 0, 204, 0.18), transparent 45%),
-            radial-gradient(circle at 45% 45%, rgba(255, 20, 147, 0.12), transparent 50%)
+            radial-gradient(circle at 14% 20%, rgba(255, 47, 161, 0.20), transparent 38%),
+            radial-gradient(circle at 85% 78%, rgba(255, 111, 181, 0.22), transparent 42%),
+            radial-gradient(circle at 50% 52%, rgba(255, 255, 255, 0.42), transparent 45%)
           `,
           pointerEvents: "none",
         }}
         aria-hidden
       />
 
-      {/* Main container */}
       <div
         style={{
           position: "relative",
           zIndex: 1,
           width: "100%",
-          maxWidth: isMobile ? "95%" : isTablet ? "500px" : "600px",
+          maxWidth: isMobile ? "96%" : "1120px",
           display: "flex",
-          flexDirection: "column",
-          gap: isMobile ? "16px" : isTablet ? "20px" : "24px",
-          alignItems: "center",
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? "16px" : "32px",
+          alignItems: "stretch",
+          justifyContent: "center",
         }}
       >
-        <div style={{ textAlign: "center" }}>
-          <h1
-            style={{
-              fontSize: isMobile ? "1.35rem" : isTablet ? "1.75rem" : "2.1rem",
-              fontWeight: 800,
-              margin: 0,
-              color: "#ff2aa1",
-              letterSpacing: "0.02em",
-              lineHeight: 1.3,
-            }}
-          >
-            Academia de Belleza
-          </h1>
-          <div
-            style={{
-              marginTop: isMobile ? "4px" : "6px",
-              fontSize: isMobile ? "1.15rem" : isTablet ? "1.45rem" : "1.7rem",
-              fontWeight: 800,
-              color: "#ff2aa1",
-              letterSpacing: "0.02em",
-              lineHeight: 1.3,
-            }}
-          >
-            Crystal Diamante
-          </div>
-          <p
-            style={{
-              margin: isMobile ? "4px 0 0" : "6px 0 0",
-              fontSize: isMobile ? "0.8rem" : isTablet ? "0.9rem" : "1rem",
-              fontWeight: 500,
-              color: "#ff2aa1",
-            }}
-          >
-            Plataforma Académica
-          </p>
-        </div>
-
-        {/* PWA Install Prompt */}
-        <PwaInstallPrompt inline={true} />
-
-        {/* Login form container */}
         <div
           style={{
-            flex: "0 0 auto",
-            width: "100%",
-            maxWidth: isMobile ? "100%" : isTablet ? "420px" : "480px",
+            flex: isMobile ? "0 0 auto" : "1 1 52%",
+            borderRadius: 20,
+            padding: isMobile ? "18px" : "28px",
+            background: "rgba(255, 255, 255, 0.62)",
+            border: "1px solid rgba(255,255,255,0.7)",
+            boxShadow: "0 18px 40px rgba(196, 52, 128, 0.14)",
+            backdropFilter: "blur(8px)",
             display: "flex",
+            flexDirection: "column",
             justifyContent: "center",
           }}
         >
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              alignSelf: isMobile ? "center" : "flex-start",
+              background: "rgba(255, 42, 161, 0.12)",
+              color: "#c73384",
+              borderRadius: 999,
+              padding: "6px 12px",
+              fontSize: 12,
+              fontWeight: 700,
+              marginBottom: 14,
+            }}
+          >
+            Academy Crystal
+          </div>
+
+          <h1
+            style={{
+              fontSize: isMobile ? "1.45rem" : isTablet ? "1.9rem" : "2.2rem",
+              fontWeight: 800,
+              margin: 0,
+              color: "#93205f",
+              lineHeight: 1.2,
+              textAlign: isMobile ? "center" : "left",
+            }}
+          >
+            Bienvenido a Crystal Diamante
+          </h1>
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontSize: isMobile ? "0.9rem" : "1rem",
+              fontWeight: 500,
+              color: "#7f4b67",
+              lineHeight: 1.5,
+              textAlign: isMobile ? "center" : "left",
+            }}
+          >
+            Gestiona cursos, seguimiento académico y recursos en una experiencia moderna y segura.
+          </p>
+
+          <div
+            style={{
+              marginTop: 16,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              justifyContent: isMobile ? "center" : "flex-start",
+            }}
+          >
+            {["Acceso seguro", "Panel académico", "Soporte institucional"].map((item) => (
+              <span
+                key={item}
+                style={{
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.82)",
+                  border: "1px solid rgba(255, 123, 184, 0.35)",
+                  color: "#9b2a67",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "6px 10px",
+                }}
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div
+          style={{
+            flex: isMobile ? "0 0 auto" : "1 1 48%",
+            width: "100%",
+            maxWidth: isMobile ? "100%" : "500px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            justifyContent: "center",
+          }}
+        >
+          <PwaInstallPrompt inline={true} />
           {children}
         </div>
       </div>
