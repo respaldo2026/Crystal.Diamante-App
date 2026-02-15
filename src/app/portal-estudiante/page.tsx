@@ -22,7 +22,8 @@ import {
   Typography,
   Space,
   Dropdown,
-  Checkbox
+  Checkbox,
+  Grid
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -52,6 +53,8 @@ const { Title, Text } = Typography;
 const { Panel } = Collapse;
 
 export default function PortalEstudiante() {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const [loading, setLoading] = useState(true);
   const [estudiante, setEstudiante] = useState<any>(null);
   const [asistencias, setAsistencias] = useState<any[]>([]);
@@ -538,6 +541,10 @@ export default function PortalEstudiante() {
       return Boolean(checklistInsumos[key]);
     }).length;
 
+    const cursoActualNombre = matriculaSeleccionada?.cursos?.nombre || "Curso";
+    const moduloActualNombre = cicloSeleccionado?.nombre_ciclo || "Sin módulo";
+    const temaActualNombre = temaSeleccionado?.nombre_curso || "Sin tema";
+
     const obtenerRecursosTema = (ciclo: any, tema: any) => {
       return deduplicarLista(
         materialesPrograma.filter((material: any) => {
@@ -580,19 +587,18 @@ export default function PortalEstudiante() {
     };
 
     return (
-      <Card title={`Plan de Estudios: ${programaNombre}`}>
+      <Card
+        title={`Plan de Estudios: ${programaNombre}`}
+        size={isMobile ? "small" : "default"}
+      >
         <Divider orientation="left">Curso inscrito</Divider>
         <Row gutter={[8, 8]}>
           {matriculasActivas.map((mat: any) => (
             <Col xs={24} sm={12} md={8} key={mat.id}>
               <Button
                 block
+                size={isMobile ? "middle" : "large"}
                 type={String(mat.id) === String(matriculaSeleccionada.id) ? "primary" : "default"}
-                style={
-                  String(mat.id) === String(matriculaSeleccionada.id)
-                    ? { backgroundColor: "#1677ff", borderColor: "#1677ff" }
-                    : undefined
-                }
                 onClick={() => {
                   setMatriculaRutaId(String(mat.id));
                   setCicloRutaId(null);
@@ -606,7 +612,11 @@ export default function PortalEstudiante() {
         </Row>
 
         <div style={{ marginTop: 8, marginBottom: 4 }}>
-          <Tag color="blue">Curso seleccionado: {matriculaSeleccionada?.cursos?.nombre || "N/A"}</Tag>
+          <Space size={[6, 6]} wrap>
+            <Tag color="blue">Curso: {cursoActualNombre}</Tag>
+            <Tag color="cyan">Módulo: {moduloActualNombre}</Tag>
+            <Tag color="purple">Tema: {temaActualNombre}</Tag>
+          </Space>
         </div>
 
         <Divider orientation="left">Módulo / Mes</Divider>
@@ -614,6 +624,7 @@ export default function PortalEstudiante() {
           <Empty description="Este curso aún no tiene módulos/ciclos configurados" />
         ) : (
           <Collapse
+            size={isMobile ? "small" : "middle"}
             accordion
             activeKey={cicloSeleccionado?.id ? String(cicloSeleccionado.id) : undefined}
             onChange={(key) => {
@@ -632,12 +643,7 @@ export default function PortalEstudiante() {
                 <Panel
                   header={
                     <Space size={8} wrap>
-                      <Text
-                        strong
-                        style={{
-                          color: String(cicloSeleccionado?.id) === String(ciclo.id) ? "#1677ff" : undefined,
-                        }}
-                      >
+                      <Text strong>
                         {ciclo.nombre_ciclo}
                       </Text>
                       {String(cicloSeleccionado?.id) === String(ciclo.id) ? <Tag color="blue">Seleccionado</Tag> : null}
@@ -649,6 +655,7 @@ export default function PortalEstudiante() {
                     <Empty description="Este módulo aún no tiene temas configurados" />
                   ) : (
                     <Collapse
+                      size={isMobile ? "small" : "middle"}
                       accordion
                       activeKey={String(cicloSeleccionado?.id) === String(ciclo.id) && temaSeleccionado?.id ? String(temaSeleccionado.id) : undefined}
                       onChange={(key) => {
@@ -666,10 +673,7 @@ export default function PortalEstudiante() {
                             key={String(tema.id)}
                             header={
                               <Space size={8} wrap>
-                                <Text
-                                  strong
-                                  style={{ color: String(temaSeleccionado?.id) === String(tema.id) ? "#722ed1" : undefined }}
-                                >
+                                <Text strong>
                                   {tema.nombre_curso}
                                 </Text>
                                 <Tag>{tema.horas || 0} horas</Tag>
@@ -679,11 +683,12 @@ export default function PortalEstudiante() {
                           >
                             <Row gutter={[12, 12]}>
                               <Col xs={24} lg={12}>
-                                <Card size="small" title="Material didáctico del tema">
+                                <Card size={isMobile ? "small" : "default"} title="Material didáctico del tema">
                                   {recursosTemaPanel.length === 0 ? (
                                     <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
                                   ) : (
                                     <List
+                                      size={isMobile ? "small" : "default"}
                                       dataSource={recursosTemaPanel}
                                       renderItem={(item: any) => {
                                         let Icon = FileTextOutlined;
@@ -713,7 +718,7 @@ export default function PortalEstudiante() {
 
                               <Col xs={24} lg={12}>
                                 <Card
-                                  size="small"
+                                  size={isMobile ? "small" : "default"}
                                   title="Productos / materiales necesarios"
                                   extra={<Tag color={insumosTemaPanel.length > 0 && marcadosTema === insumosTemaPanel.length ? "green" : "blue"}>{marcadosTema}/{insumosTemaPanel.length} listos</Tag>}
                                 >
@@ -721,6 +726,7 @@ export default function PortalEstudiante() {
                                     <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
                                   ) : (
                                     <List
+                                      size={isMobile ? "small" : "default"}
                                       dataSource={insumosTemaPanel}
                                       renderItem={(insumo: any) => {
                                         const key = `${matriculaSeleccionada.id}|${tema?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
@@ -773,7 +779,7 @@ export default function PortalEstudiante() {
   }
 
   return (
-    <div className="portal-estudiante" style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
+    <div className="portal-estudiante" style={{ padding: isMobile ? "12px" : "20px", maxWidth: "1200px", margin: "0 auto" }}>
       <Card style={{ marginBottom: 20 }}>
         <Row gutter={16} className="header-row">
           <Col xs={24} sm={12}>
@@ -812,7 +818,7 @@ export default function PortalEstudiante() {
                 <Button
                   icon={<WhatsAppOutlined />}
                   type="primary"
-                  size="large"
+                  size={isMobile ? "middle" : "large"}
                   style={{ backgroundColor: "#25D366", borderColor: "#25D366" }}
                 >
                   Contactar por WhatsApp
