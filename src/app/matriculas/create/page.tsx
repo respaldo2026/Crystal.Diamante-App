@@ -7,7 +7,6 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { construirNombreGrupo } from "@utils/grupos";
 import { BookOutlined, SearchOutlined, PlusOutlined, PrinterOutlined, DollarCircleOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
 import { useRouter } from "next/navigation";
 import { useColorMode } from "@/contexts/color-mode";
@@ -504,10 +503,10 @@ export default function MatriculaCreate() {
             if (errMat) throw errMat;
 
             message.success("✅ Pago registrado y matrícula activada");
-            // Enviar confirmación de pago con nueva plantilla
+            // Enviar confirmación de pago + bienvenida portal (solo al confirmar pago)
             if (estudianteData?.telefono && (estudianteData?.notif_whatsapp ?? true)) {
                 try {
-                    const { enviarConfirmacionPago } = await import('@/services/whatsapp-messages-module');
+                    const { enviarConfirmacionPago, enviarBienvenidaPortalEstudiante } = await import('@/services/whatsapp-messages-module');
                     
                     await enviarConfirmacionPago(estudianteData.id, {
                         nombre: estudianteData.nombre_completo,
@@ -521,23 +520,19 @@ export default function MatriculaCreate() {
                         fechaProximaClase: cursoData?.fecha_inicio ? 
                             new Date(cursoData.fecha_inicio).toLocaleDateString('es-CO') : 'Por confirmar'
                     });
-                } catch (error) {
-                    console.error('Error enviando confirmación de pago:', error);
-                }
-            }
 
-            // Enviar bienvenida al portal
-            if (estudianteData?.telefono && (estudianteData?.notif_whatsapp !== false)) {
-                await enviarWhatsappConPlantilla(
-                    estudianteData.telefono,
-                    'bienvenida_portal_estudiante',
-                    {
+                    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+                    await enviarBienvenidaPortalEstudiante(estudianteData.id, {
                         nombre: estudianteData.nombre_completo,
-                        curso: cursoData?.nombre ?? "tu curso",
-                        enlace_portal: PORTAL_ESTUDIANTE_URL,
-                        usuario: (estudianteData.email || estudianteData.identificacion) || "tu usuario registrado",
-                    },
-                );
+                        telefono: estudianteData.telefono,
+                        nombreCurso: cursoData?.nombre ?? 'Curso',
+                        enlacePortal: PORTAL_ESTUDIANTE_URL,
+                        usuario: (estudianteData.email || estudianteData.identificacion) || 'tu usuario registrado',
+                    });
+                } catch (error) {
+                    console.error('Error enviando mensajes post-pago:', error);
+                }
             }
 
             setTimeout(() => {
