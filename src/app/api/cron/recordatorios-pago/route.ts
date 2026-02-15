@@ -1,10 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { WhatsAppService } from '@/services/whatsapp-service';
 
 export const runtime = 'nodejs';
 
-// Función para enviar WhatsApp de forma simple (sin usar el módulo completo)
+const DEFAULT_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_RECORDATORIO_PAGO || 'recordatorio_pago_v2';
+const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_MAX_BULK_PER_RUN || 30);
+const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_DELAY_BETWEEN_SENDS_MS || 1200);
+const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALLOW_TEXT_FALLBACK || 'false').toLowerCase() === 'true';
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizePhone(telefono: string): string {
+  const digits = String(telefono || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 10 && digits.startsWith('3')) return `57${digits}`;
+  if (digits.startsWith('00') && digits.length > 2) return digits.slice(2);
+  return digits;
+}
+
+// Función para enviar WhatsApp usando plantilla aprobada por Meta
 async function enviarWhatsAppDirecto(telefono: string, nombre: string, monto: string, fecha: string, curso: string) {
   const mensaje = `Hola ${nombre} 👋
 
@@ -18,25 +36,29 @@ Puedes pagar en línea o en nuestra oficina. ¡Gracias!
 _Academia Crystal_`;
 
   try {
-    const response = await fetch('https://graph.instagram.com/v21.0/794398730428114/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: telefono.replace('+', ''),
-        type: 'text',
-        text: { body: mensaje },
-      }),
-    });
+    const templateVariables = [
+      nombre,
+      monto,
+      curso,
+      fecha,
+    ];
 
-    const data = await response.json();
-    console.log(`[Recordatorio] Enviado a ${telefono}: ${data.messages?.[0]?.id || 'sin ID'}`);
-    return data;
+    const response = await WhatsAppService.sendTemplate(
+      telefono,
+      DEFAULT_TEMPLATE_NAME,
+      templateVariables,
+      'es_CO'
+    );
+
+    console.log(`[Recordatorio] Enviado template a ${telefono}: ${response.messages?.[0]?.id || 'sin ID'}`);
+    return response;
   } catch (error) {
+    if (ALLOW_TEXT_FALLBACK) {
+      console.warn(`[Recordatorio] Falló template, usando fallback texto para ${telefono}`);
+      const fallback = await WhatsAppService.sendText(telefono, mensaje);
+      return fallback;
+    }
+
     console.error(`[Recordatorio] Error enviando a ${telefono}:`, error);
     throw error;
   }
@@ -107,24 +129,46 @@ export async function POST(request: NextRequest) {
 
     let enviados = 0;
     let fallidos = 0;
+    let omitidos = 0;
+    const telefonosProcesados = new Set<string>();
 
     for (const cuota of cuotas || []) {
       const perfil = cuota.perfiles as any;
       const matricula = cuota.matriculas as any;
 
+      if (enviados >= MAX_SENDS_PER_RUN) {
+        console.log(`[Recordatorio] Límite por corrida alcanzado (${MAX_SENDS_PER_RUN})`);
+        break;
+      }
+
       // Validar que tenga teléfono y notificaciones habilitadas
       if (!perfil?.telefono) {
         console.log(`[Recordatorio] Sin teléfono para estudiante ${cuota.estudiante_id}`);
+        omitidos++;
         continue;
       }
 
       if (perfil.notif_whatsapp === false) {
         console.log(`[Recordatorio] Notificaciones deshabilitadas para ${perfil.nombre_completo}`);
+        omitidos++;
+        continue;
+      }
+
+      const telefonoNormalizado = normalizePhone(perfil.telefono);
+      if (!telefonoNormalizado) {
+        console.log(`[Recordatorio] Teléfono inválido para ${perfil.nombre_completo}`);
+        omitidos++;
+        continue;
+      }
+
+      if (telefonosProcesados.has(telefonoNormalizado)) {
+        console.log(`[Recordatorio] Duplicado evitado para ${telefonoNormalizado}`);
+        omitidos++;
         continue;
       }
 
       try {
-        const telefono = perfil.telefono.startsWith('+') ? perfil.telefono : `+${perfil.telefono}`;
+        const telefono = telefonoNormalizado;
         const fecha = new Date(cuota.fecha_vencimiento).toLocaleDateString('es-CO', { month: 'long' });
         const monto = `$${Number(cuota.monto).toLocaleString()}`;
         const curso = matricula?.cursos?.nombre || 'Curso';
@@ -137,7 +181,12 @@ export async function POST(request: NextRequest) {
           curso
         );
 
+        telefonosProcesados.add(telefonoNormalizado);
         enviados++;
+
+        if (DELAY_BETWEEN_SENDS_MS > 0) {
+          await sleep(DELAY_BETWEEN_SENDS_MS);
+        }
       } catch (err) {
         console.error(`[Recordatorio] Error enviando a ${perfil.nombre_completo}:`, err);
         fallidos++;
@@ -146,7 +195,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      mensaje: `${enviados} recordatorios enviados, ${fallidos} fallidos`,
+      mensaje: `${enviados} recordatorios enviados, ${fallidos} fallidos, ${omitidos} omitidos`,
+      recomendaciones: {
+        template: DEFAULT_TEMPLATE_NAME,
+        textFallback: ALLOW_TEXT_FALLBACK,
+        maxSendsPerRun: MAX_SENDS_PER_RUN,
+        delayBetweenSendsMs: DELAY_BETWEEN_SENDS_MS,
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (error: any) {

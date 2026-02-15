@@ -541,6 +541,37 @@ export async function enviarBienvenidaEstudiante(
 }
 
 /**
+ * CASO 7B: Enviar bienvenida de acceso al portal del estudiante
+ */
+export async function enviarBienvenidaPortalEstudiante(
+  usuarioId: string,
+  datos: {
+    nombre: string;
+    telefono: string;
+    nombreCurso: string;
+    enlacePortal: string;
+    usuario: string;
+    contrasena: string;
+  }
+): Promise<ResultadoEnvio> {
+  console.log(`[WhatsApp] Enviando bienvenida de portal a ${datos.nombre}`);
+
+  return enviarMensajeConPlantilla(
+    datos.telefono,
+    'bienvenida_portal_estudiante',
+    {
+      nombre: datos.nombre,
+      curso: datos.nombreCurso,
+      enlace_portal: datos.enlacePortal,
+      usuario: datos.usuario,
+      contrasena: datos.contrasena,
+    },
+    usuarioId,
+    { tipo_evento: 'bienvenida_portal_estudiante', curso_id: null }
+  );
+}
+
+/**
  * CASO 8: Enviar recordatorio de clase (1 hora antes)
  */
 export async function enviarRecordatorioClase(

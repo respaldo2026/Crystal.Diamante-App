@@ -46,7 +46,7 @@ const definitions = {
         descripcion: "Da la bienvenida al estudiante y comparte la información de ingreso al portal.",
         variables: ["nombre", "curso", "enlace_portal", "usuario", "contrasena"],
         fallback:
-            "Hola {{nombre}}, ¡bienvenido(a) al curso {{curso}}! Ingresa al portal estudiantil: {{enlace_portal}} con usuario {{usuario}} y contraseña {{contrasena}} (tu número de cédula).",
+            "Hola {{nombre}}, ¡bienvenido(a) a {{curso}}!\n\nYa puedes ingresar a la app: {{enlace_portal}}\n\n*Usuario:* {{usuario}}\n*Contraseña:* {{contrasena}} (tu número de cédula)\n\n*En la app podrás ver:*\n• Asistencias\n• Notas\n• Material didáctico\n• Materiales necesarios por clase",
     },
     pago_inscripcion_pendiente: {
         nombre: "pago_inscripcion_pendiente",
