@@ -56,7 +56,7 @@ WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.perfiles p
     WHERE p.id = auth.uid()
-      AND p.rol IN ('admin', 'director', 'secretaria', 'profesor')
+      AND p.rol IN ('admin', 'director', 'secretaria')
   )
 );
 
@@ -69,14 +69,14 @@ USING (
   EXISTS (
     SELECT 1 FROM public.perfiles p
     WHERE p.id = auth.uid()
-      AND p.rol IN ('admin', 'director', 'secretaria', 'profesor')
+      AND p.rol IN ('admin', 'director', 'secretaria')
   )
 )
 WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.perfiles p
     WHERE p.id = auth.uid()
-      AND p.rol IN ('admin', 'director', 'secretaria', 'profesor')
+      AND p.rol IN ('admin', 'director', 'secretaria')
   )
 );
 
@@ -89,6 +89,6 @@ USING (
   EXISTS (
     SELECT 1 FROM public.perfiles p
     WHERE p.id = auth.uid()
-      AND p.rol IN ('admin', 'director', 'secretaria', 'profesor')
+      AND p.rol IN ('admin', 'director', 'secretaria')
   )
 );

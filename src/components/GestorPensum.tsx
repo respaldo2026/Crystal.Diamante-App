@@ -151,6 +151,11 @@ export default function GestorPensum({
   // Estados para navegación
   const [selectedCicloId, setSelectedCicloId] = useState<string | null>(null);
   const [selectedCursoId, setSelectedCursoId] = useState<string | null>(null);
+  const [currentRole, setCurrentRole] = useState<string>("");
+
+  const canManageMateriales = useMemo(() => {
+    return ["admin", "director", "secretaria"].includes(currentRole.toLowerCase());
+  }, [currentRole]);
 
   // Cargar información del programa
   const cargarPrograma = useCallback(async () => {
@@ -168,6 +173,31 @@ export default function GestorPensum({
       logger.error(error);
     }
   }, [programaId, message]);
+
+  const cargarRolActual = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabaseBrowserClient.auth.getUser();
+
+      if (!user?.id) {
+        setCurrentRole("");
+        return;
+      }
+
+      const { data, error } = await supabaseBrowserClient
+        .from("perfiles")
+        .select("rol")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setCurrentRole(String(data?.rol || "").toLowerCase());
+    } catch (error) {
+      logger.error("Error al cargar rol actual", error);
+      setCurrentRole("");
+    }
+  }, []);
 
   const cargarPensums = useCallback(async () => {
     setLoadingPensums(true);
@@ -440,6 +470,10 @@ export default function GestorPensum({
   }, [programaId, message]);
 
   const abrirModalMaterialClase = (cursoId: string, material?: MaterialClase) => {
+    if (!canManageMateriales) {
+      message.warning("Solo administración y secretaría pueden gestionar materiales.");
+      return;
+    }
     setEditingMaterialClase(material || null);
     formMaterialClase.setFieldsValue({
       pensum_curso_id: material?.pensum_curso_id || cursoId,
@@ -456,6 +490,10 @@ export default function GestorPensum({
 
   const handleGuardarMaterialClase = async () => {
     try {
+      if (!canManageMateriales) {
+        message.warning("Solo administración y secretaría pueden gestionar materiales.");
+        return;
+      }
       if (!selectedCicloId) return;
       const values = await formMaterialClase.validateFields();
 
@@ -501,6 +539,10 @@ export default function GestorPensum({
   };
 
   const handleEliminarMaterialClase = (materialId: string) => {
+    if (!canManageMateriales) {
+      message.warning("Solo administración y secretaría pueden gestionar materiales.");
+      return;
+    }
     modal.confirm({
       title: "Eliminar material necesario",
       content: "¿Estás seguro?",
@@ -528,7 +570,8 @@ export default function GestorPensum({
 
   useEffect(() => {
     cargarPrograma();
-  }, [cargarPrograma]);
+    cargarRolActual();
+  }, [cargarPrograma, cargarRolActual]);
 
   useEffect(() => {
     if (programaData) {
@@ -572,6 +615,10 @@ export default function GestorPensum({
   };
 
   const abrirDrawerMaterialParaTema = (temaNombre?: string) => {
+    if (!canManageMateriales) {
+      message.warning("Solo administración y secretaría pueden gestionar materiales.");
+      return;
+    }
     setEditingMaterial(null);
     formMaterial.resetFields();
     setFileList([]);
@@ -581,6 +628,10 @@ export default function GestorPensum({
   };
 
   const editarMaterial = (material: MaterialDidactico, temaNombre?: string) => {
+    if (!canManageMateriales) {
+      message.warning("Solo administración y secretaría pueden gestionar materiales.");
+      return;
+    }
     const esEnlace = material.mime_type === "link" || material.nombre_archivo === "Enlace Externo";
     setEditingMaterial(material);
     setFileList([]);
@@ -605,6 +656,10 @@ export default function GestorPensum({
 
 
   const handleEliminarMaterial = (materialId: string) => {
+    if (!canManageMateriales) {
+      message.warning("Solo administración y secretaría pueden gestionar materiales.");
+      return;
+    }
     modal.confirm({
       title: "Eliminar material",
       content: "¿Estás seguro?",
@@ -651,6 +706,10 @@ export default function GestorPensum({
   // Actualizar pensum_id cuando se selecciona un ciclo para subir material
   const handleSubirMaterial = async () => {
     try {
+      if (!canManageMateriales) {
+        message.warning("Solo administración y secretaría pueden gestionar materiales.");
+        return;
+      }
       if (!selectedCicloId) {
         message.error("Selecciona un ciclo antes de subir material.");
         return;
@@ -886,6 +945,16 @@ export default function GestorPensum({
             style={{ marginBottom: 16 }}
           />
 
+          {!canManageMateriales && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Modo solo lectura de materiales"
+              description="Solo administración y secretaría pueden crear, editar o eliminar materiales."
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           <div style={{ marginBottom: 16 }}>
             <Button
               type="primary"
@@ -931,12 +1000,16 @@ export default function GestorPensum({
                         trigger={["click"]}
                         menu={{
                           items: [
-                            {
-                              key: `subir-material-${curso.id}`,
-                              label: "Subir material",
-                              icon: <UploadOutlined />,
-                              onClick: () => abrirDrawerMaterialParaTema(curso.nombre_curso),
-                            },
+                            ...(canManageMateriales
+                              ? [
+                                  {
+                                    key: `subir-material-${curso.id}`,
+                                    label: "Subir material",
+                                    icon: <UploadOutlined />,
+                                    onClick: () => abrirDrawerMaterialParaTema(curso.nombre_curso),
+                                  },
+                                ]
+                              : []),
                             { type: "divider" as const },
                             {
                               key: `editar-tema-${curso.id}`,
@@ -948,12 +1021,16 @@ export default function GestorPensum({
                                 setModalCursoVisible(true);
                               },
                             },
-                            {
-                              key: `agregar-material-necesario-${curso.id}`,
-                              label: "Agregar material necesario",
-                              icon: <PlusOutlined />,
-                              onClick: () => abrirModalMaterialClase(curso.id),
-                            },
+                            ...(canManageMateriales
+                              ? [
+                                  {
+                                    key: `agregar-material-necesario-${curso.id}`,
+                                    label: "Agregar material necesario",
+                                    icon: <PlusOutlined />,
+                                    onClick: () => abrirModalMaterialClase(curso.id),
+                                  },
+                                ]
+                              : []),
                             {
                               key: `eliminar-tema-${curso.id}`,
                               label: "Eliminar tema",
@@ -961,7 +1038,7 @@ export default function GestorPensum({
                               danger: true,
                               onClick: () => handleEliminarCurso(curso.id),
                             },
-                            ...(materialesTema.length > 0
+                            ...(canManageMateriales && materialesTema.length > 0
                               ? [
                                   { type: "divider" as const },
                                   ...materialesTema.map((material) => {
@@ -975,7 +1052,7 @@ export default function GestorPensum({
                                   }),
                                 ]
                               : []),
-                            ...(materialesNecesariosTema.length > 0
+                            ...(canManageMateriales && materialesNecesariosTema.length > 0
                               ? [
                                   { type: "divider" as const },
                                   ...materialesNecesariosTema.map((material) => ({
@@ -1078,7 +1155,7 @@ export default function GestorPensum({
                         style={{ marginTop: 8 }}
                         renderItem={(material: MaterialClase) => (
                           <List.Item
-                            actions={[
+                            actions={canManageMateriales ? [
                               <Button
                                 key={`editar-necesario-${material.id}`}
                                 type="link"
@@ -1094,7 +1171,7 @@ export default function GestorPensum({
                                 onClick={() => handleEliminarMaterialClase(material.id)}
                                 style={{ padding: 0, height: "auto" }}
                               />,
-                            ]}
+                            ] : []}
                           >
                             <List.Item.Meta
                               title={
