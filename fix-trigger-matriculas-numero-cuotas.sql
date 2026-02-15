@@ -71,6 +71,7 @@ BEGIN
   IF v_precio_inscripcion > 0 THEN
     IF v_has_periodo_pagado THEN
       INSERT INTO public.pagos (
+        estudiante_id,
         matricula_id,
         numero_cuota,
         periodo_pagado,
@@ -80,6 +81,7 @@ BEGIN
         fecha_vencimiento,
         observaciones
       ) VALUES (
+        NEW.estudiante_id,
         NEW.id,
         0,
         'Inscripción',
@@ -91,6 +93,7 @@ BEGIN
       );
     ELSE
       INSERT INTO public.pagos (
+        estudiante_id,
         matricula_id,
         numero_cuota,
         monto,
@@ -99,6 +102,7 @@ BEGIN
         fecha_vencimiento,
         observaciones
       ) VALUES (
+        NEW.estudiante_id,
         NEW.id,
         0,
         v_precio_inscripcion,
@@ -115,6 +119,7 @@ BEGIN
     FOR v_i IN 1..v_num_cuotas LOOP
       IF v_has_periodo_pagado THEN
         INSERT INTO public.pagos (
+          estudiante_id,
           matricula_id,
           numero_cuota,
           periodo_pagado,
@@ -124,6 +129,7 @@ BEGIN
           fecha_vencimiento,
           observaciones
         ) VALUES (
+          NEW.estudiante_id,
           NEW.id,
           v_i,
           'Cuota ' || v_i || ' de ' || v_num_cuotas,
@@ -135,6 +141,7 @@ BEGIN
         );
       ELSE
         INSERT INTO public.pagos (
+          estudiante_id,
           matricula_id,
           numero_cuota,
           monto,
@@ -143,6 +150,7 @@ BEGIN
           fecha_vencimiento,
           observaciones
         ) VALUES (
+          NEW.estudiante_id,
           NEW.id,
           v_i,
           v_precio_mensualidad,

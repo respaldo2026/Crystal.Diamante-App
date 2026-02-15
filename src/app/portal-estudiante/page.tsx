@@ -179,7 +179,24 @@ export default function PortalEstudiante() {
         .order("fecha_vencimiento", { ascending: true });
       
       if (errPagos) logger.error("Error cargando pagos:", errPagos);
-      setPagos(dataPagos || []);
+
+      let pagosFinales = dataPagos || [];
+
+      if (pagosFinales.length === 0 && matriculaIds.length > 0) {
+        const { data: pagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
+          .from("pagos")
+          .select("*")
+          .in("matricula_id", matriculaIds)
+          .order("fecha_vencimiento", { ascending: true });
+
+        if (errPagosPorMatricula) {
+          logger.error("Error cargando pagos por matrícula:", errPagosPorMatricula);
+        } else {
+          pagosFinales = pagosPorMatricula || [];
+        }
+      }
+
+      setPagos(pagosFinales);
 
       // 3. Cargar datos relacionados a matrículas activas
       if (matriculaIds.length > 0) {

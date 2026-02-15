@@ -183,7 +183,26 @@ export default function StudentDetailView() {
         setLoadError("No pudimos cargar el historial de pagos.");
         throw errPagos;
       }
-      const pagosList = (dataPagos as unknown as Pago[] | null) ?? [];
+
+      let pagosList = (dataPagos as unknown as Pago[] | null) ?? [];
+
+      if (pagosList.length === 0 && listaMats.length > 0) {
+        const matriculaIds = listaMats.map((m: any) => m.id).filter(Boolean);
+        if (matriculaIds.length > 0) {
+          const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
+            .from("pagos")
+            .select(
+              "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
+            )
+            .in("matricula_id", matriculaIds)
+            .order("created_at", { ascending: false });
+
+          if (!errPagosPorMatricula) {
+            pagosList = (dataPagosPorMatricula as unknown as Pago[] | null) ?? [];
+          }
+        }
+      }
+
       console.log("🔍 Pagos estudiante:", pagosList.length, pagosList);
       setPagosHistorial(pagosList);
 

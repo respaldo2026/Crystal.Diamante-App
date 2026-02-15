@@ -52,6 +52,98 @@ export default function MatriculaCreate() {
     const [pagoForm] = Form.useForm();
     const [mediosPago, setMediosPago] = useState<any[]>([]);
 
+    const asegurarPagosGenerados = async (
+        matriculaId: string,
+        estudianteId: string,
+        cursoId: string | number,
+        fechaInicio?: string | null,
+    ) => {
+        const { count } = await supabaseBrowserClient
+            .from("pagos")
+            .select("id", { count: "exact", head: true })
+            .eq("matricula_id", matriculaId);
+
+        if ((count || 0) > 0) return;
+
+        const { data: cursoInfo, error: errCursoInfo } = await supabaseBrowserClient
+            .from("cursos")
+            .select("id, fecha_inicio, precio_mensualidad, numero_cuotas, duracion, programas(precio_inscripcion, precio_mensualidad, precio_curso, numero_cuotas)")
+            .eq("id", cursoId)
+            .single();
+
+        if (errCursoInfo || !cursoInfo) {
+            throw new Error("No se pudo cargar la configuración financiera del curso");
+        }
+
+        const programa: any = Array.isArray((cursoInfo as any)?.programas)
+            ? (cursoInfo as any).programas[0]
+            : (cursoInfo as any)?.programas;
+
+        const precioInscripcion = Number(
+            programa?.precio_inscripcion ?? 0
+        ) || 0;
+
+        const precioMensualidad = Number(
+            (cursoInfo as any)?.precio_mensualidad ??
+            programa?.precio_mensualidad ??
+            programa?.precio_curso ??
+            0
+        ) || 0;
+
+        let numeroCuotas = Number(
+            (cursoInfo as any)?.numero_cuotas ??
+            programa?.numero_cuotas ??
+            (cursoInfo as any)?.duracion ??
+            4
+        ) || 4;
+
+        if (numeroCuotas < 1) numeroCuotas = 1;
+
+        const fechaBase = dayjs(fechaInicio || (cursoInfo as any)?.fecha_inicio || dayjs().format("YYYY-MM-DD"));
+
+        const nuevosPagos: any[] = [];
+
+        if (precioInscripcion > 0) {
+            nuevosPagos.push({
+                estudiante_id: estudianteId,
+                matricula_id: matriculaId,
+                numero_cuota: 0,
+                periodo_pagado: "Inscripción",
+                monto: precioInscripcion,
+                estado: "pendiente",
+                metodo_pago: null,
+                fecha_vencimiento: fechaBase.format("YYYY-MM-DD"),
+                observaciones: "Pago de inscripción",
+            });
+        }
+
+        if (precioMensualidad > 0) {
+            for (let i = 1; i <= numeroCuotas; i += 1) {
+                nuevosPagos.push({
+                    estudiante_id: estudianteId,
+                    matricula_id: matriculaId,
+                    numero_cuota: i,
+                    periodo_pagado: `Cuota ${i} de ${numeroCuotas}`,
+                    monto: precioMensualidad,
+                    estado: "pendiente",
+                    metodo_pago: null,
+                    fecha_vencimiento: fechaBase.add(i, "month").format("YYYY-MM-DD"),
+                    observaciones: `Cuota mensual ${i} de ${numeroCuotas}`,
+                });
+            }
+        }
+
+        if (nuevosPagos.length > 0) {
+            const { error: errInsertPagos } = await supabaseBrowserClient
+                .from("pagos")
+                .insert(nuevosPagos);
+
+            if (errInsertPagos) {
+                throw errInsertPagos;
+            }
+        }
+    };
+
     const { selectProps: programaSelectProps } = useSelect({
         resource: "programas",
         optionLabel: "nombre",
@@ -431,6 +523,13 @@ export default function MatriculaCreate() {
             console.log("Matrícula creada con ID:", matriculaId);
             message.success("✅ Inscripción académica registrada");
 
+            try {
+                await asegurarPagosGenerados(matriculaId, estudiante_id, curso_id, fecha_inicio);
+            } catch (errPago: any) {
+                console.error("Error asegurando pagos pendientes:", errPago);
+                message.warning("Se creó la matrícula, pero no se pudieron generar todas las cuotas automáticamente.");
+            }
+
             // Cargar datos completos para mostrar el recibo
             const { data: matricula } = await supabaseBrowserClient
                 .from("matriculas")
@@ -449,7 +548,7 @@ export default function MatriculaCreate() {
                 .select("*")
                 .eq("matricula_id", matriculaId)
                 .eq("numero_cuota", 0)
-                .single();
+                .maybeSingle();
 
             setMatriculaData(matricula);
             setEstudianteData(estudiante);
