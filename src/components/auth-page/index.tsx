@@ -63,24 +63,17 @@ export const AuthPage = (props: AuthPageProps) => {
       <div
         style={{
           width: "100%",
-          background: "rgba(255,255,255,0.94)",
+          background: "#ffffff",
           padding: isMobile ? 18 : 24,
-          borderRadius: 20,
-          border: "1px solid rgba(255, 153, 204, 0.35)",
-          boxShadow: "0 20px 36px rgba(140, 36, 97, 0.18)",
-          backdropFilter: "blur(6px)",
+          borderRadius: 16,
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)",
         }}
       >
         <div style={{ marginBottom: isMobile ? 12 : 16 }}>
-          <div style={{ color: "#8f295f", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-            Ingreso al sistema
-          </div>
-          <h2 style={{ margin: "4px 0 4px", fontSize: isMobile ? 20 : 24, lineHeight: 1.2, color: "#3c1d2e" }}>
+          <h2 style={{ margin: "0 0 4px", fontSize: isMobile ? 20 : 22, lineHeight: 1.2, color: "#111827" }}>
             Inicia sesión
           </h2>
-          <p style={{ margin: 0, fontSize: 13, color: "#6a5a64" }}>
-            Usa tu correo institucional y contraseña para acceder.
-          </p>
         </div>
 
         <Form
@@ -149,7 +142,7 @@ export const AuthPage = (props: AuthPageProps) => {
           </Form.Item>
 
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: -6, marginBottom: 12 }}>
-            <Link href="/forgot-password" style={{ fontSize: 12, fontWeight: 600, color: "#9b2a67" }}>
+            <Link href="/forgot-password" style={{ fontSize: 12, fontWeight: 600, color: "#1f4f8f" }}>
               ¿Olvidaste tu contraseña?
             </Link>
           </div>
@@ -202,19 +195,19 @@ export const AuthPage = (props: AuthPageProps) => {
             style={{
               fontSize: isMobile ? "13px" : "14px",
               height: isMobile ? "38px" : "42px",
-              background: "linear-gradient(135deg, #ff2aa1 0%, #d81b87 100%)",
+              background: "#1f4f8f",
               border: "none",
               borderRadius: 10,
               fontWeight: 700,
               color: "#ffffff",
-              boxShadow: "0 8px 20px rgba(216, 27, 135, 0.35)",
+              boxShadow: "0 8px 18px rgba(31, 79, 143, 0.28)",
             }}
           >
             {isPending ? "Iniciando sesión..." : "Iniciar sesión"}
           </Button>
         </Form>
 
-        <Divider style={{ margin: isMobile ? "14px 0" : "18px 0", color: "#a07b90" }}>o</Divider>
+        <Divider style={{ margin: isMobile ? "14px 0" : "18px 0", color: "#9ca3af" }}>o</Divider>
 
         <Button
           block
@@ -225,8 +218,8 @@ export const AuthPage = (props: AuthPageProps) => {
           style={{
             height: isMobile ? "38px" : "42px",
             borderRadius: 10,
-            borderColor: "#e3d2dc",
-            color: "#4c3441",
+            borderColor: "#d1d5db",
+            color: "#111827",
             fontWeight: 600,
           }}
         >
@@ -235,16 +228,8 @@ export const AuthPage = (props: AuthPageProps) => {
       </div>
 
       {props.type === "login" && (
-        <div style={{
-          marginTop: isMobile ? "8px" : "12px",
-          textAlign: "center",
-          fontSize: isMobile ? "11px" : "12px",
-          color: "#666",
-          lineHeight: 1.5,
-        }}>
-          <p style={{ margin: 0 }}>
-            ¿No tienes acceso? Comunícate con el personal de la Academia
-          </p>
+        <div style={{ marginTop: 10, textAlign: "center", fontSize: 11, color: "#6b7280" }}>
+          Acceso exclusivo para usuarios autorizados.
         </div>
       )}
     </div>

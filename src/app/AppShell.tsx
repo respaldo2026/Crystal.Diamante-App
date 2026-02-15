@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useEffect, useState } from "react";
 import {
   Refine,
   useLogout,
@@ -61,6 +61,7 @@ import { QueryProvider } from "@/providers/query-provider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { RolesPermissionsProvider, useRolesPermissions } from "@/contexts/roles-permissions-context";
 import { ColorModeContextProvider, useColorMode } from "@/contexts/color-mode";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 const allResources = [
   {
@@ -574,6 +575,8 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const { permisos, loading: permisosLoading } = useRolesPermissions();
   const { mode } = useColorMode();
   const pathname = usePathname();
+  const [brandingName, setBrandingName] = useState("Crystal App");
+  const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
 
   const isDarkMode = mode === "dark";
 
@@ -729,6 +732,23 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
   const router = useRouter();
 
+  useEffect(() => {
+    const cargarBranding = async () => {
+      const { data } = await supabaseBrowserClient
+        .from("configuracion")
+        .select("nombre_academia, logo_url")
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data?.nombre_academia) setBrandingName(data.nombre_academia);
+      if (data?.logo_url) setBrandingLogo(data.logo_url);
+    };
+
+    cargarBranding();
+  }, []);
+
   React.useEffect(() => {
     if (!userLoading && !user && !isAuthRoute) {
       router.replace("/login");
@@ -854,7 +874,26 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
                 initialSiderCollapsed={false}
                 Sider={CustomSider}
                 Title={({ collapsed }) => (
-                  <ThemedTitle collapsed={collapsed} text="Crystal App" icon={<BookOutlined />} />
+                  <ThemedTitle
+                    collapsed={collapsed}
+                    text={brandingName}
+                    icon={
+                      brandingLogo ? (
+                        <img
+                          src={brandingLogo}
+                          alt={brandingName}
+                          style={{
+                            width: 22,
+                            height: 22,
+                            objectFit: "contain",
+                            borderRadius: 4,
+                          }}
+                        />
+                      ) : (
+                        <BookOutlined />
+                      )
+                    }
+                  />
                 )}
               >
                 <ThemeToggleButton />
