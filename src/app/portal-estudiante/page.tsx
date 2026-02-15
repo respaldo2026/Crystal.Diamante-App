@@ -22,8 +22,7 @@ import {
   Space,
   Dropdown,
   Checkbox,
-  Grid,
-  Select
+  Grid
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -195,6 +194,10 @@ export default function PortalEstudiante() {
       setMatriculaRutaId(null);
       setCicloRutaId(null);
       setTemaRutaId(null);
+      return;
+    }
+
+    if (!matriculaRutaId) {
       return;
     }
 
@@ -458,12 +461,40 @@ export default function PortalEstudiante() {
       (m: any) => String(m?.id)
     );
 
-    const matriculaSeleccionada =
-      matriculasActivas.find((m: any) => String(m.id) === String(matriculaRutaId)) ||
-      matriculasActivas[0];
+    const matriculaSeleccionada = matriculasActivas.find((m: any) => String(m.id) === String(matriculaRutaId));
+
+    const tituloPrincipal = vista === "plan"
+      ? "Plan de Estudios"
+      : "Materiales (Kits)";
+
+    const StepCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
+      <Card title={title} size={isMobile ? "small" : "default"}>
+        {children}
+      </Card>
+    );
 
     if (!matriculaSeleccionada) {
-      return <Empty description="No se encontró una matrícula activa" />;
+      return (
+        <StepCard title={tituloPrincipal}>
+          <Text strong>Selecciona un curso</Text>
+          <Row gutter={[10, 10]} style={{ marginTop: 10 }}>
+            {matriculasActivas.map((mat: any) => (
+              <Col xs={24} sm={12} lg={8} key={mat.id}>
+                <Button
+                  block
+                  onClick={() => {
+                    setMatriculaRutaId(String(mat.id));
+                    setCicloRutaId(null);
+                    setTemaRutaId(null);
+                  }}
+                >
+                  {mat?.cursos?.nombre || `Curso ${mat.id}`}
+                </Button>
+              </Col>
+            ))}
+          </Row>
+        </StepCard>
+      );
     }
 
     const programaIdSeleccionado = matriculaSeleccionada?.cursos?.programa_id;
@@ -474,18 +505,85 @@ export default function PortalEstudiante() {
       (ciclo: any) => String(ciclo?.id || `${ciclo?.programa_id || ''}-${ciclo?.nombre_ciclo || ''}-${ciclo?.numero_ciclo || ''}`)
     ).sort((a: any, b: any) => Number(a?.numero_ciclo || 0) - Number(b?.numero_ciclo || 0));
 
-    const cicloSeleccionado =
-      ciclosPrograma.find((c: any) => String(c.id) === String(cicloRutaId)) ||
-      ciclosPrograma[0];
+    const cicloSeleccionado = ciclosPrograma.find((c: any) => String(c.id) === String(cicloRutaId));
+
+    if (!ciclosPrograma.length) {
+      return (
+        <StepCard title={`${tituloPrincipal}: ${programaNombre}`}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Button onClick={() => setMatriculaRutaId(null)}>← Volver a cursos</Button>
+            <Empty description="Este curso aún no tiene módulos/ciclos configurados" />
+          </Space>
+        </StepCard>
+      );
+    }
+
+    if (!cicloSeleccionado) {
+      return (
+        <StepCard title={`${tituloPrincipal}: ${programaNombre}`}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Button onClick={() => setMatriculaRutaId(null)}>← Volver a cursos</Button>
+            <Text strong>Selecciona un ciclo / módulo</Text>
+            <Row gutter={[10, 10]}>
+              {ciclosPrograma.map((ciclo: any) => (
+                <Col xs={24} sm={12} lg={8} key={ciclo.id}>
+                  <Button
+                    block
+                    onClick={() => {
+                      setCicloRutaId(String(ciclo.id));
+                      setTemaRutaId(null);
+                    }}
+                  >
+                    {ciclo.nombre_ciclo}
+                  </Button>
+                </Col>
+              ))}
+            </Row>
+          </Space>
+        </StepCard>
+      );
+    }
 
     const temasCiclo = deduplicarLista(
       (cicloSeleccionado?.pensum_cursos || []),
       (tema: any) => String(tema?.id || normalizarTexto(tema?.nombre_curso || ""))
     );
 
-    const temaSeleccionado =
-      temasCiclo.find((t: any) => String(t.id) === String(temaRutaId)) ||
-      temasCiclo[0];
+    const temaSeleccionado = temasCiclo.find((t: any) => String(t.id) === String(temaRutaId));
+
+    if (!temasCiclo.length) {
+      return (
+        <StepCard title={`${tituloPrincipal}: ${programaNombre}`}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Button onClick={() => setCicloRutaId(null)}>← Volver a ciclos</Button>
+            <Empty description="Este ciclo aún no tiene temas configurados" />
+          </Space>
+        </StepCard>
+      );
+    }
+
+    if (!temaSeleccionado) {
+      return (
+        <StepCard title={`${tituloPrincipal}: ${programaNombre}`}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Space wrap>
+              <Button onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
+              <Button onClick={() => setCicloRutaId(null)}>← Ciclos</Button>
+            </Space>
+            <Text strong>Selecciona un tema</Text>
+            <Row gutter={[10, 10]}>
+              {temasCiclo.map((tema: any) => (
+                <Col xs={24} sm={12} lg={8} key={tema.id}>
+                  <Button block onClick={() => setTemaRutaId(String(tema.id))}>
+                    {tema.nombre_curso}
+                  </Button>
+                </Col>
+              ))}
+            </Row>
+          </Space>
+        </StepCard>
+      );
+    }
 
     const materialesPrograma = deduplicarLista(
       materiales.filter((m: any) => m.programa_id === programaIdSeleccionado),
@@ -547,107 +645,16 @@ export default function PortalEstudiante() {
     const moduloActualNombre = cicloSeleccionado?.nombre_ciclo || "Sin módulo";
     const temaActualNombre = temaSeleccionado?.nombre_curso || "Sin tema";
 
-    const obtenerRecursosTema = (ciclo: any, tema: any) => {
-      return deduplicarLista(
-        materialesPrograma.filter((material: any) => {
-          if (!tema) return false;
-          if (ciclo?.id && material.pensum_id && String(material.pensum_id) !== String(ciclo.id)) return false;
-
-          const parsed = parseTemaTituloMaterial(material.titulo);
-          const temaMaterial = normalizarTemaComparacion(parsed.tema);
-          const temaObjetivo = normalizarTemaComparacion(tema.nombre_curso);
-          const tituloLimpio = normalizarTexto(parsed.tituloLimpio);
-          const descripcion = normalizarTexto(material.descripcion || "");
-
-          if (!temaObjetivo) return true;
-          if (temaMaterial) return temaMaterial === temaObjetivo;
-          return tituloLimpio.includes(temaObjetivo) || descripcion.includes(temaObjetivo);
-        }),
-        (m: any) => {
-          const parsed = parseTemaTituloMaterial(m?.titulo);
-          return `${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`;
-        }
-      );
-    };
-
-    const obtenerInsumosTema = (ciclo: any, tema: any) => {
-      return deduplicarLista(
-        materialesClasePrograma.filter((item: any) => {
-          if (!tema) return false;
-          if (ciclo?.id && item.pensum_id && String(item.pensum_id) !== String(ciclo.id)) return false;
-          return String(item.pensum_curso_id) === String(tema.id);
-        }),
-        (m: any) => `${normalizarTexto(m?.nombre_material || '')}-${m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`
-      );
-    };
-
-    const contarInsumosMarcados = (tema: any, insumos: any[]) => {
-      return insumos.filter((insumo: any) => {
-        const key = `${matriculaSeleccionada.id}|${tema?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
-        return Boolean(checklistInsumos[key]);
-      }).length;
-    };
-
-    const tituloPrincipal = vista === "plan"
-      ? `Plan de Estudios: ${programaNombre}`
-      : `Materiales (Kits): ${programaNombre}`;
-
     return (
       <Card
-        title={tituloPrincipal}
+        title={`${tituloPrincipal}: ${programaNombre}`}
         size={isMobile ? "small" : "default"}
       >
-        <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
-          <Col xs={24} md={8}>
-            <Text strong>Curso</Text>
-            <Select
-              style={{ width: "100%", marginTop: 6 }}
-              value={String(matriculaSeleccionada.id)}
-              options={matriculasActivas.map((mat: any) => ({
-                value: String(mat.id),
-                label: mat?.cursos?.nombre || `Curso ${mat.id}`,
-              }))}
-              onChange={(value) => {
-                setMatriculaRutaId(String(value));
-                setCicloRutaId(null);
-                setTemaRutaId(null);
-              }}
-            />
-          </Col>
-
-          <Col xs={24} md={8}>
-            <Text strong>Ciclo / Módulo</Text>
-            <Select
-              style={{ width: "100%", marginTop: 6 }}
-              value={cicloSeleccionado?.id ? String(cicloSeleccionado.id) : undefined}
-              placeholder="Selecciona ciclo"
-              options={ciclosPrograma.map((ciclo: any) => ({
-                value: String(ciclo.id),
-                label: ciclo.nombre_ciclo,
-              }))}
-              onChange={(value) => {
-                setCicloRutaId(String(value));
-                setTemaRutaId(null);
-              }}
-            />
-          </Col>
-
-          <Col xs={24} md={8}>
-            <Text strong>Tema</Text>
-            <Select
-              style={{ width: "100%", marginTop: 6 }}
-              value={temaSeleccionado?.id ? String(temaSeleccionado.id) : undefined}
-              placeholder="Selecciona tema"
-              options={temasCiclo.map((tema: any) => ({
-                value: String(tema.id),
-                label: tema.nombre_curso,
-              }))}
-              onChange={(value) => {
-                setTemaRutaId(String(value));
-              }}
-            />
-          </Col>
-        </Row>
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Button onClick={() => setMatriculaRutaId(null)}>Cambiar curso</Button>
+          <Button onClick={() => setCicloRutaId(null)}>Cambiar ciclo</Button>
+          <Button onClick={() => setTemaRutaId(null)}>Cambiar tema</Button>
+        </Space>
 
         <div style={{ marginTop: 8, marginBottom: 12 }}>
           <Text type="secondary">
@@ -655,13 +662,7 @@ export default function PortalEstudiante() {
           </Text>
         </div>
 
-        {!ciclosPrograma.length ? (
-          <Empty description="Este curso aún no tiene módulos/ciclos configurados" />
-        ) : !temasCiclo.length ? (
-          <Empty description="Este ciclo aún no tiene temas configurados" />
-        ) : !temaSeleccionado ? (
-          <Empty description={vista === "plan" ? "Selecciona un tema para ver su material didáctico" : "Selecciona un tema para ver los materiales necesarios"} />
-        ) : vista === "plan" ? (
+        {vista === "plan" ? (
           <Card size={isMobile ? "small" : "default"} title="Material didáctico del tema">
             {recursosTema.length === 0 ? (
               <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
