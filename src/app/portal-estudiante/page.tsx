@@ -791,8 +791,12 @@ export default function PortalEstudiante() {
       <Card style={{ marginBottom: 20 }}>
         <Row gutter={16} className="header-row">
           <Col xs={24} sm={12}>
-            <Title level={2}>{obtenerSaludoBienvenida(estudiante?.genero)}, {estudiante?.nombre_completo}! 🎓</Title>
-            <Text type="secondary">Portal de Estudiante - Academy Crystal</Text>
+            <Text style={{ display: "block", fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>
+              Te damos la Bienvenida
+            </Text>
+            <Title level={3} style={{ marginTop: 6, marginBottom: 0 }}>
+              {estudiante?.nombre_completo}
+            </Title>
           </Col>
           <Col xs={24} sm={12} className="header-actions" style={{ textAlign: "right" }}>
             {(whatsappAgente || whatsappAdmisiones) && (
@@ -826,8 +830,8 @@ export default function PortalEstudiante() {
                 <Button
                   icon={<WhatsAppOutlined />}
                   type="primary"
-                  size={isMobile ? "middle" : "large"}
-                  style={{ backgroundColor: "#25D366", borderColor: "#25D366" }}
+                  size="middle"
+                  style={{ backgroundColor: "#25D366", borderColor: "#25D366", height: 34, paddingInline: 12, fontSize: 13 }}
                 >
                   Contactar por WhatsApp
                 </Button>
@@ -852,7 +856,35 @@ export default function PortalEstudiante() {
                     {avancePorCurso.map((curso: any, idx: number) => (
                       <Col xs={24} sm={12} lg={8} key={idx}>
                         <Card className="course-card" title={curso.curso} extra={<Tag>{curso.programa}</Tag>}>
-                          <Progress type="circle" percent={curso.nota} format={() => `${curso.nota}/100`} />
+                          <Row gutter={12}>
+                            <Col xs={12}>
+                              <div style={{ textAlign: "center" }}>
+                                <Progress
+                                  type="circle"
+                                  percent={Math.max(0, Math.min(100, Number(curso.nota || 0)))}
+                                  width={isMobile ? 78 : 90}
+                                  format={() => `${Number(curso.nota || 0)}/100`}
+                                />
+                                <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
+                                  Nota actual
+                                </Text>
+                              </div>
+                            </Col>
+                            <Col xs={12}>
+                              <div style={{ textAlign: "center" }}>
+                                <Progress
+                                  type="dashboard"
+                                  percent={Math.max(0, Math.min(100, Math.round((Number(curso.nota || 0) / 70) * 100)))}
+                                  width={isMobile ? 78 : 90}
+                                  format={(percent) => `${percent}%`}
+                                  status={Number(curso.nota || 0) >= 70 ? "success" : "active"}
+                                />
+                                <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
+                                  Meta aprobatoria
+                                </Text>
+                              </div>
+                            </Col>
+                          </Row>
                           <div style={{ marginTop: 10, textAlign: 'center' }}>
                             <Tag color={curso.nota >= 70 ? "green" : "orange"}>{curso.estado?.toUpperCase()}</Tag>
                           </div>
