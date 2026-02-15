@@ -581,13 +581,18 @@ export default function PortalEstudiante() {
 
     return (
       <Card title={`Plan de Estudios: ${programaNombre}`}>
-        <Divider orientation="left">1. Curso inscrito</Divider>
+        <Divider orientation="left">Curso inscrito</Divider>
         <Row gutter={[8, 8]}>
           {matriculasActivas.map((mat: any) => (
             <Col xs={24} sm={12} md={8} key={mat.id}>
               <Button
                 block
                 type={String(mat.id) === String(matriculaSeleccionada.id) ? "primary" : "default"}
+                style={
+                  String(mat.id) === String(matriculaSeleccionada.id)
+                    ? { backgroundColor: "#1677ff", borderColor: "#1677ff" }
+                    : undefined
+                }
                 onClick={() => {
                   setMatriculaRutaId(String(mat.id));
                   setCicloRutaId(null);
@@ -600,7 +605,11 @@ export default function PortalEstudiante() {
           ))}
         </Row>
 
-        <Divider orientation="left">2. Módulo / Mes</Divider>
+        <div style={{ marginTop: 8, marginBottom: 4 }}>
+          <Tag color="blue">Curso seleccionado: {matriculaSeleccionada?.cursos?.nombre || "N/A"}</Tag>
+        </div>
+
+        <Divider orientation="left">Módulo / Mes</Divider>
         {ciclosPrograma.length === 0 ? (
           <Empty description="Este curso aún no tiene módulos/ciclos configurados" />
         ) : (
@@ -620,7 +629,22 @@ export default function PortalEstudiante() {
               );
 
               return (
-                <Panel header={ciclo.nombre_ciclo} key={String(ciclo.id)}>
+                <Panel
+                  header={
+                    <Space size={8} wrap>
+                      <Text
+                        strong
+                        style={{
+                          color: String(cicloSeleccionado?.id) === String(ciclo.id) ? "#1677ff" : undefined,
+                        }}
+                      >
+                        {ciclo.nombre_ciclo}
+                      </Text>
+                      {String(cicloSeleccionado?.id) === String(ciclo.id) ? <Tag color="blue">Seleccionado</Tag> : null}
+                    </Space>
+                  }
+                  key={String(ciclo.id)}
+                >
                   {temasDelCiclo.length === 0 ? (
                     <Empty description="Este módulo aún no tiene temas configurados" />
                   ) : (
@@ -642,8 +666,14 @@ export default function PortalEstudiante() {
                             key={String(tema.id)}
                             header={
                               <Space size={8} wrap>
-                                <Text strong>{tema.nombre_curso}</Text>
+                                <Text
+                                  strong
+                                  style={{ color: String(temaSeleccionado?.id) === String(tema.id) ? "#722ed1" : undefined }}
+                                >
+                                  {tema.nombre_curso}
+                                </Text>
                                 <Tag>{tema.horas || 0} horas</Tag>
+                                {String(temaSeleccionado?.id) === String(tema.id) ? <Tag color="purple">Seleccionado</Tag> : null}
                               </Space>
                             }
                           >
