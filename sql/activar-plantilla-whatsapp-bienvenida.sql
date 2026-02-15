@@ -5,8 +5,8 @@ INSERT INTO plantillas_whatsapp (nombre, descripcion, plantilla, variables, acti
 VALUES (
     'bienvenida_portal_estudiante',
     'Bienvenida al portal con credenciales iniciales',
-    'Hola {{nombre}}, ¡bienvenido(a) a {{curso}}!\n\nYa puedes ingresar a la app: {{enlace_portal}}\n\n*Usuario:* {{usuario}}\n*Contraseña:* {{contrasena}} (tu número de cédula)\n\n*En la app podrás ver:*\n• Asistencias\n• Notas\n• Material didáctico\n• Materiales necesarios por clase',
-    ARRAY['nombre', 'curso', 'enlace_portal', 'usuario', 'contrasena'],
+    'Hola {{nombre}}, ¡bienvenida al Curso: {{curso}}!\n\n*Ya puedes ingresar a la app:* {{enlace_portal}}\n\n*Usuario*: {{usuario}}\n\n*En la app podrás ver:*\n• Asistencias\n• Notas\n• Material didáctico\n• Materiales necesarios por clase',
+    ARRAY['nombre', 'curso', 'enlace_portal', 'usuario'],
     true
 )
 ON CONFLICT (nombre) DO UPDATE SET

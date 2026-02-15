@@ -551,7 +551,6 @@ export async function enviarBienvenidaPortalEstudiante(
     nombreCurso: string;
     enlacePortal: string;
     usuario: string;
-    contrasena: string;
   }
 ): Promise<ResultadoEnvio> {
   console.log(`[WhatsApp] Enviando bienvenida de portal a ${datos.nombre}`);
@@ -564,7 +563,6 @@ export async function enviarBienvenidaPortalEstudiante(
       curso: datos.nombreCurso,
       enlace_portal: datos.enlacePortal,
       usuario: datos.usuario,
-      contrasena: datos.contrasena,
     },
     usuarioId,
     { tipo_evento: 'bienvenida_portal_estudiante', curso_id: null }

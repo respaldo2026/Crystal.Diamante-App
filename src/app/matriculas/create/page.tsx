@@ -556,7 +556,6 @@ export default function MatriculaCreate() {
                         curso: cursoData?.nombre ?? "tu curso",
                         enlace_portal: PORTAL_ESTUDIANTE_URL,
                         usuario: (estudianteData.email || estudianteData.identificacion) || "tu usuario registrado",
-                        contrasena: (String(estudianteData.identificacion).replace(/[^0-9]/g, "")) || "tu número de cédula",
                     },
                 );
             }
