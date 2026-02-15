@@ -538,157 +538,196 @@ export default function PortalEstudiante() {
       return Boolean(checklistInsumos[key]);
     }).length;
 
+    const obtenerRecursosTema = (ciclo: any, tema: any) => {
+      return deduplicarLista(
+        materialesPrograma.filter((material: any) => {
+          if (!tema) return false;
+          if (ciclo?.id && material.pensum_id && String(material.pensum_id) !== String(ciclo.id)) return false;
+
+          const parsed = parseTemaTituloMaterial(material.titulo);
+          const temaMaterial = normalizarTexto(parsed.tema);
+          const temaObjetivo = normalizarTexto(tema.nombre_curso);
+          const tituloLimpio = normalizarTexto(parsed.tituloLimpio);
+          const descripcion = normalizarTexto(material.descripcion || "");
+
+          if (!temaObjetivo) return true;
+          if (temaMaterial) return temaMaterial === temaObjetivo;
+          return tituloLimpio.includes(temaObjetivo) || descripcion.includes(temaObjetivo);
+        }),
+        (m: any) => {
+          const parsed = parseTemaTituloMaterial(m?.titulo);
+          return `${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`;
+        }
+      );
+    };
+
+    const obtenerInsumosTema = (ciclo: any, tema: any) => {
+      return deduplicarLista(
+        materialesClasePrograma.filter((item: any) => {
+          if (!tema) return false;
+          if (ciclo?.id && item.pensum_id && String(item.pensum_id) !== String(ciclo.id)) return false;
+          return String(item.pensum_curso_id) === String(tema.id);
+        }),
+        (m: any) => `${normalizarTexto(m?.nombre_material || '')}-${m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`
+      );
+    };
+
+    const contarInsumosMarcados = (tema: any, insumos: any[]) => {
+      return insumos.filter((insumo: any) => {
+        const key = `${matriculaSeleccionada.id}|${tema?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+        return Boolean(checklistInsumos[key]);
+      }).length;
+    };
+
     return (
       <Card title={`Plan de Estudios: ${programaNombre}`}>
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="Ruta recomendada"
-          description="1) Elige tu curso, 2) entra al módulo/mes, 3) selecciona un tema y revisa material didáctico + productos necesarios."
-        />
-
         <Divider orientation="left">1. Curso inscrito</Divider>
-        <Space wrap>
+        <Row gutter={[8, 8]}>
           {matriculasActivas.map((mat: any) => (
-            <Button
-              key={mat.id}
-              type={String(mat.id) === String(matriculaSeleccionada.id) ? "primary" : "default"}
-              onClick={() => {
-                setMatriculaRutaId(String(mat.id));
-                setCicloRutaId(null);
-                setTemaRutaId(null);
-              }}
-            >
-              {mat?.cursos?.nombre || `Curso ${mat.id}`}
-            </Button>
+            <Col xs={24} sm={12} md={8} key={mat.id}>
+              <Button
+                block
+                type={String(mat.id) === String(matriculaSeleccionada.id) ? "primary" : "default"}
+                onClick={() => {
+                  setMatriculaRutaId(String(mat.id));
+                  setCicloRutaId(null);
+                  setTemaRutaId(null);
+                }}
+              >
+                {mat?.cursos?.nombre || `Curso ${mat.id}`}
+              </Button>
+            </Col>
           ))}
-        </Space>
+        </Row>
 
         <Divider orientation="left">2. Módulo / Mes</Divider>
         {ciclosPrograma.length === 0 ? (
           <Empty description="Este curso aún no tiene módulos/ciclos configurados" />
         ) : (
-          <Space wrap>
-            {ciclosPrograma.map((ciclo: any) => (
-              <Button
-                key={ciclo.id}
-                type={String(ciclo.id) === String(cicloSeleccionado?.id) ? "primary" : "default"}
-                onClick={() => {
-                  setCicloRutaId(String(ciclo.id));
-                  setTemaRutaId(null);
-                }}
-              >
-                {ciclo.nombre_ciclo}
-              </Button>
-            ))}
-          </Space>
-        )}
+          <Collapse
+            accordion
+            activeKey={cicloSeleccionado?.id ? String(cicloSeleccionado.id) : undefined}
+            onChange={(key) => {
+              const value = Array.isArray(key) ? key[0] : key;
+              setCicloRutaId(value ? String(value) : null);
+              setTemaRutaId(null);
+            }}
+          >
+            {ciclosPrograma.map((ciclo: any) => {
+              const temasDelCiclo = deduplicarLista(
+                (ciclo?.pensum_cursos || []),
+                (tema: any) => String(tema?.id || normalizarTexto(tema?.nombre_curso || ""))
+              );
 
-        <Divider orientation="left">3. Tema del módulo</Divider>
-        {temasCiclo.length === 0 ? (
-          <Empty description="Este módulo aún no tiene temas configurados" />
-        ) : (
-          <Row gutter={[12, 12]}>
-            {temasCiclo.map((tema: any) => (
-              <Col xs={24} sm={12} md={8} lg={6} key={tema.id}>
-                <Card
-                  size="small"
-                  hoverable
-                  onClick={() => setTemaRutaId(String(tema.id))}
-                  style={{
-                    borderColor: String(tema.id) === String(temaSeleccionado?.id) ? "#1677ff" : undefined,
-                    boxShadow: String(tema.id) === String(temaSeleccionado?.id) ? "0 0 0 1px #1677ff inset" : undefined,
-                  }}
-                >
-                  <Text strong>{tema.nombre_curso}</Text>
-                  <div style={{ marginTop: 6 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {tema.horas || 0} horas
-                    </Text>
-                  </div>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        )}
-
-        {temaSeleccionado && (
-          <>
-            <Divider orientation="left">Tema seleccionado: {temaSeleccionado.nombre_curso}</Divider>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} lg={12}>
-                <Card size="small" title="Material didáctico del tema">
-                  {recursosTema.length === 0 ? (
-                    <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
+              return (
+                <Panel header={ciclo.nombre_ciclo} key={String(ciclo.id)}>
+                  {temasDelCiclo.length === 0 ? (
+                    <Empty description="Este módulo aún no tiene temas configurados" />
                   ) : (
-                    <List
-                      dataSource={recursosTema}
-                      renderItem={(item: any) => {
-                        let Icon = FileTextOutlined;
-                        if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
-                        if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
-                        const parsed = parseTemaTituloMaterial(item.titulo);
+                    <Collapse
+                      accordion
+                      activeKey={String(cicloSeleccionado?.id) === String(ciclo.id) && temaSeleccionado?.id ? String(temaSeleccionado.id) : undefined}
+                      onChange={(key) => {
+                        const value = Array.isArray(key) ? key[0] : key;
+                        setTemaRutaId(value ? String(value) : null);
+                      }}
+                    >
+                      {temasDelCiclo.map((tema: any) => {
+                        const recursosTemaPanel = obtenerRecursosTema(ciclo, tema);
+                        const insumosTemaPanel = obtenerInsumosTema(ciclo, tema);
+                        const marcadosTema = contarInsumosMarcados(tema, insumosTemaPanel);
+
                         return (
-                          <List.Item
-                            actions={[
-                              <a key={`desc-${item.id}`} href={item.url_archivo} target="_blank" rel="noreferrer">
-                                <DownloadOutlined />
-                              </a>,
-                            ]}
+                          <Panel
+                            key={String(tema.id)}
+                            header={
+                              <Space size={8} wrap>
+                                <Text strong>{tema.nombre_curso}</Text>
+                                <Tag>{tema.horas || 0} horas</Tag>
+                              </Space>
+                            }
                           >
-                            <List.Item.Meta
-                              avatar={<Icon />}
-                              title={parsed.tituloLimpio || item.titulo}
-                              description={item.descripcion || "Sin descripción"}
-                            />
-                          </List.Item>
-                        );
-                      }}
-                    />
-                  )}
-                </Card>
-              </Col>
+                            <Row gutter={[12, 12]}>
+                              <Col xs={24} lg={12}>
+                                <Card size="small" title="Material didáctico del tema">
+                                  {recursosTemaPanel.length === 0 ? (
+                                    <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
+                                  ) : (
+                                    <List
+                                      dataSource={recursosTemaPanel}
+                                      renderItem={(item: any) => {
+                                        let Icon = FileTextOutlined;
+                                        if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                                        if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                                        const parsed = parseTemaTituloMaterial(item.titulo);
+                                        return (
+                                          <List.Item
+                                            actions={[
+                                              <a key={`desc-${item.id}`} href={item.url_archivo} target="_blank" rel="noreferrer">
+                                                <DownloadOutlined />
+                                              </a>,
+                                            ]}
+                                          >
+                                            <List.Item.Meta
+                                              avatar={<Icon />}
+                                              title={parsed.tituloLimpio || item.titulo}
+                                              description={item.descripcion || "Sin descripción"}
+                                            />
+                                          </List.Item>
+                                        );
+                                      }}
+                                    />
+                                  )}
+                                </Card>
+                              </Col>
 
-              <Col xs={24} lg={12}>
-                <Card
-                  size="small"
-                  title="Productos / materiales necesarios"
-                  extra={<Tag color={insumosTema.length > 0 && insumosMarcados === insumosTema.length ? "green" : "blue"}>{insumosMarcados}/{insumosTema.length} listos</Tag>}
-                >
-                  {insumosTema.length === 0 ? (
-                    <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
-                  ) : (
-                    <List
-                      dataSource={insumosTema}
-                      renderItem={(insumo: any) => {
-                        const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
-                        return (
-                          <List.Item>
-                            <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                              <Checkbox
-                                checked={Boolean(checklistInsumos[key])}
-                                onChange={(event) => toggleChecklist(insumo, event.target.checked)}
-                              >
-                                <Text strong>{insumo.nombre_material}</Text>
-                              </Checkbox>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {[insumo.cantidad, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
-                                {insumo.obligatorio ? " • Obligatorio" : " • Opcional"}
-                              </Text>
-                              {insumo.observaciones ? (
-                                <Text type="secondary" style={{ fontSize: 12 }}>{insumo.observaciones}</Text>
-                              ) : null}
-                            </Space>
-                          </List.Item>
+                              <Col xs={24} lg={12}>
+                                <Card
+                                  size="small"
+                                  title="Productos / materiales necesarios"
+                                  extra={<Tag color={insumosTemaPanel.length > 0 && marcadosTema === insumosTemaPanel.length ? "green" : "blue"}>{marcadosTema}/{insumosTemaPanel.length} listos</Tag>}
+                                >
+                                  {insumosTemaPanel.length === 0 ? (
+                                    <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
+                                  ) : (
+                                    <List
+                                      dataSource={insumosTemaPanel}
+                                      renderItem={(insumo: any) => {
+                                        const key = `${matriculaSeleccionada.id}|${tema?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+                                        return (
+                                          <List.Item>
+                                            <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                                              <Checkbox
+                                                checked={Boolean(checklistInsumos[key])}
+                                                onChange={(event) => toggleChecklist(insumo, event.target.checked)}
+                                              >
+                                                <Text strong>{insumo.nombre_material}</Text>
+                                              </Checkbox>
+                                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                                {[insumo.cantidad, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
+                                                {insumo.obligatorio ? " • Obligatorio" : " • Opcional"}
+                                              </Text>
+                                              {insumo.observaciones ? (
+                                                <Text type="secondary" style={{ fontSize: 12 }}>{insumo.observaciones}</Text>
+                                              ) : null}
+                                            </Space>
+                                          </List.Item>
+                                        );
+                                      }}
+                                    />
+                                  )}
+                                </Card>
+                              </Col>
+                            </Row>
+                          </Panel>
                         );
-                      }}
-                    />
+                      })}
+                    </Collapse>
                   )}
-                </Card>
-              </Col>
-            </Row>
-          </>
+                </Panel>
+              );
+            })}
+          </Collapse>
         )}
       </Card>
     );
