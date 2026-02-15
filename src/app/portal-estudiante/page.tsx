@@ -21,7 +21,8 @@ import {
   Collapse,
   Typography,
   Space,
-  Dropdown
+  Dropdown,
+  Checkbox
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -64,6 +65,10 @@ export default function PortalEstudiante() {
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
+  const [matriculaRutaId, setMatriculaRutaId] = useState<string | null>(null);
+  const [cicloRutaId, setCicloRutaId] = useState<string | null>(null);
+  const [temaRutaId, setTemaRutaId] = useState<string | null>(null);
+  const [checklistInsumos, setChecklistInsumos] = useState<Record<string, boolean>>({});
 
   const deduplicarLista = <T,>(items: T[], resolverClave: (item: T) => string) => {
     const vistos = new Set<string>();
@@ -153,6 +158,48 @@ export default function PortalEstudiante() {
   useEffect(() => {
     cargarDatos();
   }, []);
+
+  useEffect(() => {
+    if (!estudiante?.id) return;
+    try {
+      const key = `portal-checklist-insumos:${estudiante.id}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setChecklistInsumos(parsed);
+        }
+      }
+    } catch (error) {
+      logger.error("No se pudo cargar checklist de insumos", error);
+    }
+  }, [estudiante?.id]);
+
+  useEffect(() => {
+    if (!estudiante?.id) return;
+    try {
+      const key = `portal-checklist-insumos:${estudiante.id}`;
+      localStorage.setItem(key, JSON.stringify(checklistInsumos));
+    } catch (error) {
+      logger.error("No se pudo guardar checklist de insumos", error);
+    }
+  }, [checklistInsumos, estudiante?.id]);
+
+  useEffect(() => {
+    if (!matriculas.length) {
+      setMatriculaRutaId(null);
+      setCicloRutaId(null);
+      setTemaRutaId(null);
+      return;
+    }
+
+    const existeMatricula = matriculas.some((m: any) => String(m.id) === String(matriculaRutaId));
+    if (!existeMatricula) {
+      setMatriculaRutaId(String(matriculas[0].id));
+      setCicloRutaId(null);
+      setTemaRutaId(null);
+    }
+  }, [matriculas, matriculaRutaId]);
 
   const cargarDatos = async () => {
     try {
@@ -400,218 +447,250 @@ export default function PortalEstudiante() {
 
   const renderPensum = () => {
     if (!matriculas.length) return <Empty description="No tienes cursos activos" />;
-    const programasIds = Array.from(new Set(matriculas.map(m => m.cursos?.programa_id))).filter(Boolean);
+
+    const matriculasActivas = deduplicarLista(
+      matriculas.filter((m: any) => m.estado !== "cancelado"),
+      (m: any) => String(m?.id)
+    );
+
+    const matriculaSeleccionada =
+      matriculasActivas.find((m: any) => String(m.id) === String(matriculaRutaId)) ||
+      matriculasActivas[0];
+
+    if (!matriculaSeleccionada) {
+      return <Empty description="No se encontró una matrícula activa" />;
+    }
+
+    const programaIdSeleccionado = matriculaSeleccionada?.cursos?.programa_id;
+    const programaNombre = matriculaSeleccionada?.cursos?.programas?.nombre || matriculaSeleccionada?.cursos?.nombre || "Programa";
+
+    const ciclosPrograma = deduplicarLista(
+      pensum.filter((p: any) => p.programa_id === programaIdSeleccionado),
+      (ciclo: any) => String(ciclo?.id || `${ciclo?.programa_id || ''}-${ciclo?.nombre_ciclo || ''}-${ciclo?.numero_ciclo || ''}`)
+    ).sort((a: any, b: any) => Number(a?.numero_ciclo || 0) - Number(b?.numero_ciclo || 0));
+
+    const cicloSeleccionado =
+      ciclosPrograma.find((c: any) => String(c.id) === String(cicloRutaId)) ||
+      ciclosPrograma[0];
+
+    const temasCiclo = deduplicarLista(
+      (cicloSeleccionado?.pensum_cursos || []),
+      (tema: any) => String(tema?.id || normalizarTexto(tema?.nombre_curso || ""))
+    );
+
+    const temaSeleccionado =
+      temasCiclo.find((t: any) => String(t.id) === String(temaRutaId)) ||
+      temasCiclo[0];
+
+    const materialesPrograma = deduplicarLista(
+      materiales.filter((m: any) => m.programa_id === programaIdSeleccionado),
+      (m: any) => {
+        const parsed = parseTemaTituloMaterial(m?.titulo);
+        return String(`${m?.pensum_id || ''}-${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`);
+      }
+    );
+
+    const materialesClasePrograma = deduplicarLista(
+      materialesClase.filter((m: any) => m.programa_id === programaIdSeleccionado),
+      (m: any) => String(`${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${normalizarTexto(m?.nombre_material || '')}-${m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`)
+    );
+
+    const recursosTema = deduplicarLista(
+      materialesPrograma.filter((material: any) => {
+        if (!temaSeleccionado) return false;
+        if (cicloSeleccionado?.id && material.pensum_id && String(material.pensum_id) !== String(cicloSeleccionado.id)) return false;
+
+        const parsed = parseTemaTituloMaterial(material.titulo);
+        const temaMaterial = normalizarTexto(parsed.tema);
+        const temaObjetivo = normalizarTexto(temaSeleccionado.nombre_curso);
+        const tituloLimpio = normalizarTexto(parsed.tituloLimpio);
+        const descripcion = normalizarTexto(material.descripcion || "");
+
+        if (!temaObjetivo) return true;
+        if (temaMaterial) return temaMaterial === temaObjetivo;
+        return tituloLimpio.includes(temaObjetivo) || descripcion.includes(temaObjetivo);
+      }),
+      (m: any) => {
+        const parsed = parseTemaTituloMaterial(m?.titulo);
+        return `${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`;
+      }
+    );
+
+    const insumosTema = deduplicarLista(
+      materialesClasePrograma.filter((item: any) => {
+        if (!temaSeleccionado) return false;
+        if (cicloSeleccionado?.id && item.pensum_id && String(item.pensum_id) !== String(cicloSeleccionado.id)) return false;
+        return String(item.pensum_curso_id) === String(temaSeleccionado.id);
+      }),
+      (m: any) => `${normalizarTexto(m?.nombre_material || '')}-${m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`
+    );
+
+    const toggleChecklist = (insumo: any, checked: boolean) => {
+      const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+      setChecklistInsumos((prev) => ({
+        ...prev,
+        [key]: checked,
+      }));
+    };
+
+    const insumosMarcados = insumosTema.filter((insumo: any) => {
+      const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+      return Boolean(checklistInsumos[key]);
+    }).length;
 
     return (
-      <div>
-        {programasIds.map((progId: any) => {
-          const programa = matriculas.find(m => m.cursos?.programa_id === progId)?.cursos?.programas;
-          const pensumProg = deduplicarLista(
-            pensum.filter(p => p.programa_id === progId),
-            (ciclo: any) => String(ciclo?.id || `${ciclo?.programa_id || ''}-${ciclo?.nombre_ciclo || ''}-${ciclo?.numero_ciclo || ''}`)
-          );
-          const matProg = deduplicarLista(
-            materiales.filter(m => m.programa_id === progId),
-            (m: any) => String(`${m?.pensum_id || ''}-${(m?.titulo || '').trim().toLowerCase()}-${(m?.url_archivo || '').trim().toLowerCase()}-${(m?.tipo_material || '').trim().toLowerCase()}`)
-          );
-          const matClaseProg = deduplicarLista(
-            materialesClase.filter((m) => m.programa_id === progId),
-            (m: any) => String(`${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${(m?.nombre_material || '').trim().toLowerCase()}-${m?.cantidad || ''}-${(m?.unidad || '').trim().toLowerCase()}-${(m?.observaciones || '').trim().toLowerCase()}`)
-          );
+      <Card title={`Plan de Estudios: ${programaNombre}`}>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Ruta recomendada"
+          description="1) Elige tu curso, 2) entra al módulo/mes, 3) selecciona un tema y revisa material didáctico + productos necesarios."
+        />
 
-          return (
-            <Card key={progId} title={`Plan de Estudios: ${programa?.nombre}`} style={{ marginBottom: 20 }}>
-              <Tabs items={[
-                {
-                  key: 'pensum',
-                  label: 'Pensum Académico',
-                  children: (
-                    <Collapse defaultActiveKey={pensumProg[0]?.id}>
-                      {pensumProg.map(ciclo => (
-                        <Panel header={`${ciclo.nombre_ciclo} (${ciclo.duracion_semanas || 0} semanas)`} key={ciclo.id}>
-                          <Text type="secondary">{ciclo.descripcion}</Text>
-                          <Divider style={{ margin: '10px 0' }} />
-                          <List
-                            header={<Text strong>Temas:</Text>}
-                            dataSource={ciclo.pensum_cursos || []}
-                            renderItem={(curso: any) => (
-                              <List.Item>
-                                <List.Item.Meta
-                                  avatar={<BookOutlined />}
-                                  title={curso.nombre_curso}
-                                  description={`${curso.horas} horas • ${curso.tipo_curso}`}
-                                />
-                              </List.Item>
-                            )}
-                          />
-                        </Panel>
-                      ))}
-                    </Collapse>
-                  )
-                },
-                {
-                  key: 'material',
-                  label: 'Material Didáctico',
-                  children: (
-                    <div>
-                      {pensumProg.map(ciclo => {
-                        const materialesClaseCiclo = deduplicarLista(
-                          matClaseProg.filter((m) => m.pensum_id === ciclo.id),
-                          (m: any) => String(`${m?.pensum_curso_id || ''}-${(m?.nombre_material || '').trim().toLowerCase()}-${m?.cantidad || ''}-${(m?.unidad || '').trim().toLowerCase()}-${(m?.observaciones || '').trim().toLowerCase()}`)
-                        );
-                        const matsCiclo = deduplicarLista(
-                          matProg.filter((m) => m.pensum_id === ciclo.id),
-                          (m: any) => {
-                            const parsed = parseTemaTituloMaterial(m?.titulo);
-                            return String(`${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`);
-                          }
-                        );
+        <Divider orientation="left">1. Curso inscrito</Divider>
+        <Space wrap>
+          {matriculasActivas.map((mat: any) => (
+            <Button
+              key={mat.id}
+              type={String(mat.id) === String(matriculaSeleccionada.id) ? "primary" : "default"}
+              onClick={() => {
+                setMatriculaRutaId(String(mat.id));
+                setCicloRutaId(null);
+                setTemaRutaId(null);
+              }}
+            >
+              {mat?.cursos?.nombre || `Curso ${mat.id}`}
+            </Button>
+          ))}
+        </Space>
 
-                        if (materialesClaseCiclo.length === 0 && matsCiclo.length === 0) return null;
+        <Divider orientation="left">2. Módulo / Mes</Divider>
+        {ciclosPrograma.length === 0 ? (
+          <Empty description="Este curso aún no tiene módulos/ciclos configurados" />
+        ) : (
+          <Space wrap>
+            {ciclosPrograma.map((ciclo: any) => (
+              <Button
+                key={ciclo.id}
+                type={String(ciclo.id) === String(cicloSeleccionado?.id) ? "primary" : "default"}
+                onClick={() => {
+                  setCicloRutaId(String(ciclo.id));
+                  setTemaRutaId(null);
+                }}
+              >
+                {ciclo.nombre_ciclo}
+              </Button>
+            ))}
+          </Space>
+        )}
 
-                        const materialesPorTema = materialesClaseCiclo.reduce((acc: Record<string, any[]>, material: any) => {
-                          const temaKey = material.pensum_curso_id || 'sin-tema';
-                          if (!acc[temaKey]) acc[temaKey] = [];
-                          acc[temaKey].push(material);
-                          return acc;
-                        }, {});
+        <Divider orientation="left">3. Tema del módulo</Divider>
+        {temasCiclo.length === 0 ? (
+          <Empty description="Este módulo aún no tiene temas configurados" />
+        ) : (
+          <Row gutter={[12, 12]}>
+            {temasCiclo.map((tema: any) => (
+              <Col xs={24} sm={12} md={8} lg={6} key={tema.id}>
+                <Card
+                  size="small"
+                  hoverable
+                  onClick={() => setTemaRutaId(String(tema.id))}
+                  style={{
+                    borderColor: String(tema.id) === String(temaSeleccionado?.id) ? "#1677ff" : undefined,
+                    boxShadow: String(tema.id) === String(temaSeleccionado?.id) ? "0 0 0 1px #1677ff inset" : undefined,
+                  }}
+                >
+                  <Text strong>{tema.nombre_curso}</Text>
+                  <div style={{ marginTop: 6 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {tema.horas || 0} horas
+                    </Text>
+                  </div>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        )}
 
+        {temaSeleccionado && (
+          <>
+            <Divider orientation="left">Tema seleccionado: {temaSeleccionado.nombre_curso}</Divider>
+            <Row gutter={[16, 16]}>
+              <Col xs={24} lg={12}>
+                <Card size="small" title="Material didáctico del tema">
+                  {recursosTema.length === 0 ? (
+                    <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
+                  ) : (
+                    <List
+                      dataSource={recursosTema}
+                      renderItem={(item: any) => {
+                        let Icon = FileTextOutlined;
+                        if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                        if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                        const parsed = parseTemaTituloMaterial(item.titulo);
                         return (
-                          <Card
-                            key={`material-ciclo-${ciclo.id}`}
-                            size="small"
-                            title={`Ciclo: ${ciclo.nombre_ciclo}`}
-                            style={{ marginBottom: 16 }}
+                          <List.Item
+                            actions={[
+                              <a key={`desc-${item.id}`} href={item.url_archivo} target="_blank" rel="noreferrer">
+                                <DownloadOutlined />
+                              </a>,
+                            ]}
                           >
-                            {materialesClaseCiclo.length > 0 && (
-                              <>
-                                <Divider orientation="left" style={{ marginTop: 0 }}>
-                                  Materiales para la clase / tema
-                                </Divider>
-                                <Collapse>
-                                  {Object.entries(materialesPorTema).map(([temaId, items]: [string, any]) => {
-                                    const temaNombre = items?.[0]?.pensum_cursos?.nombre_curso || 'Clase sin tema definido';
-                                    return (
-                                      <Panel header={`Tema: ${temaNombre}`} key={`${ciclo.id}-${temaId}`}>
-                                        <List
-                                          size="small"
-                                          dataSource={items}
-                                          renderItem={(item: any) => (
-                                            <List.Item>
-                                              <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                                                <Text strong>{item.nombre_material}</Text>
-                                                <Space size={6} wrap>
-                                                  <Tag color="blue">Ciclo: {ciclo.nombre_ciclo}</Tag>
-                                                  <Tag color="purple">Tema: {temaNombre}</Tag>
-                                                  <Tag color={item.obligatorio ? 'red' : 'default'}>
-                                                    {item.obligatorio ? 'Obligatorio' : 'Opcional'}
-                                                  </Tag>
-                                                </Space>
-                                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                                  {item.cantidad ? `${item.cantidad}${item.unidad ? ` ${item.unidad}` : ''}` : 'Cantidad por definir'}
-                                                </Text>
-                                                {item.observaciones ? <Text type="secondary">{item.observaciones}</Text> : null}
-                                              </Space>
-                                            </List.Item>
-                                          )}
-                                        />
-                                      </Panel>
-                                    );
-                                  })}
-                                </Collapse>
-                              </>
-                            )}
-
-                            {matsCiclo.length > 0 && (
-                              <>
-                                <Divider orientation="left">Recursos didácticos del ciclo</Divider>
-                                <List
-                                  grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
-                                  dataSource={matsCiclo}
-                                  renderItem={(item: any) => {
-                                    let Icon = FileTextOutlined;
-                                    if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
-                                    if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
-                                    return (
-                                      <List.Item>
-                                        <Card
-                                          size="small"
-                                          title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
-                                          extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
-                                        >
-                                          <Text strong>{item.titulo}</Text>
-                                          <br />
-                                          <Text type="secondary" style={{ fontSize: 12 }}>
-                                            Ciclo: {ciclo.nombre_ciclo}
-                                          </Text>
-                                          <br />
-                                          <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
-                                        </Card>
-                                      </List.Item>
-                                    );
-                                  }}
-                                />
-                              </>
-                            )}
-                          </Card>
+                            <List.Item.Meta
+                              avatar={<Icon />}
+                              title={parsed.tituloLimpio || item.titulo}
+                              description={item.descripcion || "Sin descripción"}
+                            />
+                          </List.Item>
                         );
-                      })}
+                      }}
+                    />
+                  )}
+                </Card>
+              </Col>
 
-                      {deduplicarLista(
-                        matProg.filter(m => !m.pensum_id),
-                        (m: any) => {
-                          const parsed = parseTemaTituloMaterial(m?.titulo);
-                          return String(`${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`);
-                        }
-                      ).length > 0 && (
-                        <div style={{marginBottom: 24}}>
-                          <Divider orientation="left">Material general (no asociado a ciclo)</Divider>
-                          <List
-                            grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
-                            dataSource={deduplicarLista(
-                              matProg.filter(m => !m.pensum_id),
-                              (m: any) => {
-                                const parsed = parseTemaTituloMaterial(m?.titulo);
-                                return String(`${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`);
-                              }
-                            )}
-                            renderItem={(item: any) => {
-                              let Icon = FileTextOutlined;
-                              if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
-                              if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
-                              return (
-                                <List.Item>
-                                  <Card 
-                                    size="small" 
-                                    title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
-                                    extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
-                                  >
-                                    <Text strong>{item.titulo}</Text>
-                                    <br />
-                                    <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
-                                  </Card>
-                                </List.Item>
-                              );
-                            }}
-                          />
-                        </div>
-                      )}
-                      {matClaseProg.length === 0 && matProg.length === 0 && (
-                        <Alert
-                          type="info"
-                          showIcon
-                          message="Aún no hay material didáctico cargado para este programa"
-                          description="Cuando administración registre materiales por ciclo, clase o tema, aparecerán aquí organizados."
-                        />
-                      )}
-                    </div>
-                  )
-                }
-              ]} />
-            </Card>
-          );
-        })}
-      </div>
+              <Col xs={24} lg={12}>
+                <Card
+                  size="small"
+                  title="Productos / materiales necesarios"
+                  extra={<Tag color={insumosTema.length > 0 && insumosMarcados === insumosTema.length ? "green" : "blue"}>{insumosMarcados}/{insumosTema.length} listos</Tag>}
+                >
+                  {insumosTema.length === 0 ? (
+                    <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
+                  ) : (
+                    <List
+                      dataSource={insumosTema}
+                      renderItem={(insumo: any) => {
+                        const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+                        return (
+                          <List.Item>
+                            <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                              <Checkbox
+                                checked={Boolean(checklistInsumos[key])}
+                                onChange={(event) => toggleChecklist(insumo, event.target.checked)}
+                              >
+                                <Text strong>{insumo.nombre_material}</Text>
+                              </Checkbox>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {[insumo.cantidad, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
+                                {insumo.obligatorio ? " • Obligatorio" : " • Opcional"}
+                              </Text>
+                              {insumo.observaciones ? (
+                                <Text type="secondary" style={{ fontSize: 12 }}>{insumo.observaciones}</Text>
+                              ) : null}
+                            </Space>
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  )}
+                </Card>
+              </Col>
+            </Row>
+          </>
+        )}
+      </Card>
     );
   };
 
