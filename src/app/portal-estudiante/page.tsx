@@ -110,6 +110,9 @@ export default function PortalEstudiante() {
     };
   };
 
+  const normalizarTemaComparacion = (valor?: string | null) =>
+    normalizarTexto(valor).replace(/^\d+\s*/, "").trim();
+
   const obtenerSaludoBienvenida = (genero?: string | null) => {
     const generoNormalizado = String(genero || "")
       .trim()
@@ -503,8 +506,8 @@ export default function PortalEstudiante() {
         if (cicloSeleccionado?.id && material.pensum_id && String(material.pensum_id) !== String(cicloSeleccionado.id)) return false;
 
         const parsed = parseTemaTituloMaterial(material.titulo);
-        const temaMaterial = normalizarTexto(parsed.tema);
-        const temaObjetivo = normalizarTexto(temaSeleccionado.nombre_curso);
+        const temaMaterial = normalizarTemaComparacion(parsed.tema);
+        const temaObjetivo = normalizarTemaComparacion(temaSeleccionado.nombre_curso);
         const tituloLimpio = normalizarTexto(parsed.tituloLimpio);
         const descripcion = normalizarTexto(material.descripcion || "");
 
@@ -551,8 +554,8 @@ export default function PortalEstudiante() {
           if (ciclo?.id && material.pensum_id && String(material.pensum_id) !== String(ciclo.id)) return false;
 
           const parsed = parseTemaTituloMaterial(material.titulo);
-          const temaMaterial = normalizarTexto(parsed.tema);
-          const temaObjetivo = normalizarTexto(tema.nombre_curso);
+          const temaMaterial = normalizarTemaComparacion(parsed.tema);
+          const temaObjetivo = normalizarTemaComparacion(tema.nombre_curso);
           const tituloLimpio = normalizarTexto(parsed.tituloLimpio);
           const descripcion = normalizarTexto(material.descripcion || "");
 

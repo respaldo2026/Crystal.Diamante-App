@@ -17,7 +17,7 @@ export async function obtenerMaterialesPorProgramas(programaIds: string[]) {
     .from("material_didactico")
     .select("*")
     .in("programa_id", programaIds)
-    .eq("visible", true)
+    .or("visible.is.null,visible.eq.true")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data || [];
