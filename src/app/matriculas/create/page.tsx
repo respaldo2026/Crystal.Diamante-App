@@ -415,6 +415,10 @@ export default function MatriculaCreate() {
 
             if (errInsert) {
                 console.error("Error insertando matrícula:", errInsert);
+                if ((errInsert as any)?.code === "42703" && String((errInsert as any)?.message || "").includes("numero_cuotas")) {
+                    message.error("⚠️ Falta actualizar el trigger de cuotas en Supabase. Ejecuta el script: fix-trigger-matriculas-numero-cuotas.sql");
+                    return;
+                }
                 throw errInsert;
             }
 
@@ -453,30 +457,6 @@ export default function MatriculaCreate() {
             setCursoData(matricula?.cursos);
             setPagoInscripcionData(pagoInscripcion);
             setInscripcionCreada(true);
-
-            // Enviar WhatsApp con nueva plantilla mejorada
-            if (estudiante?.telefono && (estudiante?.notif_whatsapp ?? true)) {
-                try {
-                    const { enviarConfirmacionInscripcion } = await import('@/services/whatsapp-messages-module');
-                    
-                    await enviarConfirmacionInscripcion(estudiante.id, {
-                        nombre: estudiante.nombre_completo,
-                        telefono: estudiante.telefono,
-                        nombreCurso: matricula?.cursos?.nombre ?? "Curso",
-                        fechaInicio: matricula?.cursos?.fecha_inicio ? 
-                            new Date(matricula.cursos.fecha_inicio).toLocaleDateString('es-CO') : 'Por confirmar',
-                        horario: matricula?.cursos?.horario || 'Por confirmar',
-                        mensualidad: matricula?.cursos?.precio_mensualidad ? 
-                            Number(matricula.cursos.precio_mensualidad) : 0,
-                        instructor: matricula?.cursos?.profesor_id ? 'Pendiente asignación' : 'Pendiente',
-                        fechaPago: pagoInscripcion?.fecha_vencimiento ? 
-                            new Date(pagoInscripcion.fecha_vencimiento).toLocaleDateString('es-CO') : 'Próximamente'
-                    });
-                } catch (error) {
-                    console.error('Error enviando WhatsApp de inscripción:', error);
-                    // No rompe el flujo si WhatsApp falla
-                }
-            }
 
             // Inicializar formulario de pago
             const montoInscripcion = pagoInscripcion?.monto || matricula?.cursos?.programas?.precio_inscripcion || 50000;
