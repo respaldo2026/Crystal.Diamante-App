@@ -959,7 +959,7 @@ export default function GestorPensum({
             message="Temas + Material en una sola vista"
             description={
               <div>
-                Cada tarjeta de tema muestra sus materiales. Usa el botón "Agregar Material Necesario" para abrir el formulario.
+                Cada tarjeta de tema muestra sus materiales. Usa el botón &quot;Agregar Material Necesario&quot; para abrir el formulario.
               </div>
             }
             style={{ marginBottom: 16 }}
@@ -991,11 +991,12 @@ export default function GestorPensum({
               <Button
                 icon={<GiftOutlined />}
                 onClick={() => {
-                  if (cursosPensum.length === 0) {
+                  const primerTema = cursosPensum[0];
+                  if (!primerTema) {
                     message.warning("Primero debes crear al menos un tema para asociar materiales.");
                     return;
                   }
-                  abrirModalMaterialClase(cursosPensum[0].id);
+                  abrirModalMaterialClase(primerTema.id);
                 }}
               >
                 Agregar Material Necesario
