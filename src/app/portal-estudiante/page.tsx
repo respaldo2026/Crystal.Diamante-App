@@ -65,6 +65,18 @@ export default function PortalEstudiante() {
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
 
+  const deduplicarLista = <T,>(items: T[], resolverClave: (item: T) => string) => {
+    const vistos = new Set<string>();
+    const resultado: T[] = [];
+    for (const item of items || []) {
+      const clave = resolverClave(item);
+      if (!clave || vistos.has(clave)) continue;
+      vistos.add(clave);
+      resultado.push(item);
+    }
+    return resultado;
+  };
+
   const obtenerSaludoBienvenida = (genero?: string | null) => {
     const generoNormalizado = String(genero || "")
       .trim()
@@ -223,10 +235,16 @@ export default function PortalEstudiante() {
         setPensum(pensumData);
 
         const materialesData = await obtenerMaterialesPorProgramas(programaIds);
-        setMateriales(materialesData);
+        const materialesUnicos = deduplicarLista(materialesData || [], (m: any) =>
+          String(m?.id || `${m?.programa_id || ''}-${m?.pensum_id || ''}-${m?.titulo || ''}-${m?.url_archivo || ''}`)
+        );
+        setMateriales(materialesUnicos);
 
         const materialesClaseData = await obtenerMaterialesClasePorProgramas(programaIds);
-        setMaterialesClase(materialesClaseData);
+        const materialesClaseUnicos = deduplicarLista(materialesClaseData || [], (m: any) =>
+          String(m?.id || `${m?.programa_id || ''}-${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${m?.nombre_material || ''}-${m?.cantidad || ''}-${m?.unidad || ''}`)
+        );
+        setMaterialesClase(materialesClaseUnicos);
       }
 
       // 5. Calcular Avance y Certificados
@@ -397,8 +415,14 @@ export default function PortalEstudiante() {
                   children: (
                     <div>
                       {pensumProg.map(ciclo => {
-                        const materialesClaseCiclo = matClaseProg.filter((m) => m.pensum_id === ciclo.id);
-                        const matsCiclo = matProg.filter((m) => m.pensum_id === ciclo.id);
+                        const materialesClaseCiclo = deduplicarLista(
+                          matClaseProg.filter((m) => m.pensum_id === ciclo.id),
+                          (m: any) => String(m?.id || `${m?.pensum_curso_id || ''}-${m?.nombre_material || ''}-${m?.cantidad || ''}`)
+                        );
+                        const matsCiclo = deduplicarLista(
+                          matProg.filter((m) => m.pensum_id === ciclo.id),
+                          (m: any) => String(m?.id || `${m?.titulo || ''}-${m?.url_archivo || ''}-${m?.tipo_material || ''}`)
+                        );
 
                         if (materialesClaseCiclo.length === 0 && matsCiclo.length === 0) return null;
 
