@@ -18,12 +18,12 @@ import {
   Tag,
   Divider,
   List,
-  Collapse,
   Typography,
   Space,
   Dropdown,
   Checkbox,
-  Grid
+  Grid,
+  Select
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -50,7 +50,6 @@ import { HistorialEntregas } from "@components/EntregaMaterialModal";
 dayjs.locale("es");
 
 const { Title, Text } = Typography;
-const { Panel } = Collapse;
 
 export default function PortalEstudiante() {
   const screens = Grid.useBreakpoint();
@@ -591,27 +590,59 @@ export default function PortalEstudiante() {
         title={`Plan de Estudios: ${programaNombre}`}
         size={isMobile ? "small" : "default"}
       >
-        <Divider orientation="left">Curso inscrito</Divider>
-        <Row gutter={[8, 8]}>
-          {matriculasActivas.map((mat: any) => (
-            <Col xs={24} sm={12} md={8} key={mat.id}>
-              <Button
-                block
-                size={isMobile ? "middle" : "large"}
-                type={String(mat.id) === String(matriculaSeleccionada.id) ? "primary" : "default"}
-                onClick={() => {
-                  setMatriculaRutaId(String(mat.id));
-                  setCicloRutaId(null);
-                  setTemaRutaId(null);
-                }}
-              >
-                {mat?.cursos?.nombre || `Curso ${mat.id}`}
-              </Button>
-            </Col>
-          ))}
+        <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+          <Col xs={24} md={8}>
+            <Text strong>Curso</Text>
+            <Select
+              style={{ width: "100%", marginTop: 6 }}
+              value={String(matriculaSeleccionada.id)}
+              options={matriculasActivas.map((mat: any) => ({
+                value: String(mat.id),
+                label: mat?.cursos?.nombre || `Curso ${mat.id}`,
+              }))}
+              onChange={(value) => {
+                setMatriculaRutaId(String(value));
+                setCicloRutaId(null);
+                setTemaRutaId(null);
+              }}
+            />
+          </Col>
+
+          <Col xs={24} md={8}>
+            <Text strong>Ciclo / Módulo</Text>
+            <Select
+              style={{ width: "100%", marginTop: 6 }}
+              value={cicloSeleccionado?.id ? String(cicloSeleccionado.id) : undefined}
+              placeholder="Selecciona ciclo"
+              options={ciclosPrograma.map((ciclo: any) => ({
+                value: String(ciclo.id),
+                label: ciclo.nombre_ciclo,
+              }))}
+              onChange={(value) => {
+                setCicloRutaId(String(value));
+                setTemaRutaId(null);
+              }}
+            />
+          </Col>
+
+          <Col xs={24} md={8}>
+            <Text strong>Tema</Text>
+            <Select
+              style={{ width: "100%", marginTop: 6 }}
+              value={temaSeleccionado?.id ? String(temaSeleccionado.id) : undefined}
+              placeholder="Selecciona tema"
+              options={temasCiclo.map((tema: any) => ({
+                value: String(tema.id),
+                label: tema.nombre_curso,
+              }))}
+              onChange={(value) => {
+                setTemaRutaId(String(value));
+              }}
+            />
+          </Col>
         </Row>
 
-        <div style={{ marginTop: 8, marginBottom: 4 }}>
+        <div style={{ marginTop: 8, marginBottom: 12 }}>
           <Space size={[6, 6]} wrap>
             <Tag color="blue">Curso: {cursoActualNombre}</Tag>
             <Tag color="cyan">Módulo: {moduloActualNombre}</Tag>
@@ -619,151 +650,87 @@ export default function PortalEstudiante() {
           </Space>
         </div>
 
-        <Divider orientation="left">Módulo / Mes</Divider>
-        {ciclosPrograma.length === 0 ? (
+        {!ciclosPrograma.length ? (
           <Empty description="Este curso aún no tiene módulos/ciclos configurados" />
+        ) : !temasCiclo.length ? (
+          <Empty description="Este ciclo aún no tiene temas configurados" />
+        ) : !temaSeleccionado ? (
+          <Empty description="Selecciona un tema para ver su material" />
         ) : (
-          <Collapse
-            size={isMobile ? "small" : "middle"}
-            accordion
-            activeKey={cicloSeleccionado?.id ? String(cicloSeleccionado.id) : undefined}
-            onChange={(key) => {
-              const value = Array.isArray(key) ? key[0] : key;
-              setCicloRutaId(value ? String(value) : null);
-              setTemaRutaId(null);
-            }}
-          >
-            {ciclosPrograma.map((ciclo: any) => {
-              const temasDelCiclo = deduplicarLista(
-                (ciclo?.pensum_cursos || []),
-                (tema: any) => String(tema?.id || normalizarTexto(tema?.nombre_curso || ""))
-              );
+          <Row gutter={[12, 12]}>
+            <Col xs={24} lg={12}>
+              <Card size={isMobile ? "small" : "default"} title="Material didáctico del tema">
+                {recursosTema.length === 0 ? (
+                  <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
+                ) : (
+                  <List
+                    size={isMobile ? "small" : "default"}
+                    dataSource={recursosTema}
+                    renderItem={(item: any) => {
+                      let Icon = FileTextOutlined;
+                      if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                      if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                      const parsed = parseTemaTituloMaterial(item.titulo);
+                      return (
+                        <List.Item
+                          actions={[
+                            <a key={`desc-${item.id}`} href={item.url_archivo} target="_blank" rel="noreferrer">
+                              <DownloadOutlined />
+                            </a>,
+                          ]}
+                        >
+                          <List.Item.Meta
+                            avatar={<Icon />}
+                            title={parsed.tituloLimpio || item.titulo}
+                            description={item.descripcion || "Sin descripción"}
+                          />
+                        </List.Item>
+                      );
+                    }}
+                  />
+                )}
+              </Card>
+            </Col>
 
-              return (
-                <Panel
-                  header={
-                    <Space size={8} wrap>
-                      <Text strong>
-                        {ciclo.nombre_ciclo}
-                      </Text>
-                      {String(cicloSeleccionado?.id) === String(ciclo.id) ? <Tag color="blue">Seleccionado</Tag> : null}
-                    </Space>
-                  }
-                  key={String(ciclo.id)}
-                >
-                  {temasDelCiclo.length === 0 ? (
-                    <Empty description="Este módulo aún no tiene temas configurados" />
-                  ) : (
-                    <Collapse
-                      size={isMobile ? "small" : "middle"}
-                      accordion
-                      activeKey={String(cicloSeleccionado?.id) === String(ciclo.id) && temaSeleccionado?.id ? String(temaSeleccionado.id) : undefined}
-                      onChange={(key) => {
-                        const value = Array.isArray(key) ? key[0] : key;
-                        setTemaRutaId(value ? String(value) : null);
-                      }}
-                    >
-                      {temasDelCiclo.map((tema: any) => {
-                        const recursosTemaPanel = obtenerRecursosTema(ciclo, tema);
-                        const insumosTemaPanel = obtenerInsumosTema(ciclo, tema);
-                        const marcadosTema = contarInsumosMarcados(tema, insumosTemaPanel);
-
-                        return (
-                          <Panel
-                            key={String(tema.id)}
-                            header={
-                              <Space size={8} wrap>
-                                <Text strong>
-                                  {tema.nombre_curso}
-                                </Text>
-                                <Tag>{tema.horas || 0} horas</Tag>
-                                {String(temaSeleccionado?.id) === String(tema.id) ? <Tag color="purple">Seleccionado</Tag> : null}
-                              </Space>
-                            }
-                          >
-                            <Row gutter={[12, 12]}>
-                              <Col xs={24} lg={12}>
-                                <Card size={isMobile ? "small" : "default"} title="Material didáctico del tema">
-                                  {recursosTemaPanel.length === 0 ? (
-                                    <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
-                                  ) : (
-                                    <List
-                                      size={isMobile ? "small" : "default"}
-                                      dataSource={recursosTemaPanel}
-                                      renderItem={(item: any) => {
-                                        let Icon = FileTextOutlined;
-                                        if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
-                                        if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
-                                        const parsed = parseTemaTituloMaterial(item.titulo);
-                                        return (
-                                          <List.Item
-                                            actions={[
-                                              <a key={`desc-${item.id}`} href={item.url_archivo} target="_blank" rel="noreferrer">
-                                                <DownloadOutlined />
-                                              </a>,
-                                            ]}
-                                          >
-                                            <List.Item.Meta
-                                              avatar={<Icon />}
-                                              title={parsed.tituloLimpio || item.titulo}
-                                              description={item.descripcion || "Sin descripción"}
-                                            />
-                                          </List.Item>
-                                        );
-                                      }}
-                                    />
-                                  )}
-                                </Card>
-                              </Col>
-
-                              <Col xs={24} lg={12}>
-                                <Card
-                                  size={isMobile ? "small" : "default"}
-                                  title="Productos / materiales necesarios"
-                                  extra={<Tag color={insumosTemaPanel.length > 0 && marcadosTema === insumosTemaPanel.length ? "green" : "blue"}>{marcadosTema}/{insumosTemaPanel.length} listos</Tag>}
-                                >
-                                  {insumosTemaPanel.length === 0 ? (
-                                    <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
-                                  ) : (
-                                    <List
-                                      size={isMobile ? "small" : "default"}
-                                      dataSource={insumosTemaPanel}
-                                      renderItem={(insumo: any) => {
-                                        const key = `${matriculaSeleccionada.id}|${tema?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
-                                        return (
-                                          <List.Item>
-                                            <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                                              <Checkbox
-                                                checked={Boolean(checklistInsumos[key])}
-                                                onChange={(event) => toggleChecklist(insumo, event.target.checked)}
-                                              >
-                                                <Text strong>{insumo.nombre_material}</Text>
-                                              </Checkbox>
-                                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                                {[insumo.cantidad, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
-                                                {insumo.obligatorio ? " • Obligatorio" : " • Opcional"}
-                                              </Text>
-                                              {insumo.observaciones ? (
-                                                <Text type="secondary" style={{ fontSize: 12 }}>{insumo.observaciones}</Text>
-                                              ) : null}
-                                            </Space>
-                                          </List.Item>
-                                        );
-                                      }}
-                                    />
-                                  )}
-                                </Card>
-                              </Col>
-                            </Row>
-                          </Panel>
-                        );
-                      })}
-                    </Collapse>
-                  )}
-                </Panel>
-              );
-            })}
-          </Collapse>
+            <Col xs={24} lg={12}>
+              <Card
+                size={isMobile ? "small" : "default"}
+                title="Productos / materiales necesarios"
+                extra={<Tag color={insumosTema.length > 0 && insumosMarcados === insumosTema.length ? "green" : "blue"}>{insumosMarcados}/{insumosTema.length} listos</Tag>}
+              >
+                {insumosTema.length === 0 ? (
+                  <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
+                ) : (
+                  <List
+                    size={isMobile ? "small" : "default"}
+                    dataSource={insumosTema}
+                    renderItem={(insumo: any) => {
+                      const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+                      return (
+                        <List.Item>
+                          <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                            <Checkbox
+                              checked={Boolean(checklistInsumos[key])}
+                              onChange={(event) => toggleChecklist(insumo, event.target.checked)}
+                            >
+                              <Text strong>{insumo.nombre_material}</Text>
+                            </Checkbox>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {[insumo.cantidad, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
+                              {insumo.obligatorio ? " • Obligatorio" : " • Opcional"}
+                            </Text>
+                            {insumo.observaciones ? (
+                              <Text type="secondary" style={{ fontSize: 12 }}>{insumo.observaciones}</Text>
+                            ) : null}
+                          </Space>
+                        </List.Item>
+                      );
+                    }}
+                  />
+                )}
+              </Card>
+            </Col>
+          </Row>
         )}
       </Card>
     );
