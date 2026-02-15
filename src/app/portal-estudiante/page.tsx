@@ -450,7 +450,7 @@ export default function PortalEstudiante() {
     );
   };
 
-  const renderPensum = () => {
+  const renderRutaAcademica = (vista: "plan" | "kits") => {
     if (!matriculas.length) return <Empty description="No tienes cursos activos" />;
 
     const matriculasActivas = deduplicarLista(
@@ -588,9 +588,13 @@ export default function PortalEstudiante() {
       }).length;
     };
 
+    const tituloPrincipal = vista === "plan"
+      ? `Plan de Estudios: ${programaNombre}`
+      : `Materiales (Kits): ${programaNombre}`;
+
     return (
       <Card
-        title={`Plan de Estudios: ${programaNombre}`}
+        title={tituloPrincipal}
         size={isMobile ? "small" : "default"}
       >
         <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
@@ -656,90 +660,88 @@ export default function PortalEstudiante() {
         ) : !temasCiclo.length ? (
           <Empty description="Este ciclo aún no tiene temas configurados" />
         ) : !temaSeleccionado ? (
-          <Empty description="Selecciona un tema para ver su material" />
-        ) : (
-          <Row gutter={[12, 12]}>
-            <Col xs={24} lg={12}>
-              <Card size={isMobile ? "small" : "default"} title="Material didáctico del tema">
-                {recursosTema.length === 0 ? (
-                  <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
-                ) : (
-                  <List
-                    size={isMobile ? "small" : "default"}
-                    dataSource={recursosTema}
-                    renderItem={(item: any) => {
-                      let Icon = FileTextOutlined;
-                      if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
-                      if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
-                      const parsed = parseTemaTituloMaterial(item.titulo);
-                      return (
-                        <List.Item
-                          actions={[
-                            <a key={`desc-${item.id}`} href={item.url_archivo} target="_blank" rel="noreferrer">
-                              <DownloadOutlined />
-                            </a>,
-                          ]}
-                        >
-                          <List.Item.Meta
-                            avatar={<Icon />}
-                            title={parsed.tituloLimpio || item.titulo}
-                            description={item.descripcion || "Sin descripción"}
-                          />
-                        </List.Item>
-                      );
-                    }}
-                  />
-                )}
-              </Card>
-            </Col>
-
-            <Col xs={24} lg={12}>
-              <Card
+          <Empty description={vista === "plan" ? "Selecciona un tema para ver su material didáctico" : "Selecciona un tema para ver los materiales necesarios"} />
+        ) : vista === "plan" ? (
+          <Card size={isMobile ? "small" : "default"} title="Material didáctico del tema">
+            {recursosTema.length === 0 ? (
+              <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
+            ) : (
+              <List
                 size={isMobile ? "small" : "default"}
-                title="Productos / materiales necesarios"
-                extra={
-                  <Text type={insumosTema.length > 0 && insumosMarcados === insumosTema.length ? undefined : "secondary"}>
-                    {insumosMarcados}/{insumosTema.length} listos
-                  </Text>
-                }
-              >
-                {insumosTema.length === 0 ? (
-                  <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
-                ) : (
-                  <List
-                    size={isMobile ? "small" : "default"}
-                    dataSource={insumosTema}
-                    renderItem={(insumo: any) => {
-                      const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
-                      return (
-                        <List.Item>
-                          <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                            <Checkbox
-                              checked={Boolean(checklistInsumos[key])}
-                              onChange={(event) => toggleChecklist(insumo, event.target.checked)}
-                            >
-                              <Text strong>{insumo.nombre_material}</Text>
-                            </Checkbox>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              {[insumo.cantidad, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
-                              {insumo.obligatorio ? " • Obligatorio" : " • Opcional"}
-                            </Text>
-                            {insumo.observaciones ? (
-                              <Text type="secondary" style={{ fontSize: 12 }}>{insumo.observaciones}</Text>
-                            ) : null}
-                          </Space>
-                        </List.Item>
-                      );
-                    }}
-                  />
-                )}
-              </Card>
-            </Col>
-          </Row>
+                dataSource={recursosTema}
+                renderItem={(item: any) => {
+                  let Icon = FileTextOutlined;
+                  if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                  if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                  const parsed = parseTemaTituloMaterial(item.titulo);
+                  return (
+                    <List.Item
+                      actions={[
+                        <a key={`desc-${item.id}`} href={item.url_archivo} target="_blank" rel="noreferrer">
+                          <DownloadOutlined />
+                        </a>,
+                      ]}
+                    >
+                      <List.Item.Meta
+                        avatar={<Icon />}
+                        title={parsed.tituloLimpio || item.titulo}
+                        description={item.descripcion || "Sin descripción"}
+                      />
+                    </List.Item>
+                  );
+                }}
+              />
+            )}
+          </Card>
+        ) : (
+          <Card
+            size={isMobile ? "small" : "default"}
+            title="Productos / materiales necesarios"
+            extra={
+              <Text type={insumosTema.length > 0 && insumosMarcados === insumosTema.length ? undefined : "secondary"}>
+                {insumosMarcados}/{insumosTema.length} listos
+              </Text>
+            }
+          >
+            {insumosTema.length === 0 ? (
+              <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
+            ) : (
+              <List
+                size={isMobile ? "small" : "default"}
+                dataSource={insumosTema}
+                renderItem={(insumo: any) => {
+                  const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+                  return (
+                    <List.Item>
+                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                        <Checkbox
+                          checked={Boolean(checklistInsumos[key])}
+                          onChange={(event) => toggleChecklist(insumo, event.target.checked)}
+                        >
+                          <Text strong>{insumo.nombre_material}</Text>
+                        </Checkbox>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {[insumo.cantidad, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
+                          {insumo.obligatorio ? " • Obligatorio" : " • Opcional"}
+                        </Text>
+                        {insumo.observaciones ? (
+                          <Text type="secondary" style={{ fontSize: 12 }}>{insumo.observaciones}</Text>
+                        ) : null}
+                      </Space>
+                    </List.Item>
+                  );
+                }}
+              />
+            )}
+          </Card>
         )}
       </Card>
     );
   };
+
+  const renderPensum = () => renderRutaAcademica("plan");
+
+  const renderMaterialesKits = () => renderRutaAcademica("kits");
 
   if (loading) {
     return (
@@ -892,7 +894,12 @@ export default function PortalEstudiante() {
           {
             key: "7",
             label: <span><BookOutlined /> Materiales (Kits)</span>,
-            children: <HistorialEntregas estudianteId={estudiante?.id} />
+            children: (
+              <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                {renderMaterialesKits()}
+                <HistorialEntregas estudianteId={estudiante?.id} />
+              </Space>
+            )
           }
         ]}
       />
