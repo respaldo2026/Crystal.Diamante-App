@@ -643,11 +643,9 @@ export default function PortalEstudiante() {
         </Row>
 
         <div style={{ marginTop: 8, marginBottom: 12 }}>
-          <Space size={[6, 6]} wrap>
-            <Tag color="blue">Curso: {cursoActualNombre}</Tag>
-            <Tag color="cyan">Módulo: {moduloActualNombre}</Tag>
-            <Tag color="purple">Tema: {temaActualNombre}</Tag>
-          </Space>
+          <Text type="secondary">
+            Curso: {cursoActualNombre} · Módulo: {moduloActualNombre} · Tema: {temaActualNombre}
+          </Text>
         </div>
 
         {!ciclosPrograma.length ? (
@@ -696,7 +694,11 @@ export default function PortalEstudiante() {
               <Card
                 size={isMobile ? "small" : "default"}
                 title="Productos / materiales necesarios"
-                extra={<Tag color={insumosTema.length > 0 && insumosMarcados === insumosTema.length ? "green" : "blue"}>{insumosMarcados}/{insumosTema.length} listos</Tag>}
+                extra={
+                  <Text type={insumosTema.length > 0 && insumosMarcados === insumosTema.length ? undefined : "secondary"}>
+                    {insumosMarcados}/{insumosTema.length} listos
+                  </Text>
+                }
               >
                 {insumosTema.length === 0 ? (
                   <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>

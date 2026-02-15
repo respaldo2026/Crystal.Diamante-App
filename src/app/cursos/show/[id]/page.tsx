@@ -22,6 +22,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
 import { construirNombreGrupo } from "@utils/grupos";
+import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas, obtenerMaterialesClasePorProgramas } from "@modules/academico/pensum.service";
 
 const { Title, Text } = Typography;
 
@@ -421,31 +422,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       // Temario desde programa académico
       if (cursoConProfesor?.programa_id) {
-        const { data: temasData } = await supabaseBrowserClient
-          .from("pensum")
-          .select("*")
-          .eq("programa_id", cursoConProfesor.programa_id)
-          .order("orden", { ascending: true });
+        const programaIds = [String(cursoConProfesor.programa_id)];
+
+        const [temasData, materialesData, materialesClaseData] = await Promise.all([
+          obtenerPensumPorProgramas(programaIds),
+          obtenerMaterialesPorProgramas(programaIds),
+          obtenerMaterialesClasePorProgramas(programaIds),
+        ]);
+
         setTemas(temasData || []);
-
-        const { data: materialesData } = await supabaseBrowserClient
-          .from("material_didactico")
-          .select("*")
-          .eq("programa_id", cursoConProfesor.programa_id)
-          .order("orden", { ascending: true });
         setMateriales(materialesData || []);
-
-        const { data: materialesClaseData } = await supabaseBrowserClient
-          .from("materiales_clase")
-          .select(`
-            *,
-            pensum_cursos: pensum_curso_id (id, nombre_curso, orden),
-            pensum: pensum_id (id, nombre_ciclo, numero_ciclo)
-          `)
-          .eq("programa_id", cursoConProfesor.programa_id)
-          .eq("activo", true)
-          .order("orden", { ascending: true })
-          .order("created_at", { ascending: true });
         setMaterialesClase(materialesClaseData || []);
       } else {
         setTemas([]);
