@@ -53,6 +53,7 @@ const { Title, Text } = Typography;
 export default function PortalEstudiante() {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+  const [activeTab, setActiveTab] = useState("1");
   const [loading, setLoading] = useState(true);
   const [estudiante, setEstudiante] = useState<any>(null);
   const [asistencias, setAsistencias] = useState<any[]>([]);
@@ -344,8 +345,13 @@ export default function PortalEstudiante() {
       // 5. Calcular Avance y Certificados
       if (dataMatriculas) {
         const avance = dataMatriculas.map((m: any) => ({
+          matriculaId: m.id,
           curso: m.cursos?.nombre,
           programa: m.cursos?.programas?.nombre,
+          programaId: m.cursos?.programa_id,
+          diasSemana: m.cursos?.dias_semana,
+          horaInicio: m.cursos?.hora_inicio,
+          horaFin: m.cursos?.hora_fin,
           nota: m.nota_final || 0,
           estado: m.estado_academico
         }));
@@ -754,6 +760,71 @@ export default function PortalEstudiante() {
 
   const renderMaterialesKits = () => renderRutaAcademica("kits");
 
+  const obtenerRutaTemasPrograma = (programaId: string | number | null | undefined) => {
+    const ciclos = (pensum || [])
+      .filter((p: any) => String(p?.programa_id) === String(programaId))
+      .sort((a: any, b: any) => Number(a?.numero_ciclo || 0) - Number(b?.numero_ciclo || 0));
+
+    const ruta: Array<{ ciclo: any; tema: any }> = [];
+    ciclos.forEach((ciclo: any) => {
+      const temasOrdenados = (ciclo?.pensum_cursos || [])
+        .slice()
+        .sort((a: any, b: any) => Number(a?.orden || 0) - Number(b?.orden || 0));
+
+      temasOrdenados.forEach((tema: any) => {
+        ruta.push({ ciclo, tema });
+      });
+    });
+
+    return ruta;
+  };
+
+  const obtenerSiguienteClase = (curso: any) => {
+    const ruta = obtenerRutaTemasPrograma(curso?.programaId);
+    if (!ruta.length) return null;
+
+    const temasVistos = new Set(
+      (asistencias || [])
+        .filter((asistencia: any) => String(asistencia?.matricula_id) === String(curso?.matriculaId))
+        .map((asistencia: any) => asistencia?.tema_id)
+        .filter(Boolean)
+        .map((id: any) => String(id))
+    );
+
+    const siguiente = ruta.find((item) => !temasVistos.has(String(item.tema?.id)));
+    if (siguiente) {
+      return {
+        ...siguiente,
+        completado: false,
+        total: ruta.length,
+        vistos: temasVistos.size,
+      };
+    }
+
+    const ultima = ruta[ruta.length - 1];
+    return {
+      ...ultima,
+      completado: true,
+      total: ruta.length,
+      vistos: ruta.length,
+    };
+  };
+
+  const irAMaterialesSiguienteClase = (curso: any) => {
+    const siguiente = obtenerSiguienteClase(curso);
+    if (!siguiente) {
+      message.info("Este curso aún no tiene ciclo/tema configurado");
+      return;
+    }
+
+    if (curso?.matriculaId) {
+      setMatriculaRutaId(String(curso.matriculaId));
+    }
+    setCicloRutaId(String(siguiente.ciclo.id));
+    setTemaRutaId(String(siguiente.tema.id));
+    setActiveTab("7");
+  };
+
   if (loading) {
     return (
       <div className="portal-estudiante" style={{ padding: isMobile ? "12px" : "20px", maxWidth: "1200px", margin: "0 auto" }}>
@@ -842,7 +913,8 @@ export default function PortalEstudiante() {
       </Card>
 
       <Tabs
-        defaultActiveKey="1"
+        activeKey={activeTab}
+        onChange={setActiveTab}
         items={[
           {
             key: "1",
@@ -855,14 +927,24 @@ export default function PortalEstudiante() {
                   <Row gutter={16}>
                     {avancePorCurso.map((curso: any, idx: number) => (
                       <Col xs={24} sm={12} lg={8} key={idx}>
-                        <Card className="course-card" title={curso.curso} extra={<Tag>{curso.programa}</Tag>}>
+                        <Card className="course-card" title={curso.curso}>
+                          <Space direction="vertical" size={2} style={{ width: "100%", marginBottom: 10 }}>
+                            <Text strong style={{ fontSize: 13 }}>{curso.programa || "Programa académico"}</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {curso.diasSemana || "Día por definir"}
+                              {curso.horaInicio
+                                ? ` • ${dayjs(curso.horaInicio, "HH:mm:ss").format("h:mm A")}${curso.horaFin ? ` - ${dayjs(curso.horaFin, "HH:mm:ss").format("h:mm A")}` : ""}`
+                                : " • Hora por definir"}
+                            </Text>
+                          </Space>
+
                           <Row gutter={12}>
                             <Col xs={12}>
                               <div style={{ textAlign: "center" }}>
                                 <Progress
                                   type="circle"
                                   percent={Math.max(0, Math.min(100, Number(curso.nota || 0)))}
-                                  width={isMobile ? 78 : 90}
+                                  width={isMobile ? 94 : 108}
                                   format={() => `${Number(curso.nota || 0)}/100`}
                                 />
                                 <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
@@ -875,7 +957,7 @@ export default function PortalEstudiante() {
                                 <Progress
                                   type="dashboard"
                                   percent={Math.max(0, Math.min(100, Math.round((Number(curso.nota || 0) / 70) * 100)))}
-                                  width={isMobile ? 78 : 90}
+                                  width={isMobile ? 94 : 108}
                                   format={(percent) => `${percent}%`}
                                   status={Number(curso.nota || 0) >= 70 ? "success" : "active"}
                                 />
@@ -888,6 +970,38 @@ export default function PortalEstudiante() {
                           <div style={{ marginTop: 10, textAlign: 'center' }}>
                             <Tag color={curso.nota >= 70 ? "green" : "orange"}>{curso.estado?.toUpperCase()}</Tag>
                           </div>
+
+                          {(() => {
+                            const siguiente = obtenerSiguienteClase(curso);
+                            const nombreTema = siguiente?.tema?.nombre_curso || "Tema por definir";
+                            const nombreCiclo = siguiente?.ciclo?.nombre_ciclo || "Ciclo por definir";
+                            const descripcionTema = siguiente?.tema?.descripcion || "Introducción al ciclo";
+
+                            return (
+                              <div style={{ marginTop: 12 }}>
+                                <Text style={{ fontSize: 12, display: "block" }}>
+                                  {siguiente?.completado ? (
+                                    <>
+                                      <strong>Plan completado:</strong> ya registraste asistencia en {siguiente?.vistos}/{siguiente?.total} clases del programa. Puedes repasar materiales del último tema.
+                                    </>
+                                  ) : (
+                                    <>
+                                      <strong>Siguiente Clase:</strong> {nombreTema} del {nombreCiclo}: {descripcionTema}. Verifica la lista de materiales para esta clase.
+                                    </>
+                                  )}
+                                </Text>
+                                <Button
+                                  type="link"
+                                  style={{ paddingLeft: 0, marginTop: 4, height: "auto" }}
+                                  onClick={() => irAMaterialesSiguienteClase(curso)}
+                                >
+                                  {siguiente?.completado
+                                    ? "Ver materiales del último tema"
+                                    : "Ir a lista de materiales de esta clase"}
+                                </Button>
+                              </div>
+                            );
+                          })()}
                         </Card>
                       </Col>
                     ))}
