@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { logger } from "@utils/logger";
 import {
   Tabs,
@@ -9,7 +9,7 @@ import {
   Row,
   Col,
   Statistic,
-  Spin,
+  Skeleton,
   Alert,
   Progress,
   Button,
@@ -70,6 +70,8 @@ export default function PortalEstudiante() {
   const [cicloRutaId, setCicloRutaId] = useState<string | null>(null);
   const [temaRutaId, setTemaRutaId] = useState<string | null>(null);
   const [checklistInsumos, setChecklistInsumos] = useState<Record<string, boolean>>({});
+  const isFetchingRef = useRef(false);
+  const hasFetchedOnceRef = useRef(false);
 
   const deduplicarLista = <T,>(items: T[], resolverClave: (item: T) => string) => {
     const vistos = new Set<string>();
@@ -160,6 +162,7 @@ export default function PortalEstudiante() {
   };
 
   useEffect(() => {
+    if (hasFetchedOnceRef.current || isFetchingRef.current) return;
     cargarDatos();
   }, []);
 
@@ -210,8 +213,13 @@ export default function PortalEstudiante() {
   }, [matriculas, matriculaRutaId]);
 
   const cargarDatos = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     try {
-      setLoading(true);
+      if (!hasFetchedOnceRef.current) {
+        setLoading(true);
+      }
 
       const { data: { user }, error: authError } = await supabaseBrowserClient.auth.getUser();
       if (authError || !user) {
@@ -350,6 +358,8 @@ export default function PortalEstudiante() {
       logger.error("Error:", error);
       message.error("Error cargando información del portal");
     } finally {
+      hasFetchedOnceRef.current = true;
+      isFetchingRef.current = false;
       setLoading(false);
     }
   };
@@ -746,9 +756,32 @@ export default function PortalEstudiante() {
 
   if (loading) {
     return (
-      <div style={{ textAlign: "center", padding: 50 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 10 }}>Cargando tu información...</div>
+      <div className="portal-estudiante" style={{ padding: isMobile ? "12px" : "20px", maxWidth: "1200px", margin: "0 auto" }}>
+        <Card style={{ marginBottom: 20 }}>
+          <Skeleton active paragraph={{ rows: 2 }} title={{ width: "45%" }} />
+        </Card>
+
+        <Card style={{ marginBottom: 16 }}>
+          <Space size={12} wrap>
+            <Skeleton.Button active size="small" style={{ width: 120 }} />
+            <Skeleton.Button active size="small" style={{ width: 140 }} />
+            <Skeleton.Button active size="small" style={{ width: 110 }} />
+            <Skeleton.Button active size="small" style={{ width: 105 }} />
+          </Space>
+        </Card>
+
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={12}>
+            <Card>
+              <Skeleton active paragraph={{ rows: 5 }} title={{ width: "60%" }} />
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card>
+              <Skeleton active paragraph={{ rows: 5 }} title={{ width: "55%" }} />
+            </Card>
+          </Col>
+        </Row>
       </div>
     );
   }
