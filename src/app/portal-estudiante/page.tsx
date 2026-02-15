@@ -398,7 +398,9 @@ export default function PortalEstudiante() {
                     <div>
                       {pensumProg.map(ciclo => {
                         const materialesClaseCiclo = matClaseProg.filter((m) => m.pensum_id === ciclo.id);
-                        if (materialesClaseCiclo.length === 0) return null;
+                        const matsCiclo = matProg.filter((m) => m.pensum_id === ciclo.id);
+
+                        if (materialesClaseCiclo.length === 0 && matsCiclo.length === 0) return null;
 
                         const materialesPorTema = materialesClaseCiclo.reduce((acc: Record<string, any[]>, material: any) => {
                           const temaKey = material.pensum_curso_id || 'sin-tema';
@@ -408,71 +410,89 @@ export default function PortalEstudiante() {
                         }, {});
 
                         return (
-                          <div key={`lista-clase-${ciclo.id}`} style={{ marginBottom: 24 }}>
-                            <Divider orientation="left">Materiales necesarios por clase • {ciclo.nombre_ciclo}</Divider>
-                            <Collapse>
-                              {Object.entries(materialesPorTema).map(([temaId, items]: [string, any]) => {
-                                const temaNombre = items?.[0]?.pensum_cursos?.nombre_curso || 'Clase';
-                                return (
-                                  <Panel header={temaNombre} key={`${ciclo.id}-${temaId}`}>
-                                    <List
-                                      size="small"
-                                      dataSource={items}
-                                      renderItem={(item: any) => (
-                                        <List.Item>
-                                          <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                                            <Text strong>{item.nombre_material}</Text>
-                                            <Text type="secondary" style={{ fontSize: 12 }}>
-                                              {item.cantidad ? `${item.cantidad}${item.unidad ? ` ${item.unidad}` : ''}` : 'Cantidad por definir'}
-                                              {item.obligatorio ? ' • Obligatorio' : ' • Opcional'}
-                                            </Text>
-                                            {item.observaciones ? <Text type="secondary">{item.observaciones}</Text> : null}
-                                          </Space>
-                                        </List.Item>
-                                      )}
-                                    />
-                                  </Panel>
-                                );
-                              })}
-                            </Collapse>
-                          </div>
+                          <Card
+                            key={`material-ciclo-${ciclo.id}`}
+                            size="small"
+                            title={`Ciclo: ${ciclo.nombre_ciclo}`}
+                            style={{ marginBottom: 16 }}
+                          >
+                            {materialesClaseCiclo.length > 0 && (
+                              <>
+                                <Divider orientation="left" style={{ marginTop: 0 }}>
+                                  Materiales para la clase / tema
+                                </Divider>
+                                <Collapse>
+                                  {Object.entries(materialesPorTema).map(([temaId, items]: [string, any]) => {
+                                    const temaNombre = items?.[0]?.pensum_cursos?.nombre_curso || 'Clase sin tema definido';
+                                    return (
+                                      <Panel header={`Tema: ${temaNombre}`} key={`${ciclo.id}-${temaId}`}>
+                                        <List
+                                          size="small"
+                                          dataSource={items}
+                                          renderItem={(item: any) => (
+                                            <List.Item>
+                                              <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                                                <Text strong>{item.nombre_material}</Text>
+                                                <Space size={6} wrap>
+                                                  <Tag color="blue">Ciclo: {ciclo.nombre_ciclo}</Tag>
+                                                  <Tag color="purple">Tema: {temaNombre}</Tag>
+                                                  <Tag color={item.obligatorio ? 'red' : 'default'}>
+                                                    {item.obligatorio ? 'Obligatorio' : 'Opcional'}
+                                                  </Tag>
+                                                </Space>
+                                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                                  {item.cantidad ? `${item.cantidad}${item.unidad ? ` ${item.unidad}` : ''}` : 'Cantidad por definir'}
+                                                </Text>
+                                                {item.observaciones ? <Text type="secondary">{item.observaciones}</Text> : null}
+                                              </Space>
+                                            </List.Item>
+                                          )}
+                                        />
+                                      </Panel>
+                                    );
+                                  })}
+                                </Collapse>
+                              </>
+                            )}
+
+                            {matsCiclo.length > 0 && (
+                              <>
+                                <Divider orientation="left">Recursos didácticos del ciclo</Divider>
+                                <List
+                                  grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
+                                  dataSource={matsCiclo}
+                                  renderItem={(item: any) => {
+                                    let Icon = FileTextOutlined;
+                                    if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
+                                    if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
+                                    return (
+                                      <List.Item>
+                                        <Card
+                                          size="small"
+                                          title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
+                                          extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
+                                        >
+                                          <Text strong>{item.titulo}</Text>
+                                          <br />
+                                          <Text type="secondary" style={{ fontSize: 12 }}>
+                                            Ciclo: {ciclo.nombre_ciclo}
+                                          </Text>
+                                          <br />
+                                          <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
+                                        </Card>
+                                      </List.Item>
+                                    );
+                                  }}
+                                />
+                              </>
+                            )}
+                          </Card>
                         );
                       })}
 
-                      {pensumProg.map(ciclo => {
-                        const matsCiclo = matProg.filter(m => m.pensum_id === ciclo.id);
-                        if (matsCiclo.length === 0) return null;
-                        return (
-                          <div key={ciclo.id} style={{marginBottom: 24}}>
-                            <Divider orientation="left">{ciclo.nombre_ciclo}</Divider>
-                            <List
-                              grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
-                              dataSource={matsCiclo}
-                              renderItem={(item: any) => {
-                                let Icon = FileTextOutlined;
-                                if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
-                                if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
-                                return (
-                                  <List.Item>
-                                    <Card 
-                                      size="small" 
-                                      title={<><Icon /> {item.tipo_material?.toUpperCase()}</>}
-                                      extra={<a href={item.url_archivo} target="_blank" rel="noreferrer"><DownloadOutlined /></a>}
-                                    >
-                                      <Text strong>{item.titulo}</Text>
-                                      <br />
-                                      <Text type="secondary" style={{ fontSize: 12 }}>{item.descripcion}</Text>
-                                    </Card>
-                                  </List.Item>
-                                );
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
                       {matProg.filter(m => !m.pensum_id).length > 0 && (
                         <div style={{marginBottom: 24}}>
-                          <Divider orientation="left">General</Divider>
+                          <Divider orientation="left">Material general (no asociado a ciclo)</Divider>
                           <List
                             grid={{ gutter: 16, xs: 1, sm: 2, md: 3 }}
                             dataSource={matProg.filter(m => !m.pensum_id)}
@@ -496,6 +516,14 @@ export default function PortalEstudiante() {
                             }}
                           />
                         </div>
+                      )}
+                      {matClaseProg.length === 0 && matProg.length === 0 && (
+                        <Alert
+                          type="info"
+                          showIcon
+                          message="Aún no hay material didáctico cargado para este programa"
+                          description="Cuando administración registre materiales por ciclo, clase o tema, aparecerán aquí organizados."
+                        />
                       )}
                     </div>
                   )
