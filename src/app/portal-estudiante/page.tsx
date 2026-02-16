@@ -414,7 +414,12 @@ export default function PortalEstudiante() {
     const extras: any[] = [];
 
     matriculas.forEach((matricula: any) => {
-      const totalCuotas = parseDuracionMeses(matricula?.cursos?.duracion);
+      const totalCuotas = parseDuracionMeses(
+        matricula?.cursos?.duracion ??
+        matricula?.cursos?.programas?.duracion ??
+        matricula?.cursos?.numero_cuotas ??
+        matricula?.numero_cuotas
+      );
       if (!totalCuotas) return;
 
       const pagosMatricula = base.filter((p) => String(p?.matricula_id) === String(matricula?.id));
