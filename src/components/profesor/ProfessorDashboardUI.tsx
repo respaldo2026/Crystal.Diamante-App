@@ -11,57 +11,46 @@ import {
   StarOutlined,
   UserAddOutlined,
   GiftOutlined,
-              <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                {logoAcademia ? (
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <img
-                      src={logoAcademia}
-                      alt="Logo academia"
-                      style={{ height: 36, objectFit: "contain" }}
-                    />
-                  </div>
-                ) : null}
-                <Card
-                  variant="borderless"
-                  style={{ borderRadius: 20, background: "rgba(17, 24, 39, 0.55)", color: "#fff" }}
-                  styles={{ body: { padding: 14 } }}
-                >
-                  <Row gutter={[10, 10]}>
-                    <Col span={12}>
-                      <Statistic
-                        prefix={<BookOutlined style={{ color: "#60a5fa" }} />}
-                        title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Cursos activos</span>}
-                        value={statsData.cursosActivos}
-                        valueStyle={{ color: "#fff", fontWeight: 600 }}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        prefix={<TeamOutlined style={{ color: "#34d399" }} />}
-                        title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Estudiantes</span>}
-                        value={statsData.totalEstudiantes}
-                        valueStyle={{ color: "#fff", fontWeight: 600 }}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        prefix={<ClockCircleOutlined style={{ color: "#38bdf8" }} />}
-                        title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Horas mes</span>}
-                        value={`${statsData.horasMes} hrs`}
-                        valueStyle={{ color: "#fff", fontWeight: 600 }}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        prefix={<StarOutlined style={{ color: "#facc15" }} />}
-                        title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Promedio</span>}
-                        value={statsData.promedioCalificaciones}
-                        valueStyle={{ color: "#fff", fontWeight: 600 }}
-                      />
-                    </Col>
-                  </Row>
-                </Card>
-              </Space>
+} from "@ant-design/icons";
+import {
+  Badge,
+  Button,
+  Card,
+  Col,
+  Divider,
+  Drawer,
+  Empty,
+  List,
+  Progress,
+  Row,
+  Table,
+  Select,
+  Space,
+  Spin,
+  Statistic,
+  Tag,
+  Typography,
+} from "antd";
+import dayjs from "dayjs";
+import { ProfessorDashboardData } from "@hooks/useProfessorDashboard";
+import { construirNombreGrupo } from "@utils/grupos";
+import { obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas, obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
+import { supabaseBrowserClient } from "@utils/supabase/client";
+
+type CourseActionContext = "attendance" | "grades" | "materials" | "default";
+
+type ProfessorDashboardUIProps = {
+  dashboard: ProfessorDashboardData | null | undefined;
+  onOpenCourse?: (cursoId: string, action?: CourseActionContext) => void;
+};
+
+const fallbackStats: ProfessorDashboardData["stats"] = {
+  cursosActivos: 0,
+  totalEstudiantes: 0,
+  horasMes: 0,
+  porcentajeAsistencia: 0,
+  promedioCalificaciones: 0,
+  pendientesPorCalificar: 0,
   asistenciaChart: [],
   calificacionesChart: [],
   topCursos: [],
