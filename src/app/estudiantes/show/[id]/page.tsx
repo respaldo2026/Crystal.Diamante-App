@@ -129,8 +129,8 @@ export default function StudentDetailView() {
 
   const obtenerDuracionMeses = (matricula: any) =>
     parseDuracionMeses(
-      matricula?.cursos?.duracion ??
       matricula?.cursos?.programas?.duracion ??
+      matricula?.cursos?.duracion ??
       matricula?.cursos?.numero_cuotas ??
       matricula?.numero_cuotas
     );
@@ -595,10 +595,9 @@ export default function StudentDetailView() {
             statusColor = "#1890ff";
           }
 
-          const etiquetaBase = cuota.periodo_pagado || (cuota.numero_cuota === 0 ? "Inscripción" : `Ciclo ${cuota.numero_cuota}`);
-          const etiqueta = etiquetaBase
-            .replace(/cuota mensual/gi, "Ciclo mensual")
-            .replace(/cuota/gi, "Ciclo");
+          const etiqueta = cuota.numero_cuota === 0
+            ? "Inscripción"
+            : `Ciclo mensual ${cuota.numero_cuota} de ${totalCiclos}`;
 
           return (
             <Tooltip
