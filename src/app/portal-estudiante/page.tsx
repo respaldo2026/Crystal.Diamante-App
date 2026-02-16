@@ -68,6 +68,7 @@ export default function PortalEstudiante() {
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
+  const [logoAcademia, setLogoAcademia] = useState<string | null>(null);
   const [matriculaRutaId, setMatriculaRutaId] = useState<string | null>(null);
   const [cicloRutaId, setCicloRutaId] = useState<string | null>(null);
   const [temaRutaId, setTemaRutaId] = useState<string | null>(null);
@@ -255,6 +256,7 @@ export default function PortalEstudiante() {
 
       setWhatsappAgente(numeroAgente);
       setWhatsappAdmisiones(numeroAdmisiones);
+      setLogoAcademia((config as any)?.logo_url || null);
 
       // 1. Cargar Matrículas con Cursos y Programas
       const { data: dataMatriculas } = await supabaseBrowserClient
@@ -971,12 +973,23 @@ export default function PortalEstudiante() {
       <Card style={{ marginBottom: 20 }}>
         <Row gutter={16} className="header-row">
           <Col xs={24} sm={12}>
-            <Text style={{ display: "block", fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>
-              Te damos la Bienvenida
-            </Text>
-            <Text type="secondary" style={{ display: "block", marginTop: 4 }}>
-              Portal de Estudiante
-            </Text>
+            <Space size={12} align="center">
+              {logoAcademia ? (
+                <img
+                  src={logoAcademia}
+                  alt="Logo academia"
+                  style={{ width: 36, height: 36, objectFit: "contain" }}
+                />
+              ) : null}
+              <div>
+                <Text style={{ display: "block", fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>
+                  Te damos la Bienvenida
+                </Text>
+                <Text type="secondary" style={{ display: "block", marginTop: 4 }}>
+                  Portal de Estudiante
+                </Text>
+              </div>
+            </Space>
           </Col>
           <Col xs={24} sm={12} className="header-actions" style={{ textAlign: "right" }}>
             {(whatsappAgente || whatsappAdmisiones) && (
@@ -1011,10 +1024,10 @@ export default function PortalEstudiante() {
                   icon={<WhatsAppOutlined />}
                   type="primary"
                   size="middle"
-                  style={{ backgroundColor: "#25D366", borderColor: "#25D366", height: 34, paddingInline: 12, fontSize: 13 }}
-                >
-                  Contactar por WhatsApp
-                </Button>
+                  shape="circle"
+                  aria-label="Contactar por WhatsApp"
+                  style={{ backgroundColor: "#25D366", borderColor: "#25D366", height: 34, width: 34, paddingInline: 0 }}
+                />
               </Dropdown>
             )}
           </Col>
