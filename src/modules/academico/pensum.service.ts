@@ -7,7 +7,7 @@ export async function obtenerPensumPorProgramas(programaIds: string[]) {
     .select("*, pensum_cursos (*)")
     .in("programa_id", programaIds)
     .eq("activo", true)
-    .order("numero_ciclo", { ascending: false });
+    .order("numero_ciclo", { ascending: true });
   if (error) throw error;
   return data || [];
 }
@@ -33,8 +33,8 @@ export async function obtenerMaterialesClasePorProgramas(programaIds: string[]) 
     `)
     .in("programa_id", programaIds)
     .eq("activo", true)
-    .order("orden", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("orden", { ascending: true })
+    .order("created_at", { ascending: true });
   if (error) throw error;
   return data || [];
 }

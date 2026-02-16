@@ -968,8 +968,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                             const entriesTemaOrdenadas = Object.entries(agrupadosPorTema).sort(([temaA], [temaB]) => {
                               const ordenA = temasOrden.get(String(temaA)) ?? 0;
                               const ordenB = temasOrden.get(String(temaB)) ?? 0;
-                              if (ordenB !== ordenA) return ordenB - ordenA;
-                              return Number(temaB) - Number(temaA);
+                              if (ordenA !== ordenB) return ordenA - ordenB;
+                              return Number(temaA) - Number(temaB);
                             });
 
                             return (
@@ -1010,8 +1010,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                             const matchB = temas.find((t: any) => String(t.id) === String(b));
                             const ordenA = Number(matchA?.orden ?? matchA?.numero_ciclo ?? 0);
                             const ordenB = Number(matchB?.orden ?? matchB?.numero_ciclo ?? 0);
-                            if (ordenB !== ordenA) return ordenB - ordenA;
-                            return Number(b) - Number(a);
+                            if (ordenA !== ordenB) return ordenA - ordenB;
+                            return Number(a) - Number(b);
                           })
                           .map(([key, mats]) => (
                           <Card

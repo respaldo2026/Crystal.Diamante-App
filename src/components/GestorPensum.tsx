@@ -226,7 +226,7 @@ export default function GestorPensum({
         .from("pensum")
         .select("*")
         .eq("programa_id", programaId)
-        .order("numero_ciclo", { ascending: false });
+        .order("numero_ciclo", { ascending: true });
 
       if (error) throw error;
       setPensums(data || []);
@@ -373,7 +373,7 @@ export default function GestorPensum({
         .from("pensum_cursos")
         .select("*")
         .eq("pensum_id", pensumId)
-        .order("orden", { ascending: false });
+        .order("orden", { ascending: true });
 
       if (error) throw error;
       setCursosPensum(data || []);

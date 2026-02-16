@@ -521,8 +521,8 @@ export default function PortalEstudiante() {
     ).sort((a: any, b: any) => {
       const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 0);
       const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 0);
-      if (ordenB !== ordenA) return ordenB - ordenA;
-      return Number(b?.id || 0) - Number(a?.id || 0);
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return Number(a?.id || 0) - Number(b?.id || 0);
     });
 
     const cicloSeleccionado = ciclosPrograma.find((c: any) => String(c.id) === String(cicloRutaId));
@@ -570,8 +570,8 @@ export default function PortalEstudiante() {
     ).sort((a: any, b: any) => {
       const ordenA = Number(a?.orden ?? 0);
       const ordenB = Number(b?.orden ?? 0);
-      if (ordenB !== ordenA) return ordenB - ordenA;
-      return Number(b?.id || 0) - Number(a?.id || 0);
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return Number(a?.id || 0) - Number(b?.id || 0);
     });
 
     const temaSeleccionado = temasCiclo.find((t: any) => String(t.id) === String(temaRutaId));
@@ -785,8 +785,8 @@ export default function PortalEstudiante() {
       .sort((a: any, b: any) => {
         const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 0);
         const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 0);
-        if (ordenB !== ordenA) return ordenB - ordenA;
-        return Number(b?.id || 0) - Number(a?.id || 0);
+        if (ordenA !== ordenB) return ordenA - ordenB;
+        return Number(a?.id || 0) - Number(b?.id || 0);
       });
 
     const ruta: Array<{ ciclo: any; tema: any }> = [];
@@ -796,8 +796,8 @@ export default function PortalEstudiante() {
         .sort((a: any, b: any) => {
           const ordenA = Number(a?.orden ?? 0);
           const ordenB = Number(b?.orden ?? 0);
-          if (ordenB !== ordenA) return ordenB - ordenA;
-          return Number(b?.id || 0) - Number(a?.id || 0);
+          if (ordenA !== ordenB) return ordenA - ordenB;
+          return Number(a?.id || 0) - Number(b?.id || 0);
         });
 
       temasOrdenados.forEach((tema: any) => {
