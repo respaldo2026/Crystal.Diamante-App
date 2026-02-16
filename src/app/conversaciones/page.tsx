@@ -106,6 +106,11 @@ export default function ConversacionesPage() {
     return !normalized || normalized === "unknown" || normalized === "desconocido";
   };
 
+  const getPhoneLabel = (value?: string | null) => {
+    if (isUnknownPhone(value)) return "Sin número (Make/Webhook)";
+    return value || "Sin número (Make/Webhook)";
+  };
+
   const matchesAny = (text: string, patterns: RegExp[]) =>
     patterns.some((pattern) => pattern.test(text));
 
@@ -124,16 +129,11 @@ export default function ConversacionesPage() {
       }
 
       const registros = (data || []) as Conversation[];
-      const visibles = registros.filter((c) => !isUnknownPhone(c.phone_number));
-      setConversations(visibles);
+      setConversations(registros);
 
       // Extraer lista única de números de teléfono
-      const phones = [...new Set(visibles.map((c) => c.phone_number))];
+      const phones = [...new Set(registros.map((c) => c.phone_number))];
       setPhoneList(phones);
-
-      if (selectedPhone && isUnknownPhone(selectedPhone)) {
-        setSelectedPhone(null);
-      }
     } catch (err) {
       console.error("Error:", err);
     } finally {
@@ -342,7 +342,8 @@ export default function ConversacionesPage() {
       render: (phone: string) => (
         <Space>
           <PhoneOutlined />
-          <span>{phone}</span>
+          <span>{getPhoneLabel(phone)}</span>
+          {isUnknownPhone(phone) && <Tag color="orange">Pendiente identificar</Tag>}
         </Space>
       ),
       width: 150,
@@ -489,7 +490,7 @@ export default function ConversacionesPage() {
               value={selectedPhone}
               onChange={setSelectedPhone}
               options={phoneList.map((phone) => ({
-                label: phone,
+                label: getPhoneLabel(phone),
                 value: phone,
               }))}
               style={{ width: "100%" }}
@@ -588,7 +589,7 @@ export default function ConversacionesPage() {
         title={
           <Space>
             <PhoneOutlined />
-            Conversación: {selectedPhone}
+            Conversación: {getPhoneLabel(selectedPhone)}
           </Space>
         }
         onClose={() => {
