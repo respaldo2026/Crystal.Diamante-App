@@ -503,14 +503,57 @@ export default function StudentDetailView() {
   const renderCuotasPorMatricula = (record: any) => {
     // Obtener todas las cuotas de esta matrícula
     const cuotasMatricula = pagosHistorial.filter(p => p.matricula_id === record.id).sort((a, b) => (a.numero_cuota || 0) - (b.numero_cuota || 0));
-    
-    if (cuotasMatricula.length === 0) {
-      return <Text type="secondary">No hay cuotas generadas</Text>;
+
+    const duracionMeses = Number(record?.cursos?.duracion) || 0;
+    const totalCiclos = Math.max(duracionMeses, 0);
+    const pagosMap = new Map<number, Pago>();
+    cuotasMatricula.forEach((p) => {
+      if (typeof p.numero_cuota === "number") {
+        pagosMap.set(p.numero_cuota, p);
+      }
+    });
+
+    const inscripcionPago = cuotasMatricula.find((p) =>
+      (p.periodo_pagado || "").toLowerCase().includes("matric") || p.numero_cuota === 0,
+    );
+    if (inscripcionPago) {
+      pagosMap.set(0, inscripcionPago);
+    }
+
+    const pagosEsperados: Pago[] = [];
+    for (let ciclo = 0; ciclo <= totalCiclos; ciclo += 1) {
+      const pago = pagosMap.get(ciclo);
+      if (pago) {
+        pagosEsperados.push(pago);
+        continue;
+      }
+
+      pagosEsperados.push({
+        id: `pendiente-${record.id}-${ciclo}`,
+        fecha_pago: null,
+        fecha_vencimiento: null,
+        numero_cuota: ciclo,
+        matricula_id: record.id,
+        matriculas: record.matriculas ?? null,
+        monto: ciclo === 0 ? record?.cursos?.precio || null : record?.cursos?.precio_mensualidad || null,
+        metodo_pago: null,
+        referencia: null,
+        observaciones: null,
+        periodo_pagado: ciclo === 0
+          ? "Inscripción"
+          : `Ciclo mensual ${ciclo} de ${totalCiclos}`,
+        estado: "pendiente",
+        ticket_url: null,
+      });
+    }
+
+    if (pagosEsperados.length === 0) {
+      return <Text type="secondary">No hay ciclos generados</Text>;
     }
 
     return (
       <Space wrap size="small">
-        {cuotasMatricula.map((cuota) => {
+        {pagosEsperados.map((cuota) => {
           const estado = (cuota.estado || 'pendiente').toLowerCase();
           const isPagado = estado === 'pagado';
           const isVencido = estado === 'vencido' || (cuota.fecha_vencimiento && dayjs(cuota.fecha_vencimiento).isBefore(dayjs(), 'day') && !isPagado);
@@ -538,12 +581,17 @@ export default function StudentDetailView() {
             statusColor = "#1890ff";
           }
 
+          const etiquetaBase = cuota.periodo_pagado || (cuota.numero_cuota === 0 ? "Inscripción" : `Ciclo ${cuota.numero_cuota}`);
+          const etiqueta = etiquetaBase
+            .replace(/cuota mensual/gi, "Ciclo mensual")
+            .replace(/cuota/gi, "Ciclo");
+
           return (
             <Tooltip
               key={cuota.id}
               title={
                 <div>
-                  <div><strong>{cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}</strong></div>
+                  <div><strong>{etiqueta}</strong></div>
                   <div>Monto: ${(cuota.monto || 0).toLocaleString()}</div>
                   {cuota.fecha_vencimiento && (
                     <div>Vence: {formatDate(cuota.fecha_vencimiento)}</div>
@@ -571,7 +619,7 @@ export default function StudentDetailView() {
                 onClick={() => {
                   if (!isPagado) {
                     Modal.confirm({
-                      title: `Registrar pago de ${cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}`,
+                      title: `Registrar pago de ${etiqueta}`,
                       content: (
                         <div>
                           <p>Monto: <strong>${(cuota.monto || 0).toLocaleString()}</strong></p>
@@ -589,7 +637,7 @@ export default function StudentDetailView() {
                 }}
               >
                 <span style={{ fontSize: 11, fontWeight: 500 }}>
-                  {cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}
+                  {etiqueta}
                 </span>
                 <span style={{ fontSize: 10, color: statusColor, marginTop: 2 }}>
                   {statusText}
@@ -937,7 +985,7 @@ export default function StudentDetailView() {
                         render: (_: string, record: any) => <Text strong>{construirNombreGrupo(record.cursos) || "Curso no asociado"}</Text>,
                       },
                       {
-                        title: "Cuotas de Pago",
+                        title: "Ciclos de Pago",
                         render: (_: any, record: any) => renderCuotasPorMatricula(record),
                         width: 600,
                       },
