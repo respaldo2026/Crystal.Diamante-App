@@ -41,7 +41,7 @@ import {
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import { formatDate } from "@utils/date";
-import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas, obtenerMaterialesClasePorProgramas } from "@modules/academico/pensum.service";
+import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas, obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas } from "@modules/academico/pensum.service";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
@@ -63,6 +63,7 @@ export default function PortalEstudiante() {
   const [pagos, setPagos] = useState<any[]>([]);
   const [pensum, setPensum] = useState<any[]>([]);
   const [materiales, setMateriales] = useState<any[]>([]);
+  const [materialesCiclo, setMaterialesCiclo] = useState<any[]>([]);
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
@@ -335,6 +336,10 @@ export default function PortalEstudiante() {
         );
         setMateriales(materialesUnicos);
 
+        const materialesCicloData = await obtenerMaterialesCicloPorProgramas(programaIds);
+        const materialesCicloUnicos = deduplicarLista(materialesCicloData || [], (m: any) => String(m?.id || ""));
+        setMaterialesCiclo(materialesCicloUnicos);
+
         const materialesClaseData = await obtenerMaterialesClasePorProgramas(programaIds);
         const materialesClaseUnicos = deduplicarLista(materialesClaseData || [], (m: any) =>
           String(`${m?.programa_id || ''}-${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${(m?.nombre_material || '').trim().toLowerCase()}-${m?.cantidad || ''}-${(m?.unidad || '').trim().toLowerCase()}-${(m?.observaciones || '').trim().toLowerCase()}`)
@@ -469,7 +474,7 @@ export default function PortalEstudiante() {
     );
   };
 
-  const renderRutaAcademica = (vista: "plan" | "kits") => {
+  const renderRutaAcademica = (vista: "plan" | "kits" | "ciclo") => {
     if (!matriculas.length) return <Empty description="No tienes cursos activos" />;
 
     const matriculasActivas = deduplicarLista(
@@ -481,7 +486,9 @@ export default function PortalEstudiante() {
 
     const tituloPrincipal = vista === "plan"
       ? "Plan de Estudios"
-      : "Materiales (Kits)";
+      : vista === "ciclo"
+        ? "Materiales del ciclo"
+        : "Materiales por clase";
 
     const StepCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
       <Card title={title} size={isMobile ? "small" : "default"}>
@@ -576,6 +583,53 @@ export default function PortalEstudiante() {
 
     const temaSeleccionado = temasCiclo.find((t: any) => String(t.id) === String(temaRutaId));
 
+    if (vista === "ciclo") {
+      const materialesCicloPrograma = deduplicarLista(
+        materialesCiclo.filter((m: any) => m.programa_id === programaIdSeleccionado),
+        (m: any) => String(m?.id || ""),
+      );
+      const materialesCicloSeleccionado = deduplicarLista(
+        materialesCicloPrograma.filter((item: any) => {
+          if (!cicloSeleccionado?.id) return false;
+          return String(item.pensum_id) === String(cicloSeleccionado.id);
+        }),
+        (m: any) => String(m?.id || ""),
+      );
+
+      return (
+        <StepCard title={tituloPrincipal}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Space wrap>
+              <Button onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
+              <Button onClick={() => setCicloRutaId(null)}>← Ciclos</Button>
+            </Space>
+            <Text strong>Materiales generales del ciclo</Text>
+            {materialesCicloSeleccionado.length === 0 ? (
+              <Text type="secondary">No hay materiales generales registrados para este ciclo.</Text>
+            ) : (
+              <List
+                size={isMobile ? "small" : "default"}
+                dataSource={materialesCicloSeleccionado}
+                renderItem={(material: any) => (
+                  <List.Item>
+                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                      <Space size={8} wrap>
+                        <Text strong>{material.nombre}</Text>
+                        {material.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
+                      </Space>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {material.cantidad || "Cantidad por definir"}
+                      </Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            )}
+          </Space>
+        </StepCard>
+      );
+    }
+
     if (!temasCiclo.length) {
       return (
         <StepCard title={tituloPrincipal}>
@@ -620,7 +674,7 @@ export default function PortalEstudiante() {
 
     const materialesClasePrograma = deduplicarLista(
       materialesClase.filter((m: any) => m.programa_id === programaIdSeleccionado),
-      (m: any) => String(`${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${normalizarTexto(m?.nombre_material || '')}-${m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`)
+      (m: any) => String(`${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${normalizarTexto(m?.materiales_ciclo?.nombre || m?.nombre_material || '')}-${m?.materiales_ciclo?.cantidad || m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`)
     );
 
     const recursosTema = deduplicarLista(
@@ -650,7 +704,7 @@ export default function PortalEstudiante() {
         if (cicloSeleccionado?.id && item.pensum_id && String(item.pensum_id) !== String(cicloSeleccionado.id)) return false;
         return String(item.pensum_curso_id) === String(temaSeleccionado.id);
       }),
-      (m: any) => `${normalizarTexto(m?.nombre_material || '')}-${m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`
+      (m: any) => `${normalizarTexto(m?.materiales_ciclo?.nombre || m?.nombre_material || '')}-${m?.materiales_ciclo?.cantidad || m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`
     );
 
     const toggleChecklist = (insumo: any, checked: boolean) => {
@@ -747,6 +801,8 @@ export default function PortalEstudiante() {
                 dataSource={insumosTema}
                 renderItem={(insumo: any) => {
                   const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+                  const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
+                  const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
                   return (
                     <List.Item>
                       <Space direction="vertical" size={2} style={{ width: "100%" }}>
@@ -754,10 +810,13 @@ export default function PortalEstudiante() {
                           checked={Boolean(checklistInsumos[key])}
                           onChange={(event) => toggleChecklist(insumo, event.target.checked)}
                         >
-                          <Text strong>{insumo.nombre_material}</Text>
+                          <Space size={8} wrap>
+                            <Text strong>{nombreInsumo}</Text>
+                            {insumo.materiales_ciclo?.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
+                          </Space>
                         </Checkbox>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          {[insumo.cantidad, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
+                          {[cantidadInsumo, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
                           {insumo.obligatorio ? " • Obligatorio" : " • Opcional"}
                         </Text>
                         {insumo.observaciones ? (
@@ -778,6 +837,8 @@ export default function PortalEstudiante() {
   const renderPensum = () => renderRutaAcademica("plan");
 
   const renderMaterialesKits = () => renderRutaAcademica("kits");
+
+  const renderMaterialesCiclo = () => renderRutaAcademica("ciclo");
 
   const obtenerRutaTemasPrograma = (programaId: string | number | null | undefined) => {
     const ciclos = (pensum || [])
@@ -1099,13 +1160,18 @@ export default function PortalEstudiante() {
           },
           {
             key: "7",
-            label: <span><BookOutlined /> Materiales (Kits)</span>,
+            label: <span><BookOutlined /> Materiales por clase</span>,
             children: (
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
                 {renderMaterialesKits()}
                 <HistorialEntregas estudianteId={estudiante?.id} />
               </Space>
             )
+          },
+          {
+            key: "8",
+            label: <span><BookOutlined /> Materiales del ciclo</span>,
+            children: renderMaterialesCiclo(),
           }
         ]}
       />

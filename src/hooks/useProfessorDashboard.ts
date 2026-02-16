@@ -10,6 +10,7 @@ export interface ProfesorDashboardCurso {
   id: string;
   nombre: string;
   estado: string;
+  programaId?: number | null;
   estudiantesActivos: number;
   asistenciaPromedio?: number | null;
   promedioNota?: number | null;
@@ -110,7 +111,7 @@ export const fetchProfessorDashboardData = async (
 ): Promise<Omit<ProfessorDashboardData, "loading" | "profesorNombre">> => {
   const cursosResponse = await supabaseBrowserClient
     .from("cursos")
-    .select("id, nombre, estado")
+    .select("id, nombre, estado, programa_id")
     .eq("profesor_id", profesorId)
     .neq("estado", "eliminado")
     .order("nombre", { ascending: true });
@@ -436,6 +437,7 @@ export const fetchProfessorDashboardData = async (
       id: curso.id,
       nombre: curso.nombre,
       estado: curso.estado,
+      programaId: curso.programa_id ?? null,
       estudiantesActivos: estudiantesPorCurso.get(curso.id) || 0,
       asistenciaPromedio:
         asistencia && asistencia.total > 0

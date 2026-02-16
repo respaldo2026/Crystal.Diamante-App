@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Column, Line } from "@ant-design/plots";
 import {
   BookOutlined,
@@ -18,9 +18,11 @@ import {
   Col,
   Divider,
   Drawer,
+  Empty,
   List,
   Progress,
   Row,
+  Select,
   Space,
   Spin,
   Statistic,
@@ -30,6 +32,7 @@ import {
 import dayjs from "dayjs";
 import { ProfessorDashboardData } from "@hooks/useProfessorDashboard";
 import { construirNombreGrupo } from "@utils/grupos";
+import { obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas, obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 
 type CourseActionContext = "attendance" | "grades" | "materials" | "default";
 
@@ -82,6 +85,14 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   const pendientesData = dedupeByKey(pendientes || [], (pendiente: any) => `${pendiente.cursoId ?? ""}-${pendiente.concepto ?? ""}-${pendiente.fecha ?? ""}`);
   const pagosData = dedupeByKey(pagos || [], (pago: any) => `${pago.id ?? ""}-${pago.fecha ?? ""}-${pago.monto ?? ""}-${pago.tipo ?? ""}`);
   const [financialOpen, setFinancialOpen] = useState(false);
+  const [materialsOpen, setMaterialsOpen] = useState(false);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [materialesPensum, setMaterialesPensum] = useState<any[]>([]);
+  const [materialesCiclo, setMaterialesCiclo] = useState<any[]>([]);
+  const [materialesClase, setMaterialesClase] = useState<any[]>([]);
+  const [cursoMaterialSeleccionado, setCursoMaterialSeleccionado] = useState<any | null>(null);
+  const [cicloSeleccionadoId, setCicloSeleccionadoId] = useState<string | null>(null);
+  const [temaSeleccionadoId, setTemaSeleccionadoId] = useState<string | null>(null);
 
   const currencyFormatter = useMemo(
     () =>
@@ -184,6 +195,87 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   const hasAsistenciaData = (statsData.asistenciaChart || []).length > 0;
   const hasCalificacionesData = (statsData.calificacionesChart || []).length > 0;
   const hasTopCursos = (topCursos || []).length > 0;
+
+  const ciclosMateriales = useMemo(() => {
+    const programaId = cursoMaterialSeleccionado?.programaId;
+    if (!programaId) return [];
+    return (materialesPensum || [])
+      .filter((ciclo: any) => Number(ciclo.programa_id) === Number(programaId))
+      .sort((a: any, b: any) => {
+        const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 0);
+        const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 0);
+        if (ordenA !== ordenB) return ordenA - ordenB;
+        return Number(a?.numero_ciclo ?? 0) - Number(b?.numero_ciclo ?? 0);
+      });
+  }, [materialesPensum, cursoMaterialSeleccionado?.programaId]);
+
+  const cicloMaterialSeleccionado = useMemo(() => {
+    return ciclosMateriales.find((ciclo: any) => String(ciclo.id) === String(cicloSeleccionadoId));
+  }, [ciclosMateriales, cicloSeleccionadoId]);
+
+  const temasMateriales = useMemo(() => {
+    const temas = cicloMaterialSeleccionado?.pensum_cursos || [];
+    return temas.slice().sort((a: any, b: any) => {
+      const ordenA = Number(a?.orden ?? 0);
+      const ordenB = Number(b?.orden ?? 0);
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return Number(a?.id || 0) - Number(b?.id || 0);
+    });
+  }, [cicloMaterialSeleccionado]);
+
+  const materialesCicloSeleccionado = useMemo(() => {
+    if (!cicloMaterialSeleccionado?.id) return [];
+    return (materialesCiclo || [])
+      .filter((item: any) => String(item.pensum_id) === String(cicloMaterialSeleccionado.id))
+      .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0));
+  }, [materialesCiclo, cicloMaterialSeleccionado?.id]);
+
+  const materialesClaseSeleccionados = useMemo(() => {
+    if (!cicloMaterialSeleccionado?.id || !temaSeleccionadoId) return [];
+    return (materialesClase || [])
+      .filter((item: any) => String(item.pensum_id) === String(cicloMaterialSeleccionado.id))
+      .filter((item: any) => String(item.pensum_curso_id) === String(temaSeleccionadoId))
+      .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0));
+  }, [materialesClase, cicloMaterialSeleccionado?.id, temaSeleccionadoId]);
+
+  const handleOpenMaterials = (curso: any) => {
+    setCursoMaterialSeleccionado(curso);
+    setCicloSeleccionadoId(null);
+    setTemaSeleccionadoId(null);
+    setMaterialsOpen(true);
+  };
+
+  useEffect(() => {
+    const cargarMateriales = async () => {
+      if (!materialsOpen || !cursoMaterialSeleccionado?.programaId) return;
+      setMaterialsLoading(true);
+      try {
+        const programaId = String(cursoMaterialSeleccionado.programaId);
+        const [pensumData, materialesCicloData, materialesClaseData] = await Promise.all([
+          obtenerPensumPorProgramas([programaId]),
+          obtenerMaterialesCicloPorProgramas([programaId]),
+          obtenerMaterialesClasePorProgramas([programaId]),
+        ]);
+        setMaterialesPensum(pensumData || []);
+        setMaterialesCiclo(materialesCicloData || []);
+        setMaterialesClase(materialesClaseData || []);
+
+        const primerCiclo = (pensumData || [])[0];
+        setCicloSeleccionadoId(primerCiclo?.id || null);
+        const primerTema = (primerCiclo?.pensum_cursos || [])[0];
+        setTemaSeleccionadoId(primerTema?.id || null);
+      } catch (error) {
+        console.error("Error cargando materiales del curso", error);
+        setMaterialesPensum([]);
+        setMaterialesCiclo([]);
+        setMaterialesClase([]);
+      } finally {
+        setMaterialsLoading(false);
+      }
+    };
+
+    cargarMateriales();
+  }, [materialsOpen, cursoMaterialSeleccionado?.programaId]);
 
   if (loading) {
     return (
@@ -434,6 +526,16 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                         >
                           Entrar al curso
                         </Button>
+                        <Button
+                          block
+                          size="middle"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenMaterials(curso);
+                          }}
+                        >
+                          Ver materiales
+                        </Button>
                       </Card>
                     </Col>
                   );
@@ -569,6 +671,101 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             )}
           </Row>
         )}
+
+        <Drawer
+          title={`Materiales del curso: ${cursoMaterialSeleccionado ? construirNombreGrupo(cursoMaterialSeleccionado) : "Curso"}`}
+          placement="right"
+          width={460}
+          onClose={() => setMaterialsOpen(false)}
+          open={materialsOpen}
+        >
+          {materialsLoading ? (
+            <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Spin />
+            </div>
+          ) : (
+            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+              <Select
+                placeholder="Selecciona un ciclo"
+                value={cicloSeleccionadoId || undefined}
+                onChange={(value) => {
+                  const ciclo = ciclosMateriales.find((item: any) => String(item.id) === String(value));
+                  setCicloSeleccionadoId(value || null);
+                  const primerTema = ciclo?.pensum_cursos?.[0];
+                  setTemaSeleccionadoId(primerTema?.id || null);
+                }}
+                options={ciclosMateriales.map((ciclo: any) => ({
+                  value: ciclo.id,
+                  label: ciclo.nombre_ciclo || `Ciclo ${ciclo.numero_ciclo}`,
+                }))}
+              />
+
+              <Select
+                placeholder="Selecciona un tema"
+                value={temaSeleccionadoId || undefined}
+                onChange={(value) => setTemaSeleccionadoId(value || null)}
+                options={temasMateriales.map((tema: any) => ({
+                  value: tema.id,
+                  label: tema.nombre_curso,
+                }))}
+              />
+
+              <Card size="small" title="Materiales generales del ciclo">
+                {materialesCicloSeleccionado.length === 0 ? (
+                  <Empty description="Sin materiales generales" />
+                ) : (
+                  <List
+                    size="small"
+                    dataSource={materialesCicloSeleccionado}
+                    renderItem={(material: any) => (
+                      <List.Item>
+                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                          <Space size={8} wrap>
+                            <Typography.Text strong>{material.nombre}</Typography.Text>
+                            {material.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
+                          </Space>
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            {material.cantidad || "Cantidad por definir"}
+                          </Typography.Text>
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                )}
+              </Card>
+
+              <Card size="small" title="Materiales por clase">
+                {materialesClaseSeleccionados.length === 0 ? (
+                  <Empty description="Sin materiales asignados" />
+                ) : (
+                  <List
+                    size="small"
+                    dataSource={materialesClaseSeleccionados}
+                    renderItem={(material: any) => {
+                      const nombre = material.materiales_ciclo?.nombre || material.nombre_material;
+                      const cantidad = material.materiales_ciclo?.cantidad || material.cantidad;
+                      return (
+                        <List.Item>
+                          <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                            <Space size={8} wrap>
+                              <Typography.Text strong>{nombre}</Typography.Text>
+                              {material.materiales_ciclo?.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
+                              {material.obligatorio ? <Tag color="red">Obligatorio</Tag> : <Tag>Opcional</Tag>}
+                            </Space>
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                              {[cantidad, material.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
+                              {material.observaciones ? ` · ${material.observaciones}` : ""}
+                            </Typography.Text>
+                          </Space>
+                        </List.Item>
+                      );
+                    }}
+                  />
+                )}
+              </Card>
+            </Space>
+          )}
+        </Drawer>
 
         <Drawer
           title="Resumen financiero"

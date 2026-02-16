@@ -23,11 +23,24 @@ export async function obtenerMaterialesPorProgramas(programaIds: string[]) {
   return data || [];
 }
 
+export async function obtenerMaterialesCicloPorProgramas(programaIds: string[]) {
+  const { data, error } = await supabaseBrowserClient
+    .from("materiales_ciclo")
+    .select("*")
+    .in("programa_id", programaIds)
+    .eq("activo", true)
+    .order("orden", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
 export async function obtenerMaterialesClasePorProgramas(programaIds: string[]) {
   const { data, error } = await supabaseBrowserClient
     .from("materiales_clase")
     .select(`
       *,
+      materiales_ciclo: material_ciclo_id (id, nombre, cantidad, incluido_kit),
       pensum_cursos: pensum_curso_id (id, nombre_curso, orden),
       pensum: pensum_id (id, nombre_ciclo, numero_ciclo)
     `)

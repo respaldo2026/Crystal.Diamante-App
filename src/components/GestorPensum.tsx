@@ -88,11 +88,24 @@ interface MaterialClase {
   programa_id: number;
   pensum_id?: string | null;
   pensum_curso_id: string;
+  material_ciclo_id?: string | null;
   nombre_material: string;
   cantidad?: string | null;
   unidad?: string | null;
   observaciones?: string | null;
   obligatorio: boolean;
+  orden: number;
+  activo: boolean;
+  materiales_ciclo?: MaterialCiclo | null;
+}
+
+interface MaterialCiclo {
+  id: string;
+  programa_id: number;
+  pensum_id: string;
+  nombre: string;
+  cantidad?: string | null;
+  incluido_kit: boolean;
   orden: number;
   activo: boolean;
 }
@@ -113,6 +126,7 @@ export default function GestorPensum({
   const [formMaterial] = Form.useForm();
   const [formCiclo] = Form.useForm();
   const [formMaterialClase] = Form.useForm();
+  const [formMaterialCiclo] = Form.useForm();
 
   // Estados para pensum
   const [pensums, setPensums] = useState<Pensum[]>([]);
@@ -138,6 +152,8 @@ export default function GestorPensum({
   // Estados para material didáctico
   const [materiales, setMateriales] = useState<MaterialDidactico[]>([]);
   const [loadingMateriales, setLoadingMateriales] = useState(false);
+  const [materialesCicloGeneral, setMaterialesCicloGeneral] = useState<MaterialCiclo[]>([]);
+  const [loadingMaterialesCiclo, setLoadingMaterialesCiclo] = useState(false);
   const [materialesClase, setMaterialesClase] = useState<MaterialClase[]>([]);
   const [loadingMaterialesClase, setLoadingMaterialesClase] = useState(false);
   const [drawerMaterialesVisible, setDrawerMaterialesVisible] = useState(false);
@@ -146,6 +162,8 @@ export default function GestorPensum({
   const [editingMaterial, setEditingMaterial] = useState<MaterialDidactico | null>(null);
   const [modalMaterialClaseVisible, setModalMaterialClaseVisible] = useState(false);
   const [editingMaterialClase, setEditingMaterialClase] = useState<MaterialClase | null>(null);
+  const [modalMaterialCicloVisible, setModalMaterialCicloVisible] = useState(false);
+  const [editingMaterialCiclo, setEditingMaterialCiclo] = useState<MaterialCiclo | null>(null);
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace'>('archivo');
 
   // Estados para navegación
@@ -469,12 +487,33 @@ export default function GestorPensum({
     }
   }, [programaId, message]);
 
+  const cargarMaterialesCiclo = useCallback(async () => {
+    setLoadingMaterialesCiclo(true);
+    try {
+      const { data, error } = await supabaseBrowserClient
+        .from("materiales_ciclo")
+        .select("id, programa_id, pensum_id, nombre, cantidad, incluido_kit, orden, activo")
+        .eq("programa_id", programaId)
+        .eq("activo", true)
+        .order("orden", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      setMaterialesCicloGeneral(data || []);
+    } catch (error) {
+      message.error("Error al cargar materiales del ciclo");
+      logger.error(error);
+    } finally {
+      setLoadingMaterialesCiclo(false);
+    }
+  }, [programaId, message]);
+
   const cargarMaterialesClase = useCallback(async () => {
     setLoadingMaterialesClase(true);
     try {
       const { data, error } = await supabaseBrowserClient
         .from("materiales_clase")
-        .select("id, programa_id, pensum_id, pensum_curso_id, nombre_material, cantidad, unidad, observaciones, obligatorio, orden, activo")
+        .select("id, programa_id, pensum_id, pensum_curso_id, material_ciclo_id, nombre_material, cantidad, unidad, observaciones, obligatorio, orden, activo, materiales_ciclo:material_ciclo_id (id, nombre, cantidad, incluido_kit)")
         .eq("programa_id", programaId)
         .eq("activo", true)
         .order("orden", { ascending: true });
@@ -497,6 +536,7 @@ export default function GestorPensum({
     setEditingMaterialClase(material || null);
     formMaterialClase.setFieldsValue({
       pensum_curso_id: material?.pensum_curso_id || cursoId,
+      material_ciclo_id: material?.material_ciclo_id || null,
       nombre_material: material?.nombre_material || "",
       cantidad: material?.cantidad || "",
       unidad: material?.unidad || "",
@@ -517,12 +557,19 @@ export default function GestorPensum({
       if (!selectedCicloId) return;
       const values = await formMaterialClase.validateFields();
 
+      const materialCicloSeleccionado = materialesCicloGeneral.find(
+        (material) => String(material.id) === String(values.material_ciclo_id),
+      );
+      const nombreMaterial = values.nombre_material || materialCicloSeleccionado?.nombre || "";
+      const cantidadMaterial = values.cantidad || materialCicloSeleccionado?.cantidad || null;
+
       const payload = {
         programa_id: Number(programaId),
         pensum_id: selectedCicloId,
         pensum_curso_id: values.pensum_curso_id,
-        nombre_material: values.nombre_material,
-        cantidad: values.cantidad || null,
+        material_ciclo_id: values.material_ciclo_id || null,
+        nombre_material: nombreMaterial,
+        cantidad: cantidadMaterial,
         unidad: values.unidad || null,
         observaciones: values.observaciones || null,
         obligatorio: values.obligatorio,
@@ -588,6 +635,102 @@ export default function GestorPensum({
     });
   };
 
+  const abrirModalMaterialCiclo = (material?: MaterialCiclo) => {
+    if (!canManageMateriales) {
+      message.warning("Solo administración y secretaría pueden gestionar materiales.");
+      return;
+    }
+    setEditingMaterialCiclo(material || null);
+    formMaterialCiclo.setFieldsValue({
+      nombre: material?.nombre || "",
+      cantidad: material?.cantidad || "",
+      incluido_kit: material?.incluido_kit ?? false,
+      orden: material?.orden ?? 1,
+      activo: material?.activo ?? true,
+    });
+    setModalMaterialCicloVisible(true);
+  };
+
+  const handleGuardarMaterialCiclo = async () => {
+    try {
+      if (!canManageMateriales) {
+        message.warning("Solo administración y secretaría pueden gestionar materiales.");
+        return;
+      }
+      if (!selectedCicloId) {
+        message.error("Selecciona un ciclo antes de agregar materiales.");
+        return;
+      }
+
+      const values = await formMaterialCiclo.validateFields();
+      const payload = {
+        programa_id: Number(programaId),
+        pensum_id: selectedCicloId,
+        nombre: values.nombre,
+        cantidad: values.cantidad || null,
+        incluido_kit: Boolean(values.incluido_kit),
+        orden: values.orden || 1,
+        activo: values.activo ?? true,
+      };
+
+      if (editingMaterialCiclo) {
+        const { error } = await supabaseBrowserClient
+          .from("materiales_ciclo")
+          .update(payload)
+          .eq("id", editingMaterialCiclo.id);
+        if (error) throw error;
+        message.success("Material del ciclo actualizado");
+      } else {
+        const { error } = await supabaseBrowserClient
+          .from("materiales_ciclo")
+          .insert([payload]);
+        if (error) throw error;
+        message.success("Material del ciclo agregado");
+      }
+
+      setModalMaterialCicloVisible(false);
+      setEditingMaterialCiclo(null);
+      formMaterialCiclo.resetFields();
+      await cargarMaterialesCiclo();
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message || "Error al guardar material del ciclo");
+      } else {
+        message.error("Error al guardar material del ciclo");
+      }
+    }
+  };
+
+  const handleEliminarMaterialCiclo = (materialId: string) => {
+    if (!canManageMateriales) {
+      message.warning("Solo administración y secretaría pueden gestionar materiales.");
+      return;
+    }
+    modal.confirm({
+      title: "Eliminar material del ciclo",
+      content: "¿Estás seguro?",
+      okText: "Eliminar",
+      okType: "danger",
+      onOk: async () => {
+        try {
+          const { error } = await supabaseBrowserClient
+            .from("materiales_ciclo")
+            .update({ activo: false })
+            .eq("id", materialId);
+          if (error) throw error;
+          message.success("Material del ciclo eliminado");
+          await cargarMaterialesCiclo();
+        } catch (error) {
+          if (error instanceof Error) {
+            message.error(error.message || "Error");
+          } else {
+            message.error("Error");
+          }
+        }
+      },
+    });
+  };
+
   useEffect(() => {
     cargarPrograma();
     cargarRolActual();
@@ -615,6 +758,10 @@ export default function GestorPensum({
   useEffect(() => {
     cargarMateriales();
   }, [cargarMateriales]);
+
+  useEffect(() => {
+    cargarMaterialesCiclo();
+  }, [cargarMaterialesCiclo]);
 
   useEffect(() => {
     cargarMaterialesClase();
@@ -677,9 +824,15 @@ export default function GestorPensum({
     setDrawerMaterialesVisible(true);
   };
 
-  const materialesCiclo = useMemo(() => {
+  const materialesCicloDidactico = useMemo(() => {
     return materiales.filter(m => m.pensum_id === selectedCicloId);
   }, [materiales, selectedCicloId]);
+
+  const materialesCicloGeneralOrdenados = useMemo(() => {
+    return materialesCicloGeneral
+      .filter((m) => m.pensum_id === selectedCicloId)
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+  }, [materialesCicloGeneral, selectedCicloId]);
 
   const materialesClaseCiclo = useMemo(() => {
     return materialesClase.filter((material) => material.pensum_id === selectedCicloId);
@@ -986,6 +1139,66 @@ export default function GestorPensum({
             />
           )}
 
+          <Card
+            size="small"
+            title="Materiales del ciclo (lista general)"
+            style={{ marginBottom: 16 }}
+            extra={canManageMateriales ? (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => abrirModalMaterialCiclo()}
+              >
+                Agregar material del ciclo
+              </Button>
+            ) : null}
+          >
+            {materialesCicloGeneralOrdenados.length === 0 ? (
+              <Text type="secondary">No hay materiales generales registrados en este ciclo.</Text>
+            ) : (
+              <List
+                size="small"
+                loading={loadingMaterialesCiclo}
+                dataSource={materialesCicloGeneralOrdenados}
+                renderItem={(material: MaterialCiclo) => (
+                  <List.Item
+                    actions={canManageMateriales ? [
+                      <Button
+                        key={`editar-ciclo-${material.id}`}
+                        type="link"
+                        icon={<EditOutlined />}
+                        onClick={() => abrirModalMaterialCiclo(material)}
+                        style={{ padding: 0, height: "auto" }}
+                      />,
+                      <Button
+                        key={`eliminar-ciclo-${material.id}`}
+                        type="link"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleEliminarMaterialCiclo(material.id)}
+                        style={{ padding: 0, height: "auto" }}
+                      />,
+                    ] : []}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <Space size={6} wrap>
+                          <Text>{material.nombre}</Text>
+                          {material.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
+                        </Space>
+                      }
+                      description={
+                        <Text type="secondary">
+                          {material.cantidad || "Cantidad por definir"}
+                        </Text>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            )}
+          </Card>
+
           <div style={{ marginBottom: 16 }}>
             <Space wrap>
               <Button
@@ -1026,7 +1239,7 @@ export default function GestorPensum({
               }}
             >
               {cursosPensum.map((curso) => {
-                const materialesTema = materialesCiclo.filter((material) => {
+                const materialesTema = materialesCicloDidactico.filter((material) => {
                   const { tema: temaMaterial } = parseTemaFromTitulo(material.titulo);
                   const temaMaterialNorm = normalizarTema(temaMaterial || material.titulo);
                   const temaCursoNorm = normalizarTema(curso.nombre_curso);
@@ -1105,7 +1318,7 @@ export default function GestorPensum({
                                   { type: "divider" as const },
                                   ...materialesNecesariosTema.map((material) => ({
                                     key: `editar-material-necesario-${material.id}`,
-                                    label: `Editar insumo: ${material.nombre_material}`,
+                                    label: `Editar insumo: ${material.materiales_ciclo?.nombre || material.nombre_material}`,
                                     icon: <EditOutlined />,
                                     onClick: () => abrirModalMaterialClase(curso.id, material),
                                   })),
@@ -1224,13 +1437,14 @@ export default function GestorPensum({
                             <List.Item.Meta
                               title={
                                 <Space size={6} wrap>
-                                  <Text>{material.nombre_material}</Text>
+                                  <Text>{material.materiales_ciclo?.nombre || material.nombre_material}</Text>
                                   {material.obligatorio ? <Tag color="red">Obligatorio</Tag> : <Tag>Opcional</Tag>}
+                                  {material.materiales_ciclo?.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
                                 </Space>
                               }
                               description={
                                 <Text type="secondary">
-                                  {[material.cantidad, material.unidad].filter(Boolean).join(" ") || "Cantidad no especificada"}
+                                  {[material.materiales_ciclo?.cantidad || material.cantidad, material.unidad].filter(Boolean).join(" ") || "Cantidad no especificada"}
                                   {material.observaciones ? ` · ${material.observaciones}` : ""}
                                 </Text>
                               }
@@ -1318,6 +1532,44 @@ export default function GestorPensum({
       </Modal>
 
       <Modal
+        title={editingMaterialCiclo ? "Editar material del ciclo" : "Agregar material del ciclo"}
+        open={modalMaterialCicloVisible}
+        onOk={handleGuardarMaterialCiclo}
+        onCancel={() => {
+          setModalMaterialCicloVisible(false);
+          setEditingMaterialCiclo(null);
+          formMaterialCiclo.resetFields();
+        }}
+      >
+        <Form form={formMaterialCiclo} layout="vertical">
+          <Form.Item
+            name="nombre"
+            label="Nombre del material"
+            rules={[{ required: true, message: "El nombre es requerido" }]}
+          >
+            <Input placeholder="Ej: Esmalte base" />
+          </Form.Item>
+
+          <Form.Item name="cantidad" label="Cantidad">
+            <Input placeholder="Ej: 1 unidad, 2 ml" />
+          </Form.Item>
+
+          <Form.Item name="incluido_kit" label="Incluido en kit" initialValue={false}>
+            <Select
+              options={[
+                { value: true, label: "Si, viene en el kit mensual" },
+                { value: false, label: "No, el estudiante debe traerlo" },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item name="orden" label="Orden" initialValue={1}>
+            <InputNumber min={1} style={{ width: "100%" }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
         title={editingMaterialClase ? "Editar material necesario" : "Agregar material necesario"}
         open={modalMaterialClaseVisible}
         onOk={handleGuardarMaterialClase}
@@ -1338,6 +1590,31 @@ export default function GestorPensum({
                 value: curso.id,
                 label: curso.nombre_curso,
               }))}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="material_ciclo_id"
+            label="Material del ciclo (lista general)"
+            rules={materialesCicloGeneralOrdenados.length > 0 ? [{ required: true, message: "Selecciona un material del ciclo" }] : []}
+          >
+            <Select
+              allowClear
+              placeholder="Selecciona un material del ciclo"
+              options={materialesCicloGeneralOrdenados.map((material) => ({
+                value: material.id,
+                label: material.incluido_kit
+                  ? `${material.nombre} (Kit mensual)`
+                  : material.nombre,
+              }))}
+              onChange={(value) => {
+                const selected = materialesCicloGeneralOrdenados.find((item) => String(item.id) === String(value));
+                if (!selected) return;
+                formMaterialClase.setFieldsValue({
+                  nombre_material: selected.nombre,
+                  cantidad: selected.cantidad || "",
+                });
+              }}
             />
           </Form.Item>
 
