@@ -36,7 +36,8 @@ import {
   SafetyCertificateOutlined,
   VideoCameraOutlined,
   FilePdfOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  GiftOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
@@ -607,22 +608,29 @@ export default function PortalEstudiante() {
             {materialesCicloSeleccionado.length === 0 ? (
               <Text type="secondary">No hay materiales generales registrados para este ciclo.</Text>
             ) : (
-              <List
-                size={isMobile ? "small" : "default"}
+              <Table
                 dataSource={materialesCicloSeleccionado}
-                renderItem={(material: any) => (
-                  <List.Item>
-                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                      <Space size={8} wrap>
-                        <Text strong>{material.nombre}</Text>
-                        {material.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
-                      </Space>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {material.cantidad || "Cantidad por definir"}
-                      </Text>
-                    </Space>
-                  </List.Item>
-                )}
+                rowKey={(record) => String(record?.id || record?.nombre)}
+                size="small"
+                pagination={false}
+                columns={[
+                  {
+                    title: "Producto",
+                    dataIndex: "nombre",
+                    render: (value) => <Text strong>{value}</Text>,
+                  },
+                  {
+                    title: "Cantidad",
+                    dataIndex: "cantidad",
+                    render: (value) => value || "Cantidad por definir",
+                  },
+                  {
+                    title: "Kit",
+                    dataIndex: "incluido_kit",
+                    align: "center",
+                    render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                  },
+                ]}
               />
             )}
           </Space>
@@ -720,8 +728,6 @@ export default function PortalEstudiante() {
       return Boolean(checklistInsumos[key]);
     }).length;
 
-    const cursoActualNombre = matriculaSeleccionada?.cursos?.nombre || "Curso";
-    const moduloActualNombre = cicloSeleccionado?.nombre_ciclo || "Sin módulo";
     const temaActualNombre = temaSeleccionado?.nombre_curso || "Sin tema";
 
     return (
@@ -735,19 +741,12 @@ export default function PortalEstudiante() {
           <Button onClick={() => setTemaRutaId(null)}>Cambiar tema</Button>
         </Space>
 
-        <div style={{ marginTop: 8, marginBottom: 12 }}>
-          <Text type="secondary">
-            Curso: {cursoActualNombre} · Módulo: {moduloActualNombre} · Tema: {temaActualNombre}
-          </Text>
-        </div>
-
         {vista === "kits" && temaSeleccionado ? (
           <Alert
             type="info"
             showIcon
             style={{ marginBottom: 12 }}
-            message={`Viendo materiales de: ${temaActualNombre} (${moduloActualNombre})`}
-            description={`Curso: ${cursoActualNombre}. Esta es la lista de materiales que debes preparar para esta clase.`}
+            message={`Viendo materiales de la clase: ${temaActualNombre}`}
           />
         ) : null}
 
