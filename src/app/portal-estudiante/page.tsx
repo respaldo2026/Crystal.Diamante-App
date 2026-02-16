@@ -678,6 +678,16 @@ export default function PortalEstudiante() {
           </Text>
         </div>
 
+        {vista === "kits" && temaSeleccionado ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={`Viendo materiales de: ${temaActualNombre} (${moduloActualNombre})`}
+            description={`Curso: ${cursoActualNombre}. Esta es la lista de materiales que debes preparar para esta clase.`}
+          />
+        ) : null}
+
         {vista === "plan" ? (
           <Card size={isMobile ? "small" : "default"} title="Material didáctico del tema">
             {recursosTema.length === 0 ? (
@@ -810,18 +820,25 @@ export default function PortalEstudiante() {
     };
   };
 
-  const irAMaterialesSiguienteClase = (curso: any) => {
-    const siguiente = obtenerSiguienteClase(curso);
+  const irAMaterialesSiguienteClase = (curso: any, siguienteParam?: any) => {
+    const siguiente = siguienteParam || obtenerSiguienteClase(curso);
     if (!siguiente) {
       message.info("Este curso aún no tiene ciclo/tema configurado");
       return;
     }
 
-    if (curso?.matriculaId) {
-      setMatriculaRutaId(String(curso.matriculaId));
+    const matriculaId = curso?.matriculaId ? String(curso.matriculaId) : null;
+    const cicloId = siguiente?.ciclo?.id ? String(siguiente.ciclo.id) : null;
+    const temaId = siguiente?.tema?.id ? String(siguiente.tema.id) : null;
+
+    if (!matriculaId || !cicloId || !temaId) {
+      message.info("No se pudo abrir la clase objetivo. Intenta de nuevo.");
+      return;
     }
-    setCicloRutaId(String(siguiente.ciclo.id));
-    setTemaRutaId(String(siguiente.tema.id));
+
+    setMatriculaRutaId(matriculaId);
+    setCicloRutaId(cicloId);
+    setTemaRutaId(temaId);
     setActiveTab("7");
   };
 
@@ -993,7 +1010,7 @@ export default function PortalEstudiante() {
                                 <Button
                                   type="link"
                                   style={{ paddingLeft: 0, marginTop: 4, height: "auto" }}
-                                  onClick={() => irAMaterialesSiguienteClase(curso)}
+                                  onClick={() => irAMaterialesSiguienteClase(curso, siguiente)}
                                 >
                                   {siguiente?.completado
                                     ? "Ver materiales del último tema"
