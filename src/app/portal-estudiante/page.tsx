@@ -514,7 +514,6 @@ export default function PortalEstudiante() {
     }
 
     const programaIdSeleccionado = matriculaSeleccionada?.cursos?.programa_id;
-    const programaNombre = matriculaSeleccionada?.cursos?.programas?.nombre || matriculaSeleccionada?.cursos?.nombre || "Programa";
 
     const ciclosPrograma = deduplicarLista(
       pensum.filter((p: any) => p.programa_id === programaIdSeleccionado),
@@ -525,7 +524,7 @@ export default function PortalEstudiante() {
 
     if (!ciclosPrograma.length) {
       return (
-        <StepCard title={`${tituloPrincipal}: ${programaNombre}`}>
+        <StepCard title={tituloPrincipal}>
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Button onClick={() => setMatriculaRutaId(null)}>← Volver a cursos</Button>
             <Empty description="Este curso aún no tiene módulos/ciclos configurados" />
@@ -536,7 +535,7 @@ export default function PortalEstudiante() {
 
     if (!cicloSeleccionado) {
       return (
-        <StepCard title={`${tituloPrincipal}: ${programaNombre}`}>
+        <StepCard title={tituloPrincipal}>
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Button onClick={() => setMatriculaRutaId(null)}>← Volver a cursos</Button>
             <Text strong>Selecciona un ciclo / módulo</Text>
@@ -569,7 +568,7 @@ export default function PortalEstudiante() {
 
     if (!temasCiclo.length) {
       return (
-        <StepCard title={`${tituloPrincipal}: ${programaNombre}`}>
+        <StepCard title={tituloPrincipal}>
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Button onClick={() => setCicloRutaId(null)}>← Volver a ciclos</Button>
             <Empty description="Este ciclo aún no tiene temas configurados" />
@@ -580,7 +579,7 @@ export default function PortalEstudiante() {
 
     if (!temaSeleccionado) {
       return (
-        <StepCard title={`${tituloPrincipal}: ${programaNombre}`}>
+        <StepCard title={tituloPrincipal}>
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Space wrap>
               <Button onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
@@ -663,7 +662,7 @@ export default function PortalEstudiante() {
 
     return (
       <Card
-        title={`${tituloPrincipal}: ${programaNombre}`}
+        title={tituloPrincipal}
         size={isMobile ? "small" : "default"}
       >
         <Space wrap style={{ marginBottom: 12 }}>
@@ -882,9 +881,9 @@ export default function PortalEstudiante() {
             <Text style={{ display: "block", fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>
               Te damos la Bienvenida
             </Text>
-            <Title level={3} style={{ marginTop: 6, marginBottom: 0 }}>
-              {estudiante?.nombre_completo}
-            </Title>
+            <Text type="secondary" style={{ display: "block", marginTop: 4 }}>
+              Portal de Estudiante
+            </Text>
           </Col>
           <Col xs={24} sm={12} className="header-actions" style={{ textAlign: "right" }}>
             {(whatsappAgente || whatsappAdmisiones) && (
