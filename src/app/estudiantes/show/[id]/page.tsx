@@ -127,6 +127,19 @@ export default function StudentDetailView() {
     return match ? Number(match[0]) : 0;
   };
 
+  const parseNumeroCuota = (pago: any): number | null => {
+    const numero = Number(pago?.numero_cuota);
+    if (Number.isFinite(numero) && numero > 0) return numero;
+    const raw = String(pago?.periodo_pagado || pago?.observaciones || "");
+    const match = raw.match(/\d+/);
+    return match ? Number(match[0]) : null;
+  };
+
+  const esInscripcion = (pago: any) => {
+    const texto = String(pago?.periodo_pagado || pago?.observaciones || "").toLowerCase();
+    return texto.includes("matric") || Number(pago?.numero_cuota) === 0;
+  };
+
   const obtenerDuracionMeses = (matricula: any) =>
     parseDuracionMeses(
       matricula?.cursos?.programas?.duracion ??
@@ -421,6 +434,50 @@ export default function StudentDetailView() {
     [perfil]
   );
 
+  const pagosHistorialCompleto = useMemo(() => {
+    const base = Array.isArray(pagosHistorial) ? pagosHistorial : [];
+    if (!matriculas.length) return base;
+
+    const extras: Pago[] = [];
+
+    matriculas.forEach((matricula: any) => {
+      const totalCiclos = Math.max(obtenerDuracionMeses(matricula), 0);
+      if (!totalCiclos) return;
+
+      const pagosMatricula = base.filter((p) => p.matricula_id === matricula.id);
+      const cuotasExistentes = new Set<number>();
+
+      pagosMatricula.forEach((p) => {
+        if (esInscripcion(p)) return;
+        const cuota = parseNumeroCuota(p);
+        if (cuota && cuota >= 1 && cuota <= totalCiclos) {
+          cuotasExistentes.add(cuota);
+        }
+      });
+
+      for (let i = 1; i <= totalCiclos; i += 1) {
+        if (cuotasExistentes.has(i)) continue;
+        extras.push({
+          id: `pendiente-${matricula.id}-${i}`,
+          fecha_pago: null,
+          fecha_vencimiento: null,
+          numero_cuota: i,
+          matricula_id: matricula.id,
+          matriculas: { cursos: matricula.cursos },
+          monto: matricula?.cursos?.precio_mensualidad ?? null,
+          metodo_pago: null,
+          referencia: null,
+          observaciones: `Ciclo mensual ${i} de ${totalCiclos}`,
+          periodo_pagado: `Ciclo mensual ${i} de ${totalCiclos}`,
+          estado: "pendiente",
+          ticket_url: null,
+        });
+      }
+    });
+
+    return [...base, ...extras];
+  }, [pagosHistorial, matriculas]);
+
   const columnasPagos = useMemo(
     () => [
       {
@@ -475,7 +532,15 @@ export default function StudentDetailView() {
         title: "Observaciones",
         dataIndex: "observaciones",
         key: "obs",
-        render: (text: string | null) => text || "-",
+        render: (_: string | null, record: any) => {
+          if (esInscripcion(record)) return "Inscripción";
+          const totalCiclos = Math.max(obtenerDuracionMeses(record?.matriculas), 0);
+          const numero = parseNumeroCuota(record);
+          if (numero && totalCiclos) {
+            return `Ciclo mensual ${numero} de ${totalCiclos}`;
+          }
+          return record?.observaciones || record?.periodo_pagado || "-";
+        },
       },
       {
         title: "Ticket",
@@ -1006,11 +1071,11 @@ export default function StudentDetailView() {
                   />
 
                   <Divider orientation="left">Historial Completo de Transacciones</Divider>
-                  {pagosHistorial.length === 0 ? (
+                  {pagosHistorialCompleto.length === 0 ? (
                     <Alert message="No hay pagos registrados para este estudiante" type="info" showIcon />
                   ) : (
                     <Table
-                      dataSource={pagosHistorial}
+                      dataSource={pagosHistorialCompleto}
                       rowKey="id"
                       pagination={{ pageSize: 10 }}
                       columns={columnasPagos}
