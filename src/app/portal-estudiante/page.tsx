@@ -1113,6 +1113,30 @@ export default function PortalEstudiante() {
         .portal-estudiante .header-row {
           align-items: center;
         }
+        .portal-estudiante .course-card .ant-progress {
+          filter: drop-shadow(0 8px 16px rgba(15, 23, 42, 0.12));
+        }
+        .portal-estudiante .course-card .ant-progress-inner {
+          background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f3f6fb 45%, #e6ebf3 100%);
+        }
+        .portal-estudiante .course-card .ant-progress-circle .ant-progress-text,
+        .portal-estudiante .course-card .ant-progress-dashboard .ant-progress-text {
+          color: #1f2937;
+          font-weight: 700;
+          letter-spacing: 0.2px;
+        }
+        .portal-estudiante .course-card .ant-progress-circle-path {
+          stroke: #d81b87;
+          stroke-linecap: round;
+        }
+        .portal-estudiante .course-card .ant-progress-dashboard-path {
+          stroke: #0ea5e9;
+          stroke-linecap: round;
+        }
+        .portal-estudiante .course-card .ant-progress-circle-trail,
+        .portal-estudiante .course-card .ant-progress-dashboard-trail {
+          stroke: #e3e8f1;
+        }
         @media (max-width: 576px) {
           .portal-estudiante {
             padding: 12px !important;
