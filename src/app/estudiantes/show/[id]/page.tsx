@@ -229,7 +229,8 @@ export default function StudentDetailView() {
       // Ciclos/meses: duración + 1 inscripción. Ej: 5 ciclos = 6 pagos (1 inscripción + 5 cuotas)
       const ciclosMap: Record<number, { total: number; pagados: number; faltantes: number; periodos: string[]; inscripcionPagada: boolean }> = {};
       listaMats.forEach((m: any) => {
-        const duracionMeses = Number(m?.cursos?.duracion) || 0;
+        const duracionRaw = String(m?.cursos?.duracion ?? "");
+        const duracionMeses = Number(duracionRaw.match(/\d+/)?.[0] || 0);
         const totalPagosEsperados = duracionMeses + 1; // inscripción + cuotas mensuales
         const pagosMat = pagosList.filter((p) => p.matricula_id === m.id);
         const pagados = pagosMat.filter((p) => (p.estado || "").toLowerCase() === "pagado").length;
@@ -504,7 +505,8 @@ export default function StudentDetailView() {
     // Obtener todas las cuotas de esta matrícula
     const cuotasMatricula = pagosHistorial.filter(p => p.matricula_id === record.id).sort((a, b) => (a.numero_cuota || 0) - (b.numero_cuota || 0));
 
-    const duracionMeses = Number(record?.cursos?.duracion) || 0;
+    const duracionRaw = String(record?.cursos?.duracion ?? "");
+    const duracionMeses = Number(duracionRaw.match(/\d+/)?.[0] || 0);
     const totalCiclos = Math.max(duracionMeses, 0);
     const pagosMap = new Map<number, Pago>();
     cuotasMatricula.forEach((p) => {

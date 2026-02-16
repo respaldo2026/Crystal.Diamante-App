@@ -971,14 +971,14 @@ export default function PortalEstudiante() {
   return (
     <div className="portal-estudiante" style={{ padding: isMobile ? "12px" : "20px", maxWidth: "1200px", margin: "0 auto" }}>
       <Card style={{ marginBottom: 20 }}>
-        <Row gutter={16} className="header-row">
-          <Col xs={24} sm={12}>
-            <Space size={12} align="center">
+        <Row gutter={16} className="header-row" align="middle">
+          <Col xs={24} sm={14}>
+            <Space size={16} align="center">
               {logoAcademia ? (
                 <img
                   src={logoAcademia}
                   alt="Logo academia"
-                  style={{ width: 36, height: 36, objectFit: "contain" }}
+                  className="academy-logo"
                 />
               ) : null}
               <div>
@@ -991,7 +991,7 @@ export default function PortalEstudiante() {
               </div>
             </Space>
           </Col>
-          <Col xs={24} sm={12} className="header-actions" style={{ textAlign: "right" }}>
+          <Col xs={24} sm={10} className="header-actions" style={{ textAlign: "right" }}>
             {(whatsappAgente || whatsappAdmisiones) && (
               <Dropdown
                 trigger={["click"]}
@@ -1021,13 +1021,15 @@ export default function PortalEstudiante() {
                 }}
               >
                 <Button
+                  className="whatsapp-button"
                   icon={<WhatsAppOutlined />}
                   type="primary"
                   size="middle"
-                  shape="circle"
                   aria-label="Contactar por WhatsApp"
-                  style={{ backgroundColor: "#25D366", borderColor: "#25D366", height: 34, width: 34, paddingInline: 0 }}
-                />
+                  style={{ backgroundColor: "#25D366", borderColor: "#25D366" }}
+                >
+                  WhatsApp
+                </Button>
               </Dropdown>
             )}
           </Col>
@@ -1203,6 +1205,18 @@ export default function PortalEstudiante() {
         .portal-estudiante .header-row {
           align-items: center;
         }
+        .portal-estudiante .academy-logo {
+          height: 60px;
+          width: auto;
+          object-fit: contain;
+        }
+        .portal-estudiante .whatsapp-button {
+          padding: 0 18px;
+          height: 38px;
+          border-radius: 999px;
+          font-weight: 600;
+          letter-spacing: 0.2px;
+        }
         .portal-estudiante .course-card .ant-progress {
           filter: drop-shadow(0 8px 16px rgba(15, 23, 42, 0.12));
         }
@@ -1233,6 +1247,9 @@ export default function PortalEstudiante() {
           }
           .portal-estudiante .header-row {
             text-align: center;
+          }
+          .portal-estudiante .academy-logo {
+            height: 48px;
           }
           .portal-estudiante .header-actions {
             text-align: center !important;
