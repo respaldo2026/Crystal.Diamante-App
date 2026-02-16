@@ -488,7 +488,6 @@ export default function StudentDetailView() {
         extras.push({
           id: `pendiente-${matricula.id}-${i}`,
           fecha_pago: null,
-          fecha_vencimiento: null,
           numero_cuota: i,
           matricula_id: matricula.id,
           matriculas: { cursos: matricula.cursos },
