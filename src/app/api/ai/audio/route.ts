@@ -66,14 +66,93 @@ function normalizePhoneIdentifier(raw: string): string {
   return digits;
 }
 
+function extractStringsDeep(input: any, maxDepth = 4): string[] {
+  const result: string[] = [];
+  const visited = new Set<any>();
+
+  const walk = (value: any, depth: number) => {
+    if (depth < 0 || value == null) return;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) result.push(trimmed);
+      return;
+    }
+    if (typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, depth - 1);
+      return;
+    }
+
+    for (const v of Object.values(value)) {
+      walk(v, depth - 1);
+    }
+  };
+
+  walk(input, maxDepth);
+  return result;
+}
+
+function findPhoneCandidateDeep(candidates: string[]): string {
+  for (const value of candidates) {
+    if (!value) continue;
+
+    const normalized = String(value).trim();
+    if (!normalized) continue;
+
+    const fromWhatsAppId = normalized.match(/(\d{10,15})@/);
+    if (fromWhatsAppId?.[1]) {
+      return fromWhatsAppId[1];
+    }
+
+    const digits = normalized.replace(/\D/g, "");
+    if (digits.length >= 10 && digits.length <= 15) {
+      return digits;
+    }
+  }
+
+  return "";
+}
+
 function extractPhoneFromAudioBody(body: any): string {
   const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
   const webhookContactPhone = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.wa_id;
   const nestedPhone = body?.messages?.[0]?.from;
 
+  const deepCandidates = extractStringsDeep({
+    messages: body?.messages,
+    entry: body?.entry,
+    data: body?.data,
+    payload: body?.payload,
+    sender: body?.sender,
+    contact: body?.contact,
+    whatsapp: body?.whatsapp,
+    metadata: body?.metadata,
+  });
+
+  const deepPhoneCandidate = findPhoneCandidateDeep(deepCandidates);
+
   const phone = pickFirstNonEmptyString(
     body?.phone,
     body?.phone_number,
+    body?.phoneNumber,
+    body?.telefono,
+    body?.telefono_cliente,
+    body?.sender?.phone,
+    body?.sender?.wa_id,
+    body?.sender?.id,
+    body?.customer?.phone,
+    body?.cliente?.telefono,
+    body?.conversation?.phone_number,
+    body?.conversation?.wa_id,
+    body?.chat?.id,
+    body?.chatId,
+    body?.whatsapp?.from,
+    body?.whatsapp?.wa_id,
+    body?.metadata?.phone,
+    body?.metadata?.wa_id,
     body?.contact?.phone,
     body?.contact?.wa_id,
     body?.from,
@@ -81,6 +160,7 @@ function extractPhoneFromAudioBody(body: any): string {
     nestedPhone,
     webhookPhone,
     webhookContactPhone,
+    deepPhoneCandidate,
     "unknown"
   );
 

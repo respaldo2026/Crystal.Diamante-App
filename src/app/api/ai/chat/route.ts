@@ -476,6 +476,27 @@ function normalizePhoneIdentifier(raw: string): string {
   return digits;
 }
 
+function findPhoneCandidateDeep(candidates: string[]): string {
+  for (const value of candidates) {
+    if (!value) continue;
+
+    const normalized = String(value).trim();
+    if (!normalized) continue;
+
+    const fromWhatsAppId = normalized.match(/(\d{10,15})@/);
+    if (fromWhatsAppId?.[1]) {
+      return fromWhatsAppId[1];
+    }
+
+    const digits = normalized.replace(/\D/g, "");
+    if (digits.length >= 10 && digits.length <= 15) {
+      return digits;
+    }
+  }
+
+  return "";
+}
+
 function extractStringsDeep(input: any, maxDepth = 4): string[] {
   const result: string[] = [];
   const visited = new Set<any>();
@@ -522,6 +543,8 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     payload: body?.payload,
   });
 
+  const deepPhoneCandidate = findPhoneCandidateDeep(deepCandidates);
+
   const rawMessage = pickFirstNonEmptyString(
     body?.message,
     body?.user_message,
@@ -550,6 +573,22 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
   const phone = pickFirstNonEmptyString(
     body?.phone,
     body?.phone_number,
+    body?.phoneNumber,
+    body?.telefono,
+    body?.telefono_cliente,
+    body?.sender?.phone,
+    body?.sender?.wa_id,
+    body?.sender?.id,
+    body?.customer?.phone,
+    body?.cliente?.telefono,
+    body?.conversation?.phone_number,
+    body?.conversation?.wa_id,
+    body?.chat?.id,
+    body?.chatId,
+    body?.whatsapp?.from,
+    body?.whatsapp?.wa_id,
+    body?.metadata?.phone,
+    body?.metadata?.wa_id,
     body?.contact?.phone,
     body?.contact?.wa_id,
     body?.from,
@@ -558,6 +597,7 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     nestedPhone,
     webhookPhone,
     webhookContactPhone,
+    deepPhoneCandidate,
     "unknown"
   );
 
