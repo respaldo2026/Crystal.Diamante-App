@@ -392,8 +392,72 @@ export default function PortalEstudiante() {
     }
   };
 
+  const parseDuracionMeses = (valor?: string | number | null) => {
+    if (typeof valor === "number" && Number.isFinite(valor)) return Math.max(valor, 0);
+    const texto = String(valor || "");
+    const match = texto.match(/\d+/);
+    return match ? Number(match[0]) : 0;
+  };
+
+  const parseNumeroCuota = (pago: any): number | null => {
+    const numero = Number(pago?.numero_cuota);
+    if (Number.isFinite(numero) && numero > 0) return numero;
+    const raw = String(pago?.periodo_pagado || "");
+    const match = raw.match(/\d+/);
+    return match ? Number(match[0]) : null;
+  };
+
+  const pagosConPendientes = React.useMemo(() => {
+    const base = Array.isArray(pagos) ? pagos : [];
+    if (!matriculas.length) return base;
+
+    const extras: any[] = [];
+
+    matriculas.forEach((matricula: any) => {
+      const totalCuotas = parseDuracionMeses(matricula?.cursos?.duracion);
+      if (!totalCuotas) return;
+
+      const pagosMatricula = base.filter((p) => String(p?.matricula_id) === String(matricula?.id));
+      const cuotasExistentes = new Set<number>();
+
+      pagosMatricula.forEach((p) => {
+        const cuota = parseNumeroCuota(p);
+        if (cuota && cuota >= 1 && cuota <= totalCuotas) {
+          cuotasExistentes.add(cuota);
+        }
+      });
+
+      for (let i = 1; i <= totalCuotas; i += 1) {
+        if (cuotasExistentes.has(i)) continue;
+        const fechaInicio = matricula?.fecha_inicio ? dayjs(matricula.fecha_inicio) : null;
+        const fechaVencimiento = fechaInicio ? fechaInicio.add(i - 1, "month").format("YYYY-MM-DD") : null;
+
+        extras.push({
+          id: `pendiente-${matricula?.id}-${i}`,
+          matricula_id: matricula?.id,
+          numero_cuota: i,
+          periodo_pagado: `Cuota ${i} de ${totalCuotas}`,
+          fecha_vencimiento: fechaVencimiento,
+          monto: matricula?.cursos?.precio_mensualidad ?? matricula?.cursos?.precio ?? null,
+          estado: "pendiente",
+        });
+      }
+    });
+
+    return [...base, ...extras];
+  }, [pagos, matriculas]);
+
   const renderFinanciero = () => {
-    const pendientes = pagos.filter(p => p.estado === 'pendiente');
+    const pendientes = pagosConPendientes
+      .filter(p => p.estado === 'pendiente')
+      .sort((a, b) => {
+        const fechaA = a?.fecha_vencimiento ? dayjs(a.fecha_vencimiento) : null;
+        const fechaB = b?.fecha_vencimiento ? dayjs(b.fecha_vencimiento) : null;
+        if (fechaA && fechaB) return fechaA.valueOf() - fechaB.valueOf();
+        if (fechaA) return -1;
+        if (fechaB) return 1;
+        return (Number(a?.numero_cuota || 0) - Number(b?.numero_cuota || 0));
+      });
     const realizados = pagos.filter(p => p.estado === 'pagado');
 
     // Función auxiliar para determinar si está vencido (estrictamente anterior a hoy)
