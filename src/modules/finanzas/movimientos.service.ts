@@ -120,15 +120,16 @@ export async function actualizarMovimiento(id: string, payload: Partial<Omit<Mov
 }
 
 export async function eliminarMovimiento(id: string) {
-    const { error, count } = await supabaseBrowserClient
-        .from("movimientos_financieros")
-        .delete({ count: "exact" })
-        .eq("id", id);
+    const response = await fetch("/api/tesoreria/delete-movimiento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ movimientoId: id }),
+    });
 
-    if (error) throw error;
+    const result = await response.json();
 
-    if ((count || 0) === 0) {
-        throw new Error("No se pudo eliminar el movimiento. Verifica permisos o que el registro exista.");
+    if (!response.ok || !result?.success) {
+        throw new Error(result?.error || "No se pudo eliminar el movimiento. Verifica permisos o que el registro exista.");
     }
 
     return true;

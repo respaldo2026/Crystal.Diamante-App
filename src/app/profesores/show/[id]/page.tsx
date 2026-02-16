@@ -2,7 +2,6 @@
 
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useDelete } from "@refinedev/core";
 import { obtenerDashboardProfesor } from "@modules/academico/profesores.service";
 import { ProfessorDashboardUI } from "../../../../components/profesor/ProfessorDashboardUI";
 import {
@@ -43,7 +42,6 @@ const { Title, Text } = Typography;
 export default function ShowProfesorDashboard() {
   const params = useParams();
   const router = useRouter();
-  const { mutate: deleteProfesor } = useDelete();
   const idProfesor = params?.id as string;
   const [activeKey, setActiveKey] = React.useState("perfil");
   const [data, setData] = React.useState<any>(null);
@@ -93,25 +91,28 @@ export default function ShowProfesorDashboard() {
       okText: "Eliminar",
       okType: "danger",
       cancelText: "Cancelar",
-      onOk() {
+      async onOk() {
         setDeleteLoading(true);
-        deleteProfesor(
-          {
-            resource: "perfiles",
-            id: idProfesor,
-          },
-          {
-            onSuccess: () => {
-              message.success("Profesor eliminado exitosamente");
-              setDeleteLoading(false);
-              router.push("/profesores");
-            },
-            onError: (error: any) => {
-              message.error(error?.message || "Error al eliminar el profesor");
-              setDeleteLoading(false);
-            },
+        try {
+          const response = await fetch("/api/auth/delete-profesor", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: idProfesor }),
+          });
+
+          const result = await response.json();
+
+          if (!response.ok || !result?.success) {
+            throw new Error(result?.error || "No se pudo eliminar el profesor");
           }
-        );
+
+          message.success("Profesor eliminado exitosamente");
+          router.push("/profesores");
+        } catch (error: any) {
+          message.error(error?.message || "Error al eliminar el profesor");
+        } finally {
+          setDeleteLoading(false);
+        }
       },
     });
   };
