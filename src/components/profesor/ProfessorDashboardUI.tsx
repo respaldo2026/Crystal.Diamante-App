@@ -759,7 +759,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                         render: (_value, record) => (
                           <Space size={6} wrap>
                             <Typography.Text strong>{record.materiales_ciclo?.nombre || record.nombre_material}</Typography.Text>
-                            {record.obligatorio ? <Tag color="red">Obligatorio</Tag> : <Tag>Opcional</Tag>}
                           </Space>
                         ),
                       },

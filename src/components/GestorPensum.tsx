@@ -547,7 +547,6 @@ export default function GestorPensum({
       cantidad: material?.cantidad || "",
       unidad: material?.unidad || "",
       observaciones: material?.observaciones || "",
-      obligatorio: material?.obligatorio ?? true,
       orden: material?.orden ?? 1,
       activo: material?.activo ?? true,
     });
@@ -569,6 +568,7 @@ export default function GestorPensum({
       const nombreMaterial = values.nombre_material || materialCicloSeleccionado?.nombre || "";
       const cantidadMaterial = values.cantidad || materialCicloSeleccionado?.cantidad || null;
 
+      const obligatorio = editingMaterialClase?.obligatorio ?? true;
       const payload = {
         programa_id: Number(programaId),
         pensum_id: selectedCicloId,
@@ -578,7 +578,7 @@ export default function GestorPensum({
         cantidad: cantidadMaterial,
         unidad: values.unidad || null,
         observaciones: values.observaciones || null,
-        obligatorio: values.obligatorio,
+        obligatorio,
         orden: values.orden || 1,
         activo: true,
       };
@@ -1438,7 +1438,6 @@ export default function GestorPensum({
                               <Space size={6} wrap style={{ width: "100%", justifyContent: "space-between" }}>
                                 <Space size={6} wrap>
                                   <Text>{record.materiales_ciclo?.nombre || record.nombre_material}</Text>
-                                  {record.obligatorio ? <Tag color="red">Obligatorio</Tag> : <Tag>Opcional</Tag>}
                                 </Space>
                                 {canManageMateriales ? (
                                   <Space size={4}>
@@ -1663,15 +1662,6 @@ export default function GestorPensum({
 
           <Form.Item name="orden" label="Orden">
             <InputNumber min={1} style={{ width: "100%" }} />
-          </Form.Item>
-
-          <Form.Item name="obligatorio" label="Tipo" initialValue={true}>
-            <Select
-              options={[
-                { value: true, label: "Obligatorio" },
-                { value: false, label: "Opcional" },
-              ]}
-            />
           </Form.Item>
 
           <Form.Item name="observaciones" label="Observaciones">

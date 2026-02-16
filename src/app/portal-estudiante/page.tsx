@@ -539,7 +539,7 @@ export default function PortalEstudiante() {
       return (
         <StepCard title={tituloPrincipal}>
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Button onClick={() => setMatriculaRutaId(null)}>← Volver a cursos</Button>
+            <Button type="text" size="small" onClick={() => setMatriculaRutaId(null)}>← Volver a cursos</Button>
             <Empty description="Este curso aún no tiene módulos/ciclos configurados" />
           </Space>
         </StepCard>
@@ -601,8 +601,8 @@ export default function PortalEstudiante() {
         <StepCard title={tituloPrincipal}>
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Space wrap>
-              <Button onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
-              <Button onClick={() => setCicloRutaId(null)}>← Ciclos</Button>
+              <Button type="text" size="small" onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
+              <Button type="text" size="small" onClick={() => setCicloRutaId(null)}>← Ciclos</Button>
             </Space>
             <Text strong>
               {`Materiales para el ciclo: ${cicloSeleccionado?.nombre_ciclo || `Ciclo ${cicloSeleccionado?.numero_ciclo || ""}`}`}
@@ -644,7 +644,7 @@ export default function PortalEstudiante() {
       return (
         <StepCard title={tituloPrincipal}>
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Button onClick={() => setCicloRutaId(null)}>← Volver a ciclos</Button>
+            <Button type="text" size="small" onClick={() => setCicloRutaId(null)}>← Volver a ciclos</Button>
             <Empty description="Este ciclo aún no tiene temas configurados" />
           </Space>
         </StepCard>
@@ -656,8 +656,8 @@ export default function PortalEstudiante() {
         <StepCard title={tituloPrincipal}>
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Space wrap>
-              <Button onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
-              <Button onClick={() => setCicloRutaId(null)}>← Ciclos</Button>
+              <Button type="text" size="small" onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
+              <Button type="text" size="small" onClick={() => setCicloRutaId(null)}>← Ciclos</Button>
             </Space>
             <Text strong>Selecciona un tema</Text>
             <Row gutter={[10, 10]}>
@@ -738,9 +738,9 @@ export default function PortalEstudiante() {
         size={isMobile ? "small" : "default"}
       >
         <Space wrap style={{ marginBottom: 12 }}>
-          <Button onClick={() => setMatriculaRutaId(null)}>Cambiar curso</Button>
-          <Button onClick={() => setCicloRutaId(null)}>Cambiar ciclo</Button>
-          <Button onClick={() => setTemaRutaId(null)}>Cambiar tema</Button>
+          <Button type="text" size="small" onClick={() => setMatriculaRutaId(null)}>Cambiar curso</Button>
+          <Button type="text" size="small" onClick={() => setCicloRutaId(null)}>Cambiar ciclo</Button>
+          <Button type="text" size="small" onClick={() => setTemaRutaId(null)}>Cambiar tema</Button>
         </Space>
 
         {vista === "kits" && temaSeleccionado ? (
@@ -817,9 +817,6 @@ export default function PortalEstudiante() {
                           >
                             <Text strong>{nombreInsumo}</Text>
                           </Checkbox>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {record.obligatorio ? "Obligatorio" : "Opcional"}
-                          </Text>
                           {record.observaciones ? (
                             <Text type="secondary" style={{ fontSize: 12 }}>{record.observaciones}</Text>
                           ) : null}
@@ -1115,16 +1112,31 @@ export default function PortalEstudiante() {
           },
           {
             key: "2",
-            label: <span><SafetyCertificateOutlined /> Plan de Estudios</span>,
-            children: renderPensum()
-          },
-          {
-            key: "3",
             label: <span><DollarCircleOutlined /> Financiero</span>,
             children: renderFinanciero()
           },
           {
+            key: "3",
+            label: <span><BookOutlined /> Materiales por clase</span>,
+            children: (
+              <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                {renderMaterialesKits()}
+                <HistorialEntregas estudianteId={estudiante?.id} />
+              </Space>
+            )
+          },
+          {
             key: "4",
+            label: <span><BookOutlined /> Materiales del ciclo</span>,
+            children: renderMaterialesCiclo(),
+          },
+          {
+            key: "5",
+            label: <span><SafetyCertificateOutlined /> Plan de Estudios</span>,
+            children: renderPensum()
+          },
+          {
+            key: "6",
             label: <span><CheckCircleOutlined /> Asistencia</span>,
             children: (
               <Table
@@ -1141,7 +1153,7 @@ export default function PortalEstudiante() {
             ),
           },
           {
-            key: "5",
+            key: "7",
             label: <span><FileTextOutlined /> Calificaciones</span>,
             children: (
               <Table
@@ -1158,7 +1170,7 @@ export default function PortalEstudiante() {
             ),
           },
           {
-            key: "6",
+            key: "8",
             label: <span><TrophyOutlined /> Certificados</span>,
             children: (
               <Table
@@ -1173,21 +1185,6 @@ export default function PortalEstudiante() {
                 ]}
               />
             ),
-          },
-          {
-            key: "7",
-            label: <span><BookOutlined /> Materiales por clase</span>,
-            children: (
-              <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                {renderMaterialesKits()}
-                <HistorialEntregas estudianteId={estudiante?.id} />
-              </Space>
-            )
-          },
-          {
-            key: "8",
-            label: <span><BookOutlined /> Materiales del ciclo</span>,
-            children: renderMaterialesCiclo(),
           }
         ]}
       />
