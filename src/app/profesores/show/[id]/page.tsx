@@ -106,7 +106,11 @@ export default function ShowProfesorDashboard() {
             throw new Error(result?.error || "No se pudo eliminar el profesor");
           }
 
-          message.success("Profesor eliminado exitosamente");
+          if (result?.softDeleted) {
+            message.success("Profesor desactivado exitosamente");
+          } else {
+            message.success("Profesor eliminado exitosamente");
+          }
           router.push("/profesores");
         } catch (error: any) {
           message.error(error?.message || "Error al eliminar el profesor");

@@ -20,57 +20,54 @@ export async function POST(request: NextRequest) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { error: cursosError } = await supabaseAdmin
-      .from("cursos")
-      .update({ profesor_id: null })
-      .eq("profesor_id", userId);
-    if (cursosError) throw cursosError;
+    const errors: string[] = [];
 
-    const { error: clasesError } = await supabaseAdmin
-      .from("clases")
-      .update({ profesor_id: null })
-      .eq("profesor_id", userId);
-    if (clasesError) throw clasesError;
+    const safeUpdate = async (table: string, values: Record<string, any>, key: string) => {
+      const { error } = await supabaseAdmin.from(table).update(values).eq(key, userId);
+      if (error) errors.push(`${table}: ${error.message || "update_failed"}`);
+    };
 
-    const { error: sesionesError } = await supabaseAdmin
-      .from("sesiones_clase")
-      .update({ profesor_id: null })
-      .eq("profesor_id", userId);
-    if (sesionesError) throw sesionesError;
+    const safeDelete = async (table: string, key: string) => {
+      const { error } = await supabaseAdmin.from(table).delete().eq(key, userId);
+      if (error) errors.push(`${table}: ${error.message || "delete_failed"}`);
+    };
 
-    const { error: pagosProfesoresError } = await supabaseAdmin
-      .from("pagos_profesores")
-      .delete()
-      .eq("profesor_id", userId);
-    if (pagosProfesoresError) throw pagosProfesoresError;
-
-    const { error: pagosNominaError } = await supabaseAdmin
-      .from("pagos_nomina")
-      .delete()
-      .eq("profesor_id", userId);
-    if (pagosNominaError) throw pagosNominaError;
-
-    const { error: infoError } = await supabaseAdmin
-      .from("profesores_info")
-      .delete()
-      .eq("perfil_id", userId);
-    if (infoError) throw infoError;
+    await safeUpdate("cursos", { profesor_id: null }, "profesor_id");
+    await safeUpdate("clases", { profesor_id: null }, "profesor_id");
+    await safeUpdate("sesiones_clase", { profesor_id: null }, "profesor_id");
+    await safeDelete("pagos_profesores", "profesor_id");
+    await safeDelete("pagos_nomina", "profesor_id");
+    await safeDelete("profesores_info", "perfil_id");
 
     const { error: perfilError } = await supabaseAdmin
       .from("perfiles")
       .delete()
       .eq("id", userId);
-    if (perfilError) throw perfilError;
+
+    let softDeleted = false;
+    if (perfilError) {
+      const { error: softError } = await supabaseAdmin
+        .from("perfiles")
+        .update({ activo: false })
+        .eq("id", userId);
+
+      if (softError) {
+        throw new Error(`No se pudo eliminar ni desactivar el profesor: ${softError.message || "error"}`);
+      }
+
+      softDeleted = true;
+      errors.push(`perfiles: ${perfilError.message || "delete_failed"}`);
+    }
 
     const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
     if (authErr) {
       const msg = String(authErr.message || "").toLowerCase();
       if (!msg.includes("not exist") && !msg.includes("not found")) {
-        throw authErr;
+        errors.push(`auth: ${authErr.message || "delete_failed"}`);
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, softDeleted, errors });
   } catch (error: any) {
     console.error("🔴 Error borrando profesor:", error);
     return NextResponse.json({ success: false, error: error?.message || "Error desconocido" }, { status: 500 });
