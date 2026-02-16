@@ -213,7 +213,9 @@ export default function StudentDetailView() {
           "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
         )
         .eq("estudiante_id", idEstudiante)
-        .order("created_at", { ascending: false });
+        .order("matricula_id", { ascending: true })
+        .order("numero_cuota", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
       if (errPagos) {
         setLoadError("No pudimos cargar el historial de pagos.");
         throw errPagos;
@@ -230,7 +232,9 @@ export default function StudentDetailView() {
               "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
             )
             .in("matricula_id", matriculaIds)
-            .order("created_at", { ascending: false });
+            .order("matricula_id", { ascending: true })
+            .order("numero_cuota", { ascending: true, nullsFirst: false })
+            .order("created_at", { ascending: true });
 
           if (!errPagosPorMatricula) {
             pagosList = (dataPagosPorMatricula as unknown as Pago[] | null) ?? [];
@@ -490,7 +494,40 @@ export default function StudentDetailView() {
       }
     });
 
-    return [...base, ...extras];
+    const combinado = [...base, ...extras];
+
+    const obtenerOrdenCuota = (pago: any): number => {
+      if (esInscripcion(pago)) return 0;
+      const cuota = parseNumeroCuota(pago);
+      if (cuota && cuota > 0) return cuota;
+      return Number.MAX_SAFE_INTEGER;
+    };
+
+    return combinado.sort((a: any, b: any) => {
+      const matriculaA = Number(a?.matricula_id || 0);
+      const matriculaB = Number(b?.matricula_id || 0);
+      if (matriculaA !== matriculaB) return matriculaA - matriculaB;
+
+      const ordenCuotaA = obtenerOrdenCuota(a);
+      const ordenCuotaB = obtenerOrdenCuota(b);
+      if (ordenCuotaA !== ordenCuotaB) return ordenCuotaA - ordenCuotaB;
+
+      const fechaVencA = a?.fecha_vencimiento ? dayjs(a.fecha_vencimiento) : null;
+      const fechaVencB = b?.fecha_vencimiento ? dayjs(b.fecha_vencimiento) : null;
+      if (fechaVencA && fechaVencB && !fechaVencA.isSame(fechaVencB, "day")) {
+        return fechaVencA.valueOf() - fechaVencB.valueOf();
+      }
+      if (fechaVencA && !fechaVencB) return -1;
+      if (!fechaVencA && fechaVencB) return 1;
+
+      const createdA = a?.created_at ? dayjs(a.created_at) : null;
+      const createdB = b?.created_at ? dayjs(b.created_at) : null;
+      if (createdA && createdB && !createdA.isSame(createdB)) {
+        return createdA.valueOf() - createdB.valueOf();
+      }
+
+      return String(a?.id || "").localeCompare(String(b?.id || ""));
+    });
   }, [pagosHistorial, matriculas]);
 
   const columnasPagos = useMemo(
@@ -597,7 +634,21 @@ export default function StudentDetailView() {
 
   const renderCuotasPorMatricula = (record: any) => {
     // Obtener todas las cuotas de esta matrícula
-    const cuotasMatricula = pagosHistorial.filter(p => p.matricula_id === record.id).sort((a, b) => (a.numero_cuota || 0) - (b.numero_cuota || 0));
+    const cuotasMatricula = pagosHistorial
+      .filter(p => p.matricula_id === record.id)
+      .sort((a, b) => {
+        const ordenA = esInscripcion(a) ? 0 : (parseNumeroCuota(a) || Number.MAX_SAFE_INTEGER);
+        const ordenB = esInscripcion(b) ? 0 : (parseNumeroCuota(b) || Number.MAX_SAFE_INTEGER);
+        if (ordenA !== ordenB) return ordenA - ordenB;
+
+        const fechaA = a?.fecha_vencimiento ? dayjs(a.fecha_vencimiento) : null;
+        const fechaB = b?.fecha_vencimiento ? dayjs(b.fecha_vencimiento) : null;
+        if (fechaA && fechaB && !fechaA.isSame(fechaB, "day")) return fechaA.valueOf() - fechaB.valueOf();
+        if (fechaA && !fechaB) return -1;
+        if (!fechaA && fechaB) return 1;
+
+        return String(a?.id || "").localeCompare(String(b?.id || ""));
+      });
 
     const totalCiclos = Math.max(obtenerDuracionMeses(record), 0);
     const pagosMap = new Map<number, Pago>();

@@ -13,6 +13,11 @@ const { Title, Text } = Typography;
 const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
+const PORTAL_ESTUDIANTE_URL =
+    process.env.NEXT_PUBLIC_PORTAL_ESTUDIANTE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://app.academiacrystal.com";
+
 export default function PagoInscripcionPage() {
     const params = useParams();
     const router = useRouter();
@@ -152,12 +157,12 @@ export default function PagoInscripcionPage() {
 
             message.success("✅ Pago registrado y matrícula activada");
 
-            // Enviar confirmación de pago con nueva plantilla
+            // Enviar confirmación de pago + bienvenida portal
             if (estudiante?.telefono && (estudiante?.notif_whatsapp ?? true)) {
                 try {
-                    const { enviarConfirmacionPago } = await import('@/services/whatsapp-messages-module');
+                    const { enviarConfirmacionPago, enviarBienvenidaPortalEstudiante } = await import('@/services/whatsapp-messages-module');
                     
-                    await enviarConfirmacionPago(estudiante.id, {
+                    const resultadoConfirmacion = await enviarConfirmacionPago(estudiante.id, {
                         nombre: estudiante.nombre_completo,
                         telefono: estudiante.telefono,
                         referenciaPago: referencia || 'Contado',
@@ -169,8 +174,30 @@ export default function PagoInscripcionPage() {
                         fechaProximaClase: curso?.fecha_inicio ? 
                             new Date(curso.fecha_inicio).toLocaleDateString('es-CO') : 'Por confirmar'
                     });
+
+                    if (!resultadoConfirmacion.exito) {
+                        message.warning('⚠️ Pago registrado, pero no se pudo enviar la confirmación por WhatsApp.');
+                        console.error('Error enviando confirmación de pago:', resultadoConfirmacion.error);
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+                    const resultadoBienvenida = await enviarBienvenidaPortalEstudiante(estudiante.id, {
+                        nombre: estudiante.nombre_completo,
+                        telefono: estudiante.telefono,
+                        nombreCurso: curso?.nombre ?? 'Curso',
+                        enlacePortal: PORTAL_ESTUDIANTE_URL,
+                        usuario: (estudiante.email || estudiante.identificacion) || 'tu usuario registrado',
+                        genero: estudiante.genero ?? null,
+                    });
+
+                    if (!resultadoBienvenida.exito) {
+                        message.warning('⚠️ Pago registrado y confirmación enviada, pero falló la bienvenida al portal.');
+                        console.error('Error enviando bienvenida al portal:', resultadoBienvenida.error);
+                    }
                 } catch (error) {
-                    console.error('Error enviando confirmación de pago:', error);
+                    message.warning('⚠️ Pago registrado, pero hubo un problema al enviar mensajes de WhatsApp.');
+                    console.error('Error enviando mensajes post-pago:', error);
                 }
             }
 

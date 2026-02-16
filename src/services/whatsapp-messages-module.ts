@@ -628,6 +628,23 @@ export async function enviarBienvenidaPortalEstudiante(
 ): Promise<ResultadoEnvio> {
   console.log(`[WhatsApp] Enviando bienvenida de portal a ${datos.nombre}`);
 
+  const resultadoPlantilla = await enviarMensajeConPlantilla(
+    datos.telefono,
+    'bienvenida_portal_estudiante',
+    {
+      nombre: datos.nombre,
+      curso: datos.nombreCurso,
+      enlace_portal: datos.enlacePortal,
+      usuario: datos.usuario,
+    },
+    usuarioId,
+    { tipo_evento: 'bienvenida_portal_estudiante', curso_id: null, canal: 'template_meta' }
+  );
+
+  if (resultadoPlantilla.exito) {
+    return resultadoPlantilla;
+  }
+
   const generoNormalizado = String(datos.genero || '')
     .trim()
     .toLowerCase()
@@ -659,7 +676,13 @@ export async function enviarBienvenidaPortalEstudiante(
     'bienvenida_portal_estudiante',
     mensaje,
     usuarioId,
-    { tipo_evento: 'bienvenida_portal_estudiante', curso_id: null, canal: 'text_dinamico_genero' }
+    {
+      tipo_evento: 'bienvenida_portal_estudiante',
+      curso_id: null,
+      canal: 'text_dinamico_genero',
+      fallback_de: 'template_meta',
+      error_template: resultadoPlantilla.error || null,
+    }
   );
 }
 

@@ -58,12 +58,29 @@ export default function MatriculaCreate() {
         cursoId: string | number,
         fechaInicio?: string | null,
     ) => {
-        const { count } = await supabaseBrowserClient
+        const { data: pagosExistentes, error: errPagosExistentes } = await supabaseBrowserClient
             .from("pagos")
-            .select("id", { count: "exact", head: true })
+            .select("numero_cuota, periodo_pagado")
             .eq("matricula_id", matriculaId);
 
-        if ((count || 0) > 0) return;
+        if (errPagosExistentes) {
+            throw errPagosExistentes;
+        }
+
+        const cuotasExistentes = new Set<number>();
+        let inscripcionExiste = false;
+
+        (pagosExistentes || []).forEach((pago: any) => {
+            const numeroCuota = Number(pago?.numero_cuota);
+            if (Number.isFinite(numeroCuota)) {
+                cuotasExistentes.add(numeroCuota);
+            }
+
+            const textoPeriodo = String(pago?.periodo_pagado || "").toLowerCase();
+            if (numeroCuota === 0 || textoPeriodo.includes("inscrip")) {
+                inscripcionExiste = true;
+            }
+        });
 
         const { data: cursoInfo, error: errCursoInfo } = await supabaseBrowserClient
             .from("cursos")
@@ -103,7 +120,7 @@ export default function MatriculaCreate() {
 
         const nuevosPagos: any[] = [];
 
-        if (precioInscripcion > 0) {
+        if (precioInscripcion > 0 && !inscripcionExiste) {
             nuevosPagos.push({
                 estudiante_id: estudianteId,
                 matricula_id: matriculaId,
@@ -119,6 +136,8 @@ export default function MatriculaCreate() {
 
         if (precioMensualidad > 0) {
             for (let i = 1; i <= numeroCuotas; i += 1) {
+                if (cuotasExistentes.has(i)) continue;
+
                 nuevosPagos.push({
                     estudiante_id: estudianteId,
                     matricula_id: matriculaId,
@@ -607,7 +626,7 @@ export default function MatriculaCreate() {
                 try {
                     const { enviarConfirmacionPago, enviarBienvenidaPortalEstudiante } = await import('@/services/whatsapp-messages-module');
                     
-                    await enviarConfirmacionPago(estudianteData.id, {
+                    const resultadoConfirmacion = await enviarConfirmacionPago(estudianteData.id, {
                         nombre: estudianteData.nombre_completo,
                         telefono: estudianteData.telefono,
                         referenciaPago: referencia || 'Contado',
@@ -620,9 +639,14 @@ export default function MatriculaCreate() {
                             new Date(cursoData.fecha_inicio).toLocaleDateString('es-CO') : 'Por confirmar'
                     });
 
+                    if (!resultadoConfirmacion.exito) {
+                        message.warning('⚠️ Pago registrado, pero no se pudo enviar la confirmación por WhatsApp.');
+                        console.error('Error enviando confirmación de pago:', resultadoConfirmacion.error);
+                    }
+
                     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-                    await enviarBienvenidaPortalEstudiante(estudianteData.id, {
+                    const resultadoBienvenida = await enviarBienvenidaPortalEstudiante(estudianteData.id, {
                         nombre: estudianteData.nombre_completo,
                         telefono: estudianteData.telefono,
                         nombreCurso: cursoData?.nombre ?? 'Curso',
@@ -630,7 +654,13 @@ export default function MatriculaCreate() {
                         usuario: (estudianteData.email || estudianteData.identificacion) || 'tu usuario registrado',
                         genero: estudianteData.genero ?? null,
                     });
+
+                    if (!resultadoBienvenida.exito) {
+                        message.warning('⚠️ Pago registrado y confirmación enviada, pero falló la bienvenida al portal.');
+                        console.error('Error enviando bienvenida al portal:', resultadoBienvenida.error);
+                    }
                 } catch (error) {
+                    message.warning('⚠️ Pago registrado, pero hubo un problema al enviar mensajes de WhatsApp.');
                     console.error('Error enviando mensajes post-pago:', error);
                 }
             }
