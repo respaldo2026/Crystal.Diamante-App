@@ -73,7 +73,9 @@ interface Conversation {
 }
 
 interface ConversationThread {
+  thread_key: string;
   phone_number: string;
+  contact_name?: string;
   messages: Conversation[];
   total: number;
   last_date: string;
@@ -89,9 +91,11 @@ export default function ConversacionesPage() {
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [phoneList, setPhoneList] = useState<string[]>([]);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [contactNames, setContactNames] = useState<Record<string, string>>({});
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [activeTab, setActiveTab] = useState("todos");
 
@@ -109,6 +113,18 @@ export default function ConversacionesPage() {
   const getPhoneLabel = (value?: string | null) => {
     if (isUnknownPhone(value)) return "Sin número (Make/Webhook)";
     return value || "Sin número (Make/Webhook)";
+  };
+
+  const normalizePhoneForMatch = (value?: string | null) => {
+    const digits = (value || "").replace(/\D/g, "");
+    if (!digits) return "";
+    if (digits.length === 10 && digits.startsWith("3")) {
+      return `57${digits}`;
+    }
+    if (digits.startsWith("00") && digits.length > 2) {
+      return digits.slice(2);
+    }
+    return digits;
   };
 
   const matchesAny = (text: string, patterns: RegExp[]) =>
@@ -134,6 +150,41 @@ export default function ConversacionesPage() {
       // Extraer lista única de números de teléfono
       const phones = [...new Set(registros.map((c) => c.phone_number))];
       setPhoneList(phones);
+
+      const [perfilesResult, leadsResult] = await Promise.all([
+        supabaseBrowserClient
+          .from("perfiles")
+          .select("nombre_completo, telefono, telefono_2")
+          .or("telefono.not.is.null,telefono_2.not.is.null")
+          .limit(2000),
+        supabaseBrowserClient
+          .from("leads")
+          .select("nombre, telefono")
+          .not("telefono", "is", null)
+          .limit(2000),
+      ]);
+
+      const namesByPhone: Record<string, string> = {};
+
+      const registerName = (phoneValue?: string | null, nameValue?: string | null) => {
+        const normalizedPhone = normalizePhoneForMatch(phoneValue);
+        const normalizedName = (nameValue || "").trim();
+        if (!normalizedPhone || !normalizedName) return;
+        if (!namesByPhone[normalizedPhone]) {
+          namesByPhone[normalizedPhone] = normalizedName;
+        }
+      };
+
+      for (const perfil of (perfilesResult.data || []) as Array<any>) {
+        registerName(perfil.telefono, perfil.nombre_completo);
+        registerName(perfil.telefono_2, perfil.nombre_completo);
+      }
+
+      for (const lead of (leadsResult.data || []) as Array<any>) {
+        registerName(lead.telefono, lead.nombre);
+      }
+
+      setContactNames(namesByPhone);
     } catch (err) {
       console.error("Error:", err);
     } finally {
@@ -149,18 +200,28 @@ export default function ConversacionesPage() {
     const grouped = new Map<string, Conversation[]>();
 
     for (const conv of conversations) {
-      if (!grouped.has(conv.phone_number)) {
-        grouped.set(conv.phone_number, []);
+      const normalizedPhone = normalizePhoneForMatch(conv.phone_number);
+      const threadKey = isUnknownPhone(conv.phone_number)
+        ? `unknown:${conv.id}`
+        : normalizedPhone || conv.phone_number;
+
+      if (!grouped.has(threadKey)) {
+        grouped.set(threadKey, []);
       }
-      grouped.get(conv.phone_number)!.push(conv);
+      grouped.get(threadKey)!.push(conv);
     }
 
     const result: ConversationThread[] = [];
-    for (const [phone, items] of grouped.entries()) {
+    for (const [threadKey, items] of grouped.entries()) {
       const sorted = items
         .slice()
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       const last = sorted[sorted.length - 1];
+      const displayPhone =
+        sorted.find((item) => !isUnknownPhone(item.phone_number))?.phone_number ||
+        sorted[0]?.phone_number ||
+        "unknown";
+      const contactName = contactNames[normalizePhoneForMatch(displayPhone)];
       const combined = sorted
         .map((item) => `${item.user_message} ${item.agent_response}`)
         .join(" ");
@@ -212,7 +273,9 @@ export default function ConversacionesPage() {
       const askedPayment = matchesAny(combinedNormalized, paymentPatterns);
 
       result.push({
-        phone_number: phone,
+        thread_key: threadKey,
+        phone_number: displayPhone,
+        contact_name: contactName,
         messages: sorted,
         total: sorted.length,
         last_date: last?.created_at || "",
@@ -227,7 +290,7 @@ export default function ConversacionesPage() {
     return result.sort(
       (a, b) => new Date(b.last_date).getTime() - new Date(a.last_date).getTime()
     );
-  }, [conversations]);
+  }, [conversations, contactNames]);
 
   // Filtrar conversaciones por hilo
   const conversationsFiltradas = useMemo(() => {
@@ -253,9 +316,10 @@ export default function ConversacionesPage() {
 
   // Estadísticas
   const stats = useMemo(() => {
+    const knownPhones = phoneList.filter((phone) => !isUnknownPhone(phone));
     return {
       total: conversations.length,
-      uniquePhones: phoneList.length,
+      uniquePhones: knownPhones.length,
       today: conversations.filter((c) =>
         dayjs(c.created_at).isSame(dayjs(), "day")
       ).length,
@@ -273,30 +337,52 @@ export default function ConversacionesPage() {
 
   // Obtener conversación por teléfono
   const phoneConversations = useMemo(() => {
-    if (!selectedPhone) return [];
-    return conversations
-      .filter((c) => c.phone_number === selectedPhone)
+    if (!selectedThreadKey) return [];
+    const thread = threads.find((item) => item.thread_key === selectedThreadKey);
+    if (!thread) return [];
+    return thread.messages
+      .slice()
       .sort(
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
-  }, [conversations, selectedPhone]);
+  }, [threads, selectedThreadKey]);
+
+  const selectedThread = useMemo(() => {
+    if (!selectedThreadKey) return null;
+    return threads.find((item) => item.thread_key === selectedThreadKey) || null;
+  }, [threads, selectedThreadKey]);
 
   // Eliminar conversaciones por número
-  const eliminarConversacionesPorTelefono = async (phone: string) => {
+  const eliminarHilos = async (threadKeys: string[]) => {
+    const threadMap = new Map(threads.map((thread) => [thread.thread_key, thread]));
+    const idsToDelete = [...new Set(
+      threadKeys.flatMap((key) => (threadMap.get(key)?.messages || []).map((m) => m.id))
+    )];
+
+    if (idsToDelete.length === 0) {
+      alert("No se encontraron registros para eliminar");
+      return;
+    }
+
     try {
+      setLoadingDelete(true);
       const { error } = await supabaseBrowserClient
         .from("agent_conversations")
         .delete()
-        .eq("phone_number", phone);
+        .in("id", idsToDelete);
 
       if (error) throw error;
 
-      setConversations((prev) => prev.filter((c) => c.phone_number !== phone));
-      alert("Conversación eliminada");
+      const deletedSet = new Set(idsToDelete);
+      setConversations((prev) => prev.filter((c) => !deletedSet.has(c.id)));
+      setSelectedRows((prev) => prev.filter((key) => !threadKeys.includes(key)));
+      alert(threadKeys.length > 1 ? "Conversaciones eliminadas" : "Conversación eliminada");
     } catch (err) {
       console.error("Error eliminando:", err);
       alert("Error al eliminar");
+    } finally {
+      setLoadingDelete(false);
     }
   };
 
@@ -312,24 +398,10 @@ export default function ConversacionesPage() {
     }
 
     try {
-      setLoadingDelete(true);
-      const { error } = await supabaseBrowserClient
-        .from("agent_conversations")
-        .delete()
-        .in("phone_number", selectedRows);
-
-      if (error) throw error;
-
-      setConversations((prev) =>
-        prev.filter((c) => !selectedRows.includes(c.phone_number))
-      );
-      setSelectedRows([]);
-      alert(`${selectedRows.length} conversaciones eliminadas`);
+      await eliminarHilos(selectedRows);
     } catch (err) {
       console.error("Error eliminando múltiples:", err);
       alert("Error al eliminar conversaciones");
-    } finally {
-      setLoadingDelete(false);
     }
   };
 
@@ -339,14 +411,17 @@ export default function ConversacionesPage() {
       title: "Teléfono",
       dataIndex: "phone_number",
       key: "phone_number",
-      render: (phone: string) => (
-        <Space>
-          <PhoneOutlined />
-          <span>{getPhoneLabel(phone)}</span>
-          {isUnknownPhone(phone) && <Tag color="orange">Pendiente identificar</Tag>}
+      render: (phone: string, record: ConversationThread) => (
+        <Space direction="vertical" size={4}>
+          <Space>
+            <PhoneOutlined />
+            <span>{getPhoneLabel(phone)}</span>
+            {isUnknownPhone(phone) && <Tag color="orange">Pendiente identificar</Tag>}
+          </Space>
+          {record.contact_name ? <Tag color="green">{record.contact_name}</Tag> : null}
         </Space>
       ),
-      width: 150,
+      width: 220,
     },
     {
       title: "Ultima Pregunta",
@@ -354,10 +429,11 @@ export default function ConversacionesPage() {
       key: "last_user_message",
       ellipsis: true,
       render: (text: string) => (
-        <Tooltip title={text}>
-          <span>{text.substring(0, 60)}...</span>
+        <Tooltip title={text || ""}>
+          <span>{text && text.length > 80 ? `${text.substring(0, 80)}...` : (text || "-")}</span>
         </Tooltip>
       ),
+      width: 260,
     },
     {
       title: "Ultima Respuesta",
@@ -365,10 +441,11 @@ export default function ConversacionesPage() {
       key: "last_agent_response",
       ellipsis: true,
       render: (text: string) => (
-        <Tooltip title={formatAgentResponse(text)}>
-          <span>{formatAgentResponse(text.substring(0, 60))}...</span>
+        <Tooltip title={formatAgentResponse(text || "") }>
+          <span>{text && text.length > 80 ? formatAgentResponse(`${text.substring(0, 80)}...`) : formatAgentResponse(text || "-")}</span>
         </Tooltip>
       ),
+      width: 320,
     },
     {
       title: "Mensajes",
@@ -401,7 +478,7 @@ export default function ConversacionesPage() {
               size="small"
               icon={<EyeOutlined />}
               onClick={() => {
-                setSelectedPhone(record.phone_number);
+                setSelectedThreadKey(record.thread_key);
                 setDrawerOpen(true);
               }}
             />
@@ -413,7 +490,7 @@ export default function ConversacionesPage() {
               icon={<DeleteOutlined />}
               onClick={() => {
                 if (window.confirm("¿Eliminar esta conversación completa?")) {
-                  eliminarConversacionesPorTelefono(record.phone_number);
+                  eliminarHilos([record.thread_key]);
                 }
               }}
             />
@@ -490,7 +567,9 @@ export default function ConversacionesPage() {
               value={selectedPhone}
               onChange={setSelectedPhone}
               options={phoneList.map((phone) => ({
-                label: getPhoneLabel(phone),
+                label: contactNames[normalizePhoneForMatch(phone)]
+                  ? `${contactNames[normalizePhoneForMatch(phone)]} · ${getPhoneLabel(phone)}`
+                  : getPhoneLabel(phone),
                 value: phone,
               }))}
               style={{ width: "100%" }}
@@ -566,10 +645,11 @@ export default function ConversacionesPage() {
             <Table
               columns={columns}
               dataSource={conversationsFiltradas}
-              rowKey="phone_number"
+              rowKey="thread_key"
               pagination={{ pageSize: 20, showSizeChanger: true }}
               size="middle"
               scroll={{ x: 1200 }}
+              tableLayout="fixed"
               rowSelection={{
                 selectedRowKeys: selectedRows,
                 onChange: (keys) => setSelectedRows(keys as string[]),
@@ -589,12 +669,12 @@ export default function ConversacionesPage() {
         title={
           <Space>
             <PhoneOutlined />
-            Conversación: {getPhoneLabel(selectedPhone)}
+            Conversación: {selectedThread?.contact_name || getPhoneLabel(selectedThread?.phone_number)}
           </Space>
         }
         onClose={() => {
           setDrawerOpen(false);
-          setSelectedPhone(null);
+          setSelectedThreadKey(null);
         }}
         open={drawerOpen}
         width={600}

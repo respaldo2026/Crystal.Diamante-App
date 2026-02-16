@@ -102,9 +102,17 @@ function findPhoneCandidateDeep(candidates: string[]): string {
     const normalized = String(value).trim();
     if (!normalized) continue;
 
-    const fromWhatsAppId = normalized.match(/(\d{10,15})@/);
-    if (fromWhatsAppId?.[1]) {
-      return fromWhatsAppId[1];
+    const fromJid = normalized.match(/(?:^|\s|:)(\d{10,15})(?:@c\.us|@s\.whatsapp\.net|@g\.us|@)/i);
+    if (fromJid?.[1]) {
+      return fromJid[1];
+    }
+
+    const fromQuotedPhone = normalized.match(/(?:\+|00)?\d{10,15}/);
+    if (fromQuotedPhone?.[0]) {
+      const digits = fromQuotedPhone[0].replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 15) {
+        return digits;
+      }
     }
 
     const digits = normalized.replace(/\D/g, "");
@@ -121,6 +129,44 @@ function extractPhoneFromAudioBody(body: any): string {
   const webhookContactPhone = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.wa_id;
   const nestedPhone = body?.messages?.[0]?.from;
 
+  const extractPhoneCandidatesByKey = (input: any, maxDepth = 6): string[] => {
+    const result: string[] = [];
+    const visited = new Set<any>();
+    const keyPattern = /(phone|telefono|whatsapp|wa_?id|from|sender|contact|chat|jid|author|participant|customer|cliente|remotejid)/i;
+
+    const pushCandidate = (value: any) => {
+      if (typeof value === "string" && value.trim()) {
+        result.push(value.trim());
+        return;
+      }
+      if (typeof value === "number" && Number.isFinite(value)) {
+        result.push(String(value));
+      }
+    };
+
+    const walk = (value: any, depth: number) => {
+      if (depth < 0 || value == null) return;
+      if (typeof value !== "object") return;
+      if (visited.has(value)) return;
+      visited.add(value);
+
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item, depth - 1);
+        return;
+      }
+
+      for (const [key, nestedValue] of Object.entries(value)) {
+        if (keyPattern.test(key)) {
+          pushCandidate(nestedValue);
+        }
+        walk(nestedValue, depth - 1);
+      }
+    };
+
+    walk(input, maxDepth);
+    return result;
+  };
+
   const deepCandidates = extractStringsDeep({
     messages: body?.messages,
     entry: body?.entry,
@@ -132,7 +178,9 @@ function extractPhoneFromAudioBody(body: any): string {
     metadata: body?.metadata,
   });
 
-  const deepPhoneCandidate = findPhoneCandidateDeep(deepCandidates);
+  const deepKeyCandidates = extractPhoneCandidatesByKey(body);
+
+  const deepPhoneCandidate = findPhoneCandidateDeep([...deepKeyCandidates, ...deepCandidates]);
 
   const phone = pickFirstNonEmptyString(
     body?.phone,
@@ -149,12 +197,35 @@ function extractPhoneFromAudioBody(body: any): string {
     body?.conversation?.wa_id,
     body?.chat?.id,
     body?.chatId,
+    body?.chat_id,
+    body?.chat?.jid,
+    body?.chat?.remoteJid,
+    body?.conversationId,
     body?.whatsapp?.from,
     body?.whatsapp?.wa_id,
+    body?.whatsapp?.messages?.[0]?.from,
+    body?.whatsapp?.messages?.[0]?.id,
     body?.metadata?.phone,
     body?.metadata?.wa_id,
+    body?.metadata?.remote_jid,
+    body?.metadata?.remoteJid,
+    body?.metadata?.participant,
     body?.contact?.phone,
     body?.contact?.wa_id,
+    body?.contact?.id,
+    body?.data?.from,
+    body?.data?.wa_id,
+    body?.data?.phone,
+    body?.data?.chat?.id,
+    body?.data?.key?.remoteJid,
+    body?.data?.key?.participant,
+    body?.payload?.from,
+    body?.payload?.phone,
+    body?.payload?.wa_id,
+    body?.payload?.chatId,
+    body?.payload?.chat?.id,
+    body?.payload?.key?.remoteJid,
+    body?.From,
     body?.from,
     body?.wa_id,
     nestedPhone,
@@ -164,7 +235,15 @@ function extractPhoneFromAudioBody(body: any): string {
     "unknown"
   );
 
-  return normalizePhoneIdentifier(phone);
+  const normalizedPhone = normalizePhoneIdentifier(phone);
+  if (normalizedPhone === "unknown") {
+    console.warn("[extractPhoneFromAudioBody] No se pudo extraer teléfono", {
+      directPhone: body?.phone || body?.phone_number || body?.telefono || body?.from || body?.wa_id,
+      deepKeyCandidates: deepKeyCandidates.slice(0, 10),
+    });
+  }
+
+  return normalizedPhone;
 }
 
 /**
