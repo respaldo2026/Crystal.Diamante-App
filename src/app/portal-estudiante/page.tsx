@@ -45,7 +45,6 @@ import { formatDate } from "@utils/date";
 import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas, obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas } from "@modules/academico/pensum.service";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
-import { HistorialEntregas } from "@components/EntregaMaterialModal";
 
 dayjs.locale("es");
 
@@ -1121,7 +1120,6 @@ export default function PortalEstudiante() {
             children: (
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
                 {renderMaterialesKits()}
-                <HistorialEntregas estudianteId={estudiante?.id} />
               </Space>
             )
           },
