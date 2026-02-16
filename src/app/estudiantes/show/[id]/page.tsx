@@ -148,6 +148,13 @@ export default function StudentDetailView() {
       matricula?.numero_cuotas
     );
 
+  const obtenerMensualidad = (matricula: any) =>
+    Number(
+      matricula?.cursos?.precio_mensualidad ??
+      matricula?.cursos?.programas?.precio_mensualidad ??
+      0
+    );
+
   const cargarDatosCompletos = useCallback(async () => {
     if (!idEstudiante) return;
 
@@ -175,7 +182,7 @@ export default function StudentDetailView() {
         .select(
           `
             id, fecha_inicio, estado, monto_pagado, deuda_pendiente, nota_final, estado_academico,
-            cursos ( id, nombre, descripcion, precio, precio_mensualidad, duracion, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion), perfiles(nombre_completo) )
+            cursos ( id, nombre, descripcion, precio, precio_mensualidad, duracion, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad), perfiles(nombre_completo) )
           `
         )
         .eq("estudiante_id", idEstudiante)
@@ -203,7 +210,7 @@ export default function StudentDetailView() {
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
         .select(
-          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
+          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
         )
         .eq("estudiante_id", idEstudiante)
         .order("created_at", { ascending: false });
@@ -220,7 +227,7 @@ export default function StudentDetailView() {
           const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
             .from("pagos")
             .select(
-              "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
+              "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
             )
             .in("matricula_id", matriculaIds)
             .order("created_at", { ascending: false });
@@ -239,9 +246,17 @@ export default function StudentDetailView() {
         .reduce((sum, p) => sum + Number(p.monto || 0), 0);
       console.log("💰 Total Pagado Real calculado:", totalPagadoReal);
       
-      const deudaPendienteReal = pagosList
-        .filter((p) => (p.estado || "").toLowerCase() !== "pagado")
+      const totalMensualidadEsperada = listaMats.reduce((sum, m: any) => {
+        const meses = obtenerDuracionMeses(m);
+        const mensualidad = obtenerMensualidad(m);
+        return sum + (meses * mensualidad);
+      }, 0);
+
+      const totalMensualidadPagada = pagosList
+        .filter((p) => (p.estado || "").toLowerCase() === "pagado" && !esInscripcion(p))
         .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+
+      const deudaPendienteReal = Math.max(totalMensualidadEsperada - totalMensualidadPagada, 0);
       console.log("📊 Deuda Pendiente Real calculada:", deudaPendienteReal);
 
       setEstadisticasGlobales((prev) => ({
@@ -464,7 +479,7 @@ export default function StudentDetailView() {
           numero_cuota: i,
           matricula_id: matricula.id,
           matriculas: { cursos: matricula.cursos },
-          monto: matricula?.cursos?.precio_mensualidad ?? null,
+          monto: obtenerMensualidad(matricula),
           metodo_pago: null,
           referencia: null,
           observaciones: `Ciclo mensual ${i} de ${totalCiclos}`,
@@ -614,7 +629,7 @@ export default function StudentDetailView() {
         numero_cuota: ciclo,
         matricula_id: record.id,
         matriculas: record.matriculas ?? null,
-        monto: ciclo === 0 ? record?.cursos?.precio || null : record?.cursos?.precio_mensualidad || null,
+        monto: ciclo === 0 ? record?.cursos?.precio || null : obtenerMensualidad(record),
         metodo_pago: null,
         referencia: null,
         observaciones: null,
