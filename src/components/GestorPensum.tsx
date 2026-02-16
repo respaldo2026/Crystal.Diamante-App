@@ -1162,45 +1162,53 @@ export default function GestorPensum({
             {materialesCicloGeneralOrdenados.length === 0 ? (
               <Text type="secondary">No hay materiales generales registrados en este ciclo.</Text>
             ) : (
-              <List
+              <Table
                 size="small"
                 loading={loadingMaterialesCiclo}
+                pagination={false}
+                rowKey={(record) => String(record?.id || record?.nombre)}
                 dataSource={materialesCicloGeneralOrdenados}
-                renderItem={(material: MaterialCiclo) => (
-                  <List.Item
-                    actions={canManageMateriales ? [
-                      <Button
-                        key={`editar-ciclo-${material.id}`}
-                        type="link"
-                        icon={<EditOutlined />}
-                        onClick={() => abrirModalMaterialCiclo(material)}
-                        style={{ padding: 0, height: "auto" }}
-                      />,
-                      <Button
-                        key={`eliminar-ciclo-${material.id}`}
-                        type="link"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => handleEliminarMaterialCiclo(material.id)}
-                        style={{ padding: 0, height: "auto" }}
-                      />,
-                    ] : []}
-                  >
-                    <List.Item.Meta
-                      title={
-                        <Space size={6} wrap>
-                          <Text>{material.nombre}</Text>
-                          {material.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
-                        </Space>
-                      }
-                      description={
-                        <Text type="secondary">
-                          {material.cantidad || "Cantidad por definir"}
-                        </Text>
-                      }
-                    />
-                  </List.Item>
-                )}
+                columns={[
+                  {
+                    title: "Producto",
+                    dataIndex: "nombre",
+                    render: (value, record) => (
+                      <Space size={8} wrap style={{ width: "100%", justifyContent: "space-between" }}>
+                        <Text>{value}</Text>
+                        {canManageMateriales ? (
+                          <Space size={4}>
+                            <Button
+                              key={`editar-ciclo-${record.id}`}
+                              type="link"
+                              icon={<EditOutlined />}
+                              onClick={() => abrirModalMaterialCiclo(record)}
+                              style={{ padding: 0, height: "auto" }}
+                            />
+                            <Button
+                              key={`eliminar-ciclo-${record.id}`}
+                              type="link"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => handleEliminarMaterialCiclo(record.id)}
+                              style={{ padding: 0, height: "auto" }}
+                            />
+                          </Space>
+                        ) : null}
+                      </Space>
+                    ),
+                  },
+                  {
+                    title: "Cantidad",
+                    dataIndex: "cantidad",
+                    render: (value) => value || "Cantidad por definir",
+                  },
+                  {
+                    title: "Kit",
+                    dataIndex: "incluido_kit",
+                    align: "center",
+                    render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                  },
+                ]}
               />
             )}
           </Card>
@@ -1415,48 +1423,60 @@ export default function GestorPensum({
                         Sin materiales necesarios registrados
                       </Text>
                     ) : (
-                      <List
+                      <Table
                         size="small"
-                        dataSource={materialesNecesariosTema}
                         loading={loadingMaterialesClase}
+                        pagination={false}
+                        rowKey={(record) => String(record?.id || record?.nombre_material)}
+                        dataSource={materialesNecesariosTema}
                         style={{ marginTop: 8 }}
-                        renderItem={(material: MaterialClase) => (
-                          <List.Item
-                            actions={canManageMateriales ? [
-                              <Button
-                                key={`editar-necesario-${material.id}`}
-                                type="link"
-                                icon={<EditOutlined />}
-                                onClick={() => abrirModalMaterialClase(curso.id, material)}
-                                style={{ padding: 0, height: "auto" }}
-                              />,
-                              <Button
-                                key={`eliminar-necesario-${material.id}`}
-                                type="link"
-                                danger
-                                icon={<DeleteOutlined />}
-                                onClick={() => handleEliminarMaterialClase(material.id)}
-                                style={{ padding: 0, height: "auto" }}
-                              />,
-                            ] : []}
-                          >
-                            <List.Item.Meta
-                              title={
+                        columns={[
+                          {
+                            title: "Producto",
+                            dataIndex: "nombre_material",
+                            render: (_value, record) => (
+                              <Space size={6} wrap style={{ width: "100%", justifyContent: "space-between" }}>
                                 <Space size={6} wrap>
-                                  <Text>{material.materiales_ciclo?.nombre || material.nombre_material}</Text>
-                                  {material.obligatorio ? <Tag color="red">Obligatorio</Tag> : <Tag>Opcional</Tag>}
-                                  {material.materiales_ciclo?.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
+                                  <Text>{record.materiales_ciclo?.nombre || record.nombre_material}</Text>
+                                  {record.obligatorio ? <Tag color="red">Obligatorio</Tag> : <Tag>Opcional</Tag>}
                                 </Space>
-                              }
-                              description={
-                                <Text type="secondary">
-                                  {[material.materiales_ciclo?.cantidad || material.cantidad, material.unidad].filter(Boolean).join(" ") || "Cantidad no especificada"}
-                                  {material.observaciones ? ` · ${material.observaciones}` : ""}
-                                </Text>
-                              }
-                            />
-                          </List.Item>
-                        )}
+                                {canManageMateriales ? (
+                                  <Space size={4}>
+                                    <Button
+                                      key={`editar-necesario-${record.id}`}
+                                      type="link"
+                                      icon={<EditOutlined />}
+                                      onClick={() => abrirModalMaterialClase(curso.id, record)}
+                                      style={{ padding: 0, height: "auto" }}
+                                    />
+                                    <Button
+                                      key={`eliminar-necesario-${record.id}`}
+                                      type="link"
+                                      danger
+                                      icon={<DeleteOutlined />}
+                                      onClick={() => handleEliminarMaterialClase(record.id)}
+                                      style={{ padding: 0, height: "auto" }}
+                                    />
+                                  </Space>
+                                ) : null}
+                              </Space>
+                            ),
+                          },
+                          {
+                            title: "Cantidad",
+                            dataIndex: "cantidad",
+                            render: (_value, record) =>
+                              [record.materiales_ciclo?.cantidad || record.cantidad, record.unidad]
+                                .filter(Boolean)
+                                .join(" ") || "Cantidad no especificada",
+                          },
+                          {
+                            title: "Kit",
+                            dataIndex: "materiales_ciclo",
+                            align: "center",
+                            render: (value) => (value?.incluido_kit ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                          },
+                        ]}
                       />
                     )}
 

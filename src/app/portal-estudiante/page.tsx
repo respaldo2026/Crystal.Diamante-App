@@ -797,36 +797,51 @@ export default function PortalEstudiante() {
             {insumosTema.length === 0 ? (
               <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
             ) : (
-              <List
-                size={isMobile ? "small" : "default"}
+              <Table
+                size={isMobile ? "small" : "middle"}
+                pagination={false}
+                rowKey={(record) => String(record?.id || record?.nombre_material)}
                 dataSource={insumosTema}
-                renderItem={(insumo: any) => {
-                  const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
-                  const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
-                  const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
-                  return (
-                    <List.Item>
-                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                        <Checkbox
-                          checked={Boolean(checklistInsumos[key])}
-                          onChange={(event) => toggleChecklist(insumo, event.target.checked)}
-                        >
-                          <Space size={8} wrap>
+                columns={[
+                  {
+                    title: "Producto",
+                    dataIndex: "nombre_material",
+                    render: (_value, record) => {
+                      const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${record.id || normalizarTexto(record.nombre_material)}`;
+                      const nombreInsumo = record.materiales_ciclo?.nombre || record.nombre_material;
+                      return (
+                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                          <Checkbox
+                            checked={Boolean(checklistInsumos[key])}
+                            onChange={(event) => toggleChecklist(record, event.target.checked)}
+                          >
                             <Text strong>{nombreInsumo}</Text>
-                            {insumo.materiales_ciclo?.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
-                          </Space>
-                        </Checkbox>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {[cantidadInsumo, insumo.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
-                          {insumo.obligatorio ? " • Obligatorio" : " • Opcional"}
-                        </Text>
-                        {insumo.observaciones ? (
-                          <Text type="secondary" style={{ fontSize: 12 }}>{insumo.observaciones}</Text>
-                        ) : null}
-                      </Space>
-                    </List.Item>
-                  );
-                }}
+                          </Checkbox>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {record.obligatorio ? "Obligatorio" : "Opcional"}
+                          </Text>
+                          {record.observaciones ? (
+                            <Text type="secondary" style={{ fontSize: 12 }}>{record.observaciones}</Text>
+                          ) : null}
+                        </Space>
+                      );
+                    },
+                  },
+                  {
+                    title: "Cantidad",
+                    dataIndex: "cantidad",
+                    render: (_value, record) => {
+                      const cantidadInsumo = record.materiales_ciclo?.cantidad || record.cantidad;
+                      return [cantidadInsumo, record.unidad].filter(Boolean).join(" ") || "Cantidad por definir";
+                    },
+                  },
+                  {
+                    title: "Kit",
+                    dataIndex: "materiales_ciclo",
+                    align: "center",
+                    render: (value) => (value?.incluido_kit ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                  },
+                ]}
               />
             )}
           </Card>

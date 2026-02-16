@@ -10,6 +10,7 @@ import {
   ClockCircleOutlined,
   StarOutlined,
   UserAddOutlined,
+  GiftOutlined,
 } from "@ant-design/icons";
 import {
   Badge,
@@ -22,6 +23,7 @@ import {
   List,
   Progress,
   Row,
+  Table,
   Select,
   Space,
   Spin,
@@ -714,22 +716,29 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                 {materialesCicloSeleccionado.length === 0 ? (
                   <Empty description="Sin materiales generales" />
                 ) : (
-                  <List
+                  <Table
                     size="small"
+                    pagination={false}
+                    rowKey={(record) => String(record?.id || record?.nombre)}
                     dataSource={materialesCicloSeleccionado}
-                    renderItem={(material: any) => (
-                      <List.Item>
-                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                          <Space size={8} wrap>
-                            <Typography.Text strong>{material.nombre}</Typography.Text>
-                            {material.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
-                          </Space>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            {material.cantidad || "Cantidad por definir"}
-                          </Typography.Text>
-                        </Space>
-                      </List.Item>
-                    )}
+                    columns={[
+                      {
+                        title: "Producto",
+                        dataIndex: "nombre",
+                        render: (value) => <Typography.Text strong>{value}</Typography.Text>,
+                      },
+                      {
+                        title: "Cantidad",
+                        dataIndex: "cantidad",
+                        render: (value) => value || "Cantidad por definir",
+                      },
+                      {
+                        title: "Kit",
+                        dataIndex: "incluido_kit",
+                        align: "center",
+                        render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                      },
+                    ]}
                   />
                 )}
               </Card>
@@ -738,28 +747,37 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                 {materialesClaseSeleccionados.length === 0 ? (
                   <Empty description="Sin materiales asignados" />
                 ) : (
-                  <List
+                  <Table
                     size="small"
+                    pagination={false}
+                    rowKey={(record) => String(record?.id || record?.nombre_material)}
                     dataSource={materialesClaseSeleccionados}
-                    renderItem={(material: any) => {
-                      const nombre = material.materiales_ciclo?.nombre || material.nombre_material;
-                      const cantidad = material.materiales_ciclo?.cantidad || material.cantidad;
-                      return (
-                        <List.Item>
-                          <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                            <Space size={8} wrap>
-                              <Typography.Text strong>{nombre}</Typography.Text>
-                              {material.materiales_ciclo?.incluido_kit ? <Tag color="purple">Kit mensual</Tag> : null}
-                              {material.obligatorio ? <Tag color="red">Obligatorio</Tag> : <Tag>Opcional</Tag>}
-                            </Space>
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              {[cantidad, material.unidad].filter(Boolean).join(" ") || "Cantidad por definir"}
-                              {material.observaciones ? ` · ${material.observaciones}` : ""}
-                            </Typography.Text>
+                    columns={[
+                      {
+                        title: "Producto",
+                        dataIndex: "nombre_material",
+                        render: (_value, record) => (
+                          <Space size={6} wrap>
+                            <Typography.Text strong>{record.materiales_ciclo?.nombre || record.nombre_material}</Typography.Text>
+                            {record.obligatorio ? <Tag color="red">Obligatorio</Tag> : <Tag>Opcional</Tag>}
                           </Space>
-                        </List.Item>
-                      );
-                    }}
+                        ),
+                      },
+                      {
+                        title: "Cantidad",
+                        dataIndex: "cantidad",
+                        render: (_value, record) => {
+                          const cantidad = record.materiales_ciclo?.cantidad || record.cantidad;
+                          return [cantidad, record.unidad].filter(Boolean).join(" ") || "Cantidad por definir";
+                        },
+                      },
+                      {
+                        title: "Kit",
+                        dataIndex: "materiales_ciclo",
+                        align: "center",
+                        render: (value) => (value?.incluido_kit ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                      },
+                    ]}
                   />
                 )}
               </Card>
