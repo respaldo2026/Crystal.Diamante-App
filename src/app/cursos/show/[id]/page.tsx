@@ -958,10 +958,24 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                               return acc;
                             }, {});
 
+                            const temasOrden = new Map<string, number>();
+                            temas.forEach((ciclo: any) => {
+                              (ciclo?.pensum_cursos || []).forEach((tema: any) => {
+                                temasOrden.set(String(tema.id), Number(tema?.orden ?? 0));
+                              });
+                            });
+
+                            const entriesTemaOrdenadas = Object.entries(agrupadosPorTema).sort(([temaA], [temaB]) => {
+                              const ordenA = temasOrden.get(String(temaA)) ?? 0;
+                              const ordenB = temasOrden.get(String(temaB)) ?? 0;
+                              if (ordenB !== ordenA) return ordenB - ordenA;
+                              return Number(temaB) - Number(temaA);
+                            });
+
                             return (
                               <Card type="inner" title="Materiales necesarios por clase" style={{ marginBottom: 8 }}>
                                 <List
-                                  dataSource={Object.entries(agrupadosPorTema)}
+                                  dataSource={entriesTemaOrdenadas}
                                   renderItem={([temaId, items]) => {
                                     const temaNombre = (items?.[0] as any)?.pensum_cursos?.nombre_curso || "Clase";
                                     return (
@@ -990,7 +1004,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                           })()
                         ) : null}
 
-                        {Object.entries(grupos).map(([key, mats]) => (
+                        {Object.entries(grupos)
+                          .sort(([a], [b]) => {
+                            const matchA = temas.find((t: any) => String(t.id) === String(a));
+                            const matchB = temas.find((t: any) => String(t.id) === String(b));
+                            const ordenA = Number(matchA?.orden ?? matchA?.numero_ciclo ?? 0);
+                            const ordenB = Number(matchB?.orden ?? matchB?.numero_ciclo ?? 0);
+                            if (ordenB !== ordenA) return ordenB - ordenA;
+                            return Number(b) - Number(a);
+                          })
+                          .map(([key, mats]) => (
                           <Card
                             key={key}
                             type="inner"

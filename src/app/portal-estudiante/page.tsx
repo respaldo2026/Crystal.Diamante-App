@@ -518,7 +518,12 @@ export default function PortalEstudiante() {
     const ciclosPrograma = deduplicarLista(
       pensum.filter((p: any) => p.programa_id === programaIdSeleccionado),
       (ciclo: any) => String(ciclo?.id || `${ciclo?.programa_id || ''}-${ciclo?.nombre_ciclo || ''}-${ciclo?.numero_ciclo || ''}`)
-    ).sort((a: any, b: any) => Number(a?.numero_ciclo || 0) - Number(b?.numero_ciclo || 0));
+    ).sort((a: any, b: any) => {
+      const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 0);
+      const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 0);
+      if (ordenB !== ordenA) return ordenB - ordenA;
+      return Number(b?.id || 0) - Number(a?.id || 0);
+    });
 
     const cicloSeleccionado = ciclosPrograma.find((c: any) => String(c.id) === String(cicloRutaId));
 
@@ -562,7 +567,12 @@ export default function PortalEstudiante() {
     const temasCiclo = deduplicarLista(
       (cicloSeleccionado?.pensum_cursos || []),
       (tema: any) => String(tema?.id || normalizarTexto(tema?.nombre_curso || ""))
-    );
+    ).sort((a: any, b: any) => {
+      const ordenA = Number(a?.orden ?? 0);
+      const ordenB = Number(b?.orden ?? 0);
+      if (ordenB !== ordenA) return ordenB - ordenA;
+      return Number(b?.id || 0) - Number(a?.id || 0);
+    });
 
     const temaSeleccionado = temasCiclo.find((t: any) => String(t.id) === String(temaRutaId));
 
@@ -772,13 +782,23 @@ export default function PortalEstudiante() {
   const obtenerRutaTemasPrograma = (programaId: string | number | null | undefined) => {
     const ciclos = (pensum || [])
       .filter((p: any) => String(p?.programa_id) === String(programaId))
-      .sort((a: any, b: any) => Number(a?.numero_ciclo || 0) - Number(b?.numero_ciclo || 0));
+      .sort((a: any, b: any) => {
+        const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 0);
+        const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 0);
+        if (ordenB !== ordenA) return ordenB - ordenA;
+        return Number(b?.id || 0) - Number(a?.id || 0);
+      });
 
     const ruta: Array<{ ciclo: any; tema: any }> = [];
     ciclos.forEach((ciclo: any) => {
       const temasOrdenados = (ciclo?.pensum_cursos || [])
         .slice()
-        .sort((a: any, b: any) => Number(a?.orden || 0) - Number(b?.orden || 0));
+        .sort((a: any, b: any) => {
+          const ordenA = Number(a?.orden ?? 0);
+          const ordenB = Number(b?.orden ?? 0);
+          if (ordenB !== ordenA) return ordenB - ordenA;
+          return Number(b?.id || 0) - Number(a?.id || 0);
+        });
 
       temasOrdenados.forEach((tema: any) => {
         ruta.push({ ciclo, tema });
