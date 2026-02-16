@@ -596,7 +596,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
         colorBgBase: isDarkMode ? "#0A1020" : "#F6F8FB",
         colorBgContainer: isDarkMode ? "#0C1426" : "#F0F3F8",
         colorBgElevated: isDarkMode ? "#111827" : "#FFFFFF",
-        colorBgLayout: isDarkMode ? "#090f1d" : "#e9edf4",
+        colorBgLayout: isDarkMode ? "#090f1d" : "#e1e6ee",
         colorBorder: isDarkMode ? "#3b4a63" : "#c9d1de",
         colorBorderSecondary: isDarkMode ? "#263347" : "#d4dbe6",
         colorFillSecondary: isDarkMode ? "#1d293b" : "#e3e8f1",
@@ -639,7 +639,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
           cellPaddingInline: 10,
         },
         Layout: {
-          bodyBg: isDarkMode ? "#090f1d" : "#e9edf4",
+          bodyBg: isDarkMode ? "#090f1d" : "#e1e6ee",
           headerBg: isDarkMode ? "#0F172A" : "#FFFFFF",
           siderBg: isDarkMode ? "#0F172A" : undefined,
           headerPadding: "0 16px",

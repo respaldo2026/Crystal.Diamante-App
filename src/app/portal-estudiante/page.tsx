@@ -964,16 +964,6 @@ export default function PortalEstudiante() {
                     {avancePorCurso.map((curso: any, idx: number) => (
                       <Col xs={24} sm={12} lg={8} key={idx}>
                         <Card className="course-card" title={curso.curso}>
-                          <Space direction="vertical" size={2} style={{ width: "100%", marginBottom: 10 }}>
-                            <Text strong style={{ fontSize: 13 }}>{curso.programa || "Programa académico"}</Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              {curso.diasSemana || "Día por definir"}
-                              {curso.horaInicio
-                                ? ` • ${dayjs(curso.horaInicio, "HH:mm:ss").format("h:mm A")}${curso.horaFin ? ` - ${dayjs(curso.horaFin, "HH:mm:ss").format("h:mm A")}` : ""}`
-                                : " • Hora por definir"}
-                            </Text>
-                          </Space>
-
                           <Row gutter={12}>
                             <Col xs={12}>
                               <div style={{ textAlign: "center" }}>
