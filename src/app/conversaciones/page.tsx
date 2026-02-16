@@ -412,16 +412,28 @@ export default function ConversacionesPage() {
       dataIndex: "phone_number",
       key: "phone_number",
       render: (phone: string, record: ConversationThread) => (
-        <Space direction="vertical" size={4}>
-          <Space>
+        <div style={{ maxWidth: 240 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <PhoneOutlined />
-            <span>{getPhoneLabel(phone)}</span>
-            {isUnknownPhone(phone) && <Tag color="orange">Pendiente identificar</Tag>}
-          </Space>
-          {record.contact_name ? <Tag color="green">{record.contact_name}</Tag> : null}
-        </Space>
+            <span style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.2 }}>
+              {getPhoneLabel(phone)}
+            </span>
+            {isUnknownPhone(phone) && (
+              <Tag color="orange" style={{ marginInlineEnd: 0, whiteSpace: "normal" }}>
+                Pendiente identificar
+              </Tag>
+            )}
+          </div>
+          {record.contact_name ? (
+            <div style={{ marginTop: 4 }}>
+              <Tag color="green" style={{ marginInlineEnd: 0, whiteSpace: "normal" }}>
+                {record.contact_name}
+              </Tag>
+            </div>
+          ) : null}
+        </div>
       ),
-      width: 220,
+      width: 250,
     },
     {
       title: "Ultima Pregunta",
@@ -648,7 +660,7 @@ export default function ConversacionesPage() {
               rowKey="thread_key"
               pagination={{ pageSize: 20, showSizeChanger: true }}
               size="middle"
-              scroll={{ x: 1200 }}
+              scroll={{ x: 1400 }}
               tableLayout="fixed"
               rowSelection={{
                 selectedRowKeys: selectedRows,
