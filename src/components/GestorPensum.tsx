@@ -519,7 +519,13 @@ export default function GestorPensum({
         .order("orden", { ascending: true });
 
       if (error) throw error;
-      setMaterialesClase(data || []);
+      const normalizados = (data || []).map((item: any) => ({
+        ...item,
+        materiales_ciclo: Array.isArray(item.materiales_ciclo)
+          ? item.materiales_ciclo[0] || null
+          : item.materiales_ciclo || null,
+      }));
+      setMaterialesClase(normalizados as MaterialClase[]);
     } catch (error) {
       message.error("Error al cargar materiales por clase");
       logger.error(error);
