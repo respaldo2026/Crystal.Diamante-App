@@ -604,7 +604,9 @@ export default function PortalEstudiante() {
               <Button onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
               <Button onClick={() => setCicloRutaId(null)}>← Ciclos</Button>
             </Space>
-            <Text strong>Materiales generales del ciclo</Text>
+            <Text strong>
+              {`Materiales para el ciclo: ${cicloSeleccionado?.nombre_ciclo || `Ciclo ${cicloSeleccionado?.numero_ciclo || ""}`}`}
+            </Text>
             {materialesCicloSeleccionado.length === 0 ? (
               <Text type="secondary">No hay materiales generales registrados para este ciclo.</Text>
             ) : (
