@@ -155,6 +155,15 @@ export default function StudentDetailView() {
       0
     );
 
+  const calcularFechaVencimientoCuota = (matricula: any, numeroCuota: number) => {
+    if (!numeroCuota || numeroCuota < 1) return null;
+    const fechaBase = matricula?.fecha_inicio
+      ? dayjs(matricula.fecha_inicio)
+      : null;
+    if (!fechaBase || !fechaBase.isValid()) return null;
+    return fechaBase.add(numeroCuota, "month").format("YYYY-MM-DD");
+  };
+
   const cargarDatosCompletos = useCallback(async () => {
     if (!idEstudiante) return;
 
@@ -488,6 +497,7 @@ export default function StudentDetailView() {
           referencia: null,
           observaciones: `Ciclo mensual ${i} de ${totalCiclos}`,
           periodo_pagado: `Ciclo mensual ${i} de ${totalCiclos}`,
+          fecha_vencimiento: calcularFechaVencimientoCuota(matricula, i),
           estado: "pendiente",
           ticket_url: null,
         });
@@ -676,7 +686,7 @@ export default function StudentDetailView() {
       pagosEsperados.push({
         id: `pendiente-${record.id}-${ciclo}`,
         fecha_pago: null,
-        fecha_vencimiento: null,
+        fecha_vencimiento: ciclo === 0 ? null : calcularFechaVencimientoCuota(record, ciclo),
         numero_cuota: ciclo,
         matricula_id: record.id,
         matriculas: record.matriculas ?? null,
