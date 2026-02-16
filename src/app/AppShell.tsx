@@ -584,7 +584,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     () => ({
       algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
       token: {
-        colorPrimary: "#ff2aa1",
+        colorPrimary: "#d81b87",
         colorSuccess: "#059669",
         colorWarning: "#D97706",
         colorError: "#DC2626",
@@ -593,15 +593,15 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
         colorText: isDarkMode ? "#E2E8F0" : "#1F2937",
         colorTextSecondary: isDarkMode ? "#CBD5E1" : "#374151",
         colorTextTertiary: isDarkMode ? "#94A3B8" : "#4B5563",
-        colorBgBase: isDarkMode ? "#0B1220" : "#FFFFFF",
-        colorBgContainer: isDarkMode ? "#0E1628" : "#F9FAFB",
+        colorBgBase: isDarkMode ? "#0A1020" : "#F6F8FB",
+        colorBgContainer: isDarkMode ? "#0C1426" : "#F0F3F8",
         colorBgElevated: isDarkMode ? "#111827" : "#FFFFFF",
-        colorBgLayout: isDarkMode ? "#0B1220" : "#F3F4F6",
-        colorBorder: isDarkMode ? "#334155" : "#E5E7EB",
-        colorBorderSecondary: isDarkMode ? "#1F2937" : "#E5E7EB",
-        colorFillSecondary: isDarkMode ? "#1F2937" : "#E5E7EB",
-        colorPrimaryBg: isDarkMode ? "#3b0823" : "#ffe6f3",
-        controlOutline: "#ff2aa1",
+        colorBgLayout: isDarkMode ? "#090f1d" : "#e9edf4",
+        colorBorder: isDarkMode ? "#3b4a63" : "#c9d1de",
+        colorBorderSecondary: isDarkMode ? "#263347" : "#d4dbe6",
+        colorFillSecondary: isDarkMode ? "#1d293b" : "#e3e8f1",
+        colorPrimaryBg: isDarkMode ? "#4d1132" : "#f8dbe9",
+        controlOutline: "#d81b87",
         borderRadius: 8,
         fontSize: 14,
         // Compact global paddings
@@ -612,9 +612,9 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
       },
       components: {
         Button: {
-          controlHeight: 34,
+          controlHeight: 36,
           paddingInline: 12,
-          fontWeight: 600,
+          fontWeight: 700,
         },
         Card: {
           borderRadiusLG: 12,
@@ -632,14 +632,14 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
         Table: {
           headerBg: isDarkMode ? "#0F172A" : "#F9FAFB",
           headerColor: isDarkMode ? "#E5E7EB" : "#374151",
-          rowHoverBg: isDarkMode ? "#0B1220" : "#F3F4F6",
+          rowHoverBg: isDarkMode ? "#0B1220" : "#E9EEF6",
           borderColor: isDarkMode ? "#233044" : "#E5E7EB",
           headerPadding: 10,
           cellPaddingBlock: 8,
           cellPaddingInline: 10,
         },
         Layout: {
-          bodyBg: isDarkMode ? "#0B1220" : "#F3F4F6",
+          bodyBg: isDarkMode ? "#090f1d" : "#e9edf4",
           headerBg: isDarkMode ? "#0F172A" : "#FFFFFF",
           siderBg: isDarkMode ? "#0F172A" : undefined,
           headerPadding: "0 16px",
