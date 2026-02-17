@@ -268,8 +268,17 @@ function looksLikeHttpUrl(value: string): boolean {
 }
 
 function extractAudioInputsFromBody(body: any): { mediaId: string; audioUrl: string } {
-  const directMediaId = pickFirstNonEmptyString(body?.media_id, body?.mediaId, body?.audio_id, body?.audioId);
-  const directAudioUrl = pickFirstNonEmptyString(body?.audio_url, body?.audioUrl, body?.url);
+  const directMediaId = pickFirstNonEmptyString(
+    body?.media_id,
+    body?.mediaId,
+    body?.audio_id,
+    body?.audioId,
+    body?.audio_media_id,
+    body?.mensaje_audio,
+    body?.p_media_id,
+  );
+  const directAudioUrl = pickFirstNonEmptyString(body?.audio_url, body?.audioUrl, body?.url, body?.audio_link);
+  const legacyMessageField = pickFirstNonEmptyString(body?.mensaje_whatsapp);
 
   const webhookAudioNode = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.audio;
   const nestedAudioNode = body?.messages?.[0]?.audio;
@@ -298,8 +307,15 @@ function extractAudioInputsFromBody(body: any): { mediaId: string; audioUrl: str
 
   const deepUrlCandidate = deepStringCandidates.find((candidate) => looksLikeHttpUrl(candidate)) || "";
 
-  const mediaId = pickFirstNonEmptyString(directMediaId, fromWebhookMediaId);
-  const audioUrl = pickFirstNonEmptyString(directAudioUrl, fromWebhookAudioUrl, deepUrlCandidate);
+  const legacyMediaIdCandidate = legacyMessageField && !looksLikeHttpUrl(legacyMessageField)
+    ? legacyMessageField
+    : "";
+  const legacyAudioUrlCandidate = legacyMessageField && looksLikeHttpUrl(legacyMessageField)
+    ? legacyMessageField
+    : "";
+
+  const mediaId = pickFirstNonEmptyString(directMediaId, legacyMediaIdCandidate, fromWebhookMediaId);
+  const audioUrl = pickFirstNonEmptyString(directAudioUrl, legacyAudioUrlCandidate, fromWebhookAudioUrl, deepUrlCandidate);
 
   return { mediaId, audioUrl };
 }
