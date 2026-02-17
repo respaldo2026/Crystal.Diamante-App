@@ -960,7 +960,7 @@ NO inventes horarios, precios ni fechas que no estén en el contexto.
   return prompt;
 }
 
-function detectUserIntent(message: string): "precio" | "horario" | "temario" | "inscripcion" | "general" {
+function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "general" {
   const text = message.toLowerCase();
 
   if (/\b(precio|costo|cuanto|vale|valor|mensualidad|inscripcion|cuota|inversion)\b/i.test(text)) {
@@ -972,8 +972,23 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
     return "temario";
   }
+  if (/\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|implementos|lista\s+de\s+materiales)\b/i.test(text)) {
+    return "materiales";
+  }
   if (/\b(inscrib|matricul|pago|admisiones|contacto|numero|whatsapp|separar\s+cupo)\b/i.test(text)) {
     return "inscripcion";
+  }
+  return "general";
+}
+
+function detectMaterialsScope(message: string): "tema" | "ciclo" | "general" {
+  const text = message.toLowerCase();
+
+  if (/\b(tema|clase|sesion|sesión|modulo|m[oó]dulo|leccion|lección)\b/i.test(text)) {
+    return "tema";
+  }
+  if (/\b(ciclo|nivel|general|completo|kit|todos|todo\s+el\s+curso)\b/i.test(text)) {
+    return "ciclo";
   }
   return "general";
 }
@@ -1035,6 +1050,7 @@ function buildContextualDirective(
   courses: any[]
 ): string {
   const intent = detectUserIntent(userMessage);
+  const materialsScope = intent === "materiales" ? detectMaterialsScope(userMessage) : "general";
   const objection = detectObjectionType(userMessage);
   const explicitBuyingIntent = detectBuyingIntent(userMessage, []);
   const programName = detectedProgram?.nombre || null;
@@ -1046,6 +1062,12 @@ function buildContextualDirective(
       'Responde priorizando fechas, días, horario y cupos del grupo activo relacionado.',
     temario:
       'Responde priorizando temario/contenido por ciclos o módulos del programa solicitado.',
+    materiales:
+      materialsScope === "tema"
+        ? 'Responde priorizando SOLO "Materiales por Tema/Clase" del programa solicitado. Si falta el tema exacto, pide una aclaración breve.'
+        : materialsScope === "ciclo"
+        ? 'Responde priorizando SOLO "Materiales por Ciclo" del programa solicitado.'
+        : 'Responde con materiales del programa y pide una aclaración breve para definir si los quiere por ciclo o por tema/clase.',
     inscripcion:
       'Responde con mini-resumen del curso y guía de inscripción. Si ya hay interés claro, cierra con Admisiones (+57 301 203 8582).',
     general:

@@ -678,13 +678,23 @@ function buildAgentPrompt(
   return prompt;
 }
 
-function detectUserIntent(message: string): "precio" | "horario" | "temario" | "inscripcion" | "general" {
+function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "general" {
   const text = message.toLowerCase();
 
   if (/\b(precio|costo|cuanto|vale|valor|mensualidad|inscripcion|cuota|inversion)\b/i.test(text)) return "precio";
   if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo)\b/i.test(text)) return "horario";
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) return "temario";
+  if (/\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|implementos|lista\s+de\s+materiales)\b/i.test(text)) return "materiales";
   if (/\b(inscrib|matricul|pago|admisiones|contacto|numero|whatsapp|separar\s+cupo)\b/i.test(text)) return "inscripcion";
+  return "general";
+}
+
+function detectMaterialsScope(message: string): "tema" | "ciclo" | "general" {
+  const text = message.toLowerCase();
+
+  if (/\b(tema|clase|sesion|sesión|modulo|m[oó]dulo|leccion|lección)\b/i.test(text)) return "tema";
+  if (/\b(ciclo|nivel|general|completo|kit|todos|todo\s+el\s+curso)\b/i.test(text)) return "ciclo";
+
   return "general";
 }
 
@@ -739,6 +749,7 @@ function resolveProgramFromContext(
 
 function buildContextualDirective(userMessage: string, detectedProgram: any | null): string {
   const intent = detectUserIntent(userMessage);
+  const materialsScope = intent === "materiales" ? detectMaterialsScope(userMessage) : "general";
   const objection = detectObjectionType(userMessage);
   const explicitBuyingIntent = detectBuyingIntent(userMessage, []);
   const programName = detectedProgram?.nombre || null;
@@ -747,6 +758,12 @@ function buildContextualDirective(userMessage: string, detectedProgram: any | nu
     precio: 'Responde priorizando inscripción y mensualidad del curso solicitado. No des valor total salvo solicitud explícita.',
     horario: 'Responde priorizando fechas de inicio, días, horarios y cupos del curso solicitado.',
     temario: 'Responde priorizando contenido/temario por ciclos o módulos del curso solicitado.',
+    materiales:
+      materialsScope === "tema"
+        ? 'Responde priorizando SOLO "Materiales por Tema/Clase" del curso solicitado. Si falta el tema exacto, pide una aclaración breve.'
+        : materialsScope === "ciclo"
+        ? 'Responde priorizando SOLO "Materiales por Ciclo" del curso solicitado.'
+        : 'Responde con materiales del curso y pide una aclaración breve para definir si los quiere por ciclo o por tema/clase.',
     inscripcion: 'Responde con resumen breve y guía de inscripción; si hay interés claro, cierra con Admisiones (más 57 301 203 8582).',
     general: 'Responde en formato claro por bloques enfocado en el curso solicitado.'
   };

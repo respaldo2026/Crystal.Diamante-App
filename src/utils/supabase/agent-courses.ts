@@ -65,6 +65,31 @@ interface PensumCurso {
   orden: number | null
 }
 
+interface MaterialCicloInfo {
+  id: string
+  nombre: string | null
+  cantidad: string | number | null
+  unidad: string | null
+  observaciones: string | null
+  orden: number | null
+  pensum_id: string | null
+  incluido_kit: boolean | null
+  activo: boolean | null
+}
+
+interface MaterialClaseInfo {
+  id: string
+  nombre_material: string | null
+  cantidad: string | number | null
+  unidad: string | null
+  observaciones: string | null
+  orden: number | null
+  pensum_id: string | null
+  pensum_curso_id: string | null
+  material_ciclo_id: string | null
+  activo: boolean | null
+}
+
 interface MedioPago {
   id: number
   nombre: string
@@ -387,6 +412,158 @@ export async function getPensumByProgram(programaId: number): Promise<PensumCicl
     console.error('[getPensumByProgram] Error:', err)
     return []
   }
+}
+
+function formatMaterialQuantity(cantidad?: string | number | null, unidad?: string | null): string {
+  const value = cantidad !== null && cantidad !== undefined && `${cantidad}`.trim() !== '' ? `${cantidad}`.trim() : ''
+  const unit = unidad?.trim() || ''
+
+  if (value && unit) return `${value} ${unit}`
+  if (value) return value
+  if (unit) return unit
+  return 'Cantidad a confirmar'
+}
+
+async function getMaterialsByPensum(
+  pensum: PensumCiclo[]
+): Promise<{ materialesCiclo: MaterialCicloInfo[]; materialesClase: MaterialClaseInfo[] }> {
+  try {
+    const pensumIds = pensum.map((c) => c.id).filter(Boolean)
+    if (pensumIds.length === 0) {
+      return { materialesCiclo: [], materialesClase: [] }
+    }
+
+    const supabase = getSupabaseClient()
+
+    const [materialesCicloRes, materialesClaseRes] = await Promise.all([
+      supabase
+        .from('materiales_ciclo')
+        .select('*')
+        .in('pensum_id', pensumIds)
+        .order('orden', { ascending: true, nullsFirst: true }),
+      supabase
+        .from('materiales_clase')
+        .select('*')
+        .in('pensum_id', pensumIds)
+        .order('orden', { ascending: true, nullsFirst: true }),
+    ])
+
+    if (materialesCicloRes.error) {
+      console.error('[getMaterialsByPensum] Error materiales_ciclo:', materialesCicloRes.error)
+    }
+    if (materialesClaseRes.error) {
+      console.error('[getMaterialsByPensum] Error materiales_clase:', materialesClaseRes.error)
+    }
+
+    const materialesCiclo = ((materialesCicloRes.data || []) as any[])
+      .filter((m) => m?.activo !== false)
+      .map((m) => ({
+        id: `${m.id}`,
+        nombre: m.nombre ?? null,
+        cantidad: m.cantidad ?? null,
+        unidad: m.unidad ?? null,
+        observaciones: m.observaciones ?? null,
+        orden: m.orden ?? null,
+        pensum_id: m.pensum_id ?? null,
+        incluido_kit: m.incluido_kit ?? null,
+        activo: m.activo ?? null,
+      }))
+
+    const materialesClase = ((materialesClaseRes.data || []) as any[])
+      .filter((m) => m?.activo !== false)
+      .map((m) => ({
+        id: `${m.id}`,
+        nombre_material: m.nombre_material ?? null,
+        cantidad: m.cantidad ?? null,
+        unidad: m.unidad ?? null,
+        observaciones: m.observaciones ?? null,
+        orden: m.orden ?? null,
+        pensum_id: m.pensum_id ?? null,
+        pensum_curso_id: m.pensum_curso_id ?? null,
+        material_ciclo_id: m.material_ciclo_id ?? null,
+        activo: m.activo ?? null,
+      }))
+
+    return { materialesCiclo, materialesClase }
+  } catch (err) {
+    console.error('[getMaterialsByPensum] Error:', err)
+    return { materialesCiclo: [], materialesClase: [] }
+  }
+}
+
+function buildMaterialsContext(
+  pensum: PensumCiclo[],
+  materialesCiclo: MaterialCicloInfo[],
+  materialesClase: MaterialClaseInfo[]
+): string {
+  if (materialesCiclo.length === 0 && materialesClase.length === 0) {
+    return ''
+  }
+
+  const cicloById = new Map<string, PensumCiclo>()
+  const cursoById = new Map<string, { nombre: string; cicloNombre: string }>()
+  pensum.forEach((ciclo) => {
+    cicloById.set(ciclo.id, ciclo)
+    const cicloNombre = ciclo.nombre_ciclo || `Ciclo ${ciclo.numero_ciclo}`
+    ciclo.cursos.forEach((curso) => {
+      cursoById.set(curso.id, { nombre: curso.nombre_curso, cicloNombre })
+    })
+  })
+
+  const materialCicloById = new Map<string, MaterialCicloInfo>()
+  materialesCiclo.forEach((material) => materialCicloById.set(material.id, material))
+
+  let text = `\n  📦 **MATERIALES NECESARIOS:**\n`
+
+  if (materialesCiclo.length > 0) {
+    const byCiclo = new Map<string, MaterialCicloInfo[]>()
+    materialesCiclo.forEach((m) => {
+      const key = m.pensum_id || 'sin-ciclo'
+      if (!byCiclo.has(key)) byCiclo.set(key, [])
+      byCiclo.get(key)!.push(m)
+    })
+
+    text += `  **Materiales por Ciclo (lista general):**\n`
+    for (const [cicloId, items] of byCiclo.entries()) {
+      const ciclo = cicloId !== 'sin-ciclo' ? cicloById.get(cicloId) : null
+      const cicloNombre = ciclo ? ciclo.nombre_ciclo || `Ciclo ${ciclo.numero_ciclo}` : 'Sin ciclo asignado'
+      text += `    • ${cicloNombre}:\n`
+
+      items.forEach((item) => {
+        const nombre = item.nombre || 'Material'
+        const qty = formatMaterialQuantity(item.cantidad, item.unidad)
+        const kit = item.incluido_kit ? ' (incluido en kit)' : ''
+        text += `      - ${nombre}: ${qty}${kit}\n`
+      })
+    }
+  }
+
+  if (materialesClase.length > 0) {
+    const byCurso = new Map<string, MaterialClaseInfo[]>()
+    materialesClase.forEach((m) => {
+      const key = m.pensum_curso_id || 'sin-tema'
+      if (!byCurso.has(key)) byCurso.set(key, [])
+      byCurso.get(key)!.push(m)
+    })
+
+    text += `  **Materiales por Tema/Clase (detalle):**\n`
+    for (const [cursoId, items] of byCurso.entries()) {
+      const curso = cursoId !== 'sin-tema' ? cursoById.get(cursoId) : null
+      const temaNombre = curso ? `${curso.nombre} (${curso.cicloNombre})` : 'Tema sin asignar'
+      text += `    • ${temaNombre}:\n`
+
+      items.forEach((item) => {
+        const nombreBase = item.nombre_material?.trim()
+        const fromCiclo = item.material_ciclo_id ? materialCicloById.get(item.material_ciclo_id) : null
+        const nombre = nombreBase || fromCiclo?.nombre || 'Material'
+        const qty = formatMaterialQuantity(item.cantidad, item.unidad)
+        const obs = item.observaciones ? ` (${item.observaciones})` : ''
+        text += `      - ${nombre}: ${qty}${obs}\n`
+      })
+    }
+  }
+
+  return text
 }
 
 /**
@@ -932,6 +1109,12 @@ export async function buildHierarchicalContextWithPensum(
           }
         })
       }
+
+      const { materialesCiclo, materialesClase } = await getMaterialsByPensum(pensum)
+      const materialsContext = buildMaterialsContext(pensum, materialesCiclo, materialesClase)
+      if (materialsContext) {
+        context += `${materialsContext}\n`
+      }
     } else if (prog.contenido) {
       // Para programas no detectados, solo mostrar un resumen del contenido
       const contenidoResumen = prog.contenido.substring(0, 150)
@@ -980,6 +1163,10 @@ Si pregunta "¿Qué programas tienen?", lista todos los programas con precios, d
 Si pregunta "¿Cuándo inicia [programa]?", muestra los grupos disponibles con sus fechas y horarios específicos.
 Si pregunta "¿Cuánto cuesta [programa]?", usa el precio del PROGRAMA (inscripción + mensualidad).
 Si pregunta "¿Qué se ve en [programa]?", muestra el temario detallado por ciclos que aparece arriba.
+Si pregunta por materiales del programa, responde según su intención:
+- Si menciona ciclo/nivel/general/kit, usa "Materiales por Ciclo".
+- Si menciona tema/clase/sesión/módulo, usa "Materiales por Tema/Clase".
+- Si no especifica, pregunta brevemente: "¿Los necesitas por ciclo o por tema?".
 Si solo hay 1 grupo activo en total, dilo directo y muestra sus detalles.
 Si preguntan por el profesor, usa el nombre del profesor del grupo mostrado (si no hay, responde "A confirmar").
 `
