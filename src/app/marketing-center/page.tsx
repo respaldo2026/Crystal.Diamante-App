@@ -25,6 +25,7 @@ import {
   Divider,
   Alert,
   Tabs,
+  Dropdown,
 } from "antd";
 import {
   PlusOutlined,
@@ -38,6 +39,7 @@ import {
   ReloadOutlined,
   RobotOutlined,
   SaveOutlined,
+  MoreOutlined,
 } from "@ant-design/icons";
 import type { UploadFile, UploadProps } from "antd/es/upload/interface";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -359,6 +361,19 @@ export default function MarketingCenterPage() {
       const nextCursorPosition = selectionStart + text.length;
       nextTextArea.focus();
       nextTextArea.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  };
+
+  const restaurarPromptPorDefecto = () => {
+    Modal.confirm({
+      title: "¿Restaurar prompt por defecto?",
+      content: "Esto reemplazará el contenido actual del prompt en el formulario.",
+      okText: "Restaurar",
+      cancelText: "Cancelar",
+      onOk: () => {
+        agentForm.setFieldsValue({ system_prompt: DEFAULT_AGENT_SYSTEM_PROMPT });
+        message.success("Prompt por defecto cargado. Pulsa Guardar para aplicarlo.");
+      },
     });
   };
 
@@ -1204,6 +1219,24 @@ export default function MarketingCenterPage() {
                       <Button icon={<ReloadOutlined />} disabled={savingAgentPrompt} onClick={cargarAgentPrompt}>
                         Recargar
                       </Button>
+                      <Dropdown
+                        trigger={["click"]}
+                        menu={{
+                          items: [
+                            {
+                              key: "restore-default-prompt",
+                              label: "Restaurar prompt por defecto",
+                            },
+                          ],
+                          onClick: ({ key }) => {
+                            if (key === "restore-default-prompt") {
+                              restaurarPromptPorDefecto();
+                            }
+                          },
+                        }}
+                      >
+                        <Button icon={<MoreOutlined />} disabled={savingAgentPrompt || loadingAgentPrompt} />
+                      </Dropdown>
                     </Space>
                   }
                 >
@@ -1249,7 +1282,7 @@ export default function MarketingCenterPage() {
                       </Col>
                     </Row>
 
-                    <Form.Item name="system_prompt" label="Prompt de sistema" rules={[{ required: true, message: "Define un prompt" }]}>
+                    <Form.Item label="Prompt de sistema" required>
                       <Space direction="vertical" size={8} style={{ width: "100%" }}>
                         <Space wrap>
                           <Button size="small" onClick={() => applyWhatsappFormatToPrompt("*")} disabled={loadingAgentPrompt}>Negrita</Button>
@@ -1268,12 +1301,20 @@ export default function MarketingCenterPage() {
                           <Button size="small" onClick={() => insertIntoPrompt("✅")} disabled={loadingAgentPrompt}>✅</Button>
                         </Space>
                         <Text type="secondary">Atajos WhatsApp: *negrita*  _cursiva_  ~tachado~  `monoespacio`</Text>
-                        <TextArea
-                          id="agent-system-prompt"
-                          rows={7}
-                          placeholder="Eres Dany, asistente de la academia..."
-                          disabled={loadingAgentPrompt}
-                        />
+                        <Form.Item
+                          name="system_prompt"
+                          noStyle
+                          rules={[
+                            { required: true, whitespace: true, message: "Define un prompt" },
+                          ]}
+                        >
+                          <TextArea
+                            id="agent-system-prompt"
+                            rows={7}
+                            placeholder="Eres Dany, asistente de la academia..."
+                            disabled={loadingAgentPrompt}
+                          />
+                        </Form.Item>
                       </Space>
                     </Form.Item>
 
