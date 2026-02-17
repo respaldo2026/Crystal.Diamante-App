@@ -405,14 +405,24 @@ export default function ConversacionesPage() {
     }
   };
 
+  const compactPreview = (text: string, maxChars = 90) => {
+    const normalized = (text || "").replace(/\s+/g, " ").trim();
+    if (!normalized) return "-";
+    return normalized.length > maxChars ? `${normalized.slice(0, maxChars)}...` : normalized;
+  };
+
   // Columnas de tabla
   const columns = [
     {
-      title: "Teléfono",
+      title: (
+        <Tooltip title="Teléfono / Contacto">
+          <span>📞</span>
+        </Tooltip>
+      ),
       dataIndex: "phone_number",
       key: "phone_number",
       render: (phone: string, record: ConversationThread) => (
-        <div style={{ maxWidth: 180 }}>
+        <div style={{ maxWidth: 165 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <PhoneOutlined />
             <span style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.2 }}>
@@ -433,57 +443,95 @@ export default function ConversacionesPage() {
           ) : null}
         </div>
       ),
-      width: 190,
-    },
-    {
-      title: "Ultima Pregunta",
-      dataIndex: "last_user_message",
-      key: "last_user_message",
-      ellipsis: true,
-      render: (text: string) => (
-        <Tooltip title={text || ""}>
-          <span>{text && text.length > 60 ? `${text.substring(0, 60)}...` : (text || "-")}</span>
-        </Tooltip>
-      ),
       width: 170,
     },
     {
-      title: "Ultima Respuesta",
-      dataIndex: "last_agent_response",
-      key: "last_agent_response",
-      ellipsis: true,
-      render: (text: string) => (
-        <Tooltip title={formatAgentResponse(text || "") }>
-          <span>{text && text.length > 65 ? formatAgentResponse(`${text.substring(0, 65)}...`) : formatAgentResponse(text || "-")}</span>
+      title: (
+        <Tooltip title="Última pregunta del lead">
+          <span>🙋</span>
         </Tooltip>
       ),
-      width: 200,
+      dataIndex: "last_user_message",
+      key: "last_user_message",
+      render: (text: string) => (
+        <Tooltip title={text || ""}>
+          <span
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              lineHeight: 1.25,
+            }}
+          >
+            {compactPreview(text, 110)}
+          </span>
+        </Tooltip>
+      ),
+      width: 220,
     },
     {
-      title: "Mensajes",
+      title: (
+        <Tooltip title="Última respuesta del agente">
+          <span>🤖</span>
+        </Tooltip>
+      ),
+      dataIndex: "last_agent_response",
+      key: "last_agent_response",
+      render: (text: string) => (
+        <Tooltip title={formatAgentResponse(text || "") }>
+          <span
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              lineHeight: 1.25,
+            }}
+          >
+            {formatAgentResponse(compactPreview(text, 130))}
+          </span>
+        </Tooltip>
+      ),
+      width: 250,
+    },
+    {
+      title: (
+        <Tooltip title="Cantidad de mensajes">
+          <span>💬</span>
+        </Tooltip>
+      ),
       dataIndex: "total",
       key: "total",
-      width: 80,
+      width: 70,
       render: (total: number) => <Tag color="blue">{total}</Tag>,
     },
     {
-      title: "Fecha",
+      title: (
+        <Tooltip title="Fecha de último mensaje">
+          <span>🕒</span>
+        </Tooltip>
+      ),
       dataIndex: "last_date",
       key: "last_date",
       render: (date: string) => (
-        <Space size="small" direction="vertical">
+        <Space size={2} direction="vertical">
           <span>{dayjs(date).format("DD/MM HH:mm")}</span>
-          <Tag>{dayjs(date).fromNow()}</Tag>
+          <Tag style={{ marginInlineEnd: 0 }}>{dayjs(date).fromNow()}</Tag>
         </Space>
       ),
-      width: 130,
+      width: 120,
     },
     {
-      title: "Acciones",
+      title: (
+        <Tooltip title="Acciones">
+          <span>⚙️</span>
+        </Tooltip>
+      ),
       key: "actions",
-      width: 105,
+      width: 92,
       render: (_: any, record: ConversationThread) => (
-        <Space size="small">
+        <Space size={4}>
           <Tooltip title="Ver conversación completa">
             <Button
               type="primary"
