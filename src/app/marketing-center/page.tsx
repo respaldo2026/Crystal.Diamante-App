@@ -26,6 +26,7 @@ import {
   Alert,
   Tabs,
   Dropdown,
+  Skeleton,
 } from "antd";
 import {
   PlusOutlined,
@@ -310,6 +311,9 @@ export default function MarketingCenterPage() {
   const [ingestLoading, setIngestLoading] = useState(false);
   const [ingestForm] = Form.useForm();
   const [deletingDocId, setDeletingDocId] = useState<number | null>(null);
+  const [activeTabKey, setActiveTabKey] = useState("agent");
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const getAgentPromptTextArea = () => {
     if (typeof document === "undefined") return null;
@@ -378,8 +382,39 @@ export default function MarketingCenterPage() {
   };
 
   useEffect(() => {
-    cargarDatos();
+    cargarDatosIniciales();
   }, []);
+
+  const cargarDatosIniciales = async () => {
+    try {
+      await Promise.all([
+        cargarProgramas(),
+        cargarCursosProximos(),
+        cargarMarketingCursos(),
+        cargarAgentPrompt(),
+        cargarDocs(),
+      ]);
+    } finally {
+      setInitialLoading(false);
+    }
+  };
+
+  const handleTabChange = (key: string) => {
+    setActiveTabKey(key);
+    if (key === "assets" && !assetsLoaded) {
+      cargarAssets();
+    }
+  };
+
+  const handleToggleContextoIA = () => {
+    setMostrarContextoIA((prev) => {
+      const next = !prev;
+      if (next && !assetsLoaded) {
+        cargarAssets();
+      }
+      return next;
+    });
+  };
 
   const cargarDatos = async () => {
     await Promise.all([
@@ -402,6 +437,7 @@ export default function MarketingCenterPage() {
 
       if (error) throw error;
       setAssets((data as MarketingAsset[]) || []);
+      setAssetsLoaded(true);
     } catch (error: any) {
       console.error("Error cargando assets:", error);
       message.error("No se pudieron cargar los assets de marketing");
@@ -1199,8 +1235,11 @@ export default function MarketingCenterPage() {
         </Col>
       </Row>
 
+      <Skeleton active loading={initialLoading} paragraph={{ rows: isMobile ? 6 : 9 }}>
       <Tabs
-        defaultActiveKey="agent"
+        activeKey={activeTabKey}
+        onChange={handleTabChange}
+        destroyInactiveTabPane
         items={[
           {
             key: "agent",
@@ -1434,7 +1473,7 @@ export default function MarketingCenterPage() {
                 <Space direction="vertical" style={{ width: "100%" }}>
                   <Button
                     type="default"
-                    onClick={() => setMostrarContextoIA((v) => !v)}
+                    onClick={handleToggleContextoIA}
                     size={isMobile ? "small" : "middle"}
                     style={{ alignSelf: "flex-start" }}
                   >
@@ -1601,6 +1640,7 @@ export default function MarketingCenterPage() {
           },
         ]}
       />
+      </Skeleton>
 
       {/* Modal IA para generar copy y keywords */}
       <Modal
