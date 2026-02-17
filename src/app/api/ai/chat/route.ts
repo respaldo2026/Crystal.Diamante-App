@@ -870,7 +870,8 @@ function buildAgentPrompt(
   userMessage: string,
   knowledgeChunks: string[],
   conversationHistory: Array<{user: string, agent: string}> = [],
-  hierarchicalContext: string = ""
+  hierarchicalContext: string = "",
+  contextualDirective: string = ""
 ): string {
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asesor experto masculino de la Academia de Belleza Crystal Diamante en Cali.";
@@ -945,6 +946,10 @@ Ayuda al usuario a conocer:
     knowledgeChunks.forEach((chunk, idx) => {
       prompt += `\n## Fragmento ${idx + 1}:\n${chunk.slice(0, 600)}\n`;
     });
+  }
+
+  if (contextualDirective) {
+    prompt += `\n# DIRECTIVA CONTEXTUAL (PRIORIDAD ALTA):\n${contextualDirective}\n`;
   }
 
   prompt += `\n# 🎯 INSTRUCCIÓN DE RESPUESTA:
@@ -1279,13 +1284,17 @@ export async function POST(req: NextRequest) {
     // Obtener conocimiento relevante
     const knowledgeChunks = await searchKnowledge(supabase, message, 3);
 
+    // Construir directiva contextual por intención del usuario
+    const contextualDirective = buildContextualDirective(message, detectedProgram, courses);
+
     // Construir prompt con contexto jerárquico
     const prompt = buildAgentPrompt(
       settings || {},
       message,
       knowledgeChunks,
       history,
-      hierarchicalContext
+      hierarchicalContext,
+      contextualDirective
     );
 
     // Generar respuesta
