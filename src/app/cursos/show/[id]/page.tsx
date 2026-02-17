@@ -267,6 +267,15 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return <FileOutlined />;
   };
 
+  const abrirMaterial = (material: any) => {
+    const url = material?.url_archivo;
+    if (!url) {
+      message.warning("Este material no tiene enlace disponible");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const guardarNota = useCallback(
     async (matriculaId: string | number, nota: number | null, estado: string) => {
       if (nota == null || Number.isNaN(nota)) {
@@ -1125,9 +1134,27 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                       <Space direction="vertical" size={4}>
                                         {tema.descripcion ? <Text type="secondary">{tema.descripcion}</Text> : null}
                                         {materialesTema.length ? (
-                                          <Space wrap size={10}>
+                                          <Space wrap size={isMobile ? 6 : 10} direction={isMobile ? "vertical" : "horizontal"}>
                                             {materialesTema.map((item: any, itemIndex: number) => (
-                                              <Tag key={`${temaId}-mat-${itemIndex}`} icon={getMaterialIcon(item)}>
+                                              <Tag
+                                                key={`${temaId}-mat-${itemIndex}`}
+                                                icon={getMaterialIcon(item)}
+                                                onClick={() => abrirMaterial(item)}
+                                                onKeyDown={(event) => {
+                                                  if (event.key === "Enter" || event.key === " ") {
+                                                    event.preventDefault();
+                                                    abrirMaterial(item);
+                                                  }
+                                                }}
+                                                tabIndex={item?.url_archivo ? 0 : -1}
+                                                title={item.titulo || item.nombre_archivo || "Recurso"}
+                                                style={{
+                                                  cursor: item?.url_archivo ? "pointer" : "default",
+                                                  maxWidth: "100%",
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                }}
+                                              >
                                                 {item.titulo || item.nombre_archivo || "Recurso"}
                                               </Tag>
                                             ))}
