@@ -98,9 +98,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     () =>
       dedupeByKey(materiales, (mat: any) =>
         String(
-          mat.id ??
-            `${mat.pensum_id ?? ""}-${mat.titulo ?? mat.nombre_archivo ?? ""}-${mat.url_archivo ?? ""}`,
-        ),
+          `${mat.pensum_id ?? ""}-${mat.titulo ?? mat.nombre_archivo ?? ""}-${mat.url_archivo ?? ""}-${
+            mat.descripcion ?? ""
+          }-${mat.tipo_material ?? ""}-${mat.orden ?? ""}`,
+        ).toLowerCase(),
       ),
     [materiales],
   );
@@ -109,9 +110,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     () =>
       dedupeByKey(materialesClase, (mat: any) =>
         String(
-          mat.id ??
-            `${mat.pensum_curso_id ?? ""}-${mat.nombre_material ?? ""}-${mat.cantidad ?? ""}-${mat.unidad ?? ""}`,
-        ),
+          `${mat.pensum_curso_id ?? ""}-${mat.nombre_material ?? ""}-${mat.cantidad ?? ""}-${
+            mat.unidad ?? ""
+          }-${mat.obligatorio ?? ""}-${mat.observaciones ?? ""}`,
+        ).toLowerCase(),
       ),
     [materialesClase],
   );
@@ -1008,14 +1010,21 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                   dataSource={entriesTemaOrdenadas}
                                   renderItem={([temaId, items]) => {
                                     const temaNombre = (items?.[0] as any)?.pensum_cursos?.nombre_curso || "Clase";
+                                    const itemsUnicos = dedupeByKey(items as any[], (item: any) =>
+                                      String(
+                                        `${item.nombre_material ?? ""}-${item.cantidad ?? ""}-${item.unidad ?? ""}-${
+                                          item.obligatorio ?? ""
+                                        }-${item.observaciones ?? ""}`,
+                                      ).toLowerCase(),
+                                    );
                                     return (
                                       <List.Item key={`req-${temaId}`}>
                                         <List.Item.Meta
                                           title={<Text strong>{temaNombre}</Text>}
                                           description={
                                             <Space direction="vertical" size={4}>
-                                              {(items as any[]).map((item: any) => (
-                                                <Text key={item.id} type="secondary">
+                                              {itemsUnicos.map((item: any, index: number) => (
+                                                <Text key={`${temaId}-${index}`} type="secondary">
                                                   • {item.nombre_material}
                                                   {item.cantidad ? ` (${item.cantidad}${item.unidad ? ` ${item.unidad}` : ""})` : ""}
                                                   {item.obligatorio ? " • obligatorio" : " • opcional"}
@@ -1043,40 +1052,49 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                             if (ordenA !== ordenB) return ordenA - ordenB;
                             return Number(a) - Number(b);
                           })
-                          .map(([key, mats]) => (
-                          <Card
-                            key={key}
-                            type="inner"
-                            title={`Ciclo / Tema: ${pensumNombre(key === "sin-ciclo" ? null : key)}`}
-                          >
-                            <List
-                              dataSource={mats}
-                              renderItem={(material) => (
-                                <List.Item
-                                  key={material.id}
-                                  extra={material.url_archivo ? (
-                                    <a href={material.url_archivo} target="_blank" rel="noreferrer">
-                                      Descargar
-                                    </a>
-                                  ) : null}
-                                >
-                                  <List.Item.Meta
-                                    title={<Text strong>{material.titulo || material.nombre_archivo || "Recurso"}</Text>}
-                                    description={
-                                      <Space direction="vertical" size={2}>
-                                        {material.descripcion ? <Text type="secondary">{material.descripcion}</Text> : null}
-                                        <Space size={8} wrap>
-                                          {material.tipo_material ? <Tag>{material.tipo_material}</Tag> : null}
-                                          {material.orden ? <Tag color="blue">Orden {material.orden}</Tag> : null}
-                                        </Space>
-                                      </Space>
-                                    }
-                                  />
-                                </List.Item>
-                              )}
-                            />
-                          </Card>
-                        ))}
+                          .map(([key, mats]) => {
+                            const matsUnicos = dedupeByKey(mats as any[], (material: any) =>
+                              String(
+                                `${material.titulo ?? material.nombre_archivo ?? ""}-${material.url_archivo ?? ""}-${
+                                  material.descripcion ?? ""
+                                }-${material.tipo_material ?? ""}-${material.orden ?? ""}`,
+                              ).toLowerCase(),
+                            );
+                            return (
+                              <Card
+                                key={key}
+                                type="inner"
+                                title={`Ciclo / Tema: ${pensumNombre(key === "sin-ciclo" ? null : key)}`}
+                              >
+                                <List
+                                  dataSource={matsUnicos}
+                                  renderItem={(material, index) => (
+                                    <List.Item
+                                      key={`${key}-${index}`}
+                                      extra={material.url_archivo ? (
+                                        <a href={material.url_archivo} target="_blank" rel="noreferrer">
+                                          Descargar
+                                        </a>
+                                      ) : null}
+                                    >
+                                      <List.Item.Meta
+                                        title={<Text strong>{material.titulo || material.nombre_archivo || "Recurso"}</Text>}
+                                        description={
+                                          <Space direction="vertical" size={2}>
+                                            {material.descripcion ? <Text type="secondary">{material.descripcion}</Text> : null}
+                                            <Space size={8} wrap>
+                                              {material.tipo_material ? <Tag>{material.tipo_material}</Tag> : null}
+                                              {material.orden ? <Tag color="blue">Orden {material.orden}</Tag> : null}
+                                            </Space>
+                                          </Space>
+                                        }
+                                      />
+                                    </List.Item>
+                                  )}
+                                />
+                              </Card>
+                            );
+                          })}
                       </Space>
                     );
                   })()
