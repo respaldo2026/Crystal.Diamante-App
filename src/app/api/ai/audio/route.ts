@@ -869,15 +869,12 @@ function sanitizeForJSON(text: string | null | undefined): string {
 
   const str = String(text);
 
-  // Preserve line breaks for WhatsApp readability while removing control chars
+  // Preservar formato de WhatsApp (negrita/cursiva/monoespacio, emojis y saltos)
+  // Solo remover caracteres de control inválidos para JSON.
   return str
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
     .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim();
+    .replace(/\r/g, '\n');
 }
 
 function normalizeForComparison(text: string): string {

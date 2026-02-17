@@ -309,6 +309,59 @@ export default function MarketingCenterPage() {
   const [ingestForm] = Form.useForm();
   const [deletingDocId, setDeletingDocId] = useState<number | null>(null);
 
+  const getAgentPromptTextArea = () => {
+    if (typeof document === "undefined") return null;
+    return document.getElementById("agent-system-prompt") as HTMLTextAreaElement | null;
+  };
+
+  const applyWhatsappFormatToPrompt = (prefix: string, suffix = prefix, placeholder = "texto") => {
+    const currentValue = (agentForm.getFieldValue("system_prompt") as string) || "";
+    const textArea = getAgentPromptTextArea();
+    const selectionStart = textArea?.selectionStart ?? currentValue.length;
+    const selectionEnd = textArea?.selectionEnd ?? currentValue.length;
+    const hasSelection = selectionEnd > selectionStart;
+    const selectedText = hasSelection ? currentValue.slice(selectionStart, selectionEnd) : placeholder;
+    const formattedText = `${prefix}${selectedText}${suffix}`;
+
+    const nextValue =
+      currentValue.slice(0, selectionStart) +
+      formattedText +
+      currentValue.slice(selectionEnd);
+
+    agentForm.setFieldsValue({ system_prompt: nextValue });
+
+    requestAnimationFrame(() => {
+      const nextTextArea = getAgentPromptTextArea();
+      if (!nextTextArea) return;
+      nextTextArea.focus();
+      const nextSelectionStart = selectionStart + prefix.length;
+      const nextSelectionEnd = nextSelectionStart + selectedText.length;
+      nextTextArea.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+    });
+  };
+
+  const insertIntoPrompt = (text: string) => {
+    const currentValue = (agentForm.getFieldValue("system_prompt") as string) || "";
+    const textArea = getAgentPromptTextArea();
+    const selectionStart = textArea?.selectionStart ?? currentValue.length;
+    const selectionEnd = textArea?.selectionEnd ?? currentValue.length;
+
+    const nextValue =
+      currentValue.slice(0, selectionStart) +
+      text +
+      currentValue.slice(selectionEnd);
+
+    agentForm.setFieldsValue({ system_prompt: nextValue });
+
+    requestAnimationFrame(() => {
+      const nextTextArea = getAgentPromptTextArea();
+      if (!nextTextArea) return;
+      const nextCursorPosition = selectionStart + text.length;
+      nextTextArea.focus();
+      nextTextArea.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  };
+
   useEffect(() => {
     cargarDatos();
   }, []);
@@ -1197,11 +1250,31 @@ export default function MarketingCenterPage() {
                     </Row>
 
                     <Form.Item name="system_prompt" label="Prompt de sistema" rules={[{ required: true, message: "Define un prompt" }]}>
-                      <TextArea
-                        rows={5}
-                        placeholder="Eres Dany, asistente de la academia..."
-                        disabled={loadingAgentPrompt}
-                      />
+                      <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                        <Space wrap>
+                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("*")} disabled={loadingAgentPrompt}>Negrita</Button>
+                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("_")} disabled={loadingAgentPrompt}>Cursiva</Button>
+                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("~")} disabled={loadingAgentPrompt}>Tachado</Button>
+                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("`")} disabled={loadingAgentPrompt}>Monoespacio</Button>
+                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("```\n", "\n```", "código")}
+                            disabled={loadingAgentPrompt}
+                          >
+                            Bloque código
+                          </Button>
+                          <Button size="small" onClick={() => insertIntoPrompt("\n• ")} disabled={loadingAgentPrompt}>Viñeta</Button>
+                          <Button size="small" onClick={() => insertIntoPrompt("\n\n")} disabled={loadingAgentPrompt}>Párrafo</Button>
+                          <Button size="small" onClick={() => insertIntoPrompt("✨")} disabled={loadingAgentPrompt}>✨</Button>
+                          <Button size="small" onClick={() => insertIntoPrompt("📌")} disabled={loadingAgentPrompt}>📌</Button>
+                          <Button size="small" onClick={() => insertIntoPrompt("✅")} disabled={loadingAgentPrompt}>✅</Button>
+                        </Space>
+                        <Text type="secondary">Atajos WhatsApp: *negrita*  _cursiva_  ~tachado~  `monoespacio`</Text>
+                        <TextArea
+                          id="agent-system-prompt"
+                          rows={7}
+                          placeholder="Eres Dany, asistente de la academia..."
+                          disabled={loadingAgentPrompt}
+                        />
+                      </Space>
                     </Form.Item>
 
                     <Space wrap>
