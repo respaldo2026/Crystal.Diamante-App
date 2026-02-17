@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { List, useTable, EditButton, DeleteButton, useSelect, CreateButton } from "@refinedev/antd";
-import { Table, Space, Tag, Card, Row, Col, Progress, Typography, Statistic, Alert, Button, FloatButton, Select } from "antd";
+import { Table, Space, Tag, Card, Row, Col, Progress, Typography, Statistic, Alert, Button, FloatButton, Select, Grid } from "antd";
 import { 
   CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, 
   InfoCircleOutlined, WarningOutlined, TrophyOutlined, UserOutlined,
@@ -17,6 +17,8 @@ const { Text } = Typography;
 
 export default function ListAsistencias() {
   const { user } = useCurrentUser();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const [cursoSeleccionado, setCursoSeleccionado] = useState<number | null>(null);
   const [estadisticas, setEstadisticas] = useState<any[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
@@ -191,53 +193,76 @@ export default function ListAsistencias() {
 
       {/* TABLA DE ESTADÍSTICAS POR ESTUDIANTE */}
       {cursoSeleccionado && estadisticas.length > 0 && (
-        <Card title="📊 Estadísticas de Asistencia por Estudiante" style={{ marginBottom: 20 }}>
+        <Card title={isMobile ? "📊 Asistencia" : "📊 Estadísticas de Asistencia por Estudiante"} style={{ marginBottom: 20 }}>
           <Table 
             dataSource={estadisticas}
             rowKey="matricula_id"
             loading={loadingStats}
             pagination={{ pageSize: 10 }}
+            size={isMobile ? "small" : "middle"}
+            scroll={isMobile ? { x: 720 } : undefined}
           >
             <Table.Column
               title="Estudiante"
               dataIndex="estudiante"
+              width={isMobile ? 220 : 320}
               render={(nombre, record: any) => (
-                <Space>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                   {record.estado === 'danger' && <WarningOutlined style={{ color: '#ff4d4f' }} />}
-                  <Text strong={record.estado === 'danger'}>{nombre}</Text>
-                </Space>
+                  <Text
+                    strong={record.estado === 'danger'}
+                    style={{
+                      display: "inline-block",
+                      maxWidth: "100%",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                    title={nombre}
+                  >
+                    {nombre}
+                  </Text>
+                </div>
               )}
             />
             <Table.Column
               title="Clases Totales"
               dataIndex="totalClases"
               align="center"
+              responsive={["md"]}
             />
             <Table.Column
               title="Presentes"
               dataIndex="presentes"
               align="center"
+              responsive={["md"]}
               render={(val) => <Tag color="green">{val}</Tag>}
             />
             <Table.Column
               title="Ausentes"
               dataIndex="ausentes"
               align="center"
+              responsive={["md"]}
               render={(val) => <Tag color="red">{val}</Tag>}
             />
             <Table.Column
               title="% Asistencia"
               dataIndex="porcentaje"
               align="center"
+              width={isMobile ? 130 : 220}
               render={(val, record: any) => (
-                <div style={{ minWidth: 100 }}>
-                  <Progress 
-                    percent={val} 
-                    size="small"
-                    status={record.estado === 'ok' ? 'success' : record.estado === 'warning' ? 'normal' : 'exception'}
-                    format={(percent) => `${percent}%`}
-                  />
-                </div>
+                isMobile
+                  ? <Tag color={record.estado === 'ok' ? 'success' : record.estado === 'warning' ? 'warning' : 'error'} style={{ marginInlineEnd: 0 }}>{val}%</Tag>
+                  : (
+                    <div style={{ minWidth: 100 }}>
+                      <Progress 
+                        percent={val} 
+                        size="small"
+                        status={record.estado === 'ok' ? 'success' : record.estado === 'warning' ? 'normal' : 'exception'}
+                        format={(percent) => `${percent}%`}
+                      />
+                    </div>
+                  )
               )}
               sorter={(a, b) => a.porcentaje - b.porcentaje}
             />
@@ -245,13 +270,14 @@ export default function ListAsistencias() {
               title="Estado"
               dataIndex="cumple"
               align="center"
+              width={isMobile ? 160 : 260}
               render={(cumple, record: any) => {
                 if (cumple) {
                   return <Tag color="success" icon={<CheckCircleOutlined />}>APTO</Tag>;
                 }
                 return (
                   <Tag color="error" icon={<WarningOutlined />}>
-                    RIESGO ({record.porcentaje}% &lt; {record.minimoRequerido}%)
+                    {isMobile ? 'RIESGO' : `RIESGO (${record.porcentaje}% < ${record.minimoRequerido}%)`}
                   </Tag>
                 );
               }}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Input } from "antd";
+import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Input, Grid } from "antd";
 import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -29,6 +29,8 @@ export default function TomarAsistencia() {
   // Formato: { "id_matricula": "presente", ... }
   const [asistenciasMap, setAsistenciasMap] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const cursoIdParam = searchParams.get("curso_id") || searchParams.get("cursoId");
   const returnTo = useMemo(
     () => searchParams.get("return") || (cursoIdParam ? `/cursos/show/${cursoIdParam}` : "/cursos"),
@@ -120,18 +122,52 @@ export default function TomarAsistencia() {
       {
         title: "Estudiante",
         dataIndex: ["perfiles", "nombre_completo"],
-        render: (txt: string) => <Text strong>{txt || "Sin nombre"}</Text>,
+        width: isMobile ? 210 : 320,
+        ellipsis: true,
+        render: (txt: string) => (
+          <Text
+            strong
+            style={{
+              display: "inline-block",
+              maxWidth: "100%",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+            title={txt || "Sin nombre"}
+          >
+            {txt || "Sin nombre"}
+          </Text>
+        ),
       },
-      { title: "Email", dataIndex: ["perfiles", "email"], ellipsis: true, width: 250 },
+      {
+        title: "Email",
+        dataIndex: ["perfiles", "email"],
+        ellipsis: true,
+        width: 250,
+        responsive: ["md" as const],
+      },
       {
         title: "Asistencia",
         align: "center" as const,
-        width: 150,
+        width: isMobile ? 150 : 190,
         render: (_: any, record: any) => {
           const habilitado = record.estado === "activo" || record.estado === "en curso";
           const esPresente = asistenciasMap[record.id] === "presente";
+          const estadoLabel = habilitado
+            ? (esPresente ? "PRESENTE" : "AUSENTE")
+            : (isMobile ? "PENDIENTE" : "PENDIENTE PAGO");
+
           return (
-            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                justifyContent: "center",
+                alignItems: "center",
+                flexDirection: isMobile ? "column" : "row",
+              }}
+            >
               <Switch
                 disabled={!habilitado}
                 checked={esPresente}
@@ -140,14 +176,14 @@ export default function TomarAsistencia() {
                 unCheckedChildren={<CloseOutlined />}
               />
               <Tag color={habilitado ? (esPresente ? "success" : "error") : "default"} style={{ margin: 0 }}>
-                {habilitado ? (esPresente ? "PRESENTE" : "AUSENTE") : "PENDIENTE PAGO"}
+                {estadoLabel}
               </Tag>
             </div>
           );
         },
       },
     ],
-    [asistenciasMap, toggleEstado]
+    [asistenciasMap, isMobile, toggleEstado]
   );
 
   // Marcar todos como presentes
@@ -470,6 +506,8 @@ export default function TomarAsistencia() {
                   pagination={{ pageSize: 15 }}
                   loading={loadingAlumnos}
                   columns={columnasAlumnos}
+                  size={isMobile ? "small" : "middle"}
+                  scroll={isMobile ? { x: 420 } : undefined}
                 />
               </>
             )}
