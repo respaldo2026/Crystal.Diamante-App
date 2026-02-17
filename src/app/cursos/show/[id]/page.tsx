@@ -464,27 +464,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     resolveParams();
   }, [params, cargarDatos]);
 
-  const actualizarEstadoMatricula = useCallback(async (matriculaId: number, nuevoEstado: string) => {
-    try {
-      const { error } = await supabaseBrowserClient
-        .from("matriculas")
-        .update({ estado: nuevoEstado })
-        .eq("id", matriculaId);
-      if (error) throw error;
-      message.success(`Matrícula marcada como ${nuevoEstado}`);
-      await cargarDatos(cursoId);
-    } catch (error: any) {
-      message.error("No se pudo actualizar la matrícula");
-      console.error(error);
-    }
-  }, [cursoId, cargarDatos, message]);
-
-  const handleAccionMatricula = useCallback((key: string, record: any) => {
-    if (key === "completada" || key === "cancelada" || key === "retirada") {
-      actualizarEstadoMatricula(record.id, key);
-    }
-  }, [actualizarEstadoMatricula]);
-
   const columnasEstudiantes = useMemo(
     () => [
       {
@@ -518,43 +497,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         width: 100,
         sorter: (a: any, b: any) => a.asistencia_porcentaje - b.asistencia_porcentaje,
       },
-      {
-        title: "Acciones",
-        key: "acciones",
-        width: 280,
-        render: (_: any, record: any) => {
-          const esActivo = record.estado === "activo";
-          return (
-            <Space wrap size="small">
-              <Button 
-                size="small" 
-                type="primary"
-                disabled={!esActivo}
-                onClick={() => handleAccionMatricula("completada", record)}
-              >
-                Completar
-              </Button>
-              <Button 
-                size="small" 
-                disabled={!esActivo}
-                onClick={() => handleAccionMatricula("cancelada", record)}
-              >
-                Cancelar
-              </Button>
-              <Button 
-                size="small" 
-                danger
-                disabled={!esActivo}
-                onClick={() => handleAccionMatricula("retirada", record)}
-              >
-                Retirar
-              </Button>
-            </Space>
-          );
-        },
-      },
     ],
-    [handleAccionMatricula]
+    []
   );
 
   const handleDeleteCurso = async () => {
@@ -763,9 +707,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             </Button>
             <Title level={2} style={{ margin: 0, color: "white" }}>{construirNombreGrupo(curso)}</Title>
             <Space wrap size={20} style={{ marginTop: 4 }}>
-              <Button icon={<BookOutlined />} onClick={() => setActiveTab("1")}>
-                Ver Temario
-              </Button>
               <Button
                 type="primary"
                 icon={<CheckOutlined />}
