@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse } from "antd";
+import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse, Grid } from "antd";
 import {
   UserOutlined,
   CheckCircleOutlined,
@@ -78,6 +78,8 @@ const dedupeByKey = <T,>(items: T[] = [], keySelector: (item: T) => string): T[]
 type ParamsLike = Promise<{ id: string }>;
 
 export default function CursoShowPage({ params }: { params: ParamsLike }) {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.sm;
   const { message, modal } = App.useApp();
   const [cursoId, setCursoId] = useState<string>("");
   const [curso, setCurso] = useState<any>(null);
@@ -346,28 +348,33 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       {
         title: "Fecha",
         dataIndex: "fecha",
+        width: 120,
         render: (fecha: string) => dayjs(fecha).format("DD MMM YYYY"),
         sorter: (a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
       },
       {
         title: "Tema",
         dataIndex: "tema_visto",
+        ellipsis: true,
+        width: isMobile ? 200 : undefined,
         render: (tema: string) => (tema ? <Tag>{tema}</Tag> : <Text type="secondary">-</Text>),
       },
       {
         title: "Horas Dictadas",
         dataIndex: "horas_dictadas",
+        width: 140,
         align: "center" as const,
         render: (horas: number) => <Tag color="blue">{horas}h</Tag>,
       },
       {
         title: "Observaciones",
         dataIndex: "observaciones",
+        responsive: ["md"],
         ellipsis: true,
         render: (obs: string) => (obs ? <Text type="secondary">{obs}</Text> : <Text type="secondary">-</Text>),
       },
     ],
-    []
+    [isMobile]
   );
 
   const estadoOptions = useMemo(
@@ -608,13 +615,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       {
         title: "Nombre",
         dataIndex: "nombre_completo",
+        ellipsis: true,
+        width: isMobile ? 160 : 220,
         render: (text: string) => <Text strong>{text}</Text>,
       },
-      { title: "Identificación", dataIndex: "identificacion", width: 150 },
-      { title: "Email", dataIndex: "email", ellipsis: true },
+      { title: "Identificación", dataIndex: "identificacion", width: 150, responsive: ["md"] },
+      { title: "Email", dataIndex: "email", ellipsis: true, responsive: ["lg"] },
       {
         title: "Estado",
         dataIndex: "estado",
+        responsive: ["sm"],
         render: (estado: string) => {
           let color = "default";
           if (estado === "activo") color = "success";
@@ -637,7 +647,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         sorter: (a: any, b: any) => a.asistencia_porcentaje - b.asistencia_porcentaje,
       },
     ],
-    []
+    [isMobile]
   );
 
   const handleDeleteCurso = async () => {
@@ -1222,6 +1232,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   rowKey="id"
                   pagination={{ pageSize: 15 }}
                   columns={columnasSesiones}
+                  size={isMobile ? "small" : "middle"}
+                  tableLayout="fixed"
+                  scroll={{ x: "max-content" }}
                 />
               </Card>
             )
@@ -1236,6 +1249,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   rowKey="id"
                   pagination={{ pageSize: 20 }}
                   columns={columnasEstudiantes}
+                  size={isMobile ? "small" : "middle"}
+                  tableLayout="fixed"
+                  scroll={{ x: "max-content" }}
                 />
               </Card>
             )
@@ -1269,6 +1285,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                         rowKey="id"
                         pagination={false}
                         style={{ marginTop: 4 }}
+                        tableLayout="fixed"
+                        scroll={{ x: "max-content" }}
                         columns={[
                           {
                             title: "Nombre",
