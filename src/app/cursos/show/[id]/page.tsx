@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select } from "antd";
+import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse } from "antd";
 import {
   UserOutlined,
   CheckCircleOutlined,
@@ -117,6 +117,74 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       ),
     [materialesClase],
   );
+
+  const ciclosOrdenados = useMemo(() => {
+    const list = Array.isArray(temas) ? temas.slice() : [];
+    return list.sort((a: any, b: any) => {
+      const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 0);
+      const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 0);
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+    });
+  }, [temas]);
+
+  const temasPorCiclo = useMemo(() => {
+    const map = new Map<string, any[]>();
+    ciclosOrdenados.forEach((ciclo: any) => {
+      const cicloId = String(ciclo?.id ?? "sin-ciclo");
+      const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos.slice() : [];
+      temasCiclo.sort((a: any, b: any) => {
+        const ordenA = Number(a?.orden ?? 0);
+        const ordenB = Number(b?.orden ?? 0);
+        if (ordenA !== ordenB) return ordenA - ordenB;
+        return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+      });
+      if (temasCiclo.length) {
+        map.set(cicloId, temasCiclo);
+      }
+    });
+
+    materialesClaseUnicos.forEach((item: any) => {
+      const tema = item?.pensum_cursos;
+      if (!tema?.id) return;
+      const cicloId = String(item?.pensum_id ?? tema?.pensum_id ?? "sin-ciclo");
+      const current = map.get(cicloId) ?? [];
+      if (!current.find((t: any) => String(t.id) === String(tema.id))) {
+        current.push(tema);
+        current.sort((a: any, b: any) => {
+          const ordenA = Number(a?.orden ?? 0);
+          const ordenB = Number(b?.orden ?? 0);
+          if (ordenA !== ordenB) return ordenA - ordenB;
+          return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+        });
+        map.set(cicloId, current);
+      }
+    });
+
+    return map;
+  }, [ciclosOrdenados, materialesClaseUnicos]);
+
+  const materialesPorTema = useMemo(() => {
+    const map = new Map<string, any[]>();
+    materialesClaseUnicos.forEach((item: any) => {
+      const temaId = String(item?.pensum_curso_id ?? "sin-tema");
+      const current = map.get(temaId) ?? [];
+      current.push(item);
+      map.set(temaId, current);
+    });
+    return map;
+  }, [materialesClaseUnicos]);
+
+  const materialesPorCiclo = useMemo(() => {
+    const map = new Map<string, any[]>();
+    materialesUnicos.forEach((item: any) => {
+      const cicloId = String(item?.pensum_id ?? "sin-ciclo");
+      const current = map.get(cicloId) ?? [];
+      current.push(item);
+      map.set(cicloId, current);
+    });
+    return map;
+  }, [materialesUnicos]);
 
   const guardarNota = useCallback(
     async (matriculaId: string | number, nota: number | null, estado: string) => {
@@ -958,146 +1026,134 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   showIcon
                 />
                 {materialesUnicos.length > 0 || materialesClaseUnicos.length > 0 ? (
-                  (() => {
-                    const pensumNombre = (pensumId?: string | number | null) => {
-                      if (pensumId == null) return "Sin ciclo";
-                      const numericId = typeof pensumId === "string" ? Number(pensumId) : pensumId;
-                      const match = temas.find((t: any) => t.id === numericId || t.id === pensumId);
-                      if (match) {
-                        if (match.nombre_ciclo) return match.nombre_ciclo;
-                        if (match.titulo) return match.titulo;
-                        if (match.numero_ciclo) return `Ciclo ${match.numero_ciclo}`;
-                      }
-                      return "Sin ciclo";
-                    };
+                  <div style={{ marginTop: 16 }}>
+                    <Collapse
+                      accordion
+                      expandIconPosition="end"
+                      items={(ciclosOrdenados.length ? ciclosOrdenados : [{ id: "sin-ciclo", nombre_ciclo: "Sin ciclo" }]).map(
+                        (ciclo: any, index: number) => {
+                          const cicloId = String(ciclo?.id ?? "sin-ciclo");
+                          const cicloNombre = ciclo?.nombre_ciclo || ciclo?.titulo || ciclo?.numero_ciclo ? `Ciclo ${ciclo?.numero_ciclo}` : "Sin ciclo";
+                          const temasCiclo = temasPorCiclo.get(cicloId) ?? [];
+                          const recursosCiclo = materialesPorCiclo.get(cicloId) ?? [];
 
-                    const grupos = materialesUnicos.reduce<Record<string, any[]>>((acc, mat) => {
-                      const keyValue = mat.pensum_id ?? "sin-ciclo";
-                      const key = String(keyValue);
-                      acc[key] = acc[key] || [];
-                      acc[key].push(mat);
-                      return acc;
-                    }, {});
+                          const temaItems = [
+                            ...(recursosCiclo.length
+                              ? [{
+                                  key: `${cicloId}-recursos`,
+                                  label: "Recursos del ciclo",
+                                  children: (
+                                    <List
+                                      dataSource={recursosCiclo}
+                                      renderItem={(material: any, idx: number) => (
+                                        <List.Item
+                                          key={`${cicloId}-rec-${idx}`}
+                                          extra={material.url_archivo ? (
+                                            <a href={material.url_archivo} target="_blank" rel="noreferrer">
+                                              Descargar
+                                            </a>
+                                          ) : null}
+                                        >
+                                          <List.Item.Meta
+                                            title={<Text strong>{material.titulo || material.nombre_archivo || "Recurso"}</Text>}
+                                            description={
+                                              <Space direction="vertical" size={2}>
+                                                {material.descripcion ? <Text type="secondary">{material.descripcion}</Text> : null}
+                                                <Space size={8} wrap>
+                                                  {material.tipo_material ? <Tag>{material.tipo_material}</Tag> : null}
+                                                  {material.orden ? <Tag color="blue">Orden {material.orden}</Tag> : null}
+                                                </Space>
+                                              </Space>
+                                            }
+                                          />
+                                        </List.Item>
+                                      )}
+                                    />
+                                  ),
+                                }]
+                              : []),
+                            ...temasCiclo.map((tema: any, temaIndex: number) => {
+                              const temaId = String(tema?.id ?? `tema-${temaIndex}`);
+                              const temaNombre = tema?.nombre_curso || tema?.titulo || `Tema ${temaIndex + 1}`;
+                              const materialesTema = materialesPorTema.get(temaId) ?? [];
 
-                    return (
-                      <Space direction="vertical" size={16} style={{ marginTop: 16, width: "100%" }}>
-                        {materialesClaseUnicos.length > 0 ? (
-                          (() => {
-                            const agrupadosPorTema = materialesClaseUnicos.reduce<Record<string, any[]>>((acc, material) => {
-                              const key = String(material.pensum_curso_id || "sin-tema");
-                              if (!acc[key]) acc[key] = [];
-                              acc[key].push(material);
-                              return acc;
-                            }, {});
-
-                            const temasOrden = new Map<string, number>();
-                            temas.forEach((ciclo: any) => {
-                              (ciclo?.pensum_cursos || []).forEach((tema: any) => {
-                                temasOrden.set(String(tema.id), Number(tema?.orden ?? 0));
-                              });
-                            });
-
-                            const entriesTemaOrdenadas = Object.entries(agrupadosPorTema).sort(([temaA], [temaB]) => {
-                              const ordenA = temasOrden.get(String(temaA)) ?? 0;
-                              const ordenB = temasOrden.get(String(temaB)) ?? 0;
-                              if (ordenA !== ordenB) return ordenA - ordenB;
-                              return Number(temaA) - Number(temaB);
-                            });
-
-                            return (
-                              <Card type="inner" title="Materiales necesarios por clase" style={{ marginBottom: 8 }}>
-                                <List
-                                  dataSource={entriesTemaOrdenadas}
-                                  renderItem={([temaId, items]) => {
-                                    const temaNombre = (items?.[0] as any)?.pensum_cursos?.nombre_curso || "Clase";
-                                    const itemsUnicos = dedupeByKey(items as any[], (item: any) =>
-                                      String(
-                                        `${item.nombre_material ?? ""}-${item.cantidad ?? ""}-${item.unidad ?? ""}-${
-                                          item.obligatorio ?? ""
-                                        }-${item.observaciones ?? ""}`,
-                                      ).toLowerCase(),
-                                    );
-                                    return (
-                                      <List.Item key={`req-${temaId}`}>
-                                        <List.Item.Meta
-                                          title={<Text strong>{temaNombre}</Text>}
-                                          description={
-                                            <Space direction="vertical" size={4}>
-                                              {itemsUnicos.map((item: any, index: number) => (
-                                                <Text key={`${temaId}-${index}`} type="secondary">
-                                                  • {item.nombre_material}
-                                                  {item.cantidad ? ` (${item.cantidad}${item.unidad ? ` ${item.unidad}` : ""})` : ""}
-                                                  {item.obligatorio ? " • obligatorio" : " • opcional"}
-                                                  {item.observaciones ? ` — ${item.observaciones}` : ""}
-                                                </Text>
-                                              ))}
-                                            </Space>
-                                          }
-                                        />
-                                      </List.Item>
-                                    );
-                                  }}
-                                />
-                              </Card>
-                            );
-                          })()
-                        ) : null}
-
-                        {Object.entries(grupos)
-                          .sort(([a], [b]) => {
-                            const matchA = temas.find((t: any) => String(t.id) === String(a));
-                            const matchB = temas.find((t: any) => String(t.id) === String(b));
-                            const ordenA = Number(matchA?.orden ?? matchA?.numero_ciclo ?? 0);
-                            const ordenB = Number(matchB?.orden ?? matchB?.numero_ciclo ?? 0);
-                            if (ordenA !== ordenB) return ordenA - ordenB;
-                            return Number(a) - Number(b);
-                          })
-                          .map(([key, mats]) => {
-                            const matsUnicos = dedupeByKey(mats as any[], (material: any) =>
-                              String(
-                                `${material.titulo ?? material.nombre_archivo ?? ""}-${material.url_archivo ?? ""}-${
-                                  material.descripcion ?? ""
-                                }-${material.tipo_material ?? ""}-${material.orden ?? ""}`,
-                              ).toLowerCase(),
-                            );
-                            return (
-                              <Card
-                                key={key}
-                                type="inner"
-                                title={`Ciclo / Tema: ${pensumNombre(key === "sin-ciclo" ? null : key)}`}
-                              >
-                                <List
-                                  dataSource={matsUnicos}
-                                  renderItem={(material, index) => (
-                                    <List.Item
-                                      key={`${key}-${index}`}
-                                      extra={material.url_archivo ? (
-                                        <a href={material.url_archivo} target="_blank" rel="noreferrer">
-                                          Descargar
-                                        </a>
-                                      ) : null}
+                              return {
+                                key: `${cicloId}-${temaId}`,
+                                label: (
+                                  <Space size={12} align="center">
+                                    <div
+                                      style={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 12,
+                                        background: "#e0e7ff",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        fontWeight: 700,
+                                        color: "#1e3a8a",
+                                      }}
                                     >
-                                      <List.Item.Meta
-                                        title={<Text strong>{material.titulo || material.nombre_archivo || "Recurso"}</Text>}
-                                        description={
-                                          <Space direction="vertical" size={2}>
-                                            {material.descripcion ? <Text type="secondary">{material.descripcion}</Text> : null}
-                                            <Space size={8} wrap>
-                                              {material.tipo_material ? <Tag>{material.tipo_material}</Tag> : null}
-                                              {material.orden ? <Tag color="blue">Orden {material.orden}</Tag> : null}
-                                            </Space>
-                                          </Space>
-                                        }
-                                      />
-                                    </List.Item>
-                                  )}
-                                />
-                              </Card>
-                            );
-                          })}
-                      </Space>
-                    );
-                  })()
+                                      {temaIndex + 1}
+                                    </div>
+                                    <Text strong>{temaNombre}</Text>
+                                  </Space>
+                                ),
+                                children: materialesTema.length ? (
+                                  <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                                    {materialesTema.map((item: any, itemIndex: number) => (
+                                      <Text key={`${temaId}-mat-${itemIndex}`} type="secondary">
+                                        • {item.nombre_material}
+                                        {item.cantidad ? ` (${item.cantidad}${item.unidad ? ` ${item.unidad}` : ""})` : ""}
+                                        {item.obligatorio ? " • obligatorio" : " • opcional"}
+                                        {item.observaciones ? ` — ${item.observaciones}` : ""}
+                                      </Text>
+                                    ))}
+                                  </Space>
+                                ) : (
+                                  <Empty description="No hay material en este tema" />
+                                ),
+                              };
+                            }),
+                          ];
+
+                          return {
+                            key: cicloId,
+                            label: (
+                              <Space size={16} align="center">
+                                <div
+                                  style={{
+                                    width: 44,
+                                    height: 44,
+                                    borderRadius: 16,
+                                    background: "#111827",
+                                    color: "#f8fafc",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: 22,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {index + 1}
+                                </div>
+                                <div>
+                                  <Text strong style={{ fontSize: 16 }}>{cicloNombre}</Text>
+                                  <br />
+                                  <Text type="secondary">Ciclo / Tema</Text>
+                                </div>
+                              </Space>
+                            ),
+                            children: temaItems.length ? (
+                              <Collapse ghost items={temaItems} />
+                            ) : (
+                              <Empty description="No hay temas o material en este ciclo" />
+                            ),
+                          };
+                        }
+                      )}
+                    />
+                  </div>
                 ) : (
                   <div style={{ marginTop: 16 }}>
                     <Text type="secondary">No hay material didáctico publicado para este programa.</Text>
