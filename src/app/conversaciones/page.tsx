@@ -412,7 +412,7 @@ export default function ConversacionesPage() {
       dataIndex: "phone_number",
       key: "phone_number",
       render: (phone: string, record: ConversationThread) => (
-        <div style={{ maxWidth: 240 }}>
+        <div style={{ maxWidth: 180 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <PhoneOutlined />
             <span style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.2 }}>
@@ -433,7 +433,7 @@ export default function ConversacionesPage() {
           ) : null}
         </div>
       ),
-      width: 250,
+      width: 190,
     },
     {
       title: "Ultima Pregunta",
@@ -442,10 +442,10 @@ export default function ConversacionesPage() {
       ellipsis: true,
       render: (text: string) => (
         <Tooltip title={text || ""}>
-          <span>{text && text.length > 80 ? `${text.substring(0, 80)}...` : (text || "-")}</span>
+          <span>{text && text.length > 60 ? `${text.substring(0, 60)}...` : (text || "-")}</span>
         </Tooltip>
       ),
-      width: 260,
+      width: 170,
     },
     {
       title: "Ultima Respuesta",
@@ -454,16 +454,16 @@ export default function ConversacionesPage() {
       ellipsis: true,
       render: (text: string) => (
         <Tooltip title={formatAgentResponse(text || "") }>
-          <span>{text && text.length > 80 ? formatAgentResponse(`${text.substring(0, 80)}...`) : formatAgentResponse(text || "-")}</span>
+          <span>{text && text.length > 65 ? formatAgentResponse(`${text.substring(0, 65)}...`) : formatAgentResponse(text || "-")}</span>
         </Tooltip>
       ),
-      width: 320,
+      width: 200,
     },
     {
       title: "Mensajes",
       dataIndex: "total",
       key: "total",
-      width: 110,
+      width: 80,
       render: (total: number) => <Tag color="blue">{total}</Tag>,
     },
     {
@@ -472,16 +472,16 @@ export default function ConversacionesPage() {
       key: "last_date",
       render: (date: string) => (
         <Space size="small" direction="vertical">
-          <span>{dayjs(date).format("DD/MM/YYYY HH:mm")}</span>
+          <span>{dayjs(date).format("DD/MM HH:mm")}</span>
           <Tag>{dayjs(date).fromNow()}</Tag>
         </Space>
       ),
-      width: 180,
+      width: 130,
     },
     {
       title: "Acciones",
       key: "actions",
-      width: 120,
+      width: 105,
       render: (_: any, record: ConversationThread) => (
         <Space size="small">
           <Tooltip title="Ver conversación completa">
@@ -659,9 +659,8 @@ export default function ConversacionesPage() {
               dataSource={conversationsFiltradas}
               rowKey="thread_key"
               pagination={{ pageSize: 20, showSizeChanger: true }}
-              size="middle"
-              scroll={{ x: 1400 }}
-              tableLayout="fixed"
+              size="small"
+              tableLayout="auto"
               rowSelection={{
                 selectedRowKeys: selectedRows,
                 onChange: (keys) => setSelectedRows(keys as string[]),
