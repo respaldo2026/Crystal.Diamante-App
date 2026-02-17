@@ -11,6 +11,9 @@ export interface ProfesorDashboardCurso {
   nombre: string;
   estado: string;
   programaId?: number | null;
+  diasSemana?: string[] | string | null;
+  horaInicio?: string | null;
+  fechaInicio?: string | null;
   estudiantesActivos: number;
   asistenciaPromedio?: number | null;
   promedioNota?: number | null;
@@ -106,12 +109,88 @@ const isAsistenciaPositiva = (estado?: string | null) => {
 
 const safeNumber = (value: number) => (Number.isFinite(value) ? value : 0);
 
+const normalizeDayText = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const weekdayMap: Record<string, number> = {
+  domingo: 0,
+  lunes: 1,
+  martes: 2,
+  miercoles: 3,
+  jueves: 4,
+  viernes: 5,
+  sabado: 6,
+};
+
+const parseCourseDays = (diasSemana: string[] | string | null | undefined): number[] => {
+  if (!diasSemana) return [];
+  const raw = Array.isArray(diasSemana)
+    ? diasSemana
+    : String(diasSemana)
+        .split(/[;,|]/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+  const days = raw
+    .map((item) => normalizeDayText(item))
+    .map((name) => weekdayMap[name])
+    .filter((day): day is number => Number.isInteger(day));
+
+  return Array.from(new Set(days));
+};
+
+const applyTimeToDate = (base: dayjs.Dayjs, horaInicio?: string | null): dayjs.Dayjs => {
+  if (!horaInicio) return base.startOf("day");
+  const [hhRaw, mmRaw] = String(horaInicio).split(":");
+  const hour = Number(hhRaw);
+  const minute = Number(mmRaw);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return base.startOf("day");
+  }
+
+  return base.hour(hour).minute(minute).second(0).millisecond(0);
+};
+
+const computeNextSessionFromSchedule = (
+  diasSemana: string[] | string | null | undefined,
+  horaInicio?: string | null,
+  fechaInicio?: string | null,
+): string | null => {
+  const days = parseCourseDays(diasSemana);
+  if (!days.length) return null;
+
+  const now = dayjs();
+  const minDate = fechaInicio ? dayjs(fechaInicio).startOf("day") : null;
+
+  let best: dayjs.Dayjs | null = null;
+
+  for (let offset = 0; offset <= 21; offset += 1) {
+    const candidateDay = dayjs().startOf("day").add(offset, "day");
+    if (!days.includes(candidateDay.day())) continue;
+    if (minDate && candidateDay.isBefore(minDate, "day")) continue;
+
+    const candidate = applyTimeToDate(candidateDay, horaInicio);
+    if (candidate.isBefore(now)) continue;
+
+    if (!best || candidate.isBefore(best)) {
+      best = candidate;
+    }
+  }
+
+  return best ? best.toISOString() : null;
+};
+
 export const fetchProfessorDashboardData = async (
   profesorId: string,
 ): Promise<Omit<ProfessorDashboardData, "loading" | "profesorNombre">> => {
   const cursosResponse = await supabaseBrowserClient
     .from("cursos")
-    .select("id, nombre, estado, programa_id")
+    .select("id, nombre, estado, programa_id, dias_semana, hora_inicio, fecha_inicio")
     .eq("profesor_id", profesorId)
     .neq("estado", "eliminado")
     .order("nombre", { ascending: true });
@@ -403,6 +482,34 @@ export const fetchProfessorDashboardData = async (
     }
   });
 
+  const fallbackProximasSesiones: ProfesorDashboardSesion[] = (cursosData || [])
+    .map((curso: any) => {
+      if (proximasSesionPorCurso.has(curso.id)) return null;
+      const fechaFallback = computeNextSessionFromSchedule(curso.dias_semana, curso.hora_inicio, curso.fecha_inicio);
+      if (!fechaFallback) return null;
+
+      return {
+        id: `fallback-${curso.id}`,
+        fecha: fechaFallback,
+        cursoId: curso.id,
+        curso: cursoNombreMap.get(curso.id) || curso.nombre || "Curso",
+        tema: null,
+        horas: null,
+      } as ProfesorDashboardSesion;
+    })
+    .filter((item): item is ProfesorDashboardSesion => Boolean(item))
+    .sort((a, b) => dayjs(a.fecha).valueOf() - dayjs(b.fecha).valueOf());
+
+  fallbackProximasSesiones.forEach((sesion) => {
+    if (!proximasSesionPorCurso.has(sesion.cursoId)) {
+      proximasSesionPorCurso.set(sesion.cursoId, { fecha: sesion.fecha, tema: sesion.tema });
+    }
+  });
+
+  const mergedProximasSesiones = [...proximasSesionesList, ...fallbackProximasSesiones]
+    .sort((a, b) => dayjs(a.fecha).valueOf() - dayjs(b.fecha).valueOf())
+    .slice(0, 6);
+
   const ultimaSesionPorCurso = new Map<string, { fecha: string; tema?: string | null }>();
   sesionesMesData.forEach((sesion: any) => {
     if (!sesion.fecha || !sesion.curso_id) return;
@@ -438,6 +545,9 @@ export const fetchProfessorDashboardData = async (
       nombre: curso.nombre,
       estado: curso.estado,
       programaId: curso.programa_id ?? null,
+      diasSemana: curso.dias_semana ?? null,
+      horaInicio: curso.hora_inicio ?? null,
+      fechaInicio: curso.fecha_inicio ?? null,
       estudiantesActivos: estudiantesPorCurso.get(curso.id) || 0,
       asistenciaPromedio:
         asistencia && asistencia.total > 0
@@ -482,7 +592,7 @@ export const fetchProfessorDashboardData = async (
   return {
     stats: statsPayload,
     cursos: cursosEnriquecidos,
-    proximasSesiones: proximasSesionesList,
+    proximasSesiones: mergedProximasSesiones,
     pendientes: pendientesList,
     pagos: pagosRecientes,
   };
