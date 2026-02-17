@@ -127,6 +127,25 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     [materialesClase],
   );
 
+  const parseTemaFromTitulo = (titulo: string) => {
+    const match = titulo.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
+    if (!match) return { tema: undefined, tituloLimpio: titulo };
+    const tema = match[1]?.trim();
+    const tituloLimpio = (match[2] || titulo).trim();
+    return { tema, tituloLimpio };
+  };
+
+  const normalizarTema = (valor?: string) =>
+    String(valor || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/^\d+\s*[\.)\-:]\s*/, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
   const ciclosOrdenados = useMemo(() => {
     const list = Array.isArray(temas) ? temas.slice() : [];
     return list.sort((a: any, b: any) => {
@@ -173,6 +192,19 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return map;
   }, [ciclosOrdenados, materialesClaseUnicos]);
 
+  const temasPorNombre = useMemo(() => {
+    const map = new Map<string, string>();
+    ciclosOrdenados.forEach((ciclo: any) => {
+      const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+      temasCiclo.forEach((tema: any) => {
+        const nombre = tema?.nombre_curso || tema?.titulo || "";
+        const key = normalizarTema(nombre);
+        if (key) map.set(key, String(tema.id));
+      });
+    });
+    return map;
+  }, [ciclosOrdenados]);
+
   const materialesNecesariosPorTema = useMemo(() => {
     const map = new Map<string, any[]>();
     materialesClaseUnicos.forEach((item: any) => {
@@ -187,13 +219,23 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const materialesDidacticosPorTema = useMemo(() => {
     const map = new Map<string, any[]>();
     materialesUnicos.forEach((item: any) => {
-      const temaId = String(item?.pensum_curso_id ?? item?.pensum_cursos?.id ?? "sin-tema");
-      const current = map.get(temaId) ?? [];
+      const temaIdDirecto = item?.pensum_curso_id ?? item?.pensum_cursos?.id;
+      let temaId = temaIdDirecto ? String(temaIdDirecto) : "";
+      if (!temaId) {
+        const tituloMaterial = String(item?.titulo || item?.nombre_archivo || "");
+        const { tema } = parseTemaFromTitulo(tituloMaterial);
+        const temaKey = normalizarTema(tema);
+        if (temaKey && temasPorNombre.has(temaKey)) {
+          temaId = String(temasPorNombre.get(temaKey));
+        }
+      }
+      const finalTemaId = temaId || "sin-tema";
+      const current = map.get(finalTemaId) ?? [];
       current.push(item);
-      map.set(temaId, current);
+      map.set(finalTemaId, current);
     });
     return map;
-  }, [materialesUnicos]);
+  }, [materialesUnicos, temasPorNombre]);
 
   const materialesDidacticosPorCiclo = useMemo(() => {
     const map = new Map<string, any[]>();
