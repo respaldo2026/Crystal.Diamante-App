@@ -96,6 +96,16 @@ type Estadisticas = {
   deudaTotal: number;
 };
 
+type AsistenciaEstudiante = {
+  id: string;
+  fecha: string | null;
+  estado: string | null;
+  observaciones?: string | null;
+  matricula_id: number | null;
+  curso: string;
+  tema_visto?: string | null;
+};
+
 const { Title, Text } = Typography;
 
 export default function StudentDetailView() {
@@ -108,6 +118,7 @@ export default function StudentDetailView() {
   const [perfil, setPerfil] = useState<any>(null);
   const [matriculas, setMatriculas] = useState<Matricula[]>([]);
   const [pagosHistorial, setPagosHistorial] = useState<Pago[]>([]);
+  const [asistenciasHistorial, setAsistenciasHistorial] = useState<AsistenciaEstudiante[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState("");
@@ -202,6 +213,73 @@ export default function StudentDetailView() {
       }
       const listaMats = (dataMatriculas as any[] | null) ?? [];
       setMatriculas(listaMats);
+
+      const matriculaIds = listaMats.map((m: any) => m.id).filter(Boolean);
+      const cursoIds = listaMats.map((m: any) => m?.cursos?.id).filter(Boolean);
+
+      if (matriculaIds.length > 0) {
+        const { data: dataAsistencias, error: errAsistencias } = await supabaseBrowserClient
+          .from("asistencias")
+          .select("id, fecha, estado, observaciones, matricula_id")
+          .in("matricula_id", matriculaIds)
+          .order("fecha", { ascending: false });
+
+        if (errAsistencias) {
+          console.error("Error cargando asistencias del estudiante", errAsistencias);
+          setAsistenciasHistorial([]);
+        } else {
+          const asistenciasBase = dataAsistencias || [];
+          const fechas = asistenciasBase
+            .map((a: any) => a?.fecha)
+            .filter(Boolean)
+            .sort();
+
+          const fechaMin = fechas[0];
+          const fechaMax = fechas[fechas.length - 1];
+
+          const sesionesQuery = supabaseBrowserClient
+            .from("sesiones_clase")
+            .select("curso_id, fecha, tema_visto")
+            .in("curso_id", cursoIds);
+
+          const { data: sesionesData } = await (fechaMin && fechaMax
+            ? sesionesQuery.gte("fecha", fechaMin).lte("fecha", fechaMax)
+            : sesionesQuery);
+
+          const temaPorCursoFecha = new Map<string, string>();
+          (sesionesData || []).forEach((sesion: any) => {
+            const key = `${sesion?.curso_id || ""}-${sesion?.fecha || ""}`;
+            if (!temaPorCursoFecha.has(key)) {
+              temaPorCursoFecha.set(key, sesion?.tema_visto || "");
+            }
+          });
+
+          const cursoPorMatricula = new Map<number, any>();
+          listaMats.forEach((mat: any) => {
+            cursoPorMatricula.set(Number(mat.id), mat.cursos || null);
+          });
+
+          const asistenciasFormateadas: AsistenciaEstudiante[] = asistenciasBase.map((asistencia: any) => {
+            const cursoData = cursoPorMatricula.get(Number(asistencia.matricula_id));
+            const cursoId = cursoData?.id;
+            const key = `${cursoId || ""}-${asistencia?.fecha || ""}`;
+
+            return {
+              id: String(asistencia.id),
+              fecha: asistencia.fecha || null,
+              estado: asistencia.estado || null,
+              observaciones: asistencia.observaciones || null,
+              matricula_id: asistencia.matricula_id || null,
+              curso: construirNombreGrupo(cursoData) || "Curso",
+              tema_visto: temaPorCursoFecha.get(key) || null,
+            };
+          });
+
+          setAsistenciasHistorial(asistenciasFormateadas);
+        }
+      } else {
+        setAsistenciasHistorial([]);
+      }
 
       const activas = listaMats.filter((m) => m.estado === "activo").length;
       const finalizadas = listaMats.filter((m) => m.estado === "finalizado").length;
@@ -1161,6 +1239,50 @@ export default function StudentDetailView() {
             },
             {
               key: "4",
+              label: (
+                <span>
+                  <CheckCircleOutlined /> Asistencia y Temas
+                </span>
+              ),
+              children: (
+                <Table
+                  dataSource={asistenciasHistorial}
+                  rowKey="id"
+                  pagination={{ pageSize: 10 }}
+                  locale={{ emptyText: "No hay asistencias registradas" }}
+                  columns={[
+                    {
+                      title: "Fecha",
+                      dataIndex: "fecha",
+                      width: 130,
+                      render: (val: string | null) => (val ? formatDate(val) : "-")
+                    },
+                    {
+                      title: "Curso",
+                      dataIndex: "curso",
+                      render: (val: string) => <Text strong>{val || "Curso"}</Text>,
+                    },
+                    {
+                      title: "Tema visto",
+                      dataIndex: "tema_visto",
+                      render: (val: string | null) => val || <Text type="secondary">-</Text>,
+                    },
+                    {
+                      title: "Estado",
+                      dataIndex: "estado",
+                      width: 130,
+                      render: (estado: string | null) => (
+                        <Tag color={estado === "presente" ? "green" : "red"}>
+                          {String(estado || "-").toUpperCase()}
+                        </Tag>
+                      ),
+                    },
+                  ]}
+                />
+              ),
+            },
+            {
+              key: "5",
               label: (
                 <span>
                   <BookOutlined /> Materiales Entregados

@@ -275,6 +275,9 @@ export default function PortalEstudiante() {
 
       const matriculaIds = dataMatriculas?.map(m => m.id) || [];
       const programaIds = dataMatriculas?.map(m => m.cursos?.programa_id).filter(Boolean) || [];
+      const cursoIds = (dataMatriculas || [])
+        .map((m: any) => m?.curso_id || m?.cursos?.id)
+        .filter(Boolean);
 
       // 2. Cargar Pagos (Independiente de matrículas activas para ver historial completo)
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
@@ -308,10 +311,49 @@ export default function PortalEstudiante() {
         // Asistencias
         const { data: dataAsistencias } = await supabaseBrowserClient
           .from("asistencias")
-          .select("*, matriculas(id, cursos(nombre))")
+          .select("*, matriculas(id, curso_id, cursos(nombre))")
           .in("matricula_id", matriculaIds)
           .order("fecha", { ascending: false });
-        setAsistencias(dataAsistencias || []);
+
+        let asistenciasConTema = dataAsistencias || [];
+
+        if ((dataAsistencias || []).length > 0 && cursoIds.length > 0) {
+          const fechas = (dataAsistencias || [])
+            .map((a: any) => a?.fecha)
+            .filter(Boolean)
+            .sort();
+
+          const fechaMin = fechas[0];
+          const fechaMax = fechas[fechas.length - 1];
+
+          const sesionesQuery = supabaseBrowserClient
+            .from("sesiones_clase")
+            .select("curso_id, fecha, tema_visto")
+            .in("curso_id", cursoIds);
+
+          const { data: sesionesData } = await (fechaMin && fechaMax
+            ? sesionesQuery.gte("fecha", fechaMin).lte("fecha", fechaMax)
+            : sesionesQuery);
+
+          const temaPorCursoFecha = new Map<string, string>();
+          (sesionesData || []).forEach((sesion: any) => {
+            const key = `${sesion?.curso_id || ""}-${sesion?.fecha || ""}`;
+            if (!temaPorCursoFecha.has(key)) {
+              temaPorCursoFecha.set(key, sesion?.tema_visto || "");
+            }
+          });
+
+          asistenciasConTema = (dataAsistencias || []).map((asistencia: any) => {
+            const cursoId = asistencia?.matriculas?.curso_id;
+            const key = `${cursoId || ""}-${asistencia?.fecha || ""}`;
+            return {
+              ...asistencia,
+              tema_visto: temaPorCursoFecha.get(key) || null,
+            };
+          });
+        }
+
+        setAsistencias(asistenciasConTema);
 
         // Calificaciones
         const { data: dataCalificaciones } = await supabaseBrowserClient
@@ -1229,6 +1271,7 @@ export default function PortalEstudiante() {
                 columns={[
                   { title: "Fecha", dataIndex: "fecha", render: (f) => formatDate(f) },
                   { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
+                  { title: "Tema visto", dataIndex: "tema_visto", render: (t) => t || "-" },
                   { title: "Estado", dataIndex: "estado", render: (e) => <Tag color={e === "presente" ? "green" : "red"}>{e?.toUpperCase()}</Tag> },
                 ]}
               />

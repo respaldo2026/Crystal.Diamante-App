@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App } from "antd";
+import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Input } from "antd";
 import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -23,6 +23,7 @@ export default function TomarAsistencia() {
   const [loadingAlumnos, setLoadingAlumnos] = useState(false);
   const [cursoNombre, setCursoNombre] = useState<string>("");
   const [cursos, setCursos] = useState<any[]>([]);
+  const [temaVisto, setTemaVisto] = useState("");
   
   // Estado local para guardar la asistencia antes de enviarla
   // Formato: { "id_matricula": "presente", ... }
@@ -174,9 +175,51 @@ export default function TomarAsistencia() {
 
     setGuardando(true);
     try {
+      const cursoSeleccionadoData = cursos.find((c) => Number(c.id) === Number(cursoSeleccionado));
+      const temaLimpio = temaVisto.trim();
+      const fechaSesion = fecha.format("YYYY-MM-DD");
+
+      const guardarTemaSesion = async () => {
+        if (!temaLimpio) return;
+
+        const { data: sesionExistente, error: errSesionExistente } = await supabaseBrowserClient
+          .from("sesiones_clase")
+          .select("id")
+          .eq("curso_id", cursoSeleccionado)
+          .eq("fecha", fechaSesion)
+          .maybeSingle();
+
+        if (errSesionExistente) {
+          throw errSesionExistente;
+        }
+
+        if (sesionExistente?.id) {
+          const { error: errUpdateSesion } = await supabaseBrowserClient
+            .from("sesiones_clase")
+            .update({ tema_visto: temaLimpio })
+            .eq("id", sesionExistente.id);
+
+          if (errUpdateSesion) throw errUpdateSesion;
+          return;
+        }
+
+        const { error: errInsertSesion } = await supabaseBrowserClient
+          .from("sesiones_clase")
+          .insert({
+            curso_id: cursoSeleccionado,
+            profesor_id: cursoSeleccionadoData?.profesor_id || null,
+            fecha: fechaSesion,
+            horas_dictadas: 0,
+            tema_visto: temaLimpio,
+            observaciones: "Sesión registrada desde llamado de lista",
+          });
+
+        if (errInsertSesion) throw errInsertSesion;
+      };
+
       const registros = alumnos.map((alumno) => ({
         matricula_id: alumno.id,
-        fecha: fecha.format("YYYY-MM-DD"),
+        fecha: fechaSesion,
         estado: asistenciasMap[alumno.id],
         observaciones: "Clase regular",
       }));
@@ -187,11 +230,27 @@ export default function TomarAsistencia() {
 
       if (error) {
         if (error.code === "23505" || error.message.includes("duplicate") || error.message.includes("unique")) {
-          message.warning("⚠️ Ya se tomó asistencia para este curso en esta fecha.");
+          try {
+            await guardarTemaSesion();
+          } catch (sesionError: any) {
+            console.error(sesionError);
+            message.warning("⚠️ La asistencia ya existía, pero no se pudo guardar el tema del día.");
+            return;
+          }
+          message.warning(temaLimpio
+            ? "⚠️ La asistencia ya existía para esta fecha. Se actualizó el tema del día."
+            : "⚠️ Ya se tomó asistencia para este curso en esta fecha.");
           return;
         }
         message.error("Error guardando: " + error.message);
         return;
+      }
+
+      try {
+        await guardarTemaSesion();
+      } catch (sesionError: any) {
+        console.error(sesionError);
+        message.warning("Asistencia guardada, pero no se pudo guardar el tema del día.");
       }
 
       // Notificar automáticamente a ausentes
@@ -305,6 +364,18 @@ export default function TomarAsistencia() {
                 value={fecha}
                 onChange={(val) => setFecha(val || dayjs())}
                 format="DD-MMM-YYYY"
+              />
+            </div>
+          </Col>
+          <Col xs={24}>
+            <div>
+              <Text strong>Tema visto del día (opcional):</Text>
+              <Input
+                style={{ marginTop: 8 }}
+                value={temaVisto}
+                onChange={(e) => setTemaVisto(e.target.value)}
+                placeholder="Ej: Técnica de limado, preparación de uña y aplicación de gel"
+                maxLength={180}
               />
             </div>
           </Col>
