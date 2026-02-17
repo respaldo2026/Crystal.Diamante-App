@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse, Grid } from "antd";
+import type { Breakpoint } from "antd/es/_util/responsiveObserver";
 import {
   UserOutlined,
   CheckCircleOutlined,
@@ -411,7 +412,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       {
         title: "Observaciones",
         dataIndex: "observaciones",
-        responsive: ["md"],
+        responsive: ["md"] as Breakpoint[],
         ellipsis: true,
         render: (obs: string) => (obs ? <Text type="secondary">{obs}</Text> : <Text type="secondary">-</Text>),
       },
@@ -661,12 +662,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         width: isMobile ? 160 : 220,
         render: (text: string) => <Text strong>{text}</Text>,
       },
-      { title: "Identificación", dataIndex: "identificacion", width: 150, responsive: ["md"] },
-      { title: "Email", dataIndex: "email", ellipsis: true, responsive: ["lg"] },
+      { title: "Identificación", dataIndex: "identificacion", width: 150, responsive: ["md"] as Breakpoint[] },
+      { title: "Email", dataIndex: "email", ellipsis: true, responsive: ["lg"] as Breakpoint[] },
       {
         title: "Estado",
         dataIndex: "estado",
-        responsive: ["sm"],
+        responsive: ["sm"] as Breakpoint[],
         render: (estado: string) => {
           let color = "default";
           if (estado === "activo") color = "success";
