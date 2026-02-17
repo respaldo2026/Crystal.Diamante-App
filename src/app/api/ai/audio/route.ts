@@ -141,48 +141,6 @@ function extractPhoneFromAudioBody(body: any): string {
       }
       if (typeof value === "number" && Number.isFinite(value)) {
         result.push(String(value));
-
-      function looksLikeHttpUrl(value: string): boolean {
-        if (!value) return false;
-        return /^https?:\/\//i.test(value.trim());
-      }
-
-      function extractAudioInputsFromBody(body: any): { mediaId: string; audioUrl: string } {
-        const directMediaId = pickFirstNonEmptyString(body?.media_id, body?.mediaId, body?.audio_id, body?.audioId);
-        const directAudioUrl = pickFirstNonEmptyString(body?.audio_url, body?.audioUrl, body?.url);
-
-        const webhookAudioNode = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.audio;
-        const nestedAudioNode = body?.messages?.[0]?.audio;
-        const deepStringCandidates = extractStringsDeep({
-          audio: body?.audio,
-          message: body?.message,
-          messages: body?.messages,
-          entry: body?.entry,
-          payload: body?.payload,
-          data: body?.data,
-        }, 5);
-
-        const fromWebhookMediaId = pickFirstNonEmptyString(
-          webhookAudioNode?.id,
-          nestedAudioNode?.id,
-          webhookAudioNode?.media_id,
-          nestedAudioNode?.media_id,
-        );
-
-        const fromWebhookAudioUrl = pickFirstNonEmptyString(
-          webhookAudioNode?.url,
-          nestedAudioNode?.url,
-          webhookAudioNode?.link,
-          nestedAudioNode?.link,
-        );
-
-        const deepUrlCandidate = deepStringCandidates.find((candidate) => looksLikeHttpUrl(candidate)) || "";
-
-        const mediaId = pickFirstNonEmptyString(directMediaId, fromWebhookMediaId);
-        const audioUrl = pickFirstNonEmptyString(directAudioUrl, fromWebhookAudioUrl, deepUrlCandidate);
-
-        return { mediaId, audioUrl };
-      }
       }
     };
 
@@ -302,6 +260,48 @@ function extractPhoneFromAudioBody(body: any): string {
   }
 
   return normalizedPhone;
+}
+
+function looksLikeHttpUrl(value: string): boolean {
+  if (!value) return false;
+  return /^https?:\/\//i.test(value.trim());
+}
+
+function extractAudioInputsFromBody(body: any): { mediaId: string; audioUrl: string } {
+  const directMediaId = pickFirstNonEmptyString(body?.media_id, body?.mediaId, body?.audio_id, body?.audioId);
+  const directAudioUrl = pickFirstNonEmptyString(body?.audio_url, body?.audioUrl, body?.url);
+
+  const webhookAudioNode = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.audio;
+  const nestedAudioNode = body?.messages?.[0]?.audio;
+  const deepStringCandidates = extractStringsDeep({
+    audio: body?.audio,
+    message: body?.message,
+    messages: body?.messages,
+    entry: body?.entry,
+    payload: body?.payload,
+    data: body?.data,
+  }, 5);
+
+  const fromWebhookMediaId = pickFirstNonEmptyString(
+    webhookAudioNode?.id,
+    nestedAudioNode?.id,
+    webhookAudioNode?.media_id,
+    nestedAudioNode?.media_id,
+  );
+
+  const fromWebhookAudioUrl = pickFirstNonEmptyString(
+    webhookAudioNode?.url,
+    nestedAudioNode?.url,
+    webhookAudioNode?.link,
+    nestedAudioNode?.link,
+  );
+
+  const deepUrlCandidate = deepStringCandidates.find((candidate) => looksLikeHttpUrl(candidate)) || "";
+
+  const mediaId = pickFirstNonEmptyString(directMediaId, fromWebhookMediaId);
+  const audioUrl = pickFirstNonEmptyString(directAudioUrl, fromWebhookAudioUrl, deepUrlCandidate);
+
+  return { mediaId, audioUrl };
 }
 
 /**
