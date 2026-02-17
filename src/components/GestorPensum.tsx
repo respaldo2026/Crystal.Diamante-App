@@ -543,6 +543,7 @@ export default function GestorPensum({
     formMaterialClase.setFieldsValue({
       pensum_curso_id: material?.pensum_curso_id || cursoId,
       material_ciclo_id: material?.material_ciclo_id || null,
+      material_ciclo_ids: material?.material_ciclo_id ? [material.material_ciclo_id] : [],
       nombre_material: material?.nombre_material || "",
       cantidad: material?.cantidad || "",
       unidad: material?.unidad || "",
@@ -561,6 +562,10 @@ export default function GestorPensum({
       }
       if (!selectedCicloId) return;
       const values = await formMaterialClase.validateFields();
+
+      const selectedMaterialIds = Array.isArray(values.material_ciclo_ids)
+        ? values.material_ciclo_ids.filter(Boolean)
+        : [];
 
       const materialCicloSeleccionado = materialesCicloGeneral.find(
         (material) => String(material.id) === String(values.material_ciclo_id),
@@ -591,11 +596,42 @@ export default function GestorPensum({
         if (error) throw error;
         message.success("Material necesario actualizado");
       } else {
-        const { error } = await supabaseBrowserClient
-          .from("materiales_clase")
-          .insert([payload]);
-        if (error) throw error;
-        message.success("Material necesario agregado");
+        if (selectedMaterialIds.length > 1) {
+          const payloads = selectedMaterialIds.map((materialId: string, index: number) => {
+            const selected = materialesCicloGeneral.find((material) => String(material.id) === String(materialId));
+            return {
+              ...payload,
+              material_ciclo_id: materialId,
+              nombre_material: selected?.nombre || payload.nombre_material,
+              cantidad: selected?.cantidad || payload.cantidad,
+              orden: (values.orden || 1) + index,
+            };
+          });
+
+          const { error } = await supabaseBrowserClient
+            .from("materiales_clase")
+            .insert(payloads);
+          if (error) throw error;
+          message.success(`${payloads.length} materiales necesarios agregados`);
+        } else {
+          const materialId = selectedMaterialIds[0] || values.material_ciclo_id || null;
+          const selected = materialId
+            ? materialesCicloGeneral.find((material) => String(material.id) === String(materialId))
+            : null;
+
+          const payloadSingle = {
+            ...payload,
+            material_ciclo_id: materialId,
+            nombre_material: selected?.nombre || payload.nombre_material,
+            cantidad: selected?.cantidad || payload.cantidad,
+          };
+
+          const { error } = await supabaseBrowserClient
+            .from("materiales_clase")
+            .insert([payloadSingle]);
+          if (error) throw error;
+          message.success("Material necesario agregado");
+        }
       }
 
       setModalMaterialClaseVisible(false);
@@ -1619,13 +1655,16 @@ export default function GestorPensum({
           </Form.Item>
 
           <Form.Item
-            name="material_ciclo_id"
+            name={editingMaterialClase ? "material_ciclo_id" : "material_ciclo_ids"}
             label="Material del ciclo (lista general)"
-            rules={materialesCicloGeneralOrdenados.length > 0 ? [{ required: true, message: "Selecciona un material del ciclo" }] : []}
+            rules={materialesCicloGeneralOrdenados.length > 0 ? [{ required: true, message: "Selecciona al menos un material del ciclo" }] : []}
           >
             <Select
               allowClear
-              placeholder="Selecciona un material del ciclo"
+              mode={editingMaterialClase ? undefined : "multiple"}
+              showSearch
+              optionFilterProp="label"
+              placeholder={editingMaterialClase ? "Selecciona un material del ciclo" : "Selecciona uno o varios materiales del ciclo"}
               options={materialesCicloGeneralOrdenados.map((material) => ({
                 value: material.id,
                 label: material.incluido_kit
@@ -1633,12 +1672,16 @@ export default function GestorPensum({
                   : material.nombre,
               }))}
               onChange={(value) => {
-                const selected = materialesCicloGeneralOrdenados.find((item) => String(item.id) === String(value));
+                const selectedIds = Array.isArray(value) ? value : [value].filter(Boolean);
+                if (selectedIds.length !== 1) return;
+                const selected = materialesCicloGeneralOrdenados.find((item) => String(item.id) === String(selectedIds[0]));
                 if (!selected) return;
-                formMaterialClase.setFieldsValue({
-                  nombre_material: selected.nombre,
-                  cantidad: selected.cantidad || "",
-                });
+                if (!editingMaterialClase) {
+                  formMaterialClase.setFieldsValue({
+                    nombre_material: selected.nombre,
+                    cantidad: selected.cantidad || "",
+                  });
+                }
               }}
             />
           </Form.Item>
