@@ -1115,12 +1115,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   </Upload>
                 ) : null}
               >
-                <Alert
-                  message="Material controlado desde el programa académico"
-                  description="El temario y los recursos provienen del programa académico. Para cambios, contacta a un administrador."
-                  type="info"
-                  showIcon
-                />
                 {materialesClaseUnicos.length > 0 ? (
                   <div style={{ marginTop: 16 }}>
                     <Collapse

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Card, Tabs, Typography, Space, Tag, Button, Table, List, Progress, Statistic, Row, Col, App, Alert, Upload } from "antd";
+import { Card, Tabs, Typography, Space, Tag, Button, Table, List, Progress, Statistic, Row, Col, App, Upload } from "antd";
 import {
   ArrowLeftOutlined,
   CalendarOutlined,
@@ -404,12 +404,6 @@ export default function SalonVirtualPage() {
           </Row>
 
           <Card title={`Material Didáctico (${materiales.length})`}>
-            <Alert
-              message="Material controlado desde el programa académico"
-              description="Los recursos se organizan por ciclo/tema del pensum. Para cambios, contacta a un administrador."
-              type="info"
-              showIcon
-            />
             {materiales.length > 0 ? (
               (() => {
                 const pensumNombre = (pensumId?: string | number | null) => {
