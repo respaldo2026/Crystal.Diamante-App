@@ -653,6 +653,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             <li>Asistencias y notas</li>
           </ul>
           <p>Recomendado cuando no quieres que aparezca en listados pero necesitas mantener los datos.</p>
+        </div>
+      ),
+      okText: "Ocultar grupo",
+      okType: "danger",
+      cancelText: "Cancelar",
+      onOk: async () => {
         try {
           const { error } = await supabaseBrowserClient
             .from("cursos")
@@ -665,7 +671,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           message.error("No se pudo ocultar el grupo");
           console.error(error);
         }
-      }
+      },
     });
   };
 
@@ -689,12 +695,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   <li>Una vez que todas las matrículas estén cerradas, podrás finalizar el grupo</li>
                 </ol>
                 <p><strong>Estudiantes activos:</strong></p>
-                  <Alert
-                    message="Material controlado desde el programa académico"
-                    description="El temario y los recursos provienen del programa académico. Para cambios, contacta a un administrador."
-                    type="info"
-                    showIcon
-                  />
               </div>
             ),
             okText: "Entendido",
