@@ -14,6 +14,14 @@ import {
   DeleteOutlined,
   BookOutlined,
   FileOutlined,
+  FileTextOutlined,
+  FileExcelOutlined,
+  FilePptOutlined,
+  FileWordOutlined,
+  LinkOutlined,
+  PictureOutlined,
+  PlayCircleOutlined,
+  YoutubeOutlined,
   ClockCircleOutlined,
   CheckOutlined,
   FormOutlined,
@@ -164,7 +172,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return map;
   }, [ciclosOrdenados, materialesClaseUnicos]);
 
-  const materialesPorTema = useMemo(() => {
+  const materialesNecesariosPorTema = useMemo(() => {
     const map = new Map<string, any[]>();
     materialesClaseUnicos.forEach((item: any) => {
       const temaId = String(item?.pensum_curso_id ?? "sin-tema");
@@ -175,7 +183,18 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return map;
   }, [materialesClaseUnicos]);
 
-  const materialesPorCiclo = useMemo(() => {
+  const materialesDidacticosPorTema = useMemo(() => {
+    const map = new Map<string, any[]>();
+    materialesUnicos.forEach((item: any) => {
+      const temaId = String(item?.pensum_curso_id ?? item?.pensum_cursos?.id ?? "sin-tema");
+      const current = map.get(temaId) ?? [];
+      current.push(item);
+      map.set(temaId, current);
+    });
+    return map;
+  }, [materialesUnicos]);
+
+  const materialesDidacticosPorCiclo = useMemo(() => {
     const map = new Map<string, any[]>();
     materialesUnicos.forEach((item: any) => {
       const cicloId = String(item?.pensum_id ?? "sin-ciclo");
@@ -185,6 +204,24 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     });
     return map;
   }, [materialesUnicos]);
+
+  const getMaterialIcon = (material: any) => {
+    const tipo = String(material?.tipo_material || "").toLowerCase();
+    const url = String(material?.url_archivo || "").toLowerCase();
+    const titulo = String(material?.titulo || material?.nombre_archivo || "").toLowerCase();
+    const texto = `${tipo} ${url} ${titulo}`;
+
+    if (texto.includes("canva.com")) return <LinkOutlined />;
+    if (texto.includes("youtube.com") || texto.includes("youtu.be")) return <YoutubeOutlined />;
+    if (texto.match(/\.(mp4|mov|avi|mkv|webm)$/) || texto.includes("video")) return <PlayCircleOutlined />;
+    if (texto.match(/\.(png|jpg|jpeg|gif|webp|svg)$/) || texto.includes("imagen")) return <PictureOutlined />;
+    if (texto.match(/\.(xlsx|xls|csv)$/) || texto.includes("excel") || texto.includes("sheet")) return <FileExcelOutlined />;
+    if (texto.match(/\.(ppt|pptx)$/) || texto.includes("powerpoint") || texto.includes("diapositiva")) return <FilePptOutlined />;
+    if (texto.match(/\.(doc|docx)$/) || texto.includes("word")) return <FileWordOutlined />;
+    if (texto.match(/\.pdf$/) || texto.includes("pdf")) return <FileTextOutlined />;
+    if (url.startsWith("http")) return <LinkOutlined />;
+    return <FileOutlined />;
+  };
 
   const guardarNota = useCallback(
     async (matriculaId: string | number, nota: number | null, estado: string) => {
@@ -616,12 +653,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             <li>Asistencias y notas</li>
           </ul>
           <p>Recomendado cuando no quieres que aparezca en listados pero necesitas mantener los datos.</p>
-        </div>
-      ),
-      okText: "Sí, ocultar",
-      okType: "danger",
-      cancelText: "Cancelar",
-      onOk: async () => {
         try {
           const { error } = await supabaseBrowserClient
             .from("cursos")
@@ -658,12 +689,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   <li>Una vez que todas las matrículas estén cerradas, podrás finalizar el grupo</li>
                 </ol>
                 <p><strong>Estudiantes activos:</strong></p>
-                <ul>
-                  {activos.slice(0, 5).map((m: any) => (
-                    <li key={m.id}>{m.nombre_completo}</li>
-                  ))}
-                  {activos.length > 5 && <li>... y {activos.length - 5} más</li>}
-                </ul>
+                  <Alert
+                    message="Material controlado desde el programa académico"
+                    description="El temario y los recursos provienen del programa académico. Para cambios, contacta a un administrador."
+                    type="info"
+                    showIcon
+                  />
               </div>
             ),
             okText: "Entendido",
@@ -939,23 +970,23 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       </div>
 
       {/* ESTADÍSTICAS RÁPIDAS */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} md={6}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
+        <Col xs={12} sm={12} md={6}>
           <Card>
             <Statistic title="Estudiantes" value={totalEstudiantes} prefix={<UserOutlined />} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={12} sm={12} md={6}>
           <Card>
             <Statistic title="Activos" value={estudiantesActivos} valueStyle={{ color: "#52c41a" }} prefix={<CheckCircleOutlined />} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={12} sm={12} md={6}>
           <Card>
             <Statistic title="Asistencia" value={promedioAsistencia} suffix="%" valueStyle={{ color: promedioAsistencia >= 80 ? "#52c41a" : "#ff4d4f" }} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={12} sm={12} md={6}>
           <Card>
             <Statistic title="En Riesgo" value={estudiantesEnRiesgo} valueStyle={{ color: estudiantesEnRiesgo > 0 ? "#ff4d4f" : "#52c41a" }} />
           </Card>
@@ -1025,7 +1056,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                             dataSource={temasCiclo}
                             renderItem={(tema: any, temaIndex: number) => {
                               const temaId = String(tema?.id ?? `tema-${temaIndex}`);
-                              const materialesTema = materialesPorTema.get(temaId) ?? [];
+                              const materialesTema = materialesDidacticosPorTema.get(temaId) ?? [];
                               return (
                                 <List.Item
                                   key={temaId}
@@ -1044,17 +1075,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                         {materialesTema.length ? (
                                           <Space wrap size={10}>
                                             {materialesTema.map((item: any, itemIndex: number) => (
-                                              <Space key={`${temaId}-mat-${itemIndex}`} size={6}>
-                                                {item.obligatorio ? (
-                                                  <CheckCircleOutlined style={{ color: "#16a34a" }} />
-                                                ) : (
-                                                  <ClockCircleOutlined style={{ color: "#f59e0b" }} />
-                                                )}
-                                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                                  {item.nombre_material}
-                                                  {item.cantidad ? ` (${item.cantidad}${item.unidad ? ` ${item.unidad}` : ""})` : ""}
-                                                </Text>
-                                              </Space>
+                                              <Tag key={`${temaId}-mat-${itemIndex}`} icon={getMaterialIcon(item)}>
+                                                {item.titulo || item.nombre_archivo || "Recurso"}
+                                              </Tag>
                                             ))}
                                           </Space>
                                         ) : (
@@ -1081,10 +1104,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           },
           {
             key: "2",
-            label: <span><FileOutlined /> Material Didáctico</span>,
+            label: <span><FileOutlined /> Lista de materiales</span>,
             children: (
               <Card
-                title="Recursos y Material para la Enseñanza"
+                title="Materiales necesarios por clase"
                 extra={isAdminView ? (
                   <Upload maxCount={5} multiple>
                     <Button type="primary" icon={<PlusOutlined />}>
@@ -1099,138 +1122,91 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   type="info"
                   showIcon
                 />
-                {materialesUnicos.length > 0 || materialesClaseUnicos.length > 0 ? (
+                {materialesClaseUnicos.length > 0 ? (
                   <div style={{ marginTop: 16 }}>
                     <Collapse
                       accordion
                       expandIconPosition="end"
-                      items={(ciclosOrdenados.length ? ciclosOrdenados : [{ id: "sin-ciclo", nombre_ciclo: "Sin ciclo" }]).map(
-                        (ciclo: any, index: number) => {
-                          const cicloId = String(ciclo?.id ?? "sin-ciclo");
-                          const cicloNombre = ciclo?.nombre_ciclo || ciclo?.titulo || ciclo?.numero_ciclo ? `Ciclo ${ciclo?.numero_ciclo}` : "Sin ciclo";
-                          const temasCiclo = temasPorCiclo.get(cicloId) ?? [];
-                          const recursosCiclo = materialesPorCiclo.get(cicloId) ?? [];
+                      items={ciclosOrdenados.map((ciclo: any, index: number) => {
+                        const cicloId = String(ciclo?.id ?? "sin-ciclo");
+                        const cicloNumero = ciclo?.numero_ciclo ?? ciclo?.orden ?? index + 1;
+                        const cicloNombre = ciclo?.nombre_ciclo || ciclo?.titulo || `Ciclo ${cicloNumero}`;
+                        const temasCiclo = temasPorCiclo.get(cicloId) ?? [];
 
-                          const temaItems = [
-                            ...(recursosCiclo.length
-                              ? [{
-                                  key: `${cicloId}-recursos`,
-                                  label: "Recursos del ciclo",
-                                  children: (
-                                    <List
-                                      dataSource={recursosCiclo}
-                                      renderItem={(material: any, idx: number) => (
-                                        <List.Item
-                                          key={`${cicloId}-rec-${idx}`}
-                                          extra={material.url_archivo ? (
-                                            <a href={material.url_archivo} target="_blank" rel="noreferrer">
-                                              Descargar
-                                            </a>
-                                          ) : null}
-                                        >
-                                          <List.Item.Meta
-                                            title={<Text strong>{material.titulo || material.nombre_archivo || "Recurso"}</Text>}
-                                            description={
-                                              <Space direction="vertical" size={2}>
-                                                {material.descripcion ? <Text type="secondary">{material.descripcion}</Text> : null}
-                                                <Space size={8} wrap>
-                                                  {material.tipo_material ? <Tag>{material.tipo_material}</Tag> : null}
-                                                  {material.orden ? <Tag color="blue">Orden {material.orden}</Tag> : null}
-                                                </Space>
+                        return {
+                          key: `mat-${cicloId}`,
+                          label: (
+                            <Space size={16} align="center">
+                              <div
+                                style={{
+                                  width: 44,
+                                  height: 44,
+                                  borderRadius: 16,
+                                  background: "#111827",
+                                  color: "#f8fafc",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 22,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {cicloNumero}
+                              </div>
+                              <div>
+                                <Text strong style={{ fontSize: 16 }}>{cicloNombre}</Text>
+                                <br />
+                                <Text type="secondary">Materiales por tema</Text>
+                              </div>
+                            </Space>
+                          ),
+                          children: temasCiclo.length ? (
+                            <List
+                              dataSource={temasCiclo}
+                              renderItem={(tema: any, temaIndex: number) => {
+                                const temaId = String(tema?.id ?? `tema-${temaIndex}`);
+                                const materialesTema = materialesNecesariosPorTema.get(temaId) ?? [];
+                                return (
+                                  <List.Item key={`mat-${temaId}`}>
+                                    <List.Item.Meta
+                                      avatar={<span style={{ fontSize: 20, fontWeight: 700, color: "#2563eb" }}>{tema.orden || temaIndex + 1}</span>}
+                                      title={<Text strong>{tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}</Text>}
+                                      description={
+                                        materialesTema.length ? (
+                                          <Space wrap size={10}>
+                                            {materialesTema.map((item: any, itemIndex: number) => (
+                                              <Space key={`${temaId}-req-${itemIndex}`} size={6}>
+                                                {item.obligatorio ? (
+                                                  <CheckCircleOutlined style={{ color: "#16a34a" }} />
+                                                ) : (
+                                                  <ClockCircleOutlined style={{ color: "#f59e0b" }} />
+                                                )}
+                                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                                  {item.nombre_material}
+                                                  {item.cantidad ? ` (${item.cantidad}${item.unidad ? ` ${item.unidad}` : ""})` : ""}
+                                                </Text>
                                               </Space>
-                                            }
-                                          />
-                                        </List.Item>
-                                      )}
+                                            ))}
+                                          </Space>
+                                        ) : (
+                                          <Text type="secondary" style={{ fontSize: 12 }}>Sin materiales registrados</Text>
+                                        )
+                                      }
                                     />
-                                  ),
-                                }]
-                              : []),
-                            ...temasCiclo.map((tema: any, temaIndex: number) => {
-                              const temaId = String(tema?.id ?? `tema-${temaIndex}`);
-                              const temaNombre = tema?.nombre_curso || tema?.titulo || `Tema ${temaIndex + 1}`;
-                              const materialesTema = materialesPorTema.get(temaId) ?? [];
-
-                              return {
-                                key: `${cicloId}-${temaId}`,
-                                label: (
-                                  <Space size={12} align="center">
-                                    <div
-                                      style={{
-                                        width: 32,
-                                        height: 32,
-                                        borderRadius: 12,
-                                        background: "#e0e7ff",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        fontWeight: 700,
-                                        color: "#1e3a8a",
-                                      }}
-                                    >
-                                      {temaIndex + 1}
-                                    </div>
-                                    <Text strong>{temaNombre}</Text>
-                                  </Space>
-                                ),
-                                children: materialesTema.length ? (
-                                  <Space direction="vertical" size={4} style={{ width: "100%" }}>
-                                    {materialesTema.map((item: any, itemIndex: number) => (
-                                      <Text key={`${temaId}-mat-${itemIndex}`} type="secondary">
-                                        • {item.nombre_material}
-                                        {item.cantidad ? ` (${item.cantidad}${item.unidad ? ` ${item.unidad}` : ""})` : ""}
-                                        {item.obligatorio ? " • obligatorio" : " • opcional"}
-                                        {item.observaciones ? ` — ${item.observaciones}` : ""}
-                                      </Text>
-                                    ))}
-                                  </Space>
-                                ) : (
-                                  <Empty description="No hay material en este tema" />
-                                ),
-                              };
-                            }),
-                          ];
-
-                          return {
-                            key: cicloId,
-                            label: (
-                              <Space size={16} align="center">
-                                <div
-                                  style={{
-                                    width: 44,
-                                    height: 44,
-                                    borderRadius: 16,
-                                    background: "#111827",
-                                    color: "#f8fafc",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 22,
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  {index + 1}
-                                </div>
-                                <div>
-                                  <Text strong style={{ fontSize: 16 }}>{cicloNombre}</Text>
-                                  <br />
-                                  <Text type="secondary">Ciclo / Tema</Text>
-                                </div>
-                              </Space>
-                            ),
-                            children: temaItems.length ? (
-                              <Collapse ghost items={temaItems} />
-                            ) : (
-                              <Empty description="No hay temas o material en este ciclo" />
-                            ),
-                          };
-                        }
-                      )}
+                                  </List.Item>
+                                );
+                              }}
+                            />
+                          ) : (
+                            <Empty description="No hay temas registrados en este ciclo." />
+                          ),
+                        };
+                      })}
                     />
                   </div>
                 ) : (
                   <div style={{ marginTop: 16 }}>
-                    <Text type="secondary">No hay material didáctico publicado para este programa.</Text>
+                    <Text type="secondary">No hay materiales registrados para este programa.</Text>
                   </div>
                 )}
               </Card>
