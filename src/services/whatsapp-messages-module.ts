@@ -687,6 +687,60 @@ export async function enviarBienvenidaPortalEstudiante(
 }
 
 /**
+ * CASO 7C: Enviar bienvenida de acceso al portal del profesor
+ */
+export async function enviarBienvenidaPortalProfesor(
+  usuarioId: string,
+  datos: {
+    nombre: string;
+    telefono: string;
+    enlacePortal: string;
+    usuario: string;
+  }
+): Promise<ResultadoEnvio> {
+  console.log(`[WhatsApp] Enviando bienvenida de portal profesor a ${datos.nombre}`);
+
+  const resultadoPlantilla = await enviarMensajeConPlantilla(
+    datos.telefono,
+    'bienvenida_portal_profesor',
+    {
+      nombre: datos.nombre,
+      enlace_portal: datos.enlacePortal,
+      usuario: datos.usuario,
+    },
+    usuarioId,
+    { tipo_evento: 'bienvenida_portal_profesor', curso_id: null, canal: 'template_meta' }
+  );
+
+  if (resultadoPlantilla.exito) {
+    return resultadoPlantilla;
+  }
+
+  const mensaje = [
+    `Hola ${datos.nombre}, tu cuenta de profesor en Academia Crystal Diamante fue activada.`,
+    '',
+    `Ingresa a la plataforma: ${datos.enlacePortal}`,
+    `Usuario registrado: ${datos.usuario}`,
+    '',
+    'Este mensaje corresponde a la activación de tu acceso.',
+  ].join('\n');
+
+  return enviarMensajeTexto(
+    datos.telefono,
+    'bienvenida_portal_profesor',
+    mensaje,
+    usuarioId,
+    {
+      tipo_evento: 'bienvenida_portal_profesor',
+      curso_id: null,
+      canal: 'text_fallback',
+      fallback_de: 'template_meta',
+      error_template: resultadoPlantilla.error || null,
+    }
+  );
+}
+
+/**
  * CASO 8: Enviar recordatorio de clase (1 hora antes)
  */
 export async function enviarRecordatorioClase(

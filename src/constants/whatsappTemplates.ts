@@ -48,6 +48,13 @@ const definitions = {
         fallback:
             "Hola {{nombre}}, ¡bienvenida al Curso: {{curso}}!\n\n*Ya puedes ingresar a la app:* {{enlace_portal}}\n\n*Usuario*: {{usuario}}\n\n*En la app podrás ver:*\n• Asistencias\n• Notas\n• Material didáctico\n• Materiales necesarios por clase",
     },
+    bienvenida_portal_profesor: {
+        nombre: "bienvenida_portal_profesor",
+        descripcion: "Da la bienvenida al profesor y comparte acceso a la app con su usuario.",
+        variables: ["nombre", "enlace_portal", "usuario"],
+        fallback:
+            "Hola {{nombre}}, tu cuenta de profesor en Academia Crystal Diamante fue activada.\n\nIngresa a la plataforma: {{enlace_portal}}\nUsuario registrado: {{usuario}}\n\nEste mensaje corresponde a la activación de tu acceso.",
+    },
     pago_inscripcion_pendiente: {
         nombre: "pago_inscripcion_pendiente",
         descripcion: "Recuerda al estudiante completar el pago de inscripción pendiente.",

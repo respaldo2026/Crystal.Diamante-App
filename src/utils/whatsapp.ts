@@ -195,12 +195,12 @@ export const enviarWhatsappConPlantilla = async (
     const fallback = mensajeFallback ?? buildWhatsappFallbackMessage(nombrePlantilla, variables);
 
     if (mensaje) {
-        enviarWhatsapp(telefono, mensaje);
+        await enviarWhatsapp(telefono, mensaje);
         return;
     }
 
     if (fallback && fallback.trim().length > 0) {
-        enviarWhatsapp(telefono, fallback);
+        await enviarWhatsapp(telefono, fallback);
         return;
     }
 

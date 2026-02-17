@@ -11,6 +11,10 @@ import {
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
+const PORTAL_PROFESOR_URL =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://app.crystaldiamante.com";
+
 export default function ProfesorCreate() {
     const { list } = useNavigation(); // Para redirigir manualmente
     const { message } = App.useApp(); // Usar hook para mensajes
@@ -56,6 +60,32 @@ export default function ProfesorCreate() {
                 throw new Error(result.error || "Error al crear el usuario");
             }
 
+            let whatsappInfo = "";
+            if (values.telefono) {
+                try {
+                    const { enviarBienvenidaPortalProfesor } = await import("@/services/whatsapp-messages-module");
+                    const resultadoWhatsapp = await enviarBienvenidaPortalProfesor(result.user?.id || "", {
+                        nombre: values.nombre_completo,
+                        telefono: values.telefono,
+                        enlacePortal: PORTAL_PROFESOR_URL,
+                        usuario: values.email,
+                    });
+
+                    whatsappInfo = resultadoWhatsapp.exito
+                        ? "WhatsApp de bienvenida enviado."
+                        : "Profesor creado, pero falló el envío de WhatsApp.";
+
+                    if (!resultadoWhatsapp.exito) {
+                        logger.error("Error enviando WhatsApp de bienvenida a profesor:", resultadoWhatsapp.error);
+                    }
+                } catch (whatsappError) {
+                    logger.error("Error enviando WhatsApp de bienvenida a profesor:", whatsappError);
+                    whatsappInfo = "Profesor creado, pero falló el envío de WhatsApp.";
+                }
+            } else {
+                whatsappInfo = "Profesor creado sin envío de WhatsApp (sin teléfono).";
+            }
+
             // 3. Éxito
             message.success({
                 content: (
@@ -65,6 +95,7 @@ export default function ProfesorCreate() {
                             Email: <strong>{values.email}</strong><br/>
                             Contraseña temporal: <strong>{passwordTemporal}</strong>
                         </div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>{whatsappInfo}</div>
                     </div>
                 ),
                 duration: 8
