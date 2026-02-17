@@ -5,7 +5,6 @@ import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography,
 import {
   UserOutlined,
   CheckCircleOutlined,
-  FileTextOutlined,
   BarChartOutlined,
   CalendarOutlined,
   ArrowLeftOutlined,
