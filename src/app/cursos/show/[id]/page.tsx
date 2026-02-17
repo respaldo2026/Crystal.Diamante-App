@@ -970,34 +970,108 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         items={[
           {
             key: "1",
-            label: <span><BookOutlined /> Temario / Pensum ({temas.length})</span>,
+            label: <span><BookOutlined /> Pensum ({temas.length})</span>,
             children: (
               <Card
-                title="Contenido del Curso - Temario"
+                title="Contenido del Curso - Pensum"
                 extra={isAdminView ? (
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalTemaVisible(true)}>
                     Agregar Tema
                   </Button>
                 ) : null}
               >
-                {temas.length > 0 ? (
-                  <List
-                    dataSource={temas}
-                    renderItem={(tema, index) => (
-                      <List.Item key={tema?.id ?? index}
-                        actions={isAdminView ? [
-                          <Button key={`eliminar-tema-${tema?.id ?? index}`} type="link" danger icon={<DeleteOutlined />} onClick={() => onDeleteTema(tema.id)}>
-                            Eliminar
-                          </Button>
-                        ] : []}
-                      >
-                        <List.Item.Meta
-                          avatar={<span style={{ fontSize: 24, fontWeight: "bold", color: "#667eea" }}>{tema.orden || tema.numero_ciclo || index + 1}</span>}
-                          title={<Text strong>{tema.nombre_ciclo || tema.titulo || `Tema ${index + 1}`}</Text>}
-                          description={tema.descripcion || ""}
-                        />
-                      </List.Item>
-                    )}
+                {ciclosOrdenados.length > 0 ? (
+                  <Collapse
+                    accordion
+                    expandIconPosition="end"
+                    items={ciclosOrdenados.map((ciclo: any, index: number) => {
+                      const cicloId = String(ciclo?.id ?? "sin-ciclo");
+                      const cicloNumero = ciclo?.numero_ciclo ?? ciclo?.orden ?? index + 1;
+                      const cicloNombre = ciclo?.nombre_ciclo || ciclo?.titulo || `Ciclo ${cicloNumero}`;
+                      const temasCiclo = temasPorCiclo.get(cicloId) ?? [];
+
+                      return {
+                        key: cicloId,
+                        label: (
+                          <Space size={16} align="center">
+                            <div
+                              style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 16,
+                                background: "#111827",
+                                color: "#f8fafc",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 22,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {cicloNumero}
+                            </div>
+                            <div>
+                              <Text strong style={{ fontSize: 16 }}>{cicloNombre}</Text>
+                              {ciclo?.descripcion ? (
+                                <div>
+                                  <Text type="secondary">{ciclo.descripcion}</Text>
+                                </div>
+                              ) : null}
+                            </div>
+                          </Space>
+                        ),
+                        children: temasCiclo.length ? (
+                          <List
+                            dataSource={temasCiclo}
+                            renderItem={(tema: any, temaIndex: number) => {
+                              const temaId = String(tema?.id ?? `tema-${temaIndex}`);
+                              const materialesTema = materialesPorTema.get(temaId) ?? [];
+                              return (
+                                <List.Item
+                                  key={temaId}
+                                  actions={isAdminView ? [
+                                    <Button key={`eliminar-tema-${temaId}`} type="link" danger icon={<DeleteOutlined />} onClick={() => onDeleteTema(tema.id)}>
+                                      Eliminar
+                                    </Button>
+                                  ] : []}
+                                >
+                                  <List.Item.Meta
+                                    avatar={<span style={{ fontSize: 20, fontWeight: 700, color: "#2563eb" }}>{tema.orden || temaIndex + 1}</span>}
+                                    title={<Text strong>{tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}</Text>}
+                                    description={
+                                      <Space direction="vertical" size={4}>
+                                        {tema.descripcion ? <Text type="secondary">{tema.descripcion}</Text> : null}
+                                        {materialesTema.length ? (
+                                          <Space wrap size={10}>
+                                            {materialesTema.map((item: any, itemIndex: number) => (
+                                              <Space key={`${temaId}-mat-${itemIndex}`} size={6}>
+                                                {item.obligatorio ? (
+                                                  <CheckCircleOutlined style={{ color: "#16a34a" }} />
+                                                ) : (
+                                                  <ClockCircleOutlined style={{ color: "#f59e0b" }} />
+                                                )}
+                                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                                  {item.nombre_material}
+                                                  {item.cantidad ? ` (${item.cantidad}${item.unidad ? ` ${item.unidad}` : ""})` : ""}
+                                                </Text>
+                                              </Space>
+                                            ))}
+                                          </Space>
+                                        ) : (
+                                          <Text type="secondary" style={{ fontSize: 12 }}>Sin material didactico</Text>
+                                        )}
+                                      </Space>
+                                    }
+                                  />
+                                </List.Item>
+                              );
+                            }}
+                          />
+                        ) : (
+                          <Empty description="No hay temas registrados en este ciclo." />
+                        ),
+                      };
+                    })}
                   />
                 ) : (
                   <Empty description="No hay temas registrados en el programa." />
