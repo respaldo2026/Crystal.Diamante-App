@@ -57,6 +57,17 @@ interface Sesion {
   observaciones?: string;
 }
 
+const dedupeByKey = <T,>(items: T[] = [], keySelector: (item: T) => string): T[] => {
+  const map = new Map<string, T>();
+  items.forEach((item) => {
+    const key = keySelector(item);
+    if (!map.has(key)) {
+      map.set(key, item);
+    }
+  });
+  return Array.from(map.values());
+};
+
 type ParamsLike = Promise<{ id: string }>;
 
 export default function CursoShowPage({ params }: { params: ParamsLike }) {
@@ -82,6 +93,28 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const searchParams = useSearchParams();
   const isAdminView = searchParams?.get("admin") === "1";
   const returnTo = isAdminView ? "/cursos" : "/mi-oficina";
+
+  const materialesUnicos = useMemo(
+    () =>
+      dedupeByKey(materiales, (mat: any) =>
+        String(
+          mat.id ??
+            `${mat.pensum_id ?? ""}-${mat.titulo ?? mat.nombre_archivo ?? ""}-${mat.url_archivo ?? ""}`,
+        ),
+      ),
+    [materiales],
+  );
+
+  const materialesClaseUnicos = useMemo(
+    () =>
+      dedupeByKey(materialesClase, (mat: any) =>
+        String(
+          mat.id ??
+            `${mat.pensum_curso_id ?? ""}-${mat.nombre_material ?? ""}-${mat.cantidad ?? ""}-${mat.unidad ?? ""}`,
+        ),
+      ),
+    [materialesClase],
+  );
 
   const guardarNota = useCallback(
     async (matriculaId: string | number, nota: number | null, estado: string) => {
@@ -922,7 +955,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   type="info"
                   showIcon
                 />
-                {materiales.length > 0 || materialesClase.length > 0 ? (
+                {materialesUnicos.length > 0 || materialesClaseUnicos.length > 0 ? (
                   (() => {
                     const pensumNombre = (pensumId?: string | number | null) => {
                       if (pensumId == null) return "Sin ciclo";
@@ -936,7 +969,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       return "Sin ciclo";
                     };
 
-                    const grupos = materiales.reduce<Record<string, any[]>>((acc, mat) => {
+                    const grupos = materialesUnicos.reduce<Record<string, any[]>>((acc, mat) => {
                       const keyValue = mat.pensum_id ?? "sin-ciclo";
                       const key = String(keyValue);
                       acc[key] = acc[key] || [];
@@ -946,9 +979,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
                     return (
                       <Space direction="vertical" size={16} style={{ marginTop: 16, width: "100%" }}>
-                        {materialesClase.length > 0 ? (
+                        {materialesClaseUnicos.length > 0 ? (
                           (() => {
-                            const agrupadosPorTema = materialesClase.reduce<Record<string, any[]>>((acc, material) => {
+                            const agrupadosPorTema = materialesClaseUnicos.reduce<Record<string, any[]>>((acc, material) => {
                               const key = String(material.pensum_curso_id || "sin-tema");
                               if (!acc[key]) acc[key] = [];
                               acc[key].push(material);

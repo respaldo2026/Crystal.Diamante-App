@@ -529,9 +529,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                           </Typography.Text>
                         ) : null}
 
-                        <Typography.Text style={{ color: "#e2e8f0", fontSize: 12, display: "block" }}>
-                          Horario próximo: {curso.proxLabel}
-                        </Typography.Text>
                         <Typography.Text style={{ color: "#e2e8f0", fontSize: 12 }}>
                           Próxima clase: {curso.proxLabel}
                           {curso.siguienteTema ? ` • Tema: ${curso.siguienteTema}` : ""}
