@@ -694,27 +694,44 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   return (
     <div style={{ padding: 24 }}>
       {/* ENCABEZADO - OFICINA DEL PROFESOR */}
-      <div style={{ marginBottom: 28, background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white", padding: 28, borderRadius: 10 }}>
+      <div
+        style={{
+          marginBottom: 28,
+          background: "linear-gradient(135deg, #4057d6 0%, #6d3fb0 100%)",
+          color: "white",
+          padding: 28,
+          borderRadius: 14,
+          boxShadow: "0 14px 30px -18px rgba(44, 52, 124, 0.7)",
+        }}
+      >
         <Space direction="vertical" style={{ width: "100%" }} size={20}>
           <Space wrap size={20} style={{ alignItems: "center" }}>
             <Button
               type="primary"
               icon={<ArrowLeftOutlined />}
               onClick={() => router.push(returnTo)}
-              style={{ background: "rgba(255,255,255,0.3)" }}
+              style={{
+                background: "rgba(15, 23, 42, 0.28)",
+                borderColor: "rgba(255,255,255,0.35)",
+                color: "#fff",
+                fontWeight: 600,
+              }}
             >
               Volver
             </Button>
-            <Title level={2} style={{ margin: 0, color: "white" }}>{construirNombreGrupo(curso)}</Title>
+            <Title level={2} style={{ margin: 0, color: "white", textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
+              {construirNombreGrupo(curso)}
+            </Title>
             <Space wrap size={20} style={{ marginTop: 4 }}>
               <Button
                 type="primary"
                 icon={<CheckOutlined />}
                 onClick={() => router.push(`/asistencias/create?curso_id=${cursoId}&curso_nombre=${encodeURIComponent(construirNombreGrupo(curso))}`)}
+                style={{ fontWeight: 600 }}
               >
                 Llamar Lista
               </Button>
-              <Button icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
+              <Button icon={<FormOutlined />} onClick={() => setActiveTab("5")} style={{ fontWeight: 600 }}>
                 Calificar Tareas
               </Button>
               {isAdminView && (
@@ -740,41 +757,80 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             </Space>
           </Space>
           <div>
-            <Text style={{ color: "rgba(255,255,255,0.9)" }}>
-
           {/* RESUMEN RÁPIDO DEL CURSO */}
           <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
             <Col xs={12} md={6}>
-              <Card size="small">
-                <Statistic title="Estudiantes" value={`${estudiantesActivos}/${totalEstudiantes}`} suffix="activos" />
+              <Card
+                size="small"
+                style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
+                styles={{ body: { padding: 14 } }}
+              >
+                <Statistic
+                  title={<span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Estudiantes</span>}
+                  value={`${estudiantesActivos}/${totalEstudiantes}`}
+                  suffix="activos"
+                  valueStyle={{ color: "#fff", fontWeight: 700 }}
+                />
               </Card>
             </Col>
             <Col xs={12} md={6}>
-              <Card size="small">
-                <Statistic title="Promedio asistencia" value={promedioAsistencia} suffix="%" />
+              <Card
+                size="small"
+                style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
+                styles={{ body: { padding: 14 } }}
+              >
+                <Statistic
+                  title={<span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Promedio asistencia</span>}
+                  value={promedioAsistencia}
+                  suffix="%"
+                  valueStyle={{ color: "#fff", fontWeight: 700 }}
+                />
               </Card>
             </Col>
             <Col xs={12} md={6}>
-              <Card size="small">
-                <Statistic title="Promedio nota" value={promedioNota} precision={1} suffix="/5" />
+              <Card
+                size="small"
+                style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
+                styles={{ body: { padding: 14 } }}
+              >
+                <Statistic
+                  title={<span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Promedio nota</span>}
+                  value={promedioNota}
+                  precision={1}
+                  suffix="/5"
+                  valueStyle={{ color: "#fff", fontWeight: 700 }}
+                />
               </Card>
             </Col>
             <Col xs={12} md={6}>
-              <Card size="small">
-                <Statistic title="Cupos" value={cuposOcupados} suffix={cuposTotales ? `/ ${cuposTotales}` : ""} />
+              <Card
+                size="small"
+                style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
+                styles={{ body: { padding: 14 } }}
+              >
+                <Statistic
+                  title={<span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Cupos</span>}
+                  value={cuposOcupados}
+                  suffix={cuposTotales ? `/ ${cuposTotales}` : ""}
+                  valueStyle={{ color: "#fff", fontWeight: 700 }}
+                />
               </Card>
             </Col>
           </Row>
 
-          <Card size="small" style={{ marginBottom: 16 }}>
+          <Card
+            size="small"
+            style={{ marginBottom: 16, background: "rgba(15, 23, 42, 0.2)", borderColor: "rgba(255,255,255,0.22)" }}
+          >
             <Space direction="vertical">
-              <Text><strong>Horario:</strong> {curso.dias_semana || "-"} {curso.hora_inicio && `• ${dayjs(curso.hora_inicio, 'HH:mm:ss').format('h:mm A')}`} {curso.hora_fin && ` - ${dayjs(curso.hora_fin, 'HH:mm:ss').format('h:mm A')}`}</Text>
-              <Text><strong>Fecha de inicio:</strong> {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format('DD MMM YYYY') : "-"}</Text>
-              <Text><strong>Fecha de fin:</strong> {curso.fecha_fin ? dayjs(curso.fecha_fin).format('DD MMM YYYY') : "No definida"}</Text>
+              <Text style={{ color: "#ffffff" }}><strong>Horario:</strong> {curso.dias_semana || "-"} {curso.hora_inicio && `• ${dayjs(curso.hora_inicio, 'HH:mm:ss').format('h:mm A')}`} {curso.hora_fin && ` - ${dayjs(curso.hora_fin, 'HH:mm:ss').format('h:mm A')}`}</Text>
+              <Text style={{ color: "#f8fafc" }}><strong>Fecha de inicio:</strong> {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format('DD MMM YYYY') : "-"}</Text>
+              <Text style={{ color: "#f8fafc" }}><strong>Fecha de fin:</strong> {curso.fecha_fin ? dayjs(curso.fecha_fin).format('DD MMM YYYY') : "No definida"}</Text>
             </Space>
           </Card>
+          <Text style={{ color: "rgba(255,255,255,0.94)", fontSize: 15 }}>
               👨‍🏫 Profesor: <strong>{curso.perfiles?.nombre_completo || "Sin asignar"}</strong> • 📅 Inicio: {dayjs(curso.fecha_inicio).format("DD MMM YYYY")} • ⏱️ Duración: {curso.duracion}
-            </Text>
+          </Text>
           </div>
         </Space>
       </div>
