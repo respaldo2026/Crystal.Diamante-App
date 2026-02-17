@@ -14,13 +14,27 @@ interface PwaInstallPromptProps {
 
 export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredPrompt | null>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [platform, setPlatform] = useState<"ios" | "android" | "desktop">("desktop");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
-    if (isStandalone) return;
+    const standalone = window.matchMedia("(display-mode: standalone)").matches;
+    setIsStandalone(standalone);
+
+    const ua = window.navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(ua)) {
+      setPlatform("ios");
+    } else if (/android/.test(ua)) {
+      setPlatform("android");
+    } else {
+      setPlatform("desktop");
+    }
+
+    if (standalone) return;
 
     const handler = (event: Event) => {
       event.preventDefault();
@@ -32,97 +46,120 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
     return () => window.removeEventListener("beforeinstallprompt", handler as EventListener);
   }, []);
 
-  if (!visible || !deferredPrompt) return null;
+  if (!visible || isStandalone) return null;
 
   const handleInstall = async () => {
+    if (!deferredPrompt) {
+      setShowGuide(true);
+      return;
+    }
     await deferredPrompt.prompt();
     const choice = await deferredPrompt.userChoice;
-    if (choice.outcome === "accepted") {
-      setVisible(false);
-      setDeferredPrompt(null);
-    }
+    if (choice.outcome === "accepted") setVisible(false);
+    setDeferredPrompt(null);
+  };
+
+  const guideText =
+    platform === "ios"
+      ? "En iPhone/iPad: abre el menú Compartir (□↗) y pulsa 'Agregar a pantalla de inicio'."
+      : platform === "android"
+      ? "En Android: abre el menú del navegador (⋮) y pulsa 'Instalar app' o 'Agregar a pantalla principal'."
+      : "En escritorio: usa el icono de instalar en la barra de direcciones del navegador.";
+
+  const actionLabel = deferredPrompt ? "Instalar" : "Cómo instalar";
+
+  const inlineGuide = showGuide ? (
+    <div
+      style={{
+        marginTop: 8,
+        borderRadius: 8,
+        background: "rgba(255,255,255,0.16)",
+        padding: "8px 10px",
+        color: "#fff",
+        fontSize: 11,
+        lineHeight: 1.35,
+      }}
+    >
+      {guideText}
+    </div>
+  ) : null;
+
+  const floatingGuide = showGuide ? (
+    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.95)", marginTop: 6, maxWidth: 240, lineHeight: 1.35 }}>
+      {guideText}
+    </div>
+  ) : null;
+
+  const closePrompt = () => {
+    setVisible(false);
+    setShowGuide(false);
   };
 
   if (inline) {
     return (
-      <div
-        style={{
-          background: "linear-gradient(135deg, rgba(255, 42, 161, 0.9), rgba(255, 107, 181, 0.9))",
-          border: "1px solid rgba(255, 255, 255, 0.3)",
-          borderRadius: 10,
-          padding: "10px 14px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          boxShadow: "0 4px 12px rgba(255, 42, 161, 0.2)",
-          width: "100%",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#ffffff" }}>
-            📱 Instalar App
+      <div style={{ width: "100%" }}>
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(255, 42, 161, 0.9), rgba(255, 107, 181, 0.9))",
+            border: "1px solid rgba(255, 255, 255, 0.3)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            boxShadow: "0 4px 12px rgba(255, 42, 161, 0.2)",
+            width: "100%",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#ffffff" }}>
+              📱 Instalar App
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 500, color: "rgba(255, 255, 255, 0.9)" }}>
+              Accede rápido desde tu celular
+            </div>
           </div>
-          <div style={{ fontSize: 10, fontWeight: 500, color: "rgba(255, 255, 255, 0.9)" }}>
-            Accede rápido desde tu celular
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              onClick={handleInstall}
+              style={{
+                background: "rgba(255, 255, 255, 0.95)",
+                color: "#ff2aa1",
+                border: "none",
+                borderRadius: 6,
+                padding: "5px 10px",
+                fontWeight: 700,
+                fontSize: 11,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {actionLabel}
+            </button>
+            <button
+              onClick={closePrompt}
+              title="Cerrar"
+              style={{
+                background: "none",
+                border: "none",
+                color: "#ffffff",
+                fontSize: 14,
+                cursor: "pointer",
+                padding: "2px 4px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 0.2s ease",
+                opacity: 0.8,
+              }}
+            >
+              <CloseOutlined />
+            </button>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            onClick={handleInstall}
-            style={{
-              background: "rgba(255, 255, 255, 0.95)",
-              color: "#ff2aa1",
-              border: "none",
-              borderRadius: 6,
-              padding: "5px 10px",
-              fontWeight: 700,
-              fontSize: 11,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-              transition: "all 0.2s ease",
-            }}
-            onMouseEnter={(e) => {
-              const target = e.currentTarget as HTMLButtonElement;
-              target.style.background = "#ffffff";
-              target.style.transform = "scale(1.05)";
-            }}
-            onMouseLeave={(e) => {
-              const target = e.currentTarget as HTMLButtonElement;
-              target.style.background = "rgba(255, 255, 255, 0.95)";
-              target.style.transform = "scale(1)";
-            }}
-          >
-            Instalar
-          </button>
-          <button
-            onClick={() => setVisible(false)}
-            title="Cerrar"
-            style={{
-              background: "none",
-              border: "none",
-              color: "#ffffff",
-              fontSize: 14,
-              cursor: "pointer",
-              padding: "2px 4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "all 0.2s ease",
-              opacity: 0.8,
-            }}
-            onMouseEnter={(e) => {
-              const target = e.currentTarget as HTMLButtonElement;
-              target.style.opacity = "1";
-            }}
-            onMouseLeave={(e) => {
-              const target = e.currentTarget as HTMLButtonElement;
-              target.style.opacity = "0.8";
-            }}
-          >
-            <CloseOutlined />
-          </button>
-        </div>
+        {inlineGuide}
       </div>
     );
   }
@@ -181,10 +218,10 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
             target.style.transform = "scale(1)";
           }}
         >
-          Instalar
+          {actionLabel}
         </button>
         <button
-          onClick={() => setVisible(false)}
+          onClick={closePrompt}
           title="Cerrar"
           style={{
             background: "none",
@@ -211,6 +248,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
           <CloseOutlined />
         </button>
       </div>
+      {floatingGuide}
     </div>
   );
 };
