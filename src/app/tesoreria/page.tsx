@@ -606,7 +606,7 @@ export default function TesoreriaPage() {
                     </Space>
                 }
             >
-                <Form form={form} layout="vertical" initialValues={{ tipo: MOVIMIENTO_TIPO.INGRESO, fecha: dayjs() }}>
+                <Form form={form} layout="vertical" initialValues={{ tipo: MOVIMIENTO_TIPO.INGRESO, fecha: dayjs(), metodo_pago: "efectivo" }}>
                     <Form.Item
                         label="Tipo de movimiento"
                         name="tipo"
@@ -653,8 +653,22 @@ export default function TesoreriaPage() {
                             addonBefore={<DollarCircleOutlined />}
                         />
                     </Form.Item>
-                    <Form.Item label="Método de pago" name="metodo_pago">
-                        <Input placeholder="Efectivo, Transferencia, etc." />
+                    <Form.Item
+                        label="Método de pago"
+                        name="metodo_pago"
+                        rules={[{ required: true, message: "Selecciona el método de pago" }]}
+                    >
+                        <Select
+                            placeholder="Selecciona método de pago"
+                            options={[
+                                { label: "Efectivo", value: "efectivo" },
+                                { label: "Transferencia", value: "transferencia" },
+                                { label: "Tarjeta", value: "tarjeta" },
+                                { label: "Nequi", value: "nequi" },
+                                { label: "QR", value: "qr" },
+                                { label: "Otro", value: "otro" },
+                            ]}
+                        />
                     </Form.Item>
                     <Form.Item label="Referencia" name="referencia">
                         <Input placeholder="Número de recibo, comprobante, etc." />

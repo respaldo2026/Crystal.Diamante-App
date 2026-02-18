@@ -35,6 +35,7 @@ import {
   HomeOutlined,
   TeamOutlined,
   WhatsAppOutlined,
+  PrinterOutlined,
   CameraOutlined,
   UploadOutlined,
   ReloadOutlined,
@@ -441,6 +442,36 @@ export default function StudentDetailView() {
     enviarWhatsapp(perfil.telefono, mensaje);
   };
 
+  const handleReimprimirTicket = (ticketUrl: string) => {
+    const printWindow = window.open(ticketUrl, "_blank");
+
+    if (!printWindow) {
+      message.warning("No se pudo abrir el ticket para imprimir");
+      return;
+    }
+
+    const fallbackTimeout = window.setTimeout(() => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } catch {
+      }
+    }, 2500);
+
+    printWindow.addEventListener(
+      "load",
+      () => {
+        window.clearTimeout(fallbackTimeout);
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch {
+        }
+      },
+      { once: true }
+    );
+  };
+
   const columnasCursos = useMemo(
     () => [
       {
@@ -689,9 +720,34 @@ export default function StudentDetailView() {
         title: "Ticket",
         dataIndex: "ticket_url",
         key: "ticket",
-        render: (url: string | null) =>
+        render: (url: string | null, record: Pago) =>
           url ? (
-            <Button size="small" onClick={() => window.open(url, "_blank")}>Ver ticket</Button>
+            <Space size={6} wrap>
+              <Button size="small" onClick={() => window.open(url, "_blank")}>
+                Ver PDF
+              </Button>
+              <Button size="small" icon={<PrinterOutlined />} onClick={() => handleReimprimirTicket(url)}>
+                Reimprimir
+              </Button>
+              <Button
+                size="small"
+                icon={<WhatsAppOutlined />}
+                onClick={() => {
+                  const telefono = contactoPerfil.telefono || contactoPerfil.whatsapp;
+                  if (!telefono) {
+                    message.warning("El estudiante no tiene teléfono registrado");
+                    return;
+                  }
+
+                  const curso = construirNombreGrupo(record.matriculas?.cursos) || "tu curso";
+                  const monto = record.monto ? `$${record.monto.toLocaleString("es-CO")}` : "(monto no indicado)";
+                  const msg = `Hola ${contactoPerfil.nombre}, te compartimos tu ticket de pago (${monto}) del curso ${curso}: ${url}`;
+                  enviarWhatsapp(telefono, msg);
+                }}
+              >
+                Enviar
+              </Button>
+            </Space>
           ) : (
             <Text type="secondary">No disponible</Text>
           ),
