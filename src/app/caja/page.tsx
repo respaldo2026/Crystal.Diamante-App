@@ -61,6 +61,7 @@ interface Cuota {
   fecha_vencimiento: string;
   periodo_pagado: string;
   estado: string;
+  matricula_id?: string;
 }
 
 const formatCurrency = (value?: number | null) => {
@@ -213,6 +214,27 @@ export default function CajaPage() {
         // Cargar cuotas pendientes
         const matriculaIds = matriculasFormat.map((m) => m.id);
         if (matriculaIds.length > 0) {
+          const { data: planCuotasData, error: planCuotasError } = await supabaseBrowserClient
+            .from("pagos")
+            .select("matricula_id, numero_cuota")
+            .in("matricula_id", matriculaIds);
+
+          if (planCuotasError) throw planCuotasError;
+
+          const resumenPlanPorMatricula = new Map<string, { maxNumero: number; tieneInscripcion: boolean }>();
+          (planCuotasData || []).forEach((row: any) => {
+            const matriculaId = String(row?.matricula_id || "");
+            if (!matriculaId) return;
+
+            const numero = Number(row?.numero_cuota);
+            if (!Number.isFinite(numero)) return;
+
+            const actual = resumenPlanPorMatricula.get(matriculaId) || { maxNumero: 0, tieneInscripcion: false };
+            actual.maxNumero = Math.max(actual.maxNumero, numero);
+            if (numero === 0) actual.tieneInscripcion = true;
+            resumenPlanPorMatricula.set(matriculaId, actual);
+          });
+
           const { data: cuotasData, error: cuotasError } = await supabaseBrowserClient
             .from("pagos")
             .select("id, monto, numero_cuota, fecha_vencimiento, periodo_pagado, estado, matricula_id")
@@ -221,7 +243,34 @@ export default function CajaPage() {
             .order("fecha_vencimiento");
 
           if (cuotasError) throw cuotasError;
-          setCuotas(cuotasData || []);
+
+          const cuotasNormalizadas = (cuotasData || []).map((cuota: any) => {
+            const matriculaId = String(cuota?.matricula_id || "");
+            const resumen = resumenPlanPorMatricula.get(matriculaId);
+            const numero = Number(cuota?.numero_cuota);
+
+            if (!resumen || !Number.isFinite(numero) || numero <= 0) {
+              return cuota;
+            }
+
+            const total = resumen.tieneInscripcion
+              ? Math.max(1, resumen.maxNumero + 1)
+              : Math.max(1, resumen.maxNumero);
+
+            const periodoActual = String(cuota?.periodo_pagado || "");
+            const pareceEtiquetaCuota = /cuota/i.test(periodoActual) || !periodoActual;
+
+            if (!pareceEtiquetaCuota) {
+              return cuota;
+            }
+
+            return {
+              ...cuota,
+              periodo_pagado: `Cuota ${numero} de ${total}`,
+            };
+          });
+
+          setCuotas(cuotasNormalizadas);
         } else {
           setCuotas([]);
         }
