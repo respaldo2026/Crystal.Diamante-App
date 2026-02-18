@@ -44,6 +44,7 @@ import {
     listarMovimientos,
     crearMovimiento,
     eliminarMovimiento,
+    sincronizarIngresosDesdePagos,
     type MovimientoFinanciero,
 } from "@modules/finanzas/movimientos.service";
 import { MOVIMIENTO_CATEGORIAS, MOVIMIENTO_TIPO, MOVIMIENTO_TIPO_COLOR, MOVIMIENTO_TIPO_LABEL } from "@constants/movimientos";
@@ -66,6 +67,8 @@ export default function TesoreriaPage() {
     const [error, setError] = useState<string | null>(null);
     const [busqueda, setBusqueda] = useState("");
     const [filtroRango, setFiltroRango] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
+    const [filtroMes, setFiltroMes] = useState<dayjs.Dayjs | null>(null);
+    const [filtroPeriodo, setFiltroPeriodo] = useState<string | null>(null);
     const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
     const [filtroCategoria, setFiltroCategoria] = useState<string | null>(null);
     const [filtroMetodo, setFiltroMetodo] = useState<string | null>(null);
@@ -79,8 +82,27 @@ export default function TesoreriaPage() {
         setError(null);
         try {
             const role = (user?.rol || "").toLowerCase();
-            const esAdmin = role === "admin" || role === "director" || role === "administrador" || role === "administrativo" || role.includes("admin");
-            const data = await listarMovimientos({}, { userId: user?.id || null, esAdmin });
+            const puedeVerTodo =
+                role === "admin" ||
+                role === "director" ||
+                role === "administrador" ||
+                role === "administrativo" ||
+                role === "secretaria" ||
+                role === "tesoreria" ||
+                role === "tesorero" ||
+                role === "caja" ||
+                role === "cajero" ||
+                role === "contador" ||
+                role === "finanzas" ||
+                role.includes("admin");
+
+            try {
+                await sincronizarIngresosDesdePagos(user?.id || null);
+            } catch (syncError) {
+                console.warn("No se pudo sincronizar ingresos desde pagos al cargar tesorería", syncError);
+            }
+
+            const data = await listarMovimientos({}, { userId: user?.id || null, esAdmin: puedeVerTodo });
             setMovimientos(data);
         } catch (err: any) {
             console.error("Error cargando movimientos", err);
@@ -142,18 +164,49 @@ export default function TesoreriaPage() {
                 if (mov.conciliado !== valor) return false;
             }
 
+            const fechaMov = dayjs(mov.fecha);
+
             if (filtroRango && filtroRango[0] && filtroRango[1]) {
-                const fechaMov = dayjs(mov.fecha);
                 const inicio = filtroRango[0];
                 const fin = filtroRango[1];
                 if (!fechaMov.isBetween(inicio, fin.add(1, "day"), "day", "[)")) {
+                    return false;
+                }
+            } else if (filtroMes) {
+                if (!fechaMov.isSame(filtroMes, "month")) {
+                    return false;
+                }
+            } else if (filtroPeriodo) {
+                const hoy = dayjs();
+                let inicio: dayjs.Dayjs | null = null;
+                let fin: dayjs.Dayjs | null = null;
+
+                if (filtroPeriodo === "hoy") {
+                    inicio = hoy.startOf("day");
+                    fin = hoy.endOf("day");
+                } else if (filtroPeriodo === "semana_actual") {
+                    inicio = hoy.startOf("week");
+                    fin = hoy.endOf("week");
+                } else if (filtroPeriodo === "mes_actual") {
+                    inicio = hoy.startOf("month");
+                    fin = hoy.endOf("month");
+                } else if (filtroPeriodo === "mes_anterior") {
+                    const mesAnterior = hoy.subtract(1, "month");
+                    inicio = mesAnterior.startOf("month");
+                    fin = mesAnterior.endOf("month");
+                } else if (filtroPeriodo === "anio_actual") {
+                    inicio = hoy.startOf("year");
+                    fin = hoy.endOf("year");
+                }
+
+                if (inicio && fin && !fechaMov.isBetween(inicio, fin.add(1, "day"), "day", "[)")) {
                     return false;
                 }
             }
 
             return true;
         });
-    }, [busqueda, filtroCategoria, filtroConciliado, filtroMetodo, filtroRango, filtroTipo, movimientos]);
+    }, [busqueda, filtroCategoria, filtroConciliado, filtroMes, filtroMetodo, filtroPeriodo, filtroRango, filtroTipo, movimientos]);
 
     const totalIngresos = useMemo(
         () => movimientosFiltrados.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
@@ -216,6 +269,8 @@ export default function TesoreriaPage() {
     const resetFiltros = () => {
         setBusqueda("");
         setFiltroRango(null);
+        setFiltroMes(null);
+        setFiltroPeriodo(null);
         setFiltroTipo(null);
         setFiltroCategoria(null);
         setFiltroMetodo(null);
@@ -334,8 +389,55 @@ export default function TesoreriaPage() {
                         <RangePicker
                             style={{ width: "100%" }}
                             value={filtroRango as any}
-                            onChange={(value) => setFiltroRango(value as any)}
+                            onChange={(value) => {
+                                setFiltroRango(value as any);
+                                if (value && (value[0] || value[1])) {
+                                    setFiltroMes(null);
+                                    setFiltroPeriodo(null);
+                                }
+                            }}
                             size="middle"
+                        />
+                    </Col>
+                    <Col xs={12} sm={6} md={6} lg={4}>
+                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Mes</label>
+                        <DatePicker
+                            picker="month"
+                            style={{ width: "100%" }}
+                            value={filtroMes as any}
+                            onChange={(value) => {
+                                setFiltroMes(value);
+                                if (value) {
+                                    setFiltroRango(null);
+                                    setFiltroPeriodo(null);
+                                }
+                            }}
+                            allowClear
+                            size="middle"
+                        />
+                    </Col>
+                    <Col xs={12} sm={6} md={6} lg={4}>
+                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Período</label>
+                        <Select
+                            allowClear
+                            placeholder="Selecciona"
+                            value={filtroPeriodo ?? undefined}
+                            onChange={(val) => {
+                                setFiltroPeriodo(val ?? null);
+                                if (val) {
+                                    setFiltroRango(null);
+                                    setFiltroMes(null);
+                                }
+                            }}
+                            style={{ width: "100%" }}
+                            size="middle"
+                            options={[
+                                { label: "Hoy", value: "hoy" },
+                                { label: "Semana actual", value: "semana_actual" },
+                                { label: "Mes actual", value: "mes_actual" },
+                                { label: "Mes anterior", value: "mes_anterior" },
+                                { label: "Año actual", value: "anio_actual" },
+                            ]}
                         />
                     </Col>
                     <Col xs={12} sm={6} md={6} lg={4}>

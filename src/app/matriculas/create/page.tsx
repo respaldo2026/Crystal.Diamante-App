@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import { formatDate } from "@utils/date";
 import { useRouter } from "next/navigation";
 import { useColorMode } from "@/contexts/color-mode";
+import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 
 const { Title, Text } = Typography;
 
@@ -619,6 +620,26 @@ export default function MatriculaCreate() {
                 .eq("id", matriculaData.id);
 
             if (errMat) throw errMat;
+
+            try {
+                const fechaPagoISO = fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
+                await registrarIngresoDesdePago({
+                    fecha: fechaPagoISO,
+                    monto: montoNumero,
+                    concepto: `Pago de inscripción - ${cursoData?.nombre ?? "Curso"}`,
+                    categoria: "inscripciones",
+                    metodo_pago: metodo_pago || null,
+                    referencia: referencia || pagoInscripcionData.id,
+                    descripcion: `Pago de inscripción de matrícula ${matriculaData?.id ?? ""}`,
+                    estudiante_id: estudianteData?.id ?? null,
+                    ticket_url: null,
+                    pago_id: pagoInscripcionData.id,
+                    created_by: null,
+                });
+            } catch (movError) {
+                console.error("Error registrando ingreso en tesorería (inscripción):", movError);
+                message.warning("Pago registrado, pero no se pudo reflejar automáticamente en tesorería.");
+            }
 
             message.success("✅ Pago registrado y matrícula activada");
             // Enviar confirmación de pago + bienvenida portal (solo al confirmar pago)
