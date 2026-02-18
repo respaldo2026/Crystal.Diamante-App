@@ -310,21 +310,26 @@ export default function StudentDetailView() {
 
       let pagosList = (dataPagos as unknown as Pago[] | null) ?? [];
 
-      if (pagosList.length === 0 && listaMats.length > 0) {
-        const matriculaIds = listaMats.map((m: any) => m.id).filter(Boolean);
-        if (matriculaIds.length > 0) {
-          const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
-            .from("pagos")
-            .select(
-              "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
-            )
-            .in("matricula_id", matriculaIds)
-            .order("matricula_id", { ascending: true })
-            .order("numero_cuota", { ascending: true, nullsFirst: false })
-            .order("created_at", { ascending: true });
+      const matriculaIds = listaMats.map((m: any) => m.id).filter(Boolean);
+      if (matriculaIds.length > 0) {
+        const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
+          .from("pagos")
+          .select(
+            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+          )
+          .in("matricula_id", matriculaIds)
+          .order("matricula_id", { ascending: true })
+          .order("numero_cuota", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true });
 
-          if (!errPagosPorMatricula) {
-            pagosList = (dataPagosPorMatricula as unknown as Pago[] | null) ?? [];
+        if (!errPagosPorMatricula) {
+          const pagosPorMatricula = (dataPagosPorMatricula as unknown as Pago[] | null) ?? [];
+          if (pagosPorMatricula.length > 0) {
+            const pagosMap = new Map<string, Pago>();
+            [...pagosList, ...pagosPorMatricula].forEach((p) => {
+              pagosMap.set(String(p.id), p);
+            });
+            pagosList = Array.from(pagosMap.values());
           }
         }
       }

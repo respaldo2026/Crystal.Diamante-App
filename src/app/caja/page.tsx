@@ -46,6 +46,7 @@ interface Estudiante {
   nombre_completo: string;
   telefono?: string;
   email?: string;
+  notif_whatsapp?: boolean | null;
 }
 
 interface Matricula {
@@ -125,7 +126,7 @@ export default function CajaPage() {
     try {
       const { data, error } = await supabaseBrowserClient
         .from("perfiles")
-        .select("id, nombre_completo, telefono, email")
+        .select("id, nombre_completo, telefono, email, notif_whatsapp")
         .eq("rol", "estudiante")
         .eq("activo", true)
         .order("nombre_completo");
@@ -262,6 +263,7 @@ export default function CajaPage() {
       const cuotasAPagar = cuotas.filter((c) => cuotasSeleccionadas.includes(c.id));
       const pagosActualizados = [];
       const metodoPago = values.metodo_pago as MetodoPago;
+      const referenciaPago = values.referencia || `FAC-${generarNumeroFactura()}`;
 
       // Actualizar cada cuota seleccionada
       for (const cuota of cuotasAPagar) {
@@ -271,7 +273,8 @@ export default function CajaPage() {
             estado: "pagado",
             metodo_pago: (values.metodo_pago as string).toLowerCase(),
             fecha_pago: dayjs().toISOString(),
-            referencia: values.referencia || `FAC-${generarNumeroFactura()}`,
+            referencia: referenciaPago,
+            estudiante_id: estudianteSeleccionado?.id || null,
             observaciones: values.observaciones || null,
           })
           .eq("id", cuota.id)
@@ -320,7 +323,7 @@ export default function CajaPage() {
           monto: totalAPagar,
           metodo: metodoPagoLabels[metodoPago],
           fecha: dayjs().format("DD/MM/YYYY HH:mm"),
-          referencia: values.referencia || `FAC-${generarNumeroFactura()}`,
+          referencia: referenciaPago,
           numeroCuota: cuotasAPagar.length === 1 ? cuotasAPagar[0]?.numero_cuota : undefined,
           periodo: cuotasAPagar.map((c) => c.periodo_pagado).join(", "),
           valorEntregado: valorEntregado || undefined,
@@ -373,6 +376,43 @@ export default function CajaPage() {
       // Abrir cajón registrador si es efectivo
       if (values.metodo_pago === "efectivo") {
         abrirCajonRegistrador();
+      }
+
+      if (estudianteSeleccionado?.telefono && (estudianteSeleccionado?.notif_whatsapp ?? true)) {
+        try {
+          const { enviarConfirmacionPago } = await import("@/services/whatsapp-messages-module");
+
+          const cursosPago = cuotasAPagar
+            .map((cuota) => matriculas.find((m) => String(m.id) === String((cuota as any).matricula_id))?.curso_nombre)
+            .filter(Boolean) as string[];
+          const cursosUnicos = Array.from(new Set(cursosPago));
+
+          const nombreCursoWhatsapp =
+            cursosUnicos.length === 0
+              ? "Curso"
+              : cursosUnicos.length === 1
+              ? cursosUnicos[0]
+              : "Varios cursos";
+
+          const conceptoPago = cuotasAPagar
+            .map((cuota) => cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim())
+            .filter(Boolean)
+            .join(", ");
+
+          await enviarConfirmacionPago(estudianteSeleccionado.id, {
+            nombre: estudianteSeleccionado.nombre_completo,
+            telefono: estudianteSeleccionado.telefono,
+            referenciaPago,
+            monto: totalAPagar,
+            fechaPago: dayjs().format("DD/MM/YYYY"),
+            concepto: conceptoPago,
+            nombreCurso: nombreCursoWhatsapp,
+            fechaVigencia: dayjs().add(1, "month").format("DD/MM/YYYY"),
+            fechaProximaClase: "Por confirmar",
+          });
+        } catch (whatsappError) {
+          console.error("Error enviando confirmación de pago por WhatsApp desde Caja:", whatsappError);
+        }
       }
 
       messageApi.success(`Pago registrado exitosamente. Total: ${formatCurrency(totalAPagar)}`);
