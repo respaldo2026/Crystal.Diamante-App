@@ -8,65 +8,75 @@ const { Page, Text, View, Document, StyleSheet, Image } = ReactPDF;
 
 const styles = StyleSheet.create({
   page: {
-    padding: 16,
+    paddingTop: 10,
+    paddingRight: 10,
+    paddingBottom: 10,
+    paddingLeft: 10,
     backgroundColor: "#ffffff",
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: "Helvetica",
   },
   header: {
     textAlign: "center",
-    marginBottom: 12,
-  },
-  logo: {
-    width: 120,
-    maxHeight: 56,
-    objectFit: "contain",
-    alignSelf: "center",
     marginBottom: 6,
   },
-  ticketTitle: {
-    fontSize: 12,
-    fontWeight: 600,
+  logo: {
+    width: 104,
+    maxHeight: 42,
+    objectFit: "contain",
+    alignSelf: "center",
     marginBottom: 4,
+  },
+  ticketTitle: {
+    fontSize: 11,
+    fontWeight: 600,
+    marginBottom: 2,
   },
   title: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 700,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   subtitle: {
-    fontSize: 10,
+    fontSize: 9,
     color: "#555555",
   },
   details: {
     borderTop: "1px dashed #cccccc",
-    paddingTop: 8,
-    marginBottom: 8,
+    paddingTop: 5,
+    marginBottom: 5,
   },
   row: {
     display: "flex",
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 6,
+    marginBottom: 3,
   },
   section: {
-    marginBottom: 8,
+    marginBottom: 5,
     borderBottom: "1px dashed #cccccc",
-    paddingBottom: 6,
+    paddingBottom: 4,
   },
   label: {
     fontWeight: "bold",
   },
   value: {
-    marginBottom: 2,
+    marginBottom: 1,
   },
   footer: {
     textAlign: "center",
-    marginTop: 12,
-    fontSize: 9,
+    marginTop: 6,
+    fontSize: 8.5,
     color: "#555555",
   },
 });
+
+const truncarTexto = (valor: string | null | undefined, max: number) => {
+  const texto = String(valor || "").trim();
+  if (!texto) return "";
+  if (texto.length <= max) return texto;
+  return `${texto.slice(0, Math.max(0, max - 1)).trim()}…`;
+};
 
 export interface TicketCamposVisibles {
   logo: boolean;
@@ -142,15 +152,20 @@ const normalizarCampos = (campos?: Partial<TicketCamposVisibles> | null): Ticket
 
 export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, pago, curso }) => {
   const campos = normalizarCampos(academia.ticketCampos);
-  const concepto =
+  const conceptoBase =
     pago.concepto ||
     pago.periodo ||
     (pago.numeroCuota ? `Cuota ${pago.numeroCuota}` : null) ||
     "Pago";
+  const concepto = truncarTexto(conceptoBase, 92);
+  const nombreEstudiante = truncarTexto(estudiante.nombre, 56);
+  const nombreCurso = curso ? truncarTexto(construirNombreGrupo(curso), 70) : "";
+  const metodo = truncarTexto(pago.metodo, 28);
+  const referencia = truncarTexto(pago.referencia, 32);
 
   return (
     <Document>
-      <Page size={[226.77, 397.7]} style={styles.page}>
+      <Page size={[226.77, 520]} style={styles.page}>
         <View style={styles.header}>
           {campos.logo && academia.logoUrl ? <Image style={styles.logo} src={academia.logoUrl} /> : null}
           {campos.nombreAcademia ? <Text style={styles.title}>{academia.nombre}</Text> : null}
@@ -165,7 +180,7 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
             <Text style={styles.ticketTitle}>{academia.ticketTitulo || "Recibo de Pago"}</Text>
           ) : null}
           {campos.fecha ? (
-            <Text style={[styles.subtitle, { marginBottom: 6 }]}>Fecha: {pago.fecha}</Text>
+            <Text style={[styles.subtitle, { marginBottom: 4 }]}>Fecha: {pago.fecha}</Text>
           ) : null}
           {campos.concepto ? (
             <View style={styles.row}>
@@ -183,7 +198,7 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
 
         <View style={styles.section}>
           <Text style={styles.label}>Estudiante:</Text>
-          <Text style={styles.value}>{estudiante.nombre}</Text>
+          <Text style={styles.value}>{nombreEstudiante}</Text>
           {estudiante.identificacion ? (
             <>
               <Text style={styles.label}>Documento:</Text>
@@ -193,19 +208,19 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
           {curso ? (
             <>
               <Text style={styles.label}>Curso:</Text>
-              <Text style={styles.value}>{construirNombreGrupo(curso)}</Text>
+              <Text style={styles.value}>{nombreCurso}</Text>
             </>
           ) : null}
-          {pago.metodo ? (
+          {metodo ? (
             <>
               <Text style={styles.label}>Método:</Text>
-              <Text style={styles.value}>{pago.metodo}</Text>
+              <Text style={styles.value}>{metodo}</Text>
             </>
           ) : null}
-          {pago.referencia ? (
+          {referencia ? (
             <>
               <Text style={styles.label}>Referencia:</Text>
-              <Text style={styles.value}>{pago.referencia}</Text>
+              <Text style={styles.value}>{referencia}</Text>
             </>
           ) : null}
           {pago.valorEntregado ? (
