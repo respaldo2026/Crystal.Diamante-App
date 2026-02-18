@@ -602,6 +602,8 @@ export default function PortalEstudiante() {
       : vista === "ciclo"
         ? "Materiales del ciclo"
         : "Materiales por clase";
+    const colorDiferenciadorCiclo = vista === "plan" ? "#2563eb" : "#16a34a";
+    const fondoDiferenciadorCiclo = vista === "plan" ? "#eff6ff" : "#f0fdf4";
 
     const StepCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
       <Card title={title} size={isMobile ? "small" : "default"}>
@@ -669,6 +671,11 @@ export default function PortalEstudiante() {
                 <Col xs={24} sm={12} lg={8} key={ciclo.id}>
                   <Button
                     block
+                    style={{
+                      color: colorDiferenciadorCiclo,
+                      borderColor: colorDiferenciadorCiclo,
+                      background: fondoDiferenciadorCiclo,
+                    }}
                     onClick={() => {
                       setCicloRutaId(String(ciclo.id));
                       setTemaRutaId(null);

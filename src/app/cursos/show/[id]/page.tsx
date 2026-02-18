@@ -1091,7 +1091,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                 width: 44,
                                 height: 44,
                                 borderRadius: 16,
-                                background: "#111827",
+                                background: "#2563eb",
                                 color: "#f8fafc",
                                 display: "flex",
                                 alignItems: "center",
@@ -1215,7 +1215,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                   width: 44,
                                   height: 44,
                                   borderRadius: 16,
-                                  background: "#111827",
+                                  background: "#16a34a",
                                   color: "#f8fafc",
                                   display: "flex",
                                   alignItems: "center",
@@ -1242,7 +1242,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                 return (
                                   <List.Item key={`mat-${temaId}`}>
                                     <List.Item.Meta
-                                      avatar={<span style={{ fontSize: 20, fontWeight: 700, color: "#2563eb" }}>{tema.orden || temaIndex + 1}</span>}
+                                      avatar={<span style={{ fontSize: 20, fontWeight: 700, color: "#16a34a" }}>{tema.orden || temaIndex + 1}</span>}
                                       title={<Text strong>{tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}</Text>}
                                       description={
                                         materialesTema.length ? (
