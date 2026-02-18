@@ -56,7 +56,7 @@ export default function EstudiantesList() {
         resource: "perfiles",
         // TRUCO AVANZADO: Especificar explícitamente la FK para evitar ambigüedad
         meta: {
-            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
+            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, created_at, fecha_inicio, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
         },
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
         pagination: {
@@ -101,11 +101,64 @@ export default function EstudiantesList() {
     const [attFilter, setAttFilter] = useState<'all' | 'bajo' | 'sin'>('all');
     const [asistStats, setAsistStats] = useState<Record<number, { total: number; present: number; porcentaje: number; minimo: number; cumple: boolean; tieneDatos: boolean }>>({});
     const [loadingAsist, setLoadingAsist] = useState(false);
-    const [pagosStats, setPagosStats] = useState<Record<number, { pagados: number; pendientes: number; pendientesVencidos: number }>>({});
+    const [pagosStats, setPagosStats] = useState<Record<number, {
+        pagados: number;
+        pendientes: number;
+        pendientesVencidos: number;
+        inscripcionPagada: number;
+        mensualidadesPagadas: number;
+        mensualidadesPendientes: number;
+        mensualidadesPendientesVencidas: number;
+    }>>({});
     const [loadingPagos, setLoadingPagos] = useState(false);
     const [calcularAsistencia, setCalcularAsistencia] = useState(false);
-    const activoEstados = useMemo(() => ["activo", "en curso", "pendiente"], []);
+    const activoEstados = useMemo(() => ["activo", "en curso", "pendiente", "inscrito", "preinscrito", "matriculado"], []);
     const graduadoEstados = useMemo(() => ["aprobado", "certificado", "finalizado"], []);
+
+    const normalizarEstado = (value: any) => String(value || "").toLowerCase().trim();
+    const esEstadoInactivo = (estado: string) => ["cancelado", "cancelada", "retirado", "retirada", "anulado", "anulada"].includes(estado);
+    const esEstadoGraduado = (estado: string) => graduadoEstados.includes(estado);
+    const esPagoInscripcion = (pago: any) => {
+        const numero = Number(pago?.numero_cuota);
+        const periodo = String(pago?.periodo_pagado || "").toLowerCase();
+        return numero === 0 || periodo.includes("inscrip") || periodo.includes("matric");
+    };
+    const obtenerMatriculasVigentes = (record: any) => {
+        const matriculas = (record?.matriculas || []).slice();
+        const filtradas = matriculas.filter((m: any) => {
+            const estado = normalizarEstado(m?.estado);
+            if (!estado) return true;
+            return !esEstadoInactivo(estado) && !esEstadoGraduado(estado);
+        });
+        return filtradas.sort((a: any, b: any) => {
+            const fechaA = dayjs(a?.fecha_inicio || a?.created_at || 0).valueOf();
+            const fechaB = dayjs(b?.fecha_inicio || b?.created_at || 0).valueOf();
+            return fechaB - fechaA;
+        });
+    };
+    const obtenerEstadoPago = (record: any) => {
+        const mats = obtenerMatriculasVigentes(record);
+        if (mats.length === 0) return { label: 'Sin pagos', color: 'default' as const };
+
+        let mensualidadesPagadas = 0;
+        let mensualidadesPendientes = 0;
+        let mensualidadesPendientesVencidas = 0;
+        let inscripcionPagada = 0;
+
+        mats.forEach((m: any) => {
+            const st = pagosStats[m.id];
+            mensualidadesPagadas += st?.mensualidadesPagadas || 0;
+            mensualidadesPendientes += st?.mensualidadesPendientes || 0;
+            mensualidadesPendientesVencidas += st?.mensualidadesPendientesVencidas || 0;
+            inscripcionPagada += st?.inscripcionPagada || 0;
+        });
+
+        if (mensualidadesPendientesVencidas > 0) return { label: 'Pendiente', color: 'orange' as const };
+        if (mensualidadesPendientes > 0) return { label: 'Pendiente', color: 'gold' as const };
+        if (mensualidadesPagadas > 0) return { label: 'Al día', color: 'green' as const };
+        if (inscripcionPagada > 0) return { label: 'Inscripción pagada', color: 'blue' as const };
+        return { label: 'Sin pagos', color: 'default' as const };
+    };
 
     const dataSource = useMemo(
         () => ((tableProps.dataSource as any[]) || []).filter((s: any) => !deletedIds.includes(s.id)),
@@ -179,20 +232,43 @@ export default function EstudiantesList() {
             try {
                 const { data: pagos } = await supabaseBrowserClient
                     .from('pagos')
-                    .select('matricula_id, estado, fecha_vencimiento')
+                    .select('matricula_id, estado, fecha_vencimiento, numero_cuota, periodo_pagado')
                     .in('matricula_id', matriculaIds);
 
                 const hoy = dayjs().startOf('day');
-                const stats: Record<number, { pagados: number; pendientes: number; pendientesVencidos: number }> = {};
+                const stats: Record<number, {
+                    pagados: number;
+                    pendientes: number;
+                    pendientesVencidos: number;
+                    inscripcionPagada: number;
+                    mensualidadesPagadas: number;
+                    mensualidadesPendientes: number;
+                    mensualidadesPendientesVencidas: number;
+                }> = {};
                 (pagos || []).forEach((p: any) => {
                     const matriculaId = p?.matricula_id;
                     if (!matriculaId) return;
-                    if (!stats[matriculaId]) stats[matriculaId] = { pagados: 0, pendientes: 0, pendientesVencidos: 0 };
+                    if (!stats[matriculaId]) {
+                        stats[matriculaId] = {
+                            pagados: 0,
+                            pendientes: 0,
+                            pendientesVencidos: 0,
+                            inscripcionPagada: 0,
+                            mensualidadesPagadas: 0,
+                            mensualidadesPendientes: 0,
+                            mensualidadesPendientesVencidas: 0,
+                        };
+                    }
+                    const esInscripcion = esPagoInscripcion(p);
                     if (p.estado === 'pagado') stats[matriculaId].pagados += 1;
+                    if (p.estado === 'pagado' && esInscripcion) stats[matriculaId].inscripcionPagada += 1;
+                    if (p.estado === 'pagado' && !esInscripcion) stats[matriculaId].mensualidadesPagadas += 1;
                     if (p.estado === 'pendiente') {
                         stats[matriculaId].pendientes += 1;
+                        if (!esInscripcion) stats[matriculaId].mensualidadesPendientes += 1;
                         if (p.fecha_vencimiento && dayjs(p.fecha_vencimiento).endOf('day').isBefore(hoy)) {
                             stats[matriculaId].pendientesVencidos += 1;
+                            if (!esInscripcion) stats[matriculaId].mensualidadesPendientesVencidas += 1;
                         }
                     }
                 });
@@ -206,11 +282,13 @@ export default function EstudiantesList() {
         fetchPagos();
     }, [dataSource]);
     const activos = useMemo(() => dataSource.filter(s => {
-        // Mostrar todos los estudiantes que tienen activo=true O no tienen el campo
-        // Si tienen matrículas, verificar que al menos una esté activa
-        const mats = s.matriculas || [];
+        const mats = obtenerMatriculasVigentes(s);
         if (mats.length === 0) return s.activo !== false; // Estudiantes sin matrícula (activos por defecto)
-        return mats.some((m: any) => activoEstados.includes(String(m.estado || '').toLowerCase()));
+        return mats.some((m: any) => {
+            const estado = normalizarEstado(m.estado);
+            if (!estado) return true;
+            return activoEstados.includes(estado) || (!esEstadoInactivo(estado) && !esEstadoGraduado(estado));
+        });
     }), [dataSource, activoEstados]);
     const graduados = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => graduadoEstados.includes(String(m.estado || '').toLowerCase()))), [dataSource, graduadoEstados]);
     const desertores = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => {
@@ -286,24 +364,9 @@ export default function EstudiantesList() {
                         <Text type="secondary">Sin estudiantes para mostrar</Text>
                     )}
                     {filteredDataSource.map((record: any) => {
-                        const mats = record.matriculas || [];
+                        const mats = obtenerMatriculasVigentes(record);
                         const cursoNombre = construirNombreGrupo(mats[0]?.cursos);
-                        let hasPendiente = false;
-                        let hasPendienteVencido = false;
-                        let hasPagado = false;
-                        mats.forEach((m: any) => {
-                            const st = pagosStats[m.id];
-                            if (st?.pendientes) hasPendiente = true;
-                            if (st?.pendientesVencidos) hasPendienteVencido = true;
-                            if (st?.pagados) hasPagado = true;
-                        });
-                        const pagoTag = hasPendienteVencido
-                            ? { label: 'Pago pendiente', color: 'orange' }
-                            : hasPagado
-                                ? { label: 'Al día', color: 'green' }
-                                : hasPendiente
-                                    ? { label: 'Pendiente', color: 'gold' }
-                                : { label: 'Sin pagos', color: 'default' };
+                        const pagoTag = obtenerEstadoPago(record);
 
                         return (
                             <Card key={record.id} style={{ borderRadius: 10 }} bodyStyle={{ padding: 10, position: "relative" }}>
@@ -420,7 +483,7 @@ export default function EstudiantesList() {
                                 <span style={{ fontWeight: 600, fontSize: '15px' }}>{value || "Sin Nombre"}</span>
                                 {/* Badge de asistencia (peor caso entre sus matrículas) */}
                                 {(() => {
-                                    const mats = record.matriculas || [];
+                                    const mats = obtenerMatriculasVigentes(record);
                                     let worst: any = null;
                                     mats.forEach((m: any) => {
                                         const st = asistStats[m.id];
@@ -444,24 +507,9 @@ export default function EstudiantesList() {
                                 {/* ID de referencia rápida */}
                                 <span style={{ fontSize: '11px', color: '#999' }}>ID: {record.identificacion || 'N/A'}</span>
                                 {isMobile && (() => {
-                                    const mats = record.matriculas || [];
+                                    const mats = obtenerMatriculasVigentes(record);
                                     const cursoNombre = mats[0]?.cursos?.nombre;
-                                    let hasPendiente = false;
-                                    let hasPendienteVencido = false;
-                                    let hasPagado = false;
-                                    mats.forEach((m: any) => {
-                                        const st = pagosStats[m.id];
-                                        if (st?.pendientes) hasPendiente = true;
-                                        if (st?.pendientesVencidos) hasPendienteVencido = true;
-                                        if (st?.pagados) hasPagado = true;
-                                    });
-                                    const pagoTag = hasPendienteVencido
-                                        ? { label: 'Pago pendiente', color: 'orange' }
-                                        : hasPagado
-                                            ? { label: 'Al día', color: 'green' }
-                                            : hasPendiente
-                                                ? { label: 'Pendiente', color: 'gold' }
-                                            : { label: 'Sin pagos', color: 'default' };
+                                    const pagoTag = obtenerEstadoPago(record);
                                     return (
                                         <Space size={6} wrap style={{ marginTop: 6 }}>
                                             {cursoNombre && <Tag color="blue">{cursoNombre}</Tag>}
@@ -493,8 +541,7 @@ export default function EstudiantesList() {
                     <Table.Column 
                         title="Cursos Activos"
                         render={(_, record: any) => {
-                            // Filtramos solo matrículas activas o recientes
-                            const matriculas = record.matriculas || [];
+                            const matriculas = obtenerMatriculasVigentes(record);
                             if (matriculas.length === 0) return <Tag>Ninguno</Tag>;
 
                             return (
@@ -520,20 +567,8 @@ export default function EstudiantesList() {
                     <Table.Column
                         title="Pago"
                         render={(_, record: any) => {
-                            const mats = record.matriculas || [];
-                            let hasPendiente = false;
-                            let hasPendienteVencido = false;
-                            let hasPagado = false;
-                            mats.forEach((m: any) => {
-                                const st = pagosStats[m.id];
-                                if (st?.pendientes) hasPendiente = true;
-                                if (st?.pendientesVencidos) hasPendienteVencido = true;
-                                if (st?.pagados) hasPagado = true;
-                            });
-                            if (hasPendienteVencido) return <Tag color="orange">Pendiente</Tag>;
-                            if (hasPagado) return <Tag color="green">Al día</Tag>;
-                            if (hasPendiente) return <Tag color="gold">Pendiente</Tag>;
-                            return <Tag color="default">Sin pagos</Tag>;
+                            const pagoTag = obtenerEstadoPago(record);
+                            return <Tag color={pagoTag.color}>{pagoTag.label}</Tag>;
                         }}
                     />
                 )}
