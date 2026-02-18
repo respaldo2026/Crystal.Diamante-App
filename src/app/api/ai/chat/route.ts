@@ -1064,7 +1064,7 @@ function buildContextualDirective(
       'Responde priorizando temario/contenido por ciclos o módulos del programa solicitado.',
     materiales:
       materialsScope === "tema"
-        ? 'Responde priorizando SOLO "Materiales por Tema/Clase" del programa solicitado. Si falta el tema exacto, pide una aclaración breve.'
+        ? 'Responde priorizando SOLO "Materiales por Tema/Clase" del programa solicitado. Regla: "Clase N" = tema con orden N del ciclo consultado. Si no se especifica ciclo y hay ambigüedad, pide aclaración breve antes de listar materiales.'
         : materialsScope === "ciclo"
         ? 'Responde priorizando SOLO "Materiales por Ciclo" del programa solicitado.'
         : 'Responde con materiales del programa y pide una aclaración breve para definir si los quiere por ciclo o por tema/clase.',

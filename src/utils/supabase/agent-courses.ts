@@ -435,7 +435,7 @@ async function getMaterialsByPensum(
 
     const supabase = getSupabaseClient()
 
-    const [materialesCicloRes, materialesClaseRes] = await Promise.all([
+    const [materialesCicloRes, materialesClaseRes, pensumCursosRes] = await Promise.all([
       supabase
         .from('materiales_ciclo')
         .select('*')
@@ -446,6 +446,10 @@ async function getMaterialsByPensum(
         .select('*')
         .in('pensum_id', pensumIds)
         .order('orden', { ascending: true, nullsFirst: true }),
+      supabase
+        .from('pensum_cursos')
+        .select('id, pensum_id, nombre_curso, orden')
+        .in('pensum_id', pensumIds),
     ])
 
     if (materialesCicloRes.error) {
@@ -454,6 +458,18 @@ async function getMaterialsByPensum(
     if (materialesClaseRes.error) {
       console.error('[getMaterialsByPensum] Error materiales_clase:', materialesClaseRes.error)
     }
+    if (pensumCursosRes.error) {
+      console.error('[getMaterialsByPensum] Error pensum_cursos:', pensumCursosRes.error)
+    }
+
+    const pensumCursoById = new Map<string, { pensum_id: string | null; nombre_curso: string | null; orden: number | null }>()
+    ;((pensumCursosRes.data || []) as any[]).forEach((row) => {
+      pensumCursoById.set(String(row.id), {
+        pensum_id: row.pensum_id ?? null,
+        nombre_curso: row.nombre_curso ?? null,
+        orden: row.orden ?? null,
+      })
+    })
 
     const materialesCiclo = ((materialesCicloRes.data || []) as any[])
       .filter((m) => m?.activo !== false)
@@ -471,6 +487,22 @@ async function getMaterialsByPensum(
 
     const materialesClase = ((materialesClaseRes.data || []) as any[])
       .filter((m) => m?.activo !== false)
+      .filter((m) => {
+        const cursoId = m?.pensum_curso_id ? String(m.pensum_curso_id) : ''
+        if (!cursoId) return true
+
+        const curso = pensumCursoById.get(cursoId)
+        if (!curso) return false
+
+        const pensumIdMaterial = m?.pensum_id ? String(m.pensum_id) : ''
+        const pensumIdCurso = curso.pensum_id ? String(curso.pensum_id) : ''
+
+        if (pensumIdMaterial && pensumIdCurso && pensumIdMaterial !== pensumIdCurso) {
+          return false
+        }
+
+        return true
+      })
       .map((m) => ({
         id: `${m.id}`,
         nombre_material: m.nombre_material ?? null,
@@ -501,12 +533,28 @@ function buildMaterialsContext(
   }
 
   const cicloById = new Map<string, PensumCiclo>()
-  const cursoById = new Map<string, { nombre: string; cicloNombre: string }>()
+  const cursoById = new Map<string, {
+    nombre: string
+    cicloNombre: string
+    cicloNumero: number
+    cicloOrden: number
+    cicloId: string
+    cursoOrden: number
+  }>()
   pensum.forEach((ciclo) => {
     cicloById.set(ciclo.id, ciclo)
     const cicloNombre = ciclo.nombre_ciclo || `Ciclo ${ciclo.numero_ciclo}`
+    const cicloNumero = Number(ciclo.numero_ciclo || 0)
+    const cicloOrden = Number(ciclo.orden || ciclo.numero_ciclo || 9999)
     ciclo.cursos.forEach((curso) => {
-      cursoById.set(curso.id, { nombre: curso.nombre_curso, cicloNombre })
+      cursoById.set(curso.id, {
+        nombre: curso.nombre_curso,
+        cicloNombre,
+        cicloNumero,
+        cicloOrden,
+        cicloId: ciclo.id,
+        cursoOrden: Number(curso.orden || 9999),
+      })
     })
   })
 
@@ -524,12 +572,23 @@ function buildMaterialsContext(
     })
 
     text += `  **Materiales por Ciclo (lista general):**\n`
-    for (const [cicloId, items] of byCiclo.entries()) {
+    const ciclosOrdenados = Array.from(byCiclo.entries()).sort((a, b) => {
+      const cicloA = a[0] !== 'sin-ciclo' ? cicloById.get(a[0]) : null
+      const cicloB = b[0] !== 'sin-ciclo' ? cicloById.get(b[0]) : null
+      const ordenA = Number(cicloA?.orden || cicloA?.numero_ciclo || 9999)
+      const ordenB = Number(cicloB?.orden || cicloB?.numero_ciclo || 9999)
+      return ordenA - ordenB
+    })
+
+    for (const [cicloId, items] of ciclosOrdenados) {
       const ciclo = cicloId !== 'sin-ciclo' ? cicloById.get(cicloId) : null
       const cicloNombre = ciclo ? ciclo.nombre_ciclo || `Ciclo ${ciclo.numero_ciclo}` : 'Sin ciclo asignado'
       text += `    • ${cicloNombre}:\n`
 
-      items.forEach((item) => {
+      items
+        .slice()
+        .sort((a, b) => Number(a.orden || 9999) - Number(b.orden || 9999))
+        .forEach((item) => {
         const nombre = item.nombre || 'Material'
         const qty = formatMaterialQuantity(item.cantidad, item.unidad)
         const kit = item.incluido_kit ? ' (incluido en kit)' : ''
@@ -547,12 +606,30 @@ function buildMaterialsContext(
     })
 
     text += `  **Materiales por Tema/Clase (detalle):**\n`
-    for (const [cursoId, items] of byCurso.entries()) {
+    const cursosOrdenados = Array.from(byCurso.entries()).sort((a, b) => {
+      const cursoA = a[0] !== 'sin-tema' ? cursoById.get(a[0]) : null
+      const cursoB = b[0] !== 'sin-tema' ? cursoById.get(b[0]) : null
+
+      const cicloOrdenA = Number(cursoA?.cicloOrden || 9999)
+      const cicloOrdenB = Number(cursoB?.cicloOrden || 9999)
+      if (cicloOrdenA !== cicloOrdenB) return cicloOrdenA - cicloOrdenB
+
+      const cursoOrdenA = Number(cursoA?.cursoOrden || 9999)
+      const cursoOrdenB = Number(cursoB?.cursoOrden || 9999)
+      return cursoOrdenA - cursoOrdenB
+    })
+
+    for (const [cursoId, items] of cursosOrdenados) {
       const curso = cursoId !== 'sin-tema' ? cursoById.get(cursoId) : null
-      const temaNombre = curso ? `${curso.nombre} (${curso.cicloNombre})` : 'Tema sin asignar'
+      const temaNombre = curso
+        ? `Clase ${curso.cursoOrden === 9999 ? '?' : curso.cursoOrden} · ${curso.nombre} (Ciclo ${curso.cicloNumero}: ${curso.cicloNombre})`
+        : 'Tema sin asignar'
       text += `    • ${temaNombre}:\n`
 
-      items.forEach((item) => {
+      items
+        .slice()
+        .sort((a, b) => Number(a.orden || 9999) - Number(b.orden || 9999))
+        .forEach((item) => {
         const nombreBase = item.nombre_material?.trim()
         const fromCiclo = item.material_ciclo_id ? materialCicloById.get(item.material_ciclo_id) : null
         const nombre = nombreBase || fromCiclo?.nombre || 'Material'
@@ -561,6 +638,8 @@ function buildMaterialsContext(
         text += `      - ${nombre}: ${qty}${obs}\n`
       })
     }
+
+    text += `  ⚠️ Regla crítica para responder: "Clase N" corresponde al tema con orden N dentro del ciclo consultado. Si el usuario no indica ciclo y existe Clase N en varios ciclos, primero pide aclaración de ciclo.\n`
   }
 
   return text
