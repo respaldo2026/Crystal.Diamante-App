@@ -6,8 +6,52 @@ import { TicketPagoPDF, type TicketPagoData } from "@components/pdf/TicketPagoPD
 const crearDocumento = (data: TicketPagoData) =>
   React.createElement(TicketPagoPDF, data) as React.ReactElement<DocumentProps>;
 
+const convertirBlobADataUrl = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        resolve(result);
+        return;
+      }
+      reject(new Error("No se pudo convertir el logo a data URL"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Error leyendo logo"));
+    reader.readAsDataURL(blob);
+  });
+
+const prepararTicketData = async (data: TicketPagoData): Promise<TicketPagoData> => {
+  const logoUrl = data.academia?.logoUrl;
+
+  if (!logoUrl || logoUrl.startsWith("data:")) {
+    return data;
+  }
+
+  try {
+    const response = await fetch(logoUrl);
+    if (!response.ok) {
+      return data;
+    }
+
+    const logoBlob = await response.blob();
+    const logoDataUrl = await convertirBlobADataUrl(logoBlob);
+
+    return {
+      ...data,
+      academia: {
+        ...data.academia,
+        logoUrl: logoDataUrl,
+      },
+    };
+  } catch {
+    return data;
+  }
+};
+
 export const generarTicketPagoBlob = async (data: TicketPagoData) => {
-  const doc = crearDocumento(data);
+  const dataPreparada = await prepararTicketData(data);
+  const doc = crearDocumento(dataPreparada);
   return pdf(doc).toBlob();
 };
 
