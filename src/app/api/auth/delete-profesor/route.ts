@@ -35,6 +35,8 @@ export async function POST(request: NextRequest) {
     await safeUpdate("cursos", { profesor_id: null }, "profesor_id");
     await safeUpdate("clases", { profesor_id: null }, "profesor_id");
     await safeUpdate("sesiones_clase", { profesor_id: null }, "profesor_id");
+    await safeUpdate("grupos", { profesor_id: null }, "profesor_id");
+    await safeUpdate("nomina", { profesor_id: null }, "profesor_id");
     await safeDelete("pagos_profesores", "profesor_id");
     await safeDelete("pagos_nomina", "profesor_id");
     await safeDelete("profesores_info", "perfil_id");
@@ -46,17 +48,32 @@ export async function POST(request: NextRequest) {
 
     let softDeleted = false;
     if (perfilError) {
-      const { error: softError } = await supabaseAdmin
-        .from("perfiles")
-        .update({ activo: false })
-        .eq("id", userId);
+      errors.push(`perfiles: ${perfilError.message || "delete_failed"}`);
 
-      if (softError) {
-        throw new Error(`No se pudo eliminar ni desactivar el profesor: ${softError.message || "error"}`);
+      const softStrategies: Array<Record<string, any>> = [
+        { activo: false },
+        { rol: "administrativo" },
+      ];
+
+      let softErrorMessage = "";
+      for (const strategy of softStrategies) {
+        const { error: softError } = await supabaseAdmin
+          .from("perfiles")
+          .update(strategy)
+          .eq("id", userId);
+
+        if (!softError) {
+          softDeleted = true;
+          break;
+        }
+
+        softErrorMessage = softError.message || "soft_delete_failed";
+        errors.push(`perfiles_soft: ${softErrorMessage}`);
       }
 
-      softDeleted = true;
-      errors.push(`perfiles: ${perfilError.message || "delete_failed"}`);
+      if (!softDeleted) {
+        throw new Error(`No se pudo eliminar ni desactivar el profesor: ${softErrorMessage || "error"}`);
+      }
     }
 
     const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
