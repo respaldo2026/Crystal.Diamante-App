@@ -120,6 +120,48 @@ interface CourseInfo {
   programa_id: number
 }
 
+interface StudentEnrollmentInfo {
+  matriculaId: string
+  estadoMatricula: string | null
+  cursoId: number | null
+  cursoNombre: string
+  programaId: number | null
+  programaNombre: string | null
+  diasSemana: string | null
+  horaInicio: string | null
+  horaFin: string | null
+  deudaPendiente: number
+}
+
+interface StudentPendingPaymentInfo {
+  id: string
+  matriculaId: string | null
+  monto: number
+  estado: string | null
+  fechaVencimiento: string | null
+  numeroCuota: number | null
+  periodoPagado: string | null
+}
+
+export interface StudentAgentContext {
+  estudianteId: string
+  estudianteNombre: string
+  identificacion: string
+  telefono: string | null
+  enrollments: StudentEnrollmentInfo[]
+  enrolledProgramIds: number[]
+  pendingPayments: StudentPendingPaymentInfo[]
+  deudaTotal: number
+  nextMonthlyPayment: StudentPendingPaymentInfo | null
+  nextClass: {
+    cursoNombre: string
+    programaNombre: string | null
+    fechaHoraIso: string
+    fechaHoraTexto: string
+  } | null
+  contextText: string
+}
+
 function normalizeText(value: string): string {
   return value
     .toLowerCase()
@@ -141,6 +183,318 @@ function extractUsefulTokens(value: string): string[] {
     .split(' ')
     .map((t) => t.trim())
     .filter((t) => t.length >= 3 && !stopwords.has(t))
+}
+
+function normalizeIdentification(value: string): string {
+  return String(value || '').replace(/\D/g, '')
+}
+
+function formatIdentificationWithDots(value: string): string {
+  const digits = normalizeIdentification(value)
+  if (!digits) return ''
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+
+function buildIdentificationCandidates(rawIdentification: string): string[] {
+  const raw = String(rawIdentification || '').trim()
+  const digits = normalizeIdentification(raw)
+  const dotted = formatIdentificationWithDots(digits)
+
+  return Array.from(new Set([raw, digits, dotted].filter(Boolean)))
+}
+
+function parseHourToMinutes(value: string | null): number {
+  if (!value) return 8 * 60
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+  if (!match) return 8 * 60
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 8 * 60
+  return Math.max(0, Math.min(23, hours)) * 60 + Math.max(0, Math.min(59, minutes))
+}
+
+function detectDayIndexesFromSchedule(diasSemana: string | null): number[] {
+  const normalized = normalizeText(diasSemana || '')
+  if (!normalized) return []
+
+  const map: Array<{ tokens: string[]; day: number }> = [
+    { tokens: ['domingo', 'dom'], day: 0 },
+    { tokens: ['lunes', 'lun'], day: 1 },
+    { tokens: ['martes', 'mar'], day: 2 },
+    { tokens: ['miercoles', 'mie', 'mier'], day: 3 },
+    { tokens: ['jueves', 'jue'], day: 4 },
+    { tokens: ['viernes', 'vie'], day: 5 },
+    { tokens: ['sabado', 'sab'], day: 6 },
+  ]
+
+  const indexes = new Set<number>()
+
+  if (/\b(lunes\s*a\s*viernes|lunes\s*-\s*viernes|lun\s*a\s*vie|lv|l\s*a\s*v)\b/i.test(normalized)) {
+    indexes.add(1)
+    indexes.add(2)
+    indexes.add(3)
+    indexes.add(4)
+    indexes.add(5)
+  }
+
+  map.forEach((entry) => {
+    if (entry.tokens.some((token) => new RegExp(`\\b${token}\\b`, 'i').test(normalized))) {
+      indexes.add(entry.day)
+    }
+  })
+
+  return Array.from(indexes.values()).sort((a, b) => a - b)
+}
+
+function calculateNextClassDate(diasSemana: string | null, horaInicio: string | null, now: Date): Date | null {
+  const dayIndexes = detectDayIndexesFromSchedule(diasSemana)
+  if (!dayIndexes.length) return null
+
+  const minutes = parseHourToMinutes(horaInicio)
+  const hour = Math.floor(minutes / 60)
+  const minute = minutes % 60
+
+  let best: Date | null = null
+  for (let offset = 0; offset < 14; offset++) {
+    const candidate = new Date(now)
+    candidate.setHours(0, 0, 0, 0)
+    candidate.setDate(candidate.getDate() + offset)
+    if (!dayIndexes.includes(candidate.getDay())) continue
+
+    candidate.setHours(hour, minute, 0, 0)
+    if (candidate <= now) continue
+
+    if (!best || candidate < best) {
+      best = candidate
+    }
+  }
+
+  return best
+}
+
+function formatDateTimeForStudent(value: Date): string {
+  return value.toLocaleString('es-CO', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(value) ? value : 0)
+}
+
+function formatDateShort(value: string | null): string {
+  if (!value) return 'Sin fecha definida'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Sin fecha definida'
+  return date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+export async function getStudentContextByIdentification(rawIdentification: string): Promise<StudentAgentContext | null> {
+  try {
+    const supabase = getSupabaseClient()
+    const candidates = buildIdentificationCandidates(rawIdentification)
+
+    if (!candidates.length) {
+      return null
+    }
+
+    let studentProfile: any = null
+
+    const { data: directProfiles, error: directError } = await supabase
+      .from('perfiles')
+      .select('id, nombre_completo, identificacion, telefono, rol')
+      .in('identificacion', candidates)
+      .limit(10)
+
+    if (directError) {
+      console.error('[getStudentContextByIdentification] Error perfiles direct:', directError)
+    }
+
+    const normalizedTarget = normalizeIdentification(rawIdentification)
+    studentProfile = (directProfiles || []).find((profile: any) => normalizeIdentification(profile?.identificacion || '') === normalizedTarget)
+      || (directProfiles || []).find((profile: any) => String(profile?.rol || '').toLowerCase() === 'estudiante')
+      || (directProfiles || [])[0]
+
+    if (!studentProfile && normalizedTarget) {
+      const searchTail = normalizedTarget.slice(-6)
+      const { data: fuzzyProfiles, error: fuzzyError } = await supabase
+        .from('perfiles')
+        .select('id, nombre_completo, identificacion, telefono, rol')
+        .ilike('identificacion', `%${searchTail}%`)
+        .limit(60)
+
+      if (fuzzyError) {
+        console.error('[getStudentContextByIdentification] Error perfiles fuzzy:', fuzzyError)
+      }
+
+      studentProfile = (fuzzyProfiles || []).find((profile: any) => normalizeIdentification(profile?.identificacion || '') === normalizedTarget) || null
+    }
+
+    if (!studentProfile?.id) {
+      return null
+    }
+
+    const { data: matriculasRows, error: matriculasError } = await supabase
+      .from('matriculas')
+      .select('id, estado, fecha_inicio, deuda_pendiente, cursos(id, nombre, programa_id, dias_semana, hora_inicio, hora_fin, programas:programa_id(nombre))')
+      .eq('estudiante_id', studentProfile.id)
+      .order('created_at', { ascending: false })
+
+    if (matriculasError) {
+      console.error('[getStudentContextByIdentification] Error matrículas:', matriculasError)
+      return null
+    }
+
+    const enrollments: StudentEnrollmentInfo[] = ((matriculasRows || []) as any[])
+      .map((row: any) => ({
+        matriculaId: String(row?.id || ''),
+        estadoMatricula: row?.estado ?? null,
+        cursoId: row?.cursos?.id ?? null,
+        cursoNombre: row?.cursos?.nombre || 'Curso',
+        programaId: row?.cursos?.programa_id ?? null,
+        programaNombre: row?.cursos?.programas?.nombre || null,
+        diasSemana: row?.cursos?.dias_semana ?? null,
+        horaInicio: row?.cursos?.hora_inicio ?? null,
+        horaFin: row?.cursos?.hora_fin ?? null,
+        deudaPendiente: Number(row?.deuda_pendiente || 0),
+      }))
+      .filter((item) => Boolean(item.matriculaId))
+
+    const enrollmentIds = enrollments.map((item) => item.matriculaId).filter(Boolean)
+    const activeEnrollments = enrollments.filter((item) => !['cancelada', 'retirada', 'inactiva'].includes(String(item.estadoMatricula || '').toLowerCase()))
+
+    let pendingPayments: StudentPendingPaymentInfo[] = []
+    if (enrollmentIds.length > 0) {
+      const { data: pagosRows, error: pagosError } = await supabase
+        .from('pagos')
+        .select('id, matricula_id, monto, estado, fecha_vencimiento, numero_cuota, periodo_pagado')
+        .eq('estudiante_id', studentProfile.id)
+        .in('matricula_id', enrollmentIds)
+        .order('fecha_vencimiento', { ascending: true, nullsFirst: false })
+
+      if (pagosError) {
+        console.error('[getStudentContextByIdentification] Error pagos:', pagosError)
+      } else {
+        pendingPayments = ((pagosRows || []) as any[])
+          .filter((row: any) => String(row?.estado || '').toLowerCase() !== 'pagado')
+          .map((row: any) => ({
+            id: String(row?.id || ''),
+            matriculaId: row?.matricula_id ? String(row.matricula_id) : null,
+            monto: Number(row?.monto || 0),
+            estado: row?.estado ?? null,
+            fechaVencimiento: row?.fecha_vencimiento ?? null,
+            numeroCuota: typeof row?.numero_cuota === 'number' ? row.numero_cuota : row?.numero_cuota ? Number(row.numero_cuota) : null,
+            periodoPagado: row?.periodo_pagado ?? null,
+          }))
+      }
+    }
+
+    const pendingDebtFromPayments = pendingPayments.reduce((sum, item) => sum + Math.max(0, Number(item.monto || 0)), 0)
+    const pendingDebtFromEnrollments = enrollments.reduce((sum, item) => sum + Math.max(0, Number(item.deudaPendiente || 0)), 0)
+    const deudaTotal = pendingDebtFromPayments > 0 ? pendingDebtFromPayments : pendingDebtFromEnrollments
+
+    const nextMonthlyPayment = pendingPayments
+      .filter((item) => Number(item.numeroCuota || 0) > 0)
+      .sort((a, b) => {
+        const dateA = a.fechaVencimiento ? new Date(a.fechaVencimiento).getTime() : Number.MAX_SAFE_INTEGER
+        const dateB = b.fechaVencimiento ? new Date(b.fechaVencimiento).getTime() : Number.MAX_SAFE_INTEGER
+        return dateA - dateB
+      })[0] || null
+
+    const now = new Date()
+    let nextClass: StudentAgentContext['nextClass'] = null
+    for (const enrollment of activeEnrollments) {
+      const nextDate = calculateNextClassDate(enrollment.diasSemana, enrollment.horaInicio, now)
+      if (!nextDate) continue
+
+      if (!nextClass || nextDate.getTime() < new Date(nextClass.fechaHoraIso).getTime()) {
+        nextClass = {
+          cursoNombre: enrollment.cursoNombre,
+          programaNombre: enrollment.programaNombre,
+          fechaHoraIso: nextDate.toISOString(),
+          fechaHoraTexto: formatDateTimeForStudent(nextDate),
+        }
+      }
+    }
+
+    const enrolledProgramIds = Array.from(
+      new Set(activeEnrollments.map((item) => Number(item.programaId)).filter((value) => Number.isFinite(value) && value > 0))
+    )
+
+    const studentName = studentProfile?.nombre_completo || 'Estudiante'
+    const identified = studentProfile?.identificacion || rawIdentification
+
+    const coursesText = activeEnrollments.length
+      ? activeEnrollments
+          .map((item) => {
+            const scheduleParts = [
+              item.diasSemana || null,
+              item.horaInicio && item.horaFin ? `${item.horaInicio} - ${item.horaFin}` : item.horaInicio || null,
+            ].filter(Boolean)
+            const schedule = scheduleParts.length ? ` | Horario: ${scheduleParts.join(' | ')}` : ''
+            return `- ${item.cursoNombre}${item.programaNombre ? ` (${item.programaNombre})` : ''}${schedule}`
+          })
+          .join('\n')
+      : '- No tiene cursos activos en este momento.'
+
+    const nextClassText = nextClass
+      ? `- ${nextClass.cursoNombre}${nextClass.programaNombre ? ` (${nextClass.programaNombre})` : ''}: ${nextClass.fechaHoraTexto}`
+      : '- No se pudo calcular próxima clase (faltan días/horarios en la matrícula).'
+
+    const nextMonthlyText = nextMonthlyPayment
+      ? `- Cuota ${nextMonthlyPayment.numeroCuota ?? '?'} | Vence: ${formatDateShort(nextMonthlyPayment.fechaVencimiento)} | Valor: ${formatCurrency(nextMonthlyPayment.monto)}`
+      : '- No tiene mensualidades pendientes registradas.'
+
+    const contextText = `
+## CONTEXTO PRIVADO DE ESTUDIANTE (IDENTIFICACIÓN VALIDADA)
+Estudiante: ${studentName}
+Identificación: ${identified}
+
+Cursos inscritos (activos):
+${coursesText}
+
+Próxima clase estimada:
+${nextClassText}
+
+Estado financiero del estudiante:
+- Deuda total pendiente: ${formatCurrency(deudaTotal)}
+Próxima mensualidad pendiente:
+${nextMonthlyText}
+
+Reglas obligatorias con este contexto:
+- Si pregunta "cuánto debo", responde con "Deuda total pendiente".
+- Si pregunta "cuándo debo pagar" o "próxima mensualidad", responde con "Próxima mensualidad pendiente".
+- Si pregunta por materiales sin mencionar curso, prioriza los cursos inscritos arriba.
+- Nunca mezcles datos de otro estudiante ni inventes cuotas/fechas no listadas.
+`.trim()
+
+    return {
+      estudianteId: String(studentProfile.id),
+      estudianteNombre: studentName,
+      identificacion: identified,
+      telefono: studentProfile?.telefono ?? null,
+      enrollments: activeEnrollments,
+      enrolledProgramIds,
+      pendingPayments,
+      deudaTotal,
+      nextMonthlyPayment,
+      nextClass,
+      contextText,
+    }
+  } catch (error) {
+    console.error('[getStudentContextByIdentification] Exception:', error)
+    return null
+  }
 }
 
 function buildProgramPriceText(

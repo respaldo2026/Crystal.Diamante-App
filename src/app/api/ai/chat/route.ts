@@ -16,7 +16,8 @@ import {
   buildHierarchicalContext,
   buildHierarchicalContextWithPensum,
   getAcademyInfo,
-  getMediosPago
+  getMediosPago,
+  getStudentContextByIdentification
 } from "@/utils/supabase/agent-courses";
 
 export const dynamic = "force-dynamic";
@@ -1065,6 +1066,120 @@ function formatDateShort(value: string | null | undefined): string {
   return date.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+function formatCurrencyCOP(value: number): string {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+function formatStudentCoursesList(studentContext: any): string {
+  const enrollments = Array.isArray(studentContext?.enrollments) ? studentContext.enrollments : [];
+  if (!enrollments.length) {
+    return "No tienes cursos activos registrados en este momento.";
+  }
+
+  const lines = enrollments
+    .slice(0, 6)
+    .map((item: any) => {
+      const schedule = [item?.diasSemana, item?.horaInicio && item?.horaFin ? `${item.horaInicio} - ${item.horaFin}` : item?.horaInicio]
+        .filter(Boolean)
+        .join(" | ");
+      return `- ${item?.cursoNombre || "Curso"}${item?.programaNombre ? ` (${item.programaNombre})` : ""}${schedule ? ` | ${schedule}` : ""}`;
+    })
+    .join("\n");
+
+  return `Tus cursos inscritos son:\n${lines}`;
+}
+
+function extractIdentificationFromText(message: string): string | null {
+  const text = String(message || "").trim();
+  if (!text) return null;
+
+  const normalized = normalizeForMatch(text);
+  const hasIdKeyword = /\b(cedula|cedula|identificacion|identificacion|documento|dni|cc)\b/i.test(normalized);
+  const looksLikeOnlyNumber = /^[\d\s.\-]{6,20}$/.test(text);
+
+  if (!hasIdKeyword && !looksLikeOnlyNumber) {
+    return null;
+  }
+
+  const matches = text.match(/\b\d[\d.\-\s]{5,20}\b/g) || [];
+  const candidate = matches
+    .map((item) => item.replace(/\D/g, ""))
+    .find((digits) => digits.length >= 6 && digits.length <= 12);
+
+  return candidate || null;
+}
+
+function hasStudentAccountIntent(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(cuanto debo|deuda|saldo pendiente|mensualidad|proxima mensualidad|proximo pago|cuando debo pagar|proxima clase|siguiente clase|hoy hay clase|inscrita|inscrito|mis cursos|materiales)\b/i.test(text);
+}
+
+function resolveStudentIdentification(
+  userMessage: string,
+  history: Array<{ user: string; agent: string }>
+): string | null {
+  const direct = extractIdentificationFromText(userMessage);
+  if (direct) return direct;
+
+  if (!hasStudentAccountIntent(userMessage)) {
+    return null;
+  }
+
+  for (let i = history.length - 1; i >= 0; i--) {
+    const fromHistory = extractIdentificationFromText(history[i]?.user || "");
+    if (fromHistory) {
+      return fromHistory;
+    }
+  }
+
+  return null;
+}
+
+function buildStudentDirectResponse(message: string, studentContext: any): string | null {
+  if (!studentContext) return null;
+
+  const text = normalizeForMatch(message);
+  const asksDebt = /\b(cuanto debo|deuda|saldo pendiente|debo)\b/i.test(text);
+  const asksNextPay = /\b(proxima mensualidad|proximo pago|cuando debo pagar|fecha de pago|vence|vencimiento)\b/i.test(text);
+  const asksNextClass = /\b(proxima clase|siguiente clase|hoy hay clase|hoy tengo clase|clase hoy)\b/i.test(text);
+  const asksEnrolledCourses = /\b(en que curso|que cursos|mis cursos|inscrita|inscrito)\b/i.test(text);
+
+  if (asksDebt) {
+    const deuda = Number(studentContext?.deudaTotal || 0);
+    const next = studentContext?.nextMonthlyPayment;
+    const extra = next
+      ? `\nPróxima mensualidad: Cuota ${next.numeroCuota ?? "?"} | vence ${formatDateShort(next.fechaVencimiento)} | valor ${formatCurrencyCOP(Number(next.monto || 0))}.`
+      : "\nNo tienes mensualidades pendientes registradas.";
+    return `Tu deuda total pendiente es ${formatCurrencyCOP(deuda)}.${extra}`;
+  }
+
+  if (asksNextPay) {
+    const next = studentContext?.nextMonthlyPayment;
+    if (!next) {
+      return "No tienes una mensualidad pendiente registrada en este momento.";
+    }
+    return `Tu próxima mensualidad es la cuota ${next.numeroCuota ?? "?"}, vence el ${formatDateShort(next.fechaVencimiento)} y el valor es ${formatCurrencyCOP(Number(next.monto || 0))}.`;
+  }
+
+  if (asksNextClass) {
+    const nextClass = studentContext?.nextClass;
+    if (!nextClass) {
+      return `No pude calcular tu próxima clase con los horarios actuales. ${formatStudentCoursesList(studentContext)}`;
+    }
+    return `Tu próxima clase es ${nextClass.cursoNombre}${nextClass.programaNombre ? ` (${nextClass.programaNombre})` : ""}, el ${nextClass.fechaHoraTexto}.`;
+  }
+
+  if (asksEnrolledCourses) {
+    return formatStudentCoursesList(studentContext);
+  }
+
+  return null;
+}
+
 function buildTodayClassDirectResponse(
   detectedProgram: any | null,
   courses: any[],
@@ -1409,6 +1524,32 @@ export async function POST(req: NextRequest) {
     // 1. Obtener todos los programas (información primaria)
     const programs = await getProgramsForAgent();
 
+    const studentIdentification = resolveStudentIdentification(message, history);
+    const studentContext = studentIdentification
+      ? await getStudentContextByIdentification(studentIdentification)
+      : null;
+
+    if (studentIdentification && !studentContext && hasStudentAccountIntent(message)) {
+      const notFoundResponse = `No encontré una estudiante con identificación ${studentIdentification}. Verifica el número de cédula y me lo vuelves a enviar.`;
+      const truncatedNotFound = truncateResponse(notFoundResponse, 1000);
+      await saveConversation(supabase, phone || "unknown", message, truncatedNotFound);
+
+      const sanitizedResponse = sanitizeForJSON(truncatedNotFound);
+      let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
+      whatsappResponse = formatPrices(whatsappResponse);
+      whatsappResponse = removeCOPCurrency(whatsappResponse);
+
+      return NextResponse.json({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      });
+    }
+
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
     let detectedProgram = resolveProgramFromContext(message, programs, history);
     let courses = detectedProgram
@@ -1424,6 +1565,39 @@ export async function POST(req: NextRequest) {
           courses = await getCoursesByProgram(inferred.id);
         }
       }
+    }
+
+    if (!detectedProgram && studentContext?.enrolledProgramIds?.length === 1) {
+      const inferredFromStudent = programs.find((p) => Number(p.id) === Number(studentContext.enrolledProgramIds[0])) || null;
+      if (inferredFromStudent) {
+        detectedProgram = inferredFromStudent;
+        courses = await getCoursesByProgram(inferredFromStudent.id);
+      }
+    }
+
+    const directStudentResponse = buildStudentDirectResponse(message, studentContext);
+    if (directStudentResponse) {
+      const truncatedResponse = truncateResponse(directStudentResponse, 1000);
+
+      await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+
+      const sanitizedResponse = sanitizeForJSON(truncatedResponse);
+      let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
+      whatsappResponse = formatPrices(whatsappResponse);
+      whatsappResponse = removeCOPCurrency(whatsappResponse);
+
+      const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
+      const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
+
+      return NextResponse.json({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizedAgent || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: sanitizedProgram || null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      });
     }
 
     if (shouldUseTodayClassDirectResponse(message, detectedProgram, programs, history)) {
@@ -1458,7 +1632,10 @@ export async function POST(req: NextRequest) {
     const mediosPago = await getMediosPago();
     
     // 5. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
-    const hierarchicalContext = await buildHierarchicalContextWithPensum(programs, courses, detectedProgram, academy, mediosPago);
+    const hierarchicalContextBase = await buildHierarchicalContextWithPensum(programs, courses, detectedProgram, academy, mediosPago);
+    const hierarchicalContext = studentContext?.contextText
+      ? `${hierarchicalContextBase}\n\n${studentContext.contextText}`
+      : hierarchicalContextBase;
 
     // 🔍 DEBUG: Ver qué información tiene el agente
     console.log('=== CONTEXTO DEL AGENTE ===');
@@ -1478,7 +1655,12 @@ export async function POST(req: NextRequest) {
     const knowledgeChunks = await searchKnowledge(supabase, message, 3);
 
     // Construir directiva contextual por intención del usuario
-    const contextualDirective = buildContextualDirective(message, detectedProgram, courses);
+    const studentDirective = studentContext
+      ? 'Existe contexto de estudiante validado por identificación. Prioriza responder con sus cursos inscritos, su próxima clase y su estado real de pagos antes de información general.'
+      : '';
+    const contextualDirective = [buildContextualDirective(message, detectedProgram, courses), studentDirective]
+      .filter(Boolean)
+      .join('\n');
 
     // Construir prompt con contexto jerárquico
     const prompt = buildAgentPrompt(
