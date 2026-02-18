@@ -473,7 +473,7 @@ export default function TesoreriaPage() {
             return;
         }
 
-        const telefono = record.perfiles?.telefono || record.perfiles?.whatsapp;
+        const telefono = record.perfiles?.telefono;
         if (!telefono) {
             message.warning("El estudiante no tiene teléfono/WhatsApp registrado");
             return;
