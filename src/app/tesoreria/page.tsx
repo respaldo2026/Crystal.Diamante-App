@@ -44,7 +44,7 @@ import dayjs from "dayjs";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
-import { generarTicketPagoBlob } from "@utils/pago-ticket";
+import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import {
     listarMovimientos,
@@ -489,6 +489,114 @@ export default function TesoreriaPage() {
         enviarWhatsapp(telefono, mensajeWhatsApp);
     };
 
+    const handleRegenerarComprobante = async (record: MovimientoFinanciero) => {
+        try {
+            if (!record.pago_id) {
+                message.warning("Solo se puede regenerar ticket en movimientos vinculados a un pago");
+                return;
+            }
+
+            const { data: configAcademia } = await supabaseBrowserClient
+                .from("configuracion")
+                .select("*")
+                .order("updated_at", { ascending: false, nullsFirst: false })
+                .order("created_at", { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle();
+
+            const { data: pago, error: pagoError } = await supabaseBrowserClient
+                .from("pagos")
+                .select("id, fecha_pago, monto, metodo_pago, referencia, periodo_pagado, numero_cuota, estudiante_id, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
+                .eq("id", record.pago_id)
+                .maybeSingle();
+
+            if (pagoError || !pago) {
+                throw pagoError ?? new Error("No se encontró el pago asociado al movimiento");
+            }
+
+            const estudianteId = String(pago?.estudiante_id || record?.estudiante_id || "");
+            const { data: perfil } = estudianteId
+                ? await supabaseBrowserClient
+                    .from("perfiles")
+                    .select("id, nombre_completo, identificacion, telefono")
+                    .eq("id", estudianteId)
+                    .maybeSingle()
+                : { data: null as any };
+
+            const cursoNombre = (pago as any)?.matriculas?.cursos?.nombre || "Curso";
+            const periodoLegible = pago?.periodo_pagado || `Cuota ${pago?.numero_cuota ?? ""}`.trim();
+            const fechaPagoLegible = pago?.fecha_pago ? dayjs(pago.fecha_pago).format("DD/MM/YYYY") : dayjs().format("DD/MM/YYYY");
+
+            const ticketData = {
+                academia: {
+                    nombre: configAcademia?.nombre_academia || "Academia Crystal Diamante",
+                    ruc: configAcademia?.ruc || undefined,
+                    logoUrl: configAcademia?.logo_url || undefined,
+                    telefono: configAcademia?.telefono || undefined,
+                    direccion: configAcademia?.direccion || undefined,
+                    email: configAcademia?.email || undefined,
+                    ticketTitulo: configAcademia?.ticket_titulo || undefined,
+                    ticketNota: configAcademia?.ticket_nota || undefined,
+                    ticketPie: configAcademia?.ticket_pie || undefined,
+                    ticketCampos: configAcademia?.ticket_campos || undefined,
+                },
+                estudiante: {
+                    nombre: perfil?.nombre_completo || record?.perfiles?.nombre_completo || "Estudiante",
+                    identificacion: perfil?.identificacion || undefined,
+                    telefono: perfil?.telefono || record?.perfiles?.telefono || undefined,
+                },
+                pago: {
+                    referencia: pago?.referencia || pago?.id,
+                    metodo: pago?.metodo_pago || "efectivo",
+                    monto: Number(pago?.monto || 0),
+                    fecha: fechaPagoLegible,
+                    concepto: `${periodoLegible} - ${cursoNombre}`,
+                    periodo: periodoLegible,
+                    numeroCuota: typeof pago?.numero_cuota === "number" ? pago.numero_cuota : undefined,
+                },
+                curso: {
+                    nombre: cursoNombre,
+                },
+            } as const;
+
+            const blob = await generarTicketPagoBlob(ticketData);
+            const placeholder = window.open("", "_blank");
+            if (placeholder) {
+                abrirTicketPagoDesdeBlob(blob, placeholder);
+            } else {
+                abrirTicketPagoDesdeBlob(blob);
+            }
+
+            const { publicUrl } = await subirTicketPago({
+                blob,
+                pagoId: String(pago.id),
+                estudianteId: estudianteId || undefined,
+            });
+
+            await supabaseBrowserClient
+                .from("pagos")
+                .update({ ticket_url: publicUrl })
+                .eq("id", pago.id);
+
+            await supabaseBrowserClient
+                .from("movimientos_financieros")
+                .update({ ticket_url: publicUrl })
+                .eq("pago_id", pago.id);
+
+            setMovimientos((prev) => prev.map((mov) => {
+                if (String(mov.pago_id || "") === String(pago.id)) {
+                    return { ...mov, ticket_url: publicUrl };
+                }
+                return mov;
+            }));
+
+            message.success("Ticket regenerado correctamente");
+        } catch (err) {
+            console.error("Error regenerando ticket:", err);
+            message.error("No se pudo regenerar el ticket");
+        }
+    };
+
     return (
         <List
             title={isMobile ? "💰 Tesorería" : "💰 Tesorería - Movimientos Financieros"}
@@ -881,19 +989,24 @@ export default function TesoreriaPage() {
                         <Table.Column
                             title="Ticket"
                             render={(_, record: MovimientoFinanciero) =>
-                                record.ticket_url ? (
-                                    <Space size={6} wrap>
-                                        <Button size="small" onClick={() => window.open(record.ticket_url!, "_blank")}>Ver PDF</Button>
-                                        <Button size="small" icon={<PrinterOutlined />} onClick={() => handleReimprimirComprobante(record.ticket_url!)}>
-                                            Reimprimir
-                                        </Button>
-                                        <Button size="small" icon={<WhatsAppOutlined />} onClick={() => handleEnviarComprobanteWhatsapp(record)}>
-                                            Enviar
-                                        </Button>
-                                    </Space>
-                                ) : (
-                                    <Tag color="default">Sin comprobante</Tag>
-                                )
+                                <Space size={6} wrap>
+                                    {record.ticket_url ? (
+                                        <>
+                                            <Button size="small" onClick={() => window.open(record.ticket_url!, "_blank")}>Ver PDF</Button>
+                                            <Button size="small" icon={<PrinterOutlined />} onClick={() => handleReimprimirComprobante(record.ticket_url!)}>
+                                                Reimprimir
+                                            </Button>
+                                            <Button size="small" icon={<WhatsAppOutlined />} onClick={() => handleEnviarComprobanteWhatsapp(record)}>
+                                                Enviar
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <Tag color="default">Sin comprobante</Tag>
+                                    )}
+                                    <Button size="small" onClick={() => void handleRegenerarComprobante(record)}>
+                                        Regenerar
+                                    </Button>
+                                </Space>
                             }
                         />
                     )}
@@ -929,6 +1042,11 @@ export default function TesoreriaPage() {
                                         label: "Enviar por WhatsApp",
                                         disabled: !record.ticket_url,
                                         onClick: () => handleEnviarComprobanteWhatsapp(record),
+                                    },
+                                    {
+                                        key: `regenerar-ticket-${record.id}`,
+                                        label: "Regenerar ticket",
+                                        onClick: () => void handleRegenerarComprobante(record),
                                     },
                                 ];
 

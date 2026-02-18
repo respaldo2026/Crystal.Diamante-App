@@ -49,6 +49,8 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { construirNombreGrupo } from "@utils/grupos";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
+import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { subirTicketPago } from "@utils/ticket-storage";
 
 type Matricula = {
   id: number;
@@ -472,6 +474,89 @@ export default function StudentDetailView() {
     );
   };
 
+  const handleRegenerarTicket = useCallback(async (record: Pago) => {
+    try {
+      const { data: configAcademia } = await supabaseBrowserClient
+        .from("configuracion")
+        .select("*")
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+
+      const cursoNombre = construirNombreGrupo(record?.matriculas?.cursos) || "Curso";
+      const periodoLegible = record?.periodo_pagado || (record?.numero_cuota === 0 ? "Inscripción" : `Cuota ${record?.numero_cuota ?? ""}`.trim());
+      const fechaPagoLegible = record?.fecha_pago ? dayjs(record.fecha_pago).format("DD/MM/YYYY") : dayjs().format("DD/MM/YYYY");
+
+      const ticketData = {
+        academia: {
+          nombre: configAcademia?.nombre_academia || "Academia Crystal Diamante",
+          ruc: configAcademia?.ruc || undefined,
+          logoUrl: configAcademia?.logo_url || undefined,
+          telefono: configAcademia?.telefono || configAcademia?.whatsapp || undefined,
+          direccion: configAcademia?.direccion || undefined,
+          email: configAcademia?.email || undefined,
+          ticketTitulo: configAcademia?.ticket_titulo || undefined,
+          ticketNota: configAcademia?.ticket_nota || undefined,
+          ticketPie: configAcademia?.ticket_pie || undefined,
+          ticketCampos: configAcademia?.ticket_campos || undefined,
+        },
+        estudiante: {
+          nombre: perfil?.nombre_completo || "Estudiante",
+          identificacion: perfil?.identificacion || undefined,
+          telefono: perfil?.telefono || undefined,
+        },
+        pago: {
+          referencia: record?.referencia || record?.id,
+          metodo: record?.metodo_pago || "efectivo",
+          monto: Number(record?.monto || 0),
+          fecha: fechaPagoLegible,
+          concepto: `${periodoLegible} - ${cursoNombre}`,
+          periodo: periodoLegible,
+          numeroCuota: typeof record?.numero_cuota === "number" ? record.numero_cuota : undefined,
+        },
+        curso: {
+          nombre: cursoNombre,
+        },
+      } as const;
+
+      const blob = await generarTicketPagoBlob(ticketData);
+      const placeholder = window.open("", "_blank");
+      if (placeholder) {
+        abrirTicketPagoDesdeBlob(blob, placeholder);
+      } else {
+        abrirTicketPagoDesdeBlob(blob);
+      }
+
+      const { publicUrl } = await subirTicketPago({
+        blob,
+        pagoId: String(record.id),
+        estudianteId: String(idEstudiante),
+      });
+
+      await supabaseBrowserClient
+        .from("pagos")
+        .update({ ticket_url: publicUrl } as any)
+        .eq("id", record.id);
+
+      await supabaseBrowserClient
+        .from("movimientos_financieros")
+        .update({ ticket_url: publicUrl })
+        .eq("pago_id", record.id);
+
+      setPagosHistorial((prev) => prev.map((p) => (
+        String(p.id) === String(record.id)
+          ? { ...p, ticket_url: publicUrl }
+          : p
+      )));
+
+      message.success("Ticket regenerado correctamente");
+    } catch (error) {
+      console.error("Error regenerando ticket del pago:", error);
+      message.error("No se pudo regenerar el ticket");
+    }
+  }, [idEstudiante, perfil]);
+
   const columnasCursos = useMemo(
     () => [
       {
@@ -729,6 +814,9 @@ export default function StudentDetailView() {
               <Button size="small" icon={<PrinterOutlined />} onClick={() => handleReimprimirTicket(url)}>
                 Reimprimir
               </Button>
+              <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRegenerarTicket(record)}>
+                Regenerar
+              </Button>
               <Button
                 size="small"
                 icon={<WhatsAppOutlined />}
@@ -749,7 +837,12 @@ export default function StudentDetailView() {
               </Button>
             </Space>
           ) : (
-            <Text type="secondary">No disponible</Text>
+            <Space size={6} wrap>
+              <Text type="secondary">No disponible</Text>
+              <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRegenerarTicket(record)}>
+                Regenerar
+              </Button>
+            </Space>
           ),
       },
       {
@@ -776,7 +869,7 @@ export default function StudentDetailView() {
         ),
       },
     ],
-    [contactoPerfil]
+    [contactoPerfil, handleRegenerarTicket]
   );
 
   const renderCuotasPorMatricula = (record: any) => {

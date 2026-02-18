@@ -8,6 +8,8 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
+import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { subirTicketPago } from "@utils/ticket-storage";
 
 const { Title, Text } = Typography;
 
@@ -132,6 +134,8 @@ export default function PagoInscripcionPage() {
 
             const { monto, metodo_pago, referencia, fecha_pago } = values;
             const montoNumero = Number(monto ?? 0) || Number(pagoInscripcion?.monto ?? 0);
+            const fechaPagoISO = fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
+            const fechaPagoLegible = dayjs(fechaPagoISO).format("DD/MM/YYYY");
 
             // Actualizar el pago de inscripción
             const { error: errUpdate } = await supabaseBrowserClient
@@ -141,7 +145,7 @@ export default function PagoInscripcionPage() {
                     monto: montoNumero,
                     metodo_pago: metodo_pago,
                     referencia: referencia || null,
-                    fecha_pago: fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
+                    fecha_pago: fechaPagoISO,
                     observaciones: `Pago registrado el ${dayjs().format("DD/MM/YYYY HH:mm")}`
                 })
                 .eq("id", pagoInscripcion.id);
@@ -156,8 +160,75 @@ export default function PagoInscripcionPage() {
 
             if (errMat) throw errMat;
 
+            let ticketUrl: string | null = null;
+
             try {
-                const fechaPagoISO = fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
+                const { data: configAcademia } = await supabaseBrowserClient
+                    .from("configuracion")
+                    .select("*")
+                    .order("updated_at", { ascending: false, nullsFirst: false })
+                    .order("created_at", { ascending: false, nullsFirst: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                const ticketData = {
+                    academia: {
+                        nombre: configAcademia?.nombre_academia || "Academia Crystal Diamante",
+                        ruc: configAcademia?.ruc || undefined,
+                        logoUrl: configAcademia?.logo_url || undefined,
+                        telefono: configAcademia?.telefono || configAcademia?.whatsapp || undefined,
+                        direccion: configAcademia?.direccion || undefined,
+                        email: configAcademia?.email || undefined,
+                        ticketTitulo: configAcademia?.ticket_titulo || undefined,
+                        ticketNota: configAcademia?.ticket_nota || undefined,
+                        ticketPie: configAcademia?.ticket_pie || undefined,
+                        ticketCampos: configAcademia?.ticket_campos || undefined,
+                    },
+                    estudiante: {
+                        nombre: estudiante?.nombre_completo || "Estudiante",
+                        identificacion: estudiante?.identificacion || undefined,
+                        telefono: estudiante?.telefono || undefined,
+                    },
+                    pago: {
+                        referencia: referencia || pagoInscripcion.id,
+                        metodo: metodo_pago || "efectivo",
+                        monto: montoNumero,
+                        fecha: fechaPagoLegible,
+                        concepto: `Inscripción - ${curso?.nombre ?? "Curso"}`,
+                        periodo: "Inscripción",
+                        numeroCuota: 0,
+                    },
+                    curso: {
+                        nombre: curso?.nombre ?? "Curso",
+                    },
+                } as const;
+
+                const blob = await generarTicketPagoBlob(ticketData);
+                const placeholder = window.open("", "_blank");
+                if (placeholder) {
+                    abrirTicketPagoDesdeBlob(blob, placeholder);
+                } else {
+                    abrirTicketPagoDesdeBlob(blob);
+                }
+
+                const { publicUrl } = await subirTicketPago({
+                    blob,
+                    pagoId: pagoInscripcion.id,
+                    estudianteId: estudiante?.id,
+                });
+
+                ticketUrl = publicUrl;
+
+                await supabaseBrowserClient
+                    .from("pagos")
+                    .update({ ticket_url: publicUrl } as any)
+                    .eq("id", pagoInscripcion.id);
+            } catch (ticketError) {
+                console.error("Error generando/guardando ticket de inscripción:", ticketError);
+                message.warning("Pago registrado, pero no se pudo generar el ticket PDF.");
+            }
+
+            try {
                 await registrarIngresoDesdePago({
                     fecha: fechaPagoISO,
                     monto: montoNumero,
@@ -167,7 +238,7 @@ export default function PagoInscripcionPage() {
                     referencia: referencia || pagoInscripcion.id,
                     descripcion: `Pago de inscripción de matrícula ${matriculaId}`,
                     estudiante_id: estudiante?.id ?? null,
-                    ticket_url: null,
+                    ticket_url: ticketUrl,
                     pago_id: pagoInscripcion.id,
                     created_by: null,
                 });
