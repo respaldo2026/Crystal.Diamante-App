@@ -144,6 +144,8 @@ export default function CajaPage() {
       const { data, error } = await supabaseBrowserClient
         .from("configuracion")
         .select("*")
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
 
@@ -305,18 +307,28 @@ export default function CajaPage() {
       }
 
       // Generar ticket
+      const { data: configActual } = await supabaseBrowserClient
+        .from("configuracion")
+        .select("*")
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+
+      const configTicket = configActual || configuracion;
+
       const ticketData = {
         academia: {
-          nombre: configuracion?.nombre_academia || "Academia Crystal Diamante",
-          ruc: configuracion?.ruc || undefined,
-          logoUrl: configuracion?.logo_url || undefined,
-          telefono: configuracion?.telefono || "",
-          direccion: configuracion?.direccion || "",
-          email: configuracion?.email || "",
-          ticketTitulo: configuracion?.ticket_titulo || "RECIBO DE PAGO",
-          ticketNota: configuracion?.ticket_nota || "",
-          ticketPie: configuracion?.ticket_pie || "Gracias por su pago",
-          ticketCampos: configuracion?.ticket_campos || undefined,
+          nombre: configTicket?.nombre_academia || "Academia Crystal Diamante",
+          ruc: configTicket?.ruc || undefined,
+          logoUrl: configTicket?.logo_url || undefined,
+          telefono: configTicket?.telefono || "",
+          direccion: configTicket?.direccion || "",
+          email: configTicket?.email || "",
+          ticketTitulo: configTicket?.ticket_titulo || "RECIBO DE PAGO",
+          ticketNota: configTicket?.ticket_nota || "",
+          ticketPie: configTicket?.ticket_pie || "Gracias por su pago",
+          ticketCampos: configTicket?.ticket_campos || undefined,
         },
         estudiante: {
           nombre: estudianteSeleccionado?.nombre_completo || "",
@@ -723,19 +735,29 @@ export default function CajaPage() {
 
                     const cuotasAPagar = cuotas.filter((c) => cuotasSeleccionadas.includes(c.id));
                     const metodoPago = values.metodo_pago as MetodoPago;
+
+                    const { data: configActual } = await supabaseBrowserClient
+                      .from("configuracion")
+                      .select("*")
+                      .order("updated_at", { ascending: false, nullsFirst: false })
+                      .order("created_at", { ascending: false, nullsFirst: false })
+                      .limit(1)
+                      .maybeSingle();
+
+                    const configTicket = configActual || configuracion;
                     
                     const ticketData = {
                       academia: {
-                        nombre: configuracion?.nombre_academia || "Academia Crystal Diamante",
-                        ruc: configuracion?.ruc || undefined,
-                        logoUrl: configuracion?.logo_url || undefined,
-                        telefono: configuracion?.telefono || "",
-                        direccion: configuracion?.direccion || "",
-                        email: configuracion?.email || "",
+                        nombre: configTicket?.nombre_academia || "Academia Crystal Diamante",
+                        ruc: configTicket?.ruc || undefined,
+                        logoUrl: configTicket?.logo_url || undefined,
+                        telefono: configTicket?.telefono || "",
+                        direccion: configTicket?.direccion || "",
+                        email: configTicket?.email || "",
                         ticketTitulo: "PRE-RECIBO (NO VÁLIDO COMO COMPROBANTE)",
-                        ticketNota: configuracion?.ticket_nota || "",
-                        ticketPie: configuracion?.ticket_pie || "Gracias",
-                        ticketCampos: configuracion?.ticket_campos || undefined,
+                        ticketNota: configTicket?.ticket_nota || "",
+                        ticketPie: configTicket?.ticket_pie || "Gracias",
+                        ticketCampos: configTicket?.ticket_campos || undefined,
                       },
                       estudiante: {
                         nombre: estudianteSeleccionado.nombre_completo,

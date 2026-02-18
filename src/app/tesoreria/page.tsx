@@ -87,6 +87,8 @@ export default function TesoreriaPage() {
         const { data: configAcademia } = await supabaseBrowserClient
             .from("configuracion")
             .select("nombre_academia, ruc, logo_url, telefono, direccion, email, ticket_titulo, ticket_nota, ticket_pie, ticket_campos")
+            .order("updated_at", { ascending: false, nullsFirst: false })
+            .order("created_at", { ascending: false, nullsFirst: false })
             .limit(1)
             .maybeSingle();
 

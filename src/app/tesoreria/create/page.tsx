@@ -80,6 +80,8 @@ export default function PagoCreate() {
                 const { data, error } = await supabaseBrowserClient
                     .from("configuracion")
                     .select("*")
+                    .order("updated_at", { ascending: false, nullsFirst: false })
+                    .order("created_at", { ascending: false, nullsFirst: false })
                     .limit(1)
                     .maybeSingle();
 
@@ -299,18 +301,28 @@ export default function PagoCreate() {
             const cursoRelacionado = cursosDelEstudiante.find((m) => String(m.id) === String(cuota.matricula_id));
             const periodoLegible = cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim();
 
+            const { data: configActual } = await supabaseBrowserClient
+                .from("configuracion")
+                .select("*")
+                .order("updated_at", { ascending: false, nullsFirst: false })
+                .order("created_at", { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle();
+
+            const configTicket = configActual || configuracion;
+
             const ticketData = {
                 academia: {
-                    nombre: configuracion?.nombre_academia ?? "Academia Crystal",
-                    ruc: configuracion?.ruc ?? undefined,
-                    logoUrl: configuracion?.logo_url ?? undefined,
-                    telefono: configuracion?.telefono ?? configuracion?.whatsapp ?? undefined,
-                    direccion: configuracion?.direccion ?? undefined,
-                    email: configuracion?.email ?? undefined,
-                    ticketTitulo: configuracion?.ticket_titulo ?? undefined,
-                    ticketNota: configuracion?.ticket_nota ?? undefined,
-                    ticketPie: configuracion?.ticket_pie ?? undefined,
-                    ticketCampos: configuracion?.ticket_campos ?? undefined,
+                    nombre: configTicket?.nombre_academia ?? "Academia Crystal",
+                    ruc: configTicket?.ruc ?? undefined,
+                    logoUrl: configTicket?.logo_url ?? undefined,
+                    telefono: configTicket?.telefono ?? configTicket?.whatsapp ?? undefined,
+                    direccion: configTicket?.direccion ?? undefined,
+                    email: configTicket?.email ?? undefined,
+                    ticketTitulo: configTicket?.ticket_titulo ?? undefined,
+                    ticketNota: configTicket?.ticket_nota ?? undefined,
+                    ticketPie: configTicket?.ticket_pie ?? undefined,
+                    ticketCampos: configTicket?.ticket_campos ?? undefined,
                 },
                 estudiante: {
                     nombre: estudianteSeleccionado?.nombre_completo ?? "Estudiante",
