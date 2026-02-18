@@ -22,13 +22,21 @@ import {
   Space,
   Dropdown,
   Checkbox,
+  Collapse,
   Grid
 } from "antd";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   BookOutlined,
+  FileOutlined,
   FileTextOutlined,
+  FileExcelOutlined,
+  FilePptOutlined,
+  FileWordOutlined,
+  LinkOutlined,
+  PictureOutlined,
+  PlayCircleOutlined,
   TrophyOutlined,
   DownloadOutlined,
   WhatsAppOutlined,
@@ -37,7 +45,8 @@ import {
   VideoCameraOutlined,
   FilePdfOutlined,
   ClockCircleOutlined,
-  GiftOutlined
+  GiftOutlined,
+  YoutubeOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
@@ -116,6 +125,24 @@ export default function PortalEstudiante() {
 
   const normalizarTemaComparacion = (valor?: string | null) =>
     normalizarTexto(valor).replace(/^\d+\s*/, "").trim();
+
+  const getMaterialIcon = (material: any) => {
+    const tipo = String(material?.tipo_material || "").toLowerCase();
+    const url = String(material?.url_archivo || "").toLowerCase();
+    const titulo = String(material?.titulo || material?.nombre_archivo || "").toLowerCase();
+    const texto = `${tipo} ${url} ${titulo}`;
+
+    if (texto.includes("canva.com")) return <LinkOutlined />;
+    if (texto.includes("youtube.com") || texto.includes("youtu.be")) return <YoutubeOutlined />;
+    if (texto.match(/\.(mp4|mov|avi|mkv|webm)$/) || texto.includes("video")) return <PlayCircleOutlined />;
+    if (texto.match(/\.(png|jpg|jpeg|gif|webp|svg)$/) || texto.includes("imagen")) return <PictureOutlined />;
+    if (texto.match(/\.(xlsx|xls|csv)$/) || texto.includes("excel") || texto.includes("sheet")) return <FileExcelOutlined />;
+    if (texto.match(/\.(ppt|pptx)$/) || texto.includes("powerpoint") || texto.includes("diapositiva")) return <FilePptOutlined />;
+    if (texto.match(/\.(doc|docx)$/) || texto.includes("word")) return <FileWordOutlined />;
+    if (texto.match(/\.pdf$/) || texto.includes("pdf")) return <FileTextOutlined />;
+    if (url.startsWith("http")) return <LinkOutlined />;
+    return <FileOutlined />;
+  };
 
   const obtenerSaludoBienvenida = (genero?: string | null) => {
     const generoNormalizado = String(genero || "")
@@ -595,15 +622,17 @@ export default function PortalEstudiante() {
       (m: any) => String(m?.id)
     );
 
-    const matriculaSeleccionada = matriculasActivas.find((m: any) => String(m.id) === String(matriculaRutaId));
+    const matriculaSeleccionada =
+      matriculasActivas.find((m: any) => String(m.id) === String(matriculaRutaId)) ||
+      matriculasActivas[0];
 
     const tituloPrincipal = vista === "plan"
-      ? "Plan de Estudios"
+      ? "Contenido del Curso - Pensum"
       : vista === "ciclo"
-        ? "Materiales del ciclo"
-        : "Materiales por clase";
+        ? "Materiales generales por ciclo"
+        : "Materiales necesarios por clase";
     const colorDiferenciadorCiclo = vista === "plan" ? "#2563eb" : "#16a34a";
-    const fondoDiferenciadorCiclo = vista === "plan" ? "#eff6ff" : "#f0fdf4";
+    const colorNumeroTema = vista === "plan" ? "#2563eb" : "#16a34a";
 
     const StepCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
       <Card title={title} size={isMobile ? "small" : "default"}>
@@ -647,7 +676,10 @@ export default function PortalEstudiante() {
       return Number(a?.id || 0) - Number(b?.id || 0);
     });
 
-    const cicloSeleccionado = ciclosPrograma.find((c: any) => String(c.id) === String(cicloRutaId));
+    const cicloActivo =
+      cicloRutaId && ciclosPrograma.some((c: any) => String(c.id) === String(cicloRutaId))
+        ? String(cicloRutaId)
+        : String(ciclosPrograma[0]?.id || "");
 
     if (!ciclosPrograma.length) {
       return (
@@ -660,141 +692,8 @@ export default function PortalEstudiante() {
       );
     }
 
-    if (!cicloSeleccionado) {
-      return (
-        <StepCard title={tituloPrincipal}>
-          <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Button onClick={() => setMatriculaRutaId(null)}>← Volver a cursos</Button>
-            <Text strong>Selecciona un ciclo / módulo</Text>
-            <Row gutter={[10, 10]}>
-              {ciclosPrograma.map((ciclo: any) => (
-                <Col xs={24} sm={12} lg={8} key={ciclo.id}>
-                  <Button
-                    block
-                    style={{
-                      color: colorDiferenciadorCiclo,
-                      borderColor: colorDiferenciadorCiclo,
-                      background: fondoDiferenciadorCiclo,
-                    }}
-                    onClick={() => {
-                      setCicloRutaId(String(ciclo.id));
-                      setTemaRutaId(null);
-                    }}
-                  >
-                    {ciclo.nombre_ciclo}
-                  </Button>
-                </Col>
-              ))}
-            </Row>
-          </Space>
-        </StepCard>
-      );
-    }
-
-    const temasCiclo = deduplicarLista(
-      (cicloSeleccionado?.pensum_cursos || []),
-      (tema: any) => String(tema?.id || normalizarTexto(tema?.nombre_curso || ""))
-    ).sort((a: any, b: any) => {
-      const ordenA = Number(a?.orden ?? 0);
-      const ordenB = Number(b?.orden ?? 0);
-      if (ordenA !== ordenB) return ordenA - ordenB;
-      return Number(a?.id || 0) - Number(b?.id || 0);
-    });
-
-    const temaSeleccionado = temasCiclo.find((t: any) => String(t.id) === String(temaRutaId));
-
-    if (vista === "ciclo") {
-      const materialesCicloPrograma = deduplicarLista(
-        materialesCiclo.filter((m: any) => m.programa_id === programaIdSeleccionado),
-        (m: any) => String(m?.id || ""),
-      );
-      const materialesCicloSeleccionado = deduplicarLista(
-        materialesCicloPrograma.filter((item: any) => {
-          if (!cicloSeleccionado?.id) return false;
-          return String(item.pensum_id) === String(cicloSeleccionado.id);
-        }),
-        (m: any) => String(m?.id || ""),
-      );
-
-      return (
-        <StepCard title={tituloPrincipal}>
-          <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Space wrap>
-              <Button type="text" size="small" onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
-              <Button type="text" size="small" onClick={() => setCicloRutaId(null)}>← Ciclos</Button>
-            </Space>
-            <Text strong>
-              {`Materiales para el ciclo: ${cicloSeleccionado?.nombre_ciclo || `Ciclo ${cicloSeleccionado?.numero_ciclo || ""}`}`}
-            </Text>
-            {materialesCicloSeleccionado.length === 0 ? (
-              <Text type="secondary">No hay materiales generales registrados para este ciclo.</Text>
-            ) : (
-              <Table
-                dataSource={materialesCicloSeleccionado}
-                rowKey={(record) => String(record?.id || record?.nombre)}
-                size="small"
-                pagination={false}
-                columns={[
-                  {
-                    title: "Producto",
-                    dataIndex: "nombre",
-                    render: (value) => <Text strong>{value}</Text>,
-                  },
-                  {
-                    title: "Cantidad",
-                    dataIndex: "cantidad",
-                    render: (value) => value || "Cantidad por definir",
-                  },
-                  {
-                    title: "Kit",
-                    dataIndex: "incluido_kit",
-                    align: "center",
-                    render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
-                  },
-                ]}
-              />
-            )}
-          </Space>
-        </StepCard>
-      );
-    }
-
-    if (!temasCiclo.length) {
-      return (
-        <StepCard title={tituloPrincipal}>
-          <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Button type="text" size="small" onClick={() => setCicloRutaId(null)}>← Volver a ciclos</Button>
-            <Empty description="Este ciclo aún no tiene temas configurados" />
-          </Space>
-        </StepCard>
-      );
-    }
-
-    if (!temaSeleccionado) {
-      return (
-        <StepCard title={tituloPrincipal}>
-          <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Space wrap>
-              <Button type="text" size="small" onClick={() => setMatriculaRutaId(null)}>← Cursos</Button>
-              <Button type="text" size="small" onClick={() => setCicloRutaId(null)}>← Ciclos</Button>
-            </Space>
-            <Text strong>Selecciona un tema</Text>
-            <Row gutter={[10, 10]}>
-              {temasCiclo.map((tema: any) => (
-                <Col xs={24} sm={12} lg={8} key={tema.id}>
-                  <Button block onClick={() => setTemaRutaId(String(tema.id))}>
-                    {tema.nombre_curso}
-                  </Button>
-                </Col>
-              ))}
-            </Row>
-          </Space>
-        </StepCard>
-      );
-    }
-
     const materialesPrograma = deduplicarLista(
-      materiales.filter((m: any) => m.programa_id === programaIdSeleccionado),
+      materiales.filter((m: any) => String(m?.programa_id) === String(programaIdSeleccionado)),
       (m: any) => {
         const parsed = parseTemaTituloMaterial(m?.titulo);
         return String(`${m?.pensum_id || ''}-${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`);
@@ -802,166 +701,280 @@ export default function PortalEstudiante() {
     );
 
     const materialesClasePrograma = deduplicarLista(
-      materialesClase.filter((m: any) => m.programa_id === programaIdSeleccionado),
+      materialesClase.filter((m: any) => String(m?.programa_id) === String(programaIdSeleccionado)),
       (m: any) => String(`${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${normalizarTexto(m?.materiales_ciclo?.nombre || m?.nombre_material || '')}-${m?.materiales_ciclo?.cantidad || m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`)
     );
 
-    const recursosTema = deduplicarLista(
-      materialesPrograma.filter((material: any) => {
-        if (!temaSeleccionado) return false;
-        if (cicloSeleccionado?.id && material.pensum_id && String(material.pensum_id) !== String(cicloSeleccionado.id)) return false;
+    const materialesCicloPrograma = deduplicarLista(
+      materialesCiclo.filter((m: any) => String(m?.programa_id) === String(programaIdSeleccionado)),
+      (m: any) => String(m?.id || `${normalizarTexto(m?.nombre || "")}-${m?.cantidad || ""}-${m?.pensum_id || ""}`),
+    );
 
-        const parsed = parseTemaTituloMaterial(material.titulo);
-        const temaMaterial = normalizarTemaComparacion(parsed.tema);
-        const temaObjetivo = normalizarTemaComparacion(temaSeleccionado.nombre_curso);
-        const tituloLimpio = normalizarTexto(parsed.tituloLimpio);
-        const descripcion = normalizarTexto(material.descripcion || "");
+    const obtenerTemasCiclo = (ciclo: any) =>
+      deduplicarLista(
+        ciclo?.pensum_cursos || [],
+        (tema: any) => String(tema?.id || normalizarTexto(tema?.nombre_curso || ""))
+      ).sort((a: any, b: any) => {
+        const ordenA = Number(a?.orden ?? 0);
+        const ordenB = Number(b?.orden ?? 0);
+        if (ordenA !== ordenB) return ordenA - ordenB;
+        return Number(a?.id || 0) - Number(b?.id || 0);
+      });
 
-        if (!temaObjetivo) return true;
-        if (temaMaterial) return temaMaterial === temaObjetivo;
-        return tituloLimpio.includes(temaObjetivo) || descripcion.includes(temaObjetivo);
-      }),
-      (m: any) => {
-        const parsed = parseTemaTituloMaterial(m?.titulo);
-        return `${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`;
+    const obtenerRecursosTema = (tema: any, cicloId?: string) =>
+      deduplicarLista(
+        materialesPrograma.filter((material: any) => {
+          if (!tema) return false;
+          if (cicloId && material.pensum_id && String(material.pensum_id) !== String(cicloId)) return false;
+
+          const parsed = parseTemaTituloMaterial(material.titulo);
+          const temaMaterial = normalizarTemaComparacion(parsed.tema);
+          const temaObjetivo = normalizarTemaComparacion(tema.nombre_curso);
+          const tituloLimpio = normalizarTexto(parsed.tituloLimpio);
+          const descripcion = normalizarTexto(material.descripcion || "");
+
+          if (!temaObjetivo) return true;
+          if (temaMaterial) return temaMaterial === temaObjetivo;
+          return tituloLimpio.includes(temaObjetivo) || descripcion.includes(temaObjetivo);
+        }),
+        (m: any) => {
+          const parsed = parseTemaTituloMaterial(m?.titulo);
+          return `${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`;
+        }
+      );
+
+    const obtenerInsumosTema = (tema: any, cicloId?: string) =>
+      deduplicarLista(
+        materialesClasePrograma.filter((item: any) => {
+          if (!tema) return false;
+          if (cicloId && item.pensum_id && String(item.pensum_id) !== String(cicloId)) return false;
+          return String(item.pensum_curso_id) === String(tema.id);
+        }),
+        (m: any) => `${normalizarTexto(m?.materiales_ciclo?.nombre || m?.nombre_material || '')}-${m?.materiales_ciclo?.cantidad || m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`
+      );
+
+    const obtenerMaterialesCiclo = (cicloId?: string) =>
+      deduplicarLista(
+        materialesCicloPrograma.filter((item: any) => (cicloId ? String(item?.pensum_id) === String(cicloId) : false)),
+        (m: any) => String(m?.id || `${normalizarTexto(m?.nombre || "")}-${m?.cantidad || ""}`),
+      );
+
+    const temaObjetivo = (() => {
+      if (!temaRutaId) return null;
+      for (const ciclo of ciclosPrograma) {
+        const tema = (obtenerTemasCiclo(ciclo) || []).find((t: any) => String(t?.id) === String(temaRutaId));
+        if (tema) return tema;
       }
-    );
-
-    const insumosTema = deduplicarLista(
-      materialesClasePrograma.filter((item: any) => {
-        if (!temaSeleccionado) return false;
-        if (cicloSeleccionado?.id && item.pensum_id && String(item.pensum_id) !== String(cicloSeleccionado.id)) return false;
-        return String(item.pensum_curso_id) === String(temaSeleccionado.id);
-      }),
-      (m: any) => `${normalizarTexto(m?.materiales_ciclo?.nombre || m?.nombre_material || '')}-${m?.materiales_ciclo?.cantidad || m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`
-    );
-
-    const toggleChecklist = (insumo: any, checked: boolean) => {
-      const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
-      setChecklistInsumos((prev) => ({
-        ...prev,
-        [key]: checked,
-      }));
-    };
-
-    const insumosMarcados = insumosTema.filter((insumo: any) => {
-      const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
-      return Boolean(checklistInsumos[key]);
-    }).length;
-
-    const temaActualNombre = temaSeleccionado?.nombre_curso || "Sin tema";
+      return null;
+    })();
 
     return (
       <Card
         title={tituloPrincipal}
         size={isMobile ? "small" : "default"}
       >
-        <Space wrap style={{ marginBottom: 12 }}>
-          <Button type="text" size="small" onClick={() => setMatriculaRutaId(null)}>Cambiar curso</Button>
-          <Button type="text" size="small" onClick={() => setCicloRutaId(null)}>Cambiar ciclo</Button>
-          <Button type="text" size="small" onClick={() => setTemaRutaId(null)}>Cambiar tema</Button>
+        <Space direction="vertical" size={12} style={{ width: "100%", marginBottom: 12 }}>
+          <Text strong>Curso activo</Text>
+          <Row gutter={[10, 10]}>
+            {matriculasActivas.map((mat: any) => {
+              const activo = String(mat?.id) === String(matriculaSeleccionada?.id);
+              return (
+                <Col xs={24} sm={12} lg={8} key={mat.id}>
+                  <Button
+                    block
+                    type={activo ? "primary" : "default"}
+                    onClick={() => {
+                      setMatriculaRutaId(String(mat.id));
+                      setCicloRutaId(null);
+                      setTemaRutaId(null);
+                    }}
+                  >
+                    {mat?.cursos?.nombre || `Curso ${mat.id}`}
+                  </Button>
+                </Col>
+              );
+            })}
+          </Row>
         </Space>
 
-        {vista === "kits" && temaSeleccionado ? (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message={`Viendo materiales de la clase: ${temaActualNombre}`}
-          />
-        ) : null}
+        <Collapse
+          accordion
+          expandIconPosition="end"
+          activeKey={cicloActivo || undefined}
+          onChange={(key) => {
+            const value = Array.isArray(key) ? key[0] : key;
+            setCicloRutaId(value ? String(value) : null);
+          }}
+          items={ciclosPrograma.map((ciclo: any, index: number) => {
+            const cicloId = String(ciclo?.id || `ciclo-${index}`);
+            const cicloNumero = ciclo?.numero_ciclo ?? ciclo?.orden ?? index + 1;
+            const cicloNombre = ciclo?.nombre_ciclo || ciclo?.titulo || `Ciclo ${cicloNumero}`;
+            const temasCiclo = obtenerTemasCiclo(ciclo);
+            const materialesGenerales = obtenerMaterialesCiclo(cicloId);
 
-        {vista === "plan" ? (
-          <Card size={isMobile ? "small" : "default"} title="Material didáctico del tema">
-            {recursosTema.length === 0 ? (
-              <Text type="secondary">No hay material didáctico asignado a este tema.</Text>
-            ) : (
-              <List
-                size={isMobile ? "small" : "default"}
-                dataSource={recursosTema}
-                renderItem={(item: any) => {
-                  let Icon = FileTextOutlined;
-                  if (item.tipo_material === 'video') Icon = VideoCameraOutlined;
-                  if (item.tipo_material === 'documento') Icon = FilePdfOutlined;
-                  const parsed = parseTemaTituloMaterial(item.titulo);
-                  return (
-                    <List.Item
-                      actions={[
-                        <a key={`desc-${item.id}`} href={item.url_archivo} target="_blank" rel="noreferrer">
-                          <DownloadOutlined />
-                        </a>,
-                      ]}
-                    >
-                      <List.Item.Meta
-                        avatar={<Icon />}
-                        title={parsed.tituloLimpio || item.titulo}
-                        description={item.descripcion || "Sin descripción"}
-                      />
-                    </List.Item>
-                  );
-                }}
-              />
-            )}
-          </Card>
-        ) : (
-          <Card
-            size={isMobile ? "small" : "default"}
-            title="Productos / materiales necesarios"
-            extra={
-              <Text type={insumosTema.length > 0 && insumosMarcados === insumosTema.length ? undefined : "secondary"}>
-                {insumosMarcados}/{insumosTema.length} listos
-              </Text>
-            }
-          >
-            {insumosTema.length === 0 ? (
-              <Text type="secondary">No hay productos necesarios registrados para este tema.</Text>
-            ) : (
-              <Table
-                size={isMobile ? "small" : "middle"}
-                pagination={false}
-                rowKey={(record) => String(record?.id || record?.nombre_material)}
-                dataSource={insumosTema}
-                columns={[
-                  {
-                    title: "Producto",
-                    dataIndex: "nombre_material",
-                    render: (_value, record) => {
-                      const key = `${matriculaSeleccionada.id}|${temaSeleccionado?.id || 'sin-tema'}|${record.id || normalizarTexto(record.nombre_material)}`;
-                      const nombreInsumo = record.materiales_ciclo?.nombre || record.nombre_material;
-                      return (
-                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                          <Checkbox
-                            checked={Boolean(checklistInsumos[key])}
-                            onChange={(event) => toggleChecklist(record, event.target.checked)}
-                          >
-                            <Text strong>{nombreInsumo}</Text>
-                          </Checkbox>
-                          {record.observaciones ? (
-                            <Text type="secondary" style={{ fontSize: 12 }}>{record.observaciones}</Text>
-                          ) : null}
-                        </Space>
-                      );
-                    },
-                  },
-                  {
-                    title: "Cantidad",
-                    dataIndex: "cantidad",
-                    render: (_value, record) => {
-                      const cantidadInsumo = record.materiales_ciclo?.cantidad || record.cantidad;
-                      return [cantidadInsumo, record.unidad].filter(Boolean).join(" ") || "Cantidad por definir";
-                    },
-                  },
-                  {
-                    title: "Kit",
-                    dataIndex: "materiales_ciclo",
-                    align: "center",
-                    render: (value) => (value?.incluido_kit ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
-                  },
-                ]}
-              />
-            )}
-          </Card>
-        )}
+            return {
+              key: cicloId,
+              label: (
+                <Space size={16} align="center">
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 16,
+                      background: colorDiferenciadorCiclo,
+                      color: "#f8fafc",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 22,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {cicloNumero}
+                  </div>
+                  <div>
+                    <Text strong style={{ fontSize: 16 }}>{cicloNombre}</Text>
+                    {vista === "kits" ? (
+                      <div><Text type="secondary">Materiales por tema</Text></div>
+                    ) : ciclo?.descripcion ? (
+                      <div><Text type="secondary">{ciclo.descripcion}</Text></div>
+                    ) : null}
+                  </div>
+                </Space>
+              ),
+              children: vista === "ciclo" ? (
+                materialesGenerales.length ? (
+                  <Table
+                    dataSource={materialesGenerales}
+                    rowKey={(record) => String(record?.id || record?.nombre)}
+                    size="small"
+                    pagination={false}
+                    columns={[
+                      {
+                        title: "Producto",
+                        dataIndex: "nombre",
+                        render: (value) => <Text strong>{value}</Text>,
+                      },
+                      {
+                        title: "Cantidad",
+                        dataIndex: "cantidad",
+                        render: (value) => value || "Cantidad por definir",
+                      },
+                      {
+                        title: "Kit",
+                        dataIndex: "incluido_kit",
+                        align: "center",
+                        render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Text type="secondary">No hay materiales generales registrados para este ciclo.</Text>
+                )
+              ) : temasCiclo.length ? (
+                <List
+                  dataSource={temasCiclo}
+                  renderItem={(tema: any, temaIndex: number) => {
+                    const temaId = String(tema?.id || `tema-${temaIndex}`);
+                    const recursosTema = obtenerRecursosTema(tema, cicloId);
+                    const insumosTema = obtenerInsumosTema(tema, cicloId);
+                    const insumosMarcados = insumosTema.filter((insumo: any) => {
+                      const key = `${matriculaSeleccionada.id}|${temaId}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+                      return Boolean(checklistInsumos[key]);
+                    }).length;
+
+                    return (
+                      <List.Item key={temaId}>
+                        <List.Item.Meta
+                          avatar={<span style={{ fontSize: 20, fontWeight: 700, color: colorNumeroTema }}>{tema.orden || temaIndex + 1}</span>}
+                          title={<Text strong>{tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}</Text>}
+                          description={
+                            <Space direction="vertical" size={4}>
+                              {tema.descripcion ? (
+                                <div>
+                                  <Text type="secondary">{tema.descripcion}</Text>
+                                </div>
+                              ) : null}
+
+                              {vista === "plan" ? (
+                                recursosTema.length ? (
+                                  <Space wrap size={isMobile ? 6 : 10} direction={isMobile ? "vertical" : "horizontal"}>
+                                    {recursosTema.map((item: any, itemIndex: number) => {
+                                      const parsed = parseTemaTituloMaterial(item.titulo);
+                                      const titulo = parsed.tituloLimpio || item.titulo || "Recurso";
+                                      return (
+                                        <Tag
+                                          key={`${temaId}-recurso-${itemIndex}`}
+                                          icon={getMaterialIcon(item)}
+                                          style={{ cursor: item?.url_archivo ? "pointer" : "default" }}
+                                          onClick={() => {
+                                            if (item?.url_archivo) {
+                                              window.open(item.url_archivo, "_blank", "noopener,noreferrer");
+                                            }
+                                          }}
+                                        >
+                                          {titulo}
+                                        </Tag>
+                                      );
+                                    })}
+                                  </Space>
+                                ) : (
+                                  <Text type="secondary" style={{ fontSize: 12 }}>Sin material didáctico</Text>
+                                )
+                              ) : insumosTema.length ? (
+                                <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                                  {insumosTema.map((insumo: any, itemIndex: number) => {
+                                    const key = `${matriculaSeleccionada.id}|${temaId}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+                                    const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
+                                    const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
+                                    return (
+                                      <Space key={`${temaId}-insumo-${itemIndex}`} size={6} wrap>
+                                        {insumo.obligatorio ? (
+                                          <CheckCircleOutlined style={{ color: "#16a34a" }} />
+                                        ) : (
+                                          <ClockCircleOutlined style={{ color: "#f59e0b" }} />
+                                        )}
+                                        <Checkbox
+                                          checked={Boolean(checklistInsumos[key])}
+                                          onChange={(event) => {
+                                            setChecklistInsumos((prev) => ({
+                                              ...prev,
+                                              [key]: event.target.checked,
+                                            }));
+                                            setTemaRutaId(temaId);
+                                            setCicloRutaId(cicloId);
+                                          }}
+                                        >
+                                          <Text type="secondary" style={{ fontSize: 12 }}>
+                                            {nombreInsumo}
+                                            {cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}
+                                          </Text>
+                                        </Checkbox>
+                                      </Space>
+                                    );
+                                  })}
+                                </Space>
+                              ) : (
+                                <Text type="secondary" style={{ fontSize: 12 }}>Sin materiales registrados</Text>
+                              )}
+                              {vista === "kits" && insumosTema.length > 0 ? (
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  {insumosMarcados}/{insumosTema.length} listos
+                                </Text>
+                              ) : null}
+                            </Space>
+                          }
+                        />
+                      </List.Item>
+                    );
+                  }}
+                />
+              ) : (
+                <Empty description="No hay temas registrados en este ciclo." />
+              ),
+            };
+          })}
+        />
       </Card>
     );
   };
@@ -1249,7 +1262,7 @@ export default function PortalEstudiante() {
           },
           {
             key: "3",
-            label: <span><BookOutlined /> Materiales por clase</span>,
+            label: <span><FileOutlined /> Lista de materiales</span>,
             children: (
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
                 {renderMaterialesKits()}
@@ -1263,7 +1276,7 @@ export default function PortalEstudiante() {
           },
           {
             key: "5",
-            label: <span><SafetyCertificateOutlined /> Plan de Estudios</span>,
+            label: <span><BookOutlined /> Pensum</span>,
             children: renderPensum()
           },
           {
