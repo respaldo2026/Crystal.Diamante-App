@@ -966,7 +966,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   if (/\b(precio|costo|cuanto|vale|valor|mensualidad|inscripcion|cuota|inversion)\b/i.test(text)) {
     return "precio";
   }
-  if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo)\b/i.test(text)) {
+  if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text)) {
     return "horario";
   }
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
@@ -979,6 +979,155 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
     return "inscripcion";
   }
   return "general";
+}
+
+function normalizeForMatch(value: string): string {
+  return (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isTodayClassQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|hoy\s+tengo\s+clase|clase\s+hoy)\b/i.test(text);
+}
+
+function isLikelyProgramOnlyReply(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const tokenCount = text.split(" ").filter(Boolean).length;
+  if (tokenCount > 4) return false;
+
+  return !/\b(precio|horario|hora|material|temario|inscrip|matricul|pago|cuanto|cuando|donde)\b/i.test(text);
+}
+
+function hasRecentTodayClassContext(
+  history: Array<{ user: string; agent: string }>
+): boolean {
+  const recent = history.slice(-3);
+  return recent.some((turn) => isTodayClassQuestion(turn?.user || ""));
+}
+
+function isCourseActiveOnDate(course: any, date: Date): boolean {
+  const dayDate = new Date(date);
+  dayDate.setHours(0, 0, 0, 0);
+
+  const start = course?.fecha_inicio ? new Date(course.fecha_inicio) : null;
+  const end = course?.fecha_fin ? new Date(course.fecha_fin) : null;
+
+  if (start && !Number.isNaN(start.getTime())) {
+    start.setHours(0, 0, 0, 0);
+    if (dayDate < start) return false;
+  }
+
+  if (end && !Number.isNaN(end.getTime())) {
+    end.setHours(0, 0, 0, 0);
+    if (dayDate > end) return false;
+  }
+
+  return true;
+}
+
+function scheduleIncludesDay(horario: string | null | undefined, dayIndex: number): boolean {
+  const text = normalizeForMatch(horario || "");
+  if (!text) return false;
+
+  if (
+    dayIndex >= 1 &&
+    dayIndex <= 5 &&
+    /\b(lunes\s*a\s*viernes|lunes\s*-\s*viernes|lun\s*a\s*vie|l\s*a\s*v|lv)\b/i.test(text)
+  ) {
+    return true;
+  }
+
+  const dayTokens: Record<number, string[]> = {
+    0: ["domingo", "dom"],
+    1: ["lunes", "lun"],
+    2: ["martes", "mar"],
+    3: ["miercoles", "mie", "mier"],
+    4: ["jueves", "jue"],
+    5: ["viernes", "vie"],
+    6: ["sabado", "sab"],
+  };
+
+  return (dayTokens[dayIndex] || []).some((token) => new RegExp(`\\b${token}\\b`, "i").test(text));
+}
+
+function formatDateShort(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function buildTodayClassDirectResponse(
+  detectedProgram: any | null,
+  courses: any[],
+  now: Date
+): string {
+  if (!detectedProgram) {
+    return "Para confirmarte si hoy hay clase, dime el curso en el que estás inscrita (por ejemplo: Uñas).";
+  }
+
+  const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
+  const relatedCourses = (courses || []).filter((course) => {
+    const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+    const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
+    return Boolean(sameProgramId || sameProgramName);
+  });
+
+  if (relatedCourses.length === 0) {
+    return `No encontré grupos activos de ${detectedProgram.nombre} en este momento. Si quieres, te comparto los próximos grupos.`;
+  }
+
+  const dayIndex = now.getDay();
+  const dayNames = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+  const dayName = dayNames[dayIndex] || "hoy";
+
+  const activeCourses = relatedCourses.filter((course) => isCourseActiveOnDate(course, now));
+  const candidates = activeCourses.length > 0 ? activeCourses : relatedCourses;
+  const todayCourses = candidates.filter((course) => scheduleIncludesDay(course?.horario, dayIndex));
+
+  if (todayCourses.length > 0) {
+    const lines = todayCourses
+      .slice(0, 4)
+      .map((course) => `- ${course.nombre}${course.horario ? ` (${course.horario})` : ""}`)
+      .join("\n");
+
+    return `Sí, hoy ${dayName} sí hay clase de ${detectedProgram.nombre}.\n${lines}`;
+  }
+
+  const reference = candidates
+    .slice(0, 4)
+    .map((course) => {
+      const start = formatDateShort(course?.fecha_inicio);
+      const datePart = start ? ` | inicia: ${start}` : "";
+      return `- ${course.nombre}${course.horario ? ` (${course.horario})` : ""}${datePart}`;
+    })
+    .join("\n");
+
+  return `Hoy ${dayName} no aparece clase de ${detectedProgram.nombre} según los horarios registrados.\n${reference}`;
+}
+
+function shouldUseTodayClassDirectResponse(
+  userMessage: string,
+  detectedProgram: any | null,
+  programs: any[],
+  history: Array<{ user: string; agent: string }>
+): boolean {
+  if (isTodayClassQuestion(userMessage)) return true;
+
+  const mentionsProgram = Boolean(detectProgramFromMessage(userMessage, programs));
+  if (mentionsProgram && detectedProgram && isLikelyProgramOnlyReply(userMessage) && hasRecentTodayClassContext(history)) {
+    return true;
+  }
+
+  return false;
 }
 
 function detectMaterialsScope(message: string): "tema" | "ciclo" | "general" {
@@ -1064,10 +1213,10 @@ function buildContextualDirective(
       'Responde priorizando temario/contenido por ciclos o módulos del programa solicitado.',
     materiales:
       materialsScope === "tema"
-        ? 'Responde priorizando SOLO "Materiales por Tema/Clase" del programa solicitado. Regla: "Clase N" = tema con orden N del ciclo consultado. Si no se especifica ciclo y hay ambigüedad, pide aclaración breve antes de listar materiales.'
+        ? 'Responde priorizando SOLO "Materiales por Tema/Clase" del programa solicitado. Regla: "Clase N" = tema con orden N del ciclo consultado. Si no se especifica ciclo y hay ambigüedad, pide aclaración breve antes de listar materiales. Formato obligatorio: primero cantidad y unidad, luego el nombre del material.'
         : materialsScope === "ciclo"
-        ? 'Responde priorizando SOLO "Materiales por Ciclo" del programa solicitado.'
-        : 'Responde con materiales del programa y pide una aclaración breve para definir si los quiere por ciclo o por tema/clase.',
+        ? 'Responde priorizando SOLO "Materiales por Ciclo" del programa solicitado. Formato obligatorio: primero cantidad y unidad, luego el nombre del material.'
+        : 'Responde con materiales del programa y pide una aclaración breve para definir si los quiere por ciclo o por tema/clase. Formato obligatorio: primero cantidad y unidad, luego el nombre del material.',
     inscripcion:
       'Responde con mini-resumen del curso y guía de inscripción. Si ya hay interés claro, cierra con Admisiones (+57 301 203 8582).',
     general:
@@ -1275,6 +1424,31 @@ export async function POST(req: NextRequest) {
           courses = await getCoursesByProgram(inferred.id);
         }
       }
+    }
+
+    if (shouldUseTodayClassDirectResponse(message, detectedProgram, programs, history)) {
+      const directResponse = buildTodayClassDirectResponse(detectedProgram, courses, new Date());
+      const truncatedResponse = truncateResponse(directResponse, 1000);
+
+      await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+
+      const sanitizedResponse = sanitizeForJSON(truncatedResponse);
+      let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
+      whatsappResponse = formatPrices(whatsappResponse);
+      whatsappResponse = removeCOPCurrency(whatsappResponse);
+
+      const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
+      const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
+
+      return NextResponse.json({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizedAgent || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: sanitizedProgram || null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      });
     }
     
     // 3. Obtener información de la academia (dirección, redes, contacto)

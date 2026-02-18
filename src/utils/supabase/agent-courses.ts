@@ -592,7 +592,7 @@ function buildMaterialsContext(
         const nombre = item.nombre || 'Material'
         const qty = formatMaterialQuantity(item.cantidad, item.unidad)
         const kit = item.incluido_kit ? ' (incluido en kit)' : ''
-        text += `      - ${nombre}: ${qty}${kit}\n`
+        text += `      - ${qty} de ${nombre}${kit}\n`
       })
     }
   }
@@ -635,7 +635,7 @@ function buildMaterialsContext(
         const nombre = nombreBase || fromCiclo?.nombre || 'Material'
         const qty = formatMaterialQuantity(item.cantidad, item.unidad)
         const obs = item.observaciones ? ` (${item.observaciones})` : ''
-        text += `      - ${nombre}: ${qty}${obs}\n`
+        text += `      - ${qty} de ${nombre}${obs}\n`
       })
     }
 
