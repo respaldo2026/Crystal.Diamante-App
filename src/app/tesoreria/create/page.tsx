@@ -23,6 +23,8 @@ type EstudianteDetalle = {
 
 type ConfiguracionAcademia = {
     nombre_academia?: string | null;
+    ruc?: string | null;
+    logo_url?: string | null;
     telefono?: string | null;
     direccion?: string | null;
     whatsapp?: string | null;
@@ -30,6 +32,20 @@ type ConfiguracionAcademia = {
     ticket_titulo?: string | null;
     ticket_nota?: string | null;
     ticket_pie?: string | null;
+    ticket_campos?: {
+        logo?: boolean;
+        nombreAcademia?: boolean;
+        ruc?: boolean;
+        direccion?: boolean;
+        telefono?: boolean;
+        email?: boolean;
+        fecha?: boolean;
+        concepto?: boolean;
+        monto?: boolean;
+        nota?: boolean;
+        pie?: boolean;
+        titulo?: boolean;
+    } | null;
 };
 
 const formatoCOP = (valor: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
@@ -286,12 +302,15 @@ export default function PagoCreate() {
             const ticketData = {
                 academia: {
                     nombre: configuracion?.nombre_academia ?? "Academia Crystal",
+                    ruc: configuracion?.ruc ?? undefined,
+                    logoUrl: configuracion?.logo_url ?? undefined,
                     telefono: configuracion?.telefono ?? configuracion?.whatsapp ?? undefined,
                     direccion: configuracion?.direccion ?? undefined,
                     email: configuracion?.email ?? undefined,
                     ticketTitulo: configuracion?.ticket_titulo ?? undefined,
                     ticketNota: configuracion?.ticket_nota ?? undefined,
                     ticketPie: configuracion?.ticket_pie ?? undefined,
+                    ticketCampos: configuracion?.ticket_campos ?? undefined,
                 },
                 estudiante: {
                     nombre: estudianteSeleccionado?.nombre_completo ?? "Estudiante",
@@ -303,6 +322,7 @@ export default function PagoCreate() {
                     metodo: metodo_pago,
                     monto: montoNumero,
                     fecha: fechaPagoLegible,
+                    concepto: `${periodoLegible} - ${cursoRelacionado?.cursos?.nombre ?? "Curso"}`,
                     periodo: periodoLegible,
                     numeroCuota: cuota.numero_cuota ?? undefined,
                 },

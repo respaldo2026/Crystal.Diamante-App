@@ -308,12 +308,15 @@ export default function CajaPage() {
       const ticketData = {
         academia: {
           nombre: configuracion?.nombre_academia || "Academia Crystal Diamante",
+          ruc: configuracion?.ruc || undefined,
+          logoUrl: configuracion?.logo_url || undefined,
           telefono: configuracion?.telefono || "",
           direccion: configuracion?.direccion || "",
           email: configuracion?.email || "",
           ticketTitulo: configuracion?.ticket_titulo || "RECIBO DE PAGO",
           ticketNota: configuracion?.ticket_nota || "",
           ticketPie: configuracion?.ticket_pie || "Gracias por su pago",
+          ticketCampos: configuracion?.ticket_campos || undefined,
         },
         estudiante: {
           nombre: estudianteSeleccionado?.nombre_completo || "",
@@ -324,6 +327,7 @@ export default function CajaPage() {
           metodo: metodoPagoLabels[metodoPago],
           fecha: dayjs().format("DD/MM/YYYY HH:mm"),
           referencia: referenciaPago,
+          concepto: cuotasAPagar.map((c) => c.periodo_pagado || `Cuota ${c.numero_cuota ?? ""}`.trim()).join(", "),
           numeroCuota: cuotasAPagar.length === 1 ? cuotasAPagar[0]?.numero_cuota : undefined,
           periodo: cuotasAPagar.map((c) => c.periodo_pagado).join(", "),
           valorEntregado: valorEntregado || undefined,
@@ -723,12 +727,15 @@ export default function CajaPage() {
                     const ticketData = {
                       academia: {
                         nombre: configuracion?.nombre_academia || "Academia Crystal Diamante",
+                        ruc: configuracion?.ruc || undefined,
+                        logoUrl: configuracion?.logo_url || undefined,
                         telefono: configuracion?.telefono || "",
                         direccion: configuracion?.direccion || "",
                         email: configuracion?.email || "",
                         ticketTitulo: "PRE-RECIBO (NO VÁLIDO COMO COMPROBANTE)",
                         ticketNota: configuracion?.ticket_nota || "",
                         ticketPie: configuracion?.ticket_pie || "Gracias",
+                        ticketCampos: configuracion?.ticket_campos || undefined,
                       },
                       estudiante: {
                         nombre: estudianteSeleccionado.nombre_completo,
@@ -739,6 +746,7 @@ export default function CajaPage() {
                         metodo: metodoPagoLabels[metodoPago],
                         fecha: dayjs().format("DD/MM/YYYY HH:mm"),
                         referencia: values.referencia || `FAC-${generarNumeroFactura()}`,
+                        concepto: cuotasAPagar.map((c) => c.periodo_pagado || `Cuota ${c.numero_cuota ?? ""}`.trim()).join(", "),
                         numeroCuota: cuotasAPagar.length === 1 ? cuotasAPagar[0]?.numero_cuota : undefined,
                         periodo: cuotasAPagar.map((c) => c.periodo_pagado).join(", "),
                         valorEntregado: valorEntregado || undefined,

@@ -86,7 +86,7 @@ export default function TesoreriaPage() {
     const generarTicketsFaltantes = useCallback(async () => {
         const { data: configAcademia } = await supabaseBrowserClient
             .from("configuracion")
-            .select("nombre_academia, telefono, direccion, email, ticket_titulo, ticket_nota, ticket_pie")
+            .select("nombre_academia, ruc, logo_url, telefono, direccion, email, ticket_titulo, ticket_nota, ticket_pie, ticket_campos")
             .limit(1)
             .maybeSingle();
 
@@ -134,12 +134,15 @@ export default function TesoreriaPage() {
                 const ticketData = {
                     academia: {
                         nombre: configAcademia?.nombre_academia || "Academia Crystal Diamante",
+                        ruc: configAcademia?.ruc || undefined,
+                        logoUrl: configAcademia?.logo_url || undefined,
                         telefono: configAcademia?.telefono || undefined,
                         direccion: configAcademia?.direccion || undefined,
                         email: configAcademia?.email || undefined,
                         ticketTitulo: configAcademia?.ticket_titulo || undefined,
                         ticketNota: configAcademia?.ticket_nota || undefined,
                         ticketPie: configAcademia?.ticket_pie || undefined,
+                        ticketCampos: configAcademia?.ticket_campos || undefined,
                     },
                     estudiante: {
                         nombre: perfil?.nombre_completo || "Estudiante",
@@ -151,6 +154,7 @@ export default function TesoreriaPage() {
                         metodo: pago?.metodo_pago || "efectivo",
                         monto: Number(pago?.monto || 0),
                         fecha: dayjs(pago?.fecha_pago).format("DD/MM/YYYY"),
+                        concepto: `${periodoLegible} - ${cursoNombre}`,
                         periodo: periodoLegible,
                         numeroCuota: typeof pago?.numero_cuota === "number" ? pago.numero_cuota : undefined,
                     },

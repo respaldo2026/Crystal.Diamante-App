@@ -111,6 +111,8 @@ const formatCurrency = (value?: number | null) => {
 
 type ConfiguracionAcademia = {
   nombre_academia?: string | null;
+  ruc?: string | null;
+  logo_url?: string | null;
   telefono?: string | null;
   direccion?: string | null;
   whatsapp?: string | null;
@@ -118,6 +120,20 @@ type ConfiguracionAcademia = {
   ticket_titulo?: string | null;
   ticket_nota?: string | null;
   ticket_pie?: string | null;
+  ticket_campos?: {
+    logo?: boolean;
+    nombreAcademia?: boolean;
+    ruc?: boolean;
+    direccion?: boolean;
+    telefono?: boolean;
+    email?: boolean;
+    fecha?: boolean;
+    concepto?: boolean;
+    monto?: boolean;
+    nota?: boolean;
+    pie?: boolean;
+    titulo?: boolean;
+  } | null;
   instagram?: string | null;
   facebook?: string | null;
   youtube?: string | null;
@@ -807,12 +823,15 @@ Formamos profesionales en belleza y estética.
             const ticketData = {
               academia: {
                 nombre: configAcademia.nombre_academia ?? "Academia Crystal",
+                ruc: configAcademia.ruc ?? undefined,
+                logoUrl: configAcademia.logo_url ?? undefined,
                 telefono: configAcademia.telefono ?? configAcademia.whatsapp ?? undefined,
                 direccion: configAcademia.direccion ?? undefined,
                 email: configAcademia.email ?? undefined,
                 ticketTitulo: configAcademia.ticket_titulo ?? undefined,
                 ticketNota: configAcademia.ticket_nota ?? undefined,
                 ticketPie: configAcademia.ticket_pie ?? undefined,
+                ticketCampos: configAcademia.ticket_campos ?? undefined,
               },
               estudiante: {
                 nombre: estudiantePerfil.nombre_completo ?? "Estudiante",
@@ -824,6 +843,10 @@ Formamos profesionales en belleza y estética.
                 metodo: pagoActualizado.metodo_pago ?? values.metodo_pago,
                 monto: Number(pagoActualizado.monto ?? 0),
                 fecha: dayjs(fechaTicketISO).format("DD/MM/YYYY"),
+                concepto: `${
+                  pagoActualizado.periodo_pagado ||
+                  `Cuota ${pagoActualizado.numero_cuota ?? ""}`.trim()
+                } - ${(pagoActualizado as any)?.matricula?.cursos?.nombre ?? "Curso"}`,
                 periodo:
                   pagoActualizado.periodo_pagado ||
                   `Cuota ${pagoActualizado.numero_cuota ?? ""}`.trim(),
