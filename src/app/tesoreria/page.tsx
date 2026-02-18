@@ -42,7 +42,10 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useCurrentUser } from "@hooks/useCurrentUser";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { generarTicketPagoBlob } from "@utils/pago-ticket";
+import { subirTicketPago } from "@utils/ticket-storage";
 import {
     listarMovimientos,
     crearMovimiento,
@@ -80,6 +83,108 @@ export default function TesoreriaPage() {
     const [registrando, setRegistrando] = useState(false);
     const [form] = Form.useForm();
 
+    const generarTicketsFaltantes = useCallback(async () => {
+        const { data: configAcademia } = await supabaseBrowserClient
+            .from("configuracion")
+            .select("nombre_academia, telefono, direccion, email, ticket_titulo, ticket_nota, ticket_pie")
+            .limit(1)
+            .maybeSingle();
+
+        const { data: pagosSinTicket, error: errPagosSinTicket } = await supabaseBrowserClient
+            .from("pagos")
+            .select("id, fecha_pago, monto, metodo_pago, referencia, periodo_pagado, numero_cuota, estudiante_id, matricula_id, ticket_url, matriculas!pagos_matricula_id_fkey(estudiante_id, cursos(nombre))")
+            .eq("estado", "pagado")
+            .or("ticket_url.is.null,ticket_url.eq.")
+            .not("fecha_pago", "is", null)
+            .order("fecha_pago", { ascending: false })
+            .limit(300);
+
+        if (errPagosSinTicket) throw errPagosSinTicket;
+
+        const pagos = (pagosSinTicket || []) as any[];
+        if (pagos.length === 0) return 0;
+
+        const estudianteIds = Array.from(
+            new Set(
+                pagos
+                    .map((p) => p?.estudiante_id || p?.matriculas?.estudiante_id)
+                    .filter(Boolean)
+            )
+        );
+
+        const perfilesMap = new Map<string, any>();
+        if (estudianteIds.length > 0) {
+            const { data: perfilesData } = await supabaseBrowserClient
+                .from("perfiles")
+                .select("id, nombre_completo, identificacion, telefono")
+                .in("id", estudianteIds);
+
+            (perfilesData || []).forEach((perfil: any) => perfilesMap.set(String(perfil.id), perfil));
+        }
+
+        let generados = 0;
+
+        for (const pago of pagos) {
+            try {
+                const estudianteId = String(pago?.estudiante_id || pago?.matriculas?.estudiante_id || "");
+                const perfil = perfilesMap.get(estudianteId);
+                const cursoNombre = pago?.matriculas?.cursos?.nombre || "Curso";
+                const periodoLegible = pago?.periodo_pagado || `Cuota ${pago?.numero_cuota ?? ""}`.trim();
+
+                const ticketData = {
+                    academia: {
+                        nombre: configAcademia?.nombre_academia || "Academia Crystal Diamante",
+                        telefono: configAcademia?.telefono || undefined,
+                        direccion: configAcademia?.direccion || undefined,
+                        email: configAcademia?.email || undefined,
+                        ticketTitulo: configAcademia?.ticket_titulo || undefined,
+                        ticketNota: configAcademia?.ticket_nota || undefined,
+                        ticketPie: configAcademia?.ticket_pie || undefined,
+                    },
+                    estudiante: {
+                        nombre: perfil?.nombre_completo || "Estudiante",
+                        identificacion: perfil?.identificacion || undefined,
+                        telefono: perfil?.telefono || undefined,
+                    },
+                    pago: {
+                        referencia: pago?.referencia || pago?.id,
+                        metodo: pago?.metodo_pago || "efectivo",
+                        monto: Number(pago?.monto || 0),
+                        fecha: dayjs(pago?.fecha_pago).format("DD/MM/YYYY"),
+                        periodo: periodoLegible,
+                        numeroCuota: typeof pago?.numero_cuota === "number" ? pago.numero_cuota : undefined,
+                    },
+                    curso: {
+                        nombre: cursoNombre,
+                    },
+                } as const;
+
+                const blob = await generarTicketPagoBlob(ticketData);
+                const { publicUrl } = await subirTicketPago({
+                    blob,
+                    pagoId: String(pago.id),
+                    estudianteId: estudianteId || undefined,
+                });
+
+                await supabaseBrowserClient
+                    .from("pagos")
+                    .update({ ticket_url: publicUrl })
+                    .eq("id", pago.id);
+
+                await supabaseBrowserClient
+                    .from("movimientos_financieros")
+                    .update({ ticket_url: publicUrl })
+                    .eq("pago_id", pago.id);
+
+                generados += 1;
+            } catch (ticketErr) {
+                console.error("Error generando ticket histórico:", pago?.id, ticketErr);
+            }
+        }
+
+        return generados;
+    }, []);
+
     const cargarMovimientos = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -105,6 +210,15 @@ export default function TesoreriaPage() {
                 console.warn("No se pudo sincronizar ingresos desde pagos al cargar tesorería", syncError);
             }
 
+            try {
+                const totalGenerados = await generarTicketsFaltantes();
+                if (totalGenerados > 0) {
+                    message.success(`Se generaron ${totalGenerados} tickets PDF faltantes.`);
+                }
+            } catch (ticketBackfillError) {
+                console.warn("No se pudieron generar algunos tickets históricos", ticketBackfillError);
+            }
+
             const data = await listarMovimientos({}, { userId: user?.id || null, esAdmin: puedeVerTodo });
             setMovimientos(data);
         } catch (err: any) {
@@ -113,7 +227,7 @@ export default function TesoreriaPage() {
         } finally {
             setLoading(false);
         }
-    }, [user?.id, user?.rol]);
+    }, [generarTicketsFaltantes, user?.id, user?.rol]);
 
     useEffect(() => {
         void cargarMovimientos();
