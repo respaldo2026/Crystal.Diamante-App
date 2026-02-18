@@ -20,7 +20,7 @@ export interface MovimientoFinanciero {
     conciliado_por?: string | null;
     created_at: string;
     created_by?: string | null;
-    perfiles?: { nombre_completo?: string | null } | null;
+    perfiles?: { nombre_completo?: string | null; telefono?: string | null; whatsapp?: string | null } | null;
     proveedores?: { nombre_completo?: string | null } | null;
 }
 
@@ -39,7 +39,7 @@ export async function listarMovimientos(filtros: MovimientoFiltro = {}, options?
 
     const query = supabaseBrowserClient
         .from("movimientos_financieros")
-        .select(`*, perfiles:perfiles!movimientos_financieros_estudiante_id_fkey(nombre_completo), proveedores:perfiles!movimientos_financieros_proveedor_id_fkey(nombre_completo)`)
+        .select(`*, perfiles:perfiles!movimientos_financieros_estudiante_id_fkey(nombre_completo, telefono, whatsapp), proveedores:perfiles!movimientos_financieros_proveedor_id_fkey(nombre_completo)`)
         .order("fecha", { ascending: false })
         .order("created_at", { ascending: false });
 

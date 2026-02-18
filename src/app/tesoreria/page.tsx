@@ -37,9 +37,12 @@ import {
     SaveOutlined,
     SearchOutlined,
     EllipsisOutlined,
+    PrinterOutlined,
+    WhatsAppOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useCurrentUser } from "@hooks/useCurrentUser";
+import { enviarWhatsapp } from "@utils/whatsapp";
 import {
     listarMovimientos,
     crearMovimiento,
@@ -220,6 +223,46 @@ export default function TesoreriaPage() {
 
     const saldoNeto = useMemo(() => totalIngresos - totalEgresos, [totalIngresos, totalEgresos]);
 
+    const totalIngresosCaja = useMemo(
+        () =>
+            movimientosFiltrados
+                .filter(
+                    (m) =>
+                        m.tipo === MOVIMIENTO_TIPO.INGRESO &&
+                        ["matriculas", "inscripciones"].includes(String(m.categoria || "").toLowerCase())
+                )
+                .reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosFiltrados]
+    );
+
+    const totalIngresosEfectivo = useMemo(
+        () =>
+            movimientosFiltrados
+                .filter(
+                    (m) =>
+                        m.tipo === MOVIMIENTO_TIPO.INGRESO &&
+                        ["matriculas", "inscripciones"].includes(String(m.categoria || "").toLowerCase()) &&
+                        String(m.metodo_pago || "").toLowerCase() === "efectivo"
+                )
+                .reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosFiltrados]
+    );
+
+    const totalSalidasReales = useMemo(
+        () => movimientosFiltrados.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosFiltrados]
+    );
+
+    const totalSalidasEfectivo = useMemo(
+        () =>
+            movimientosFiltrados
+                .filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO && String(m.metodo_pago || "").toLowerCase() === "efectivo")
+                .reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosFiltrados]
+    );
+
+    const saldoCajaEfectivo = useMemo(() => totalIngresosEfectivo - totalSalidasEfectivo, [totalIngresosEfectivo, totalSalidasEfectivo]);
+
     const handleRegistrarMovimiento = useCallback(async () => {
         try {
             const values = await form.validateFields();
@@ -275,6 +318,55 @@ export default function TesoreriaPage() {
         setFiltroCategoria(null);
         setFiltroMetodo(null);
         setFiltroConciliado(null);
+    };
+
+    const handleReimprimirComprobante = (ticketUrl: string) => {
+        const printWindow = window.open(ticketUrl, "_blank");
+        if (!printWindow) {
+            message.warning("No se pudo abrir el comprobante para imprimir");
+            return;
+        }
+
+        const fallbackTimeout = window.setTimeout(() => {
+            try {
+                printWindow.focus();
+                printWindow.print();
+            } catch {
+            }
+        }, 2500);
+
+        printWindow.addEventListener(
+            "load",
+            () => {
+                window.clearTimeout(fallbackTimeout);
+                try {
+                    printWindow.focus();
+                    printWindow.print();
+                } catch {
+                }
+            },
+            { once: true }
+        );
+    };
+
+    const handleEnviarComprobanteWhatsapp = (record: MovimientoFinanciero) => {
+        if (!record.ticket_url) {
+            message.warning("Este movimiento no tiene comprobante");
+            return;
+        }
+
+        const telefono = record.perfiles?.telefono || record.perfiles?.whatsapp;
+        if (!telefono) {
+            message.warning("El estudiante no tiene teléfono/WhatsApp registrado");
+            return;
+        }
+
+        const nombre = record.perfiles?.nombre_completo || "estudiante";
+        const concepto = record.concepto || "pago";
+        const monto = Number(record.monto || 0);
+        const montoTexto = formatoCOP(monto);
+        const mensajeWhatsApp = `Hola ${nombre}, te compartimos tu comprobante de ${concepto} por ${montoTexto}: ${record.ticket_url}`;
+        enviarWhatsapp(telefono, mensajeWhatsApp);
     };
 
     return (
@@ -367,6 +459,51 @@ export default function TesoreriaPage() {
                             title="Saldo neto"
                             value={formatoCOP(saldoNeto)}
                             valueStyle={{ color: saldoNeto >= 0 ? "#1890ff" : "#cf1322", fontSize: isMobile ? 18 : 24 }}
+                            prefix={<BankOutlined />}
+                        />
+                    </Card>
+                </Col>
+            </Row>
+
+            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                <Col xs={24} md={8}>
+                    <Card
+                        variant="borderless"
+                        style={{ background: "#f6ffed", borderColor: "#b7eb8f" }}
+                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
+                    >
+                        <Statistic
+                            title="Ingresos de caja (matrículas + mensualidades)"
+                            value={formatoCOP(totalIngresosCaja)}
+                            valueStyle={{ color: "#3f8600", fontSize: isMobile ? 16 : 22 }}
+                            prefix={<DollarCircleOutlined />}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={24} md={8}>
+                    <Card
+                        variant="borderless"
+                        style={{ background: "#fff1f0", borderColor: "#ffa39e" }}
+                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
+                    >
+                        <Statistic
+                            title="Salidas reales (profesores + gastos)"
+                            value={formatoCOP(totalSalidasReales)}
+                            valueStyle={{ color: "#cf1322", fontSize: isMobile ? 16 : 22 }}
+                            prefix={<DollarCircleOutlined />}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={24} md={8}>
+                    <Card
+                        variant="borderless"
+                        style={{ background: "#e6f7ff", borderColor: "#91d5ff" }}
+                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
+                    >
+                        <Statistic
+                            title="Saldo caja efectivo"
+                            value={formatoCOP(saldoCajaEfectivo)}
+                            valueStyle={{ color: saldoCajaEfectivo >= 0 ? "#1890ff" : "#cf1322", fontSize: isMobile ? 16 : 22 }}
                             prefix={<BankOutlined />}
                         />
                     </Card>
@@ -625,7 +762,15 @@ export default function TesoreriaPage() {
                             title="Ticket"
                             render={(_, record: MovimientoFinanciero) =>
                                 record.ticket_url ? (
-                                    <Button size="small" onClick={() => window.open(record.ticket_url!, "_blank")}>Ver comprobante</Button>
+                                    <Space size={6} wrap>
+                                        <Button size="small" onClick={() => window.open(record.ticket_url!, "_blank")}>Ver PDF</Button>
+                                        <Button size="small" icon={<PrinterOutlined />} onClick={() => handleReimprimirComprobante(record.ticket_url!)}>
+                                            Reimprimir
+                                        </Button>
+                                        <Button size="small" icon={<WhatsAppOutlined />} onClick={() => handleEnviarComprobanteWhatsapp(record)}>
+                                            Enviar
+                                        </Button>
+                                    </Space>
                                 ) : (
                                     <Tag color="default">Sin comprobante</Tag>
                                 )
@@ -644,44 +789,58 @@ export default function TesoreriaPage() {
                     <Table.Column
                         title={isMobile ? "Opciones" : "Acciones"}
                         fixed="right"
-                        render={(_, record: MovimientoFinanciero) => (
-                            user?.rol === "admin" ? (
-                                isMobile ? (
-                                    <Dropdown
-                                        trigger={["click"]}
-                                        menu={{
-                                            items: [
-                                                {
-                                                    key: `ver-ticket-${record.id}`,
-                                                    label: record.ticket_url ? "Ver comprobante" : "Sin comprobante",
-                                                    disabled: !record.ticket_url,
-                                                    onClick: () => record.ticket_url && window.open(record.ticket_url!, "_blank"),
-                                                },
-                                                { type: "divider" as const },
-                                                {
-                                                    key: `eliminar-${record.id}`,
-                                                    label: "Eliminar",
-                                                    danger: true,
-                                                    onClick: () => void handleEliminar(record.id),
-                                                },
-                                            ],
-                                        }}
-                                    >
+                        render={(_, record: MovimientoFinanciero) => {
+                            if (isMobile) {
+                                const items: any[] = [
+                                    {
+                                        key: `ver-ticket-${record.id}`,
+                                        label: record.ticket_url ? "Ver comprobante" : "Sin comprobante",
+                                        disabled: !record.ticket_url,
+                                        onClick: () => record.ticket_url && window.open(record.ticket_url, "_blank"),
+                                    },
+                                    {
+                                        key: `reimprimir-ticket-${record.id}`,
+                                        label: "Reimprimir comprobante",
+                                        disabled: !record.ticket_url,
+                                        onClick: () => record.ticket_url && handleReimprimirComprobante(record.ticket_url),
+                                    },
+                                    {
+                                        key: `enviar-ticket-${record.id}`,
+                                        label: "Enviar por WhatsApp",
+                                        disabled: !record.ticket_url,
+                                        onClick: () => handleEnviarComprobanteWhatsapp(record),
+                                    },
+                                ];
+
+                                if (user?.rol === "admin") {
+                                    items.push({ type: "divider" as const });
+                                    items.push({
+                                        key: `eliminar-${record.id}`,
+                                        label: "Eliminar",
+                                        danger: true,
+                                        onClick: () => void handleEliminar(record.id),
+                                    });
+                                }
+
+                                return (
+                                    <Dropdown trigger={["click"]} menu={{ items }}>
                                         <Button size="small" icon={<EllipsisOutlined />} />
                                     </Dropdown>
-                                ) : (
-                                    <Popconfirm
-                                        title="Eliminar movimiento"
-                                        description="Esta acción no se puede deshacer. ¿Deseas continuar?"
-                                        okText="Sí, eliminar"
-                                        cancelText="Cancelar"
-                                        onConfirm={() => void handleEliminar(record.id)}
-                                    >
-                                        <Button size="small" danger icon={<DeleteOutlined />} />
-                                    </Popconfirm>
-                                )
-                            ) : null
-                        )}
+                                );
+                            }
+
+                            return user?.rol === "admin" ? (
+                                <Popconfirm
+                                    title="Eliminar movimiento"
+                                    description="Esta acción no se puede deshacer. ¿Deseas continuar?"
+                                    okText="Sí, eliminar"
+                                    cancelText="Cancelar"
+                                    onConfirm={() => void handleEliminar(record.id)}
+                                >
+                                    <Button size="small" danger icon={<DeleteOutlined />} />
+                                </Popconfirm>
+                            ) : null;
+                        }}
                     />
                 </Table>
             )}
