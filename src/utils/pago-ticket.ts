@@ -24,6 +24,51 @@ export const abrirTicketPagoDesdeBlob = (blob: Blob, placeholder?: Window | null
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 
+export const imprimirTicketPagoDesdeBlob = async (blob: Blob, placeholder?: Window | null) => {
+  const targetWindow = placeholder ?? window.open("", "_blank");
+
+  if (!targetWindow) {
+    throw new Error("No se pudo abrir la ventana del ticket");
+  }
+
+  const url = URL.createObjectURL(blob);
+
+  await new Promise<void>((resolve) => {
+    let finalized = false;
+    const finalizar = () => {
+      if (finalized) return;
+      finalized = true;
+      resolve();
+    };
+
+    const onLoad = () => {
+      try {
+        targetWindow.focus();
+        targetWindow.print();
+      } catch {
+      } finally {
+        finalizar();
+      }
+    };
+
+    targetWindow.addEventListener("load", onLoad, { once: true });
+    targetWindow.location.href = url;
+    targetWindow.focus();
+
+    setTimeout(() => {
+      if (finalized) return;
+      try {
+        targetWindow.print();
+      } catch {
+      } finally {
+        finalizar();
+      }
+    }, 2500);
+  });
+
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
+
 export const descargarTicketPago = async (data: TicketPagoData) => {
   const blob = await generarTicketPagoBlob(data);
   const url = URL.createObjectURL(blob);

@@ -33,7 +33,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { generarTicketPagoBlob, abrirTicketPagoDesdeBlob } from "@utils/pago-ticket";
+import { generarTicketPagoBlob, abrirTicketPagoDesdeBlob, imprimirTicketPagoDesdeBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 
@@ -336,12 +336,7 @@ export default function CajaPage() {
       const placeholder = window.open("", "_blank");
       
       if (placeholder) {
-        abrirTicketPagoDesdeBlob(blob, placeholder);
-        
-        // Intentar imprimir automáticamente
-        setTimeout(() => {
-          placeholder.print();
-        }, 1000);
+        await imprimirTicketPagoDesdeBlob(blob, placeholder);
       } else {
         abrirTicketPagoDesdeBlob(blob);
       }
