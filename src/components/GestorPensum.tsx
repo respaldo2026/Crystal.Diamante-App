@@ -384,6 +384,52 @@ export default function GestorPensum({
 
   // ==================== CURSOS DEL PENSUM ====================
 
+  const normalizarOrdenTemas = useCallback(async (pensumId: string, cursos: PensumCurso[]) => {
+    if (!cursos.length) return cursos;
+
+    const cursosOrdenados = [...cursos].sort((a, b) => {
+      const ordenA = Number.isFinite(Number(a.orden)) ? Number(a.orden) : Number.MAX_SAFE_INTEGER;
+      const ordenB = Number.isFinite(Number(b.orden)) ? Number(b.orden) : Number.MAX_SAFE_INTEGER;
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return String(a.nombre_curso || "").localeCompare(String(b.nombre_curso || ""), "es", { sensitivity: "base" });
+    });
+
+    const indiceBioseguridad = cursosOrdenados.findIndex((curso) =>
+      String(curso.nombre_curso || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .includes("bioseguridad")
+    );
+
+    const cursosFinales = [...cursosOrdenados];
+    if (indiceBioseguridad > 0) {
+      const [cursoBio] = cursosFinales.splice(indiceBioseguridad, 1);
+      if (cursoBio) cursosFinales.unshift(cursoBio);
+    }
+
+    const actualizaciones = cursosFinales
+      .map((curso, index) => ({ id: curso.id, orden: index + 1 }))
+      .filter((update) => {
+        const original = cursos.find((c) => c.id === update.id);
+        return Number(original?.orden || 0) !== update.orden;
+      });
+
+    if (actualizaciones.length > 0) {
+      await Promise.all(
+        actualizaciones.map((update) =>
+          supabaseBrowserClient
+            .from("pensum_cursos")
+            .update({ orden: update.orden })
+            .eq("id", update.id)
+            .eq("pensum_id", pensumId)
+        )
+      );
+    }
+
+    return cursosFinales.map((curso, index) => ({ ...curso, orden: index + 1 }));
+  }, []);
+
   const cargarCursosPensum = useCallback(async (pensumId: string) => {
     setLoadingCursos(true);
     try {
@@ -394,13 +440,14 @@ export default function GestorPensum({
         .order("orden", { ascending: true });
 
       if (error) throw error;
-      setCursosPensum(data || []);
+      const cursosNormalizados = await normalizarOrdenTemas(pensumId, (data || []) as PensumCurso[]);
+      setCursosPensum(cursosNormalizados || []);
     } catch (error) {
       message.error("Error al cargar cursos");
     } finally {
       setLoadingCursos(false);
     }
-  }, [message]);
+  }, [message, normalizarOrdenTemas]);
 
   const handleGuardarCurso = async () => {
     try {
