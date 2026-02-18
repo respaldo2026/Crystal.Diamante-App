@@ -391,7 +391,7 @@ export default function CajaPage() {
             cursosUnicos.length === 0
               ? "Curso"
               : cursosUnicos.length === 1
-              ? cursosUnicos[0]
+              ? (cursosUnicos[0] ?? "Curso")
               : "Varios cursos";
 
           const conceptoPago = cuotasAPagar

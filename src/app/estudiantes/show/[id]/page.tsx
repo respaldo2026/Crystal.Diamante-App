@@ -310,7 +310,6 @@ export default function StudentDetailView() {
 
       let pagosList = (dataPagos as unknown as Pago[] | null) ?? [];
 
-      const matriculaIds = listaMats.map((m: any) => m.id).filter(Boolean);
       if (matriculaIds.length > 0) {
         const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
           .from("pagos")
