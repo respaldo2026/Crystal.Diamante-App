@@ -1153,7 +1153,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   if (/\b(precio|costo|cuanto|vale|valor|mensualidad|inscripcion|cuota|inversion)\b/i.test(text)) {
     return "precio";
   }
-  if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text)) {
+  if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text)) {
     return "horario";
   }
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
@@ -1191,6 +1191,47 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   if (tokenCount > 4) return false;
 
   return !/\b(precio|horario|hora|material|temario|inscrip|matricul|pago|cuanto|cuando|donde)\b/i.test(text);
+}
+
+function isShortAffirmativeReply(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const words = text.split(" ").filter(Boolean);
+  if (words.length > 4) return false;
+
+  return /^(si|sí|dale|ok|okay|claro|listo|perfecto|de una|por favor|si por favor|sí por favor)$/i.test(text);
+}
+
+function inferPendingTopicFromHistory(history: Array<{ user: string; agent: string }>): string {
+  const lastAgent = String(history[history.length - 1]?.agent || "");
+  const normalized = normalizeForMatch(lastAgent);
+
+  if (!normalized) return "";
+  if (/\b(cupo|cupos|disponible|disponibles)\b/i.test(normalized)) return "quiero saber si hay cupos disponibles";
+  if (/\b(proximo grupo|siguiente grupo|proximo curso|fecha confirmada|por confirmar)\b/i.test(normalized)) return "quiero saber el proximo grupo y su fecha";
+  if (/\b(horario|dias|dia|hora)\b/i.test(normalized)) return "quiero saber dias y horario";
+  if (/\b(materiales|material|insumo|kit)\b/i.test(normalized)) return "quiero saber materiales";
+  if (/\b(temario|contenido|modulo|modulos|ciclo)\b/i.test(normalized)) return "quiero saber el temario";
+  if (/\b(inscripcion|inscribirme|admisiones|matricula|matricularme|pago)\b/i.test(normalized)) return "quiero saber como me inscribo";
+
+  return "";
+}
+
+function enrichMessageWithFollowUpContext(
+  userMessage: string,
+  history: Array<{ user: string; agent: string }>
+): string {
+  if (!isShortAffirmativeReply(userMessage)) {
+    return userMessage;
+  }
+
+  const pendingTopic = inferPendingTopicFromHistory(history);
+  if (!pendingTopic) {
+    return userMessage;
+  }
+
+  return `${userMessage}. ${pendingTopic}.`;
 }
 
 function hasRecentTodayClassContext(
@@ -1859,6 +1900,7 @@ export async function POST(req: NextRequest) {
 
     // Obtener historial
     const history = await getConversationHistory(supabase, phone || "unknown", 5);
+    const effectiveMessage = enrichMessageWithFollowUpContext(message, history);
 
     const linkAccessResponse = await buildLinkAccessDirectResponse(supabase, message, history);
     if (linkAccessResponse) {
@@ -1886,12 +1928,12 @@ export async function POST(req: NextRequest) {
     // 1. Obtener todos los programas (información primaria)
     const programs = await getProgramsForAgent();
 
-    const studentIdentification = resolveStudentIdentification(message, history);
+    const studentIdentification = resolveStudentIdentification(effectiveMessage, history);
     const studentContext = studentIdentification
       ? await getStudentContextByIdentification(studentIdentification)
       : null;
 
-    if (studentIdentification && !studentContext && hasStudentAccountIntent(message)) {
+    if (studentIdentification && !studentContext && hasStudentAccountIntent(effectiveMessage)) {
       const notFoundResponse = `No encontré una estudiante con identificación ${studentIdentification}. Verifica el número de cédula y me lo vuelves a enviar.`;
       const truncatedNotFound = truncateResponse(notFoundResponse, 1000);
       await saveConversation(supabase, phone || "unknown", message, truncatedNotFound);
@@ -1911,10 +1953,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
-    let detectedProgram = resolveProgramFromContext(message, programs, history);
+    let detectedProgram = resolveProgramFromContext(effectiveMessage, programs, history);
     let courses = detectedProgram
       ? await getCoursesByProgram(detectedProgram.id)
-      : await getCoursesForQuery(message, programs);
+      : await getCoursesForQuery(effectiveMessage, programs);
 
     if (!detectedProgram && courses.length > 0) {
       const uniqueProgramIds = Array.from(new Set(courses.map((c) => c.programa_id).filter(Boolean)));
@@ -1935,7 +1977,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const directStudentResponse = buildStudentDirectResponse(message, studentContext);
+    const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext);
     if (directStudentResponse) {
       const truncatedResponse = truncateResponse(directStudentResponse, 1000);
 
@@ -1958,7 +2000,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (shouldUseTodayClassDirectResponse(message, detectedProgram, programs, history)) {
+    if (shouldUseTodayClassDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
       const directResponse = buildTodayClassDirectResponse(detectedProgram, courses, new Date());
       const truncatedResponse = truncateResponse(directResponse, 1000);
 
@@ -1981,7 +2023,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (shouldUseNextGroupDirectResponse(message, detectedProgram, programs, history)) {
+    if (shouldUseNextGroupDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
       const directResponse = buildNextGroupDirectResponse(detectedProgram, courses, new Date());
       const truncatedResponse = truncateResponse(directResponse, 1000);
 
@@ -2031,20 +2073,20 @@ export async function POST(req: NextRequest) {
     console.log(`📝 Contexto jerárquico (primeros 500 chars): ${hierarchicalContext.substring(0, 500)}`);
 
     // Obtener conocimiento relevante
-    const knowledgeChunks = await searchKnowledge(supabase, message, 3);
+    const knowledgeChunks = await searchKnowledge(supabase, effectiveMessage, 3);
 
     // Construir directiva contextual por intención del usuario
     const studentDirective = studentContext
       ? 'Existe contexto de estudiante validado por identificación. Prioriza responder con sus cursos inscritos, su próxima clase y su estado real de pagos antes de información general.'
       : '';
-    const contextualDirective = [buildContextualDirective(message, detectedProgram, courses), studentDirective]
+    const contextualDirective = [buildContextualDirective(effectiveMessage, detectedProgram, courses), studentDirective]
       .filter(Boolean)
       .join('\n');
 
     // Construir prompt con contexto jerárquico
     const prompt = buildAgentPrompt(
       settings || {},
-      message,
+      effectiveMessage,
       knowledgeChunks,
       history,
       hierarchicalContext,
@@ -2054,7 +2096,7 @@ export async function POST(req: NextRequest) {
     // Generar respuesta
     let response = await generateResponse(geminiKey, prompt);
 
-    if (isRepetitiveResponse(response, history, message)) {
+    if (isRepetitiveResponse(response, history, effectiveMessage)) {
       console.warn("[anti-repeat] Respuesta muy parecida a la anterior. Regenerando...");
       const antiRepeatPrompt = `${prompt}
 
