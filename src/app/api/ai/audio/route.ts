@@ -1288,7 +1288,31 @@ function sanitizeAgentVisibleResponse(rawText: string, fallbackResponse: string)
     .replace(/[ \t]{2,}/g, " ")
     .trim();
 
+  output = normalizeWhatsAppReadability(output);
+
   return enforceParagraphBlocks(output || fallback) || fallback;
+}
+
+function normalizeWhatsAppReadability(text: string): string {
+  let output = String(text || "");
+
+  output = output
+    .replace(/\bhttps?:\s*\/\/\s*/gi, (match) => (match.toLowerCase().startsWith("https") ? "https://" : "http://"))
+    .replace(/\bwww\.\s*/gi, "www.")
+    .replace(/instagram\.\s*com/gi, "instagram.com")
+    .replace(/facebook\.\s*com/gi, "facebook.com")
+    .replace(/wa\.\s*me/gi, "wa.me")
+    .replace(/(https?:\/\/[^\s\n]+)\n(?=[a-z0-9./_-])/gi, "$1")
+    .replace(/([a-z0-9])\s*\.\s*([a-z0-9])/gi, "$1.$2")
+    .replace(/([a-z0-9])\s*\/\s*([a-z0-9])/gi, "$1/$2");
+
+  let previous = "";
+  while (previous !== output) {
+    previous = output;
+    output = output.replace(/(\d)\s*[.]\s*(\d{3}\b)/g, "$1.$2");
+  }
+
+  return output;
 }
 
 function getColombiaNowDate(): Date {
@@ -1321,7 +1345,16 @@ function enforceParagraphBlocks(text: string): string {
   const singleLine = input.replace(/\n+/g, " ").replace(/\s{2,}/g, " ").trim();
   if (!singleLine) return "";
 
-  const sentences = singleLine.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [singleLine];
+  const hasUrlLikeContent = /https?:\/\/|www\./i.test(singleLine);
+  if (hasUrlLikeContent || singleLine.length < 220) {
+    return singleLine;
+  }
+
+  const sentences = singleLine
+    .split(/(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡0-9💎📌👉])/u)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   if (sentences.length <= 2) return sentences.join(" ").trim();
 
   const blocks: string[] = [];

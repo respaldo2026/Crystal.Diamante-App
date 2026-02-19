@@ -104,8 +104,32 @@ const escapeHtml = (value: string) =>
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const normalizeWhatsAppReadableText = (value: string) => {
+  let output = String(value || "");
+
+  output = output
+    .replace(/\bhttps?:\s*\/\/\s*/gi, (match) => (match.toLowerCase().startsWith("https") ? "https://" : "http://"))
+    .replace(/\bwww\.\s*/gi, "www.")
+    .replace(/instagram\.\s*com/gi, "instagram.com")
+    .replace(/facebook\.\s*com/gi, "facebook.com")
+    .replace(/wa\.\s*me/gi, "wa.me")
+    .replace(/([a-z0-9])\s*\.\s*([a-z0-9])/gi, "$1.$2")
+    .replace(/([a-z0-9])\s*\/\s*([a-z0-9])/gi, "$1/$2");
+
+  let previous = "";
+  while (previous !== output) {
+    previous = output;
+    output = output.replace(/(\d)\s*[.]\s*(\d{3}\b)/g, "$1.$2");
+  }
+
+  return output
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
 const formatWhatsAppTextToHtml = (value: string) => {
-  const escaped = escapeHtml(value || "");
+  const normalized = normalizeWhatsAppReadableText(value || "");
+  const escaped = escapeHtml(normalized);
   const withCodeBlocks = escaped.replace(/```([\s\S]*?)```/g, (_match, content) => {
     return `<code class="wa-code-block">${content}</code>`;
   });
