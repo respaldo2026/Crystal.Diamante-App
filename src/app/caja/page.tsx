@@ -239,12 +239,21 @@ export default function CajaPage() {
             .from("pagos")
             .select("id, monto, numero_cuota, fecha_vencimiento, periodo_pagado, estado, matricula_id")
             .in("matricula_id", matriculaIds)
-            .in("estado", ["pendiente", "vencido"])
             .order("fecha_vencimiento");
 
           if (cuotasError) throw cuotasError;
 
-          const cuotasNormalizadas = (cuotasData || []).map((cuota: any) => {
+          const cuotasPendientes = (cuotasData || []).filter((cuota: any) => {
+            const estadoNormalizado = String(cuota?.estado || "").trim().toLowerCase();
+
+            if (!estadoNormalizado) {
+              return true;
+            }
+
+            return estadoNormalizado !== "pagado" && estadoNormalizado !== "cancelado";
+          });
+
+          const cuotasNormalizadas = cuotasPendientes.map((cuota: any) => {
             const matriculaId = String(cuota?.matricula_id || "");
             const resumen = resumenPlanPorMatricula.get(matriculaId);
             const numero = Number(cuota?.numero_cuota);
@@ -550,11 +559,16 @@ export default function CajaPage() {
       title: "Estado",
       dataIndex: "estado",
       key: "estado",
-      render: (estado: string) => (
-        <Tag color={estado === "vencido" ? "red" : "orange"}>
-          {estado === "vencido" ? "Vencido" : "Pendiente"}
-        </Tag>
-      ),
+      render: (estado: string) => {
+        const estadoNormalizado = String(estado || "").trim().toLowerCase();
+        const esVencido = estadoNormalizado === "vencido";
+
+        return (
+          <Tag color={esVencido ? "red" : "orange"}>
+            {esVencido ? "Vencido" : "Pendiente"}
+          </Tag>
+        );
+      },
     },
   ];
 
