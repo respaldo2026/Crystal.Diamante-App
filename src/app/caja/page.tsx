@@ -52,6 +52,13 @@ interface Estudiante {
 interface Matricula {
   id: string;
   curso_nombre: string;
+  fecha_inicio?: string | null;
+  numero_cuotas?: number | null;
+  curso_numero_cuotas?: number | null;
+  duracion?: string | number | null;
+  programa_duracion?: string | number | null;
+  precio_mensualidad?: number | null;
+  programa_precio_mensualidad?: number | null;
 }
 
 interface Cuota {
@@ -62,11 +69,31 @@ interface Cuota {
   periodo_pagado: string;
   estado: string;
   matricula_id?: string;
+  es_virtual?: boolean;
 }
 
 const formatCurrency = (value?: number | null) => {
   if (!value) return "$0";
   return `$${Number(value).toLocaleString("es-CO")}`;
+};
+
+const parseDuracionMeses = (value: unknown): number => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value));
+  }
+
+  const text = String(value ?? "").trim();
+  if (!text) return 0;
+
+  const match = text.match(/\d+/);
+  return match ? Math.max(0, Number(match[0])) : 0;
+};
+
+const calcularFechaVencimientoCuota = (fechaInicio: string | null | undefined, numeroCuota: number) => {
+  if (!fechaInicio || !numeroCuota || numeroCuota < 1) return "";
+  const base = dayjs(fechaInicio);
+  if (!base.isValid()) return "";
+  return base.add(numeroCuota, "month").format("YYYY-MM-DD");
 };
 
 // Función para generar número de factura secuencial (1000-9999)
@@ -198,7 +225,7 @@ export default function CajaPage() {
         // Cargar matrículas del estudiante
         const { data: matriculasData, error: matriculasError } = await supabaseBrowserClient
           .from("matriculas")
-          .select("id, cursos ( nombre )")
+          .select("id, fecha_inicio, numero_cuotas, cursos ( nombre, numero_cuotas, duracion, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
           .eq("estudiante_id", estudianteId)
           .eq("estado", "activo");
 
@@ -207,6 +234,13 @@ export default function CajaPage() {
         const matriculasFormat = (matriculasData || []).map((m: any) => ({
           id: m.id,
           curso_nombre: m.cursos?.nombre || "Sin nombre",
+          fecha_inicio: m.fecha_inicio || null,
+          numero_cuotas: m.numero_cuotas ?? null,
+          curso_numero_cuotas: m.cursos?.numero_cuotas ?? null,
+          duracion: m.cursos?.duracion ?? null,
+          programa_duracion: m.cursos?.programas?.duracion ?? null,
+          precio_mensualidad: m.cursos?.precio_mensualidad ?? null,
+          programa_precio_mensualidad: m.cursos?.programas?.precio_mensualidad ?? null,
         }));
 
         setMatriculas(matriculasFormat);
@@ -222,6 +256,7 @@ export default function CajaPage() {
           if (planCuotasError) throw planCuotasError;
 
           const resumenPlanPorMatricula = new Map<string, { maxNumero: number; tieneInscripcion: boolean }>();
+          const cuotasRegistradasPorMatricula = new Map<string, Set<number>>();
           (planCuotasData || []).forEach((row: any) => {
             const matriculaId = String(row?.matricula_id || "");
             if (!matriculaId) return;
@@ -233,6 +268,25 @@ export default function CajaPage() {
             actual.maxNumero = Math.max(actual.maxNumero, numero);
             if (numero === 0) actual.tieneInscripcion = true;
             resumenPlanPorMatricula.set(matriculaId, actual);
+
+            if (numero > 0) {
+              const existentes = cuotasRegistradasPorMatricula.get(matriculaId) || new Set<number>();
+              existentes.add(numero);
+              cuotasRegistradasPorMatricula.set(matriculaId, existentes);
+            }
+          });
+
+          const totalCuotasEsperadasPorMatricula = new Map<string, number>();
+          matriculasFormat.forEach((m) => {
+            const totalEsperado =
+              parseDuracionMeses(m.programa_duracion) ||
+              parseDuracionMeses(m.duracion) ||
+              parseDuracionMeses(m.curso_numero_cuotas) ||
+              parseDuracionMeses(m.numero_cuotas);
+
+            if (totalEsperado > 0) {
+              totalCuotasEsperadasPorMatricula.set(m.id, totalEsperado);
+            }
           });
 
           const { data: cuotasData, error: cuotasError } = await supabaseBrowserClient
@@ -262,9 +316,12 @@ export default function CajaPage() {
               return cuota;
             }
 
-            const total = resumen.tieneInscripcion
+            const totalCalculado = resumen.tieneInscripcion
               ? Math.max(1, resumen.maxNumero + 1)
               : Math.max(1, resumen.maxNumero);
+
+            const totalEsperado = totalCuotasEsperadasPorMatricula.get(matriculaId) || 0;
+            const total = Math.max(totalCalculado, totalEsperado, numero);
 
             const periodoActual = String(cuota?.periodo_pagado || "");
             const pareceEtiquetaCuota = /cuota/i.test(periodoActual) || !periodoActual;
@@ -279,7 +336,49 @@ export default function CajaPage() {
             };
           });
 
-          setCuotas(cuotasNormalizadas);
+          const cuotasVirtuales: Cuota[] = [];
+          matriculasFormat.forEach((matricula) => {
+            const totalEsperado = totalCuotasEsperadasPorMatricula.get(matricula.id) || 0;
+            if (totalEsperado <= 0) return;
+
+            const cuotasRegistradas = cuotasRegistradasPorMatricula.get(matricula.id) || new Set<number>();
+            const montoBase =
+              Number(matricula.precio_mensualidad || 0) ||
+              Number(matricula.programa_precio_mensualidad || 0) ||
+              Number(
+                cuotasNormalizadas.find((q) => q.matricula_id === matricula.id && Number(q.numero_cuota) > 0)?.monto || 0
+              );
+
+            for (let i = 1; i <= totalEsperado; i += 1) {
+              if (cuotasRegistradas.has(i)) continue;
+
+              cuotasVirtuales.push({
+                id: `virtual-${matricula.id}-${i}`,
+                monto: montoBase,
+                numero_cuota: i,
+                fecha_vencimiento: calcularFechaVencimientoCuota(matricula.fecha_inicio, i),
+                periodo_pagado: `Cuota ${i} de ${totalEsperado}`,
+                estado: "pendiente",
+                matricula_id: matricula.id,
+                es_virtual: true,
+              });
+            }
+          });
+
+          const cuotasConVirtuales = [...cuotasNormalizadas, ...cuotasVirtuales].sort((a, b) => {
+            const fechaA = a.fecha_vencimiento ? dayjs(a.fecha_vencimiento) : null;
+            const fechaB = b.fecha_vencimiento ? dayjs(b.fecha_vencimiento) : null;
+
+            if (fechaA && fechaB && !fechaA.isSame(fechaB, "day")) {
+              return fechaA.valueOf() - fechaB.valueOf();
+            }
+            if (fechaA && !fechaB) return -1;
+            if (!fechaA && fechaB) return 1;
+
+            return Number(a.numero_cuota || 0) - Number(b.numero_cuota || 0);
+          });
+
+          setCuotas(cuotasConVirtuales);
         } else {
           setCuotas([]);
         }
@@ -327,19 +426,34 @@ export default function CajaPage() {
 
       // Actualizar cada cuota seleccionada
       for (const cuota of cuotasAPagar) {
-        const { data: pagoActualizado, error: updateError } = await supabaseBrowserClient
-          .from("pagos")
-          .update({
-            estado: "pagado",
-            metodo_pago: (values.metodo_pago as string).toLowerCase(),
-            fecha_pago: dayjs().toISOString(),
-            referencia: referenciaPago,
-            estudiante_id: estudianteSeleccionado?.id || null,
-            observaciones: values.observaciones || null,
-          })
-          .eq("id", cuota.id)
-          .select()
-          .single();
+        const payloadPago = {
+          estado: "pagado",
+          metodo_pago: (values.metodo_pago as string).toLowerCase(),
+          fecha_pago: dayjs().toISOString(),
+          referencia: referenciaPago,
+          estudiante_id: estudianteSeleccionado?.id || null,
+          observaciones: values.observaciones || null,
+        };
+
+        const { data: pagoActualizado, error: updateError } = cuota.es_virtual
+          ? await supabaseBrowserClient
+              .from("pagos")
+              .insert({
+                ...payloadPago,
+                matricula_id: cuota.matricula_id || null,
+                monto: Number(cuota.monto || 0),
+                numero_cuota: Number(cuota.numero_cuota || 0),
+                fecha_vencimiento: cuota.fecha_vencimiento || null,
+                periodo_pagado: cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim(),
+              })
+              .select()
+              .single()
+          : await supabaseBrowserClient
+              .from("pagos")
+              .update(payloadPago)
+              .eq("id", cuota.id)
+              .select()
+              .single();
 
         if (updateError) throw updateError;
         pagosActualizados.push(pagoActualizado);
