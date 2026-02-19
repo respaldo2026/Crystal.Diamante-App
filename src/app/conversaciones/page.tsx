@@ -9,6 +9,7 @@ import {
   Space,
   Tag,
   Drawer,
+  Modal,
   Empty,
   Spin,
   Select,
@@ -31,6 +32,8 @@ import {
   MessageOutlined,
   RobotOutlined,
   BarsOutlined,
+  PrinterOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@/utils/supabase/client";
 import dayjs from "dayjs";
@@ -86,6 +89,83 @@ interface ConversationThread {
   asked_payment: boolean;
 }
 
+interface ChatBubbleItem {
+  key: string;
+  role: "user" | "agent";
+  text: string;
+  created_at: string;
+}
+
+const escapeHtml = (value: string) =>
+  (value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[]) => {
+  const bubbles = messages
+    .map((item) => {
+      const bubbleClass = item.role === "user" ? "bubble user" : "bubble agent";
+      const sender = item.role === "user" ? "Estudiante" : "Agente";
+      const content = escapeHtml(item.text).replace(/\n/g, "<br/>");
+      const time = dayjs(item.created_at).format("DD/MM/YYYY HH:mm");
+
+      return `
+        <div class="row ${item.role}">
+          <div class="${bubbleClass}">
+            <div class="sender">${sender}</div>
+            <div class="content">${content}</div>
+            <div class="time">${time}</div>
+          </div>
+        </div>
+      `;
+    })
+    .join("\n");
+
+  return `
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vista WhatsApp - ${escapeHtml(threadLabel)}</title>
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #ece5dd; }
+      .app { max-width: 840px; margin: 0 auto; min-height: 100vh; background: #efeae2; }
+      .header { background: #075e54; color: #fff; padding: 14px 16px; font-weight: 600; }
+      .subheader { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+      .chat { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+      .row { display: flex; width: 100%; }
+      .row.user { justify-content: flex-start; }
+      .row.agent { justify-content: flex-end; }
+      .bubble { max-width: 78%; border-radius: 8px; padding: 8px 10px; box-shadow: 0 1px 0 rgba(0,0,0,.1); }
+      .bubble.user { background: #fff; }
+      .bubble.agent { background: #dcf8c6; }
+      .sender { font-size: 11px; font-weight: 700; margin-bottom: 4px; color: #54656f; }
+      .content { font-size: 14px; line-height: 1.4; white-space: normal; word-break: break-word; }
+      .time { font-size: 11px; color: #667781; text-align: right; margin-top: 6px; }
+      @media print {
+        .app { max-width: 100%; }
+        .header { position: sticky; top: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="header">
+        ${escapeHtml(threadLabel)}
+        <div class="subheader">Exportación rápida tipo WhatsApp</div>
+      </div>
+      <div class="chat">
+        ${bubbles}
+      </div>
+    </div>
+  </body>
+</html>`;
+};
+
 export default function ConversacionesPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +178,7 @@ export default function ConversacionesPage() {
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [activeTab, setActiveTab] = useState("todos");
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const normalizeText = (value: string) =>
     value
@@ -353,6 +434,61 @@ export default function ConversacionesPage() {
     return threads.find((item) => item.thread_key === selectedThreadKey) || null;
   }, [threads, selectedThreadKey]);
 
+  const previewMessages = useMemo<ChatBubbleItem[]>(() => {
+    if (!phoneConversations.length) return [];
+
+    return phoneConversations.flatMap((conv) => {
+      const items: ChatBubbleItem[] = [];
+      if ((conv.user_message || "").trim()) {
+        items.push({
+          key: `${conv.id}-user`,
+          role: "user",
+          text: conv.user_message,
+          created_at: conv.created_at,
+        });
+      }
+      if ((conv.agent_response || "").trim()) {
+        items.push({
+          key: `${conv.id}-agent`,
+          role: "agent",
+          text: conv.agent_response,
+          created_at: conv.created_at,
+        });
+      }
+      return items;
+    });
+  }, [phoneConversations]);
+
+  const previewLabel = selectedThread?.contact_name || getPhoneLabel(selectedThread?.phone_number);
+
+  const abrirPreviewWhatsApp = (threadKey: string) => {
+    setSelectedThreadKey(threadKey);
+    setPreviewOpen(true);
+  };
+
+  const abrirPreviewEnPestana = () => {
+    if (!previewMessages.length) return;
+    const html = buildWhatsAppPreviewHtml(previewLabel, previewMessages);
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) return;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+  };
+
+  const imprimirPreview = () => {
+    if (!previewMessages.length) return;
+    const html = buildWhatsAppPreviewHtml(previewLabel, previewMessages);
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) return;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
   // Eliminar conversaciones por número
   const eliminarHilos = async (threadKeys: string[]) => {
     const threadMap = new Map(threads.map((thread) => [thread.thread_key, thread]));
@@ -543,6 +679,13 @@ export default function ConversacionesPage() {
               }}
             />
           </Tooltip>
+          <Tooltip title="Vista WhatsApp rápida">
+            <Button
+              size="small"
+              icon={<FileTextOutlined />}
+              onClick={() => abrirPreviewWhatsApp(record.thread_key)}
+            />
+          </Tooltip>
           <Tooltip title="Eliminar">
             <Button
               danger
@@ -731,6 +874,16 @@ export default function ConversacionesPage() {
             Conversación: {selectedThread?.contact_name || getPhoneLabel(selectedThread?.phone_number)}
           </Space>
         }
+        extra={
+          <Button
+            size="small"
+            icon={<FileTextOutlined />}
+            onClick={() => setPreviewOpen(true)}
+            disabled={!phoneConversations.length}
+          >
+            Vista WhatsApp
+          </Button>
+        }
         onClose={() => {
           setDrawerOpen(false);
           setSelectedThreadKey(null);
@@ -831,6 +984,65 @@ export default function ConversacionesPage() {
           />
         )}
       </Drawer>
+
+      <Modal
+        title={`Vista tipo WhatsApp: ${previewLabel || "Conversación"}`}
+        open={previewOpen}
+        onCancel={() => setPreviewOpen(false)}
+        width={860}
+        footer={[
+          <Button key="open" onClick={abrirPreviewEnPestana} disabled={!previewMessages.length}>
+            Abrir en pestaña
+          </Button>,
+          <Button key="print" type="primary" icon={<PrinterOutlined />} onClick={imprimirPreview} disabled={!previewMessages.length}>
+            Imprimir / PDF
+          </Button>,
+        ]}
+        bodyStyle={{ padding: 0, background: "#ece5dd" }}
+      >
+        <div style={{ maxHeight: "72vh", overflow: "auto", background: "#ece5dd" }}>
+          <div style={{ background: "#075e54", color: "#fff", padding: "12px 14px", fontWeight: 600 }}>
+            {previewLabel || "Conversación"}
+            <div style={{ fontSize: 12, opacity: 0.9 }}>Vista rápida tipo WhatsApp</div>
+          </div>
+
+          <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+            {previewMessages.length === 0 ? (
+              <Empty description="No hay mensajes para previsualizar" style={{ padding: "28px 0" }} />
+            ) : (
+              previewMessages.map((item) => {
+                const isUser = item.role === "user";
+                return (
+                  <div
+                    key={item.key}
+                    style={{ display: "flex", justifyContent: isUser ? "flex-start" : "flex-end" }}
+                  >
+                    <div
+                      style={{
+                        maxWidth: "78%",
+                        background: isUser ? "#fff" : "#dcf8c6",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                        boxShadow: "0 1px 0 rgba(0,0,0,0.12)",
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: "#54656f" }}>
+                        {isUser ? "Estudiante" : "Agente"}
+                      </div>
+                      <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4 }}>
+                        {item.text}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#667781", textAlign: "right", marginTop: 6 }}>
+                        {dayjs(item.created_at).format("DD/MM/YYYY HH:mm")}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

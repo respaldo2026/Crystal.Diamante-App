@@ -223,6 +223,57 @@ function normalizeForComparison(text: string): string {
     .trim();
 }
 
+function sanitizeAgentVisibleResponse(rawText: string, fallbackResponse: string): string {
+  const fallback = (fallbackResponse || "Déjame confirmarlo y te respondo en breve.").trim();
+  if (!rawText) return fallback;
+
+  let output = String(rawText).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  const leakedBlockPatterns: RegExp[] = [
+    /🔒\s*MODO\s+RESPUESTA\s+A\s+PLANTILLAS[\s\S]*?cualquier\s+texto\s+de\s+ventas\.?/gi,
+    /#\s*SYSTEM\s+PROMPT:[\s\S]*?(?=\n\s*(?:Usuario:|Mensaje del usuario:|#\s*Mensaje del usuario:|$))/gi,
+    /#\s*DIRECTIVA\s+CONTEXTUAL[\s\S]*?(?=\n\s*(?:Usuario:|Mensaje del usuario:|#\s*Mensaje del usuario:|$))/gi,
+    /#\s*🎯\s*INSTRUCCI[ÓO]N\s+DE\s+RESPUESTA:[\s\S]*?(?=\n\s*(?:Usuario:|Mensaje del usuario:|#\s*Mensaje del usuario:|$))/gi,
+  ];
+
+  for (const pattern of leakedBlockPatterns) {
+    output = output.replace(pattern, " ");
+  }
+
+  const leakedLinePatterns: RegExp[] = [
+    /modo\s+respuesta\s+a\s+plantillas/i,
+    /no\s+vender\s+cursos\s+ni\s+iniciar\s+discurso\s+comercial/i,
+    /responder\s+corto,?\s+claro\s+y\s+operativo/i,
+    /priorizar\s+ayuda\s+en\s+este\s+orden/i,
+    /si\s+pide\s+datos\s+sensibles\s+o\s+no\s+se\s+puede\s+validar\s+identidad/i,
+    /si\s+hay\s+problema\s+de\s+pago,?\s+bloqueo\s+de\s+cuenta\s+o\s+error\s+t[eé]cnico\s+persistente/i,
+    /cerrar\s+siempre\s+con\s+una\s+pregunta\s+de\s+avance/i,
+    /frases\s+prohibidas\s+en\s+este\s+modo/i,
+    /te\s+interesa\s+inscribirte/i,
+    /te\s+comparto\s+nuestros\s+cursos/i,
+    /^\s*(intenci[oó]n|objeci[oó]n|se[ñn]al\s+de\s+compra\s+expl[ií]cita)\s+detectada\s*:/i,
+    /^\s*acci[oó]n\s+obligatoria\s*:/i,
+    /^\s*prohibido\s+responder\s+con\s*:/i,
+  ];
+
+  const cleanedLines = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line) return false;
+      return !leakedLinePatterns.some((pattern) => pattern.test(line));
+    });
+
+  output = cleanedLines.join("\n").trim();
+
+  output = output
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+
+  return output || fallback;
+}
+
 function wordOverlapRatio(a: string, b: string): number {
   const wordsA = new Set(normalizeForComparison(a).split(" ").filter(Boolean));
   const wordsB = new Set(normalizeForComparison(b).split(" ").filter(Boolean));
@@ -1688,8 +1739,11 @@ export async function POST(req: NextRequest) {
       response = await generateResponse(geminiKey, antiRepeatPrompt);
     }
 
+    const fallbackResponse = settings?.fallback_response || "Déjame confirmarlo y te respondo en breve.";
+    const cleanedAgentResponse = sanitizeAgentVisibleResponse(response, fallbackResponse);
+
     // Truncar respuesta si es muy larga (máx 1000 caracteres para chat)
-    const truncatedResponse = truncateResponse(response, 1000);
+    const truncatedResponse = truncateResponse(cleanedAgentResponse, 1000);
 
     // Guardar en historiales (guardar la versión truncada)
     await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
