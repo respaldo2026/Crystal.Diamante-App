@@ -225,7 +225,7 @@ export default function CajaPage() {
         // Cargar matrículas del estudiante
         const { data: matriculasData, error: matriculasError } = await supabaseBrowserClient
           .from("matriculas")
-          .select("id, fecha_inicio, numero_cuotas, cursos ( nombre, numero_cuotas, duracion, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
+          .select("id, fecha_inicio, cursos ( nombre, numero_cuotas, duracion, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
           .eq("estudiante_id", estudianteId)
           .eq("estado", "activo");
 
@@ -235,7 +235,6 @@ export default function CajaPage() {
           id: m.id,
           curso_nombre: m.cursos?.nombre || "Sin nombre",
           fecha_inicio: m.fecha_inicio || null,
-          numero_cuotas: m.numero_cuotas ?? null,
           curso_numero_cuotas: m.cursos?.numero_cuotas ?? null,
           duracion: m.cursos?.duracion ?? null,
           programa_duracion: m.cursos?.programas?.duracion ?? null,
@@ -281,8 +280,7 @@ export default function CajaPage() {
             const totalEsperado =
               parseDuracionMeses(m.programa_duracion) ||
               parseDuracionMeses(m.duracion) ||
-              parseDuracionMeses(m.curso_numero_cuotas) ||
-              parseDuracionMeses(m.numero_cuotas);
+              parseDuracionMeses(m.curso_numero_cuotas);
 
             if (totalEsperado > 0) {
               totalCuotasEsperadasPorMatricula.set(m.id, totalEsperado);
