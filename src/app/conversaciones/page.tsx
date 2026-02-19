@@ -104,12 +104,26 @@ const escapeHtml = (value: string) =>
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const formatWhatsAppTextToHtml = (value: string) => {
+  const escaped = escapeHtml(value || "");
+  const withCodeBlocks = escaped.replace(/```([\s\S]*?)```/g, (_match, content) => {
+    return `<code class="wa-code-block">${content}</code>`;
+  });
+
+  const withInlineCode = withCodeBlocks.replace(/`([^`\n]+)`/g, "<code class=\"wa-code\">$1</code>");
+  const withBold = withInlineCode.replace(/\*(?=\S)([^*\n]*?\S)\*/g, "<strong>$1</strong>");
+  const withItalic = withBold.replace(/_(?=\S)([^_\n]*?\S)_/g, "<em>$1</em>");
+  const withStrike = withItalic.replace(/~(?=\S)([^~\n]*?\S)~/g, "<s>$1</s>");
+
+  return withStrike.replace(/\n/g, "<br/>");
+};
+
 const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[]) => {
   const bubbles = messages
     .map((item) => {
       const bubbleClass = item.role === "user" ? "bubble user" : "bubble agent";
       const sender = item.role === "user" ? "Estudiante" : "Agente";
-      const content = escapeHtml(item.text).replace(/\n/g, "<br/>");
+      const content = formatWhatsAppTextToHtml(item.text);
       const time = dayjs(item.created_at).format("DD/MM/YYYY HH:mm");
 
       return `
@@ -145,6 +159,21 @@ const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[
       .bubble.agent { background: #dcf8c6; }
       .sender { font-size: 11px; font-weight: 700; margin-bottom: 4px; color: #54656f; }
       .content { font-size: 14px; line-height: 1.4; white-space: normal; word-break: break-word; }
+      .content strong { font-weight: 700; }
+      .content em { font-style: italic; }
+      .content s { text-decoration: line-through; }
+      .content .wa-code, .content .wa-code-block {
+        font-family: Consolas, Monaco, 'Courier New', monospace;
+        background: rgba(0, 0, 0, 0.08);
+        border-radius: 4px;
+      }
+      .content .wa-code { padding: 1px 4px; }
+      .content .wa-code-block {
+        display: block;
+        padding: 8px;
+        white-space: pre-wrap;
+        margin: 4px 0;
+      }
       .time { font-size: 11px; color: #667781; text-align: right; margin-top: 6px; }
       @media print {
         .app { max-width: 100%; }
@@ -1073,7 +1102,9 @@ export default function ConversacionesPage() {
                         {isUser ? "Estudiante" : "Agente"}
                       </div>
                       <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4 }}>
-                        {item.text}
+                        <span
+                          dangerouslySetInnerHTML={{ __html: formatWhatsAppTextToHtml(item.text) }}
+                        />
                       </div>
                       <div style={{ fontSize: 11, color: "#667781", textAlign: "right", marginTop: 6 }}>
                         {dayjs(item.created_at).format("DD/MM/YYYY HH:mm")}
