@@ -1062,14 +1062,7 @@ export default function ConversacionesPage() {
         open={previewOpen}
         onCancel={() => setPreviewOpen(false)}
         width={860}
-        footer={[
-          <Button key="open" onClick={abrirPreviewEnPestana} disabled={!previewMessages.length}>
-            Abrir en pestaña
-          </Button>,
-          <Button key="print" type="primary" icon={<PrinterOutlined />} onClick={imprimirPreview} disabled={!previewMessages.length}>
-            Imprimir / PDF
-          </Button>,
-        ]}
+        footer={null}
         bodyStyle={{ padding: 0, background: "#ece5dd" }}
       >
         <div style={{ maxHeight: "72vh", overflow: "auto", background: "#ece5dd" }}>
