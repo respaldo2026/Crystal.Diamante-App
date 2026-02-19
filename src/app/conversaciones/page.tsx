@@ -1073,11 +1073,6 @@ export default function ConversacionesPage() {
         bodyStyle={{ padding: 0, background: "#ece5dd" }}
       >
         <div style={{ maxHeight: "72vh", overflow: "auto", background: "#ece5dd" }}>
-          <div style={{ background: "#075e54", color: "#fff", padding: "12px 14px", fontWeight: 600 }}>
-            {previewLabel || "Conversación"}
-            <div style={{ fontSize: 12, opacity: 0.9 }}>Vista rápida tipo WhatsApp</div>
-          </div>
-
           <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
             {previewMessages.length === 0 ? (
               <Empty description="No hay mensajes para previsualizar" style={{ padding: "28px 0" }} />
