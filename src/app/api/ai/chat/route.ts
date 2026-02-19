@@ -241,6 +241,10 @@ function sanitizeAgentVisibleResponse(rawText: string, fallbackResponse: string)
   }
 
   const leakedLinePatterns: RegExp[] = [
+    /cambia\s+a\s+modo\s+soporte\s+estudiante/i,
+    /^\s*acceso\s+a\s+la\s+app\s*,?\s*$/i,
+    /^\s*visualizacion\s+de\s+asistencias\/?notas\/?materiales\s*,?\s*$/i,
+    /^\s*orientacion\s+basica\s+de\s+uso\s*\.?\s*$/i,
     /modo\s+respuesta\s+a\s+plantillas/i,
     /no\s+vender\s+cursos\s+ni\s+iniciar\s+discurso\s+comercial/i,
     /responder\s+corto,?\s+claro\s+y\s+operativo/i,
@@ -1190,6 +1194,81 @@ function resolveStudentIdentification(
   return null;
 }
 
+function hasLinkOrAppAccessIntent(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const linkToken = /\b(link|lin|lik|enlace|url)\b/i.test(text);
+  const accessToken = /\b(no puedo|no abre|no me abre|no funciona|problema|error|ingresar|entrar|acceder|abrir)\b/i.test(text);
+  const appToken = /\b(app|aplicacion|aplicacion|portal)\b/i.test(text);
+
+  return (linkToken && (accessToken || appToken)) || /\bno puedo abrir\b/i.test(text);
+}
+
+function hasRecentLinkSupportContext(history: Array<{ user: string; agent: string }>): boolean {
+  const recent = history.slice(-4);
+  return recent.some((turn) => {
+    const combined = `${turn?.user || ""} ${turn?.agent || ""}`;
+    const normalized = normalizeForMatch(combined);
+    return /\b(link|lin|lik|enlace|app|aplicacion|portal|usuario|cedula|identificacion)\b/i.test(normalized);
+  });
+}
+
+function extractIdentificationLoose(message: string): string | null {
+  const raw = String(message || "").trim();
+  if (!raw) return null;
+
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length >= 6 && digits.length <= 12) {
+    return digits;
+  }
+
+  return null;
+}
+
+async function buildLinkAccessDirectResponse(
+  supabase: any,
+  userMessage: string,
+  history: Array<{ user: string; agent: string }>
+): Promise<string | null> {
+  const appUrl = "https://app.crystaldiamante.com";
+  const isLinkIntent = hasLinkOrAppAccessIntent(userMessage);
+  const hasLinkContext = hasRecentLinkSupportContext(history);
+
+  const directId = extractIdentificationFromText(userMessage) || extractIdentificationLoose(userMessage);
+  const shouldTryIdentification = Boolean(directId && (isLinkIntent || hasLinkContext));
+
+  if (shouldTryIdentification && directId) {
+    const { data: profile, error } = await supabase
+      .from("perfiles")
+      .select("id, nombre_completo, email, identificacion, rol")
+      .eq("identificacion", directId)
+      .eq("rol", "estudiante")
+      .maybeSingle();
+
+    if (error) {
+      console.error("[link-support] Error buscando estudiante por cédula:", error);
+    }
+
+    if (profile) {
+      const userLogin = String(profile?.email || "").trim();
+      if (userLogin) {
+        return `Perfecto. Este es el link de la app: ${appUrl}\n\nTu usuario es: ${userLogin}\nTu clave es tu número de cédula: ${directId}\n\n¿Te funcionó el ingreso?`;
+      }
+
+      return `Ya validé tu cédula. Este es el link de la app: ${appUrl}\n\nTu clave es tu número de cédula: ${directId}\nSi no recuerdas tu usuario, te ayudo a recuperarlo con Secretaría.\n\n¿Te funcionó el ingreso?`;
+    }
+
+    return `No encontré un estudiante con la cédula ${directId}.\nEste es el link de la app: ${appUrl}\n\nRevísame el número de cédula (solo números) y te confirmo tu usuario.\nTu clave es tu número de cédula.`;
+  }
+
+  if (isLinkIntent) {
+    return `¿Te refieres al link de la app?\nAquí te lo dejo: ${appUrl}\n\nSi necesitas tu usuario, compárteme tu número de cédula (solo números) y te lo confirmo.\nTu clave es tu número de cédula.`;
+  }
+
+  return null;
+}
+
 function buildStudentDirectResponse(message: string, studentContext: any): string | null {
   if (!studentContext) return null;
 
@@ -1570,6 +1649,30 @@ export async function POST(req: NextRequest) {
 
     // Obtener historial
     const history = await getConversationHistory(supabase, phone || "unknown", 5);
+
+    const linkAccessResponse = await buildLinkAccessDirectResponse(supabase, message, history);
+    if (linkAccessResponse) {
+      const fallbackResponse = settings?.fallback_response || "Déjame confirmarlo y te respondo en breve.";
+      const cleanedResponse = sanitizeAgentVisibleResponse(linkAccessResponse, fallbackResponse);
+      const truncatedResponse = truncateResponse(cleanedResponse, 1000);
+      await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+
+      const sanitizedResponse = sanitizeForJSON(truncatedResponse);
+      let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
+      whatsappResponse = formatPrices(whatsappResponse);
+      whatsappResponse = removeCOPCurrency(whatsappResponse);
+
+      const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
+      return NextResponse.json({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizedAgent || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      });
+    }
 
     // INFORMACIÓN JERÁRQUICA
     // 1. Obtener todos los programas (información primaria)

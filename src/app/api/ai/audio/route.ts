@@ -1239,6 +1239,10 @@ function sanitizeAgentVisibleResponse(rawText: string, fallbackResponse: string)
   }
 
   const leakedLinePatterns: RegExp[] = [
+    /cambia\s+a\s+modo\s+soporte\s+estudiante/i,
+    /^\s*acceso\s+a\s+la\s+app\s*,?\s*$/i,
+    /^\s*visualizacion\s+de\s+asistencias\/?notas\/?materiales\s*,?\s*$/i,
+    /^\s*orientacion\s+basica\s+de\s+uso\s*\.?\s*$/i,
     /modo\s+respuesta\s+a\s+plantillas/i,
     /no\s+vender\s+cursos\s+ni\s+iniciar\s+discurso\s+comercial/i,
     /responder\s+corto,?\s+claro\s+y\s+operativo/i,
