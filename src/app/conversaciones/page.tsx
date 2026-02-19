@@ -25,7 +25,6 @@ import {
 import {
   SearchOutlined,
   DeleteOutlined,
-  EyeOutlined,
   ExclamationCircleOutlined,
   PhoneOutlined,
   ClockCircleOutlined,
@@ -643,19 +642,9 @@ export default function ConversacionesPage() {
       width: 92,
       render: (_: any, record: ConversationThread) => (
         <Space size={4}>
-          <Tooltip title="Ver conversación completa">
+          <Tooltip title="Ver conversación completa tipo WhatsApp">
             <Button
               type="primary"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => {
-                setSelectedThreadKey(record.thread_key);
-                setDrawerOpen(true);
-              }}
-            />
-          </Tooltip>
-          <Tooltip title="Vista WhatsApp rápida">
-            <Button
               size="small"
               icon={<FileTextOutlined />}
               onClick={() => abrirPreviewWhatsApp(record.thread_key)}
