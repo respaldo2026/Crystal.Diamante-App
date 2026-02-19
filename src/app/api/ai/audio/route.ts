@@ -540,10 +540,17 @@ function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: s
   if (!conversationHistory || conversationHistory.length === 0) return false;
   
   // Palabras de saludo comunes
-  const greetings = /\b(hola|buenos|buenas|bienvenido|bienvenida|hallo|¿qué tal|hey|saludos|encantado|encantada)\b/gi;
+  const greetings = /\b(hola|buenos|buenas|bienvenido|bienvenida|hallo|que\s+tal|hey|saludos|encantado|encantada)\b/i;
   
   // Revisar todas las respuestas del agente en el historial
   return conversationHistory.some(msg => greetings.test(msg.agent));
+}
+
+function stripRepeatedGreetingPrefix(text: string, hasHistory: boolean): string {
+  if (!hasHistory) return text;
+
+  const greetingPrefix = /^\s*(?:[¡!¿?.,:;\-–—\s]|\p{Emoji_Presentation})*(?:hola(?:\s+de\s+nuevo)?|buen(?:os|as)?(?:\s+d[ií]as|\s+tardes|\s+noches)?|saludos)\b[\s!¡.,:;\-–—]*/iu;
+  return String(text || "").replace(greetingPrefix, "").trim();
 }
 
 function applyTemplate(template: string, tokens: Record<string, string>): string {
@@ -1574,7 +1581,10 @@ export async function POST(req: NextRequest) {
     }
     
     const fallbackResponse = settings?.fallback_response || "Déjame confirmarlo y te respondo en breve.";
-    agentResponse = sanitizeAgentVisibleResponse(agentResponse, fallbackResponse);
+    agentResponse = stripRepeatedGreetingPrefix(
+      sanitizeAgentVisibleResponse(agentResponse, fallbackResponse),
+      history.length > 0
+    );
 
     // 9.5. IMPORTANTE: Eliminar emojis de la respuesta antes de convertir a audio
     const agentResponseClean = cleanForTTS(agentResponse);

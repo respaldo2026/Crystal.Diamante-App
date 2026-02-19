@@ -849,10 +849,17 @@ function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: s
   if (!conversationHistory || conversationHistory.length === 0) return false;
   
   // Palabras de saludo comunes
-  const greetings = /\b(hola|buenos|buenas|bienvenido|bienvenida|hallo|¿qué tal|hey|saludos|encantado|encantada)\b/gi;
+  const greetings = /\b(hola|buenos|buenas|bienvenido|bienvenida|hallo|que\s+tal|hey|saludos|encantado|encantada)\b/i;
   
   // Revisar todas las respuestas del agente en el historial
   return conversationHistory.some(msg => greetings.test(msg.agent));
+}
+
+function stripRepeatedGreetingPrefix(text: string, hasHistory: boolean): string {
+  if (!hasHistory) return text;
+
+  const greetingPrefix = /^\s*(?:[¡!¿?.,:;\-–—\s]|\p{Emoji_Presentation})*(?:hola(?:\s+de\s+nuevo)?|buen(?:os|as)?(?:\s+d[ií]as|\s+tardes|\s+noches)?|saludos)\b[\s!¡.,:;\-–—]*/iu;
+  return String(text || "").replace(greetingPrefix, "").trim();
 }
 
 /**
@@ -1843,7 +1850,10 @@ export async function POST(req: NextRequest) {
     }
 
     const fallbackResponse = settings?.fallback_response || "Déjame confirmarlo y te respondo en breve.";
-    const cleanedAgentResponse = sanitizeAgentVisibleResponse(response, fallbackResponse);
+    const cleanedAgentResponse = stripRepeatedGreetingPrefix(
+      sanitizeAgentVisibleResponse(response, fallbackResponse),
+      history.length > 0
+    );
 
     // Truncar respuesta si es muy larga (máx 1000 caracteres para chat)
     const truncatedResponse = truncateResponse(cleanedAgentResponse, 1000);
