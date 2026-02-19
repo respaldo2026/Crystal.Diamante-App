@@ -1252,6 +1252,18 @@ function formatDateShort(value: string | null | undefined): string {
   return date.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+function formatDateLong(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("es-CO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function formatCurrencyCOP(value: number): string {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -1490,6 +1502,69 @@ function buildTodayClassDirectResponse(
   return `Hoy ${dayName} no aparece clase de ${detectedProgram.nombre} según los horarios registrados.\n${reference}`;
 }
 
+function isNextGroupQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(cuando hay otro curso|cuando hay otro|otro curso|proximo grupo|siguiente grupo|proximo curso|nuevo grupo|cuando abren|cuando inicia el proximo)\b/i.test(text);
+}
+
+function hasRecentNextGroupContext(history: Array<{ user: string; agent: string }>): boolean {
+  const recent = history.slice(-3);
+  return recent.some((turn) => {
+    const combined = `${turn?.user || ""} ${turn?.agent || ""}`;
+    return /\b(otro curso|proximo grupo|siguiente grupo|proximo curso|grupo avanzado|por confirmar)\b/i.test(normalizeForMatch(combined));
+  });
+}
+
+function shouldUseNextGroupDirectResponse(
+  userMessage: string,
+  detectedProgram: any | null,
+  programs: any[],
+  history: Array<{ user: string; agent: string }>
+): boolean {
+  if (isNextGroupQuestion(userMessage)) return true;
+
+  const mentionsProgram = Boolean(detectProgramFromMessage(userMessage, programs));
+  if (mentionsProgram && detectedProgram && isLikelyProgramOnlyReply(userMessage) && hasRecentNextGroupContext(history)) {
+    return true;
+  }
+
+  return false;
+}
+
+function buildNextGroupDirectResponse(
+  detectedProgram: any | null,
+  courses: any[],
+  now: Date
+): string {
+  if (!detectedProgram) {
+    return "¡Claro! Te ayudo con eso. ¿De cuál curso quieres que te confirme el próximo grupo?";
+  }
+
+  const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
+  const relatedCourses = (courses || []).filter((course) => {
+    const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+    const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
+    return Boolean(sameProgramId || sameProgramName);
+  });
+
+  if (!relatedCourses.length) {
+    return `Te entiendo. En este momento no tengo grupos cargados de ${detectedProgram.nombre}. Si quieres, te aviso apenas publiquemos nueva fecha.`;
+  }
+
+  const nextWithDate = relatedCourses
+    .filter((course) => course?.fecha_inicio && !Number.isNaN(new Date(course.fecha_inicio).getTime()))
+    .sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime())
+    .find((course) => new Date(course.fecha_inicio).getTime() >= now.getTime() - 24 * 60 * 60 * 1000);
+
+  if (nextWithDate) {
+    const dateLabel = formatDateLong(nextWithDate.fecha_inicio) || formatDateShort(nextWithDate.fecha_inicio) || "Por confirmar";
+    const horario = nextWithDate?.horario || "Por confirmar";
+    return `Te entiendo, este grupo ya va avanzado.\n\n💎 ${detectedProgram.nombre}\n🗓️ Próximo grupo: ${dateLabel}\n⏰ Horario: ${horario}\n\nSi quieres, te dejo pendiente para avisarte apenas abran inscripciones.`;
+  }
+
+  return `Te entiendo, este grupo ya va avanzado.\n\n💎 ${detectedProgram.nombre}\n🗓️ Próximo grupo: Por confirmar\n⏰ Horario: Por confirmar\n\nApenas publiquemos nueva fecha, te la comparto de inmediato. ¿Quieres que te avise?`;
+}
+
 function shouldUseTodayClassDirectResponse(
   userMessage: string,
   detectedProgram: any | null,
@@ -1578,6 +1653,7 @@ function buildContextualDirective(
   const materialsScope = intent === "materiales" ? detectMaterialsScope(userMessage) : "general";
   const objection = detectObjectionType(userMessage);
   const explicitBuyingIntent = detectBuyingIntent(userMessage, []);
+  const asksNextGroup = isNextGroupQuestion(userMessage);
   const programName = detectedProgram?.nombre || null;
 
   const intentInstructionMap: Record<string, string> = {
@@ -1648,6 +1724,9 @@ function buildContextualDirective(
     explicitBuyingIntent
       ? 'ACCIÓN OBLIGATORIA: Entrega el número de la academia/admisiones (+57 301 203 8582) y guía el siguiente paso de inscripción.'
       : 'Si no hay señal explícita de compra, continúa en modo informativo y consultivo.',
+    asksNextGroup
+      ? 'CASO ESPECIAL: Si pregunta por "otro curso" o "próximo grupo", NO envíes ficha comercial completa. Responde corto, natural y humano: 1) reconoce que el grupo actual puede ir avanzado, 2) da fecha/horario solo si están confirmados, 3) si no hay fecha, dilo claramente sin rodeos, 4) cierra con una sola pregunta de seguimiento.'
+      : 'Mantén el enfoque en resolver la pregunta puntual sin sobrecargar con información no solicitada.',
     'Si hay objeción, estructura la respuesta en: 1) Empatía breve, 2) Dato concreto del curso, 3) Propuesta clara, 4) CTA corta.',
     'Prohibido responder con: "¿En qué curso estás interesado?" cuando el usuario ya mencionó un curso o tema específico.'
   ].join('\n');
@@ -1881,6 +1960,29 @@ export async function POST(req: NextRequest) {
 
     if (shouldUseTodayClassDirectResponse(message, detectedProgram, programs, history)) {
       const directResponse = buildTodayClassDirectResponse(detectedProgram, courses, new Date());
+      const truncatedResponse = truncateResponse(directResponse, 1000);
+
+      await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+
+      const sanitizedResponse = sanitizeForJSON(truncatedResponse);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
+
+      const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
+      const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
+
+      return NextResponse.json({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizedAgent || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: sanitizedProgram || null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      });
+    }
+
+    if (shouldUseNextGroupDirectResponse(message, detectedProgram, programs, history)) {
+      const directResponse = buildNextGroupDirectResponse(detectedProgram, courses, new Date());
       const truncatedResponse = truncateResponse(directResponse, 1000);
 
       await saveConversation(supabase, phone || "unknown", message, truncatedResponse);

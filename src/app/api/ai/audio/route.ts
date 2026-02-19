@@ -794,6 +794,18 @@ function formatDateShort(value: string | null | undefined): string {
   return date.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+function formatDateLong(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("es-CO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function formatCurrencyCOP(value: number): string {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -957,6 +969,69 @@ function buildTodayClassDirectResponse(
   return `Hoy ${dayName} no aparece clase de ${detectedProgram.nombre} según los horarios registrados.\n${reference}`;
 }
 
+function isNextGroupQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(cuando hay otro curso|cuando hay otro|otro curso|proximo grupo|siguiente grupo|proximo curso|nuevo grupo|cuando abren|cuando inicia el proximo)\b/i.test(text);
+}
+
+function hasRecentNextGroupContext(history: Array<{ user: string; agent: string }>): boolean {
+  const recent = history.slice(-3);
+  return recent.some((turn) => {
+    const combined = `${turn?.user || ""} ${turn?.agent || ""}`;
+    return /\b(otro curso|proximo grupo|siguiente grupo|proximo curso|grupo avanzado|por confirmar)\b/i.test(normalizeForMatch(combined));
+  });
+}
+
+function shouldUseNextGroupDirectResponse(
+  userMessage: string,
+  detectedProgram: any | null,
+  programs: any[],
+  history: Array<{ user: string; agent: string }>
+): boolean {
+  if (isNextGroupQuestion(userMessage)) return true;
+
+  const mentionsProgram = Boolean(detectProgramFromMessage(userMessage, programs));
+  if (mentionsProgram && detectedProgram && isLikelyProgramOnlyReply(userMessage) && hasRecentNextGroupContext(history)) {
+    return true;
+  }
+
+  return false;
+}
+
+function buildNextGroupDirectResponse(
+  detectedProgram: any | null,
+  courses: any[],
+  now: Date
+): string {
+  if (!detectedProgram) {
+    return "¡Claro! Te ayudo con eso. ¿De cuál curso quieres que te confirme el próximo grupo?";
+  }
+
+  const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
+  const relatedCourses = (courses || []).filter((course) => {
+    const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+    const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
+    return Boolean(sameProgramId || sameProgramName);
+  });
+
+  if (!relatedCourses.length) {
+    return `Te entiendo. En este momento no tengo grupos cargados de ${detectedProgram.nombre}. Si quieres, te aviso apenas publiquemos nueva fecha.`;
+  }
+
+  const nextWithDate = relatedCourses
+    .filter((course) => course?.fecha_inicio && !Number.isNaN(new Date(course.fecha_inicio).getTime()))
+    .sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime())
+    .find((course) => new Date(course.fecha_inicio).getTime() >= now.getTime() - 24 * 60 * 60 * 1000);
+
+  if (nextWithDate) {
+    const dateLabel = formatDateLong(nextWithDate.fecha_inicio) || formatDateShort(nextWithDate.fecha_inicio) || "Por confirmar";
+    const horario = nextWithDate?.horario || "Por confirmar";
+    return `Te entiendo, este grupo ya va avanzado.\n\n💎 ${detectedProgram.nombre}\n🗓️ Próximo grupo: ${dateLabel}\n⏰ Horario: ${horario}\n\nSi quieres, te dejo pendiente para avisarte apenas abran inscripciones.`;
+  }
+
+  return `Te entiendo, este grupo ya va avanzado.\n\n💎 ${detectedProgram.nombre}\n🗓️ Próximo grupo: Por confirmar\n⏰ Horario: Por confirmar\n\nApenas publiquemos nueva fecha, te la comparto de inmediato. ¿Quieres que te avise?`;
+}
+
 function shouldUseTodayClassDirectResponse(
   userMessage: string,
   detectedProgram: any | null,
@@ -1036,6 +1111,7 @@ function buildContextualDirective(userMessage: string, detectedProgram: any | nu
   const materialsScope = intent === "materiales" ? detectMaterialsScope(userMessage) : "general";
   const objection = detectObjectionType(userMessage);
   const explicitBuyingIntent = detectBuyingIntent(userMessage, []);
+  const asksNextGroup = isNextGroupQuestion(userMessage);
   const programName = detectedProgram?.nombre || null;
 
   const intentInstructionMap: Record<string, string> = {
@@ -1074,6 +1150,9 @@ function buildContextualDirective(userMessage: string, detectedProgram: any | nu
     explicitBuyingIntent
       ? 'ACCIÓN OBLIGATORIA EN VOZ: Entrega el número de la academia/admisiones (más 57 301 203 8582) y guía el siguiente paso de inscripción.'
       : 'Si no hay señal explícita de compra, mantén modo informativo y consultivo.',
+    asksNextGroup
+      ? 'CASO ESPECIAL EN VOZ: Si pregunta por "otro curso" o "próximo grupo", NO des discurso largo. Responde natural y breve: reconoce que el grupo actual puede ir avanzado, comparte fecha/horario solo si están confirmados, y si no hay fecha indícalo claramente antes de cerrar con una pregunta corta.'
+      : 'Mantén foco en resolver lo que preguntó, sin sobrecargar información.',
     'Si hay objeción, usa esta secuencia en voz: empatía breve, dato concreto, propuesta simple, cierre con pregunta corta.',
     'Prohibido responder con frases genéricas como: "¿en qué curso estás interesado?" si el usuario ya mencionó uno.'
   ].join('\n');
@@ -1671,6 +1750,9 @@ export async function POST(req: NextRequest) {
     const directTodayResponse = shouldUseTodayClassDirectResponse(transcription, detectedProgram, programs, history)
       ? buildTodayClassDirectResponse(detectedProgram, courses, new Date())
       : null;
+    const directNextGroupResponse = shouldUseNextGroupDirectResponse(transcription, detectedProgram, programs, history)
+      ? buildNextGroupDirectResponse(detectedProgram, courses, new Date())
+      : null;
     const directStudentResponse = buildStudentDirectResponse(transcription, studentContext);
     
     // 7.7. Obtener información de la academia (dirección, redes, contacto)
@@ -1690,7 +1772,7 @@ export async function POST(req: NextRequest) {
     // 7.10. IMPORTANTE: Eliminar emojis del contexto para que el agente no los use en respuestas de audio
     hierarchicalContext = removeEmojis(hierarchicalContext);
 
-    let agentResponse = directStudentResponse || directTodayResponse || "";
+    let agentResponse = directStudentResponse || directTodayResponse || directNextGroupResponse || "";
     if (!agentResponse) {
       // 8. Buscar conocimiento relevante
       const knowledgeChunks = await searchKnowledge(supabase, transcription, 3);
