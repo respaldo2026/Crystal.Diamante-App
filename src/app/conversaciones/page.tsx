@@ -21,6 +21,7 @@ import {
   Timeline,
   Divider,
   Tabs,
+  Grid,
 } from "antd";
 import {
   SearchOutlined,
@@ -166,6 +167,8 @@ const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[
 };
 
 export default function ConversacionesPage() {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
@@ -546,6 +549,14 @@ export default function ConversacionesPage() {
     return normalized.length > maxChars ? `${normalized.slice(0, maxChars)}...` : normalized;
   };
 
+  const toggleThreadSelection = (threadKey: string) => {
+    setSelectedRows((prev) =>
+      prev.includes(threadKey)
+        ? prev.filter((item) => item !== threadKey)
+        : [...prev, threadKey]
+    );
+  };
+
   // Columnas de tabla
   const columns = [
     {
@@ -557,7 +568,7 @@ export default function ConversacionesPage() {
       dataIndex: "phone_number",
       key: "phone_number",
       render: (phone: string, record: ConversationThread) => (
-        <div style={{ maxWidth: 165 }}>
+        <div style={{ maxWidth: 210 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <PhoneOutlined />
             <span style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.2 }}>
@@ -578,7 +589,7 @@ export default function ConversacionesPage() {
           ) : null}
         </div>
       ),
-      width: 170,
+      width: 210,
     },
     {
       title: (
@@ -593,17 +604,17 @@ export default function ConversacionesPage() {
           <span
             style={{
               display: "-webkit-box",
-              WebkitLineClamp: 2,
+              WebkitLineClamp: 3,
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
               lineHeight: 1.25,
             }}
           >
-            {compactPreview(text, 110)}
+            {compactPreview(text, 180)}
           </span>
         </Tooltip>
       ),
-      width: 220,
+      width: 380,
     },
     {
       title: (
@@ -639,7 +650,7 @@ export default function ConversacionesPage() {
         </Tooltip>
       ),
       key: "actions",
-      width: 92,
+      width: 110,
       render: (_: any, record: ConversationThread) => (
         <Space size={4}>
           <Tooltip title="Ver conversación completa tipo WhatsApp">
@@ -809,23 +820,91 @@ export default function ConversacionesPage() {
               style={{ padding: "60px 0" }}
             />
           ) : (
-            <Table
-              columns={columns}
-              dataSource={conversationsFiltradas}
-              rowKey="thread_key"
-              pagination={{ pageSize: 20, showSizeChanger: true }}
-              size="small"
-              tableLayout="auto"
-              rowSelection={{
-                selectedRowKeys: selectedRows,
-                onChange: (keys) => setSelectedRows(keys as string[]),
-                selections: [
-                  Table.SELECTION_ALL,
-                  Table.SELECTION_INVERT,
-                  Table.SELECTION_NONE,
-                ],
-              }}
-            />
+            isMobile ? (
+              <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+                {conversationsFiltradas.map((record) => {
+                  const isSelected = selectedRows.includes(record.thread_key);
+                  return (
+                    <Card
+                      key={record.thread_key}
+                      size="small"
+                      style={{ borderRadius: 10 }}
+                      bodyStyle={{ padding: 12 }}
+                    >
+                      <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                        <Space wrap style={{ justifyContent: "space-between", width: "100%" }}>
+                          <Space size={6}>
+                            <PhoneOutlined />
+                            <span style={{ fontWeight: 600 }}>{getPhoneLabel(record.phone_number)}</span>
+                          </Space>
+                          <Tag color="blue" style={{ marginInlineEnd: 0 }}>{record.total}</Tag>
+                        </Space>
+
+                        {record.contact_name ? (
+                          <Tag color="green" style={{ width: "fit-content" }}>{record.contact_name}</Tag>
+                        ) : null}
+
+                        <div style={{ fontSize: 13, lineHeight: 1.35 }}>
+                          {compactPreview(record.last_user_message, 160)}
+                        </div>
+
+                        <span style={{ fontSize: 12, color: "#8c8c8c" }}>
+                          {dayjs(record.last_date).format("DD/MM HH:mm")} · {dayjs(record.last_date).fromNow()}
+                        </span>
+
+                        <Space wrap>
+                          <Button
+                            type="primary"
+                            size="small"
+                            icon={<FileTextOutlined />}
+                            onClick={() => abrirPreviewWhatsApp(record.thread_key)}
+                          >
+                            WhatsApp
+                          </Button>
+                          <Button
+                            size="small"
+                            onClick={() => toggleThreadSelection(record.thread_key)}
+                          >
+                            {isSelected ? "Quitar selección" : "Seleccionar"}
+                          </Button>
+                          <Button
+                            danger
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            onClick={() => {
+                              if (window.confirm("¿Eliminar esta conversación completa?")) {
+                                eliminarHilos([record.thread_key]);
+                              }
+                            }}
+                          >
+                            Borrar
+                          </Button>
+                        </Space>
+                      </Space>
+                    </Card>
+                  );
+                })}
+              </Space>
+            ) : (
+              <Table
+                columns={columns}
+                dataSource={conversationsFiltradas}
+                rowKey="thread_key"
+                pagination={{ pageSize: 20, showSizeChanger: true }}
+                size="small"
+                tableLayout="fixed"
+                scroll={{ x: 880 }}
+                rowSelection={{
+                  selectedRowKeys: selectedRows,
+                  onChange: (keys) => setSelectedRows(keys as string[]),
+                  selections: [
+                    Table.SELECTION_ALL,
+                    Table.SELECTION_INVERT,
+                    Table.SELECTION_NONE,
+                  ],
+                }}
+              />
+            )
           )}
         </Spin>
       </Card>
