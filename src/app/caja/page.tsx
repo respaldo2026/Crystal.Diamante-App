@@ -301,6 +301,10 @@ export default function CajaPage() {
             const numero = Number(cuota?.numero_cuota);
             if (!matriculaId || !Number.isFinite(numero) || numero <= 0) return;
 
+            const existentes = cuotasRegistradasPorMatricula.get(matriculaId) || new Set<number>();
+            existentes.add(numero);
+            cuotasRegistradasPorMatricula.set(matriculaId, existentes);
+
             const estadoNormalizado = String(cuota?.estado || "").trim().toLowerCase();
             if (estadoNormalizado === "pagado") {
               const actuales = cuotasPagadasPorMatricula.get(matriculaId) || new Set<number>();
@@ -309,28 +313,12 @@ export default function CajaPage() {
             }
           });
 
-          const cuotasPendientes = (cuotasData || []).filter((cuota: any) => {
+          const cuotasFiltradas = (cuotasData || []).filter((cuota: any) => {
             const estadoNormalizado = String(cuota?.estado || "").trim().toLowerCase();
-            const matriculaId = String(cuota?.matricula_id || "");
-            const numero = Number(cuota?.numero_cuota);
-
-            if (
-              matriculaId &&
-              Number.isFinite(numero) &&
-              numero > 0 &&
-              cuotasPagadasPorMatricula.get(matriculaId)?.has(numero)
-            ) {
-              return false;
-            }
-
-            if (!estadoNormalizado) {
-              return true;
-            }
-
-            return estadoNormalizado !== "pagado" && estadoNormalizado !== "cancelado";
+            return estadoNormalizado !== "cancelado";
           });
 
-          const cuotasNormalizadas = cuotasPendientes.map((cuota: any) => {
+          const cuotasNormalizadas = cuotasFiltradas.map((cuota: any) => {
             const matriculaId = String(cuota?.matricula_id || "");
             const resumen = resumenPlanPorMatricula.get(matriculaId);
             const numero = Number(cuota?.numero_cuota);
@@ -372,6 +360,15 @@ export default function CajaPage() {
 
             const estadoActual = String(actual?.estado || "").trim().toLowerCase();
             const estadoNuevo = String(cuota?.estado || "").trim().toLowerCase();
+            if (estadoActual === "pagado") {
+              return;
+            }
+
+            if (estadoNuevo === "pagado") {
+              cuotasNormalizadasDedupe.set(key, cuota);
+              return;
+            }
+
             if (estadoActual !== "vencido" && estadoNuevo === "vencido") {
               cuotasNormalizadasDedupe.set(key, cuota);
             }
@@ -440,6 +437,18 @@ export default function CajaPage() {
             const actual = cuotasDedupe.get(key);
 
             if (!actual) {
+              cuotasDedupe.set(key, cuota);
+              return;
+            }
+
+            const estadoActual = String(actual?.estado || "").trim().toLowerCase();
+            const estadoNuevo = String(cuota?.estado || "").trim().toLowerCase();
+
+            if (estadoActual === "pagado") {
+              return;
+            }
+
+            if (estadoNuevo === "pagado") {
               cuotasDedupe.set(key, cuota);
               return;
             }
@@ -747,10 +756,11 @@ export default function CajaPage() {
       render: (estado: string) => {
         const estadoNormalizado = String(estado || "").trim().toLowerCase();
         const esVencido = estadoNormalizado === "vencido";
+        const esPagado = estadoNormalizado === "pagado";
 
         return (
-          <Tag color={esVencido ? "red" : "orange"}>
-            {esVencido ? "Vencido" : "Pendiente"}
+          <Tag color={esPagado ? "green" : esVencido ? "red" : "orange"}>
+            {esPagado ? "Pagado" : esVencido ? "Vencido" : "Pendiente"}
           </Tag>
         );
       },
@@ -761,6 +771,12 @@ export default function CajaPage() {
     selectedRowKeys: cuotasSeleccionadas,
     onChange: (selectedKeys: React.Key[]) => {
       setCuotasSeleccionadas(selectedKeys as string[]);
+    },
+    getCheckboxProps: (record: Cuota) => {
+      const estadoNormalizado = String(record?.estado || "").trim().toLowerCase();
+      return {
+        disabled: estadoNormalizado === "pagado" || estadoNormalizado === "cancelado",
+      };
     },
   };
 
