@@ -1411,11 +1411,33 @@ function enforceCourseInfoBlocks(text: string): string {
   return output;
 }
 
+function enforceReadableLineBreaks(text: string): string {
+  if (!text) return "";
+
+  let output = String(text);
+  const hasEmojiList = /(incluye\s*:|incluye)\s*(👚|📃|🎉|🎓|🧴|💅|📌|✅)/i.test(output);
+
+  if (hasEmojiList) {
+    output = output
+      .replace(/(incluye\s*:?)\s*(?=(👚|📃|🎉|🎓|🧴|💅|📌|✅))/gi, "$1\n\n")
+      .replace(/\s*(👚|📃|🎉|🎓|🧴|💅|📌|✅)\s*/g, "\n$1 ");
+  }
+
+  output = output
+    .replace(/([.!?])\s+(¿)/g, "$1\n\n$2")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+
+  return output;
+}
+
 function formatFinalWhatsAppResponse(text: string): string {
   let output = cleanMarkdownForWhatsApp(text || "");
   output = formatPrices(output);
   output = removeCOPCurrency(output);
   output = enforceCourseInfoBlocks(output);
+  output = enforceReadableLineBreaks(output);
   return output;
 }
 
