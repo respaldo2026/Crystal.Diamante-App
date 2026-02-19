@@ -295,8 +295,33 @@ export default function CajaPage() {
 
           if (cuotasError) throw cuotasError;
 
+          const cuotasPagadasPorMatricula = new Map<string, Set<number>>();
+          (cuotasData || []).forEach((cuota: any) => {
+            const matriculaId = String(cuota?.matricula_id || "");
+            const numero = Number(cuota?.numero_cuota);
+            if (!matriculaId || !Number.isFinite(numero) || numero <= 0) return;
+
+            const estadoNormalizado = String(cuota?.estado || "").trim().toLowerCase();
+            if (estadoNormalizado === "pagado") {
+              const actuales = cuotasPagadasPorMatricula.get(matriculaId) || new Set<number>();
+              actuales.add(numero);
+              cuotasPagadasPorMatricula.set(matriculaId, actuales);
+            }
+          });
+
           const cuotasPendientes = (cuotasData || []).filter((cuota: any) => {
             const estadoNormalizado = String(cuota?.estado || "").trim().toLowerCase();
+            const matriculaId = String(cuota?.matricula_id || "");
+            const numero = Number(cuota?.numero_cuota);
+
+            if (
+              matriculaId &&
+              Number.isFinite(numero) &&
+              numero > 0 &&
+              cuotasPagadasPorMatricula.get(matriculaId)?.has(numero)
+            ) {
+              return false;
+            }
 
             if (!estadoNormalizado) {
               return true;
@@ -334,8 +359,28 @@ export default function CajaPage() {
             };
           });
 
-          const cuotasPendientesRegistradas = new Map<string, Set<number>>();
+          const cuotasNormalizadasDedupe = new Map<string, Cuota>();
           cuotasNormalizadas.forEach((cuota) => {
+            const matriculaId = String(cuota?.matricula_id || "");
+            const numero = Number(cuota?.numero_cuota || 0);
+            const key = `${matriculaId}:${numero}`;
+            const actual = cuotasNormalizadasDedupe.get(key);
+            if (!actual) {
+              cuotasNormalizadasDedupe.set(key, cuota);
+              return;
+            }
+
+            const estadoActual = String(actual?.estado || "").trim().toLowerCase();
+            const estadoNuevo = String(cuota?.estado || "").trim().toLowerCase();
+            if (estadoActual !== "vencido" && estadoNuevo === "vencido") {
+              cuotasNormalizadasDedupe.set(key, cuota);
+            }
+          });
+
+          const cuotasNormalizadasFinal = Array.from(cuotasNormalizadasDedupe.values());
+
+          const cuotasPendientesRegistradas = new Map<string, Set<number>>();
+          cuotasNormalizadasFinal.forEach((cuota) => {
             const matriculaId = String(cuota?.matricula_id || "");
             const numero = Number(cuota?.numero_cuota);
             if (!matriculaId || !Number.isFinite(numero) || numero <= 0) return;
@@ -355,7 +400,7 @@ export default function CajaPage() {
               Number(matricula.precio_mensualidad || 0) ||
               Number(matricula.programa_precio_mensualidad || 0) ||
               Number(
-                cuotasNormalizadas.find((q) => q.matricula_id === matricula.id && Number(q.numero_cuota) > 0)?.monto || 0
+                cuotasNormalizadasFinal.find((q) => q.matricula_id === matricula.id && Number(q.numero_cuota) > 0)?.monto || 0
               );
 
             for (let i = 1; i <= totalEsperado; i += 1) {
@@ -374,7 +419,7 @@ export default function CajaPage() {
             }
           });
 
-          const cuotasConVirtuales = [...cuotasNormalizadas, ...cuotasVirtuales].sort((a, b) => {
+          const cuotasConVirtuales = [...cuotasNormalizadasFinal, ...cuotasVirtuales].sort((a, b) => {
             const fechaA = a.fecha_vencimiento ? dayjs(a.fecha_vencimiento) : null;
             const fechaB = b.fecha_vencimiento ? dayjs(b.fecha_vencimiento) : null;
 
