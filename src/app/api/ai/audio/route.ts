@@ -324,11 +324,11 @@ function extractAudioInputsFromBody(body: any): { mediaId: string; audioUrl: str
 /**
  * Obtener historial reciente de conversación
  */
-async function getConversationHistory(supabase: any, phone: string, limit = 5): Promise<Array<{user: string, agent: string}>> {
+async function getConversationHistory(supabase: any, phone: string, limit = 5): Promise<Array<{user: string, agent: string, created_at?: string | null}>> {
   try {
     const { data, error } = await supabase
       .from("agent_conversations")
-      .select("user_message, agent_response")
+      .select("user_message, agent_response, created_at")
       .eq("phone_number", phone)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -341,6 +341,7 @@ async function getConversationHistory(supabase: any, phone: string, limit = 5): 
     return (data || []).reverse().map((row: any) => ({
       user: row.user_message,
       agent: row.agent_response,
+      created_at: row.created_at,
     }));
   } catch (err) {
     console.error("[getConversationHistory] Error:", err);
@@ -536,14 +537,18 @@ async function searchKnowledge(supabase: any, query: string, limit = 3): Promise
 /**
  * Detectar si ya hay un saludo en el historial de conversación
  */
-function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: string}>): boolean {
+function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: string, created_at?: string | null}>): boolean {
   if (!conversationHistory || conversationHistory.length === 0) return false;
-  
-  // Palabras de saludo comunes
-  const greetings = /\b(hola|buenos|buenas|bienvenido|bienvenida|hallo|que\s+tal|hey|saludos|encantado|encantada)\b/i;
-  
-  // Revisar todas las respuestas del agente en el historial
-  return conversationHistory.some(msg => greetings.test(msg.agent));
+
+  const greetings = /\b(hola|buen(?:os|as)?(?:\s+d[ií]as|\s+tardes|\s+noches)?|bienvenid[oa]|que\s+tal|hey|saludos|encantad[oa])\b/i;
+  const today = getColombiaNowDate().toISOString().slice(0, 10);
+
+  return conversationHistory.some((msg) => {
+    const text = String(msg.agent || "");
+    if (!greetings.test(text)) return false;
+    if (!msg.created_at) return true;
+    return String(msg.created_at).slice(0, 10) === today;
+  });
 }
 
 function stripRepeatedGreetingPrefix(text: string, hasHistory: boolean): string {
@@ -631,7 +636,7 @@ function buildAgentPrompt(
   settings: any,
   userMessage: string,
   knowledgeChunks: string[],
-  conversationHistory: Array<{user: string, agent: string}> = [],
+  conversationHistory: Array<{user: string, agent: string, created_at?: string | null}> = [],
   coursesContext: string = "",
   contextualDirective: string = ""
 ): string {
@@ -648,11 +653,14 @@ function buildAgentPrompt(
   // Detectar intención de compra/cierre
   const showsBuyingIntent = detectBuyingIntent(userMessage, conversationHistory);
 
+  const nowInColombia = getColombiaNowDate();
+  const expectedSlotGreeting = getTimeSlotGreeting(nowInColombia.getHours());
+
   const greetingRule = alreadyGreeted
-    ? "YA HAS SALUDADO EN ESTA CONVERSACION. No repitas saludos."
+    ? `YA SALUDASTE HOY (${expectedSlotGreeting}). No repitas saludos en este mismo día.`
     : greeting
-    ? `Usa este saludo exacto al iniciar: "${greeting}".`
-    : "Saluda SOLO UNA VEZ al inicio del contacto. Si ya hablaron, ve directo al punto.";
+    ? `Saluda SOLO UNA VEZ por día y con franja horaria coherente (${expectedSlotGreeting}). Si vas a saludar, usa este saludo base: "${greeting}". Luego responde sin volver a saludar.`
+    : `Saluda SOLO UNA VEZ por día con franja horaria coherente (${expectedSlotGreeting}). Luego responde sin volver a saludar.`;
 
   let prompt = applyTemplate(systemPromptTemplate, {
     persona_name: persona,
@@ -1280,7 +1288,49 @@ function sanitizeAgentVisibleResponse(rawText: string, fallbackResponse: string)
     .replace(/[ \t]{2,}/g, " ")
     .trim();
 
-  return output || fallback;
+  return enforceParagraphBlocks(output || fallback) || fallback;
+}
+
+function getColombiaNowDate(): Date {
+  const colombiaIso = new Date().toLocaleString("sv-SE", {
+    timeZone: "America/Bogota",
+    hour12: false,
+  });
+  return new Date(colombiaIso.replace(" ", "T"));
+}
+
+function getTimeSlotGreeting(hour: number): "Buenos días" | "Buenas tardes" | "Buenas noches" {
+  if (hour >= 5 && hour < 12) return "Buenos días";
+  if (hour >= 12 && hour < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+function enforceParagraphBlocks(text: string): string {
+  const input = (text || "").trim();
+  if (!input) return "";
+
+  const hasBlockBreaks = /\n\n/.test(input);
+  if (hasBlockBreaks) {
+    return input
+      .split(/\n{2,}/)
+      .map((block) => block.trim())
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  const singleLine = input.replace(/\n+/g, " ").replace(/\s{2,}/g, " ").trim();
+  if (!singleLine) return "";
+
+  const sentences = singleLine.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [singleLine];
+  if (sentences.length <= 2) return sentences.join(" ").trim();
+
+  const blocks: string[] = [];
+  for (let i = 0; i < sentences.length; i += 2) {
+    const block = sentences.slice(i, i + 2).join(" ").trim();
+    if (block) blocks.push(block);
+  }
+
+  return blocks.join("\n\n").trim();
 }
 
 function normalizeForComparison(text: string): string {
@@ -1583,7 +1633,7 @@ export async function POST(req: NextRequest) {
     const fallbackResponse = settings?.fallback_response || "Déjame confirmarlo y te respondo en breve.";
     agentResponse = stripRepeatedGreetingPrefix(
       sanitizeAgentVisibleResponse(agentResponse, fallbackResponse),
-      history.length > 0
+      hasGreetingInHistory(history)
     );
 
     // 9.5. IMPORTANTE: Eliminar emojis de la respuesta antes de convertir a audio
