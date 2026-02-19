@@ -334,12 +334,23 @@ export default function CajaPage() {
             };
           });
 
+          const cuotasPendientesRegistradas = new Map<string, Set<number>>();
+          cuotasNormalizadas.forEach((cuota) => {
+            const matriculaId = String(cuota?.matricula_id || "");
+            const numero = Number(cuota?.numero_cuota);
+            if (!matriculaId || !Number.isFinite(numero) || numero <= 0) return;
+            const existentes = cuotasPendientesRegistradas.get(matriculaId) || new Set<number>();
+            existentes.add(numero);
+            cuotasPendientesRegistradas.set(matriculaId, existentes);
+          });
+
           const cuotasVirtuales: Cuota[] = [];
           matriculasFormat.forEach((matricula) => {
             const totalEsperado = totalCuotasEsperadasPorMatricula.get(matricula.id) || 0;
             if (totalEsperado <= 0) return;
 
             const cuotasRegistradas = cuotasRegistradasPorMatricula.get(matricula.id) || new Set<number>();
+            const cuotasPendientesSet = cuotasPendientesRegistradas.get(matricula.id) || new Set<number>();
             const montoBase =
               Number(matricula.precio_mensualidad || 0) ||
               Number(matricula.programa_precio_mensualidad || 0) ||
@@ -348,7 +359,7 @@ export default function CajaPage() {
               );
 
             for (let i = 1; i <= totalEsperado; i += 1) {
-              if (cuotasRegistradas.has(i)) continue;
+              if (cuotasRegistradas.has(i) || cuotasPendientesSet.has(i)) continue;
 
               cuotasVirtuales.push({
                 id: `virtual-${matricula.id}-${i}`,
@@ -376,7 +387,24 @@ export default function CajaPage() {
             return Number(a.numero_cuota || 0) - Number(b.numero_cuota || 0);
           });
 
-          setCuotas(cuotasConVirtuales);
+          const cuotasDedupe = new Map<string, Cuota>();
+          cuotasConVirtuales.forEach((cuota) => {
+            const matriculaId = String(cuota?.matricula_id || "");
+            const numero = Number(cuota?.numero_cuota || 0);
+            const key = `${matriculaId}:${numero}`;
+            const actual = cuotasDedupe.get(key);
+
+            if (!actual) {
+              cuotasDedupe.set(key, cuota);
+              return;
+            }
+
+            if (actual.es_virtual && !cuota.es_virtual) {
+              cuotasDedupe.set(key, cuota);
+            }
+          });
+
+          setCuotas(Array.from(cuotasDedupe.values()));
         } else {
           setCuotas([]);
         }
