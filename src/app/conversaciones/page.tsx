@@ -608,31 +608,6 @@ export default function ConversacionesPage() {
     },
     {
       title: (
-        <Tooltip title="Última respuesta del agente">
-          <span>🤖</span>
-        </Tooltip>
-      ),
-      dataIndex: "last_agent_response",
-      key: "last_agent_response",
-      render: (text: string) => (
-        <Tooltip title={formatAgentResponse(text || "") }>
-          <span
-            style={{
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-              lineHeight: 1.25,
-            }}
-          >
-            {formatAgentResponse(compactPreview(text, 130))}
-          </span>
-        </Tooltip>
-      ),
-      width: 250,
-    },
-    {
-      title: (
         <Tooltip title="Cantidad de mensajes">
           <span>💬</span>
         </Tooltip>
