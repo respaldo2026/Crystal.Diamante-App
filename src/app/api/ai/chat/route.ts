@@ -135,6 +135,47 @@ function removeCOPCurrency(text: string): string {
     .trim();
 }
 
+function enforceCourseInfoBlocks(text: string): string {
+  if (!text) return "";
+
+  let output = String(text)
+    .replace(/\*{2,}/g, "*")
+    .replace(/(curso)\s+\*([^*\n]+)\*/gi, "$1 $2")
+    .replace(/💎\s*\*([^*\n]+)\*/g, "💎 $1")
+    .replace(/📅\s*([^\n*]+)\*([^\n*]+)\*/g, "📅 $1$2")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const hasCoursePattern = /(💎|pr[oó]ximo\s+inicio|horario|inscripci[oó]n|mensualidad|s[ií]guenos|instagram)/i.test(output);
+  if (!hasCoursePattern) {
+    return output;
+  }
+
+  output = output
+    .replace(/:\s*(?=💎)/g, ":\n\n")
+    .replace(/\s*(🗓️\s*Pr[oó]ximo\s+inicio:?)/gi, "\n$1")
+    .replace(/\s*(📅\s*)/g, "\n\n$1")
+    .replace(/\s*(⏰\s*Horario:)/gi, "\n$1")
+    .replace(/\s*(💰\s*Inscripci[oó]n:)/gi, "\n$1")
+    .replace(/\s*(💰\s*Mensualidad:)/gi, "\n\n$1")
+    .replace(/\s*(📲\s*S[ií]guenos)/gi, "\n\n$1")
+    .replace(/\s*(¿Te\s+gustar[ií]a[^\n?]*\?\s*😊?)/i, "\n\n$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+
+  return output;
+}
+
+function formatFinalWhatsAppResponse(text: string): string {
+  let output = cleanMarkdownForWhatsApp(text || "");
+  output = formatPrices(output);
+  output = removeCOPCurrency(output);
+  output = enforceCourseInfoBlocks(output);
+  return output;
+}
+
 /**
  * Validar entrada del usuario antes de procesar
  */
@@ -1748,9 +1789,7 @@ export async function POST(req: NextRequest) {
       await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
 
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
-      let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
-      whatsappResponse = formatPrices(whatsappResponse);
-      whatsappResponse = removeCOPCurrency(whatsappResponse);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       return NextResponse.json({
@@ -1779,9 +1818,7 @@ export async function POST(req: NextRequest) {
       await saveConversation(supabase, phone || "unknown", message, truncatedNotFound);
 
       const sanitizedResponse = sanitizeForJSON(truncatedNotFound);
-      let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
-      whatsappResponse = formatPrices(whatsappResponse);
-      whatsappResponse = removeCOPCurrency(whatsappResponse);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
       return NextResponse.json({
         ok: true,
@@ -1826,9 +1863,7 @@ export async function POST(req: NextRequest) {
       await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
 
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
-      let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
-      whatsappResponse = formatPrices(whatsappResponse);
-      whatsappResponse = removeCOPCurrency(whatsappResponse);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
@@ -1851,9 +1886,7 @@ export async function POST(req: NextRequest) {
       await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
 
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
-      let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
-      whatsappResponse = formatPrices(whatsappResponse);
-      whatsappResponse = removeCOPCurrency(whatsappResponse);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
@@ -1948,13 +1981,7 @@ export async function POST(req: NextRequest) {
     const sanitizedResponse = sanitizeForJSON(truncatedResponse);
     
     // Limpiar markdown para WhatsApp (**texto** → *texto*)
-    let whatsappResponse = cleanMarkdownForWhatsApp(sanitizedResponse);
-    
-    // Formatear precios con separador de mil
-    whatsappResponse = formatPrices(whatsappResponse);
-    
-    // Remover la palabra COP de precios
-    whatsappResponse = removeCOPCurrency(whatsappResponse);
+    const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
     
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
     const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";

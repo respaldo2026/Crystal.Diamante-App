@@ -1236,6 +1236,69 @@ function sanitizeForJSON(text: string | null | undefined): string {
     .replace(/\r/g, '\n');
 }
 
+function cleanMarkdownForWhatsApp(text: string): string {
+  if (!text) return "";
+  return text.replace(/\*\*([^*]+)\*\*/g, "*$1*");
+}
+
+function formatPrices(text: string): string {
+  if (!text) return "";
+  return text.replace(/\$(\d+)(?![\d,.])/g, (match, number) => {
+    const num = parseInt(number, 10);
+    if (isNaN(num)) return match;
+    return `$${num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+  });
+}
+
+function removeCOPCurrency(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/[ \t]*COP\b/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function enforceCourseInfoBlocks(text: string): string {
+  if (!text) return "";
+
+  let output = String(text)
+    .replace(/\*{2,}/g, "*")
+    .replace(/(curso)\s+\*([^*\n]+)\*/gi, "$1 $2")
+    .replace(/💎\s*\*([^*\n]+)\*/g, "💎 $1")
+    .replace(/📅\s*([^\n*]+)\*([^\n*]+)\*/g, "📅 $1$2")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const hasCoursePattern = /(💎|pr[oó]ximo\s+inicio|horario|inscripci[oó]n|mensualidad|s[ií]guenos|instagram)/i.test(output);
+  if (!hasCoursePattern) return output;
+
+  output = output
+    .replace(/:\s*(?=💎)/g, ":\n\n")
+    .replace(/\s*(🗓️\s*Pr[oó]ximo\s+inicio:?)/gi, "\n$1")
+    .replace(/\s*(📅\s*)/g, "\n\n$1")
+    .replace(/\s*(⏰\s*Horario:)/gi, "\n$1")
+    .replace(/\s*(💰\s*Inscripci[oó]n:)/gi, "\n$1")
+    .replace(/\s*(💰\s*Mensualidad:)/gi, "\n\n$1")
+    .replace(/\s*(📲\s*S[ií]guenos)/gi, "\n\n$1")
+    .replace(/\s*(¿Te\s+gustar[ií]a[^\n?]*\?\s*😊?)/i, "\n\n$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+
+  return output;
+}
+
+function formatFinalWhatsAppResponse(text: string): string {
+  let output = cleanMarkdownForWhatsApp(text || "");
+  output = formatPrices(output);
+  output = removeCOPCurrency(output);
+  output = enforceCourseInfoBlocks(output);
+  return output;
+}
+
 function sanitizeAgentVisibleResponse(rawText: string, fallbackResponse: string): string {
   const fallback = (fallbackResponse || "Déjame confirmarlo y te respondo en breve.").trim();
   if (!rawText) return fallback;
@@ -1553,9 +1616,10 @@ export async function POST(req: NextRequest) {
 
     if (studentIdentification && !studentContext && hasStudentAccountIntent(transcription)) {
       const notFoundMessage = `No encontré una estudiante con identificación ${studentIdentification}. Verifica el número de cédula y me lo vuelves a enviar.`;
-      await saveConversation(supabase, resolvedPhone, transcription, notFoundMessage, transcription);
+      const finalNotFound = formatFinalWhatsAppResponse(notFoundMessage);
+      await saveConversation(supabase, resolvedPhone, transcription, finalNotFound, transcription);
 
-      const cleaned = cleanForTTS(notFoundMessage);
+      const cleaned = cleanForTTS(finalNotFound);
       let audioUrl = "";
       try {
         if (process.env.ELEVENLABS_API_KEY) {
@@ -1571,7 +1635,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ok: true,
         transcription: sanitizeForJSON(transcription) || "",
-        agent_response: sanitizeForJSON(notFoundMessage) || "",
+        agent_response: sanitizeForJSON(finalNotFound) || "",
         audio_url: audioUrl || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
         historyLength: Number(history.length) || 0,
@@ -1668,6 +1732,7 @@ export async function POST(req: NextRequest) {
       sanitizeAgentVisibleResponse(agentResponse, fallbackResponse),
       hasGreetingInHistory(history)
     );
+    agentResponse = formatFinalWhatsAppResponse(agentResponse);
 
     // 9.5. IMPORTANTE: Eliminar emojis de la respuesta antes de convertir a audio
     const agentResponseClean = cleanForTTS(agentResponse);
