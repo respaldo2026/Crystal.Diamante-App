@@ -1085,7 +1085,7 @@ function buildIntentFocusedDirectResponse(
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
 
-    return `✨ *${detectedProgram.nombre}*\n\n✅ Formación práctica desde cero\n⏳ *Duración:* ${duration}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres conocer el precio de la inscripcion y mensualida?`;
+    return `✨ *${detectedProgram.nombre}*\n\n✅ Formación práctica desde cero\n⏳ *Duración:* ${duration}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres conocer el precio de la inscripción y mensualidad?`;
   }
 
   if (intent === "temario") {
@@ -1095,10 +1095,10 @@ function buildIntentFocusedDirectResponse(
       const explicitClasses = Number(detectedProgram?.total_clases ?? 0);
       const totalClasses = explicitClasses > 0 ? explicitClasses : totalCycles * 4;
       const lines = highlights.map((item, index) => `🔹 *Ciclo ${index + 1}:* ${item}`).join("\n");
-      return `📚 *Temario de ${detectedProgram.nombre}*\n\n🧩 Este programa tiene *${totalCycles} ciclos* y *${totalClasses} clases*.\n✨ Trataremos:\n${lines}\n\n💸 ¿Quieres conocer el precio de la inscripcion y mensualida?`;
+      return `📚 *Temario de ${detectedProgram.nombre}*\n\n🧩 Este programa tiene *${totalCycles} ciclos* y *${totalClasses} clases*.\n✨ Trataremos:\n${lines}\n\n💸 ¿Quieres conocer el precio de la inscripción y mensualidad?`;
     }
 
-    return `📚 *Temario de ${detectedProgram.nombre}*\n\nTe comparto el contenido por *ciclos* de forma breve para que sea fácil de leer.\n\n¿Quieres conocer el precio de la inscripcion y mensualida?`;
+    return `📚 *Temario de ${detectedProgram.nombre}*\n\nTe comparto el contenido por *ciclos* de forma breve para que sea fácil de leer.\n\n¿Quieres conocer el precio de la inscripción y mensualidad?`;
   }
 
   if (intent === "precio") {
