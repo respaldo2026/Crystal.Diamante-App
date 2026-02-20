@@ -950,6 +950,39 @@ function isCourseInfoRequest(message: string): boolean {
   return /\b(informacion del curso|quiero informacion|quiero info|dame informacion|cuentame del curso|sobre el curso|curso de)\b/i.test(text);
 }
 
+function hasProgramCorrectionSignal(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(no es|no era|no hablo de|no me refiero|no estoy preguntando por|eso no es|ese no es|esa no es)\b/i.test(text);
+}
+
+function extractCorrectedProgramName(message: string): string | null {
+  const raw = String(message || "").trim();
+  if (!raw) return null;
+
+  const patterns = [
+    /(?:eso|ese|esa|esto)?\s*no\s+es\s+([a-záéíóúñ0-9\s]{3,60})/i,
+    /no\s+me\s+refiero\s+a\s+([a-záéíóúñ0-9\s]{3,60})/i,
+    /no\s+hablo\s+de\s+([a-záéíóúñ0-9\s]{3,60})/i,
+    /no\s+estoy\s+preguntando\s+por\s+([a-záéíóúñ0-9\s]{3,60})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (!match?.[1]) continue;
+
+    const candidate = match[1]
+      .replace(/[.,;:!?].*$/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (candidate.length >= 3) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function extractTemarioHighlights(rawTemario: string, maxItems?: number): string[] {
   const text = String(rawTemario || "").trim();
   if (!text) return [];
@@ -1048,6 +1081,11 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (!detectedProgram) {
+    const correctedProgram = extractCorrectedProgramName(message);
+    if (correctedProgram) {
+      return `Entiendo, buscas *${correctedProgram}*. Gracias por corregirme 🙏\n\nAhora mismo no lo tengo identificado en los programas cargados. ¿Quieres que te comparta las opciones disponibles para elegir la correcta?`;
+    }
+
     if (asksGeneralInfo) {
       const fallbackCourse = courses?.[0];
       const fallbackName = fallbackCourse?.programa_nombre || fallbackCourse?.nombre || "nuestros cursos de belleza";
@@ -1454,6 +1492,8 @@ function resolveProgramFromContext(
 ): any | null {
   const directProgram = detectProgramFromMessage(userMessage, programs);
   if (directProgram) return directProgram;
+
+  if (hasProgramCorrectionSignal(userMessage)) return null;
 
   const isLikelyFollowUp = /\b(ese|esa|ese\s+curso|esa\s+carrera|horario|precio|cuanto|cuando|inscripcion|mensualidad|cupos|duracion)\b/i.test(
     userMessage
@@ -2122,7 +2162,9 @@ export async function POST(req: NextRequest) {
       ? await getCoursesByProgram(detectedProgram.id)
       : await getCoursesForQuery(effectiveTranscription, programs);
 
-    if (!detectedProgram && courses.length > 0) {
+    const hasCorrectionSignal = hasProgramCorrectionSignal(effectiveTranscription);
+
+    if (!detectedProgram && !hasCorrectionSignal && courses.length > 0) {
       const uniqueProgramIds = Array.from(new Set(courses.map((c) => c.programa_id).filter(Boolean)));
       if (uniqueProgramIds.length === 1) {
         const inferred = programs.find((p) => p.id === uniqueProgramIds[0]) || null;
