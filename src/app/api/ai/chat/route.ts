@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
+import { getAgentImageSuggestion, withMediaSuggestion } from "@/utils/agent-media-suggestions";
 import { 
   getProgramsForAgent, 
   getCoursesForQuery, 
@@ -2445,6 +2446,8 @@ export async function POST(req: NextRequest) {
     const history = await getConversationHistory(supabase, phone || "unknown", 5);
     const effectiveMessage = enrichMessageWithFollowUpContext(message, history);
     const preferredStudentName = resolvePreferredStudentName(message, history);
+    const detectedIntent = detectUserIntent(effectiveMessage);
+    let mediaSuggestion: Awaited<ReturnType<typeof getAgentImageSuggestion>> = null;
 
     const linkAccessResponse = await buildLinkAccessDirectResponse(supabase, message, history);
     if (linkAccessResponse) {
@@ -2457,7 +2460,7 @@ export async function POST(req: NextRequest) {
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
-      return NextResponse.json({
+      return NextResponse.json(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -2465,7 +2468,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      });
+      }, mediaSuggestion));
     }
 
     // INFORMACIÓN JERÁRQUICA
@@ -2485,7 +2488,7 @@ export async function POST(req: NextRequest) {
       const sanitizedResponse = sanitizeForJSON(truncatedNotFound);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
-      return NextResponse.json({
+      return NextResponse.json(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
@@ -2493,7 +2496,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      });
+      }, mediaSuggestion));
     }
 
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
@@ -2523,6 +2526,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    mediaSuggestion = await getAgentImageSuggestion(supabase, {
+      message: effectiveMessage,
+      intent: detectedIntent,
+      programId: detectedProgram?.id || null,
+    });
+
     const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext);
     if (directStudentResponse) {
       const truncatedResponse = truncateResponse(directStudentResponse, 1000);
@@ -2535,7 +2544,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json({
+      return NextResponse.json(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -2543,7 +2552,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      });
+      }, mediaSuggestion));
     }
 
     if (shouldUseTodayClassDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -2558,7 +2567,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json({
+      return NextResponse.json(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -2566,7 +2575,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      });
+      }, mediaSuggestion));
     }
 
     if (shouldUseNextGroupDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -2581,7 +2590,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json({
+      return NextResponse.json(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -2589,7 +2598,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      });
+      }, mediaSuggestion));
     }
     
     // 3. Obtener información de la academia (dirección, redes, contacto)
@@ -2637,7 +2646,7 @@ export async function POST(req: NextRequest) {
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
-      return NextResponse.json({
+      return NextResponse.json(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
@@ -2645,7 +2654,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      });
+      }, mediaSuggestion));
     }
     
     // 4. Obtener medios de pago disponibles
@@ -2734,7 +2743,7 @@ export async function POST(req: NextRequest) {
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
     const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-    return NextResponse.json({
+    return NextResponse.json(withMediaSuggestion({
       ok: true,
       response: whatsappResponse || "",
       agent: sanitizedAgent || "Dany",
@@ -2742,7 +2751,7 @@ export async function POST(req: NextRequest) {
       historyLength: Number(history.length) || 0,
       programDetected: sanitizedProgram || null,
       rateLimitRemaining: Number(rateLimit.remaining) || 0,
-    });
+    }, mediaSuggestion));
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);
     const errorMessage = error?.message || "Error generando respuesta";

@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
+import { getAgentImageSuggestion, withMediaSuggestion } from "@/utils/agent-media-suggestions";
 import { 
   getProgramsForAgent, 
   getCoursesForQuery, 
@@ -2267,6 +2268,8 @@ export async function POST(req: NextRequest) {
     const history = await getConversationHistory(supabase, resolvedPhone, 5);
     const effectiveTranscription = enrichMessageWithFollowUpContext(transcription, history);
     const preferredStudentName = resolvePreferredStudentName(transcription, history);
+    const detectedIntent = detectUserIntent(effectiveTranscription);
+    let mediaSuggestion: Awaited<ReturnType<typeof getAgentImageSuggestion>> = null;
 
     // 7.5. Obtener información JERÁRQUICA: todos los programas (primaria)
     console.log("[POST /api/ai/audio] Leyendo programas disponibles...");
@@ -2278,6 +2281,12 @@ export async function POST(req: NextRequest) {
       : null;
 
     if (studentIdentification && !studentContext && hasStudentAccountIntent(effectiveTranscription)) {
+      mediaSuggestion = await getAgentImageSuggestion(supabase, {
+        message: effectiveTranscription,
+        intent: detectedIntent,
+        programId: null,
+      });
+
       const notFoundMessage = `No encontré una estudiante con identificación ${studentIdentification}. Verifica el número de cédula y me lo vuelves a enviar.`;
       const finalNotFound = formatFinalWhatsAppResponse(notFoundMessage);
       await saveConversation(supabase, resolvedPhone, transcription, finalNotFound, transcription);
@@ -2295,14 +2304,14 @@ export async function POST(req: NextRequest) {
         console.warn("[POST /api/ai/audio] Error en TTS para no-encontrado:", ttsErr);
       }
 
-      return NextResponse.json({
+      return NextResponse.json(withMediaSuggestion({
         ok: true,
         transcription: sanitizeForJSON(transcription) || "",
         agent_response: sanitizeForJSON(finalNotFound) || "",
         audio_url: audioUrl || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
         historyLength: Number(history.length) || 0,
-      });
+      }, mediaSuggestion));
     }
 
     // 7.6. Obtener cursos/grupos basado en lo que pregunta el usuario
@@ -2332,6 +2341,12 @@ export async function POST(req: NextRequest) {
         courses = await getCoursesByProgram(inferredFromStudent.id);
       }
     }
+
+    mediaSuggestion = await getAgentImageSuggestion(supabase, {
+      message: effectiveTranscription,
+      intent: detectedIntent,
+      programId: detectedProgram?.id || null,
+    });
 
     const directTodayResponse = shouldUseTodayClassDirectResponse(effectiveTranscription, detectedProgram, programs, history)
       ? buildTodayClassDirectResponse(detectedProgram, courses, new Date())
@@ -2472,14 +2487,14 @@ export async function POST(req: NextRequest) {
     const sanitizedTranscription = sanitizeForJSON(transcription);
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
 
-    return NextResponse.json({
+    return NextResponse.json(withMediaSuggestion({
       ok: true,
       transcription: sanitizedTranscription || "",
       agent_response: sanitizedResponse || "",
       audio_url: audioUrl || "",
       agent: sanitizedAgent || "Dany",
       historyLength: Number(history.length) || 0,
-    });
+    }, mediaSuggestion));
   } catch (error: any) {
     console.error("[POST /api/ai/audio] Error:", error);
     const errorMessage = error?.message || "Error procesando audio";

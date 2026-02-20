@@ -90,17 +90,30 @@ El endpoint `/api/ai/chat` devuelve:
   "ok": true,
   "response": "¡Hola! Soy Dany, asistente de la Academia...",
   "agent": "Dany",
-  "knowledgeUsed": true
+  "knowledgeUsed": true,
+  "media_suggestion": {
+    "type": "image",
+    "mediaUrl": "https://...",
+    "caption": "Así vivimos las clases en Academia Crystal ✨",
+    "sendBeforeText": true,
+    "intent": "horario"
+  },
+  "media_send_order": "image_then_text"
 }
 ```
 
 **En el siguiente módulo (enviar WhatsApp), usa:**
 - Variable para el mensaje: `{{2.response}}`
 - Donde `2` es el número del módulo HTTP que llamó a `/api/ai/chat`
+- Si viene `{{2.media_suggestion.mediaUrl}}`, enviar primero imagen y luego el texto
 
 ---
 
 ### Paso 4: Enviar Respuesta por WhatsApp
+
+**Orden recomendado (para reforzar confianza):**
+1. Si existe `{{2.media_suggestion.mediaUrl}}` → enviar imagen (`type: image`)
+2. Luego enviar el texto normal (`type: text`, `message: {{2.response}}`)
 
 **HTTP Request - Enviar:**
 
@@ -128,6 +141,18 @@ POST
   "phone": "{{1.from}}",
   "type": "text",
   "message": "{{2.response}}"
+}
+```
+
+**HTTP Request adicional (imagen opcional):**
+
+**Body:**
+```json
+{
+  "phone": "{{1.from}}",
+  "type": "image",
+  "mediaUrl": "{{2.media_suggestion.mediaUrl}}",
+  "caption": "{{2.media_suggestion.caption}}"
 }
 ```
 
