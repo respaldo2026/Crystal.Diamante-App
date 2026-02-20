@@ -847,6 +847,79 @@ function formatDateLong(value: string | null | undefined): string {
   });
 }
 
+function extractExplicitStudentName(message: string): string | null {
+  const text = String(message || "").trim();
+  if (!text) return null;
+
+  const match = text.match(/\b(?:soy|me\s+llamo|mi\s+nombre\s+es)\s+([a-záéíóúñ]+(?:\s+[a-záéíóúñ]+){0,2})\b/i);
+  if (!match?.[1]) return null;
+
+  const rawName = match[1]
+    .trim()
+    .replace(/[^a-záéíóúñ\s]/gi, "")
+    .replace(/\s+/g, " ");
+
+  if (!rawName || rawName.length < 2) return null;
+  return rawName
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function resolvePreferredStudentName(
+  userMessage: string,
+  history: Array<{ user: string; agent: string }>
+): string | null {
+  const current = extractExplicitStudentName(userMessage);
+  if (current) return current;
+
+  for (let i = history.length - 1; i >= 0; i--) {
+    const fromHistory = extractExplicitStudentName(history[i]?.user || "");
+    if (fromHistory) return fromHistory;
+  }
+
+  return null;
+}
+
+function buildNameSafetyDirective(preferredName: string | null): string {
+  return preferredName
+    ? `NOMBRE VALIDADO DEL USUARIO: "${preferredName}". Si lo mencionas, usa SOLO ese nombre exacto.`
+    : 'No hay nombre validado del usuario. NO inventes ni asumas nombres propios; responde sin llamar por nombre.';
+}
+
+function buildUpcomingStartDirective(detectedProgram: any | null, courses: any[]): string {
+  if (!detectedProgram) {
+    return 'Para consultas de inicio, si no hay programa detectado pide una aclaración breve sin inventar fechas.';
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
+  const relatedCourses = (courses || []).filter((course) => {
+    const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+    const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
+    return Boolean(sameProgramId || sameProgramName);
+  });
+
+  const upcoming = relatedCourses
+    .filter((course) => {
+      if (!course?.fecha_inicio) return false;
+      const start = new Date(course.fecha_inicio);
+      if (Number.isNaN(start.getTime())) return false;
+      start.setHours(0, 0, 0, 0);
+      return start >= today;
+    })
+    .sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime());
+
+  if (!upcoming.length) {
+    return `PROXIMO INICIO VALIDADO para ${detectedProgram.nombre}: no hay fecha futura confirmada. Si preguntan por próximo inicio, responde "Por confirmar".`;
+  }
+
+  const next = upcoming[0];
+  return `PROXIMO INICIO VALIDADO para ${detectedProgram.nombre}: ${formatDateLong(next.fecha_inicio) || formatDateShort(next.fecha_inicio)} | Horario: ${next.horario || "Por confirmar"}. Nunca uses como "próximo" una fecha pasada.`;
+}
+
 function formatCurrencyCOP(value: number): string {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -1747,6 +1820,7 @@ export async function POST(req: NextRequest) {
     console.log("[POST /api/ai/audio] Leyendo historial de conversación...");
     const history = await getConversationHistory(supabase, resolvedPhone, 5);
     const effectiveTranscription = enrichMessageWithFollowUpContext(transcription, history);
+    const preferredStudentName = resolvePreferredStudentName(transcription, history);
 
     // 7.5. Obtener información JERÁRQUICA: todos los programas (primaria)
     console.log("[POST /api/ai/audio] Leyendo programas disponibles...");
@@ -1843,7 +1917,12 @@ export async function POST(req: NextRequest) {
       const studentDirective = studentContext
         ? 'Existe contexto de estudiante validado por identificación. Prioriza responder con sus cursos inscritos, su próxima clase y su estado real de pagos antes de información general.'
         : '';
-      const contextualDirective = [buildContextualDirective(effectiveTranscription, detectedProgram), studentDirective]
+      const contextualDirective = [
+        buildContextualDirective(effectiveTranscription, detectedProgram),
+        buildNameSafetyDirective(preferredStudentName),
+        buildUpcomingStartDirective(detectedProgram, courses),
+        studentDirective,
+      ]
         .filter(Boolean)
         .join('\n');
 
