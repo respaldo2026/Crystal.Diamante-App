@@ -1476,6 +1476,62 @@ function extractCorrectedProgramName(message: string): string | null {
   return null;
 }
 
+function extractProgramInquiryTopic(message: string): string | null {
+  const normalized = normalizeForMatch(message);
+  if (!normalized) return null;
+
+  const patterns = [
+    /(?:aprender|ensenan|ensenan|ensena|dictan|dan|ofrecen|tienen|hay)\s+([a-z0-9\s]{3,40})/i,
+    /(?:curso|programa)\s+de\s+([a-z0-9\s]{3,40})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match?.[1]) continue;
+
+    const candidate = match[1]
+      .replace(/\b(aqui|aca|en\s+cali|por\s+favor|me\s+podrias|me\s+puedes|si|no)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (candidate.length >= 3) return candidate;
+  }
+
+  return null;
+}
+
+function findProgramMatchByTopic(topic: string, programs: any[]): any | null {
+  const normalizedTopic = normalizeForMatch(topic);
+  if (!normalizedTopic || !Array.isArray(programs) || !programs.length) return null;
+
+  const topicWords = normalizedTopic.split(" ").filter((word) => word.length >= 4);
+
+  for (const program of programs) {
+    const programName = normalizeForMatch(program?.nombre || "");
+    if (!programName) continue;
+
+    if (programName.includes(normalizedTopic) || normalizedTopic.includes(programName)) {
+      return program;
+    }
+
+    if (topicWords.some((word) => programName.includes(word))) {
+      return program;
+    }
+  }
+
+  return null;
+}
+
+function buildAvailableProgramsPrompt(programs: any[], limit: number = 3): string {
+  const names = (programs || [])
+    .map((program) => String(program?.nombre || "").trim())
+    .filter(Boolean)
+    .slice(0, limit);
+
+  if (!names.length) return "";
+  return `Por ahora te puedo orientar en: *${names.join("*, *")}*.`;
+}
+
 function extractTemarioHighlights(rawTemario: string, maxItems?: number): string[] {
   const text = String(rawTemario || "").trim();
   if (!text) return [];
@@ -1585,7 +1641,8 @@ function buildIntentFocusedDirectResponse(
   detectedProgram: any | null,
   courses: any[],
   academy: any | null,
-  history: Array<{ user: string; agent: string }> = []
+  history: Array<{ user: string; agent: string }> = [],
+  programs: any[] = []
 ): string | null {
   if (isThanksOnlyMessage(message)) {
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
@@ -1602,6 +1659,15 @@ function buildIntentFocusedDirectResponse(
       return `Estamos ubicados en ${academy.direccion}. ¿Quieres que también te comparta la referencia para llegar más fácil?`;
     }
     return "Te comparto la ubicación exacta por aquí en un momento. ¿Quieres que también te envíe el WhatsApp de admisiones?";
+  }
+
+  const requestedTopic = extractProgramInquiryTopic(message);
+  if (requestedTopic) {
+    const matchedProgram = findProgramMatchByTopic(requestedTopic, programs);
+    if (!matchedProgram) {
+      const alternatives = buildAvailableProgramsPrompt(programs);
+      return `¡Gracias por tu pregunta! 🙌\n\nEn este momento no tengo *${requestedTopic}* dentro de los programas activos.${alternatives ? `\n\n${alternatives}` : ""}\n\nSi quieres, te ayudo a elegir la opción más parecida a lo que buscas.`;
+    }
   }
 
   if (!detectedProgram) {
@@ -2497,7 +2563,7 @@ export async function POST(req: NextRequest) {
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
 
-    const directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history);
+    const directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs);
     if (directIntentResponse) {
       const truncatedResponse = truncateResponse(directIntentResponse, 1000);
 
