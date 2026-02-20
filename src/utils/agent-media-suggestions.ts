@@ -72,7 +72,7 @@ function getIntentKeywordHints(intent: AgentIntent): string[] {
 
 function isImageLikeAsset(asset: MarketingAssetCandidate): boolean {
   const type = normalizeText(String(asset.tipo_asset || ""));
-  return type === "imagen" || type === "flyer";
+  return type === "imagen" || type === "flyer" || type === "image" || type === "foto";
 }
 
 function isAssetAvailable(asset: MarketingAssetCandidate): boolean {
@@ -114,7 +114,6 @@ export async function getAgentImageSuggestion(
   try {
     const normalizedMessage = normalizeText(params.message || "");
     if (!normalizedMessage) return null;
-    if (params.intent === "general") return null;
 
     const messageTokens = new Set(
       normalizedMessage
@@ -126,8 +125,7 @@ export async function getAgentImageSuggestion(
     const { data, error } = await supabase
       .from("marketing_assets")
       .select("id, titulo, descripcion, descripcion_ia, tipo_asset, url_archivo, keywords, categoria, programa_id, estado, visible_para_ia, created_at")
-      .in("tipo_asset", ["imagen", "flyer"])
-      .limit(100);
+      .limit(200);
 
     if (error || !Array.isArray(data) || data.length === 0) {
       return null;
@@ -135,9 +133,14 @@ export async function getAgentImageSuggestion(
 
     const categoryHints = getIntentCategoryHints(params.intent).map((value) => normalizeText(value));
     const intentKeywordHints = getIntentKeywordHints(params.intent).map((value) => normalizeText(value));
+    const candidates = (data as MarketingAssetCandidate[])
+      .filter((asset) => isImageLikeAsset(asset) && isAssetAvailable(asset));
 
-    const ranked = (data as MarketingAssetCandidate[])
-      .filter((asset) => isImageLikeAsset(asset) && isAssetAvailable(asset))
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    const ranked = candidates
       .map((asset) => {
         const keywords = extractKeywords(asset.keywords);
         const category = normalizeText(String(asset.categoria || ""));
@@ -157,6 +160,10 @@ export async function getAgentImageSuggestion(
           score += 40;
         }
 
+        if (params.intent === "general") {
+          score += 2;
+        }
+
         if (category && categoryHints.includes(category)) {
           score += 25;
         }
@@ -172,10 +179,22 @@ export async function getAgentImageSuggestion(
 
         return { asset, score };
       })
-      .filter((entry) => entry.score > 0)
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return new Date(String(b.asset.created_at || 0)).getTime() - new Date(String(a.asset.created_at || 0)).getTime();
+      });
 
-    const best = ranked[0]?.asset;
+    const fallbackByProgram = params.programId
+      ? candidates
+          .filter((asset) => Number(asset.programa_id) === Number(params.programId))
+          .sort((a, b) => new Date(String(b.created_at || 0)).getTime() - new Date(String(a.created_at || 0)).getTime())[0]
+      : null;
+
+    const fallbackRecent = candidates
+      .slice()
+      .sort((a, b) => new Date(String(b.created_at || 0)).getTime() - new Date(String(a.created_at || 0)).getTime())[0];
+
+    const best = ranked[0]?.asset || fallbackByProgram || fallbackRecent;
     if (!best?.url_archivo) {
       return null;
     }
