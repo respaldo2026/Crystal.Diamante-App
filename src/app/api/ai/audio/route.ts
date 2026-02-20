@@ -1056,7 +1056,7 @@ function buildIntentFocusedDirectResponse(
     const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
     const monthlyIncludes = "Incluye: Kit mensual de productos";
 
-    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💰 *Mensualidad:* ${menText}\n🧴 ${monthlyIncludes}\n\n📅 ¿Quieres que te comparta también la *fecha del próximo inicio*?`;
+    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💰 *Mensualidad:* ${menText}\n🧴 ${monthlyIncludes}\n\n💳 ¿Prefieres que te comparta *formas de pago* o *cómo inscribirte*?`;
   }
 
   if (intent === "horario") {
