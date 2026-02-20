@@ -1416,7 +1416,15 @@ function isDurationQuestion(message: string): boolean {
 
 function isLocationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(donde se ubican|donde estan|donde quedan|direccion|ubicacion|ubicados)\b/i.test(text);
+  if (/\b(donde se ubican|donde estan|donde quedan|direccion|ubicacion|ubicados|sede|en cali donde)\b/i.test(text)) {
+    return true;
+  }
+
+  if (/\bdonde\b/i.test(text) && !/\b(pago|pagar|inscrib|matricul|precio|cuanto|valor|mensualidad)\b/i.test(text)) {
+    return true;
+  }
+
+  return false;
 }
 
 function isThanksOnlyMessage(message: string): boolean {
