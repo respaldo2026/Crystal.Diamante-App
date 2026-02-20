@@ -139,7 +139,7 @@ const formatWhatsAppTextToHtml = (value: string) => {
   const withItalic = withBold.replace(/_(?=\S)([^_\n]*?\S)_/g, "<em>$1</em>");
   const withStrike = withItalic.replace(/~(?=\S)([^~\n]*?\S)~/g, "<s>$1</s>");
 
-  return withStrike.replace(/\n/g, "<br/>");
+  return withStrike;
 };
 
 const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[]) => {
@@ -182,7 +182,7 @@ const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[
       .bubble.user { background: #fff; }
       .bubble.agent { background: #dcf8c6; }
       .sender { font-size: 11px; font-weight: 700; margin-bottom: 4px; color: #54656f; }
-      .content { font-size: 14px; line-height: 1.4; white-space: normal; word-break: break-word; }
+      .content { font-size: 14px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; tab-size: 4; }
       .content strong { font-weight: 700; }
       .content em { font-style: italic; }
       .content s { text-decoration: line-through; }
@@ -1085,11 +1085,12 @@ export default function ConversacionesPage() {
         title={`Vista tipo WhatsApp: ${previewLabel || "Conversación"}`}
         open={previewOpen}
         onCancel={() => setPreviewOpen(false)}
-        width={860}
+        width="94vw"
+        style={{ maxWidth: 1280, top: 12 }}
         footer={null}
         bodyStyle={{ padding: 0, background: "#ece5dd" }}
       >
-        <div style={{ maxHeight: "72vh", overflow: "auto", background: "#ece5dd" }}>
+        <div style={{ maxHeight: "86vh", overflow: "auto", background: "#ece5dd" }}>
           <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
             {previewMessages.length === 0 ? (
               <Empty description="No hay mensajes para previsualizar" style={{ padding: "28px 0" }} />
@@ -1113,7 +1114,7 @@ export default function ConversacionesPage() {
                       <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: "#54656f" }}>
                         {isUser ? "Estudiante" : "Agente"}
                       </div>
-                      <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4 }}>
+                      <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4, tabSize: 4 }}>
                         <span
                           dangerouslySetInnerHTML={{ __html: formatWhatsAppTextToHtml(item.text) }}
                         />
