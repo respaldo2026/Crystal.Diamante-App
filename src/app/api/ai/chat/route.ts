@@ -1170,9 +1170,9 @@ NO inventes horarios, precios ni fechas que no estén en el contexto.
 }
 
 function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "general" {
-  const text = message.toLowerCase();
+  const text = normalizeForMatch(message);
 
-  if (/\b(precio|costo|cuanto|vale|valor|mensualidad|inscripcion|cuota|inversion)\b/i.test(text)) {
+  if (/\b(precio|precios|costo|costos|cuanto|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion)\b/i.test(text)) {
     return "precio";
   }
   if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text)) {
@@ -1222,7 +1222,10 @@ function isShortAffirmativeReply(message: string): boolean {
   const words = text.split(" ").filter(Boolean);
   if (words.length > 4) return false;
 
-  return /^(si|sí|dale|ok|okay|claro|listo|perfecto|de una|por favor|si por favor|sí por favor)$/i.test(text);
+  if (/^s+i+$/i.test(text)) return true;
+  if (/^s+i+p+$/i.test(text)) return true;
+
+  return /^(si|dale|ok|okay|claro|listo|perfecto|de una|por favor|si por favor|claro que si)$/i.test(text);
 }
 
 function inferPendingTopicFromHistory(history: Array<{ user: string; agent: string }>): string {
