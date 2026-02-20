@@ -1430,6 +1430,43 @@ function isCourseInfoRequest(message: string): boolean {
   return /\b(informacion del curso|quiero informacion|quiero info|dame informacion|cuentame del curso|sobre el curso|curso de)\b/i.test(text);
 }
 
+function extractTemarioHighlights(rawTemario: string, maxItems?: number): string[] {
+  const text = String(rawTemario || "").trim();
+  if (!text) return [];
+
+  const segments = text
+    .replace(/\r/g, "\n")
+    .replace(/[•▪◦·]/g, "\n")
+    .replace(/\s*\|\s*/g, "\n")
+    .replace(/\s+-\s+/g, "\n")
+    .split(/\n+/)
+    .map((item) =>
+      item
+        .replace(/\*+/g, "")
+        .replace(/\(\s*\d+\s*h(?:oras?)?\s*\)/gi, "")
+        .replace(/\b\d+\s*h(?:oras?)?\b/gi, "")
+        .replace(/\b\d+\s*horas?\b/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .replace(/^[\s:;,.\-–]+|[\s:;,.\-–]+$/g, "")
+        .trim()
+    )
+    .filter((item) => item.length >= 4)
+    .filter((item) => !/^contenido\s+detallado\s+por\s+ciclos?$/i.test(item));
+
+  const unique: string[] = [];
+  const seen = new Set<string>();
+
+  for (const segment of segments) {
+    const key = normalizeForMatch(segment);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(segment);
+    if (typeof maxItems === "number" && maxItems > 0 && unique.length >= maxItems) break;
+  }
+
+  return unique;
+}
+
 function buildInstagramFollowup(academy: any | null): string {
   const ig = String(academy?.instagram || "").trim();
   if (!ig) return "";
@@ -1496,6 +1533,9 @@ function buildIntentFocusedDirectResponse(
       const fallbackName = fallbackCourse?.programa_nombre || fallbackCourse?.nombre || "nuestros cursos de belleza";
       return `✨ *${fallbackName}*\n\nTe comparto la información clave al instante. ¿Prefieres que empecemos por *precio* o por *próximo inicio*?`;
     }
+    if (intent === "temario") {
+      return "¡Claro! Te comparto el temario en versión resumida. ¿De cuál curso quieres el contenido exacto?";
+    }
     if (asksDuration || intent === "precio" || intent === "horario") {
       return "¡Claro! Te ayudo con eso. ¿De cuál curso quieres el dato exacto?";
     }
@@ -1526,6 +1566,19 @@ function buildIntentFocusedDirectResponse(
     const schedule = primaryCourse?.horario || "Por confirmar";
 
     return `✨ *${detectedProgram.nombre}*\n\n✅ Formación práctica desde cero\n⏳ *Duración:* ${duration}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres conocer el precio de la inscripcion y mensualida?`;
+  }
+
+  if (intent === "temario") {
+    const highlights = extractTemarioHighlights(detectedProgram?.contenido || "");
+    if (highlights.length > 0) {
+      const totalCycles = highlights.length;
+      const explicitClasses = Number(detectedProgram?.total_clases ?? 0);
+      const totalClasses = explicitClasses > 0 ? explicitClasses : totalCycles * 4;
+      const lines = highlights.map((item, index) => `🔹 *Ciclo ${index + 1}:* ${item}`).join("\n");
+      return `📚 *Temario de ${detectedProgram.nombre}*\n\n🧩 Este programa tiene *${totalCycles} ciclos* y *${totalClasses} clases*.\n✨ Trataremos:\n${lines}\n\n💸 ¿Quieres conocer el precio de la inscripcion y mensualida?`;
+    }
+
+    return `📚 *Temario de ${detectedProgram.nombre}*\n\nTe comparto el contenido por *ciclos* de forma breve para que sea fácil de leer.\n\n¿Quieres conocer el precio de la inscripcion y mensualida?`;
   }
 
   if (intent === "precio") {
