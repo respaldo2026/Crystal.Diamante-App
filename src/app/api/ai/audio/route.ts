@@ -934,6 +934,11 @@ function isDurationQuestion(message: string): boolean {
   return /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
 }
 
+function isFastTrackQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(mas rapido|más rapido|rapido|rápido|perfeccionamiento|intensivo|avanzado|express|acelerado)\b/i.test(text);
+}
+
 function isLocationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   if (/\b(donde se ubican|donde estan|donde quedan|direccion|ubicacion|ubicados|sede|en cali donde)\b/i.test(text)) {
@@ -1065,6 +1070,36 @@ function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]
   return upcoming || withDate[0] || relatedCourses[0] || null;
 }
 
+function pickHumanToneSeed(message: string, history: Array<{ user: string; agent: string }>): number {
+  const source = `${normalizeForMatch(message)}|${history?.length || 0}`;
+  let acc = 0;
+  for (let i = 0; i < source.length; i++) {
+    acc = (acc + source.charCodeAt(i)) % 997;
+  }
+  return acc % 3;
+}
+
+function buildFastTrackHumanReply(
+  message: string,
+  history: Array<{ user: string; agent: string }>,
+  detectedProgram: any,
+  duration: string,
+  nextStart: string,
+  schedule: string
+): string {
+  const tone = pickHumanToneSeed(message, history);
+
+  if (tone === 0) {
+    return `¡Claro! Buena pregunta 🙌\n\nEl programa *${detectedProgram.nombre}* que estás viendo dura *${duration}*.\n\nSi te interesa algo más rápido tipo *perfeccionamiento/intensivo*, te confirmo la opción activa para darte el dato exacto.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario actual: ${schedule}\n\n¿Quieres que te confirme ya la alternativa más corta disponible?`;
+  }
+
+  if (tone === 1) {
+    return `Súper válido lo que preguntas 👌\n\nHoy en *${detectedProgram.nombre}* la duración es de *${duration}*.\n\nSi prefieres algo más ágil (perfeccionamiento/intensivo), te lo reviso al instante para darte una opción real y vigente.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario actual: ${schedule}\n\n¿Te comparto ahora mismo la opción más rápida?`;
+  }
+
+  return `Perfecto, te entiendo 💯\n\nEl plan *${detectedProgram.nombre}* está en *${duration}*.\n\nPara una ruta más corta de *perfeccionamiento*, te confirmo la disponibilidad actual y así avanzamos sobre algo concreto.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario actual: ${schedule}\n\n¿Quieres que te pase de una la opción más corta?`;
+}
+
 function buildIntentFocusedDirectResponse(
   message: string,
   detectedProgram: any | null,
@@ -1078,6 +1113,7 @@ function buildIntentFocusedDirectResponse(
 
   const intent = detectUserIntent(message);
   const asksDuration = isDurationQuestion(message);
+  const asksFastTrack = isFastTrackQuestion(message);
   const asksLocation = isLocationQuestion(message);
   const asksGeneralInfo = isCourseInfoRequest(message);
 
@@ -1116,6 +1152,14 @@ function buildIntentFocusedDirectResponse(
       !Number.isNaN(new Date(primaryCourse.fecha_inicio).getTime()) &&
       new Date(primaryCourse.fecha_inicio).setHours(0, 0, 0, 0) >= today.getTime()
   );
+
+  if (asksFastTrack) {
+    const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : "duración por confirmar");
+    const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+
+    return buildFastTrackHumanReply(message, history, detectedProgram, duration, nextStart, schedule);
+  }
 
   if (asksDuration) {
     const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : null);
