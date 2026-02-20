@@ -1168,11 +1168,24 @@ function buildIntentFocusedDirectResponse(
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
   }
 
-  const intent = detectUserIntent(message);
+  let intent = detectUserIntent(message);
   const asksDuration = isDurationQuestion(message);
   const asksFastTrack = isFastTrackQuestion(message);
-  const asksLocation = isLocationQuestion(message);
+  let asksLocation = isLocationQuestion(message);
   const asksGeneralInfo = isCourseInfoRequest(message);
+
+  if (intent === "general" && isShortAffirmativeReply(message) && history.length > 0) {
+    const pendingTopic = inferPendingTopicFromHistory(history);
+    if (pendingTopic) {
+      const inferredIntent = detectUserIntent(pendingTopic);
+      if (inferredIntent !== "general") {
+        intent = inferredIntent;
+      }
+      if (!asksLocation && isLocationQuestion(pendingTopic)) {
+        asksLocation = true;
+      }
+    }
+  }
 
   if (asksLocation) {
     if (academy?.direccion) {
@@ -1613,9 +1626,10 @@ function resolveProgramFromContext(
 
   if (hasProgramCorrectionSignal(userMessage)) return null;
 
-  const isLikelyFollowUp = /\b(ese|esa|ese\s+curso|esa\s+carrera|horario|precio|cuanto|cuando|inscripcion|mensualidad|cupos|duracion)\b/i.test(
-    userMessage
-  );
+  const isLikelyFollowUp = isShortAffirmativeReply(userMessage)
+    || /\b(ese|esa|ese\s+curso|esa\s+carrera|horario|precio|cuanto|cuando|inscripcion|mensualidad|cupos|duracion|inversion|temario|materiales|ubicacion|direccion|donde)\b/i.test(
+      userMessage
+    );
 
   if (!isLikelyFollowUp || !conversationHistory.length) return null;
 
