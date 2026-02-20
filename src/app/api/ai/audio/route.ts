@@ -1063,6 +1063,8 @@ function buildIntentFocusedDirectResponse(
       .map((item) => `${item?.user || ""} ${item?.agent || ""}`)
       .join(" ");
     const normalizedHistory = normalizeForMatch(recentConversationText);
+    const lastAgentMessage = Array.isArray(history) && history.length > 0 ? history[history.length - 1]?.agent || "" : "";
+    const normalizedLastAgent = normalizeForMatch(lastAgentMessage);
 
     const asksEnrollmentProcess = /\b(inscrib|inscrip|matricul|cupo|separar|reservar)\b/i.test(normalizedMessage);
     const asksPaymentMethods = /\b(pago|pagos|cuota|cuotas|tarjeta|efectivo|transferencia|nequi|daviplata|financi)\b/i.test(normalizedMessage);
@@ -1072,25 +1074,47 @@ function buildIntentFocusedDirectResponse(
     const historyMentionsPayment = /\b(pago|pagos|cuota|cuotas|tarjeta|efectivo|transferencia|nequi|daviplata|financi)\b/i.test(normalizedHistory);
     const historyMentionsDateOrSchedule = /\b(fecha|inicio|horario|hora|dias|días)\b/i.test(normalizedHistory);
 
+    const lastAgentAskedEnrollment = /\b(inscrib|inscrip|matricul|cupo|separar|reservar)\b/i.test(normalizedLastAgent);
+    const lastAgentAskedPayment = /\b(pago|pagos|cuota|cuotas|tarjeta|efectivo|transferencia|nequi|daviplata|financi)\b/i.test(normalizedLastAgent);
+    const lastAgentAskedDateOrSchedule = /\b(fecha|inicio|horario|hora|dias|días)\b/i.test(normalizedLastAgent);
+
+    let nextStepType: "payment" | "enrollment" | "date" = "payment";
+
     let nextStepPrompt = "💳 ¿Prefieres que te comparta *formas de pago* o *cómo inscribirte*?";
     if (asksEnrollmentProcess || historyMentionsEnrollment) {
       nextStepPrompt = historyMentionsPayment
         ? "📅 ¿Quieres que te confirme también la *fecha de inicio* y *horario* disponible?"
         : "✅ ¿Quieres que te confirme los *medios de pago* y las *fechas de pago*?";
+      nextStepType = historyMentionsPayment ? "date" : "payment";
     } else if (asksPaymentMethods || historyMentionsPayment) {
       nextStepPrompt = historyMentionsEnrollment
         ? "📅 ¿Quieres que te comparta también *fecha de inicio* y *horario*?"
         : "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?";
+      nextStepType = historyMentionsEnrollment ? "date" : "enrollment";
     } else if (asksDateOrSchedule || historyMentionsDateOrSchedule) {
       nextStepPrompt = historyMentionsPayment
         ? "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?"
         : "✅ ¿Quieres que te confirme los *medios de pago* y las *fechas de pago*?";
+      nextStepType = historyMentionsPayment ? "enrollment" : "payment";
     } else if (!historyMentionsPayment) {
       nextStepPrompt = "✅ ¿Quieres que te confirme los *medios de pago* y las *fechas de pago*?";
+      nextStepType = "payment";
     } else if (!historyMentionsEnrollment) {
       nextStepPrompt = "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?";
+      nextStepType = "enrollment";
     } else {
       nextStepPrompt = "📅 ¿Quieres que te confirme también la *fecha de inicio* y *horario* disponible?";
+      nextStepType = "date";
+    }
+
+    if ((nextStepType === "payment" && lastAgentAskedPayment) || (nextStepType === "enrollment" && lastAgentAskedEnrollment) || (nextStepType === "date" && lastAgentAskedDateOrSchedule)) {
+      if (nextStepType !== "payment" && !lastAgentAskedPayment) {
+        nextStepPrompt = "✅ ¿Quieres que te confirme los *medios de pago* y las *fechas de pago*?";
+      } else if (nextStepType !== "enrollment" && !lastAgentAskedEnrollment) {
+        nextStepPrompt = "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?";
+      } else if (nextStepType !== "date" && !lastAgentAskedDateOrSchedule) {
+        nextStepPrompt = "📅 ¿Quieres que te confirme también la *fecha de inicio* y *horario* disponible?";
+      }
     }
 
     return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💰 *Mensualidad:* ${menText}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
