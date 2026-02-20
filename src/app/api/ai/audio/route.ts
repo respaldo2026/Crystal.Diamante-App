@@ -958,7 +958,7 @@ function isLocationQuestion(message: string): boolean {
 function isThanksOnlyMessage(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
-  return /^(gracias|muchas gracias|ok gracias|vale gracias|super gracias|listo gracias)$/.test(text);
+  return /^(gracias|muchas gracias|ok gracias|okk gracias|okei gracias|vale gracias|super gracias|listo gracias|gracias de una|gracias por la info)$/.test(text);
 }
 
 function isCourseInfoRequest(message: string): boolean {
@@ -1094,9 +1094,18 @@ function extractTemarioHighlights(rawTemario: string, maxItems?: number): string
 
 function buildInstagramFollowup(academy: any | null): string {
   const ig = String(academy?.instagram || "").trim();
-  if (!ig) return "";
-  const normalized = /^https?:\/\//i.test(ig) ? ig : `https://${ig}`;
-  return `\n\n📲 Síguenos en redes para más info: ${normalized}`;
+  const fb = String(academy?.facebook || "").trim();
+
+  const links: string[] = [];
+  if (ig) {
+    links.push(`📸 Instagram: ${/^https?:\/\//i.test(ig) ? ig : `https://${ig}`}`);
+  }
+  if (fb) {
+    links.push(`👤 Facebook: ${/^https?:\/\//i.test(fb) ? fb : `https://${fb}`}`);
+  }
+
+  if (!links.length) return "";
+  return `\n\n📲 Si quieres más info, también te comparto nuestras redes:\n${links.join("\n")}`;
 }
 
 function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
