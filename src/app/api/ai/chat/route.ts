@@ -1471,7 +1471,8 @@ function buildIntentFocusedDirectResponse(
   message: string,
   detectedProgram: any | null,
   courses: any[],
-  academy: any | null
+  academy: any | null,
+  history: Array<{ user: string; agent: string }> = []
 ): string | null {
   if (isThanksOnlyMessage(message)) {
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
@@ -1537,17 +1538,39 @@ function buildIntentFocusedDirectResponse(
     const monthlyIncludes = "Incluye: Kit mensual de productos";
 
     const normalizedMessage = normalizeForMatch(message);
+    const recentConversationText = (Array.isArray(history) ? history : [])
+      .slice(-4)
+      .map((item) => `${item?.user || ""} ${item?.agent || ""}`)
+      .join(" ");
+    const normalizedHistory = normalizeForMatch(recentConversationText);
+
     const asksEnrollmentProcess = /\b(inscrib|inscrip|matricul|cupo|separar|reservar)\b/i.test(normalizedMessage);
     const asksPaymentMethods = /\b(pago|pagos|cuota|cuotas|tarjeta|efectivo|transferencia|nequi|daviplata|financi)\b/i.test(normalizedMessage);
     const asksDateOrSchedule = /\b(fecha|inicio|horario|hora|dias|días)\b/i.test(normalizedMessage);
 
+    const historyMentionsEnrollment = /\b(inscrib|inscrip|matricul|cupo|separar|reservar)\b/i.test(normalizedHistory);
+    const historyMentionsPayment = /\b(pago|pagos|cuota|cuotas|tarjeta|efectivo|transferencia|nequi|daviplata|financi)\b/i.test(normalizedHistory);
+    const historyMentionsDateOrSchedule = /\b(fecha|inicio|horario|hora|dias|días)\b/i.test(normalizedHistory);
+
     let nextStepPrompt = "💳 ¿Prefieres que te comparta *formas de pago* o *cómo inscribirte*?";
-    if (asksEnrollmentProcess) {
-      nextStepPrompt = "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?";
-    } else if (asksPaymentMethods) {
+    if (asksEnrollmentProcess || historyMentionsEnrollment) {
+      nextStepPrompt = historyMentionsPayment
+        ? "📅 ¿Quieres que te confirme también la *fecha de inicio* y *horario* disponible?"
+        : "✅ ¿Quieres que te confirme los *medios de pago* y las *fechas de pago*?";
+    } else if (asksPaymentMethods || historyMentionsPayment) {
+      nextStepPrompt = historyMentionsEnrollment
+        ? "📅 ¿Quieres que te comparta también *fecha de inicio* y *horario*?"
+        : "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?";
+    } else if (asksDateOrSchedule || historyMentionsDateOrSchedule) {
+      nextStepPrompt = historyMentionsPayment
+        ? "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?"
+        : "✅ ¿Quieres que te confirme los *medios de pago* y las *fechas de pago*?";
+    } else if (!historyMentionsPayment) {
       nextStepPrompt = "✅ ¿Quieres que te confirme los *medios de pago* y las *fechas de pago*?";
-    } else if (asksDateOrSchedule) {
-      nextStepPrompt = "🎯 ¿Prefieres que sigamos con *cómo separar cupo* o con *formas de pago*?";
+    } else if (!historyMentionsEnrollment) {
+      nextStepPrompt = "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?";
+    } else {
+      nextStepPrompt = "📅 ¿Quieres que te confirme también la *fecha de inicio* y *horario* disponible?";
     }
 
     return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💰 *Mensualidad:* ${menText}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
@@ -2301,7 +2324,7 @@ export async function POST(req: NextRequest) {
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
 
-    const directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy);
+    const directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history);
     if (directIntentResponse) {
       const truncatedResponse = truncateResponse(directIntentResponse, 1000);
 
