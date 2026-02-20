@@ -928,6 +928,117 @@ function formatCurrencyCOP(value: number): string {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+function isDurationQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
+}
+
+function isLocationQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(donde se ubican|donde estan|donde quedan|direccion|ubicacion|ubicados)\b/i.test(text);
+}
+
+function isThanksOnlyMessage(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  return /^(gracias|muchas gracias|ok gracias|vale gracias|super gracias|listo gracias)$/.test(text);
+}
+
+function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
+  if (!courses?.length) return null;
+
+  const normalizedProgram = normalizeForMatch(detectedProgram?.nombre || "");
+  const relatedCourses = detectedProgram
+    ? courses.filter((course) => {
+        const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+        const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
+        return Boolean(sameProgramId || sameProgramName);
+      })
+    : [...courses];
+
+  if (!relatedCourses.length) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const withDate = relatedCourses
+    .filter((course) => course?.fecha_inicio && !Number.isNaN(new Date(course.fecha_inicio).getTime()))
+    .sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime());
+
+  const upcoming = withDate.find((course) => {
+    const start = new Date(course.fecha_inicio);
+    start.setHours(0, 0, 0, 0);
+    return start >= today;
+  });
+
+  return upcoming || withDate[0] || relatedCourses[0] || null;
+}
+
+function buildIntentFocusedDirectResponse(
+  message: string,
+  detectedProgram: any | null,
+  courses: any[],
+  academy: any | null
+): string | null {
+  if (isThanksOnlyMessage(message)) {
+    return "Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.";
+  }
+
+  const intent = detectUserIntent(message);
+  const asksDuration = isDurationQuestion(message);
+  const asksLocation = isLocationQuestion(message);
+
+  if (asksLocation) {
+    if (academy?.direccion) {
+      return `Estamos ubicados en ${academy.direccion}. ¿Quieres que también te comparta la referencia para llegar más fácil?`;
+    }
+    return "Te comparto la ubicación exacta por aquí en un momento. ¿Quieres que también te envíe el WhatsApp de admisiones?";
+  }
+
+  if (!detectedProgram) {
+    if (asksDuration || intent === "precio" || intent === "horario") {
+      return "¡Claro! Te ayudo con eso. ¿De cuál curso quieres el dato exacto?";
+    }
+    return null;
+  }
+
+  const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const hasUpcomingStart = Boolean(
+    primaryCourse?.fecha_inicio &&
+      !Number.isNaN(new Date(primaryCourse.fecha_inicio).getTime()) &&
+      new Date(primaryCourse.fecha_inicio).setHours(0, 0, 0, 0) >= today.getTime()
+  );
+
+  if (asksDuration) {
+    const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : null);
+    const totalClasses = detectedProgram?.total_clases ? `${detectedProgram.total_clases} clases` : null;
+    const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+
+    return `El curso de ${detectedProgram.nombre} dura ${duration || "el tiempo definido en el plan académico"}${totalClasses ? `, con ${totalClasses}` : ""}.\n\nPróximo inicio: ${nextStart}\nHorario: ${schedule}\n\n¿Te comparto ahora inversión y formas de pago?`;
+  }
+
+  if (intent === "precio") {
+    const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
+    const mensualidad = Number(detectedProgram?.precio_mensualidad ?? primaryCourse?.precio_mensualidad ?? 0);
+    const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
+    const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
+
+    return `La inversión de ${detectedProgram.nombre} es:\n\n💰 Inscripción: ${insText}\n💰 Mensualidad: ${menText}\n\n¿Quieres que te comparta también la duración y el próximo horario disponible?`;
+  }
+
+  if (intent === "horario") {
+    const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+
+    return `Para ${detectedProgram.nombre}, el próximo inicio está: ${nextStart}.\nHorario: ${schedule}.\n\n¿Quieres que te confirme también la inversión?`;
+  }
+
+  return null;
+}
+
 function formatStudentCoursesList(studentContext: any): string {
   const enrollments = Array.isArray(studentContext?.enrollments) ? studentContext.enrollments : [];
   if (!enrollments.length) {
@@ -1267,6 +1378,7 @@ function buildContextualDirective(userMessage: string, detectedProgram: any | nu
     asksNextGroup
       ? 'CASO ESPECIAL EN VOZ: Si pregunta por "otro curso" o "próximo grupo", NO des discurso largo. Responde natural y breve: reconoce que el grupo actual puede ir avanzado, comparte fecha/horario solo si están confirmados, y si no hay fecha indícalo claramente antes de cerrar con una pregunta corta.'
       : 'Mantén foco en resolver lo que preguntó, sin sobrecargar información.',
+    'REGLA DE ORO EN VOZ: 1 intención del usuario = 1 bloque corto. No mezcles precio+duración+beneficios+temario en la misma respuesta salvo que lo pidan.',
     'Si hay objeción, usa esta secuencia en voz: empatía breve, dato concreto, propuesta simple, cierre con pregunta corta.',
     'Prohibido responder con frases genéricas como: "¿en qué curso estás interesado?" si el usuario ya mencionó uno.'
   ].join('\n');
@@ -1896,6 +2008,8 @@ export async function POST(req: NextRequest) {
     // 7.7. Obtener información de la academia (dirección, redes, contacto)
     console.log("[POST /api/ai/audio] Obteniendo información de la academia...");
     const academy = await getAcademyInfo();
+
+    const directIntentResponse = buildIntentFocusedDirectResponse(effectiveTranscription, detectedProgram, courses, academy);
     
     // 7.8. Obtener medios de pago disponibles
     console.log("[POST /api/ai/audio] Obteniendo medios de pago...");
@@ -1910,7 +2024,7 @@ export async function POST(req: NextRequest) {
     // 7.10. IMPORTANTE: Eliminar emojis del contexto para que el agente no los use en respuestas de audio
     hierarchicalContext = removeEmojis(hierarchicalContext);
 
-    let agentResponse = directStudentResponse || directTodayResponse || directNextGroupResponse || "";
+    let agentResponse = directStudentResponse || directTodayResponse || directNextGroupResponse || directIntentResponse || "";
     if (!agentResponse) {
       // 8. Buscar conocimiento relevante
       const knowledgeChunks = await searchKnowledge(supabase, effectiveTranscription, 3);
