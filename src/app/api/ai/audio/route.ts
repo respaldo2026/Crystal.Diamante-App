@@ -750,6 +750,7 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
   const normalized = normalizeForMatch(lastAgent);
 
   if (!normalized) return "";
+  if (/\b(inversion|inscripcion|mensualidad|precio|costa|valor)\b/i.test(normalized)) return "quiero saber la inversion";
   if (/\b(cupo|cupos|disponible|disponibles)\b/i.test(normalized)) return "quiero saber si hay cupos disponibles";
   if (/\b(proximo grupo|siguiente grupo|proximo curso|fecha confirmada|por confirmar)\b/i.test(normalized)) return "quiero saber el proximo grupo y su fecha";
   if (/\b(horario|dias|dia|hora)\b/i.test(normalized)) return "quiero saber dias y horario";
@@ -1012,7 +1013,7 @@ function buildIntentFocusedDirectResponse(
     if (asksGeneralInfo) {
       const fallbackCourse = courses?.[0];
       const fallbackName = fallbackCourse?.programa_nombre || fallbackCourse?.nombre || "nuestros cursos de belleza";
-      return `¡Claro! Te comparto la información de ${fallbackName}.\n\n¿Quieres que te diga primero precio o próximo inicio?`;
+      return `✨ *${fallbackName}*\n\nTe comparto la información clave al instante. ¿Prefieres que empecemos por *precio* o por *próximo inicio*?`;
     }
     if (asksDuration || intent === "precio" || intent === "horario") {
       return "¡Claro! Te ayudo con eso. ¿De cuál curso quieres el dato exacto?";
@@ -1035,7 +1036,7 @@ function buildIntentFocusedDirectResponse(
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
 
-    return `El curso de ${detectedProgram.nombre} dura ${duration || "el tiempo definido en el plan académico"}${totalClasses ? `, con ${totalClasses}` : ""}.\n\nPróximo inicio: ${nextStart}\nHorario: ${schedule}\n\n¿Te comparto ahora inversión y formas de pago?`;
+    return `📚 *${detectedProgram.nombre}*\n\n⏳ *Duración:* ${duration || "el tiempo definido en el plan académico"}${totalClasses ? ` (${totalClasses})` : ""}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta ahora la *inversión*?`;
   }
 
   if (asksGeneralInfo || intent === "general") {
@@ -1043,7 +1044,7 @@ function buildIntentFocusedDirectResponse(
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
 
-    return `El curso de ${detectedProgram.nombre} está diseñado para formarte desde cero de forma práctica.\n\nDuración: ${duration}\nPróximo inicio: ${nextStart}\nHorario: ${schedule}\n\n¿Prefieres que te comparta ahora inversión o temario?`;
+    return `✨ *${detectedProgram.nombre}*\n\n✅ Formación práctica desde cero\n⏳ *Duración:* ${duration}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Prefieres que te comparta ahora *inversión* o *temario*?`;
   }
 
   if (intent === "precio") {
@@ -1055,14 +1056,14 @@ function buildIntentFocusedDirectResponse(
     const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
     const monthlyIncludes = "Incluye: Kit mensual de productos";
 
-    return `La inversión de ${detectedProgram.nombre} es:\n\n💰 Inscripción: ${insText}\n${inscriptionIncludes}\n\n💰 Mensualidad: ${menText}\n${monthlyIncludes}\n\n¿Quieres que te comparta también la fecha del próximo inicio?`;
+    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💰 *Mensualidad:* ${menText}\n🧴 ${monthlyIncludes}\n\n📅 ¿Quieres que te comparta también la *fecha del próximo inicio*?`;
   }
 
   if (intent === "horario") {
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
 
-    return `Para ${detectedProgram.nombre}, el próximo inicio está: ${nextStart}.\nHorario: ${schedule}.\n\n¿Quieres que te confirme también la inversión?`;
+    return `📚 *${detectedProgram.nombre}*\n\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n💸 ¿Quieres que te confirme también la *inversión*?`;
   }
 
   return null;
@@ -1722,8 +1723,8 @@ function normalizeWhatsAppReadability(text: string): string {
     .replace(/facebook\.\s*com/gi, "facebook.com")
     .replace(/wa\.\s*me/gi, "wa.me")
     .replace(/(https?:\/\/[^\s\n]+)\n(?=[a-z0-9./_-])/gi, "$1")
-    .replace(/([a-z0-9])\s*\.\s*([a-z0-9])/gi, "$1.$2")
-    .replace(/([a-z0-9])\s*\/\s*([a-z0-9])/gi, "$1/$2");
+    .replace(/([a-z0-9])\s*\.\s*([a-z0-9])/g, "$1.$2")
+    .replace(/([a-z0-9])\s*\/\s*([a-z0-9])/g, "$1/$2");
 
   let previous = "";
   while (previous !== output) {
