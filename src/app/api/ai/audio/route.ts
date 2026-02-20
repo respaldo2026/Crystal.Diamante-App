@@ -702,7 +702,7 @@ function buildAgentPrompt(
 function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "general" {
   const text = normalizeForMatch(message);
 
-  if (/\b(precio|precios|costo|costos|cuanto|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion)\b/i.test(text)) return "precio";
+  if (/\b(precio|precios|costo|costos|cuanto|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text)) return "precio";
   if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text)) return "horario";
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) return "temario";
   if (/\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|implementos|lista\s+de\s+materiales)\b/i.test(text)) return "materiales";
@@ -1289,9 +1289,15 @@ function buildIntentFocusedDirectResponse(
     const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
 
     const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
-    const monthlyIncludes = "Incluye: Kit mensual de productos";
+    const monthlyIncludes = "Incluye: Cada mes te damos kit de productos";
 
     const normalizedMessage = normalizeForMatch(message);
+    const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
+
+    if (asksMonthlyConfirmation) {
+      return `✅ Sí, la *mensualidad* es ${menText}.\n🧴 *Cada mes te damos kit de productos.*\n\n¿Quieres que te comparta también los *medios de pago* y las *fechas de pago*?`;
+    }
+
     const recentConversationText = (Array.isArray(history) ? history : [])
       .slice(-4)
       .map((item) => `${item?.user || ""} ${item?.agent || ""}`)
