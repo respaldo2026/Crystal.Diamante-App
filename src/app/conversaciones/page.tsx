@@ -170,19 +170,19 @@ const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vista WhatsApp - ${escapeHtml(threadLabel)}</title>
     <style>
-      body { margin: 0; font-family: Arial, sans-serif; background: #ece5dd; }
-      .app { max-width: 840px; margin: 0 auto; min-height: 100vh; background: #efeae2; }
+      body { margin: 0; font-family: Roboto, "Noto Sans", Arial, sans-serif; background: #0b141a; }
+      .app { max-width: 430px; margin: 0 auto; min-height: 100vh; background: #e5ddd5; }
       .header { background: #075e54; color: #fff; padding: 14px 16px; font-weight: 600; }
       .subheader { font-size: 12px; opacity: 0.9; margin-top: 4px; }
-      .chat { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+      .chat { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
       .row { display: flex; width: 100%; }
       .row.user { justify-content: flex-start; }
       .row.agent { justify-content: flex-end; }
-      .bubble { max-width: 78%; border-radius: 8px; padding: 8px 10px; box-shadow: 0 1px 0 rgba(0,0,0,.1); }
+      .bubble { max-width: 84%; border-radius: 7.5px; padding: 6px 8px; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
       .bubble.user { background: #fff; }
-      .bubble.agent { background: #dcf8c6; }
-      .sender { font-size: 11px; font-weight: 700; margin-bottom: 4px; color: #54656f; }
-      .content { font-size: 14px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; tab-size: 4; }
+      .bubble.agent { background: #d9fdd3; }
+      .sender { display: none; }
+      .content { font-size: 14.2px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; tab-size: 4; color: #111b21; }
       .content strong { font-weight: 700; }
       .content em { font-style: italic; }
       .content s { text-decoration: line-through; }
@@ -198,9 +198,9 @@ const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[
         white-space: pre-wrap;
         margin: 4px 0;
       }
-      .time { font-size: 11px; color: #667781; text-align: right; margin-top: 6px; }
+      .time { font-size: 11px; color: #667781; text-align: right; margin-top: 4px; }
       @media print {
-        .app { max-width: 100%; }
+        .app { max-width: 430px; }
         .header { position: sticky; top: 0; }
       }
     </style>
@@ -1088,10 +1088,10 @@ export default function ConversacionesPage() {
         width="94vw"
         style={{ maxWidth: 1280, top: 12 }}
         footer={null}
-        bodyStyle={{ padding: 0, background: "#ece5dd" }}
+        bodyStyle={{ padding: 0, background: "#0b141a" }}
       >
-        <div style={{ maxHeight: "86vh", overflow: "auto", background: "#ece5dd" }}>
-          <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ maxHeight: "86vh", overflow: "auto", background: "#0b141a", padding: 12 }}>
+          <div style={{ maxWidth: 430, margin: "0 auto", minHeight: "84vh", background: "#e5ddd5", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
             {previewMessages.length === 0 ? (
               <Empty description="No hay mensajes para previsualizar" style={{ padding: "28px 0" }} />
             ) : (
@@ -1104,22 +1104,22 @@ export default function ConversacionesPage() {
                   >
                     <div
                       style={{
-                        maxWidth: "78%",
-                        background: isUser ? "#fff" : "#dcf8c6",
-                        borderRadius: 8,
-                        padding: "8px 10px",
-                        boxShadow: "0 1px 0 rgba(0,0,0,0.12)",
+                        maxWidth: "84%",
+                        background: isUser ? "#fff" : "#d9fdd3",
+                        borderRadius: 7.5,
+                        padding: "6px 8px",
+                        boxShadow: "0 1px 0 rgba(0,0,0,0.08)",
                       }}
                     >
-                      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: "#54656f" }}>
+                      <div style={{ display: "none", fontSize: 11, fontWeight: 700, marginBottom: 4, color: "#54656f" }}>
                         {isUser ? "Estudiante" : "Agente"}
                       </div>
-                      <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4, tabSize: 4 }}>
+                      <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.35, tabSize: 4, fontSize: 14.2, color: "#111b21" }}>
                         <span
                           dangerouslySetInnerHTML={{ __html: formatWhatsAppTextToHtml(item.text) }}
                         />
                       </div>
-                      <div style={{ fontSize: 11, color: "#667781", textAlign: "right", marginTop: 6 }}>
+                      <div style={{ fontSize: 11, color: "#667781", textAlign: "right", marginTop: 4 }}>
                         {dayjs(item.created_at).format("DD/MM/YYYY HH:mm")}
                       </div>
                     </div>
