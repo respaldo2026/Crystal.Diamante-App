@@ -2580,7 +2580,40 @@ export async function POST(req: NextRequest) {
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
 
-    const directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs);
+    let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs);
+    if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage)) {
+      const pendingTopic = inferPendingTopicFromHistory(history);
+      if (pendingTopic) {
+        const retriedDirectResponse = buildIntentFocusedDirectResponse(
+          `${effectiveMessage}. ${pendingTopic}.`,
+          detectedProgram,
+          courses,
+          academy,
+          history,
+          programs
+        );
+
+        if (retriedDirectResponse && !isRepetitiveResponse(retriedDirectResponse, history, effectiveMessage)) {
+          directIntentResponse = retriedDirectResponse;
+        }
+      }
+
+      if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage) && detectedProgram) {
+        const forcedProgressResponse = buildIntentFocusedDirectResponse(
+          `${effectiveMessage}. quiero saber la inversion.`,
+          detectedProgram,
+          courses,
+          academy,
+          history,
+          programs
+        );
+
+        if (forcedProgressResponse) {
+          directIntentResponse = forcedProgressResponse;
+        }
+      }
+    }
+
     if (directIntentResponse) {
       const truncatedResponse = truncateResponse(directIntentResponse, 1000);
 

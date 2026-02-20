@@ -2330,7 +2330,39 @@ export async function POST(req: NextRequest) {
     console.log("[POST /api/ai/audio] Obteniendo información de la academia...");
     const academy = await getAcademyInfo();
 
-    const directIntentResponse = buildIntentFocusedDirectResponse(effectiveTranscription, detectedProgram, courses, academy, history, programs);
+    let directIntentResponse = buildIntentFocusedDirectResponse(effectiveTranscription, detectedProgram, courses, academy, history, programs);
+    if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveTranscription)) {
+      const pendingTopic = inferPendingTopicFromHistory(history);
+      if (pendingTopic) {
+        const retriedDirectResponse = buildIntentFocusedDirectResponse(
+          `${effectiveTranscription}. ${pendingTopic}.`,
+          detectedProgram,
+          courses,
+          academy,
+          history,
+          programs
+        );
+
+        if (retriedDirectResponse && !isRepetitiveResponse(retriedDirectResponse, history, effectiveTranscription)) {
+          directIntentResponse = retriedDirectResponse;
+        }
+      }
+
+      if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveTranscription) && detectedProgram) {
+        const forcedProgressResponse = buildIntentFocusedDirectResponse(
+          `${effectiveTranscription}. quiero saber la inversion.`,
+          detectedProgram,
+          courses,
+          academy,
+          history,
+          programs
+        );
+
+        if (forcedProgressResponse) {
+          directIntentResponse = forcedProgressResponse;
+        }
+      }
+    }
     
     // 7.8. Obtener medios de pago disponibles
     console.log("[POST /api/ai/audio] Obteniendo medios de pago...");
