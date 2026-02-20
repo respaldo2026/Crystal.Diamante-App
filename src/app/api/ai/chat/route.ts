@@ -1424,6 +1424,18 @@ function isThanksOnlyMessage(message: string): boolean {
   return /^(gracias|muchas gracias|ok gracias|vale gracias|super gracias|listo gracias)$/.test(text);
 }
 
+function isCourseInfoRequest(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(informacion del curso|quiero informacion|quiero info|dame informacion|cuentame del curso|sobre el curso|curso de)\b/i.test(text);
+}
+
+function buildInstagramFollowup(academy: any | null): string {
+  const ig = String(academy?.instagram || "").trim();
+  if (!ig) return "";
+  const normalized = /^https?:\/\//i.test(ig) ? ig : `https://${ig}`;
+  return `\n\n📲 Síguenos en redes para más info: ${normalized}`;
+}
+
 function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
   if (!courses?.length) return null;
 
@@ -1461,12 +1473,13 @@ function buildIntentFocusedDirectResponse(
   academy: any | null
 ): string | null {
   if (isThanksOnlyMessage(message)) {
-    return "Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.";
+    return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
   }
 
   const intent = detectUserIntent(message);
   const asksDuration = isDurationQuestion(message);
   const asksLocation = isLocationQuestion(message);
+  const asksGeneralInfo = isCourseInfoRequest(message);
 
   if (asksLocation) {
     if (academy?.direccion) {
@@ -1476,6 +1489,11 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (!detectedProgram) {
+    if (asksGeneralInfo) {
+      const fallbackCourse = courses?.[0];
+      const fallbackName = fallbackCourse?.programa_nombre || fallbackCourse?.nombre || "nuestros cursos de belleza";
+      return `¡Claro! Te comparto la información de ${fallbackName}.\n\n¿Quieres que te diga primero precio o próximo inicio?`;
+    }
     if (asksDuration || intent === "precio" || intent === "horario") {
       return "¡Claro! Te ayudo con eso. ¿De cuál curso quieres el dato exacto?";
     }
@@ -1500,13 +1518,24 @@ function buildIntentFocusedDirectResponse(
     return `El curso de ${detectedProgram.nombre} dura ${duration || "el tiempo definido en el plan académico"}${totalClasses ? `, con ${totalClasses}` : ""}.\n\nPróximo inicio: ${nextStart}\nHorario: ${schedule}\n\n¿Te comparto ahora inversión y formas de pago?`;
   }
 
+  if (asksGeneralInfo || intent === "general") {
+    const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : "duración según plan académico");
+    const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+
+    return `El curso de ${detectedProgram.nombre} está diseñado para formarte desde cero de forma práctica.\n\nDuración: ${duration}\nPróximo inicio: ${nextStart}\nHorario: ${schedule}\n\n¿Prefieres que te comparta ahora inversión o temario?`;
+  }
+
   if (intent === "precio") {
     const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
     const mensualidad = Number(detectedProgram?.precio_mensualidad ?? primaryCourse?.precio_mensualidad ?? 0);
     const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
     const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
 
-    return `La inversión de ${detectedProgram.nombre} es:\n\n💰 Inscripción: ${insText}\n💰 Mensualidad: ${menText}\n\n¿Quieres que te comparta también la duración y el próximo horario disponible?`;
+    const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
+    const monthlyIncludes = "Incluye: Kit mensual de productos";
+
+    return `La inversión de ${detectedProgram.nombre} es:\n\n💰 Inscripción: ${insText}\n${inscriptionIncludes}\n\n💰 Mensualidad: ${menText}\n${monthlyIncludes}\n\n¿Quieres que te comparta también la fecha del próximo inicio?`;
   }
 
   if (intent === "horario") {
