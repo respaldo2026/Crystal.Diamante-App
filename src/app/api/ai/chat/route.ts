@@ -1524,7 +1524,7 @@ function buildIntentFocusedDirectResponse(
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
 
-    return `✨ *${detectedProgram.nombre}*\n\n✅ Formación práctica desde cero\n⏳ *Duración:* ${duration}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Prefieres que te comparta ahora *inversión* o *temario*?`;
+    return `✨ *${detectedProgram.nombre}*\n\n✅ Formación práctica desde cero\n⏳ *Duración:* ${duration}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres conocer el precio de la inscripcion y mensualida?`;
   }
 
   if (intent === "precio") {
@@ -1536,7 +1536,21 @@ function buildIntentFocusedDirectResponse(
     const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
     const monthlyIncludes = "Incluye: Kit mensual de productos";
 
-    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💰 *Mensualidad:* ${menText}\n🧴 ${monthlyIncludes}\n\n💳 ¿Prefieres que te comparta *formas de pago* o *cómo inscribirte*?`;
+    const normalizedMessage = normalizeForMatch(message);
+    const asksEnrollmentProcess = /\b(inscrib|inscrip|matricul|cupo|separar|reservar)\b/i.test(normalizedMessage);
+    const asksPaymentMethods = /\b(pago|pagos|cuota|cuotas|tarjeta|efectivo|transferencia|nequi|daviplata|financi)\b/i.test(normalizedMessage);
+    const asksDateOrSchedule = /\b(fecha|inicio|horario|hora|dias|días)\b/i.test(normalizedMessage);
+
+    let nextStepPrompt = "💳 ¿Prefieres que te comparta *formas de pago* o *cómo inscribirte*?";
+    if (asksEnrollmentProcess) {
+      nextStepPrompt = "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?";
+    } else if (asksPaymentMethods) {
+      nextStepPrompt = "✅ ¿Quieres que te confirme los *medios de pago* y las *fechas de pago*?";
+    } else if (asksDateOrSchedule) {
+      nextStepPrompt = "🎯 ¿Prefieres que sigamos con *cómo separar cupo* o con *formas de pago*?";
+    }
+
+    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💰 *Mensualidad:* ${menText}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
   }
 
   if (intent === "horario") {
