@@ -2704,6 +2704,7 @@ export async function POST(req: NextRequest) {
           temario: "quiero saber el temario",
           materiales: "quiero saber materiales",
           inscripcion: "quiero saber como me inscribo",
+          requisitos: "quiero saber los requisitos",
           general: "quiero saber dias y horario",
         };
         const forcedProgressResponse = buildIntentFocusedDirectResponse(
