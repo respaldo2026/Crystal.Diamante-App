@@ -1014,7 +1014,7 @@ function extractSentImageUrlsFromHistory(
     const text = String(msg.agent || "");
     let match = pattern.exec(text);
     while (match !== null) {
-      const url = match[1].trim();
+      const url = match[1]?.trim();
       if (url && !urls.includes(url)) {
         urls.push(url);
       }
