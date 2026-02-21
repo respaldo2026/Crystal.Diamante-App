@@ -1417,13 +1417,24 @@ ${courses.length > 0
         const matriculados = course.matriculados || 0
         const cupos = course.cupos || 0
         const disponibles = course.cupos_disponibles || 0
+        const today = new Date(); today.setHours(0,0,0,0);
+        const fechaInicio = course.fecha_inicio ? new Date(course.fecha_inicio) : null
+        const fechaInicioFmt = fechaInicio && !isNaN(fechaInicio.getTime())
+          ? fechaInicio.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+          : 'Por confirmar'
+        const esFutura = fechaInicio && fechaInicio >= today
+        const fechaFin = course.fecha_fin ? new Date(course.fecha_fin) : null
+        const fechaFinFmt = fechaFin && !isNaN(fechaFin.getTime())
+          ? fechaFin.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+          : 'Por confirmar'
         
         return `
 - **${course.nombre}**
-  📅 Inicio: ${course.fecha_inicio || 'A confirmar'} | Fin: ${course.fecha_fin || 'A confirmar'}
-  ⏰ Horario: ${course.horario || 'A confirmar'}
-  👥 Cupos: ${matriculados}/${cupos} (${disponibles} disponibles)
-  👨‍🏫 Profesor: ${course.profesor_nombre || 'A confirmar'}`
+  Inicio: ${fechaInicioFmt}${esFutura ? ' ✅' : ' (ya inició)'}
+  Fin estimado: ${fechaFinFmt}
+  Horario: ${course.horario || 'Por confirmar'}
+  Cupos: ${matriculados}/${cupos} disponibles: ${disponibles}
+  Profesor: ${course.profesor_nombre || 'Por confirmar'}`
       })
       .join('\n') + '\n\n💰 Inversión: Ver información del programa arriba'
   : 'No hay grupos disponibles para este programa en este momento.'
@@ -1432,21 +1443,29 @@ ${courses.length > 0
 
 ${!detectedProgram && courses.length === 1 && courses[0] ? `
 ### 📖 Grupo Activo Actual (Total: 1):
-- **${courses[0].nombre}** (${courses[0].programa_nombre || 'Programa'})
-  📅 Inicio: ${courses[0].fecha_inicio || 'A confirmar'} | Fin: ${courses[0].fecha_fin || 'A confirmar'}
-  ⏰ Horario: ${courses[0].horario || 'A confirmar'}
-  👥 Cupos: ${courses[0].matriculados || 0}/${courses[0].cupos || 0} (${courses[0].cupos_disponibles || 0} disponibles)
-  👨‍🏫 Profesor: ${courses[0].profesor_nombre || 'A confirmar'}
+${(() => {
+  const c = courses[0]
+  const today = new Date(); today.setHours(0,0,0,0);
+  const fi = c.fecha_inicio ? new Date(c.fecha_inicio) : null
+  const fiFmt = fi && !isNaN(fi.getTime()) ? fi.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Por confirmar'
+  return `- **${c.nombre}** (${c.programa_nombre || 'Programa'})
+  Inicio: ${fiFmt}
+  Horario: ${c.horario || 'Por confirmar'}
+  Cupos disponibles: ${c.cupos_disponibles || 0} de ${c.cupos || 0}
+  Profesor: ${c.profesor_nombre || 'Por confirmar'}`
+})()}
 
 ` : ''}
 
+INSTRUCCIONES PARA RESPONDER PREGUNTAS DE FECHA/INICIO:
+- Usa SIEMPRE las fechas exactas del contexto anterior, NO inventes fechas ni pongas emojis de fecha antes del texto de la fecha.
+- Formato correcto: "martes, 10 de marzo de 2026" — NO uses "📅 Próximo inicio: 📅 Día:"
+- Si la fecha dice "Por confirmar", di exactamente eso.
+- Si no hay fecha futura, di que está por confirmar.
 Cuando un cliente pregunte por un programa específico, muestra sus grupos con horarios y cupos disponibles.
 Los PRECIOS están en el PROGRAMA (nivel superior), NO en los grupos individuales.
-Si pregunta "¿Qué programas tienen?", lista todos los programas con precios y temario.
-Si pregunta "¿Cuándo inicia [programa]?", muestra los grupos disponibles con fechas y horarios específicos.
 Si pregunta "¿Cuánto cuesta [programa]?", usa el precio del PROGRAMA, no del grupo.
-Si solo hay 1 grupo activo en total, dilo directo y muestra sus detalles.
-Si preguntan por el profesor, usa el nombre del profesor del grupo mostrado (si no hay, responde "A confirmar").
+Si preguntan por el profesor, usa el nombre del profesor del grupo mostrado (si no hay, responde "Por confirmar").
 `
 
   return context.trim()

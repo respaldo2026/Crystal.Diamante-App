@@ -1192,7 +1192,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
     return "temario";
   }
-  if (/\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|implementos|lista\s+de\s+materiales)\b/i.test(text)) {
+  if (/\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text)) {
     return "materiales";
   }
   if (/\b(inscrib|matricul|pago|admisiones|contacto|numero|whatsapp|separar\s+cupo)\b/i.test(text)) {
@@ -1254,6 +1254,7 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
 
   // Inferir por la última pregunta específica del agente
   if (normalizedQuestion) {
+    if (/\b(referencia|como llegar|llegar mas facil|indicaciones|llegar alli)\b/i.test(normalizedQuestion)) return "quiero la referencia para llegar";
     if (/\b(validar|confirmar|grupo|horario|queda bien|otro horario|mostrar otra opcion)\b/i.test(normalizedQuestion)) return "quiero confirmar el horario y grupo";
     if (/\b(separar cupo|reservar|inscribir|matricular|avanzar con el cupo)\b/i.test(normalizedQuestion)) return "quiero inscribirme y separar cupo";
     if (/\b(formas de pago|medios de pago|fechas de pago|metodo de pago)\b/i.test(normalizedQuestion)) return "quiero saber los medios de pago";
@@ -1536,8 +1537,8 @@ function extractCorrectedProgramName(message: string): string | null {
   return null;
 }
 
-// Términos que NO son nombres de programas y deben ignorarse
-const NON_PROGRAM_TOPICS = /^(cupo|cupos|cupos disponibles|precio|precios|info|informacion|horario|horarios|fecha|fechas|clase|clases|material|materiales|inscripcion|matricula|certificado|redes|instagram|facebook|whatsapp|ubicacion|direccion|sede|cali|colombia)$/i;
+// Términos que NO son nombres de programas y deben ignorarse (con o sin artículos)
+const NON_PROGRAM_TOPICS = /^(el |la |los |las |un |una |unos |unas )?(cupo|cupos|cupos disponibles|precio|precios|info|informacion|horario|horarios|fecha|fechas|clase|clases|material|materiales|insumo|insumos|kit|kits|inscripcion|matricula|certificado|redes|instagram|facebook|whatsapp|ubicacion|direccion|sede|cali|colombia)$/i;
 
 function extractProgramInquiryTopic(message: string): string | null {
   const normalized = normalizeForMatch(message);
@@ -2294,7 +2295,7 @@ function buildTodayClassDirectResponse(
 
 function isNextGroupQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(cuando hay otro curso|cuando hay otro|otro curso|proximo grupo|siguiente grupo|proximo curso|nuevo grupo|cuando abren|cuando inicia el proximo)\b/i.test(text);
+  return /\b(cuando hay otro curso|cuando hay otro|otro curso|proximo grupo|siguiente grupo|proximo curso|nuevo grupo|cuando abren|cuando inicia el proximo|cual curso va a iniciar|cual curso inicia|que curso inicia|que curso va a iniciar|proximo en iniciar|va a iniciar|van a iniciar)\b/i.test(text);
 }
 
 function hasRecentNextGroupContext(history: Array<{ user: string; agent: string }>): boolean {
@@ -2326,8 +2327,28 @@ function buildNextGroupDirectResponse(
   courses: any[],
   now: Date
 ): string {
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+
+  // Sin programa detectado → mostrar TODOS los próximos inicios
   if (!detectedProgram) {
-    return "¡Claro! Te ayudo con eso. ¿De cuál curso quieres que te confirme el próximo grupo?";
+    const upcoming = (courses || [])
+      .filter((c) => c?.fecha_inicio && !Number.isNaN(new Date(c.fecha_inicio).getTime()) && new Date(c.fecha_inicio) >= today)
+      .sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime());
+
+    if (!upcoming.length) {
+      return "En este momento no hay fechas de inicio confirmadas. Apenas se publiquen te las comparto. ¿Quieres que te avise?";
+    }
+
+    const lines = upcoming.slice(0, 5).map((c) => {
+      const nombre = c.programa_nombre || c.nombre || "Curso";
+      const fecha = formatDateLong(c.fecha_inicio) || formatDateShort(c.fecha_inicio) || "Por confirmar";
+      const horario = c.horario || "Por confirmar";
+      const disponibles = Number(c.cupos_disponibles ?? 0);
+      const cuposStr = disponibles > 0 ? `${disponibles} cupo${disponibles === 1 ? "" : "s"}` : "Sin cupos";
+      return `💎 *${nombre}*\n   📅 Inicio: ${fecha}\n   🕓 ${horario} | 👥 ${cuposStr}`;
+    });
+
+    return `Estos son los próximos grupos que inician:\n\n${lines.join("\n\n")}\n\n¿Cuál te interesa? Te ayudo a separar cupo 🙌`;
   }
 
   const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
@@ -2344,15 +2365,17 @@ function buildNextGroupDirectResponse(
   const nextWithDate = relatedCourses
     .filter((course) => course?.fecha_inicio && !Number.isNaN(new Date(course.fecha_inicio).getTime()))
     .sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime())
-    .find((course) => new Date(course.fecha_inicio).getTime() >= now.getTime() - 24 * 60 * 60 * 1000);
+    .find((course) => new Date(course.fecha_inicio).getTime() >= today.getTime() - 24 * 60 * 60 * 1000);
 
   if (nextWithDate) {
     const dateLabel = formatDateLong(nextWithDate.fecha_inicio) || formatDateShort(nextWithDate.fecha_inicio) || "Por confirmar";
     const horario = nextWithDate?.horario || "Por confirmar";
-    return `Te entiendo, este grupo ya va avanzado.\n\n💎 ${detectedProgram.nombre}\n🗓️ Próximo grupo: ${dateLabel}\n⏰ Horario: ${horario}\n\nSi quieres, te dejo pendiente para avisarte apenas abran inscripciones.`;
+    const disponibles = Number(nextWithDate.cupos_disponibles ?? 0);
+    const cuposStr = disponibles > 0 ? `✅ ${disponibles} cupo${disponibles === 1 ? "" : "s"} disponible${disponibles === 1 ? "" : "s"}` : "❌ Sin cupos";
+    return `💎 *${detectedProgram.nombre}*\n\n📅 *Próximo inicio:* ${dateLabel}\n🕓 *Horario:* ${horario}\n👥 ${cuposStr}\n\n¿Te reservo el cupo ahora?`;
   }
 
-  return `Te entiendo, este grupo ya va avanzado.\n\n💎 ${detectedProgram.nombre}\n🗓️ Próximo grupo: Por confirmar\n⏰ Horario: Por confirmar\n\nApenas publiquemos nueva fecha, te la comparto de inmediato. ¿Quieres que te avise?`;
+  return `Para *${detectedProgram.nombre}* el próximo grupo está por confirmar. Apenas tengamos fecha te aviso. ¿Quieres que te notifiquemos?`;
 }
 
 function shouldUseTodayClassDirectResponse(
