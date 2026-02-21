@@ -1241,16 +1241,39 @@ function isShortAffirmativeReply(message: string): boolean {
 
 function inferPendingTopicFromHistory(history: Array<{ user: string; agent: string }>): string {
   const lastAgent = String(history[history.length - 1]?.agent || "");
-  const normalized = normalizeForMatch(lastAgent);
+  if (!lastAgent) return "";
 
-  if (!normalized) return "";
-  if (/\b(inversion|inscripcion|mensualidad|precio|costa|valor)\b/i.test(normalized)) return "quiero saber la inversion";
+  // Leer SOLO la última pregunta del agente (después del último "?")
+  // Esto evita que keywords del cuerpo del mensaje (ej: "inversión") contaminen la inferencia
+  const questionParts = lastAgent.split("?");
+  // La última pregunta real es la penúltima parte (la última está vacía si termina en "?")
+  const lastQuestion = questionParts.length >= 2
+    ? (questionParts[questionParts.length - 2] || "").split(/[\n\r]/).pop() || ""
+    : "";
+  const normalizedQuestion = normalizeForMatch(lastQuestion);
+
+  // Inferir por la última pregunta específica del agente
+  if (normalizedQuestion) {
+    if (/\b(validar|confirmar|grupo|horario|queda bien|otro horario|mostrar otra opcion)\b/i.test(normalizedQuestion)) return "quiero confirmar el horario y grupo";
+    if (/\b(separar cupo|reservar|inscribir|matricular|avanzar con el cupo)\b/i.test(normalizedQuestion)) return "quiero inscribirme y separar cupo";
+    if (/\b(formas de pago|medios de pago|fechas de pago|metodo de pago)\b/i.test(normalizedQuestion)) return "quiero saber los medios de pago";
+    if (/\b(pasos de inscripcion|como me inscribo|como inscribirme)\b/i.test(normalizedQuestion)) return "quiero saber como me inscribo";
+    if (/\b(inversion|precio|inscripcion|mensualidad)\b/i.test(normalizedQuestion)) return "quiero saber la inversion";
+    if (/\b(fecha|inicio|horario|dias|dia|hora)\b/i.test(normalizedQuestion)) return "quiero saber dias y horario";
+    if (/\b(cupo|cupos|disponible)\b/i.test(normalizedQuestion)) return "quiero saber si hay cupos disponibles";
+    if (/\b(material|materiales|insumo|kit)\b/i.test(normalizedQuestion)) return "quiero saber materiales";
+    if (/\b(temario|contenido|modulo|ciclo)\b/i.test(normalizedQuestion)) return "quiero saber el temario";
+  }
+
+  // Fallback: escanear todo el mensaje (solo si no hubo pregunta clara)
+  const normalized = normalizeForMatch(lastAgent);
   if (/\b(cupo|cupos|disponible|disponibles)\b/i.test(normalized)) return "quiero saber si hay cupos disponibles";
   if (/\b(proximo grupo|siguiente grupo|proximo curso|fecha confirmada|por confirmar)\b/i.test(normalized)) return "quiero saber el proximo grupo y su fecha";
-  if (/\b(horario|dias|dia|hora)\b/i.test(normalized)) return "quiero saber dias y horario";
   if (/\b(materiales|material|insumo|kit|por clase o por ciclo)\b/i.test(normalized)) return "quiero saber materiales";
   if (/\b(temario|contenido|modulo|modulos|ciclo)\b/i.test(normalized)) return "quiero saber el temario";
+  if (/\b(horario|dias|dia|hora)\b/i.test(normalized)) return "quiero saber dias y horario";
   if (/\b(inscripcion|inscribirme|admisiones|matricula|matricularme|pago)\b/i.test(normalized)) return "quiero saber como me inscribo";
+  if (/\b(inversion|mensualidad|precio|costa|valor)\b/i.test(normalized)) return "quiero saber la inversion";
 
   return "";
 }
