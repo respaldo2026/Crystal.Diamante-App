@@ -94,6 +94,8 @@ interface ChatBubbleItem {
   role: "user" | "agent";
   text: string;
   created_at: string;
+  imageUrl?: string;
+  imageCaption?: string;
 }
 
 const escapeHtml = (value: string) =>
@@ -502,13 +504,36 @@ export default function ConversacionesPage() {
           created_at: conv.created_at,
         });
       }
-      if ((conv.agent_response || "").trim()) {
-        items.push({
-          key: `${conv.id}-agent`,
-          role: "agent",
-          text: conv.agent_response,
-          created_at: conv.created_at,
-        });
+      const agentText = (conv.agent_response || "").trim();
+      if (agentText) {
+        // Detectar marcador de imagen: [📷 URL|caption]\n
+        const imgMatch = agentText.match(/^\[📷 ([^\|\]]+)\|([^\]]*)\]\n?/);
+        if (imgMatch) {
+          items.push({
+            key: `${conv.id}-img`,
+            role: "agent",
+            text: "",
+            imageUrl: imgMatch[1].trim(),
+            imageCaption: imgMatch[2].trim(),
+            created_at: conv.created_at,
+          });
+          const textWithoutMarker = agentText.replace(/^\[📷 [^\]]+\]\n?/, "").trim();
+          if (textWithoutMarker) {
+            items.push({
+              key: `${conv.id}-agent`,
+              role: "agent",
+              text: textWithoutMarker,
+              created_at: conv.created_at,
+            });
+          }
+        } else {
+          items.push({
+            key: `${conv.id}-agent`,
+            role: "agent",
+            text: agentText,
+            created_at: conv.created_at,
+          });
+        }
       }
       return items;
     });
@@ -1114,11 +1139,25 @@ export default function ConversacionesPage() {
                       <div style={{ display: "none", fontSize: 11, fontWeight: 700, marginBottom: 4, color: "#54656f" }}>
                         {isUser ? "Estudiante" : "Agente"}
                       </div>
-                      <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.35, tabSize: 4, fontSize: 14.2, color: "#111b21" }}>
-                        <span
-                          dangerouslySetInnerHTML={{ __html: formatWhatsAppTextToHtml(item.text) }}
-                        />
-                      </div>
+                      {item.imageUrl ? (
+                        <div style={{ overflow: "hidden", borderRadius: 4 }}>
+                          <img
+                            src={item.imageUrl}
+                            alt={item.imageCaption || "Imagen enviada"}
+                            style={{ width: "100%", display: "block", borderRadius: 4, maxHeight: 220, objectFit: "cover" }}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                          {item.imageCaption && (
+                            <div style={{ fontSize: 13, color: "#111b21", padding: "4px 2px 2px" }}>{item.imageCaption}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.35, tabSize: 4, fontSize: 14.2, color: "#111b21" }}>
+                          <span
+                            dangerouslySetInnerHTML={{ __html: formatWhatsAppTextToHtml(item.text) }}
+                          />
+                        </div>
+                      )}
                       <div style={{ fontSize: 11, color: "#667781", textAlign: "right", marginTop: 4 }}>
                         {dayjs(item.created_at).format("DD/MM/YYYY HH:mm")}
                       </div>

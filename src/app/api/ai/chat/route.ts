@@ -2936,8 +2936,12 @@ export async function POST(req: NextRequest) {
 
     if (directIntentResponse) {
       const truncatedResponse = truncateResponse(directIntentResponse, 1000);
+      const activeMedia = detectedProgram ? mediaSuggestion : null;
+      const responseToSave = activeMedia
+        ? `[📷 ${activeMedia.mediaUrl}|${activeMedia.caption}]\n${truncatedResponse}`
+        : truncatedResponse;
 
-      await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+      await saveConversation(supabase, phone || "unknown", message, responseToSave);
 
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
@@ -3027,8 +3031,12 @@ export async function POST(req: NextRequest) {
     // Truncar respuesta si es muy larga (máx 1000 caracteres para chat)
     const truncatedResponse = truncateResponse(cleanedAgentResponse, 1000);
 
-    // Guardar en historiales (guardar la versión truncada)
-    await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+    // Guardar en historiales — incluir marcador de imagen si aplica
+    const activeMediaFinal = detectedProgram ? mediaSuggestion : null;
+    const responseToSaveFinal = activeMediaFinal
+      ? `[📷 ${activeMediaFinal.mediaUrl}|${activeMediaFinal.caption}]\n${truncatedResponse}`
+      : truncatedResponse;
+    await saveConversation(supabase, phone || "unknown", message, responseToSaveFinal);
 
     // Sanitizar respuesta para JSON válido
     const sanitizedResponse = sanitizeForJSON(truncatedResponse);
