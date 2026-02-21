@@ -1,4 +1,4 @@
-export type AgentIntent = "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "general";
+export type AgentIntent = "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "general";
 
 export interface AgentImageSuggestion {
   type: "image";
