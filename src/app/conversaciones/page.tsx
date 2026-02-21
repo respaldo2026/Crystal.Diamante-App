@@ -144,6 +144,58 @@ const formatWhatsAppTextToHtml = (value: string) => {
   return withStrike;
 };
 
+interface SocialLinkPreview {
+  url: string;
+  platform: string;
+  title: string;
+  subtitle: string;
+}
+
+const normalizeUrlForPreview = (raw: string): string => {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+};
+
+const extractSocialLinkPreview = (text: string): SocialLinkPreview | null => {
+  if (!text) return null;
+
+  const match = text.match(/((?:https?:\/\/|www\.)[^\s<]+)/i);
+  if (!match || !match[1]) return null;
+
+  const normalizedUrl = normalizeUrlForPreview(match[1]);
+  let hostname = "";
+  try {
+    hostname = new URL(normalizedUrl).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+
+  const host = hostname.replace(/^www\./, "");
+
+  const platforms: Array<{ domains: string[]; title: string; subtitle: string }> = [
+    { domains: ["instagram.com"], title: "Instagram", subtitle: "Ver perfil/publicación" },
+    { domains: ["facebook.com", "fb.com"], title: "Facebook", subtitle: "Ver página/publicación" },
+    { domains: ["youtube.com", "youtu.be"], title: "YouTube", subtitle: "Ver video/canal" },
+    { domains: ["tiktok.com"], title: "TikTok", subtitle: "Ver perfil/video" },
+    { domains: ["maps.app.goo.gl", "google.com", "goo.gl"], title: "Google Maps", subtitle: "Ver ubicación" },
+  ];
+
+  const platform = platforms.find((item) =>
+    item.domains.some((domain) => host === domain || host.endsWith(`.${domain}`))
+  );
+
+  if (!platform) return null;
+
+  return {
+    url: normalizedUrl,
+    platform: platform.title,
+    title: platform.title,
+    subtitle: platform.subtitle,
+  };
+};
+
 const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[]) => {
   const bubbles = messages
     .map((item) => {
@@ -1122,6 +1174,10 @@ export default function ConversacionesPage() {
             ) : (
               previewMessages.map((item) => {
                 const isUser = item.role === "user";
+                const socialLink = !item.imageUrl ? extractSocialLinkPreview(item.text) : null;
+                const textWithoutSocialLink = socialLink
+                  ? item.text.replace(socialLink.url, "").trim()
+                  : item.text;
                 return (
                   <div
                     key={item.key}
@@ -1152,10 +1208,38 @@ export default function ConversacionesPage() {
                           )}
                         </div>
                       ) : (
-                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.35, tabSize: 4, fontSize: 14.2, color: "#111b21" }}>
-                          <span
-                            dangerouslySetInnerHTML={{ __html: formatWhatsAppTextToHtml(item.text) }}
-                          />
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {socialLink && (
+                            <a
+                              href={socialLink.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ textDecoration: "none" }}
+                            >
+                              <div
+                                style={{
+                                  border: "1px solid #d9d9d9",
+                                  borderRadius: 8,
+                                  padding: "8px 10px",
+                                  background: "#f5f5f5",
+                                  minWidth: 220,
+                                }}
+                              >
+                                <div style={{ fontSize: 12, fontWeight: 700, color: "#1f1f1f", marginBottom: 2 }}>
+                                  {socialLink.title}
+                                </div>
+                                <div style={{ fontSize: 12, color: "#595959", marginBottom: 4 }}>{socialLink.subtitle}</div>
+                                <div style={{ fontSize: 11, color: "#1677ff", wordBreak: "break-all" }}>{socialLink.url}</div>
+                              </div>
+                            </a>
+                          )}
+                          {textWithoutSocialLink ? (
+                            <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.35, tabSize: 4, fontSize: 14.2, color: "#111b21" }}>
+                              <span
+                                dangerouslySetInnerHTML={{ __html: formatWhatsAppTextToHtml(textWithoutSocialLink) }}
+                              />
+                            </div>
+                          ) : null}
                         </div>
                       )}
                       <div style={{ fontSize: 11, color: "#667781", textAlign: "right", marginTop: 4 }}>

@@ -66,7 +66,7 @@ export async function sendWhatsAppTextMessage(
     to: cleanPhone,
     type: 'text',
     text: {
-      preview_url: false,
+      preview_url: true,
       body: message,
     },
   };
