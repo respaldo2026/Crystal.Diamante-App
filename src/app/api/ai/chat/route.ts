@@ -1172,11 +1172,17 @@ NO inventes horarios, precios ni fechas que no estén en el contexto.
 
 function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "general" {
   const text = normalizeForMatch(message);
+  const hasPriceIntent = /\b(precio|precios|costo|costos|cuanto|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
+  const hasScheduleIntent = /\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text);
+  const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horario|hora)\b/i.test(text);
 
-  if (/\b(precio|precios|costo|costos|cuanto|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text)) {
+  if (hasScheduleIntent && hasStrongScheduleIntent) {
+    return "horario";
+  }
+  if (hasPriceIntent) {
     return "precio";
   }
-  if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text)) {
+  if (hasScheduleIntent) {
     return "horario";
   }
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
@@ -1649,6 +1655,31 @@ function buildFastTrackHumanReply(
   return `Perfecto, te entiendo 💯\n\nEl plan *${detectedProgram.nombre}* está en *${duration}*.\n\nPara una ruta más corta de *perfeccionamiento*, te confirmo la disponibilidad actual y así avanzamos sobre algo concreto.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario actual: ${schedule}\n\n¿Quieres que te pase de una la opción más corta?`;
 }
 
+function buildScheduleHumanReply(
+  message: string,
+  history: Array<{ user: string; agent: string }>,
+  detectedProgram: any,
+  nextStart: string,
+  schedule: string
+): string {
+  const tone = pickHumanToneSeed(message, history);
+  const normalized = normalizeForMatch(message);
+  const asksOnlyStart = /\b(cuando|inicio|arranca|empieza|fecha)\b/i.test(normalized) && !/\b(precio|inversion|mensualidad|inscrip|cuota|pago)\b/i.test(normalized);
+  const followup = asksOnlyStart
+    ? "Si quieres, después te comparto también la inversión."
+    : "Si te sirve, también te puedo compartir la inversión.";
+
+  if (tone === 0) {
+    return `¡Claro! Te cuento de una 🙌\n\n📚 *${detectedProgram.nombre}*\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}\n¿Te queda bien ese horario o te muestro otra opción?`;
+  }
+
+  if (tone === 1) {
+    return `Perfecto, aquí va rápido 👌\n\nPara *${detectedProgram.nombre}* tenemos:\n📅 *Inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}\n¿Quieres que te ayude a validar el grupo que mejor te queda?`;
+  }
+
+  return `Súper, te confirmo ese dato ✨\n\n📚 *${detectedProgram.nombre}*\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}\n¿Quieres que avancemos con el cupo de ese horario?`;
+}
+
 function buildIntentFocusedDirectResponse(
   message: string,
   detectedProgram: any | null,
@@ -1845,7 +1876,7 @@ function buildIntentFocusedDirectResponse(
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
 
-    return `📚 *${detectedProgram.nombre}*\n\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n💸 ¿Quieres que te confirme también la *inversión*?`;
+    return buildScheduleHumanReply(message, history, detectedProgram, nextStart, schedule);
   }
 
   return null;
@@ -2623,8 +2654,17 @@ export async function POST(req: NextRequest) {
       }
 
       if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage) && detectedProgram) {
+        const currentIntent = detectUserIntent(effectiveMessage);
+        const forcedTopicByIntent: Record<typeof currentIntent, string> = {
+          precio: "quiero saber la inversion",
+          horario: "quiero saber dias y horario",
+          temario: "quiero saber el temario",
+          materiales: "quiero saber materiales",
+          inscripcion: "quiero saber como me inscribo",
+          general: "quiero saber dias y horario",
+        };
         const forcedProgressResponse = buildIntentFocusedDirectResponse(
-          `${effectiveMessage}. quiero saber la inversion.`,
+          `${effectiveMessage}. ${forcedTopicByIntent[currentIntent]}.`,
           detectedProgram,
           courses,
           academy,
