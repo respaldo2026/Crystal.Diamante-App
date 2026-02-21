@@ -1438,12 +1438,30 @@ function isLocationQuestion(message: string): boolean {
   if (/\b(donde se ubican|donde estan|donde quedan|direccion|ubicacion|ubicados|sede|en cali donde)\b/i.test(text)) {
     return true;
   }
+  // Preguntas tipo "¿Están en Cali?", "¿quedan en Cali?" o "¿son de Cali?"
+  if (/\b(estan en|son de|quedan en|ubicados en|sede en)\b/i.test(text) && !/\b(pago|pagar|inscrib|matricul|precio|cuanto|valor|mensualidad)\b/i.test(text)) {
+    return true;
+  }
 
   if (/\bdonde\b/i.test(text) && !/\b(pago|pagar|inscrib|matricul|precio|cuanto|valor|mensualidad)\b/i.test(text)) {
     return true;
   }
 
   return false;
+}
+
+function isCuposQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(cupo|cupos|hay cupo|hay cupos|cupos disponibles|quedan cupos|queda cupo|cupos libres|disponibilidad|hay espacio|hay lugar)\b/i.test(text);
+}
+
+function isPaymentMethodQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  // Detecta preguntas sobre CÓMO pagar, no sobre el precio
+  return (
+    /\b(nequi|daviplata|transferencia|presencial|virtual|en linea|online|efectivo|tarjeta|consignacion|deposito)\b/i.test(text) &&
+    /\b(pagar|pago|pagos|aceptan|reciben|pueden|puedo|puede|se puede|se acepta|admiten)\b/i.test(text)
+  );
 }
 
 function isSocialMediaQuestion(message: string): boolean {
@@ -1495,6 +1513,9 @@ function extractCorrectedProgramName(message: string): string | null {
   return null;
 }
 
+// Términos que NO son nombres de programas y deben ignorarse
+const NON_PROGRAM_TOPICS = /^(cupo|cupos|cupos disponibles|precio|precios|info|informacion|horario|horarios|fecha|fechas|clase|clases|material|materiales|inscripcion|matricula|certificado|redes|instagram|facebook|whatsapp|ubicacion|direccion|sede|cali|colombia)$/i;
+
 function extractProgramInquiryTopic(message: string): string | null {
   const normalized = normalizeForMatch(message);
   if (!normalized) return null;
@@ -1513,7 +1534,8 @@ function extractProgramInquiryTopic(message: string): string | null {
       .replace(/\s+/g, " ")
       .trim();
 
-    if (candidate.length >= 3) return candidate;
+    // Excluir términos que no son nombres de programas
+    if (candidate.length >= 3 && !NON_PROGRAM_TOPICS.test(candidate)) return candidate;
   }
 
   return null;
@@ -1602,6 +1624,82 @@ function buildInstagramFollowup(academy: any | null): string {
 
   if (!links.length) return "";
   return `\n\n📲 Si quieres más info, también te comparto nuestras redes:\n${links.join("\n")}`;
+}
+
+function buildCuposReply(
+  detectedProgram: any | null,
+  courses: any[],
+  programs: any[]
+): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Si hay un programa detectado, mostrar cupos de ese programa
+  if (detectedProgram) {
+    const programCourses = courses.filter((c) => {
+      const sameProgramId = c?.programa_id && Number(c.programa_id) === Number(detectedProgram.id);
+      const sameProgramName = normalizeForMatch(c?.programa_nombre || "").includes(normalizeForMatch(detectedProgram?.nombre || ""));
+      return sameProgramId || sameProgramName;
+    });
+
+    const upcomingCourses = programCourses
+      .filter((c) => {
+        const start = c.fecha_inicio ? new Date(c.fecha_inicio) : null;
+        return !start || start >= today;
+      })
+      .sort((a, b) => {
+        const da = a.fecha_inicio ? new Date(a.fecha_inicio).getTime() : Infinity;
+        const db = b.fecha_inicio ? new Date(b.fecha_inicio).getTime() : Infinity;
+        return da - db;
+      });
+
+    if (!upcomingCourses.length) {
+      return `Para *${detectedProgram.nombre}* aún no hay grupos con fecha de inicio programada.\n\n¿Quieres que te avise cuando se abra la inscripción?`;
+    }
+
+    const lines = upcomingCourses.slice(0, 3).map((c) => {
+      const disponibles = Number(c.cupos_disponibles ?? 0);
+      const total = Number(c.cupos ?? 0);
+      const fechaStr = c.fecha_inicio ? (formatDateLong(c.fecha_inicio) || formatDateShort(c.fecha_inicio)) : "Por confirmar";
+      const horario = c.horario || "Por confirmar";
+      const cuposStr = disponibles > 0 ? `✅ ${disponibles} cupo${disponibles === 1 ? "" : "s"} disponible${disponibles === 1 ? "" : "s"}${total > 0 ? ` de ${total}` : ""}` : "❌ Sin cupos";
+      return `📅 *${fechaStr}* | 🕓 ${horario}\n👥 ${cuposStr}`;
+    });
+
+    return `*${detectedProgram.nombre}* — Grupos próximos:\n\n${lines.join("\n\n")}\n\n¿Te reservo un cupo ahora?`;
+  }
+
+  // Sin programa detectado: mostrar todos los programas con sus cupos
+  const summary: string[] = [];
+  for (const program of programs.slice(0, 5)) {
+    const programCourses = courses.filter((c) => {
+      const sameProgramId = c?.programa_id && Number(c.programa_id) === Number(program.id);
+      const sameProgramName = normalizeForMatch(c?.programa_nombre || "").includes(normalizeForMatch(program?.nombre || ""));
+      return sameProgramId || sameProgramName;
+    });
+
+    const upcoming = programCourses
+      .filter((c) => {
+        const start = c.fecha_inicio ? new Date(c.fecha_inicio) : null;
+        return !start || start >= today;
+      })
+      .sort((a, b) => {
+        const da = a.fecha_inicio ? new Date(a.fecha_inicio).getTime() : Infinity;
+        const db = b.fecha_inicio ? new Date(b.fecha_inicio).getTime() : Infinity;
+        return da - db;
+      })[0];
+
+    if (!upcoming) continue;
+    const disponibles = Number(upcoming.cupos_disponibles ?? 0);
+    const cuposStr = disponibles > 0 ? `✅ ${disponibles} cupo${disponibles === 1 ? "" : "s"}` : "❌ Sin cupos";
+    summary.push(`• *${program.nombre}*: ${cuposStr}`);
+  }
+
+  if (!summary.length) {
+    return "En este momento estamos actualizando la disponibilidad de cupos. ¿Quieres que te comparta los grupos activos para elegir el que más te convenga?";
+  }
+
+  return `Aquí tienes la disponibilidad de cupos por programa:\n\n${summary.join("\n")}\n\n¿Cuál te interesa? Te ayudo a reservar el tuyo 🙌`;
 }
 
 function buildSocialMediaReply(academy: any | null): string {
@@ -1757,6 +1855,16 @@ function buildIntentFocusedDirectResponse(
     return buildSocialMediaReply(academy);
   }
 
+  // Preguntas sobre medios de pago (nequi, presencial, etc.) → dejar que Gemini responda con info real
+  if (isPaymentMethodQuestion(message)) {
+    return null;
+  }
+
+  // Preguntas sobre cupos → responder con datos reales de la DB
+  if (isCuposQuestion(message)) {
+    return buildCuposReply(detectedProgram, courses, programs);
+  }
+
   const requestedTopic = extractProgramInquiryTopic(message);
   if (requestedTopic) {
     const matchedProgram = findProgramMatchByTopic(requestedTopic, programs);
@@ -1811,12 +1919,18 @@ function buildIntentFocusedDirectResponse(
     return `📚 *${detectedProgram.nombre}*\n\n⏳ *Duración:* ${duration || "el tiempo definido en el plan académico"}${totalClasses ? ` (${totalClasses})` : ""}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta ahora la *inversión*?`;
   }
 
-  if (asksGeneralInfo || intent === "general") {
+  if (asksGeneralInfo) {
+    // Solo mostrar ficha si fue una solicitud explícita de info general del curso
     const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : "duración según plan académico");
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
 
     return `✨ *${detectedProgram.nombre}*\n\n✅ Formación práctica desde cero\n⏳ *Duración:* ${duration}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres conocer el precio de la inscripción y mensualidad?`;
+  }
+
+  // intent === "general" sin solicitud explícita → dejar que Gemini responda de forma natural
+  if (intent === "general") {
+    return null;
   }
 
   if (intent === "temario") {
