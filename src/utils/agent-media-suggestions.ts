@@ -184,17 +184,17 @@ export async function getAgentImageSuggestion(
         return new Date(String(b.asset.created_at || 0)).getTime() - new Date(String(a.asset.created_at || 0)).getTime();
       });
 
-    const fallbackByProgram = params.programId
-      ? candidates
-          .filter((asset) => Number(asset.programa_id) === Number(params.programId))
-          .sort((a, b) => new Date(String(b.created_at || 0)).getTime() - new Date(String(a.created_at || 0)).getTime())[0]
-      : null;
+    // Solo devolver imagen si hay un puntaje mínimo de relevancia (15 puntos)
+    const MINIMUM_SCORE = 15;
+    
+    const bestRanked = ranked[0];
+    
+    // Si el mejor puntaje es menor al mínimo, no devolver imagen
+    if (!bestRanked || bestRanked.score < MINIMUM_SCORE) {
+      return null;
+    }
 
-    const fallbackRecent = candidates
-      .slice()
-      .sort((a, b) => new Date(String(b.created_at || 0)).getTime() - new Date(String(a.created_at || 0)).getTime())[0];
-
-    const best = ranked[0]?.asset || fallbackByProgram || fallbackRecent;
+    const best = bestRanked.asset;
     if (!best?.url_archivo) {
       return null;
     }
