@@ -1097,10 +1097,33 @@ function extractTemarioHighlights(rawTemario: string, maxItems?: number): string
     .filter((item) => item.length >= 4)
     .filter((item) => !/^contenido\s+detallado\s+por\s+ciclos?$/i.test(item));
 
+  const classSegments = segments.filter((item) => /^(\d{1,2})\s*[.)-]\s+/.test(item) || /^clase\s*\d{1,2}\b/i.test(item));
+
+  if (classSegments.length > 0) {
+    const uniqueClasses: string[] = [];
+    const seenClassNumbers = new Set<string>();
+
+    for (const segment of classSegments) {
+      const classMatch = segment.match(/^(\d{1,2})\s*[.)-]\s+/) || segment.match(/^clase\s*(\d{1,2})\b/i);
+      const classNumber = classMatch?.[1] || normalizeForMatch(segment);
+      if (!classNumber || seenClassNumbers.has(classNumber)) continue;
+
+      seenClassNumbers.add(classNumber);
+      uniqueClasses.push(segment);
+
+      if (typeof maxItems === "number" && maxItems > 0 && uniqueClasses.length >= maxItems) break;
+    }
+
+    return uniqueClasses;
+  }
+
   const unique: string[] = [];
   const seen = new Set<string>();
 
   for (const segment of segments) {
+    if (/^mes\s+\d+\b/i.test(segment)) continue;
+    if (/^temario\s+detallado/i.test(segment)) continue;
+
     const key = normalizeForMatch(segment);
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -1109,6 +1132,45 @@ function extractTemarioHighlights(rawTemario: string, maxItems?: number): string
   }
 
   return unique;
+}
+
+function extractTemarioClassCount(rawTemario: string): number {
+  const text = String(rawTemario || "");
+  if (!text) return 0;
+
+  const lines = text
+    .replace(/\r/g, "\n")
+    .split(/\n+/)
+    .map((line) =>
+      line
+        .replace(/\*+/g, "")
+        .replace(/^[\s•▪◦·\-–]+/, "")
+        .trim()
+    )
+    .filter(Boolean);
+
+  const numbers = new Set<string>();
+  for (const line of lines) {
+    const match = line.match(/^(\d{1,2})\s*[.)-]\s+/) || line.match(/^clase\s*(\d{1,2})\b/i);
+    if (match?.[1]) {
+      numbers.add(match[1]);
+    }
+  }
+
+  return numbers.size;
+}
+
+function inferTemarioCyclesCount(rawTemario: string): number {
+  const text = normalizeForMatch(rawTemario || "");
+  if (!text) return 0;
+
+  const monthMatches = text.match(/\bmes\s+\d+\b/g) || [];
+  if (monthMatches.length > 0) {
+    return new Set(monthMatches.map((m) => m.trim())).size;
+  }
+
+  const cycleMatches = text.match(/\bciclo\s+\d+\b/g) || [];
+  return new Set(cycleMatches.map((m) => m.trim())).size;
 }
 
 function buildInstagramFollowup(academy: any | null): string {
@@ -1334,13 +1396,32 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   if (intent === "temario") {
-    const highlights = extractTemarioHighlights(detectedProgram?.contenido || "");
+    const rawTemario = detectedProgram?.contenido || "";
+    const highlights = extractTemarioHighlights(rawTemario, 10);
     if (highlights.length > 0) {
-      const totalCycles = highlights.length;
       const explicitClasses = Number(detectedProgram?.total_clases ?? 0);
-      const totalClasses = explicitClasses > 0 ? explicitClasses : totalCycles * 4;
-      const lines = highlights.map((item, index) => `🔹 *Ciclo ${index + 1}:* ${item}`).join("\n");
-      return `📚 *Temario de ${detectedProgram.nombre}*\n\n🧩 Este programa tiene *${totalCycles} ciclos* y *${totalClasses} clases*.\n✨ Trataremos:\n${lines}\n\n💸 ¿Quieres conocer el precio de la inscripción y mensualidad?`;
+      const inferredClasses = extractTemarioClassCount(rawTemario);
+      const totalClasses = explicitClasses > 0 ? explicitClasses : (inferredClasses > 0 ? inferredClasses : highlights.length);
+
+      const explicitCycles = Number(detectedProgram?.total_ciclos ?? detectedProgram?.ciclos ?? 0);
+      const inferredCycles = inferTemarioCyclesCount(rawTemario);
+      const totalCycles = explicitCycles > 0 ? explicitCycles : inferredCycles;
+
+      const summaryLine = totalCycles > 0
+        ? `🧩 Este programa tiene *${totalCycles} ciclos* y *${totalClasses} clases*.`
+        : `🧩 Este programa tiene *${totalClasses} clases* en su ruta formativa.`;
+
+      const lines = highlights.map((item, index) => {
+        const classNumberMatch = item.match(/^(\d{1,2})\s*[.)-]\s+/) || item.match(/^clase\s*(\d{1,2})\b/i);
+        const classNumber = classNumberMatch?.[1] || String(index + 1);
+        const cleanItem = item
+          .replace(/^(\d{1,2})\s*[.)-]\s+/, "")
+          .replace(/^clase\s*\d{1,2}\s*[:.-]?\s*/i, "")
+          .trim();
+        return `🔹 *Clase ${classNumber}:* ${cleanItem}`;
+      }).join("\n");
+
+      return `📚 *Temario de ${detectedProgram.nombre}*\n\n${summaryLine}\n✨ Trataremos:\n${lines}\n\n💸 ¿Quieres conocer el precio de la inscripción y mensualidad?`;
     }
 
     return `📚 *Temario de ${detectedProgram.nombre}*\n\nTe comparto el contenido por *ciclos* de forma breve para que sea fácil de leer.\n\n¿Quieres conocer el precio de la inscripción y mensualidad?`;
