@@ -1442,6 +1442,11 @@ function isLocationQuestion(message: string): boolean {
   return false;
 }
 
+function isSocialMediaQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(red|redes|redes sociales|instagram|insta|facebook|face|youtube|tiktok|tik tok|ig|perfil|perfiles|siguelos|siguenos|tienen redes|tienes redes)\b/i.test(text);
+}
+
 function isThanksOnlyMessage(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
@@ -1595,6 +1600,27 @@ function buildInstagramFollowup(academy: any | null): string {
   return `\n\n📲 Si quieres más info, también te comparto nuestras redes:\n${links.join("\n")}`;
 }
 
+function buildSocialMediaReply(academy: any | null): string {
+  const ig = String(academy?.instagram || "").trim();
+  const fb = String(academy?.facebook || "").trim();
+  const yt = String(academy?.youtube || "").trim();
+  const wa = String(academy?.whatsapp || "").trim();
+  const phone = String(academy?.telefono || "").trim();
+
+  const lines: string[] = [];
+  if (ig) lines.push(`📸 Instagram: ${/^https?:\/\//i.test(ig) ? ig : `https://${ig}`}`);
+  if (fb) lines.push(`👤 Facebook: ${/^https?:\/\//i.test(fb) ? fb : `https://${fb}`}`);
+  if (yt) lines.push(`🎥 YouTube: ${/^https?:\/\//i.test(yt) ? yt : `https://${yt}`}`);
+  if (wa) lines.push(`💬 WhatsApp: ${wa}`);
+  if (phone) lines.push(`📞 Teléfono: ${phone}`);
+
+  if (!lines.length) {
+    return "¡Sí! 🙌 Te comparto nuestras redes en un momento. Si prefieres, también te atiendo por WhatsApp para ayudarte de inmediato.";
+  }
+
+  return `¡Sí, claro! 🙌 Estas son nuestras redes y canales de contacto:\n\n${lines.join("\n")}\n\nSi quieres, también te recomiendo por cuál canal te responden más rápido.`;
+}
+
 function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
   if (!courses?.length) return null;
 
@@ -1696,6 +1722,7 @@ function buildIntentFocusedDirectResponse(
   const asksDuration = isDurationQuestion(message);
   const asksFastTrack = isFastTrackQuestion(message);
   let asksLocation = isLocationQuestion(message);
+  const asksSocialMedia = isSocialMediaQuestion(message);
   const asksGeneralInfo = isCourseInfoRequest(message);
 
   if (intent === "general" && isShortAffirmativeReply(message) && history.length > 0) {
@@ -1716,6 +1743,10 @@ function buildIntentFocusedDirectResponse(
       return `Estamos ubicados en ${academy.direccion}. ¿Quieres que también te comparta la referencia para llegar más fácil?`;
     }
     return "Te comparto la ubicación exacta por aquí en un momento. ¿Quieres que también te envíe el WhatsApp de admisiones?";
+  }
+
+  if (asksSocialMedia) {
+    return buildSocialMediaReply(academy);
   }
 
   const requestedTopic = extractProgramInquiryTopic(message);
