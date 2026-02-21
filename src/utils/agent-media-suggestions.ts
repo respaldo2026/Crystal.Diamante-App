@@ -103,6 +103,11 @@ function buildTrustCaption(asset: MarketingAssetCandidate): string {
   return "Así vivimos las clases en Academia Crystal ✨";
 }
 
+// Patrones que NUNCA deben disparar una imagen
+const GREETING_BLOCK_PATTERN = /^(hola|hi|hey|buenos?\s*d[ií]as?|buenas?\s*(tardes?|noches?)|hello|holi|saludos?|qu[eé]\s+tal|c[oó]mo\s+est[aá]s?)[\s!.]*$/i;
+const SHORT_AFFIRMATIVE_BLOCK_PATTERN = /^(si|sí|s+i+p*|ok|okay|okey|dale|listo|claro|perfecto|de\s+una|bien|ya|sip|okok|entendido|genial|excelente|por\s+supuesto|claro\s+que\s+si|aha|mhm|mhmm)[\s!.?]*$/i;
+const GENERIC_INFO_BLOCK_PATTERN = /^(informaci[oó]n|m[aá]s\s+info|info|quiero\s+(saber|m[aá]s)|quiero\s+informaci[oó]n)[\s!.?]*$/i;
+
 export async function getAgentImageSuggestion(
   supabase: any,
   params: {
@@ -116,6 +121,22 @@ export async function getAgentImageSuggestion(
   try {
     const normalizedMessage = normalizeText(params.message || "");
     if (!normalizedMessage) return null;
+
+    // Bloquear imágenes en saludos, afirmaciones cortas y solicitudes genéricas de info
+    const rawMessage = (params.message || "").trim();
+    if (
+      GREETING_BLOCK_PATTERN.test(rawMessage) ||
+      SHORT_AFFIRMATIVE_BLOCK_PATTERN.test(rawMessage) ||
+      GENERIC_INFO_BLOCK_PATTERN.test(rawMessage)
+    ) {
+      return null;
+    }
+
+    // Si la intención es general, requerir que el mensaje tenga al menos 4 tokens con significado
+    if (params.intent === "general") {
+      const meaningfulTokens = normalizedMessage.split(" ").filter((t) => t.length >= 4);
+      if (meaningfulTokens.length < 2) return null;
+    }
 
     const messageTokens = new Set(
       normalizedMessage
@@ -196,8 +217,9 @@ export async function getAgentImageSuggestion(
         return new Date(String(b.asset.created_at || 0)).getTime() - new Date(String(a.asset.created_at || 0)).getTime();
       });
 
-    // Solo devolver imagen si hay un puntaje mínimo de relevancia (15 puntos)
-    const MINIMUM_SCORE = 15;
+    // Solo devolver imagen si hay un puntaje mínimo de relevancia
+    // Para intención "general" se exige más puntos (obliga a tener match de programa + categoría)
+    const MINIMUM_SCORE = params.intent === "general" ? 40 : 15;
     
     const bestRanked = ranked[0];
     

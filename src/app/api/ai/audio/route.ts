@@ -2348,6 +2348,18 @@ export async function POST(req: NextRequest) {
       programId: detectedProgram?.id || null,
     });
 
+    // Anular imagen si es primer mensaje o saludo/afirmación corta
+    if (mediaSuggestion) {
+      const isFirstInteraction = history.length === 0;
+      const trimmedTranscription = (transcription || "").trim();
+      const isGreetingOrShortInput =
+        /^(hola|hi|hey|buenos?\s*d[ií]as?|buenas?\s*(tardes?|noches?)|hello|holi|s[ií]p?|ok|okay|dale|listo|claro|perfecto|de\s+una|bien|ya|sip|genial|excelente|entendido|gracias|chao|bye)[\s!.?]*$/i.test(trimmedTranscription) ||
+        trimmedTranscription.split(/\s+/).filter(Boolean).length <= 1;
+      if (isFirstInteraction || isGreetingOrShortInput) {
+        mediaSuggestion = null;
+      }
+    }
+
     const directTodayResponse = shouldUseTodayClassDirectResponse(effectiveTranscription, detectedProgram, programs, history)
       ? buildTodayClassDirectResponse(detectedProgram, courses, new Date())
       : null;

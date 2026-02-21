@@ -2845,6 +2845,18 @@ export async function POST(req: NextRequest) {
       excludeUrls: extractSentImageUrlsFromHistory(history),
     });
 
+    // Anular imagen si es el primer mensaje de la conversación (saludo inicial)
+    // o si el mensaje original es un saludo / afirmación corta ("si", "ok", "dale", etc.)
+    if (mediaSuggestion) {
+      const isFirstInteraction = history.length === 0;
+      const trimmedOriginal = (message || "").trim();
+      const isGreetingOrShortInput = /^(hola|hi|hey|buenos?\s*d[ií]as?|buenas?\s*(tardes?|noches?)|hello|holi|s[ií]p?|ok|okay|dale|listo|claro|perfecto|de\s+una|bien|ya|sip|genial|excelente|entendido|gracias|chao|bye)[\s!.?]*$/i.test(trimmedOriginal)
+        || trimmedOriginal.split(/\s+/).filter(Boolean).length <= 1;
+      if (isFirstInteraction || isGreetingOrShortInput) {
+        mediaSuggestion = null;
+      }
+    }
+
     const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext);
     if (directStudentResponse) {
       const truncatedResponse = truncateResponse(directStudentResponse, 1000);
