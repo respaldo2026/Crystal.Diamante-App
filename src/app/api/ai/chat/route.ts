@@ -1559,6 +1559,16 @@ function isCourseInfoRequest(message: string): boolean {
   return /\b(informacion del curso|quiero informacion|quiero info|dame informacion|cuentame del curso|sobre el curso|curso de)\b/i.test(text);
 }
 
+function isKitPurchaseQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+
+  const mentionsMaterials = /\b(kit|kits|implemento|implementos|herramienta|herramientas|material|materiales|insumo|insumos)\b/i.test(text);
+  const asksBuying = /\b(comprar|compro|comprarlo|comprarlos|debo comprar|hay que comprar|toca comprar|necesito comprar|traer|poner)\b/i.test(text);
+  const asksIfProvided = /\b(lo dan|me lo dan|ustedes dan|ustedes lo dan|incluye|incluyen|proporcionan|les dan|se los dan)\b/i.test(text);
+
+  return mentionsMaterials && (asksBuying || asksIfProvided);
+}
+
 function hasProgramCorrectionSignal(message: string): boolean {
   const text = normalizeForMatch(message);
   return /\b(no es|no era|no hablo de|no me refiero|no estoy preguntando por|eso no es|ese no es|esa no es)\b/i.test(text);
@@ -2081,8 +2091,14 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   const normalizedMessage = normalizeForMatch(message);
+  const asksKitPurchase = isKitPurchaseQuestion(message);
   const asksMorningSchedule = /\b(manana|manana\s+temprano|por\s+la\s+manana|en\s+la\s+manana)\b/i.test(normalizedMessage)
     && /\b(horario|hora|grupo|noche|tarde|pm|solo|unico|4|7)\b/i.test(normalizedMessage);
+
+  if (asksKitPurchase) {
+    const programLabel = detectedProgram?.nombre ? ` para *${detectedProgram.nombre}*` : "";
+    return `¡Buena pregunta! 👌\n\n✅ Sí, te damos *kit mensual de productos*${programLabel}.\n🧰 Sobre implementos/herramientas: no necesitas comprar todo de una; se maneja según clase y avance.\n\nSi quieres, te comparto la lista exacta de lo que ponemos nosotros y lo que podrías traer en el primer mes.`;
+  }
 
   if (asksMorningSchedule) {
     if (!detectedProgram) {
