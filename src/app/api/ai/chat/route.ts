@@ -1751,6 +1751,38 @@ function inferTemarioCyclesCount(rawTemario: string): number {
   return new Set(cycleMatches.map((m) => m.trim())).size;
 }
 
+function extractTemarioMonthSummaries(rawTemario: string, maxMonths: number = 6): string[] {
+  const text = String(rawTemario || "");
+  if (!text) return [];
+
+  const lines = text
+    .replace(/\r/g, "\n")
+    .split(/\n+/)
+    .map((line) => line.replace(/\*+/g, "").trim())
+    .filter(Boolean);
+
+  const summaries: string[] = [];
+  const seenMonths = new Set<string>();
+
+  for (const line of lines) {
+    const monthMatch = line.match(/^mes\s*(\d{1,2})\s*[:\-]?\s*(.*)$/i);
+    if (!monthMatch?.[1]) continue;
+
+    const monthNumber = monthMatch[1];
+    if (seenMonths.has(monthNumber)) continue;
+    seenMonths.add(monthNumber);
+
+    const monthTopic = (monthMatch[2] || "")
+      .replace(/^[-:–\s]+/, "")
+      .trim();
+
+    summaries.push(monthTopic ? `Mes ${monthNumber}: ${monthTopic}` : `Mes ${monthNumber}`);
+    if (summaries.length >= maxMonths) break;
+  }
+
+  return summaries;
+}
+
 function buildInstagramFollowup(academy: any | null): string {
   const ig = String(academy?.instagram || "").trim();
   const fb = String(academy?.facebook || "").trim();
@@ -2149,6 +2181,8 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
       const explicitClasses = Number(detectedProgram?.total_clases ?? 0);
       const inferredClasses = extractTemarioClassCount(rawTemario);
       const totalClasses = explicitClasses > 0 ? explicitClasses : (inferredClasses > 0 ? inferredClasses : highlights.length);
+      const monthSummaries = extractTemarioMonthSummaries(rawTemario, 6);
+      const isLongTemario = totalClasses >= 12 || highlights.length >= 10;
 
       const explicitCycles = Number(detectedProgram?.total_ciclos ?? detectedProgram?.ciclos ?? 0);
       const inferredCycles = inferTemarioCyclesCount(rawTemario);
@@ -2167,6 +2201,11 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
           .trim();
         return `🔹 *Clase ${classNumber}:* ${cleanItem}`;
       }).join("\n");
+
+      if (isLongTemario && monthSummaries.length > 0) {
+        const monthLines = monthSummaries.map((item) => `🔹 *${item}*`).join("\n");
+        return `📚 *Temario de ${detectedProgram.nombre}*\n\n${summaryLine}\n✨ Para que sea más claro, te lo resumo por meses:\n${monthLines}\n\n¿Quieres que te lo envíe también *clase por clase*?`;
+      }
 
       return `📚 *Temario de ${detectedProgram.nombre}*\n\n${summaryLine}\n✨ Trataremos:\n${lines}\n\n💸 ¿Quieres conocer el precio de la inscripción y mensualidad?`;
     }
