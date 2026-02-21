@@ -109,6 +109,8 @@ export async function getAgentImageSuggestion(
     message: string;
     intent: AgentIntent;
     programId?: number | null;
+    /** URLs de imágenes ya enviadas en esta conversación — se excluyen para no repetir */
+    excludeUrls?: string[];
   }
 ): Promise<AgentImageSuggestion | null> {
   try {
@@ -136,11 +138,21 @@ export async function getAgentImageSuggestion(
     const candidates = (data as MarketingAssetCandidate[])
       .filter((asset) => isImageLikeAsset(asset) && isAssetAvailable(asset));
 
-    if (candidates.length === 0) {
+    // Excluir imágenes ya enviadas en esta conversación para evitar repetición
+    const excludeSet = new Set((params.excludeUrls || []).map((u) => u.trim()));
+    const freshCandidates = excludeSet.size > 0
+      ? candidates.filter((asset) => !excludeSet.has(String(asset.url_archivo || "").trim()))
+      : candidates;
+
+    // Si todas las imágenes disponibles ya fueron enviadas, no enviar ninguna
+    // (evita repetición; es mejor no enviar imagen que enviar la misma siempre)
+    const candidatesToRank = freshCandidates.length > 0 ? freshCandidates : (candidates.length > 0 && excludeSet.size === 0 ? candidates : null);
+
+    if (!candidatesToRank || candidatesToRank.length === 0) {
       return null;
     }
 
-    const ranked = candidates
+    const ranked = candidatesToRank
       .map((asset) => {
         const keywords = extractKeywords(asset.keywords);
         const category = normalizeText(String(asset.categoria || ""));

@@ -999,6 +999,32 @@ function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: s
   });
 }
 
+/**
+ * Extraer URLs de imágenes ya enviadas en el historial reciente.
+ * El marcador en el historial tiene el formato: [📷 URL|caption]
+ * Se usa para no repetir la misma imagen en respuestas consecutivas.
+ */
+function extractSentImageUrlsFromHistory(
+  conversationHistory: Array<{user: string, agent: string, created_at?: string | null}>
+): string[] {
+  const urls: string[] = [];
+  // Patrón: [📷 <url>|<caption>]
+  const pattern = /\[📷\s+([^\|]+)\|/g;
+  for (const msg of conversationHistory) {
+    const text = String(msg.agent || "");
+    let match = pattern.exec(text);
+    while (match !== null) {
+      const url = match[1].trim();
+      if (url && !urls.includes(url)) {
+        urls.push(url);
+      }
+      match = pattern.exec(text);
+    }
+    pattern.lastIndex = 0;
+  }
+  return urls;
+}
+
 function stripRepeatedGreetingPrefix(text: string, hasHistory: boolean): string {
   if (!hasHistory) return text;
 
@@ -2816,6 +2842,7 @@ export async function POST(req: NextRequest) {
       message: effectiveMessage,
       intent: detectedIntent,
       programId: detectedProgram?.id || null,
+      excludeUrls: extractSentImageUrlsFromHistory(history),
     });
 
     const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext);
