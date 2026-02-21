@@ -1885,17 +1885,52 @@ function buildCuposReply(
   return `Aquí tienes la disponibilidad de cupos por programa:\n\n${summary.join("\n")}\n\n¿Cuál te interesa? Te ayudo a reservar el tuyo 🙌`;
 }
 
-function buildSocialMediaReply(academy: any | null): string {
-  const ig = String(academy?.instagram || "").trim();
-  const fb = String(academy?.facebook || "").trim();
-  const yt = String(academy?.youtube || "").trim();
+function normalizeSocialUrl(raw: string, platform: "instagram" | "facebook" | "youtube"): string {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+
+  const withoutSpaces = value.replace(/\s+/g, "");
+
+  if (platform === "instagram") {
+    if (/^@/.test(withoutSpaces)) {
+      return `https://www.instagram.com/${withoutSpaces.slice(1)}/`;
+    }
+    if (!/^https?:\/\//i.test(withoutSpaces)) {
+      return `https://www.instagram.com/${withoutSpaces.replace(/^instagram\.com\//i, "")}`;
+    }
+    return withoutSpaces;
+  }
+
+  if (platform === "facebook") {
+    if (!/^https?:\/\//i.test(withoutSpaces)) {
+      return `https://${withoutSpaces}`;
+    }
+    return withoutSpaces;
+  }
+
+  if (!/^https?:\/\//i.test(withoutSpaces)) {
+    return `https://${withoutSpaces}`;
+  }
+  return withoutSpaces;
+}
+
+function buildSocialMediaReply(academy: any | null, userMessage: string = ""): string {
+  const ig = normalizeSocialUrl(academy?.instagram || "", "instagram");
+  const fb = normalizeSocialUrl(academy?.facebook || "", "facebook");
+  const yt = normalizeSocialUrl(academy?.youtube || "", "youtube");
   const wa = String(academy?.whatsapp || "").trim();
   const phone = String(academy?.telefono || "").trim();
 
+  const asksInstagram = /\b(instagram|insta|ig|perfil\s+de\s+instagram)\b/i.test(normalizeForMatch(userMessage));
+
+  if (ig && asksInstagram) {
+    return `📸 Instagram oficial:\n${ig}\n\nSi quieres, también te comparto Facebook y YouTube.`;
+  }
+
   const lines: string[] = [];
-  if (ig) lines.push(`📸 Instagram: ${/^https?:\/\//i.test(ig) ? ig : `https://${ig}`}`);
-  if (fb) lines.push(`👤 Facebook: ${/^https?:\/\//i.test(fb) ? fb : `https://${fb}`}`);
-  if (yt) lines.push(`🎥 YouTube: ${/^https?:\/\//i.test(yt) ? yt : `https://${yt}`}`);
+  if (ig) lines.push(`📸 Instagram:\n${ig}`);
+  if (fb) lines.push(`👤 Facebook:\n${fb}`);
+  if (yt) lines.push(`🎥 YouTube:\n${yt}`);
   if (wa) lines.push(`💬 WhatsApp: ${wa}`);
   if (phone) lines.push(`📞 Teléfono: ${phone}`);
 
@@ -1903,7 +1938,7 @@ function buildSocialMediaReply(academy: any | null): string {
     return "¡Sí! 🙌 Te comparto nuestras redes en un momento. Si prefieres, también te atiendo por WhatsApp para ayudarte de inmediato.";
   }
 
-  return `¡Sí, claro! 🙌 Estas son nuestras redes y canales de contacto:\n\n${lines.join("\n")}\n\nSi quieres, también te recomiendo por cuál canal te responden más rápido.`;
+  return `¡Sí, claro! 🙌 Estas son nuestras redes y canales de contacto:\n\n${lines.join("\n\n")}\n\nSi quieres, también te recomiendo por cuál canal te responden más rápido.`;
 }
 
 function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
@@ -2087,7 +2122,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   if (asksSocialMedia) {
-    return buildSocialMediaReply(academy);
+    return buildSocialMediaReply(academy, message);
   }
 
   const normalizedMessage = normalizeForMatch(message);
