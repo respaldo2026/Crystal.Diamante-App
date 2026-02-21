@@ -985,6 +985,22 @@ function isCourseInfoRequest(message: string): boolean {
   return /\b(informacion del curso|quiero informacion|quiero info|dame informacion|cuentame del curso|sobre el curso|curso de)\b/i.test(text);
 }
 
+function isPaymentMethodsOrDatesQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  const asksMethods = /\b(medios\s+de\s+pago|formas\s+de\s+pago|metodos?\s+de\s+pago|pago|pagos|nequi|bancolombia|sistecredito|tarjeta|efectivo|transferencia)\b/i.test(text);
+  const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|primeros\s+5\s+dias|vence|vencimiento)\b/i.test(text);
+  return asksMethods || asksDates;
+}
+
+function isStepOneSelection(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /^(1|uno|paso\s*1|primer\s*paso)$/.test(text);
+}
+
+function buildPaymentMethodsAndDatesReply(): string {
+  return `¡Perfecto! Te confirmo 🙌\n\n💳 *Medios de pago:*\n• Efectivo\n• Nequi: *3006402575*\n• Bancolombia\n• Sistecrédito\n\n📅 *Fechas de pago:* la mensualidad se maneja dentro de los primeros *5 días* de cada mes.\n\n¿Quieres que te guíe ahora con el *paso de inscripción*?`;
+}
+
 function isKitPurchaseQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
 
@@ -1304,10 +1320,14 @@ function buildIntentFocusedDirectResponse(
   }
 
   let intent = detectUserIntent(message);
+  const normalizedMessage = normalizeForMatch(message);
   const asksDuration = isDurationQuestion(message);
   const asksFastTrack = isFastTrackQuestion(message);
   let asksLocation = isLocationQuestion(message);
   const asksGeneralInfo = isCourseInfoRequest(message);
+  const asksPaymentMethodsOrDates = isPaymentMethodsOrDatesQuestion(message);
+  const asksStepOne = isStepOneSelection(message);
+  const asksPrice = /\b(precio|cuanto|costo|valor|inscripcion|mensualidad|inversion)\b/i.test(normalizedMessage);
 
   if (intent === "general" && isShortAffirmativeReply(message) && history.length > 0) {
     const pendingTopic = inferPendingTopicFromHistory(history);
@@ -1322,7 +1342,27 @@ function buildIntentFocusedDirectResponse(
     }
   }
 
+  const inferredPendingTopic = inferPendingTopicFromHistory(history);
+  const confirmsPaymentInfo = (isShortAffirmativeReply(message) || asksStepOne)
+    && /\b(medios\s+de\s+pago|formas\s+de\s+pago|fechas\s+de\s+pago|metodo\s+de\s+pago)\b/i.test(inferredPendingTopic);
+
+  if (asksPaymentMethodsOrDates || confirmsPaymentInfo) {
+    return buildPaymentMethodsAndDatesReply();
+  }
+
   const lastAgentForFlow = normalizeForMatch(history[history.length - 1]?.agent || "");
+  const confirmsStepOneFlow = asksStepOne
+    && /\b(para\s+inscribirte|seguimos\s+este\s+orden|paso\s+1|confirmar\s+el\s+grupo\s+y\s+horario)\b/i.test(lastAgentForFlow);
+
+  if (confirmsStepOneFlow) {
+    if (detectedProgram) {
+      const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+      const schedule = primaryCourse?.horario || "Por confirmar";
+      return `¡Excelente! Vamos con el *paso 1* ✅\n\nPara *${detectedProgram.nombre}*, el horario registrado es: *${schedule}*.\n\n¿Te funciona ese grupo o prefieres que te muestre otra opción?`;
+    }
+
+    return "¡Excelente! Vamos con el *paso 1* ✅\n\nPara avanzar, confirmemos el *curso* y el *horario* que mejor te funcione. ¿Cuál curso deseas separar?";
+  }
   const confirmsReserveFlow = isShortAffirmativeReply(message)
     && /\b(te reservo( un)? cupo|reservo( tu|el)? cupo|reservar tu cupo|te ayudo a reservar|separar cupo)\b/i.test(lastAgentForFlow);
 
@@ -1358,10 +1398,27 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     return `¡Claro! 😊\n\n${locationReference}\n\nEnseguida te comparto la ubicación exacta por aquí.\n\nSi prefieres, también te envío el WhatsApp de admisiones para guiarte paso a paso.`;
   }
 
-  const normalizedMessage = normalizeForMatch(message);
   const asksKitPurchase = isKitPurchaseQuestion(message);
   const asksMorningSchedule = /\b(manana|manana\s+temprano|por\s+la\s+manana|en\s+la\s+manana)\b/i.test(normalizedMessage)
     && /\b(horario|hora|grupo|noche|tarde|pm|solo|unico|4|7)\b/i.test(normalizedMessage);
+
+  if (asksPrice && asksLocation) {
+    const locationReference = "Estamos ubicados en el *oriente de Cali*, cerca a la *Panadería Pablos Pam*, en *La Cosmetikera (segundo piso)*.";
+    const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
+    const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
+    const mensualidad = Number(detectedProgram?.precio_mensualidad ?? primaryCourse?.precio_mensualidad ?? 0);
+    const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
+    const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
+
+    const priceBlock = detectedProgram
+      ? `💸 *${detectedProgram.nombre}*\n• Inscripción: *${insText}*\n• Mensualidad: *${menText}*`
+      : `💸 *Precio:* te confirmo inscripción y mensualidad exactas según el curso que elijas.`;
+
+    const mapsBlock = academy?.maps_url ? `\n🗺️ Mapa: ${academy.maps_url}` : "";
+    const addressBlock = academy?.direccion ? `\nDirección: *${academy.direccion}*.` : "";
+
+    return `¡Claro! Te respondo ambas de una 🙌\n\n${priceBlock}\n\n📍 ${locationReference}${addressBlock}${mapsBlock}\n\nSi quieres, te ayudo a elegir el horario que mejor te quede.`;
+  }
 
   if (asksKitPurchase) {
     const programLabel = detectedProgram?.nombre ? ` para *${detectedProgram.nombre}*` : "";
@@ -2563,7 +2620,13 @@ export async function POST(req: NextRequest) {
       const isGreetingOrShortInput =
         /^(hola|hi|hey|buenos?\s*d[ií]as?|buenas?\s*(tardes?|noches?)|hello|holi|s[ií]p?|ok|okay|dale|listo|claro|perfecto|de\s+una|bien|ya|sip|genial|excelente|entendido|gracias|chao|bye)[\s!.?]*$/i.test(trimmedTranscription) ||
         trimmedTranscription.split(/\s+/).filter(Boolean).length <= 1;
+      const normalizedTranscription = normalizeForMatch(trimmedTranscription);
+      const isOperationalQuestion = /\b(pago|pagos|nequi|bancolombia|sistecredito|inscrip|inscripcion|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps|precio|valor|cuanto)\b/i.test(normalizedTranscription)
+        || /^(1|uno|paso\s*1)$/i.test(normalizedTranscription);
       if (isFirstInteraction || isGreetingOrShortInput) {
+        mediaSuggestion = null;
+      }
+      if (isOperationalQuestion) {
         mediaSuggestion = null;
       }
     }
