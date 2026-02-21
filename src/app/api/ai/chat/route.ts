@@ -2468,7 +2468,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, mediaSuggestion));
+      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     // INFORMACIÓN JERÁRQUICA
@@ -2496,7 +2496,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, mediaSuggestion));
+      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
@@ -2552,7 +2552,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, mediaSuggestion));
+      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     if (shouldUseTodayClassDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -2575,7 +2575,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, mediaSuggestion));
+      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     if (shouldUseNextGroupDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -2598,7 +2598,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, mediaSuggestion));
+      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
     
     // 3. Obtener información de la academia (dirección, redes, contacto)
@@ -2654,7 +2654,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, mediaSuggestion));
+      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
     
     // 4. Obtener medios de pago disponibles
@@ -2751,7 +2751,7 @@ export async function POST(req: NextRequest) {
       historyLength: Number(history.length) || 0,
       programDetected: sanitizedProgram || null,
       rateLimitRemaining: Number(rateLimit.remaining) || 0,
-    }, mediaSuggestion));
+    }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);
     const errorMessage = error?.message || "Error generando respuesta";
