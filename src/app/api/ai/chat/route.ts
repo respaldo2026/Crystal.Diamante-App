@@ -1961,22 +1961,25 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (asksLocation) {
+    const locationReference = "Estamos ubicados en el *oriente de Cali*, cerca a la *Panadería Pablos Pam*, en *La Cosmetikera (segundo piso)*.";
     if (academy?.direccion) {
       if (academy?.maps_url) {
         return `¡Claro! 📍
 
-Nos encontramos en *${academy.direccion}*.
+${locationReference}
+\nDirección: *${academy.direccion}*.
 🗺️ Te comparto el mapa para que llegues fácil: ${academy.maps_url}
 
 Si quieres, también te envío una referencia rápida para llegar 😊`;
       }
       return `¡Claro! 📍
 
-Nos encontramos en *${academy.direccion}*.
+${locationReference}
+\nDirección: *${academy.direccion}*.
 
 Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     }
-    return "¡Claro! 😊\n\nEnseguida te comparto la ubicación exacta por aquí.\n\nSi prefieres, también te envío el WhatsApp de admisiones para guiarte paso a paso.";
+    return `¡Claro! 😊\n\n${locationReference}\n\nEnseguida te comparto la ubicación exacta por aquí.\n\nSi prefieres, también te envío el WhatsApp de admisiones para guiarte paso a paso.`;
   }
 
   if (asksSocialMedia) {
