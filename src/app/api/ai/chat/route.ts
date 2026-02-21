@@ -1827,21 +1827,33 @@ function buildScheduleHumanReply(
   schedule: string
 ): string {
   const tone = pickHumanToneSeed(message, history);
-  const normalized = normalizeForMatch(message);
-  const asksOnlyStart = /\b(cuando|inicio|arranca|empieza|fecha)\b/i.test(normalized) && !/\b(precio|inversion|mensualidad|inscrip|cuota|pago)\b/i.test(normalized);
-  const followup = asksOnlyStart
-    ? "Si quieres, después te comparto también la inversión."
-    : "Si te sirve, también te puedo compartir la inversión.";
+
+  // Revisar qué temas ya se cubrieron en el historial reciente para no repetirlos
+  const normalizedHistory = normalizeForMatch(
+    (Array.isArray(history) ? history : []).slice(-6).map((h) => `${h?.user || ""} ${h?.agent || ""}`).join(" ")
+  );
+  const historyHasPrice = /\b(inversion|inscripcion|mensualidad|cuota|precio|costo|vale|valor)\b/i.test(normalizedHistory);
+  const historyHasEnrollment = /\b(inscrib|cupo|separar|reservar|matricul|admision)\b/i.test(normalizedHistory);
+
+  // Ofrecer el siguiente paso lógico que aún NO se ha cubierto
+  let followup: string;
+  if (historyHasPrice && historyHasEnrollment) {
+    followup = "¿Quieres que te ayude a *reservar tu cupo*? 🙌";
+  } else if (historyHasPrice) {
+    followup = "📝 ¿Quieres que te comparta los *pasos para inscribirte*?";
+  } else {
+    followup = "💰 ¿Quieres que te comparta también la *inversión*?";
+  }
 
   if (tone === 0) {
-    return `¡Claro! Te cuento de una 🙌\n\n📚 *${detectedProgram.nombre}*\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}\n¿Te queda bien ese horario o te muestro otra opción?`;
+    return `¡Claro! Te cuento de una 🙌\n\n📚 *${detectedProgram.nombre}*\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}`;
   }
 
   if (tone === 1) {
-    return `Perfecto, aquí va rápido 👌\n\nPara *${detectedProgram.nombre}* tenemos:\n📅 *Inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}\n¿Quieres que te ayude a validar el grupo que mejor te queda?`;
+    return `Perfecto, aquí va rápido 👌\n\nPara *${detectedProgram.nombre}* tenemos:\n📅 *Inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}`;
   }
 
-  return `Súper, te confirmo ese dato ✨\n\n📚 *${detectedProgram.nombre}*\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}\n¿Quieres que avancemos con el cupo de ese horario?`;
+  return `Súper, te confirmo ese dato ✨\n\n📚 *${detectedProgram.nombre}*\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}`;
 }
 
 function buildIntentFocusedDirectResponse(
@@ -2489,13 +2501,28 @@ function resolveProgramFromContext(
 function buildContextualDirective(
   userMessage: string,
   detectedProgram: any | null,
-  courses: any[]
+  courses: any[],
+  history: Array<{ user: string; agent: string }> = []
 ): string {
   const intent = detectUserIntent(userMessage);
   const materialsScope = intent === "materiales" ? detectMaterialsScope(userMessage) : "general";
   const objection = detectObjectionType(userMessage);
   const explicitBuyingIntent = detectBuyingIntent(userMessage, []);
   const asksNextGroup = isNextGroupQuestion(userMessage);
+
+  // Detectar qué temas ya se cubrieron en el historial para no repetirlos
+  const recentHistoryText = normalizeForMatch(
+    (Array.isArray(history) ? history : []).slice(-8).map((h) => `${h?.agent || ""}`).join(" ")
+  );
+  const coveredTopics: string[] = [];
+  if (/\b(inversion|inscripcion|mensualidad|cuota|precio|costo)\b/i.test(recentHistoryText)) coveredTopics.push("precio/inversión");
+  if (/\b(horario|inicio|fecha|arranca|grupo)\b/i.test(recentHistoryText)) coveredTopics.push("horario/fecha de inicio");
+  if (/\b(inscrib|cupo|separar|reservar|matricul)\b/i.test(recentHistoryText)) coveredTopics.push("proceso de inscripción");
+  if (/\b(temario|contenido|ciclo|modulo)\b/i.test(recentHistoryText)) coveredTopics.push("temario/contenido");
+  if (/\b(material|insumo|kit|herramienta)\b/i.test(recentHistoryText)) coveredTopics.push("materiales");
+  const noRepeatRule = coveredTopics.length > 0
+    ? `REGLA ANTI-REPETICIÓN: Los siguientes temas ya fueron cubiertos en esta conversación — NO los ofrezcas de nuevo ni hagas preguntas sobre ellos: ${coveredTopics.join(", ")}. Ofrece el siguiente paso lógico que aún NO se haya cubierto.`
+    : "";
   const programName = detectedProgram?.nombre || null;
 
   const intentInstructionMap: Record<string, string> = {
@@ -2571,8 +2598,9 @@ function buildContextualDirective(
       : 'Mantén el enfoque en resolver la pregunta puntual sin sobrecargar con información no solicitada.',
     'REGLA DE ORO: 1 intención del usuario = 1 bloque corto de respuesta. No mezcles precio+duración+beneficios+temario en el mismo mensaje salvo que el usuario lo pida.',
     'Si hay objeción, estructura la respuesta en: 1) Empatía breve, 2) Dato concreto del curso, 3) Propuesta clara, 4) CTA corta.',
-    'Prohibido responder con: "¿En qué curso estás interesado?" cuando el usuario ya mencionó un curso o tema específico.'
-  ].join('\n');
+    'Prohibido responder con: "¿En qué curso estás interesado?" cuando el usuario ya mencionó un curso o tema específico.',
+    noRepeatRule
+  ].filter(Boolean).join('\n');
 }
 
 async function generateResponse(apiKey: string, prompt: string, timeoutMs: number = 25000): Promise<string> {
@@ -2956,7 +2984,7 @@ export async function POST(req: NextRequest) {
       ? 'Existe contexto de estudiante validado por identificación. Prioriza responder con sus cursos inscritos, su próxima clase y su estado real de pagos antes de información general.'
       : '';
     const contextualDirective = [
-      buildContextualDirective(effectiveMessage, detectedProgram, courses),
+      buildContextualDirective(effectiveMessage, detectedProgram, courses, history),
       buildNameSafetyDirective(preferredStudentName),
       buildUpcomingStartDirective(detectedProgram, courses),
       studentDirective,
