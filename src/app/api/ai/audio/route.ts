@@ -1251,6 +1251,22 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     return "¡Claro! 😊\n\nEnseguida te comparto la ubicación exacta por aquí.\n\nSi prefieres, también te envío el WhatsApp de admisiones para guiarte paso a paso.";
   }
 
+  const normalizedMessage = normalizeForMatch(message);
+  const asksMorningSchedule = /\b(manana|manana\s+temprano|por\s+la\s+manana|en\s+la\s+manana)\b/i.test(normalizedMessage)
+    && /\b(horario|hora|grupo|noche|tarde|pm|solo|unico|4|7)\b/i.test(normalizedMessage);
+
+  if (asksMorningSchedule) {
+    if (!detectedProgram) {
+      return "¡Te entiendo totalmente! 🙌 Si buscas *jornada de mañana* y no te funciona noche, te ayudo a revisarlo exacto.\n\nCompárteme el *curso* que te interesa y te confirmo si hay grupo en la mañana o la próxima apertura disponible.";
+    }
+
+    const morningCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const currentSchedule = morningCourse?.horario || "Por confirmar";
+    const nextStart = morningCourse?.fecha_inicio ? (formatDateLong(morningCourse.fecha_inicio) || formatDateShort(morningCourse.fecha_inicio)) : "Por confirmar";
+
+    return `¡Claro! Gracias por contarlo 🙌\n\nSi buscas *jornada de mañana*, te confirmo lo que tengo activo para *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario registrado:* ${currentSchedule}\n\nSi ese horario no te funciona, te reviso ahora mismo si hay opción en mañana o próximo grupo. ¿Te lo confirmo?`;
+  }
+
   const requestedTopic = extractProgramInquiryTopic(message);
   if (requestedTopic) {
     const matchedProgram = findProgramMatchByTopic(requestedTopic, programs);

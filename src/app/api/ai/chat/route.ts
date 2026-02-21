@@ -1983,6 +1983,22 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     return buildSocialMediaReply(academy);
   }
 
+  const normalizedMessage = normalizeForMatch(message);
+  const asksMorningSchedule = /\b(manana|manana\s+temprano|por\s+la\s+manana|en\s+la\s+manana)\b/i.test(normalizedMessage)
+    && /\b(horario|hora|grupo|noche|tarde|pm|solo|unico|4|7)\b/i.test(normalizedMessage);
+
+  if (asksMorningSchedule) {
+    if (!detectedProgram) {
+      return "¡Te entiendo totalmente! 🙌 Si buscas *jornada de mañana* y no te funciona noche, te ayudo a revisarlo exacto.\n\nCompárteme el *curso* que te interesa y te confirmo si hay grupo en la mañana o la próxima apertura disponible.";
+    }
+
+    const morningCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const currentSchedule = morningCourse?.horario || "Por confirmar";
+    const nextStart = morningCourse?.fecha_inicio ? (formatDateLong(morningCourse.fecha_inicio) || formatDateShort(morningCourse.fecha_inicio)) : "Por confirmar";
+
+    return `¡Claro! Gracias por contarlo 🙌\n\nSi buscas *jornada de mañana*, te confirmo lo que tengo activo para *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario registrado:* ${currentSchedule}\n\nSi ese horario no te funciona, te reviso ahora mismo si hay opción en mañana o próximo grupo. ¿Te lo confirmo?`;
+  }
+
   // Preguntas sobre medios de pago (nequi, presencial, etc.) → dejar que Gemini responda con info real
   if (isPaymentMethodQuestion(message)) {
     return null;
