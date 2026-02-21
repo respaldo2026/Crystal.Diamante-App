@@ -364,7 +364,7 @@ function sanitizeAgentVisibleResponse(rawText: string, fallbackResponse: string)
   const fallback = (fallbackResponse || "Déjame confirmarlo y te respondo en breve.").trim();
   if (!rawText) return fallback;
 
-  let output = String(rawText).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  let output = stripMediaMarkersForPrompt(String(rawText)).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
   const leakedBlockPatterns: RegExp[] = [
     /🔒\s*MODO\s+RESPUESTA\s+A\s+PLANTILLAS[\s\S]*?cualquier\s+texto\s+de\s+ventas\.?/gi,
@@ -395,6 +395,9 @@ function sanitizeAgentVisibleResponse(rawText: string, fallbackResponse: string)
     /^\s*(intenci[oó]n|objeci[oó]n|se[ñn]al\s+de\s+compra\s+expl[ií]cita)\s+detectada\s*:/i,
     /^\s*acci[oó]n\s+obligatoria\s*:/i,
     /^\s*prohibido\s+responder\s+con\s*:/i,
+    /^\s*\[📷\s*https?:\/\/\S+/i,
+    /^\s*📷\s*https?:\/\/\S+/i,
+    /^\s*https?:\/\/[^\s]*supabase[^\s]*\/storage\/v1\/object\/public\/marketing\//i,
   ];
 
   const cleanedLines = output
@@ -898,7 +901,7 @@ async function getConversationHistory(
   supabase: any, 
   phone: string, 
   limit = 5
-): Promise<Array<{user: string, agent: string, created_at?: string | null}>> {
+): Promise<Array<{user: string, agent: string, agent_raw?: string, created_at?: string | null}>> {
   try {
     const { data, error } = await supabase
       .from("agent_conversations")
@@ -914,7 +917,8 @@ async function getConversationHistory(
 
     return (data || []).reverse().map((row: any) => ({
       user: row.user_message,
-      agent: row.agent_response,
+      agent: stripMediaMarkersForPrompt(row.agent_response),
+      agent_raw: row.agent_response,
       created_at: row.created_at,
     }));
   } catch (err) {
@@ -948,6 +952,15 @@ async function saveConversation(
   } catch (err) {
     console.warn("[saveConversation] Error:", err);
   }
+}
+
+function stripMediaMarkersForPrompt(value: string | null | undefined): string {
+  if (!value) return "";
+
+  return String(value)
+    .replace(/\[📷\s+[^\]|\n]+\|[^\]\n]*\]\s*/g, "")
+    .replace(/^\s*📷\s*https?:\/\/\S+\s*$/gim, "")
+    .trim();
 }
 
 async function searchKnowledge(
@@ -1005,13 +1018,13 @@ function hasGreetingInHistory(conversationHistory: Array<{user: string, agent: s
  * Se usa para no repetir la misma imagen en respuestas consecutivas.
  */
 function extractSentImageUrlsFromHistory(
-  conversationHistory: Array<{user: string, agent: string, created_at?: string | null}>
+  conversationHistory: Array<{user: string, agent: string, agent_raw?: string, created_at?: string | null}>
 ): string[] {
   const urls: string[] = [];
   // Patrón: [📷 <url>|<caption>]
   const pattern = /\[📷\s+([^\|]+)\|/g;
   for (const msg of conversationHistory) {
-    const text = String(msg.agent || "");
+    const text = String(msg.agent_raw || msg.agent || "");
     let match = pattern.exec(text);
     while (match !== null) {
       const url = match[1]?.trim();
@@ -1285,7 +1298,7 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
   if (normalizedQuestion) {
     if (/\b(referencia|como llegar|llegar mas facil|indicaciones|llegar alli)\b/i.test(normalizedQuestion)) return "quiero la referencia para llegar";
     if (/\b(validar|confirmar|grupo|horario|queda bien|otro horario|mostrar otra opcion)\b/i.test(normalizedQuestion)) return "quiero confirmar el horario y grupo";
-    if (/\b(separar cupo|reservar|inscribir|matricular|avanzar con el cupo)\b/i.test(normalizedQuestion)) return "quiero inscribirme y separar cupo";
+    if (/\b(separar cupo|reservar|reservo|reservame|inscribir|matricular|avanzar con el cupo)\b/i.test(normalizedQuestion)) return "quiero inscribirme y separar cupo";
     if (/\b(formas de pago|medios de pago|fechas de pago|metodo de pago)\b/i.test(normalizedQuestion)) return "quiero saber los medios de pago";
     if (/\b(pasos de inscripcion|como me inscribo|como inscribirme)\b/i.test(normalizedQuestion)) return "quiero saber como me inscribo";
     if (/\b(inversion|precio|inscripcion|mensualidad)\b/i.test(normalizedQuestion)) return "quiero saber la inversion";
@@ -1297,6 +1310,7 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
 
   // Fallback: escanear todo el mensaje (solo si no hubo pregunta clara)
   const normalized = normalizeForMatch(lastAgent);
+  if (/\b(te reservo( un)? cupo|reservo( tu|el)? cupo|reservar tu cupo|te ayudo a reservar|separar cupo)\b/i.test(normalized)) return "quiero inscribirme y separar cupo";
   if (/\b(cupo|cupos|disponible|disponibles)\b/i.test(normalized)) return "quiero saber si hay cupos disponibles";
   if (/\b(proximo grupo|siguiente grupo|proximo curso|fecha confirmada|por confirmar)\b/i.test(normalized)) return "quiero saber el proximo grupo y su fecha";
   if (/\b(materiales|material|insumo|kit|por clase o por ciclo)\b/i.test(normalized)) return "quiero saber materiales";
@@ -1932,6 +1946,20 @@ function buildIntentFocusedDirectResponse(
     return null; // Dejar que Gemini responda sobre requisitos, edad, etc.
   }
 
+  const lastAgentForFlow = normalizeForMatch(history[history.length - 1]?.agent || "");
+  const confirmsReserveFlow = isShortAffirmativeReply(message)
+    && /\b(te reservo( un)? cupo|reservo( tu|el)? cupo|reservar tu cupo|te ayudo a reservar|separar cupo)\b/i.test(lastAgentForFlow);
+
+  if (confirmsReserveFlow) {
+    const admissionsContact = academy?.whatsapp || "+57 301 203 8582";
+    return `¡Excelente! 🙌\n\nPerfecto, avanzamos con tu inscripción.\n\n📝 *Paso 1:* Te toman datos básicos\n💳 *Paso 2:* Realizas el pago de inscripción\n✅ *Paso 3:* Queda reservado tu cupo en el grupo\n\n📱 *Admisiones:* ${admissionsContact}\n\nSi quieres, te explico también si puedes manejar pago parcial o abono en tu caso.`;
+  }
+
+  if (intent === "inscripcion") {
+    const admissionsContact = academy?.whatsapp || "+57 301 203 8582";
+    return `¡Perfecto! Te ayudo con eso 🙌\n\nPara inscribirte, seguimos este orden:\n\n1️⃣ Confirmar el grupo y horario\n2️⃣ Registrar tus datos\n3️⃣ Realizar el pago de inscripción\n4️⃣ Quedar con cupo reservado\n\n📱 *Admisiones:* ${admissionsContact}\n\nSi quieres, te acompaño ahora mismo con el paso 1.`;
+  }
+
   if (asksLocation) {
     if (academy?.direccion) {
       if (academy?.maps_url) {
@@ -2057,6 +2085,8 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
 
     const normalizedMessage = normalizeForMatch(message);
     const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
+    const asksPartialPayment = /\b(abono|abonar|pago parcial|cuota inicial|fraccionar|financiar|totalidad|pagar todo|pagar completo|de una)\b/i.test(normalizedMessage)
+      && /\b(inscripcion|inscrip|curso|total)\b/i.test(normalizedMessage);
     const asksWhatIsIncluded = /\b(que incluye|incluye|trae|viene con)\b/i.test(normalizedMessage);
 
     if (asksWhatIsIncluded) {
@@ -2065,6 +2095,10 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
 
     if (asksMonthlyConfirmation) {
       return `✅ Sí, la *mensualidad* es ${menText}.\n🧴 *Cada mes te damos kit de productos.*\n\n¿Quieres que te comparta también los *medios de pago* y las *fechas de pago*?`;
+    }
+
+    if (asksPartialPayment) {
+      return `Buena pregunta 👌\n\nNo necesitas pagar todo el curso de una sola vez.\nPara iniciar, se maneja:\n\n💰 *Inscripción:* ${insText}\n💰 *Mensualidad:* ${menText}\n\nSi quieres dividir específicamente la inscripción (abono), te lo confirma de inmediato Admisiones según tu caso:\n📱 *+57 301 203 8582*`;
     }
 
     const recentConversationText = (Array.isArray(history) ? history : [])
