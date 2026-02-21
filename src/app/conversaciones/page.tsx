@@ -508,13 +508,13 @@ export default function ConversacionesPage() {
       if (agentText) {
         // Detectar marcador de imagen: [📷 URL|caption]\n
         const imgMatch = agentText.match(/^\[📷 ([^\|\]]+)\|([^\]]*)\]\n?/);
-        if (imgMatch) {
+        if (imgMatch && imgMatch[1]) {
           items.push({
             key: `${conv.id}-img`,
             role: "agent",
             text: "",
             imageUrl: imgMatch[1].trim(),
-            imageCaption: imgMatch[2].trim(),
+            imageCaption: (imgMatch[2] ?? "").trim(),
             created_at: conv.created_at,
           });
           const textWithoutMarker = agentText.replace(/^\[📷 [^\]]+\]\n?/, "").trim();
