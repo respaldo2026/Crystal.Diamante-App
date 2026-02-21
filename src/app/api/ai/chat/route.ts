@@ -2922,7 +2922,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, detectedProgram ? mediaSuggestion : null));
     }
     
     // 4. Obtener medios de pago disponibles
@@ -3019,7 +3019,7 @@ export async function POST(req: NextRequest) {
       historyLength: Number(history.length) || 0,
       programDetected: sanitizedProgram || null,
       rateLimitRemaining: Number(rateLimit.remaining) || 0,
-    }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+    }, detectedProgram ? mediaSuggestion : null));
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);
     const errorMessage = error?.message || "Error generando respuesta";
