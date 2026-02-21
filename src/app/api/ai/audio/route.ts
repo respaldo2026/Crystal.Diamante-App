@@ -945,7 +945,14 @@ function isFastTrackQuestion(message: string): boolean {
 
 function isLocationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
+  if (/\b(como llego|como puedo llegar|como llegar|mandame la ubicacion|enviame la ubicacion|pasame la ubicacion|comparteme la ubicacion|mandame ubicacion|enviame ubicacion|pasame ubicacion|comparteme ubicacion|mapa|google maps|maps app|ubicacion exacta|link de ubicacion|enlace de ubicacion|referencia para llegar)\b/i.test(text)) {
+    return true;
+  }
   if (/\b(donde se ubican|donde estan|donde quedan|direccion|ubicacion|ubicados|sede|en cali donde)\b/i.test(text)) {
+    return true;
+  }
+
+  if (/\b(estan en|son de|quedan en|ubicados en|sede en)\b/i.test(text) && !/\b(pago|pagar|inscrib|matricul|precio|cuanto|valor|mensualidad)\b/i.test(text)) {
     return true;
   }
 
@@ -1202,9 +1209,21 @@ function buildIntentFocusedDirectResponse(
 
   if (asksLocation) {
     if (academy?.direccion) {
-      return `Estamos ubicados en ${academy.direccion}. ¿Quieres que también te comparta la referencia para llegar más fácil?`;
+      if (academy?.maps_url) {
+        return `¡Claro! 📍
+
+Nos encontramos en *${academy.direccion}*.
+🗺️ Te comparto el mapa para que llegues fácil: ${academy.maps_url}
+
+Si quieres, también te envío una referencia rápida para llegar 😊`;
+      }
+      return `¡Claro! 📍
+
+Nos encontramos en *${academy.direccion}*.
+
+Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     }
-    return "Te comparto la ubicación exacta por aquí en un momento. ¿Quieres que también te envíe el WhatsApp de admisiones?";
+    return "¡Claro! 😊\n\nEnseguida te comparto la ubicación exacta por aquí.\n\nSi prefieres, también te envío el WhatsApp de admisiones para guiarte paso a paso.";
   }
 
   const requestedTopic = extractProgramInquiryTopic(message);

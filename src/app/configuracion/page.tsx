@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider, Upload, Space, Row, Col, Grid } from "antd";
-import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined, UploadOutlined, InstagramOutlined, FacebookOutlined, YoutubeOutlined } from "@ant-design/icons";
+import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined, UploadOutlined, InstagramOutlined, FacebookOutlined, YoutubeOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
 import type { Breakpoint } from "antd/es/_util/responsiveObserver";
@@ -94,6 +94,7 @@ export default function ConfiguracionPage() {
   const previewInstagram = Form.useWatch("instagram", formAcademia) as string | undefined;
   const previewFacebook = Form.useWatch("facebook", formAcademia) as string | undefined;
   const previewYoutube = Form.useWatch("youtube", formAcademia) as string | undefined;
+  const previewMapsUrl = Form.useWatch("maps_url", formAcademia) as string | undefined;
 
   // Función para acortar URLs de redes sociales
   const shortenSocialUrl = (url: string | undefined, platform: 'instagram' | 'facebook' | 'youtube'): string => {
@@ -926,6 +927,22 @@ export default function ConfiguracionPage() {
                 >
                   <Input prefix={<WhatsAppOutlined />} placeholder="https://wa.me/573001112233" />
                 </Form.Item>
+              </Col>
+              <Col xs={24}>
+                <Form.Item
+                  label="Ubicación Google Maps"
+                  name="maps_url"
+                  extra="Este enlace se usará para compartir la ubicación desde el agente en WhatsApp."
+                >
+                  <Input prefix={<EnvironmentOutlined />} placeholder="https://maps.app.goo.gl/..." />
+                </Form.Item>
+                {previewMapsUrl && (
+                  <div style={{ marginTop: -16, marginBottom: 8 }}>
+                    <Tag color="geekblue" style={{ fontSize: 11 }}>
+                      Ubicación configurada para el agente
+                    </Tag>
+                  </div>
+                )}
               </Col>
             </Row>
           </Col>

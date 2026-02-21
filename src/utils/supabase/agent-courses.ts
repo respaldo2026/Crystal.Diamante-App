@@ -16,6 +16,7 @@ interface AcademyInfo {
   id: string
   nombre_academia: string | null
   direccion: string | null
+  maps_url: string | null
   telefono: string | null
   email: string | null
   ruc: string | null
@@ -1321,6 +1322,7 @@ export function formatAcademyInfo(academy: AcademyInfo | null): string {
   // Datos de contacto
   const contactInfo = []
   if (academy.direccion) contactInfo.push(`📍 Dirección: ${academy.direccion}`)
+  if (academy.maps_url) contactInfo.push(`🗺️ Google Maps: ${academy.maps_url}`)
   if (academy.telefono) contactInfo.push(`📞 Teléfono: ${academy.telefono}`)
   if (academy.whatsapp) contactInfo.push(`💬 WhatsApp: ${academy.whatsapp}`)
   if (academy.email) contactInfo.push(`📧 Email: ${academy.email}`)
