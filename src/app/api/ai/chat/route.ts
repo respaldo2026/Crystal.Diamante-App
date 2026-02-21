@@ -1170,12 +1170,16 @@ NO inventes horarios, precios ni fechas que no estén en el contexto.
   return prompt;
 }
 
-function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "general" {
+function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "general" {
   const text = normalizeForMatch(message);
   const hasPriceIntent = /\b(precio|precios|costo|costos|cuanto|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasScheduleIntent = /\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text);
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horario|hora)\b/i.test(text);
+  const hasRequirementsIntent = /\b(requisito|requisitos|edad|años|anos|menor|mayor|cedula|documento|llevar|necesito|experiencia|conocimiento)\b/i.test(text);
 
+  if (hasRequirementsIntent) {
+    return "requisitos";
+  }
   if (hasScheduleIntent && hasStrongScheduleIntent) {
     return "horario";
   }
@@ -1232,7 +1236,7 @@ function isShortAffirmativeReply(message: string): boolean {
   if (/^s+i+$/i.test(text)) return true;
   if (/^s+i+p+$/i.test(text)) return true;
 
-  return /^(si|dale|ok|okay|claro|listo|perfecto|de una|por favor|si por favor|claro que si)$/i.test(text);
+  return /^(si|dale|ok|okay|claro|listo|perfecto|de una|por favor|si por favor|claro que si|clase|ciclo|ambos|los dos)$/i.test(text);
 }
 
 function inferPendingTopicFromHistory(history: Array<{ user: string; agent: string }>): string {
@@ -1244,7 +1248,7 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
   if (/\b(cupo|cupos|disponible|disponibles)\b/i.test(normalized)) return "quiero saber si hay cupos disponibles";
   if (/\b(proximo grupo|siguiente grupo|proximo curso|fecha confirmada|por confirmar)\b/i.test(normalized)) return "quiero saber el proximo grupo y su fecha";
   if (/\b(horario|dias|dia|hora)\b/i.test(normalized)) return "quiero saber dias y horario";
-  if (/\b(materiales|material|insumo|kit)\b/i.test(normalized)) return "quiero saber materiales";
+  if (/\b(materiales|material|insumo|kit|por clase o por ciclo)\b/i.test(normalized)) return "quiero saber materiales";
   if (/\b(temario|contenido|modulo|modulos|ciclo)\b/i.test(normalized)) return "quiero saber el temario";
   if (/\b(inscripcion|inscribirme|admisiones|matricula|matricularme|pago)\b/i.test(normalized)) return "quiero saber como me inscribo";
 
@@ -1738,6 +1742,10 @@ function buildIntentFocusedDirectResponse(
     }
   }
 
+  if (intent === "requisitos") {
+    return null; // Dejar que Gemini responda sobre requisitos, edad, etc.
+  }
+
   if (asksLocation) {
     if (academy?.direccion) {
       return `Estamos ubicados en ${academy.direccion}. ¿Quieres que también te comparta la referencia para llegar más fácil?`;
@@ -1765,9 +1773,8 @@ function buildIntentFocusedDirectResponse(
     }
 
     if (asksGeneralInfo) {
-      const fallbackCourse = courses?.[0];
-      const fallbackName = fallbackCourse?.programa_nombre || fallbackCourse?.nombre || "nuestros cursos de belleza";
-      return `✨ *${fallbackName}*\n\nTe comparto la información clave al instante. ¿Prefieres que empecemos por *precio* o por *próximo inicio*?`;
+      // En lugar de forzar la ficha general, dejamos que Gemini responda si no hay programa detectado
+      return null;
     }
     if (intent === "temario") {
       return "¡Claro! Te comparto el temario en versión resumida. ¿De cuál curso quieres el contenido exacto?";
@@ -1836,6 +1843,11 @@ function buildIntentFocusedDirectResponse(
 
     const normalizedMessage = normalizeForMatch(message);
     const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
+    const asksWhatIsIncluded = /\b(que incluye|incluye|trae|viene con)\b/i.test(normalizedMessage);
+
+    if (asksWhatIsIncluded) {
+      return null; // Dejar que Gemini responda qué incluye la mensualidad o inscripción
+    }
 
     if (asksMonthlyConfirmation) {
       return `✅ Sí, la *mensualidad* es ${menText}.\n🧴 *Cada mes te damos kit de productos.*\n\n¿Quieres que te comparta también los *medios de pago* y las *fechas de pago*?`;
