@@ -1175,9 +1175,12 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const hasPriceIntent = /\b(precio|precios|costo|costos|cuanto|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasScheduleIntent = /\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text);
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horario|hora)\b/i.test(text);
-  const hasRequirementsIntent = /\b(requisito|requisitos|edad|años|anos|menor|mayor|cedula|documento|llevar|necesito|experiencia|conocimiento)\b/i.test(text);
+  const hasMaterialsKeyword = /\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text);
+  // "llevar" solo cuenta como requisito si NO hay keyword de materiales (evitar que "llevar materiales" sea requisito)
+  const hasRequirementsIntent = /\b(requisito|requisitos|edad|anos|menor|mayor|cedula|documento|necesito|experiencia|conocimiento)\b/i.test(text)
+    || (!hasMaterialsKeyword && /\b(llevar)\b/i.test(text));
 
-  if (hasRequirementsIntent) {
+  if (hasRequirementsIntent && !hasMaterialsKeyword) {
     return "requisitos";
   }
   if (hasScheduleIntent && hasStrongScheduleIntent) {
@@ -1192,7 +1195,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
     return "temario";
   }
-  if (/\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text)) {
+  if (hasMaterialsKeyword) {
     return "materiales";
   }
   if (/\b(inscrib|matricul|pago|admisiones|contacto|numero|whatsapp|separar\s+cupo)\b/i.test(text)) {
@@ -1497,6 +1500,15 @@ function isThanksOnlyMessage(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
   return /^(gracias|muchas gracias|ok gracias|okk gracias|okei gracias|vale gracias|super gracias|listo gracias|gracias de una|gracias por la info)$/.test(text);
+}
+
+function isPureGreeting(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  // Solo es saludo si el mensaje COMPLETO es un saludo (máx 5 palabras, sin preguntas de fondo)
+  const words = text.split(" ").filter(Boolean);
+  if (words.length > 5) return false;
+  return /^(hola|buenas|buenos dias|buenas tardes|buenas noches|hey|saludos|buen dia|buenas a todos|holi|holaa|holas|buenas!|hola!|que tal|buen dia)$/.test(text);
 }
 
 function isCourseInfoRequest(message: string): boolean {
@@ -1844,6 +1856,17 @@ function buildIntentFocusedDirectResponse(
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
   }
 
+  if (isPureGreeting(message)) {
+    const hour = getColombiaNowDate().getHours();
+    const greeting = getTimeSlotGreeting(hour);
+    const alreadyGreeted = history.length > 0;
+    if (alreadyGreeted) {
+      return `${greeting} 😊 ¿En qué te puedo ayudar?`;
+    }
+    const academyName = academy?.nombre || "Academia Crystal Diamante";
+    return `${greeting}, bienvenid@ a *${academyName}* 💎\n\n¿En qué te puedo ayudar hoy? Puedo contarte sobre nuestros cursos, fechas de inicio, precios e inscripciones 🙌`;
+  }
+
   let intent = detectUserIntent(message);
   const asksDuration = isDurationQuestion(message);
   const asksFastTrack = isFastTrackQuestion(message);
@@ -2104,7 +2127,8 @@ function extractIdentificationFromText(message: string): string | null {
 
 function hasStudentAccountIntent(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(cuanto debo|deuda|saldo pendiente|mensualidad|proxima mensualidad|proximo pago|cuando debo pagar|proxima clase|siguiente clase|hoy hay clase|inscrita|inscrito|mis cursos|materiales)\b/i.test(text);
+  // NOTA: "materiales" NO se incluye aquí — los materiales son info pública del curso, no del perfil estudiantil
+  return /\b(cuanto debo|deuda|saldo pendiente|mensualidad|proxima mensualidad|proximo pago|cuando debo pagar|proxima clase|siguiente clase|hoy hay clase|inscrita|inscrito|mis cursos)\b/i.test(text);
 }
 
 function resolveStudentIdentification(
