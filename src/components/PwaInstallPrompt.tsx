@@ -61,6 +61,9 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
 
   const handleInstallIOS = () => {
     setGuideFor("ios");
+    if (typeof window !== "undefined") {
+      window.alert("Para instalar en iPhone/iPad:\n1) Toca Compartir (□↗)\n2) Elige 'Agregar a pantalla de inicio'");
+    }
   };
 
   const handleInstall = async () => {
@@ -135,6 +138,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button
+              type="button"
               onClick={handleInstallAndroid}
               style={{
                 background: "rgba(255, 255, 255, 0.95)",
@@ -152,6 +156,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
               Android
             </button>
             <button
+              type="button"
               onClick={handleInstallIOS}
               style={{
                 background: "rgba(255, 255, 255, 0.95)",
@@ -169,6 +174,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
               iPhone/iPad
             </button>
             <button
+              type="button"
               onClick={closePrompt}
               title="Cerrar"
               style={{
@@ -224,6 +230,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
         <button
+          type="button"
           onClick={handleInstallAndroid}
           style={{
             background: "rgba(255, 255, 255, 0.95)",
@@ -251,6 +258,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
           Android
         </button>
         <button
+          type="button"
           onClick={handleInstallIOS}
           style={{
             background: "rgba(255, 255, 255, 0.95)",
@@ -278,6 +286,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
           iPhone/iPad
         </button>
         <button
+          type="button"
           onClick={closePrompt}
           title="Cerrar"
           style={{
