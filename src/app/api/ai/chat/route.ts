@@ -1936,25 +1936,19 @@ function buildTemarioDetailedListReply(
 
   if (!selectedBlock) return null;
 
-  const totalClasesDB = Number(detectedProgram?.total_clases ?? 0);
-  const numMonths = monthBlocks.length;
-  const maxPerMonth = totalClasesDB > 0 && numMonths > 0
-    ? Math.ceil(totalClasesDB / numMonths)
-    : 12;
-
-  // Numeración continua: contar clases reales (limitadas) de meses anteriores
+  // Numeración continua: contar clases reales de meses anteriores
   const startClassNumber = monthBlocks
     .filter((block) => block.month < selectedBlock.month)
-    .reduce((acc, block) => acc + Math.min(block.classes.length, maxPerMonth), 0) + 1;
+    .reduce((acc, block) => acc + block.classes.length, 0) + 1;
 
-  const classesLines = selectedBlock.classes.slice(0, maxPerMonth)
+  const classesLines = selectedBlock.classes
     .map((classItem, index) => {
       const cleanName = classItem
         .replace(/\p{Extended_Pictographic}/gu, "")  // quitar emojis
         .replace(/\s+\d+\.?\s*$/, "")               // quitar número final
         .replace(/\s{2,}/g, " ")
         .trim();
-      return `• *Clase ${startClassNumber + index}:* ${cleanName}`;
+      return `• ${startClassNumber + index}. ${cleanName}`;
     })
     .join("\n");
 
@@ -1966,10 +1960,8 @@ function buildTemarioDetailedListReply(
   return `📚 *Temario detallado de ${detectedProgram.nombre}*
 
 🗓️ *MES ${selectedBlock.month}*
-―――――――――――――
 ${classesLines}
 
-―――――――――――――
 ${followup}`;
 }
 
@@ -2000,10 +1992,10 @@ function buildTemarioCompleteReply(
             .replace(/\s{2,}/g, " ")
             .trim();
           clasesShown++;
-          return `\u2022 *Clase ${classCounter++}:* ${cleanName}`;
+          return `\u2022 ${classCounter++}. ${cleanName}`;
         })
         .join("\n");
-      return `\ud83d\uddd3\ufe0f *MES ${block.month}*\n\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n${lines}`;
+      return `\ud83d\uddd3\ufe0f *MES ${block.month}*\n${lines}`;
     })
     .filter(Boolean)
     .join("\n\n");
@@ -2012,7 +2004,7 @@ function buildTemarioCompleteReply(
   const totalLabel = totalClasesDB > 0 ? totalClasesDB : classCounter - 1;
   const duracionLabel = duracionMeses > 0 ? `${duracionMeses} meses \u00b7 ` : "";
 
-  return `\ud83d\udcda *Temario completo de ${detectedProgram.nombre}* (${duracionLabel}${totalLabel} clases)\n\n${monthSections}\n\n\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n\ud83d\udccc \u00bfQuieres que te cuente sobre la *inversi\u00f3n* o los *horarios disponibles*?`;
+  return `\ud83d\udcda *Temario completo de ${detectedProgram.nombre}* (${duracionLabel}${totalLabel} clases)\n\n${monthSections}\n\n\ud83d\udccc ¿Te cuento *inversión* u *horarios*?`;
 }
 
 function buildSeparaCupoPaymentReply(
