@@ -2400,13 +2400,16 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   const rawTemario = detectedProgram?.contenido || "";
+  const agentOfferedNextTemarioMonth = inferredTemarioMonthFromFlow !== null;
   const shouldSendDetailedTemario = Boolean(
     asksTemarioByClass
     || (isShortAffirmativeReply(message) && askedTemarioByClassBefore)
+    || (isShortAffirmativeReply(message) && agentOfferedNextTemarioMonth)
     || (requestedTemarioMonth !== null && hasRecentTemarioFlow)
   );
 
   const targetTemarioMonth = requestedTemarioMonth
+    ?? (isShortAffirmativeReply(message) && agentOfferedNextTemarioMonth ? inferredTemarioMonthFromFlow : null)
     ?? ((isShortAffirmativeReply(message) && askedTemarioByClassBefore) ? inferredTemarioMonthFromFlow : null);
 
   if (shouldSendDetailedTemario) {
