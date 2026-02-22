@@ -16,7 +16,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredPrompt | null>(null);
   const [visible, setVisible] = useState(true);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [showGuide, setShowGuide] = useState(false);
+  const [guideFor, setGuideFor] = useState<"ios" | "android" | "desktop" | null>(null);
   const [platform, setPlatform] = useState<"ios" | "android" | "desktop">("desktop");
 
   useEffect(() => {
@@ -48,9 +48,9 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
 
   if (!visible || isStandalone) return null;
 
-  const handleInstall = async () => {
+  const handleInstallAndroid = async () => {
     if (!deferredPrompt) {
-      setShowGuide(true);
+      setGuideFor("android");
       return;
     }
     await deferredPrompt.prompt();
@@ -59,16 +59,29 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
     setDeferredPrompt(null);
   };
 
+  const handleInstallIOS = () => {
+    setGuideFor("ios");
+  };
+
+  const handleInstall = async () => {
+    if (platform === "ios") {
+      handleInstallIOS();
+      return;
+    }
+    await handleInstallAndroid();
+  };
+
+  const activeGuidePlatform = guideFor ?? platform;
   const guideText =
-    platform === "ios"
+    activeGuidePlatform === "ios"
       ? "En iPhone/iPad: abre el menú Compartir (□↗) y pulsa 'Agregar a pantalla de inicio'."
-      : platform === "android"
+      : activeGuidePlatform === "android"
       ? "En Android: abre el menú del navegador (⋮) y pulsa 'Instalar app' o 'Agregar a pantalla principal'."
       : "En escritorio: usa el icono de instalar en la barra de direcciones del navegador.";
 
   const actionLabel = deferredPrompt ? "Instalar" : "Cómo instalar";
 
-  const inlineGuide = showGuide ? (
+  const inlineGuide = guideFor ? (
     <div
       style={{
         marginTop: 8,
@@ -84,7 +97,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
     </div>
   ) : null;
 
-  const floatingGuide = showGuide ? (
+  const floatingGuide = guideFor ? (
     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.95)", marginTop: 6, maxWidth: 240, lineHeight: 1.35 }}>
       {guideText}
     </div>
@@ -92,7 +105,7 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
 
   const closePrompt = () => {
     setVisible(false);
-    setShowGuide(false);
+    setGuideFor(null);
   };
 
   if (inline) {
@@ -117,12 +130,12 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
               📱 Instalar App
             </div>
             <div style={{ fontSize: 10, fontWeight: 500, color: "rgba(255, 255, 255, 0.9)" }}>
-              Accede rápido desde tu celular
+              Android o iPhone/iPad
             </div>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button
-              onClick={handleInstall}
+              onClick={handleInstallAndroid}
               style={{
                 background: "rgba(255, 255, 255, 0.95)",
                 color: "#ff2aa1",
@@ -136,7 +149,24 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
                 transition: "all 0.2s ease",
               }}
             >
-              {actionLabel}
+              Android
+            </button>
+            <button
+              onClick={handleInstallIOS}
+              style={{
+                background: "rgba(255, 255, 255, 0.95)",
+                color: "#ff2aa1",
+                border: "none",
+                borderRadius: 6,
+                padding: "5px 10px",
+                fontWeight: 700,
+                fontSize: 11,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.2s ease",
+              }}
+            >
+              iPhone/iPad
             </button>
             <button
               onClick={closePrompt}
@@ -189,12 +219,12 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
           📱 Instalar App
         </div>
         <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255, 255, 255, 0.9)" }}>
-          Accede rápido desde tu celular
+          Android o iPhone/iPad
         </div>
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
         <button
-          onClick={handleInstall}
+          onClick={handleInstallAndroid}
           style={{
             background: "rgba(255, 255, 255, 0.95)",
             color: "#ff2aa1",
@@ -218,7 +248,34 @@ export const PwaInstallPrompt = ({ inline = false }: PwaInstallPromptProps) => {
             target.style.transform = "scale(1)";
           }}
         >
-          {actionLabel}
+          Android
+        </button>
+        <button
+          onClick={handleInstallIOS}
+          style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            color: "#ff2aa1",
+            border: "none",
+            borderRadius: 8,
+            padding: "6px 12px",
+            fontWeight: 700,
+            fontSize: 12,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            const target = e.currentTarget as HTMLButtonElement;
+            target.style.background = "#ffffff";
+            target.style.transform = "scale(1.05)";
+          }}
+          onMouseLeave={(e) => {
+            const target = e.currentTarget as HTMLButtonElement;
+            target.style.background = "rgba(255, 255, 255, 0.95)";
+            target.style.transform = "scale(1)";
+          }}
+        >
+          iPhone/iPad
         </button>
         <button
           onClick={closePrompt}
