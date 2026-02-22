@@ -1957,7 +1957,15 @@ function buildTemarioDetailedListReply(
     ? `¿Quieres que te comparta también el *Mes ${nextBlock.month}*?`
     : "¿Quieres que te comparta también la *inversión*?";
 
-  return `📚 *Temario detallado de ${detectedProgram.nombre}*\n\n🗓️ *Mes ${selectedBlock.month}* (clase por clase):\n${classesLines}\n\n${followup}`;
+  return `📚 *Temario detallado de ${detectedProgram.nombre}*
+
+―――――――――――――
+🗓️ *MES ${selectedBlock.month}*
+―――――――――――――
+${classesLines}
+
+―――――――――――――
+${followup}`;
 }
 
 function buildTemarioCompleteReply(
@@ -1987,19 +1995,19 @@ function buildTemarioCompleteReply(
         .map((classItem) => {
           const cleanName = classItem.replace(/\s+\d+\.?\s*$/, "").trim();
           clasesShown++;
-          return `• *Clase ${classCounter++}:* ${cleanName}`;
+          return `\u2022 *Clase ${classCounter++}:* ${cleanName}`;
         })
         .join("\n");
-      return `🗓️ *Mes ${block.month}:*\n${lines}`;
+      return `\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n\ud83d\uddd3\ufe0f *MES ${block.month}*\n\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n${lines}`;
     })
     .filter(Boolean)
     .join("\n\n");
 
   // Usar total de BD para el encabezado; si no hay campo, usar lo contado
   const totalLabel = totalClasesDB > 0 ? totalClasesDB : classCounter - 1;
-  const duracionLabel = duracionMeses > 0 ? `${duracionMeses} meses · ` : "";
+  const duracionLabel = duracionMeses > 0 ? `${duracionMeses} meses \u00b7 ` : "";
 
-  return `📚 *Temario completo de ${detectedProgram.nombre}* (${duracionLabel}${totalLabel} clases)\n\n${monthSections}\n\n¿Quieres que te cuente sobre la *inversión* o los *horarios disponibles*?`;
+  return `\ud83d\udcda *Temario completo de ${detectedProgram.nombre}* (${duracionLabel}${totalLabel} clases)\n\n${monthSections}\n\n\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n\ud83d\udccc \u00bfQuieres que te cuente sobre la *inversi\u00f3n* o los *horarios disponibles*?`;
 }
 
 function buildSeparaCupoPaymentReply(
@@ -2351,7 +2359,7 @@ function buildIntentFocusedDirectResponse(
   const requestedTemarioMonth = extractRequestedTemarioMonth(message);
   const inferredTemarioMonthFromFlow = inferTemarioMonthFromAgentPrompt(lastAgentForFlow);
   const asksTemarioByClass = /\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado|detalle\s+por\s+clase)\b/i.test(normalizedMessage);
-  const asksCompleteTemario = /\b(temario\s+completo|todo\s+el\s+temario|completo\s+clase\s+por\s+clase|todos\s+los\s+meses|ver\s+todo\s+el\s+temario|temario\s+entero|enviam[eo]\s+el\s+temario\s+completo|lista\s+(de\s+)?clases?\s*(mes\s+por\s+mes|completa|completo|por\s+mes)?|clases?\s+mes\s+por\s+mes|todas\s+las\s+clases|lista\s+completa\s+de\s+clases?|dame\s+(la\s+)?lista|dame\s+(las\s+)?clases?|clases\s+del\s+(programa|curso))\b/i.test(normalizedMessage);
+  const asksCompleteTemario = /\b(temario\s+completo|todo\s+el\s+temario|completo\s+clase\s+por\s+clase|todos\s+los\s+meses|ver\s+todo\s+el\s+temario|temario\s+entero|enviam[eo]\s+(por\s+favor\s+)?(el\s+)?(temario|listado|lista)\s+(de\s+(las\s+)?)?clases?|lista\s+(de\s+)?(las\s+)?clases?\s*(mes\s+por\s+mes|completa|completo|por\s+mes)?|listado\s+(de\s+)?(las\s+)?clases?|clases?\s+mes\s+por\s+mes|todas\s+las\s+clases|lista\s+completa\s+de\s+clases?|dame\s+(la\s+)?(lista|listado)|dame\s+(las\s+)?clases?|clases\s+del\s+(programa|curso))\b/i.test(normalizedMessage);
   const askedTemarioByClassBefore = /\b(quieres\s+que\s+te\s+lo\s+envie\s+tambien\s+clase\s+por\s+clase|clase\s+por\s+clase)\b/i.test(normalizeForMatch(lastAgentForFlow));
   const hasRecentTemarioFlow = /\b(temario|clase\s+por\s+clase|mes\s+\d{1,2})\b/i.test(normalizeForMatch(lastAgentForFlow));
 
