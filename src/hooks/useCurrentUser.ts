@@ -9,6 +9,18 @@ export interface CurrentUser {
   nombre_completo?: string;
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallbackValue: T): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  try {
+    const timeoutPromise = new Promise<T>((resolve) => {
+      timeoutHandle = setTimeout(() => resolve(fallbackValue), timeoutMs);
+    });
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
 /**
  * Hook para obtener el usuario actual y su información de rol
  * Optimizado para evitar llamadas duplicadas
@@ -21,12 +33,13 @@ export function useCurrentUser() {
       console.log('[useCurrentUser] Iniciando query...');
       
       try {
-        const { data: { user: authUser }, error: authError } = await supabaseBrowserClient.auth.getUser();
-        
-        if (authError) {
-          console.error('[useCurrentUser] Error de auth:', authError);
-          throw authError;
+        const { data: { session }, error: sessionError } = await supabaseBrowserClient.auth.getSession();
+        if (sessionError) {
+          console.warn('[useCurrentUser] Error de sesión (fallback a null):', sessionError);
+          return null;
         }
+
+        const authUser = session?.user ?? null;
         
         if (!authUser) {
           console.log('[useCurrentUser] No hay usuario autenticado');
@@ -35,11 +48,25 @@ export function useCurrentUser() {
 
         console.log('[useCurrentUser] Usuario auth encontrado:', authUser.id);
 
-        const { data: perfil, error } = await supabaseBrowserClient
-          .from("perfiles")
-          .select("id, email, rol, nombre_completo")
-          .eq("id", authUser.id)
-          .maybeSingle();
+        const perfilResult = await withTimeout(
+          Promise.resolve(
+            supabaseBrowserClient
+              .from("perfiles")
+              .select("id, email, rol, nombre_completo")
+              .eq("id", authUser.id)
+              .maybeSingle()
+          ),
+          8000,
+          {
+            data: null,
+            error: new Error("timeout perfil") as any,
+            count: null,
+            status: 408,
+            statusText: "Request Timeout",
+          } as any
+        );
+
+        const { data: perfil, error } = perfilResult as { data: any; error: any };
 
         if (error || !perfil) {
           console.warn('[useCurrentUser] No se encontró perfil, usando datos de auth');
@@ -55,17 +82,16 @@ export function useCurrentUser() {
           nombre_completo: perfil.nombre_completo,
         };
       } catch (err) {
-        console.error('[useCurrentUser] Error en queryFn:', err);
-        throw err;
+        console.error('[useCurrentUser] Error en queryFn (fallback seguro):', err);
+        return null;
       }
     },
     staleTime: 5 * 60 * 1000,
     refetchInterval: false,
     refetchIntervalInBackground: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
-    retry: 1,
-    retryDelay: 500,
+    retry: 0,
     gcTime: 10 * 60 * 1000,
   });
 
