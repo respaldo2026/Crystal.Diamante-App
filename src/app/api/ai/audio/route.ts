@@ -1396,7 +1396,6 @@ function buildTemarioDetailedListReply(
 
   return `📚 *Temario detallado de ${detectedProgram.nombre}*
 
-―――――――――――――
 🗓️ *MES ${selectedBlock.month}*
 ―――――――――――――
 ${classesLines}
@@ -1414,27 +1413,28 @@ function buildTemarioCompleteReply(
 
   const totalClasesDB = Number(detectedProgram?.total_clases ?? 0);
   const duracionMeses = Number(detectedProgram?.duracion_meses ?? 0);
-  const numMonths = monthBlocks.length;
-  const maxPerMonth = totalClasesDB > 0 && numMonths > 0
-    ? Math.ceil(totalClasesDB / numMonths)
-    : 12;
 
   let classCounter = 1;
   let clasesShown = 0;
   const monthSections = monthBlocks
     .map((block) => {
-      const remaining = totalClasesDB > 0 ? totalClasesDB - clasesShown : Infinity;
-      const classesToShow = block.classes.slice(0, Math.min(maxPerMonth, remaining));
+      const remaining = totalClasesDB > 0 ? totalClasesDB - clasesShown : block.classes.length;
+      if (remaining <= 0) return null;
+      const classesToShow = block.classes.slice(0, remaining);
       if (!classesToShow.length) return null;
 
       const lines = classesToShow
         .map((classItem) => {
-          const cleanName = classItem.replace(/\s+\d+\.?\s*$/, "").trim();
+          const cleanName = classItem
+            .replace(/\p{Extended_Pictographic}/gu, "")
+            .replace(/\s+\d+\.?\s*$/, "")
+            .replace(/\s{2,}/g, " ")
+            .trim();
           clasesShown++;
           return `\u2022 *Clase ${classCounter++}:* ${cleanName}`;
         })
         .join("\n");
-      return `\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n\ud83d\uddd3\ufe0f *MES ${block.month}*\n\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n${lines}`;
+      return `\ud83d\uddd3\ufe0f *MES ${block.month}*\n\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n${lines}`;
     })
     .filter(Boolean)
     .join("\n\n");

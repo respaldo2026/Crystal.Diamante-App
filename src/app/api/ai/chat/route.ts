@@ -1965,7 +1965,6 @@ function buildTemarioDetailedListReply(
 
   return `📚 *Temario detallado de ${detectedProgram.nombre}*
 
-―――――――――――――
 🗓️ *MES ${selectedBlock.month}*
 ―――――――――――――
 ${classesLines}
@@ -2004,7 +2003,7 @@ function buildTemarioCompleteReply(
           return `\u2022 *Clase ${classCounter++}:* ${cleanName}`;
         })
         .join("\n");
-      return `\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n\ud83d\uddd3\ufe0f *MES ${block.month}*\n\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n${lines}`;
+      return `\ud83d\uddd3\ufe0f *MES ${block.month}*\n\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\u2015\n${lines}`;
     })
     .filter(Boolean)
     .join("\n\n");
