@@ -2246,7 +2246,7 @@ function buildIntentFocusedDirectResponse(
   }
 
   const inferredPendingTopic = inferPendingTopicFromHistory(history);
-  const confirmsPaymentInfo = (isShortAffirmativeReply(message) || asksStepOne)
+  const confirmsPaymentInfo = isShortAffirmativeReply(message)
     && /\b(medios\s+de\s+pago|formas\s+de\s+pago|fechas\s+de\s+pago|metodo\s+de\s+pago)\b/i.test(inferredPendingTopic);
 
   if (asksPaymentMethodsOrDates || confirmsPaymentInfo) {
