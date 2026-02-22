@@ -998,9 +998,10 @@ function isCourseInfoRequest(message: string): boolean {
 
 function isPaymentMethodsOrDatesQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
-  const asksMethods = /\b(medios\s+de\s+pago|formas\s+de\s+pago|metodos?\s+de\s+pago|pago|pagos|nequi|bancolombia|sistecredito|tarjeta|efectivo|transferencia)\b/i.test(text);
+  const asksMethods = /\b(medios\s+de\s+pago|formas\s+de\s+pago|metodos?\s+de\s+pago|nequi|bancolombia|sistecredito|daviplata|tarjeta|efectivo|transferencia)\b/i.test(text);
   const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|primeros\s+5\s+dias|vence|vencimiento)\b/i.test(text);
-  return asksMethods || asksDates;
+  const asksHowToPay = /\b(como\s+pago|donde\s+pago|por\s+que\s+medio\s+pago|aceptan\s+nequi|aceptan\s+tarjeta|puedo\s+pagar\s+por)\b/i.test(text);
+  return asksMethods || asksDates || asksHowToPay;
 }
 
 function isStepOneSelection(message: string): boolean {
@@ -1072,6 +1073,10 @@ function extractProgramInquiryTopic(message: string): string | null {
       .replace(/\b(aqui|aca|en\s+cali|por\s+favor|me\s+podrias|me\s+puedes|si|no)\b/gi, " ")
       .replace(/\s+/g, " ")
       .trim();
+
+    if (/\b(uniforme|kit|inscripcion|mensualidad|precio|costo|valor|pago|pagar|cuota|horario|fecha|inicio)\b/i.test(candidate)) {
+      continue;
+    }
 
     if (candidate.length >= 3) return candidate;
   }
@@ -1699,6 +1704,8 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
 
     const normalizedMessage = normalizeForMatch(message);
     const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
+    const asksTotalToPay = /\b(por\s+todo|total|todo\s+junto|de\s+una\s+vez|de\s+una|completo|todo\s+el\s+curso)\b/i.test(normalizedMessage)
+      && /\b(cuanto|cuanto\s+es|pagar|pago|se\s+paga|vale|valor|costo)\b/i.test(normalizedMessage);
     const asksPartialPayment = /\b(abono|abonar|pago parcial|cuota inicial|fraccionar|financiar|totalidad|pagar todo|pagar completo|de una)\b/i.test(normalizedMessage)
       && /\b(inscripcion|inscrip|curso|total)\b/i.test(normalizedMessage);
 
@@ -1706,8 +1713,16 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
       return `✅ Sí, la *mensualidad* es ${menText}.\n🧴 *Cada mes te damos kit de productos.*\n\n¿Quieres que te comparta también los *medios de pago* y las *fechas de pago*?`;
     }
 
+    if (asksTotalToPay) {
+      const totalInicio = (inscripcion > 0 && mensualidad > 0)
+        ? formatCurrencyCOP(inscripcion + mensualidad)
+        : "Por confirmar";
+
+      return `💸 Si pagas para iniciar con todo listo, sería:\n• *Inscripción:* ${insText}\n• *Mensualidad:* ${menText}\n• *Total inicial (inscripción + mensualidad):* ${totalInicio}\n\n✅ *Lo ideal* es pagar inscripción y mensualidad de una, porque con la mensualidad te entregamos el *kit de productos* para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase*, que es cuando se empiezan a usar los productos.`;
+    }
+
     if (asksPartialPayment) {
-      return `Buena pregunta 👌\n\nNo necesitas pagar todo el curso de una sola vez.\nPara iniciar, se maneja:\n\n💰 *Inscripción:* ${insText}\n💰 *Mensualidad:* ${menText}\n\nSi quieres dividir específicamente la inscripción (abono), te lo confirma de inmediato Admisiones según tu caso:\n📱 *+57 301 203 8582*`;
+      return `Buena pregunta 👌\n\n✅ *Lo ideal* es pagar *inscripción y mensualidad de una*, porque con la mensualidad te entregamos el *kit de productos* para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase* (ahí se empiezan a usar los productos).\n\nPara iniciar hoy, se maneja:\n💰 *Inscripción:* ${insText}\n💰 *Mensualidad:* ${menText}`;
     }
 
     const recentConversationText = (Array.isArray(history) ? history : [])
