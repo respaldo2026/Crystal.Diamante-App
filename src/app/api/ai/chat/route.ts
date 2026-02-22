@@ -1281,6 +1281,15 @@ function isShortAffirmativeReply(message: string): boolean {
   return /^(si|dale|ok|okay|claro|listo|perfecto|de una|por favor|si por favor|claro que si|clase|ciclo|ambos|los dos)$/i.test(text);
 }
 
+function isClosureAcknowledgement(message: string, lastAgentMessage: string): boolean {
+  if (!isShortAffirmativeReply(message)) return false;
+
+  const normalizedLastAgent = normalizeForMatch(lastAgentMessage || "");
+  if (!normalizedLastAgent) return false;
+
+  return /\b(alguna otra duda|si necesitas algo|te esperamos|nos vemos|quedo atenta|quedo atento|quedo pendiente|cualquier duda|antes de iniciar|te guie con el proceso|te guie con inscripcion)\b/i.test(normalizedLastAgent);
+}
+
 function inferPendingTopicFromHistory(history: Array<{ user: string; agent: string }>): string {
   const lastAgent = String(history[history.length - 1]?.agent || "");
   if (!lastAgent) return "";
@@ -1293,6 +1302,10 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
     ? (questionParts[questionParts.length - 2] || "").split(/[\n\r]/).pop() || ""
     : "";
   const normalizedQuestion = normalizeForMatch(lastQuestion);
+
+  if (/\b(alguna otra duda|si necesitas algo|antes de iniciar|te guie con el proceso|te guie con inscripcion|quedo atenta|quedo atento|nos vemos|te esperamos)\b/i.test(normalizedQuestion)) {
+    return "";
+  }
 
   // Inferir por la última pregunta específica del agente
   if (normalizedQuestion) {
@@ -2079,6 +2092,10 @@ function buildIntentFocusedDirectResponse(
 
   let intent = detectUserIntent(message);
   const normalizedMessage = normalizeForMatch(message);
+  const lastAgentForFlow = history[history.length - 1]?.agent || "";
+  if (isClosureAcknowledgement(message, lastAgentForFlow)) {
+    return "Perfecto 😊 Quedo atenta. Nos vemos en la fecha acordada y, si necesitas algo antes, me escribes por aquí.";
+  }
   const asksDuration = isDurationQuestion(message);
   const asksFastTrack = isFastTrackQuestion(message);
   let asksLocation = isLocationQuestion(message);
@@ -2113,9 +2130,8 @@ function buildIntentFocusedDirectResponse(
     return null; // Dejar que Gemini responda sobre requisitos, edad, etc.
   }
 
-  const lastAgentForFlow = normalizeForMatch(history[history.length - 1]?.agent || "");
   const confirmsStepOneFlow = asksStepOne
-    && /\b(para\s+inscribirte|seguimos\s+este\s+orden|paso\s+1|confirmar\s+el\s+grupo\s+y\s+horario)\b/i.test(lastAgentForFlow);
+    && /\b(para\s+inscribirte|seguimos\s+este\s+orden|paso\s+1|confirmar\s+el\s+grupo\s+y\s+horario)\b/i.test(normalizeForMatch(lastAgentForFlow));
 
   if (confirmsStepOneFlow) {
     if (detectedProgram) {
@@ -2127,7 +2143,7 @@ function buildIntentFocusedDirectResponse(
     return "¡Excelente! Vamos con el *paso 1* ✅\n\nPara avanzar, confirmemos el *curso* y el *horario* que mejor te funcione. ¿Cuál curso deseas separar?";
   }
   const confirmsReserveFlow = isShortAffirmativeReply(message)
-    && /\b(te reservo( un)? cupo|reservo( tu|el)? cupo|reservar tu cupo|te ayudo a reservar|separar cupo)\b/i.test(lastAgentForFlow);
+    && /\b(te reservo( un)? cupo|reservo( tu|el)? cupo|reservar tu cupo|te ayudo a reservar|separar cupo)\b/i.test(normalizeForMatch(lastAgentForFlow));
 
   if (confirmsReserveFlow) {
     const admissionsContact = academy?.whatsapp || "+57 301 203 8582";
@@ -3151,10 +3167,15 @@ export async function POST(req: NextRequest) {
       const normalizedOriginal = normalizeForMatch(trimmedOriginal);
       const isOperationalQuestion = /\b(pago|pagos|nequi|bancolombia|sistecredito|inscrip|inscripcion|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps|precio|valor|cuanto)\b/i.test(normalizedOriginal)
         || /^(1|uno|paso\s*1)$/i.test(normalizedOriginal);
+      const lastAgentMessage = history[history.length - 1]?.agent || "";
+      const isClosureAckInput = isClosureAcknowledgement(trimmedOriginal, lastAgentMessage);
       if (isFirstInteraction || isGreetingOrShortInput) {
         mediaSuggestion = null;
       }
       if (isOperationalQuestion) {
+        mediaSuggestion = null;
+      }
+      if (isClosureAckInput) {
         mediaSuggestion = null;
       }
     }
