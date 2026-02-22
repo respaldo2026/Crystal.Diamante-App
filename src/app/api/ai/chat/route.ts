@@ -1933,12 +1933,18 @@ function buildTemarioDetailedListReply(
 
   if (!selectedBlock) return null;
 
-  // Numeración continua: contar clases de meses anteriores
+  const totalClasesDB = Number(detectedProgram?.total_clases ?? 0);
+  const numMonths = monthBlocks.length;
+  const maxPerMonth = totalClasesDB > 0 && numMonths > 0
+    ? Math.ceil(totalClasesDB / numMonths)
+    : 12;
+
+  // Numeración continua: contar clases reales (limitadas) de meses anteriores
   const startClassNumber = monthBlocks
     .filter((block) => block.month < selectedBlock.month)
-    .reduce((acc, block) => acc + block.classes.length, 0) + 1;
+    .reduce((acc, block) => acc + Math.min(block.classes.length, maxPerMonth), 0) + 1;
 
-  const classesLines = selectedBlock.classes
+  const classesLines = selectedBlock.classes.slice(0, maxPerMonth)
     .map((classItem, index) => {
       // Eliminar número final duplicado (ej: "Nombre de clase 5." → "Nombre de clase")
       const cleanName = classItem.replace(/\s+\d+\.?\s*$/, "").trim();
@@ -1961,21 +1967,39 @@ function buildTemarioCompleteReply(
   const monthBlocks = extractTemarioMonthBlocks(rawTemario);
   if (!monthBlocks.length) return null;
 
+  const totalClasesDB = Number(detectedProgram?.total_clases ?? 0);
+  const duracionMeses = Number(detectedProgram?.duracion_meses ?? 0);
+  const numMonths = monthBlocks.length;
+  // Clases por mes derivado del total real de la BD; si no hay dato, 12 como fallback
+  const maxPerMonth = totalClasesDB > 0 && numMonths > 0
+    ? Math.ceil(totalClasesDB / numMonths)
+    : 12;
+
   let classCounter = 1;
+  let clasesShown = 0;
   const monthSections = monthBlocks
     .map((block) => {
-      const lines = block.classes
+      const remaining = totalClasesDB > 0 ? totalClasesDB - clasesShown : Infinity;
+      const classesToShow = block.classes.slice(0, Math.min(maxPerMonth, remaining));
+      if (!classesToShow.length) return null;
+
+      const lines = classesToShow
         .map((classItem) => {
           const cleanName = classItem.replace(/\s+\d+\.?\s*$/, "").trim();
+          clasesShown++;
           return `• *Clase ${classCounter++}:* ${cleanName}`;
         })
         .join("\n");
       return `🗓️ *Mes ${block.month}:*\n${lines}`;
     })
+    .filter(Boolean)
     .join("\n\n");
 
-  const totalClases = classCounter - 1;
-  return `📚 *Temario completo de ${detectedProgram.nombre}* (${totalClases} clases)\n\n${monthSections}\n\n¿Quieres que te cuente sobre la *inversión* o los *horarios disponibles*?`;
+  // Usar total de BD para el encabezado; si no hay campo, usar lo contado
+  const totalLabel = totalClasesDB > 0 ? totalClasesDB : classCounter - 1;
+  const duracionLabel = duracionMeses > 0 ? `${duracionMeses} meses · ` : "";
+
+  return `📚 *Temario completo de ${detectedProgram.nombre}* (${duracionLabel}${totalLabel} clases)\n\n${monthSections}\n\n¿Quieres que te cuente sobre la *inversión* o los *horarios disponibles*?`;
 }
 
 function buildSeparaCupoPaymentReply(
