@@ -1929,8 +1929,17 @@ function buildTemarioDetailedListReply(
 
   if (!selectedBlock) return null;
 
+  // Numeración continua: contar clases de meses anteriores
+  const startClassNumber = monthBlocks
+    .filter((block) => block.month < selectedBlock.month)
+    .reduce((acc, block) => acc + block.classes.length, 0) + 1;
+
   const classesLines = selectedBlock.classes
-    .map((classItem, index) => `• *Clase ${index + 1}:* ${classItem}`)
+    .map((classItem, index) => {
+      // Eliminar número final duplicado (ej: "Nombre de clase 5." → "Nombre de clase")
+      const cleanName = classItem.replace(/\s+\d+\.?\s*$/, "").trim();
+      return `• *Clase ${startClassNumber + index}:* ${cleanName}`;
+    })
     .join("\n");
 
   const nextBlock = monthBlocks.find((block) => block.month > selectedBlock.month);
