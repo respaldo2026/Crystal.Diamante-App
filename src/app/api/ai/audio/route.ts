@@ -1409,6 +1409,53 @@ function buildTemarioCompleteReply(
   return `📚 *Temario completo de ${detectedProgram.nombre}* (${totalClases} clases)\n\n${monthSections}\n\n¿Quieres que te cuente sobre la *inversión* o los *horarios disponibles*?`;
 }
 
+function buildSeparaCupoPaymentReply(
+  detectedProgram: any,
+  academy: any,
+  courses: any[]
+): string {
+  const admissionsContact = academy?.whatsapp || "+57 301 203 8582";
+  const nequiNumber = "3006402575";
+
+  const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
+  const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
+  const hasPrice = inscripcion > 0;
+  const insText = hasPrice ? formatCurrencyCOP(inscripcion) : null;
+  const programLabel = detectedProgram?.nombre ? ` en *${detectedProgram.nombre}*` : "";
+
+  const direccion = String(academy?.direccion || "").trim();
+  const mapsUrl = String(academy?.maps_url || "").trim();
+  const locationRef = "*La Cosmetikera (segundo piso)*, oriente de Cali, cerca a la Panadería Pablos Pam";
+
+  const montoLine = insText ? `• Monto: *${insText}*` : `• Monto: te lo confirma Admisiones al contactarte`;
+  const pagoEfectivoLine = insText ? `• Paga *${insText}* en efectivo` : `• Pago en efectivo (valor exacto te lo confirma Admisiones)`;
+
+  const presencialBlock = [
+    `📍 *Ir a la sede:*`,
+    direccion ? `• Dirección: *${direccion}*` : `• Ubicación: ${locationRef}`,
+    mapsUrl ? `• 🗺️ Mapa: ${mapsUrl}` : "",
+    pagoEfectivoLine,
+    `• Envía el comprobante a Admisiones: *${admissionsContact}*`,
+  ].filter(Boolean).join("\n");
+
+  const intro = insText
+    ? `¡Perfecto! 🙌 Para separar tu cupo${programLabel}, el pago de inscripción es de *${insText}*.`
+    : `¡Perfecto! 🙌 Para separar tu cupo${programLabel}, el pago de inscripción te lo confirma nuestro equipo de Admisiones.`;
+
+  return `${intro}
+
+Puedes hacerlo de estas formas:
+
+💜 *Por Nequi:*
+• Número: *${nequiNumber}*
+${montoLine}
+• Envía el comprobante a Admisiones: *${admissionsContact}*
+
+${presencialBlock}
+
+✅ Una vez confirmemos tu pago, ¡queda reservado tu cupo!`;
+}
+
 function buildInstagramFollowup(academy: any | null): string {
   const ig = String(academy?.instagram || "").trim();
   const fb = String(academy?.facebook || "").trim();
@@ -1554,13 +1601,11 @@ function buildIntentFocusedDirectResponse(
     && /\b(te reservo( un)? cupo|reservo( tu|el)? cupo|reservar tu cupo|te ayudo a reservar|separar cupo)\b/i.test(normalizeForMatch(lastAgentForFlow));
 
   if (confirmsReserveFlow) {
-    const admissionsContact = academy?.whatsapp || "+57 301 203 8582";
-    return `¡Excelente! 🙌\n\nPerfecto, avanzamos con tu inscripción.\n\n📝 *Paso 1:* Te toman datos básicos\n💳 *Paso 2:* Realizas el pago de inscripción\n✅ *Paso 3:* Queda reservado tu cupo en el grupo\n\n📱 *Admisiones:* ${admissionsContact}\n\nSi quieres, te explico también si puedes manejar pago parcial o abono en tu caso.`;
+    return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
   }
 
   if (intent === "inscripcion") {
-    const admissionsContact = academy?.whatsapp || "+57 301 203 8582";
-    return `¡Perfecto! Te ayudo con eso 🙌\n\nPara inscribirte, seguimos este orden:\n\n1️⃣ Confirmar el grupo y horario\n2️⃣ Registrar tus datos\n3️⃣ Realizar el pago de inscripción\n4️⃣ Quedar con cupo reservado\n\n📱 *Admisiones:* ${admissionsContact}\n\nSi quieres, te acompaño ahora mismo con el paso 1.`;
+    return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
   }
 
   if (asksLocation) {
