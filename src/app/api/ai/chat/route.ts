@@ -2359,7 +2359,24 @@ function buildIntentFocusedDirectResponse(
   const requestedTemarioMonth = extractRequestedTemarioMonth(message);
   const inferredTemarioMonthFromFlow = inferTemarioMonthFromAgentPrompt(lastAgentForFlow);
   const asksTemarioByClass = /\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado|detalle\s+por\s+clase)\b/i.test(normalizedMessage);
-  const asksCompleteTemario = /\b(temario\s+completo|todo\s+el\s+temario|completo\s+clase\s+por\s+clase|todos\s+los\s+meses|ver\s+todo\s+el\s+temario|temario\s+entero|enviam[eo]\s+(por\s+favor\s+)?(el\s+)?(temario|listado|lista)\s+(de\s+(las\s+)?)?clases?|lista\s+(de\s+)?(las\s+)?clases?\s*(mes\s+por\s+mes|completa|completo|por\s+mes)?|listado\s+(de\s+)?(las\s+)?clases?|clases?\s+mes\s+por\s+mes|todas\s+las\s+clases|lista\s+completa\s+de\s+clases?|dame\s+(la\s+)?(lista|listado)|dame\s+(las\s+)?clases?|clases\s+del\s+(programa|curso))\b/i.test(normalizedMessage);
+  const asksCompleteTemario = /\b(
+    temario|pensum|p[eé]nsum|plan\s+de\s+estudios|plan\s+acad[eé]mico|syll?abus|m[oó]dulos|malla\s+curricular|
+    contenido(s)?\s+(del|de\s+(el|la))\s+(curso|programa|ciclo)|
+    listado\s+(de\s+(las?\s+)?)?clases?|
+    lista(do)?\s+(completa?\s+)?(de\s+(las?\s+)?)?clases?|
+    clases?\s+(del|de\s+(el|la))\s+(programa|curso|ciclo)|
+    clases?\s+mes\s+por\s+mes|
+    todas?\s+las\s+clases?|
+    (dame|env[ií]a(me)?|comp[áa]rte(me)?|manda(me)?|pasa(me)?)\s+(por\s+favor\s+)?(el|la|las|los)?\s*(lista(do)?|temario|pensum|clases?|contenido)|
+    que\s+(se\s+ve(n)?|vemos|van\s+a\s+ver|veremos|vamos\s+a\s+ver|ense[ñn]an?|aprendo|aprender[eé](s|mos)?|incluye(n)?|cubre(n)?)\s+(en\s+(el\s+)?)?(curso|programa|ciclo|clases?)?|
+    que\s+temas?\s+(se\s+)?(ense[ñn]an?|ven?|cubren?|incluyen?|tienen?|hay|tratan?)|
+    que\s+aprend(e|o|emos|er[eé]s?)(mos)?|
+    que\s+incluye\s+(el\s+)?(curso|programa|ciclo)|
+    ver\s+(todo(s)?\s+)?(el\s+)?(temario|contenido|clases?)|
+    todo(s)?\s+(el|los)\s+(temario|contenido|clases?|m[oó]dulos?)|
+    temario\s+(completo|entero|del\s+curso|del\s+programa)|
+    clases\s+clase\s+por\s+clase
+  )\b/ix.test(normalizedMessage);
   const askedTemarioByClassBefore = /\b(quieres\s+que\s+te\s+lo\s+envie\s+tambien\s+clase\s+por\s+clase|clase\s+por\s+clase)\b/i.test(normalizeForMatch(lastAgentForFlow));
   const hasRecentTemarioFlow = /\b(temario|clase\s+por\s+clase|mes\s+\d{1,2})\b/i.test(normalizeForMatch(lastAgentForFlow));
 
