@@ -1347,12 +1347,46 @@ function extractTemarioMonthBlocks(rawTemario: string): Array<{ month: number; c
   return blocks.sort((a, b) => a.month - b.month);
 }
 
+function normalizeTemarioMonthBlocks(
+  detectedProgram: any,
+  rawTemario: string
+): Array<{ month: number; classes: string[] }> {
+  const monthBlocks = extractTemarioMonthBlocks(rawTemario);
+  if (!monthBlocks.length) return [];
+
+  const totalClasesDB = Number(detectedProgram?.total_clases ?? 0);
+  const duracionMeses = Number(detectedProgram?.duracion_meses ?? 0);
+
+  const allClasses = monthBlocks.flatMap((block) => block.classes);
+  const classes = totalClasesDB > 0 ? allClasses.slice(0, totalClasesDB) : allClasses;
+
+  const monthsTarget = duracionMeses > 0 ? duracionMeses : monthBlocks.length;
+  if (monthsTarget <= 0 || !classes.length) return monthBlocks;
+
+  const basePerMonth = Math.floor(classes.length / monthsTarget);
+  const remainder = classes.length % monthsTarget;
+
+  const normalized: Array<{ month: number; classes: string[] }> = [];
+  let cursor = 0;
+
+  for (let month = 1; month <= monthsTarget; month++) {
+    const count = basePerMonth + (month <= remainder ? 1 : 0);
+    const monthClasses = classes.slice(cursor, cursor + count);
+    cursor += count;
+    if (monthClasses.length) {
+      normalized.push({ month, classes: monthClasses });
+    }
+  }
+
+  return normalized;
+}
+
 function buildTemarioDetailedListReply(
   detectedProgram: any,
   rawTemario: string,
   options: { monthNumber?: number } = {}
 ): string | null {
-  const monthBlocks = extractTemarioMonthBlocks(rawTemario);
+  const monthBlocks = normalizeTemarioMonthBlocks(detectedProgram, rawTemario);
   if (!monthBlocks.length) return null;
 
   const requestedMonth = options.monthNumber;
@@ -1400,7 +1434,7 @@ function buildTemarioCompleteReply(
   detectedProgram: any,
   rawTemario: string
 ): string | null {
-  const monthBlocks = extractTemarioMonthBlocks(rawTemario);
+  const monthBlocks = normalizeTemarioMonthBlocks(detectedProgram, rawTemario);
   if (!monthBlocks.length) return null;
 
   const totalClasesDB = Number(detectedProgram?.total_clases ?? 0);
