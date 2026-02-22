@@ -1560,7 +1560,7 @@ function buildIntentFocusedDirectResponse(
   const requestedTemarioMonth = extractRequestedTemarioMonth(message);
   const inferredTemarioMonthFromFlow = inferTemarioMonthFromAgentPrompt(lastAgentForFlow);
   const asksTemarioByClass = /\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado|detalle\s+por\s+clase)\b/i.test(normalizedMessage);
-  const asksCompleteTemario = /\b(temario\s+completo|todo\s+el\s+temario|completo\s+clase\s+por\s+clase|todos\s+los\s+meses|ver\s+todo\s+el\s+temario|temario\s+entero|enviam[eo]\s+el\s+temario\s+completo|lista\s+(de\s+)?clases?\s+(mes\s+por\s+mes|completa|completo|por\s+mes)|clases?\s+mes\s+por\s+mes|todas\s+las\s+clases|lista\s+completa\s+de\s+clases?)\b/i.test(normalizedMessage);
+  const asksCompleteTemario = /\b(temario\s+completo|todo\s+el\s+temario|completo\s+clase\s+por\s+clase|todos\s+los\s+meses|ver\s+todo\s+el\s+temario|temario\s+entero|enviam[eo]\s+el\s+temario\s+completo|lista\s+(de\s+)?clases?\s*(mes\s+por\s+mes|completa|completo|por\s+mes)?|clases?\s+mes\s+por\s+mes|todas\s+las\s+clases|lista\s+completa\s+de\s+clases?|dame\s+(la\s+)?lista|dame\s+(las\s+)?clases?|clases\s+del\s+(programa|curso))\b/i.test(normalizedMessage);
   const askedTemarioByClassBefore = /\b(quieres\s+que\s+te\s+lo\s+envie\s+tambien\s+clase\s+por\s+clase|clase\s+por\s+clase)\b/i.test(normalizeForMatch(lastAgentForFlow));
   const hasRecentTemarioFlow = /\b(temario|clase\s+por\s+clase|mes\s+\d{1,2})\b/i.test(normalizeForMatch(lastAgentForFlow));
 
@@ -2476,6 +2476,10 @@ function enforceReadableLineBreaks(text: string): string {
 
   output = output
     .replace(/([.!?])\s+(¿)/g, "$1\n\n$2")
+    // Separar bullets amontonados: "• texto • texto" → cada uno en su línea
+    .replace(/([^\n])\s*[•·▪◦]\s+/g, "$1\n• ")
+    // Separar bloques "Mes X –" que vienen pegados
+    .replace(/([^\n])\s*(Mes\s+\d)/g, "$1\n\n$2")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]+\n/g, "\n")
     .trim();
