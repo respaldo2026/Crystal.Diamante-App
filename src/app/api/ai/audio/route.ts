@@ -1259,6 +1259,19 @@ function extractRequestedTemarioMonth(message: string): number | null {
   return month;
 }
 
+function inferTemarioMonthFromAgentPrompt(lastAgentMessage: string): number | null {
+  const text = normalizeForMatch(lastAgentMessage || "");
+  if (!text) return null;
+
+  const asksNextMonth = text.match(/\b(?:tambien\s+el|tambien\s+mes|el)\s+mes\s*(\d{1,2})\b/i);
+  if (asksNextMonth?.[1]) {
+    const month = Number(asksNextMonth[1]);
+    if (Number.isFinite(month) && month >= 1 && month <= 12) return month;
+  }
+
+  return null;
+}
+
 function splitTemarioIntoClassItems(rawBlock: string, maxItems: number = 12): string[] {
   const source = String(rawBlock || "")
     .replace(/\r/g, "\n")
@@ -1465,6 +1478,7 @@ function buildIntentFocusedDirectResponse(
   const asksStepOne = isStepOneSelection(message);
   const asksPrice = /\b(precio|cuanto|costo|valor|inscripcion|mensualidad|inversion)\b/i.test(normalizedMessage);
   const requestedTemarioMonth = extractRequestedTemarioMonth(message);
+  const inferredTemarioMonthFromFlow = inferTemarioMonthFromAgentPrompt(lastAgentForFlow);
   const asksTemarioByClass = /\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado|detalle\s+por\s+clase)\b/i.test(normalizedMessage);
   const askedTemarioByClassBefore = /\b(quieres\s+que\s+te\s+lo\s+envie\s+tambien\s+clase\s+por\s+clase|clase\s+por\s+clase)\b/i.test(normalizeForMatch(lastAgentForFlow));
   const hasRecentTemarioFlow = /\b(temario|clase\s+por\s+clase|mes\s+\d{1,2})\b/i.test(normalizeForMatch(lastAgentForFlow));
@@ -1612,9 +1626,12 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     || (requestedTemarioMonth !== null && hasRecentTemarioFlow)
   );
 
+  const targetTemarioMonth = requestedTemarioMonth
+    ?? ((isShortAffirmativeReply(message) && askedTemarioByClassBefore) ? inferredTemarioMonthFromFlow : null);
+
   if (shouldSendDetailedTemario) {
     const detailedTemarioReply = buildTemarioDetailedListReply(detectedProgram, rawTemario, {
-      monthNumber: requestedTemarioMonth || undefined,
+      monthNumber: targetTemarioMonth || undefined,
     });
     if (detailedTemarioReply) {
       return detailedTemarioReply;
