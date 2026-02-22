@@ -1950,6 +1950,30 @@ function buildTemarioDetailedListReply(
   return `📚 *Temario detallado de ${detectedProgram.nombre}*\n\n🗓️ *Mes ${selectedBlock.month}* (clase por clase):\n${classesLines}\n\n${followup}`;
 }
 
+function buildTemarioCompleteReply(
+  detectedProgram: any,
+  rawTemario: string
+): string | null {
+  const monthBlocks = extractTemarioMonthBlocks(rawTemario);
+  if (!monthBlocks.length) return null;
+
+  let classCounter = 1;
+  const monthSections = monthBlocks
+    .map((block) => {
+      const lines = block.classes
+        .map((classItem) => {
+          const cleanName = classItem.replace(/\s+\d+\.?\s*$/, "").trim();
+          return `• *Clase ${classCounter++}:* ${cleanName}`;
+        })
+        .join("\n");
+      return `🗓️ *Mes ${block.month}:*\n${lines}`;
+    })
+    .join("\n\n");
+
+  const totalClases = classCounter - 1;
+  return `📚 *Temario completo de ${detectedProgram.nombre}* (${totalClases} clases)\n\n${monthSections}\n\n¿Quieres que te cuente sobre la *inversión* o los *horarios disponibles*?`;
+}
+
 function buildInstagramFollowup(academy: any | null): string {
   const ig = String(academy?.instagram || "").trim();
   const fb = String(academy?.facebook || "").trim();
@@ -2252,6 +2276,7 @@ function buildIntentFocusedDirectResponse(
   const requestedTemarioMonth = extractRequestedTemarioMonth(message);
   const inferredTemarioMonthFromFlow = inferTemarioMonthFromAgentPrompt(lastAgentForFlow);
   const asksTemarioByClass = /\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado|detalle\s+por\s+clase)\b/i.test(normalizedMessage);
+  const asksCompleteTemario = /\b(temario\s+completo|todo\s+el\s+temario|completo\s+clase\s+por\s+clase|todos\s+los\s+meses|ver\s+todo\s+el\s+temario|temario\s+entero|enviam[eo]\s+el\s+temario\s+completo)\b/i.test(normalizedMessage);
   const askedTemarioByClassBefore = /\b(quieres\s+que\s+te\s+lo\s+envie\s+tambien\s+clase\s+por\s+clase|clase\s+por\s+clase)\b/i.test(normalizeForMatch(lastAgentForFlow));
   const hasRecentTemarioFlow = /\b(temario|clase\s+por\s+clase|mes\s+\d{1,2})\b/i.test(normalizeForMatch(lastAgentForFlow));
 
@@ -2409,6 +2434,12 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   const rawTemario = detectedProgram?.contenido || "";
+
+  if (asksCompleteTemario) {
+    const completeReply = buildTemarioCompleteReply(detectedProgram, rawTemario);
+    if (completeReply) return completeReply;
+  }
+
   const agentOfferedNextTemarioMonth = inferredTemarioMonthFromFlow !== null;
   const shouldSendDetailedTemario = Boolean(
     asksTemarioByClass
