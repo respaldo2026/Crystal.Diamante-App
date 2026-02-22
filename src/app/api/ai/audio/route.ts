@@ -1078,6 +1078,9 @@ function extractProgramInquiryTopic(message: string): string | null {
       continue;
     }
 
+    // Excluir: "otros métodos", "otras técnicas", etc. — no son nombres de programas
+    if (/^(otros?|otras?)\b/i.test(candidate)) continue;
+
     if (candidate.length >= 3) return candidate;
   }
 
@@ -1377,8 +1380,11 @@ function buildTemarioDetailedListReply(
 
   const classesLines = selectedBlock.classes.slice(0, maxPerMonth)
     .map((classItem, index) => {
-      // Eliminar número final duplicado (ej: "Nombre de clase 5." → "Nombre de clase")
-      const cleanName = classItem.replace(/\s+\d+\.?\s*$/, "").trim();
+      const cleanName = classItem
+        .replace(/\p{Extended_Pictographic}/gu, "")
+        .replace(/\s+\d+\.?\s*$/, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
       return `• *Clase ${startClassNumber + index}:* ${cleanName}`;
     })
     .join("\n");
@@ -1714,6 +1720,36 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     const nextStart = morningCourse?.fecha_inicio ? (formatDateLong(morningCourse.fecha_inicio) || formatDateShort(morningCourse.fecha_inicio)) : "Por confirmar";
 
     return `¡Claro! Gracias por contarlo 🙌\n\nSi buscas *jornada de mañana*, te confirmo lo que tengo activo para *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario registrado:* ${currentSchedule}\n\nSi ese horario no te funciona, te reviso ahora mismo si hay opción en mañana o próximo grupo. ¿Te lo confirmo?`;
+  }
+
+  // Detectar: "además de acrílico enseñan otros métodos/técnicas" → mostrar highlights del temario
+  const asksOtherTechniques =
+    /\b(ademas\s+de|aparte\s+de|mas\s+alla\s+de)\b/i.test(normalizedMessage) &&
+    /\b(ensena[nr]?|dictan?|dan|tienen|ofrecen|aprend[eo])\b/i.test(normalizedMessage) &&
+    /\b(otros?\s*(metodos?|tecnicas?|cursos?|temas?|cosas?)|mas\s*(metodos?|tecnicas?|temas?))/i.test(normalizedMessage);
+
+  if (asksOtherTechniques) {
+    const programsToHighlight = detectedProgram ? [detectedProgram] : programs.slice(0, 2);
+    const sections: string[] = [];
+    for (const prog of programsToHighlight) {
+      const highlights = extractTemarioHighlights(prog.contenido || "", 6);
+      if (highlights.length) {
+        const cleanHighlights = highlights.map((h) =>
+          h.replace(/^\d+[.)\-\s]+/, "").replace(/\p{Extended_Pictographic}/gu, "").trim()
+        );
+        sections.push(
+          `*${prog.nombre}* (${prog.total_clases || "?"}  clases · ${prog.duracion_meses || "?"}  meses):\n` +
+          cleanHighlights.map((h) => `• ${h}`).join("\n")
+        );
+      }
+    }
+    if (sections.length) {
+      return (
+        `¡Sí! Enseñamos mucho más que acrílico 💅\n\n` +
+        sections.join("\n\n") +
+        `\n\n¿Quieres que te comparta el *temario completo* o te cuento sobre fechas e inversión?`
+      );
+    }
   }
 
   const requestedTopic = extractProgramInquiryTopic(message);
