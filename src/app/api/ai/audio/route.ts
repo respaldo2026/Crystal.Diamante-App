@@ -774,6 +774,7 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
 
   if (!normalized) return "";
   if (/\b(alguna otra duda|si necesitas algo|antes de iniciar|te guie con el proceso|te guie con inscripcion|quedo atenta|quedo atento|nos vemos|te esperamos)\b/i.test(normalized)) return "";
+  if (/\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado)\b/i.test(normalized)) return "quiero el temario clase por clase";
   if (/\b(te reservo( un)? cupo|reservo( tu|el)? cupo|reservar tu cupo|te ayudo a reservar|separar cupo)\b/i.test(normalized)) return "quiero saber como me inscribo";
   if (/\b(inversion|inscripcion|mensualidad|precio|costa|valor)\b/i.test(normalized)) return "quiero saber la inversion";
   if (/\b(cupo|cupos|disponible|disponibles)\b/i.test(normalized)) return "quiero saber si hay cupos disponibles";
@@ -1241,6 +1242,122 @@ function extractTemarioMonthSummaries(rawTemario: string, maxMonths: number = 6)
   return summaries;
 }
 
+function extractRequestedTemarioMonth(message: string): number | null {
+  const text = normalizeForMatch(message);
+  if (!text) return null;
+
+  const monthMatch = text.match(/\bmes\s*(\d{1,2})\b/i);
+  if (!monthMatch?.[1]) return null;
+
+  const month = Number(monthMatch[1]);
+  if (!Number.isFinite(month) || month < 1 || month > 12) return null;
+  return month;
+}
+
+function splitTemarioIntoClassItems(rawBlock: string, maxItems: number = 12): string[] {
+  const source = String(rawBlock || "")
+    .replace(/\r/g, "\n")
+    .replace(/\n+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^mes\s*\d{1,2}\s*[:\-]?\s*/i, "")
+    .replace(/^temario\s+por\s+clases?\s*/i, "")
+    .trim();
+
+  if (!source) return [];
+
+  let segments = source
+    .replace(/\s*[•▪◦·|;]+\s*/g, "\n")
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (segments.length <= 1) {
+    segments = source
+      .replace(/\s*(\p{Extended_Pictographic})\s*/gu, "\n$1 ")
+      .split(/\n+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  const uniqueItems: string[] = [];
+  const seen = new Set<string>();
+
+  for (const segment of segments) {
+    const cleaned = segment
+      .replace(/^temario\s+por\s+clases?\s*/i, "")
+      .replace(/^mes\s*\d{1,2}\s*[:\-]?\s*/i, "")
+      .replace(/^[-–:,.]+\s*/, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    if (cleaned.length < 4) continue;
+
+    const key = normalizeForMatch(cleaned);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    uniqueItems.push(cleaned);
+
+    if (uniqueItems.length >= maxItems) break;
+  }
+
+  return uniqueItems;
+}
+
+function extractTemarioMonthBlocks(rawTemario: string): Array<{ month: number; classes: string[] }> {
+  const text = String(rawTemario || "").replace(/\r/g, "\n");
+  if (!text) return [];
+
+  const blocks: Array<{ month: number; classes: string[] }> = [];
+  const regex = /mes\s*(\d{1,2})\s*[:\-]?\s*([\s\S]*?)(?=(?:\bmes\s*\d{1,2}\s*[:\-]?)|$)/gi;
+  const seenMonths = new Set<number>();
+
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    const month = Number(match[1]);
+    if (!Number.isFinite(month) || month < 1 || month > 12 || seenMonths.has(month)) continue;
+
+    const classes = splitTemarioIntoClassItems(match[2] || "", 12);
+    if (!classes.length) continue;
+
+    seenMonths.add(month);
+    blocks.push({ month, classes });
+  }
+
+  return blocks.sort((a, b) => a.month - b.month);
+}
+
+function buildTemarioDetailedListReply(
+  detectedProgram: any,
+  rawTemario: string,
+  options: { monthNumber?: number } = {}
+): string | null {
+  const monthBlocks = extractTemarioMonthBlocks(rawTemario);
+  if (!monthBlocks.length) return null;
+
+  const requestedMonth = options.monthNumber;
+  if (requestedMonth && !monthBlocks.some((block) => block.month === requestedMonth)) {
+    const availableMonths = monthBlocks.map((block) => `Mes ${block.month}`).join(", ");
+    return `📚 *Temario de ${detectedProgram.nombre}*\n\nTengo detalle disponible para: *${availableMonths}*.\n\n¿Cuál mes quieres que te comparta primero?`;
+  }
+
+  const selectedBlock = requestedMonth
+    ? monthBlocks.find((block) => block.month === requestedMonth)
+    : monthBlocks[0];
+
+  if (!selectedBlock) return null;
+
+  const classesLines = selectedBlock.classes
+    .map((classItem, index) => `• *Clase ${index + 1}:* ${classItem}`)
+    .join("\n");
+
+  const nextBlock = monthBlocks.find((block) => block.month > selectedBlock.month);
+  const followup = nextBlock
+    ? `¿Quieres que te comparta también el *Mes ${nextBlock.month}*?`
+    : "¿Quieres que te comparta también la *inversión*?";
+
+  return `📚 *Temario detallado de ${detectedProgram.nombre}*\n\n🗓️ *Mes ${selectedBlock.month}* (clase por clase):\n${classesLines}\n\n${followup}`;
+}
+
 function buildInstagramFollowup(academy: any | null): string {
   const ig = String(academy?.instagram || "").trim();
   const fb = String(academy?.facebook || "").trim();
@@ -1342,6 +1459,10 @@ function buildIntentFocusedDirectResponse(
   const asksPaymentMethodsOrDates = isPaymentMethodsOrDatesQuestion(message);
   const asksStepOne = isStepOneSelection(message);
   const asksPrice = /\b(precio|cuanto|costo|valor|inscripcion|mensualidad|inversion)\b/i.test(normalizedMessage);
+  const requestedTemarioMonth = extractRequestedTemarioMonth(message);
+  const asksTemarioByClass = /\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado|detalle\s+por\s+clase)\b/i.test(normalizedMessage);
+  const askedTemarioByClassBefore = /\b(quieres\s+que\s+te\s+lo\s+envie\s+tambien\s+clase\s+por\s+clase|clase\s+por\s+clase)\b/i.test(normalizeForMatch(lastAgentForFlow));
+  const hasRecentTemarioFlow = /\b(temario|clase\s+por\s+clase|mes\s+\d{1,2})\b/i.test(normalizeForMatch(lastAgentForFlow));
 
   if (intent === "general" && isShortAffirmativeReply(message) && history.length > 0) {
     const pendingTopic = inferPendingTopicFromHistory(history);
@@ -1479,6 +1600,22 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     return null;
   }
 
+  const rawTemario = detectedProgram?.contenido || "";
+  const shouldSendDetailedTemario = Boolean(
+    asksTemarioByClass
+    || (isShortAffirmativeReply(message) && askedTemarioByClassBefore)
+    || (requestedTemarioMonth !== null && hasRecentTemarioFlow)
+  );
+
+  if (shouldSendDetailedTemario) {
+    const detailedTemarioReply = buildTemarioDetailedListReply(detectedProgram, rawTemario, {
+      monthNumber: requestedTemarioMonth || undefined,
+    });
+    if (detailedTemarioReply) {
+      return detailedTemarioReply;
+    }
+  }
+
   const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1514,7 +1651,6 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   if (intent === "temario") {
-    const rawTemario = detectedProgram?.contenido || "";
     const highlights = extractTemarioHighlights(rawTemario, 10);
     if (highlights.length > 0) {
       const explicitClasses = Number(detectedProgram?.total_clases ?? 0);
@@ -1952,7 +2088,7 @@ function buildContextualDirective(userMessage: string, detectedProgram: any | nu
   const intentInstructionMap: Record<string, string> = {
     precio: 'Responde priorizando inscripción y mensualidad del curso solicitado. No des valor total salvo solicitud explícita.',
     horario: 'Responde priorizando fechas de inicio, días, horarios y cupos del curso solicitado.',
-    temario: 'Responde priorizando contenido/temario por ciclos o módulos del curso solicitado.',
+    temario: 'Responde priorizando contenido/temario por ciclos o módulos del curso solicitado. Si piden detalle por mes o clase, responde en lista vertical: una clase por línea (sin texto amontonado).',
     materiales:
       materialsScope === "tema"
         ? 'Responde priorizando SOLO "Materiales por Tema/Clase" del curso solicitado. Regla: "Clase N" = tema con orden N del ciclo consultado. Si no se especifica ciclo y hay ambigüedad, pide aclaración breve antes de listar materiales. Formato obligatorio: primero cantidad y unidad, luego el nombre del material.'
