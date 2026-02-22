@@ -999,9 +999,10 @@ function isCourseInfoRequest(message: string): boolean {
 function isPaymentMethodsOrDatesQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   const asksMethods = /\b(medios\s+de\s+pago|formas\s+de\s+pago|metodos?\s+de\s+pago|nequi|bancolombia|sistecredito|daviplata|tarjeta|efectivo|transferencia)\b/i.test(text);
-  const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|primeros\s+5\s+dias|vence|vencimiento)\b/i.test(text);
-  const asksHowToPay = /\b(como\s+pago|donde\s+pago|por\s+que\s+medio\s+pago|aceptan\s+nequi|aceptan\s+tarjeta|puedo\s+pagar\s+por)\b/i.test(text);
-  return asksMethods || asksDates || asksHowToPay;
+  const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|vence|vencimiento|plazo\s+de\s+pago|hasta\s+cuando\s+pago|segunda\s+clase)\b/i.test(text);
+  const asksHowToPay = /\b(como\s+pago|donde\s+pago|por\s+que\s+medio\s+pago|aceptan\s+nequi|aceptan\s+tarjeta|puedo\s+pagar\s+por|debo\s+pagar\s+todo\s+de\s+una|todo\s+de\s+una|de\s+contado|de\s+una\s+vez|palazo)\b/i.test(text);
+  const asksFinancing = /\b(mensualidad|matricula|inscripcion|cuota|financi|abono|sistecredito|sistecr[eé]dito|sistecridito)\b/i.test(text);
+  return asksMethods || asksDates || asksHowToPay || asksFinancing;
 }
 
 function isStepOneSelection(message: string): boolean {
@@ -1010,7 +1011,7 @@ function isStepOneSelection(message: string): boolean {
 }
 
 function buildPaymentMethodsAndDatesReply(): string {
-  return `¡Perfecto! Te confirmo 🙌\n\n💳 *Medios de pago:*\n• Efectivo\n• Nequi: *3006402575*\n• Bancolombia\n• Sistecrédito\n\n📅 *Fechas de pago:* la mensualidad se maneja dentro de los primeros *5 días* de cada mes.\n\n¿Quieres que te guíe ahora con el *paso de inscripción*?`;
+  return `¡Claro! Te explico 🙌\n\n✅ La *matrícula* se paga anticipada; es la manera de *separar cupo*.\n✅ La *mensualidad* tiene plazo hasta la *segunda clase*.\n✅ Con el pago de la mensualidad te entregamos *kit de materiales mensual* para tus prácticas.\n✅ También manejamos *Sistecrédito*.\n\nSi quieres, te explico qué opción te conviene más según cómo prefieras pagar.`;
 }
 
 function isKitPurchaseQuestion(message: string): boolean {
