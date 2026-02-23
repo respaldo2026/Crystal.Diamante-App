@@ -1278,7 +1278,7 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   const tokenCount = text.split(" ").filter(Boolean).length;
   if (tokenCount > 4) return false;
 
-  return !/\b(precio|horario|hora|material|temario|inscrip|matricul|pago|cuanto|cuando|donde)\b/i.test(text);
+  return !/\b(precio|horario|hora|material|temario|inscrip|matricul|pago|cuanto|cuando|donde|ubicacion|ubicados|direccion|cali|sabado|sabados|fin de semana|trabajo|lunes|viernes)\b/i.test(text);
 }
 
 function isShortAffirmativeReply(message: string): boolean {
@@ -1732,6 +1732,98 @@ function isLocationQuestion(message: string): boolean {
   }
 
   return false;
+}
+
+function isOutOfCaliConstraintMessage(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(no\s+estoy\s+en\s+cali|no\s+vivo\s+en\s+cali|estoy\s+fuera\s+de\s+cali|soy\s+de\s+otra\s+ciudad|vivo\s+en\s+otra\s+ciudad|no\s+estoy\s+en\s+la\s+ciudad)\b/i.test(text);
+}
+
+function isSaturdayPreferenceConstraint(message: string): boolean {
+  const text = normalizeForMatch(message);
+  const asksSaturday = /\b(sabado|sabados|fin\s+de\s+semana|fines\s+de\s+semana)\b/i.test(text);
+  const weekdayConstraint = /\b(trabajo\s+de\s+lunes\s+a\s+viernes|trabajo\s+entre\s+semana|no\s+puedo\s+entre\s+semana|solo\s+puedo\s+los\s+sabados|busco\s+un\s+curso\s+los\s+sabados|necesito\s+sabado)\b/i.test(text);
+  return asksSaturday || weekdayConstraint;
+}
+
+function buildSaturdayConstraintReply(
+  message: string,
+  detectedProgram: any | null,
+  courses: any[],
+  programs: any[]
+): string | null {
+  if (!isSaturdayPreferenceConstraint(message)) {
+    return null;
+  }
+
+  const sourceCourses = Array.isArray(courses) ? courses : [];
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const getUpcoming = (list: any[]) =>
+    list
+      .filter((course) => {
+        if (!course?.fecha_inicio) return true;
+        const start = new Date(course.fecha_inicio);
+        if (Number.isNaN(start.getTime())) return true;
+        start.setHours(0, 0, 0, 0);
+        return start >= now;
+      })
+      .sort((a, b) => {
+        const aTime = a?.fecha_inicio ? new Date(a.fecha_inicio).getTime() : Number.MAX_SAFE_INTEGER;
+        const bTime = b?.fecha_inicio ? new Date(b.fecha_inicio).getTime() : Number.MAX_SAFE_INTEGER;
+        return aTime - bTime;
+      });
+
+  if (detectedProgram) {
+    const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
+    const related = sourceCourses.filter((course) => {
+      const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+      const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
+      return Boolean(sameProgramId || sameProgramName);
+    });
+
+    const saturdayCourses = getUpcoming(related).filter((course) => scheduleIncludesDay(course?.horario || "", 6));
+
+    if (saturdayCourses.length > 0) {
+      const top = saturdayCourses[0];
+      const nextStart = top?.fecha_inicio ? (formatDateLong(top.fecha_inicio) || formatDateShort(top.fecha_inicio)) : "Por confirmar";
+      const schedule = top?.horario || "Por confirmar";
+      return `¡Sí! 🙌 Para *${detectedProgram.nombre}* sí tenemos opción en *sábado*.
+
+📅 *Próximo inicio:* ${nextStart}
+🕓 *Horario:* ${schedule}
+
+¿Quieres que te comparta los pasos para *separar tu cupo*?`;
+    }
+
+    return `Te entiendo perfecto 🙌 Si trabajas de lunes a viernes, lo ideal es *sábado*.
+
+Hoy no veo grupo activo en sábado para *${detectedProgram.nombre}*.
+
+Si quieres, te dejo en *lista prioritaria* para avisarte apenas abramos sábado, o te reviso la opción más cercana en horario flexible.`;
+  }
+
+  const saturdayAcrossPrograms = getUpcoming(sourceCourses).filter((course) => scheduleIncludesDay(course?.horario || "", 6));
+  if (saturdayAcrossPrograms.length > 0) {
+    const options = saturdayAcrossPrograms.slice(0, 3).map((course) => {
+      const name = course?.programa_nombre || course?.nombre || "Programa";
+      return `• *${name}* (${course?.horario || "Horario por confirmar"})`;
+    }).join("\n");
+
+    return `¡Sí! 🙌 Como buscas *sábado*, estas son las opciones que tengo activas ahora:
+
+${options}
+
+¿Cuál te interesa para confirmarte fecha de inicio y cupos?`;
+  }
+
+  const alternatives = Array.isArray(programs) ? programs.filter((p: any) => p?.activo !== false).slice(0, 4) : [];
+  const alternativesText = alternatives.length
+    ? `\n\nPuedo ayudarte a elegir una opción activa entre semana por ahora: ${alternatives.map((p: any) => `*${p.nombre}*`).join(", ")}.`
+    : "";
+
+  return `Te entiendo 🙌 Por ahora no tengo grupos activos en sábado registrados.${alternativesText}\n\nSi quieres, te anoto para avisarte apenas abramos grupo de sábado.`;
 }
 
 function isCuposQuestion(message: string): boolean {
@@ -2469,8 +2561,25 @@ function isStepOneSelection(message: string): boolean {
   return /^(1|uno|paso\s*1|primer\s*paso)$/.test(text);
 }
 
-function buildPaymentMethodsAndDatesReply(): string {
-  return `¡Claro! Te explico 🙌\n\n✅ La *matrícula* se paga anticipada; es la manera de *separar cupo*.\n✅ La *mensualidad* tiene plazo hasta la *segunda clase*.\n✅ Con el pago de la mensualidad te entregamos *kit de materiales mensual* para tus prácticas.\n✅ También manejamos *Sistecrédito*.\n\nSi quieres, te explico qué opción te conviene más según cómo prefieras pagar.`;
+function buildPaymentMethodsAndDatesReply(mediosPago: any[] = []): string {
+  const methods = Array.isArray(mediosPago)
+    ? mediosPago
+        .filter((medio) => medio?.activo !== false)
+        .slice(0, 8)
+        .map((medio) => {
+          const label = String(medio?.nombre || "").trim();
+          const description = String(medio?.descripcion || "").trim();
+          if (!label) return "";
+          return `• *${label}*${description ? `: ${description}` : ""}`;
+        })
+        .filter(Boolean)
+    : [];
+
+  const methodsBlock = methods.length
+    ? `💳 *Medios de pago disponibles:*\n${methods.join("\n")}`
+    : "💳 *Medios de pago:* te los confirma Admisiones según el canal que prefieras.";
+
+  return `¡Claro! Te explico 🙌\n\n${methodsBlock}\n\n✅ La *matrícula* se paga anticipada; así separas tu cupo.\n✅ La *mensualidad* tiene plazo hasta la *segunda clase*.\n✅ Con la mensualidad recibes *kit de materiales mensual* para prácticas.\n\nSi quieres, te digo cuál opción te conviene más según cómo prefieras pagar.`;
 }
 
 function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
@@ -2576,7 +2685,8 @@ function buildIntentFocusedDirectResponse(
   courses: any[],
   academy: any | null,
   history: Array<{ user: string; agent: string }> = [],
-  programs: any[] = []
+  programs: any[] = [],
+  mediosPago: any[] = []
 ): string | null {
   if (isThanksOnlyMessage(message)) {
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
@@ -2595,6 +2705,15 @@ function buildIntentFocusedDirectResponse(
     }
     const academyName = academy?.nombre || "Academia Crystal Diamante";
     return `${greeting}, bienvenid@ a *${academyName}* 💎\n\n¿En qué te puedo ayudar hoy? Puedo contarte sobre nuestros cursos, fechas de inicio, precios e inscripciones 🙌`;
+  }
+
+  if (isOutOfCaliConstraintMessage(message)) {
+    return `Gracias por contarlo 🙌 Actualmente nuestra atención académica es *presencial en Cali* (oriente, La Cosmetikera - segundo piso).\n\nSi estás fuera de Cali, te puedo ayudar de dos formas:\n1) Te comparto el plan para que programes tu inscripción cuando puedas venir.\n2) Te dejo en lista para avisarte si abrimos modalidad especial para tu caso.\n\n¿Qué prefieres?`;
+  }
+
+  const saturdayReply = buildSaturdayConstraintReply(message, detectedProgram, courses, programs);
+  if (saturdayReply) {
+    return saturdayReply;
   }
 
   if (detectedProgram && isLikelyProgramOnlyReply(message) && !/[?¿]/.test(message)) {
@@ -2691,7 +2810,7 @@ function buildIntentFocusedDirectResponse(
     && /\b(medios\s+de\s+pago|formas\s+de\s+pago|fechas\s+de\s+pago|metodo\s+de\s+pago)\b/i.test(inferredPendingTopic);
 
   if (asksPaymentMethodsOrDates || confirmsPaymentInfo) {
-    return buildPaymentMethodsAndDatesReply();
+    return buildPaymentMethodsAndDatesReply(mediosPago);
   }
 
   if (intent === "requisitos") {
@@ -3921,8 +4040,9 @@ export async function POST(req: NextRequest) {
     
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
+    const mediosPago = await getMediosPago();
 
-    let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs);
+    let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs, mediosPago);
     if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage)) {
       const pendingTopic = inferPendingTopicFromHistory(history);
       if (pendingTopic) {
@@ -3932,7 +4052,8 @@ export async function POST(req: NextRequest) {
           courses,
           academy,
           history,
-          programs
+          programs,
+          mediosPago
         );
 
         if (retriedDirectResponse && !isRepetitiveResponse(retriedDirectResponse, history, effectiveMessage)) {
@@ -3957,7 +4078,8 @@ export async function POST(req: NextRequest) {
           courses,
           academy,
           history,
-          programs
+          programs,
+          mediosPago
         );
 
         if (forcedProgressResponse) {
@@ -3990,10 +4112,7 @@ export async function POST(req: NextRequest) {
       }, activeMedia));
     }
     
-    // 4. Obtener medios de pago disponibles
-    const mediosPago = await getMediosPago();
-    
-    // 5. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
+    // 4. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
     const hierarchicalContextBase = await buildHierarchicalContextWithPensum(programs, courses, detectedProgram, academy, mediosPago);
     const hierarchicalContext = studentContext?.contextText
       ? `${hierarchicalContextBase}\n\n${studentContext.contextText}`
