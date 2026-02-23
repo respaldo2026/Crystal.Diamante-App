@@ -1154,6 +1154,11 @@ export default function GestorPensum({
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  const cicloSeleccionado = pensums.find((p) => p.id === selectedCicloId) || null;
+  const totalTemas = cursosPensum.length;
+  const totalMaterialDidactico = materialesCicloDidactico.length;
+  const totalMaterialNecesario = materialesClaseCiclo.length;
+
   return (
     <Drawer
       title={`Gestión: ${programaNombre}`}
@@ -1241,8 +1246,7 @@ export default function GestorPensum({
             <Button onClick={() => setSelectedCicloId(null)}>← Volver</Button>
             <div>
               <Text strong style={{ fontSize: 18 }}>
-                {pensums.find(p => p.id === selectedCicloId)?.nombre_ciclo || 
-                 `Ciclo ${pensums.find(p => p.id === selectedCicloId)?.numero_ciclo}`}
+                {cicloSeleccionado?.nombre_ciclo || `Ciclo ${cicloSeleccionado?.numero_ciclo}`}
               </Text>
             </div>
           </div>
@@ -1250,14 +1254,24 @@ export default function GestorPensum({
           <Alert
             type="info"
             showIcon
-            message="Temas + Material en una sola vista"
+            message="Guía rápida"
             description={
-              <div>
-                Cada tarjeta de tema muestra sus materiales. Usa el botón &quot;Agregar Material Necesario&quot; para abrir el formulario.
-              </div>
+              <Space direction="vertical" size={2}>
+                <Text>1) Crea los temas del ciclo.</Text>
+                <Text>2) En cada tema, sube su material didáctico.</Text>
+                <Text>3) Registra materiales necesarios para clase.</Text>
+              </Space>
             }
             style={{ marginBottom: 16 }}
           />
+
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Space wrap size={12}>
+              <Tag color="blue">Temas: {totalTemas}</Tag>
+              <Tag color="purple">Material didáctico: {totalMaterialDidactico}</Tag>
+              <Tag color="green">Material necesario: {totalMaterialNecesario}</Tag>
+            </Space>
+          </Card>
 
           {!canManageMateriales && (
             <Alert
@@ -1289,7 +1303,7 @@ export default function GestorPensum({
               <Table
                 size="small"
                 loading={loadingMaterialesCiclo}
-                pagination={false}
+                pagination={{ pageSize: 8, hideOnSinglePage: true }}
                 rowKey={(record) => String(record?.id || record?.nombre)}
                 dataSource={materialesCicloGeneralOrdenados}
                 columns={[
@@ -1348,7 +1362,20 @@ export default function GestorPensum({
                   setModalCursoVisible(true);
                 }}
               >
-                Agregar Tema
+                1. Agregar Tema
+              </Button>
+              <Button
+                icon={<UploadOutlined />}
+                onClick={() => {
+                  const primerTema = cursosPensum[0];
+                  if (!primerTema) {
+                    message.warning("Primero crea al menos un tema para subir material didáctico.");
+                    return;
+                  }
+                  abrirDrawerMaterialParaTema(primerTema.nombre_curso);
+                }}
+              >
+                2. Subir Material Didáctico
               </Button>
               <Button
                 icon={<GiftOutlined />}
@@ -1361,7 +1388,7 @@ export default function GestorPensum({
                   abrirModalMaterialClase(primerTema.id);
                 }}
               >
-                Agregar Material Necesario
+                3. Agregar Material Necesario
               </Button>
             </Space>
           </div>
@@ -1407,6 +1434,12 @@ export default function GestorPensum({
                                     icon: <UploadOutlined />,
                                     onClick: () => abrirDrawerMaterialParaTema(curso.nombre_curso),
                                   },
+                                  {
+                                    key: `agregar-material-necesario-${curso.id}`,
+                                    label: "Agregar material necesario",
+                                    icon: <PlusOutlined />,
+                                    onClick: () => abrirModalMaterialClase(curso.id),
+                                  },
                                 ]
                               : []),
                             { type: "divider" as const },
@@ -1420,16 +1453,6 @@ export default function GestorPensum({
                                 setModalCursoVisible(true);
                               },
                             },
-                            ...(canManageMateriales
-                              ? [
-                                  {
-                                    key: `agregar-material-necesario-${curso.id}`,
-                                    label: "Agregar material necesario",
-                                    icon: <PlusOutlined />,
-                                    onClick: () => abrirModalMaterialClase(curso.id),
-                                  },
-                                ]
-                              : []),
                             {
                               key: `eliminar-tema-${curso.id}`,
                               label: "Eliminar tema",
@@ -1437,31 +1460,6 @@ export default function GestorPensum({
                               danger: true,
                               onClick: () => handleEliminarCurso(curso.id),
                             },
-                            ...(canManageMateriales && materialesTema.length > 0
-                              ? [
-                                  { type: "divider" as const },
-                                  ...materialesTema.map((material) => {
-                                    const { tituloLimpio } = parseTemaFromTitulo(material.titulo);
-                                    return {
-                                      key: `editar-material-${material.id}`,
-                                      label: `Editar material: ${tituloLimpio}`,
-                                      icon: <EditOutlined />,
-                                      onClick: () => editarMaterial(material, curso.nombre_curso),
-                                    };
-                                  }),
-                                ]
-                              : []),
-                            ...(canManageMateriales && materialesNecesariosTema.length > 0
-                              ? [
-                                  { type: "divider" as const },
-                                  ...materialesNecesariosTema.map((material) => ({
-                                    key: `editar-material-necesario-${material.id}`,
-                                    label: `Editar insumo: ${material.materiales_ciclo?.nombre || material.nombre_material}`,
-                                    icon: <EditOutlined />,
-                                    onClick: () => abrirModalMaterialClase(curso.id, material),
-                                  })),
-                                ]
-                              : []),
                           ],
                         }}
                       >
@@ -1516,6 +1514,25 @@ export default function GestorPensum({
                                 icon={material.mime_type === 'link' ? <LinkOutlined /> : <EyeOutlined />}
                                 style={{ fontWeight: 500, padding: 0, height: 'auto' }}
                               />,
+                              ...(canManageMateriales
+                                ? [
+                                    <Button
+                                      key={`editar-${material.id}`}
+                                      type="link"
+                                      icon={<EditOutlined />}
+                                      onClick={() => editarMaterial(material, curso.nombre_curso)}
+                                      style={{ padding: 0, height: "auto" }}
+                                    />,
+                                    <Button
+                                      key={`eliminar-${material.id}`}
+                                      type="link"
+                                      danger
+                                      icon={<DeleteOutlined />}
+                                      onClick={() => handleEliminarMaterial(material.id)}
+                                      style={{ padding: 0, height: "auto" }}
+                                    />,
+                                  ]
+                                : []),
                             ]}
                           >
                             <List.Item.Meta
@@ -1550,7 +1567,7 @@ export default function GestorPensum({
                       <Table
                         size="small"
                         loading={loadingMaterialesClase}
-                        pagination={false}
+                        pagination={{ pageSize: 5, hideOnSinglePage: true }}
                         rowKey={(record) => String(record?.id || record?.nombre_material)}
                         dataSource={materialesNecesariosTema}
                         style={{ marginTop: 8 }}
