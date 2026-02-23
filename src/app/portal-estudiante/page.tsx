@@ -476,11 +476,39 @@ export default function PortalEstudiante() {
     return match ? Number(match[0]) : null;
   };
 
+  const obtenerMensualidad = (matricula: any) =>
+    Number(
+      matricula?.cursos?.precio_mensualidad ??
+      matricula?.cursos?.programas?.precio_mensualidad ??
+      matricula?.cursos?.precio ??
+      0
+    );
+
   const pagosConPendientes = React.useMemo(() => {
     const base = Array.isArray(pagos) ? pagos : [];
     if (!matriculas.length) return base;
 
     const extras: any[] = [];
+    const pagosNormalizados = base.map((pago: any) => {
+      const numeroCuota = parseNumeroCuota(pago);
+      const estado = String(pago?.estado || "").toLowerCase();
+      const montoActual = Number(pago?.monto ?? 0);
+
+      if (!numeroCuota || numeroCuota < 1 || estado !== "pendiente" || montoActual > 0) {
+        return pago;
+      }
+
+      const matricula = matriculas.find((m: any) => String(m?.id) === String(pago?.matricula_id));
+      const mensualidad = obtenerMensualidad(matricula);
+      if (mensualidad <= 0) {
+        return pago;
+      }
+
+      return {
+        ...pago,
+        monto: mensualidad,
+      };
+    });
 
     matriculas.forEach((matricula: any) => {
       const totalCuotas = parseDuracionMeses(
@@ -512,13 +540,13 @@ export default function PortalEstudiante() {
           numero_cuota: i,
           periodo_pagado: `Cuota ${i} de ${totalCuotas}`,
           fecha_vencimiento: fechaVencimiento,
-          monto: matricula?.cursos?.precio_mensualidad ?? matricula?.cursos?.precio ?? null,
+          monto: obtenerMensualidad(matricula) || null,
           estado: "pendiente",
         });
       }
     });
 
-    return [...base, ...extras];
+    return [...pagosNormalizados, ...extras];
   }, [pagos, matriculas]);
 
   const renderFinanciero = () => {
