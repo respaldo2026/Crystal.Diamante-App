@@ -1218,6 +1218,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
   const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|cuanto vale|cuanto es|cuanto cuesta)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
+  const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
   const hasScheduleIntent = /\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text);
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horario|hora)\b/i.test(text);
   const hasMaterialsKeyword = /\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text);
@@ -1230,6 +1231,9 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   }
   if (hasDurationIntent || hasClassFrequencyIntent) {
     return "horario";
+  }
+  if (hasEnrollmentIntent) {
+    return "inscripcion";
   }
   if (hasScheduleIntent && hasStrongScheduleIntent) {
     return "horario";
@@ -1246,7 +1250,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   if (hasMaterialsKeyword) {
     return "materiales";
   }
-  if (/\b(inscrib|matricul|pago|admisiones|contacto|numero|whatsapp|separar\s+cupo)\b/i.test(text)) {
+  if (/\b(inscrib|matricul|admisiones|contacto|numero|whatsapp|separar\s+cupo|reservar\s+cupo)\b/i.test(text)) {
     return "inscripcion";
   }
   return "general";
@@ -1719,7 +1723,23 @@ function isSocialMediaQuestion(message: string): boolean {
 function isThanksOnlyMessage(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
-  return /^(gracias|muchas gracias|ok gracias|okk gracias|okei gracias|vale gracias|super gracias|listo gracias|gracias de una|gracias por la info)$/.test(text);
+  if (!/\b(gracias|agradezco|muy amable)\b/i.test(text)) return false;
+  if (/\b(horario|precio|costo|donde|como|inscrib|matricul|temario|material|fecha|inicio|pago)\b/i.test(text)) return false;
+  const words = text.split(" ").filter(Boolean);
+  return words.length <= 6;
+}
+
+function shouldAttachMediaSuggestion(userMessage: string, responseText: string): boolean {
+  if (isThanksOnlyMessage(userMessage)) return false;
+  if (isNeutralAcknowledgement(userMessage)) return false;
+  if (isShortAffirmativeReply(userMessage) && !/[?¿]/.test(userMessage)) return false;
+
+  const normalizedResponse = normalizeForMatch(responseText || "");
+  if (/\b(prefieres\s+que\s+empecemos|te\s+refieres\s+a|en\s+que\s+te\s+puedo\s+ayudar)\b/i.test(normalizedResponse)) {
+    return false;
+  }
+
+  return true;
 }
 
 function isPureGreeting(message: string): boolean {
@@ -2399,7 +2419,9 @@ function isPaymentMethodsOrDatesQuestion(message: string): boolean {
   const asksMethods = /\b(medios\s+de\s+pago|formas\s+de\s+pago|metodos?\s+de\s+pago|nequi|bancolombia|sistecredito|daviplata|tarjeta|efectivo|transferencia)\b/i.test(text);
   const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|vence|vencimiento|plazo\s+de\s+pago|hasta\s+cuando\s+pago|segunda\s+clase)\b/i.test(text);
   const asksHowToPay = /\b(como\s+pago|donde\s+pago|por\s+que\s+medio\s+pago|aceptan\s+nequi|aceptan\s+tarjeta|puedo\s+pagar\s+por|debo\s+pagar\s+todo\s+de\s+una|todo\s+de\s+una|de\s+contado|de\s+una\s+vez|palazo)\b/i.test(text);
-  const asksFinancing = /\b(mensualidad|matricula|inscripcion|cuota|financi|abono|sistecredito|sistecr[eé]dito|sistecridito)\b/i.test(text);
+  const mentionsFinancing = /\b(mensualidad|matricula|inscripcion|cuota|financi|abono|sistecredito|sistecr[eé]dito|sistecridito)\b/i.test(text);
+  const mentionsPaymentAction = /\b(pago|pagar|abonar|cuanto\s+se\s+paga|medio\s+de\s+pago|formas\s+de\s+pago|de\s+una\s+vez|contado)\b/i.test(text);
+  const asksFinancing = mentionsFinancing && mentionsPaymentAction;
   return asksMethods || asksDates || asksHowToPay || asksFinancing;
 }
 
@@ -2652,7 +2674,10 @@ function buildIntentFocusedDirectResponse(
   const confirmsReserveFlow = isShortAffirmativeReply(message)
     && /\b(te reservo( un)? cupo|reservo( tu|el)? cupo|reservar tu cupo|te ayudo a reservar|separar cupo)\b/i.test(normalizeForMatch(lastAgentForFlow));
 
-  if (confirmsReserveFlow) {
+  const confirmsReserveFlowFromContext = /\b(inscribirme|separar\s+cupo|reservar\s+cupo|quiero\s+reservar)\b/i.test(normalizedMessage)
+    && /\b(te reservo( un)? cupo|reservo( tu|el)? cupo|reservar tu cupo|te ayudo a reservar|separar cupo)\b/i.test(normalizeForMatch(lastAgentForFlow));
+
+  if (confirmsReserveFlow || confirmsReserveFlowFromContext) {
     return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
   }
 
@@ -2728,6 +2753,16 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   // Preguntas sobre medios de pago (nequi, presencial, etc.) → dejar que Gemini responda con info real
   if (isPaymentMethodQuestion(message)) {
     return null;
+  }
+
+  const asksScheduleIntent = /\b(horario|horarios|hora|dias|dia|fecha|inicio|cuando inicia)\b/i.test(normalizedMessage);
+  const asksEnrollmentIntent = /\b(inscripcion|inscribirme|inscrib|matricula|matricular|separar cupo|reservar cupo|admision)\b/i.test(normalizedMessage);
+  if (asksScheduleIntent && asksEnrollmentIntent && detectedProgram) {
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const nextStart = primaryCourse?.fecha_inicio ? (formatDateLong(primaryCourse.fecha_inicio) || formatDateShort(primaryCourse.fecha_inicio)) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+
+    return `Perfecto 🙌 Te respondo ambas para *${detectedProgram.nombre}*:\n\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n📝 *Inscripción:* se separa cupo con el pago de matrícula y te guiamos paso a paso con el comprobante.\n\n¿Quieres que te pase ahora los *pasos exactos* para reservar?`;
   }
 
   // Preguntas sobre cupos → responder con datos reales de la DB
@@ -3894,7 +3929,8 @@ export async function POST(req: NextRequest) {
 
     if (directIntentResponse) {
       const truncatedResponse = truncateResponse(directIntentResponse, 1000);
-      const activeMedia = detectedProgram ? mediaSuggestion : null;
+      const allowMediaSuggestion = shouldAttachMediaSuggestion(message, truncatedResponse);
+      const activeMedia = detectedProgram && allowMediaSuggestion ? mediaSuggestion : null;
       const responseToSave = activeMedia
         ? `[📷 ${activeMedia.mediaUrl}|${activeMedia.caption}]\n${truncatedResponse}`
         : truncatedResponse;
@@ -3912,7 +3948,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, detectedProgram ? mediaSuggestion : null));
+      }, activeMedia));
     }
     
     // 4. Obtener medios de pago disponibles
@@ -3990,7 +4026,8 @@ export async function POST(req: NextRequest) {
     const truncatedResponse = truncateResponse(cleanedAgentResponse, 1000);
 
     // Guardar en historiales — incluir marcador de imagen si aplica
-    const activeMediaFinal = detectedProgram ? mediaSuggestion : null;
+    const allowMediaSuggestionFinal = shouldAttachMediaSuggestion(message, truncatedResponse);
+    const activeMediaFinal = detectedProgram && allowMediaSuggestionFinal ? mediaSuggestion : null;
     const responseToSaveFinal = activeMediaFinal
       ? `[📷 ${activeMediaFinal.mediaUrl}|${activeMediaFinal.caption}]\n${truncatedResponse}`
       : truncatedResponse;
@@ -4013,7 +4050,7 @@ export async function POST(req: NextRequest) {
       historyLength: Number(history.length) || 0,
       programDetected: sanitizedProgram || null,
       rateLimitRemaining: Number(rateLimit.remaining) || 0,
-    }, detectedProgram ? mediaSuggestion : null));
+    }, activeMediaFinal));
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);
     const errorMessage = error?.message || "Error generando respuesta";
