@@ -2071,18 +2071,24 @@ export default function GestorPensum({
         open={iframePreview.open}
         onCancel={() => setIframePreview({ open: false, title: "", src: "" })}
         footer={null}
-        width="90vw"
-        styles={{ body: { padding: 0 } }}
+        width="100%"
+        centered
+        style={{ top: 0, padding: 0 }}
+        styles={{ 
+          body: { padding: 0, height: "100vh", overflow: "hidden" },
+          content: { padding: 0, borderRadius: 0, height: "100vh", overflow: "hidden" }
+        }}
         destroyOnClose
+        className="gamma-fullscreen-modal"
       >
         {iframePreview.open && iframePreview.src ? (
           <iframe
             src={iframePreview.src}
             title={iframePreview.title || "Presentación"}
-            style={{ width: "100%", height: "80vh", border: 0 }}
+            style={{ width: "100%", height: "100%", border: 0 }}
+            allow="fullscreen; clipboard-read; clipboard-write"
             allowFullScreen
             loading="lazy"
-            referrerPolicy="strict-origin-when-cross-origin"
           />
         ) : null}
       </Modal>

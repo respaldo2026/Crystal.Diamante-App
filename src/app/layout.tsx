@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import "@refinedev/antd/dist/reset.css";
+import "./globals-gamma.css";
 import "@utils/suppress-warnings";
 import { AppShell } from "./AppShell";
 import { PwaRegister } from "@components/PwaRegister";

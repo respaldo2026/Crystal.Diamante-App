@@ -1064,19 +1064,23 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           open={iframePreview.open}
           onCancel={() => setIframePreview({ open: false, title: "", src: "" })}
           footer={null}
-          width={980}
+          width="100%"
+          centered
+          style={{ top: 0, padding: 0 }}
+          styles={{ 
+            body: { padding: 0, height: "100vh", overflow: "hidden" },
+            content: { padding: 0, borderRadius: 0, height: "100vh", overflow: "hidden" }
+          }}
           destroyOnClose
+          className="gamma-fullscreen-modal"
         >
           <iframe
             src={iframePreview.src}
             title={iframePreview.title || "Presentación"}
-            width="100%"
-            height={620}
-            style={{ border: 0, borderRadius: 8 }}
-            allow="fullscreen"
+            style={{ width: "100%", height: "100%", border: 0 }}
+            allow="fullscreen; clipboard-read; clipboard-write"
             allowFullScreen
             loading="lazy"
-            referrerPolicy="no-referrer"
           />
         </Modal>
 
