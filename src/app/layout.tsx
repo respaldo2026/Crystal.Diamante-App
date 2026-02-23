@@ -11,7 +11,7 @@ import { AuthPage } from "@components/auth-page";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"),
   title: "Academia Crystal Diamante",
-  description: "Sistema de gestión académica - Academia de Belleza Crystal Diamante",
+  description: "Plataforma Educativa",
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
@@ -22,23 +22,23 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   openGraph: {
     type: "website",
-    title: "Academia de Belleza Crystal Diamante",
-    description: "Sistema de gestión académica",
+    title: "Plataforma Educativa",
+    description: "Academia Crystal Diamante",
     siteName: "Academia Crystal Diamante",
     images: [
       {
-        url: "/og.png",
+        url: "/api/og-image",
         width: 1200,
         height: 630,
-        alt: "Academia Crystal Diamante",
+        alt: "Academia Crystal Diamante - Plataforma Educativa",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Academia de Belleza Crystal Diamante",
-    description: "Sistema de gestión académica",
-    images: ["/og.png"],
+    title: "Plataforma Educativa",
+    description: "Academia Crystal Diamante",
+    images: ["/api/og-image"],
   },
   appleWebApp: {
     capable: true,
