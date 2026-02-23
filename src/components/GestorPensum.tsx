@@ -71,6 +71,23 @@ const normalizeHttpUrl = (value?: string | null): string => {
   }
 };
 
+const hasMalformedEmbedTokens = (value?: string | null): boolean => {
+  const raw = String(value || "");
+  return /%_ENCODED_%|\{\"|\{"/i.test(raw);
+};
+
+const isAllowedEmbedHost = (value?: string | null): boolean => {
+  const normalized = normalizeHttpUrl(value);
+  if (!normalized) return false;
+
+  try {
+    const host = new URL(normalized).hostname.toLowerCase();
+    return host === "gamma.app" || host.endsWith(".gamma.app");
+  } catch {
+    return false;
+  }
+};
+
 const extractIframeSrc = (value?: string | null): string => {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -1093,6 +1110,14 @@ export default function GestorPensum({
 
         if (!isHttpUrl(iframeSrc)) {
           throw new Error("No se pudo detectar una URL válida dentro del iframe.");
+        }
+
+        if (hasMalformedEmbedTokens(iframeSrc)) {
+          throw new Error("El iframe contiene parámetros inválidos. Vuelve a copiar el código de Gamma.");
+        }
+
+        if (!isAllowedEmbedHost(iframeSrc)) {
+          throw new Error("Solo se permiten iframes de Gamma (gamma.app).");
         }
 
         urlArchivo = iframeSrc;

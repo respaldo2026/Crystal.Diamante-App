@@ -195,6 +195,22 @@ export default function PortalEstudiante() {
     }
   };
 
+  const hasMalformedEmbedTokens = (value?: string | null) => {
+    const raw = String(value || "");
+    return /%_ENCODED_%|\{\"|\{"/i.test(raw);
+  };
+
+  const isAllowedEmbedHost = (value?: string | null) => {
+    const normalized = normalizeHttpUrl(value);
+    if (!normalized) return false;
+    try {
+      const host = new URL(normalized).hostname.toLowerCase();
+      return host === "gamma.app" || host.endsWith(".gamma.app");
+    } catch {
+      return false;
+    }
+  };
+
   const extractIframeSrc = (value?: string | null) => {
     const raw = String(value || "").trim();
     if (!raw) return "";
@@ -217,6 +233,17 @@ export default function PortalEstudiante() {
     }
 
     if (isIframeMaterial(material)) {
+      if (hasMalformedEmbedTokens(src)) {
+        message.warning("El enlace del iframe está dañado. Pide al administrador volver a subirlo.");
+        return;
+      }
+
+      if (!isAllowedEmbedHost(src)) {
+        message.warning("Solo se pueden previsualizar iframes de Gamma.");
+        window.open(src, "_blank", "noopener,noreferrer");
+        return;
+      }
+
       setIframePreview({
         open: true,
         title: titulo || "Presentación",
