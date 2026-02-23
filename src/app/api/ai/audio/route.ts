@@ -867,7 +867,10 @@ function formatDateShort(value: string | null | undefined): string {
   let date: Date;
 
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [year, month, day] = value.split("-").map(Number);
+    const parts = value.split("-").map(Number);
+    const year = parts[0] || 0;
+    const month = parts[1] || 0;
+    const day = parts[2] || 0;
     date = new Date(year, month - 1, day, 12, 0, 0); // Mediodía
   } else {
     date = new Date(value);
@@ -889,7 +892,10 @@ function formatDateLong(value: string | null | undefined): string {
 
   // Manejo robusto de fechas YYYY-MM-DD sin desfase horario
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [year, month, day] = value.split("-").map(Number);
+    const parts = value.split("-").map(Number);
+    const year = parts[0] || 0;
+    const month = parts[1] || 0;
+    const day = parts[2] || 0;
     date = new Date(year, month - 1, day, 12, 0, 0); // Mediodía local para evitar cambios de día
   } else {
     date = new Date(value);
