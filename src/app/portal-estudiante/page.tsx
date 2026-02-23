@@ -793,7 +793,7 @@ export default function PortalEstudiante() {
       deduplicarLista(
         materialesPrograma.filter((material: any) => {
           if (!tema) return false;
-          if (cicloId && material.pensum_id && String(material.pensum_id) !== String(cicloId)) return false;
+          if (cicloId && String(material?.pensum_id || "") !== String(cicloId)) return false;
 
           const parsed = parseTemaTituloMaterial(material.titulo);
           const temaMaterial = normalizarTemaComparacion(parsed.tema);
@@ -1409,7 +1409,7 @@ export default function PortalEstudiante() {
           src={iframePreview.src}
           title={iframePreview.title || "Presentación"}
           width="100%"
-          height={isMobile ? 420 : 620}
+          height={isMobile ? 720 : 620}
           style={{ border: 0, borderRadius: 8 }}
           allow="fullscreen"
           allowFullScreen

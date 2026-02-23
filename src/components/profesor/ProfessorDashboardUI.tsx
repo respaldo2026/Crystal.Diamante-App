@@ -300,7 +300,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     return (materialesDidacticos || [])
       .filter((item: any) => String(item?.programa_id) === String(cursoMaterialSeleccionado.programaId))
       .filter((item: any) => {
-        if (cicloMaterialSeleccionado?.id && item?.pensum_id && String(item.pensum_id) !== String(cicloMaterialSeleccionado.id)) {
+        if (cicloMaterialSeleccionado?.id && String(item?.pensum_id || "") !== String(cicloMaterialSeleccionado.id)) {
           return false;
         }
 
