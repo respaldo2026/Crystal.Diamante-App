@@ -1527,21 +1527,48 @@ function scheduleIncludesDay(horario: string | null | undefined, dayIndex: numbe
 
 function formatDateShort(value: string | null | undefined): string {
   if (!value) return "";
-  const date = new Date(value);
+  let date: Date;
+
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    date = new Date(year, month - 1, day, 12, 0, 0); // Mediodía
+  } else {
+    date = new Date(value);
+  }
+
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
+  
+  const day = date.getDate().toString().padStart(2, "0");
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${day}/${month}/${year}`;
 }
 
 function formatDateLong(value: string | null | undefined): string {
   if (!value) return "";
-  const date = new Date(value);
+  
+  let date: Date;
+
+  // Manejo robusto de fechas YYYY-MM-DD sin desfase horario
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    date = new Date(year, month - 1, day, 12, 0, 0); // Mediodía local para evitar cambios de día
+  } else {
+    date = new Date(value);
+  }
+
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("es-CO", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+
+  const DAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+  const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+  const dayName = DAYS[date.getDay()];
+  const day = date.getDate();
+  const monthName = MONTHS[date.getMonth()];
+  const year = date.getFullYear();
+
+  return `${dayName}, ${day} de ${monthName}`; // Omitimos el año para ser más conversacional, o lo incluimos si es necesario
 }
 
 function extractExplicitStudentName(message: string): string | null {
@@ -1821,7 +1848,7 @@ function extractProgramInquiryTopic(message: string): string | null {
       .trim();
 
     // Excluir términos que no son nombres de programas
-    if (/\b(uniforme|kit|inscripcion|mensualidad|precio|costo|valor|pago|pagar|cuota|horario|fecha|inicio)\b/i.test(candidate)) {
+    if (/\b(uniforme|kit|inscripcion|mensualidad|precio|costo|valor|pago|pagar|cuota|horario|fecha|inicio|disponible|disponibles|dia|dias|lunes|martes|miercoles|jueves|viernes|sabado|domingo|hoy|manana|ayer|semana)\b/i.test(candidate)) {
       continue;
     }
 
@@ -3445,7 +3472,7 @@ function resolveProgramFromContext(
   }
 
   const isLikelyFollowUp = isShortAffirmativeReply(userMessage)
-    || /\b(ese|esa|ese\s+curso|esa\s+carrera|horario|precio|cuanto|cuando|inscripcion|mensualidad|cupos|duracion|inversion|temario|materiales|ubicacion|direccion|donde)\b/i.test(
+    || /\b(ese|esa|ese\s+curso|esa\s+carrera|horario|precio|cuanto|cuando|inscripcion|mensualidad|cupos|duracion|inversion|temario|materiales|ubicacion|direccion|donde|disponible|disponibles|dia|dias|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/i.test(
       userMessage
     );
 
