@@ -97,6 +97,36 @@ const extractIframeSrc = (value?: string | null): string => {
   return normalizeHttpUrl(candidate);
 };
 
+const toGammaEmbedUrl = (value?: string | null): string => {
+  const normalized = normalizeHttpUrl(value);
+  if (!normalized) return "";
+
+  try {
+    const parsed = new URL(normalized);
+    const host = parsed.hostname.toLowerCase();
+    if (!(host === "gamma.app" || host.endsWith(".gamma.app"))) {
+      return normalized;
+    }
+
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments[0] === "embed") {
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.toString();
+    }
+
+    const documentId = segments[segments.length - 1];
+    if (!documentId) return normalized;
+
+    parsed.pathname = `/embed/${documentId}`;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
+};
+
 const isHttpUrl = (value?: string | null): boolean => Boolean(normalizeHttpUrl(value));
 
 interface PensumCurso {
@@ -209,6 +239,11 @@ export default function GestorPensum({
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace' | 'iframe'>('archivo');
   const [mostrarListaCompletaCiclo, setMostrarListaCompletaCiclo] = useState(false);
   const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
+  const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
+    open: false,
+    title: "",
+    src: "",
+  });
 
   // Estados para navegación
   const [selectedCicloId, setSelectedCicloId] = useState<string | null>(null);
@@ -1180,13 +1215,29 @@ export default function GestorPensum({
     }
   };
 
-  const handleAbrirMaterial = (url: string) => {
-    logger.debug("Intentando abrir URL:", url); // Debug para verificar qué llega
+  const handleAbrirMaterial = (url: string, title?: string) => {
+    logger.debug("Intentando abrir URL:", url);
     if (!url) {
       message.error("Error: El material no tiene una URL válida");
       return;
     }
-    window.open(url, "_blank", "noopener,noreferrer");
+
+    const normalizedUrl = normalizeHttpUrl(url);
+    if (!normalizedUrl) {
+      message.error("Error: El material no tiene una URL válida");
+      return;
+    }
+
+    if (isAllowedEmbedHost(normalizedUrl)) {
+      setIframePreview({
+        open: true,
+        title: String(title || "Presentación").trim() || "Presentación",
+        src: toGammaEmbedUrl(normalizedUrl),
+      });
+      return;
+    }
+
+    window.open(normalizedUrl, "_blank", "noopener,noreferrer");
   };
 
   const cicloSeleccionado = pensums.find((p) => p.id === selectedCicloId) || null;
@@ -1562,7 +1613,7 @@ export default function GestorPensum({
                               <Button
                                 key={`ver-${material.id}`}
                                 type="link"
-                                onClick={() => handleAbrirMaterial(material.url_archivo)}
+                                onClick={() => handleAbrirMaterial(material.url_archivo, parseTemaFromTitulo(material.titulo).tituloLimpio || material.titulo)}
                                 icon={material.mime_type === 'link' ? <LinkOutlined /> : <EyeOutlined />}
                                 style={{ fontWeight: 500, padding: 0, height: 'auto' }}
                               />,
@@ -2014,6 +2065,27 @@ export default function GestorPensum({
           </Space>
         </Form>
       </Drawer>
+
+      <Modal
+        title={iframePreview.title || "Presentación"}
+        open={iframePreview.open}
+        onCancel={() => setIframePreview({ open: false, title: "", src: "" })}
+        footer={null}
+        width="90vw"
+        styles={{ body: { padding: 0 } }}
+        destroyOnClose
+      >
+        {iframePreview.open && iframePreview.src ? (
+          <iframe
+            src={iframePreview.src}
+            title={iframePreview.title || "Presentación"}
+            style={{ width: "100%", height: "80vh", border: 0 }}
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        ) : null}
+      </Modal>
     </Drawer>
   );
 }

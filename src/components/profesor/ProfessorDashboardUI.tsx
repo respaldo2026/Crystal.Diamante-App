@@ -137,6 +137,36 @@ const extractIframeSrc = (value?: string | null) => {
   return normalizeHttpUrl(String(match?.[1] || raw).trim());
 };
 
+const toGammaEmbedUrl = (value?: string | null) => {
+  const normalized = normalizeHttpUrl(value);
+  if (!normalized) return "";
+
+  try {
+    const parsed = new URL(normalized);
+    const host = parsed.hostname.toLowerCase();
+    if (!(host === "gamma.app" || host.endsWith(".gamma.app"))) {
+      return normalized;
+    }
+
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments[0] === "embed") {
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.toString();
+    }
+
+    const documentId = segments[segments.length - 1];
+    if (!documentId) return normalized;
+
+    parsed.pathname = `/embed/${documentId}`;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
+};
+
 const isIframeMaterial = (material: any) => {
   const mime = String(material?.mime_type || "").toLowerCase();
   const tipo = String(material?.tipo_material || "").toLowerCase();
@@ -396,7 +426,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
       setIframePreview({
         open: true,
         title: title || "Presentación",
-        src,
+        src: toGammaEmbedUrl(src),
       });
       return;
     }
