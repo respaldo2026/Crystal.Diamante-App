@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Card, Button, Typography, Space, Modal, Form, Input, InputNumber, Table, Tag, App, Spin, Checkbox, Tooltip, Dropdown, Grid, Row, Col, Statistic, Divider, Badge } from "antd";
-import { PlusOutlined, EditOutlined, BookOutlined, MoreOutlined, FolderOutlined, ClockCircleOutlined, DollarOutlined, FireOutlined, TrophyOutlined, EyeOutlined, ThunderboltOutlined, AppstoreOutlined, UnorderedListOutlined, FileTextOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, BookOutlined, MoreOutlined, DeleteOutlined, FolderOutlined, ClockCircleOutlined, DollarOutlined, FireOutlined, TrophyOutlined, EyeOutlined, ThunderboltOutlined, AppstoreOutlined, UnorderedListOutlined, FileTextOutlined } from "@ant-design/icons";
 import type { CheckboxChangeEvent } from "antd/es/checkbox";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import GestorPensum from "@components/GestorPensum";
@@ -86,7 +86,11 @@ export default function ProgramasPage() {
         }
         await handleCloseModal({ refresh: true });
       } catch (error: any) {
-        message.error("Error al guardar: " + (error?.message || "Desconocido"));
+        if (error?.code === "23505" || error?.message?.includes("duplicate key")) {
+          message.error("Ya existe un programa con ese nombre. Activa 'Inactivos' y reactívalo, o elimínalo si no lo usarás.");
+        } else {
+          message.error("Error al guardar: " + (error?.message || "Desconocido"));
+        }
         console.error(error);
       }
     };
@@ -193,6 +197,53 @@ export default function ProgramasPage() {
     }
   };
 
+  const handleDeletePrograma = async (programa: any) => {
+    if (programa.activo) {
+      message.warning("Solo se pueden eliminar programas inactivos.");
+      return;
+    }
+
+    modal.confirm({
+      title: "Eliminar programa permanentemente",
+      content: (
+        <div>
+          <p>
+            Esta acción eliminará el programa <strong>{programa.nombre}</strong> de forma permanente.
+          </p>
+          <p style={{ marginTop: 10, color: "#ff4d4f" }}>
+            Esta acción no se puede deshacer.
+          </p>
+        </div>
+      ),
+      okText: "Sí, eliminar",
+      okType: "danger",
+      cancelText: "Cancelar",
+      onOk: async () => {
+        const { data: grupos, error: gruposError } = await supabaseBrowserClient
+          .from("cursos")
+          .select("id")
+          .eq("programa_id", programa.id)
+          .limit(1);
+
+        if (gruposError) throw gruposError;
+
+        if (grupos && grupos.length > 0) {
+          message.error("No se puede eliminar: este programa tiene grupos asociados.");
+          return;
+        }
+
+        const { error } = await supabaseBrowserClient
+          .from("programas")
+          .delete()
+          .eq("id", programa.id);
+
+        if (error) throw error;
+        message.success("Programa eliminado correctamente");
+        await cargarProgramas();
+      },
+    });
+  };
+
   // Función para calcular el precio total: (mensualidad * meses) + inscripción
   const calcularPrecioTotal = (programa: any): number => {
     const precio_mensualidad = Number(programa.precio_mensualidad || 0);
@@ -239,6 +290,10 @@ export default function ProgramasPage() {
     if (key === "gestor") {
       setProgramaSeleccionado(programa);
       setGestorPensumVisible(true);
+      return;
+    }
+    if (key === "delete") {
+      handleDeletePrograma(programa);
       return;
     }
   };
@@ -318,6 +373,17 @@ export default function ProgramasPage() {
                       danger: programa.activo,
                       onClick: () => handleAction("toggle", programa),
                     },
+                    ...(!programa.activo
+                      ? [
+                          {
+                            key: "delete",
+                            label: "Eliminar",
+                            icon: <DeleteOutlined />,
+                            danger: true,
+                            onClick: () => handleAction("delete", programa),
+                          },
+                        ]
+                      : []),
                   ],
                 }}
                 trigger={["click"]}
@@ -577,6 +643,17 @@ export default function ProgramasPage() {
             danger: record.activo,
             onClick: () => handleAction("toggle", record),
           },
+          ...(!record.activo
+            ? [
+                {
+                  key: "delete",
+                  label: "Eliminar",
+                  icon: <DeleteOutlined />,
+                  danger: true,
+                  onClick: () => handleAction("delete", record),
+                },
+              ]
+            : []),
         ];
 
         return (
