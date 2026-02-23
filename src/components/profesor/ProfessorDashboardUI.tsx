@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Column, Line } from "@ant-design/plots";
 import {
   BookOutlined,
@@ -176,6 +176,10 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     src: "",
   });
   const [logoAcademia, setLogoAcademia] = useState<string | null>(null);
+  const cursosSectionRef = useRef<HTMLDivElement | null>(null);
+  const sesionesSectionRef = useRef<HTMLDivElement | null>(null);
+  const pendientesSectionRef = useRef<HTMLDivElement | null>(null);
+  const analiticaSectionRef = useRef<HTMLDivElement | null>(null);
 
   const currencyFormatter = useMemo(
     () =>
@@ -278,6 +282,31 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   const hasAsistenciaData = (statsData.asistenciaChart || []).length > 0;
   const hasCalificacionesData = (statsData.calificacionesChart || []).length > 0;
   const hasTopCursos = (topCursos || []).length > 0;
+
+  const menuProfesor = [
+    { key: "cursos", label: "Cursos", icon: <BookOutlined /> },
+    { key: "sesiones", label: "Sesiones", icon: <CalendarOutlined /> },
+    { key: "pendientes", label: "Pendientes", icon: <FormOutlined /> },
+    { key: "analitica", label: "Analítica", icon: <ReadOutlined /> },
+    { key: "financiero", label: "Finanzas", icon: <DollarCircleOutlined /> },
+  ];
+
+  const handleMenuProfesor = (key: string) => {
+    if (key === "financiero") {
+      setFinancialOpen(true);
+      return;
+    }
+
+    const mapaSecciones: Record<string, React.RefObject<HTMLDivElement | null>> = {
+      cursos: cursosSectionRef,
+      sesiones: sesionesSectionRef,
+      pendientes: pendientesSectionRef,
+      analitica: analiticaSectionRef,
+    };
+
+    const targetRef = mapaSecciones[key];
+    targetRef?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const ciclosMateriales = useMemo(() => {
     const programaId = cursoMaterialSeleccionado?.programaId;
@@ -485,11 +514,35 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
               <Typography.Paragraph style={{ color: "rgba(255,255,255,0.7)", marginBottom: 12 }}>
                 Visualiza el pulso de tus cursos, haz seguimiento a tus estudiantes y mantén tus clases listas.
               </Typography.Paragraph>
-              <Space size="small" wrap>
-                <Button type="primary" icon={<DollarCircleOutlined />} size="middle" onClick={() => setFinancialOpen(true)}>
-                  Resumen financiero
-                </Button>
-              </Space>
+              <Card
+                className="professor-menu-card"
+                variant="borderless"
+                style={{
+                  borderRadius: 14,
+                  background: "rgba(17, 24, 39, 0.45)",
+                  border: "1px solid rgba(148,163,184,0.2)",
+                  maxWidth: 520,
+                }}
+                styles={{ body: { padding: 10 } }}
+              >
+                <Row gutter={[8, 8]}>
+                  {menuProfesor.map((item) => (
+                    <Col xs={8} sm={8} md={8} key={item.key}>
+                      <Button
+                        block
+                        size="small"
+                        className="professor-menu-btn"
+                        onClick={() => handleMenuProfesor(item.key)}
+                      >
+                        <span className="professor-menu-inner">
+                          <span className="professor-menu-icon">{item.icon}</span>
+                          <span className="professor-menu-label">{item.label}</span>
+                        </span>
+                      </Button>
+                    </Col>
+                  ))}
+                </Row>
+              </Card>
             </Col>
             <Col xs={24} md={10}>
               <Card
@@ -596,182 +649,188 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
 
         <Row gutter={[12, 12]} style={{ marginTop: 4 }}>
           <Col xs={24} lg={16}>
-            <Card
-              variant="borderless"
-              title={<Space><BookOutlined />Mis cursos</Space>}
-              style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
-            >
-              <Row gutter={[10, 10]}>
-                {courseCards.map((curso) => {
-                  const colSpan = courseCards.length === 1 ? 24 : courseCards.length === 2 ? 12 : 12;
-                  return (
-                    <Col key={curso.id} xs={24} sm={12} lg={colSpan}>
-                      <Card
-                        hoverable
-                        onClick={() => onOpenCourse && onOpenCourse(curso.id, "default")}
-                        style={{
-                          borderRadius: 14,
-                          height: "100%",
-                          border: curso.isSoon ? "1px solid #A855F7" : "1px solid rgba(148,163,184,0.18)",
-                          boxShadow: curso.isSoon
-                            ? "0 14px 38px -26px rgba(168,85,247,0.5)"
-                            : "0 10px 26px -22px rgba(15,23,42,0.22)",
-                          background: "linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,41,59,0.94))",
-                        }}
-                        styles={{
-                          body: {
-                            color: "#E5E7EB",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 6,
-                            minHeight: 150,
-                            padding: 10,
-                          },
-                        }}
-                      >
-                        <Space align="center" split={<Divider type="vertical" style={{ borderColor: "rgba(255,255,255,0.12)" }} />} wrap>
-                          <Typography.Title level={4} style={{ margin: 0, color: "#F8FAFC", fontSize: 18 }}>
-                            {construirNombreGrupo(curso)}
-                          </Typography.Title>
-                          <Tag color={curso.estado === "activo" ? "green" : curso.estado === "pausado" ? "gold" : "blue"}>
-                            {curso.estado}
-                          </Tag>
-                        </Space>
+            <div ref={cursosSectionRef}>
+              <Card
+                variant="borderless"
+                title={<Space><BookOutlined />Mis cursos</Space>}
+                style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+              >
+                <Row gutter={[10, 10]}>
+                  {courseCards.map((curso) => {
+                    const colSpan = courseCards.length === 1 ? 24 : courseCards.length === 2 ? 12 : 12;
+                    return (
+                      <Col key={curso.id} xs={24} sm={12} lg={colSpan}>
+                        <Card
+                          hoverable
+                          onClick={() => onOpenCourse && onOpenCourse(curso.id, "default")}
+                          style={{
+                            borderRadius: 14,
+                            height: "100%",
+                            border: curso.isSoon ? "1px solid #A855F7" : "1px solid rgba(148,163,184,0.18)",
+                            boxShadow: curso.isSoon
+                              ? "0 14px 38px -26px rgba(168,85,247,0.5)"
+                              : "0 10px 26px -22px rgba(15,23,42,0.22)",
+                            background: "linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,41,59,0.94))",
+                          }}
+                          styles={{
+                            body: {
+                              color: "#E5E7EB",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 6,
+                              minHeight: 150,
+                              padding: 10,
+                            },
+                          }}
+                        >
+                          <Space align="center" split={<Divider type="vertical" style={{ borderColor: "rgba(255,255,255,0.12)" }} />} wrap>
+                            <Typography.Title level={4} style={{ margin: 0, color: "#F8FAFC", fontSize: 18 }}>
+                              {construirNombreGrupo(curso)}
+                            </Typography.Title>
+                            <Tag color={curso.estado === "activo" ? "green" : curso.estado === "pausado" ? "gold" : "blue"}>
+                              {curso.estado}
+                            </Tag>
+                          </Space>
 
-                        <Typography.Text style={{ color: "#CBD5E1" }}>
-                          {curso.estudiantesActivos || 0} estudiantes activos
-                        </Typography.Text>
-
-                        {typeof curso.asistenciaPromedio === "number" ? (
-                          <div>
-                            <Typography.Text type="secondary" style={{ color: "#94A3B8", fontSize: 12 }}>Asistencia</Typography.Text>
-                            <Progress
-                              percent={curso.asistenciaPromedio}
-                              size="small"
-                              strokeColor={curso.asistenciaColor}
-                              showInfo={false}
-                              trailColor="rgba(148,163,184,0.25)"
-                            />
-                          </div>
-                        ) : null}
-
-                        <Space size={8} align="center">
-                          <Badge color={curso.isSoon ? "#A855F7" : "#38bdf8"} text={curso.proxLabel} />
-                        </Space>
-
-                        {curso.temaActual ? (
-                          <Typography.Text type="secondary" style={{ color: "#cbd5e1", fontSize: 12 }}>
-                            Tema actual: {curso.temaActual}
+                          <Typography.Text style={{ color: "#CBD5E1" }}>
+                            {curso.estudiantesActivos || 0} estudiantes activos
                           </Typography.Text>
-                        ) : null}
 
-                        <Typography.Text style={{ color: "#e2e8f0", fontSize: 12 }}>
-                          Próxima clase: {curso.proxLabel}
-                          {curso.siguienteTema ? ` • Tema: ${curso.siguienteTema}` : ""}
-                        </Typography.Text>
+                          {typeof curso.asistenciaPromedio === "number" ? (
+                            <div>
+                              <Typography.Text type="secondary" style={{ color: "#94A3B8", fontSize: 12 }}>Asistencia</Typography.Text>
+                              <Progress
+                                percent={curso.asistenciaPromedio}
+                                size="small"
+                                strokeColor={curso.asistenciaColor}
+                                showInfo={false}
+                                trailColor="rgba(148,163,184,0.25)"
+                              />
+                            </div>
+                          ) : null}
 
-                        <Button
-                          type="primary"
-                          block
-                          size="middle"
-                          style={{ marginTop: 4 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenCourse && onOpenCourse(curso.id, "default");
-                          }}
-                        >
-                          Entrar al curso
-                        </Button>
-                        <Button
-                          block
-                          size="middle"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenMaterials(curso);
-                          }}
-                        >
-                          Ver materiales
-                        </Button>
+                          <Space size={8} align="center">
+                            <Badge color={curso.isSoon ? "#A855F7" : "#38bdf8"} text={curso.proxLabel} />
+                          </Space>
+
+                          {curso.temaActual ? (
+                            <Typography.Text type="secondary" style={{ color: "#cbd5e1", fontSize: 12 }}>
+                              Tema actual: {curso.temaActual}
+                            </Typography.Text>
+                          ) : null}
+
+                          <Typography.Text style={{ color: "#e2e8f0", fontSize: 12 }}>
+                            Próxima clase: {curso.proxLabel}
+                            {curso.siguienteTema ? ` • Tema: ${curso.siguienteTema}` : ""}
+                          </Typography.Text>
+
+                          <Button
+                            type="primary"
+                            block
+                            size="middle"
+                            style={{ marginTop: 4 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenCourse && onOpenCourse(curso.id, "default");
+                            }}
+                          >
+                            Entrar al curso
+                          </Button>
+                          <Button
+                            block
+                            size="middle"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenMaterials(curso);
+                            }}
+                          >
+                            Ver materiales
+                          </Button>
+                        </Card>
+                      </Col>
+                    );
+                  })}
+
+                  {courseCards.length === 0 && (
+                    <Col span={24}>
+                      <Card variant="borderless" style={{ textAlign: "center" }}>
+                        <Typography.Text type="secondary">No tienes cursos asignados</Typography.Text>
                       </Card>
                     </Col>
-                  );
-                })}
-
-                {courseCards.length === 0 && (
-                  <Col span={24}>
-                    <Card variant="borderless" style={{ textAlign: "center" }}>
-                      <Typography.Text type="secondary">No tienes cursos asignados</Typography.Text>
-                    </Card>
-                  </Col>
-                )}
-              </Row>
-            </Card>
+                  )}
+                </Row>
+              </Card>
+            </div>
           </Col>
 
           <Col xs={24} lg={8}>
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Card
-                variant="borderless"
-                title={<Space><CalendarOutlined />Próximas sesiones</Space>}
-                style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
-                bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
-              >
-                <List
-                  dataSource={proximasSesionesData}
-                  locale={{ emptyText: "No hay sesiones programadas" }}
-                  renderItem={(sesion) => (
-                    <List.Item
-                      style={{ cursor: "pointer" }}
-                      onClick={() => onOpenCourse && onOpenCourse(sesion.cursoId, "attendance")}
-                    >
-                      <List.Item.Meta
-                        title={sesion.curso}
-                        description={
-                          <Space split={<Divider type="vertical" />}> 
-                            <span>{dayjs(sesion.fecha).format("ddd D MMM, HH:mm")}</span>
-                            {sesion.tema ? <span>{sesion.tema}</span> : null}
-                            {sesion.horas ? <span>{sesion.horas} hrs</span> : null}
-                          </Space>
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
-              </Card>
+              <div ref={sesionesSectionRef}>
+                <Card
+                  variant="borderless"
+                  title={<Space><CalendarOutlined />Próximas sesiones</Space>}
+                  style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+                  bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
+                >
+                  <List
+                    dataSource={proximasSesionesData}
+                    locale={{ emptyText: "No hay sesiones programadas" }}
+                    renderItem={(sesion) => (
+                      <List.Item
+                        style={{ cursor: "pointer" }}
+                        onClick={() => onOpenCourse && onOpenCourse(sesion.cursoId, "attendance")}
+                      >
+                        <List.Item.Meta
+                          title={sesion.curso}
+                          description={
+                            <Space split={<Divider type="vertical" />}> 
+                              <span>{dayjs(sesion.fecha).format("ddd D MMM, HH:mm")}</span>
+                              {sesion.tema ? <span>{sesion.tema}</span> : null}
+                              {sesion.horas ? <span>{sesion.horas} hrs</span> : null}
+                            </Space>
+                          }
+                        />
+                      </List.Item>
+                    )}
+                  />
+                </Card>
+              </div>
 
-              <Card
-                variant="borderless"
-                title={<Space><FormOutlined />Pendientes por calificar</Space>}
-                style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
-                bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
-              >
-                <List
-                  dataSource={pendientesData.slice(0, 5)}
-                  locale={{ emptyText: "No tienes pendientes" }}
-                  renderItem={(pendiente) => (
-                    <List.Item
-                      style={{ cursor: pendiente.cursoId ? "pointer" : "default", opacity: pendiente.cursoId ? 1 : 0.6 }}
-                      onClick={() => pendiente.cursoId && onOpenCourse && onOpenCourse(pendiente.cursoId as string, "grades")}
-                    >
-                      <List.Item.Meta
-                        title={pendiente.concepto}
-                        description={
-                          <Space split={<Divider type="vertical" />}> 
-                            <span>{pendiente.curso}</span>
-                            {pendiente.fecha ? <span>{dayjs(pendiente.fecha).format("DD MMM")}</span> : null}
-                          </Space>
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
-              </Card>
+              <div ref={pendientesSectionRef}>
+                <Card
+                  variant="borderless"
+                  title={<Space><FormOutlined />Pendientes por calificar</Space>}
+                  style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+                  bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
+                >
+                  <List
+                    dataSource={pendientesData.slice(0, 5)}
+                    locale={{ emptyText: "No tienes pendientes" }}
+                    renderItem={(pendiente) => (
+                      <List.Item
+                        style={{ cursor: pendiente.cursoId ? "pointer" : "default", opacity: pendiente.cursoId ? 1 : 0.6 }}
+                        onClick={() => pendiente.cursoId && onOpenCourse && onOpenCourse(pendiente.cursoId as string, "grades")}
+                      >
+                        <List.Item.Meta
+                          title={pendiente.concepto}
+                          description={
+                            <Space split={<Divider type="vertical" />}> 
+                              <span>{pendiente.curso}</span>
+                              {pendiente.fecha ? <span>{dayjs(pendiente.fecha).format("DD MMM")}</span> : null}
+                            </Space>
+                          }
+                        />
+                      </List.Item>
+                    )}
+                  />
+                </Card>
+              </div>
             </Space>
           </Col>
         </Row>
 
         {(hasAsistenciaData || hasCalificacionesData || hasTopCursos) && (
-          <Row gutter={[12, 12]} style={{ marginTop: 10 }}>
+          <Row ref={analiticaSectionRef} gutter={[12, 12]} style={{ marginTop: 10 }}>
             {hasAsistenciaData && (
               <Col xs={24} lg={hasCalificacionesData ? 12 : 24}>
                 <Card
@@ -1077,6 +1136,38 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           </Space>
         </Drawer>
         <style jsx global>{`
+          .profesor-dashboard .professor-menu-card {
+            margin-top: 10px;
+          }
+          .profesor-dashboard .professor-menu-btn {
+            border-radius: 12px;
+            min-height: 58px;
+            padding: 6px;
+            border-color: rgba(148, 163, 184, 0.35);
+            background: rgba(255, 255, 255, 0.92);
+            color: #0f172a;
+          }
+          .profesor-dashboard .professor-menu-inner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            width: 100%;
+          }
+          .profesor-dashboard .professor-menu-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            line-height: 1;
+          }
+          .profesor-dashboard .professor-menu-label {
+            font-size: 11px;
+            line-height: 1.15;
+            text-align: center;
+            white-space: normal;
+          }
           @media (max-width: 576px) {
             .profesor-dashboard {
               padding: 12px !important;
@@ -1102,6 +1193,13 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             }
             .profesor-dashboard .ant-drawer-content-wrapper {
               width: 100% !important;
+            }
+            .profesor-dashboard .professor-menu-btn {
+              min-height: 54px;
+              padding: 6px 4px;
+            }
+            .profesor-dashboard .professor-menu-label {
+              font-size: 10px;
             }
           }
         `}</style>

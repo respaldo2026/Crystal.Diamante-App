@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { logger } from "@utils/logger";
 import {
-  Tabs,
   Card,
   Table,
   Row,
@@ -1108,6 +1107,174 @@ export default function PortalEstudiante() {
 
   const renderMaterialesCiclo = () => renderRutaAcademica("ciclo");
 
+  const menuSecciones = [
+    { key: "1", label: "Mis Cursos", icon: <BookOutlined /> },
+    { key: "2", label: "Financiero", icon: <DollarCircleOutlined /> },
+    { key: "3", label: "Lista de materiales", icon: <FileOutlined /> },
+    { key: "4", label: "Materiales del ciclo", icon: <BookOutlined /> },
+    { key: "5", label: "Pensum", icon: <BookOutlined /> },
+    { key: "7", label: "Calificaciones", icon: <FileTextOutlined /> },
+  ];
+
+  const renderSeccionActiva = () => {
+    if (activeTab === "1") {
+      return (
+        <>
+          {avancePorCurso.length === 0 ? (
+            <Empty description="No estás inscrito en ningún curso activo" />
+          ) : (
+            <Row gutter={16}>
+              {avancePorCurso.map((curso: any, idx: number) => (
+                <Col xs={24} sm={12} lg={8} key={idx}>
+                  <Card className="course-card" title={curso.curso}>
+                    <Row gutter={12}>
+                      <Col xs={12}>
+                        <div style={{ textAlign: "center" }}>
+                          <Progress
+                            type="circle"
+                            percent={Math.max(0, Math.min(100, Number(curso.nota || 0)))}
+                            width={isMobile ? 94 : 108}
+                            format={() => `${Number(curso.nota || 0)}/100`}
+                          />
+                          <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
+                            Nota actual
+                          </Text>
+                        </div>
+                      </Col>
+                      <Col xs={12}>
+                        <div style={{ textAlign: "center" }}>
+                          <Progress
+                            type="dashboard"
+                            percent={Math.max(0, Math.min(100, Math.round((Number(curso.nota || 0) / 70) * 100)))}
+                            width={isMobile ? 94 : 108}
+                            format={(percent) => `${percent}%`}
+                            status={Number(curso.nota || 0) >= 70 ? "success" : "active"}
+                          />
+                          <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
+                            Meta aprobatoria
+                          </Text>
+                        </div>
+                      </Col>
+                    </Row>
+                    <div style={{ marginTop: 10, textAlign: 'center' }}>
+                      <Tag color={curso.nota >= 70 ? "green" : "orange"}>{curso.estado?.toUpperCase()}</Tag>
+                    </div>
+
+                    {(() => {
+                      const siguiente = obtenerSiguienteClase(curso);
+                      const nombreTema = siguiente?.tema?.nombre_curso || "Tema por definir";
+                      const nombreCiclo = siguiente?.ciclo?.nombre_ciclo || "Ciclo por definir";
+                      const descripcionTema = siguiente?.tema?.descripcion || "Introducción al ciclo";
+
+                      return (
+                        <div style={{ marginTop: 12 }}>
+                          <Text style={{ fontSize: 12, display: "block" }}>
+                            {siguiente?.completado ? (
+                              <>
+                                <strong>Plan completado:</strong> ya registraste asistencia en {siguiente?.vistos}/{siguiente?.total} clases del programa. Puedes repasar materiales del último tema.
+                              </>
+                            ) : (
+                              <>
+                                <strong>Siguiente Clase:</strong> {nombreTema} del {nombreCiclo}: {descripcionTema}. Verifica la lista de materiales para esta clase.
+                              </>
+                            )}
+                          </Text>
+                          <Button
+                            type="link"
+                            style={{ paddingLeft: 0, marginTop: 4, height: "auto" }}
+                            onClick={() => irAMaterialesSiguienteClase(curso, siguiente)}
+                          >
+                            {siguiente?.completado
+                              ? "Ver materiales del último tema"
+                              : "Ir a lista de materiales de esta clase"}
+                          </Button>
+                        </div>
+                      );
+                    })()}
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          )}
+
+          <Card
+            size="small"
+            title="Asistencia"
+            style={{ marginTop: 16 }}
+          >
+            <Table
+              dataSource={asistencias}
+              rowKey="id"
+              size="small"
+              pagination={{ pageSize: 5 }}
+              scroll={{ x: 520 }}
+              locale={{ emptyText: "No hay registros de asistencia" }}
+              columns={[
+                { title: "Fecha", dataIndex: "fecha", render: (f) => formatDate(f) },
+                { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
+                { title: "Tema visto", dataIndex: "tema_visto", render: (t) => t || "-" },
+                { title: "Estado", dataIndex: "estado", render: (e) => <Tag color={e === "presente" ? "green" : "red"}>{e?.toUpperCase()}</Tag> },
+              ]}
+            />
+          </Card>
+        </>
+      );
+    }
+
+    if (activeTab === "2") return renderFinanciero();
+
+    if (activeTab === "3") {
+      return (
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          {renderMaterialesKits()}
+        </Space>
+      );
+    }
+
+    if (activeTab === "4") return renderMaterialesCiclo();
+    if (activeTab === "5") return renderPensum();
+
+    if (activeTab === "7") {
+      return (
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Card size="small" title="Calificaciones">
+            <Table
+              dataSource={calificaciones}
+              rowKey="id"
+              size="small"
+              scroll={{ x: 520 }}
+              pagination={{ pageSize: 6 }}
+              locale={{ emptyText: "No hay calificaciones registradas" }}
+              columns={[
+                { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
+                { title: "Nota", dataIndex: "calificacion", render: (c) => <Tag color={c >= 70 ? "green" : "red"}>{c}</Tag> },
+                { title: "Fecha", dataIndex: "fecha_evaluacion", render: (f) => formatDate(f) },
+              ]}
+            />
+          </Card>
+
+          <Card size="small" title="Certificados">
+            <Table
+              dataSource={certificados}
+              rowKey="id"
+              size="small"
+              scroll={{ x: 520 }}
+              pagination={{ pageSize: 5 }}
+              locale={{ emptyText: "No hay certificados disponibles" }}
+              columns={[
+                { title: "Curso", render: (_, r: any) => r.cursos?.nombre },
+                { title: "Nota Final", dataIndex: "nota_final" },
+                { title: "Acción", render: (_, r) => <Button icon={<DownloadOutlined />} onClick={() => descargarCertificado(r)}>Descargar</Button> },
+              ]}
+            />
+          </Card>
+        </Space>
+      );
+    }
+
+    return null;
+  };
+
   const obtenerRutaTemasPrograma = (programaId: string | number | null | undefined) => {
     const ciclos = (pensum || [])
       .filter((p: any) => String(p?.programa_id) === String(programaId))
@@ -1290,172 +1457,33 @@ export default function PortalEstudiante() {
         </Row>
       </Card>
 
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={[
-          {
-            key: "1",
-            label: <span><BookOutlined /> Mis Cursos</span>,
-            children: (
-              <>
-                {avancePorCurso.length === 0 ? (
-                  <Empty description="No estás inscrito en ningún curso activo" />
-                ) : (
-                  <Row gutter={16}>
-                    {avancePorCurso.map((curso: any, idx: number) => (
-                      <Col xs={24} sm={12} lg={8} key={idx}>
-                        <Card className="course-card" title={curso.curso}>
-                          <Row gutter={12}>
-                            <Col xs={12}>
-                              <div style={{ textAlign: "center" }}>
-                                <Progress
-                                  type="circle"
-                                  percent={Math.max(0, Math.min(100, Number(curso.nota || 0)))}
-                                  width={isMobile ? 94 : 108}
-                                  format={() => `${Number(curso.nota || 0)}/100`}
-                                />
-                                <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
-                                  Nota actual
-                                </Text>
-                              </div>
-                            </Col>
-                            <Col xs={12}>
-                              <div style={{ textAlign: "center" }}>
-                                <Progress
-                                  type="dashboard"
-                                  percent={Math.max(0, Math.min(100, Math.round((Number(curso.nota || 0) / 70) * 100)))}
-                                  width={isMobile ? 94 : 108}
-                                  format={(percent) => `${percent}%`}
-                                  status={Number(curso.nota || 0) >= 70 ? "success" : "active"}
-                                />
-                                <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
-                                  Meta aprobatoria
-                                </Text>
-                              </div>
-                            </Col>
-                          </Row>
-                          <div style={{ marginTop: 10, textAlign: 'center' }}>
-                            <Tag color={curso.nota >= 70 ? "green" : "orange"}>{curso.estado?.toUpperCase()}</Tag>
-                          </div>
+      <Card className="student-menu-card" style={{ marginBottom: 16 }}>
+        <Row gutter={[10, 10]}>
+          {menuSecciones.map((item) => {
+            const active = activeTab === item.key;
+            return (
+              <Col xs={8} sm={6} md={4} lg={3} key={item.key}>
+                <Button
+                  block
+                  size="small"
+                  type={active ? "primary" : "default"}
+                  className={`student-menu-btn ${active ? "is-active" : ""}`}
+                  onClick={() => setActiveTab(item.key)}
+                >
+                  <span className="student-menu-inner">
+                    <span className="student-menu-icon">{item.icon}</span>
+                    <span className="student-menu-label">{item.label}</span>
+                  </span>
+                </Button>
+              </Col>
+            );
+          })}
+        </Row>
+      </Card>
 
-                          {(() => {
-                            const siguiente = obtenerSiguienteClase(curso);
-                            const nombreTema = siguiente?.tema?.nombre_curso || "Tema por definir";
-                            const nombreCiclo = siguiente?.ciclo?.nombre_ciclo || "Ciclo por definir";
-                            const descripcionTema = siguiente?.tema?.descripcion || "Introducción al ciclo";
-
-                            return (
-                              <div style={{ marginTop: 12 }}>
-                                <Text style={{ fontSize: 12, display: "block" }}>
-                                  {siguiente?.completado ? (
-                                    <>
-                                      <strong>Plan completado:</strong> ya registraste asistencia en {siguiente?.vistos}/{siguiente?.total} clases del programa. Puedes repasar materiales del último tema.
-                                    </>
-                                  ) : (
-                                    <>
-                                      <strong>Siguiente Clase:</strong> {nombreTema} del {nombreCiclo}: {descripcionTema}. Verifica la lista de materiales para esta clase.
-                                    </>
-                                  )}
-                                </Text>
-                                <Button
-                                  type="link"
-                                  style={{ paddingLeft: 0, marginTop: 4, height: "auto" }}
-                                  onClick={() => irAMaterialesSiguienteClase(curso, siguiente)}
-                                >
-                                  {siguiente?.completado
-                                    ? "Ver materiales del último tema"
-                                    : "Ir a lista de materiales de esta clase"}
-                                </Button>
-                              </div>
-                            );
-                          })()}
-                        </Card>
-                      </Col>
-                    ))}
-                  </Row>
-                )}
-              </>
-            ),
-          },
-          {
-            key: "2",
-            label: <span><DollarCircleOutlined /> Financiero</span>,
-            children: renderFinanciero()
-          },
-          {
-            key: "3",
-            label: <span><FileOutlined /> Lista de materiales</span>,
-            children: (
-              <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                {renderMaterialesKits()}
-              </Space>
-            )
-          },
-          {
-            key: "4",
-            label: <span><BookOutlined /> Materiales del ciclo</span>,
-            children: renderMaterialesCiclo(),
-          },
-          {
-            key: "5",
-            label: <span><BookOutlined /> Pensum</span>,
-            children: renderPensum()
-          },
-          {
-            key: "6",
-            label: <span><CheckCircleOutlined /> Asistencia</span>,
-            children: (
-              <Table
-                dataSource={asistencias}
-                rowKey="id"
-                size="small"
-                scroll={{ x: 520 }}
-                columns={[
-                  { title: "Fecha", dataIndex: "fecha", render: (f) => formatDate(f) },
-                  { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
-                  { title: "Tema visto", dataIndex: "tema_visto", render: (t) => t || "-" },
-                  { title: "Estado", dataIndex: "estado", render: (e) => <Tag color={e === "presente" ? "green" : "red"}>{e?.toUpperCase()}</Tag> },
-                ]}
-              />
-            ),
-          },
-          {
-            key: "7",
-            label: <span><FileTextOutlined /> Calificaciones</span>,
-            children: (
-              <Table
-                dataSource={calificaciones}
-                rowKey="id"
-                size="small"
-                scroll={{ x: 520 }}
-                columns={[
-                  { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
-                  { title: "Nota", dataIndex: "calificacion", render: (c) => <Tag color={c >= 70 ? "green" : "red"}>{c}</Tag> },
-                  { title: "Fecha", dataIndex: "fecha_evaluacion", render: (f) => formatDate(f) },
-                ]}
-              />
-            ),
-          },
-          {
-            key: "8",
-            label: <span><TrophyOutlined /> Certificados</span>,
-            children: (
-              <Table
-                dataSource={certificados}
-                rowKey="id"
-                size="small"
-                scroll={{ x: 520 }}
-                columns={[
-                  { title: "Curso", render: (_, r: any) => r.cursos?.nombre },
-                  { title: "Nota Final", dataIndex: "nota_final" },
-                  { title: "Acción", render: (_, r) => <Button icon={<DownloadOutlined />} onClick={() => descargarCertificado(r)}>Descargar</Button> }
-                ]}
-              />
-            ),
-          }
-        ]}
-      />
+      <Card className="student-section-card">
+        {renderSeccionActiva()}
+      </Card>
       <Modal
         title={iframePreview.title || "Presentación"}
         open={iframePreview.open}
@@ -1491,6 +1519,46 @@ export default function PortalEstudiante() {
           border-radius: 999px;
           font-weight: 600;
           letter-spacing: 0.2px;
+        }
+        .portal-estudiante .student-menu-card {
+          border-radius: 14px;
+        }
+        .portal-estudiante .student-section-card {
+          border-radius: 14px;
+        }
+        .portal-estudiante .student-menu-btn {
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 64px;
+          padding: 6px;
+          font-weight: 600;
+          border-color: #d9e2f5;
+        }
+        .portal-estudiante .student-menu-inner {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          width: 100%;
+        }
+        .portal-estudiante .student-menu-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 17px;
+          line-height: 1;
+        }
+        .portal-estudiante .student-menu-label {
+          font-size: 11px;
+          line-height: 1.15;
+          text-align: center;
+          white-space: normal;
+        }
+        .portal-estudiante .student-menu-btn.is-active {
+          box-shadow: 0 4px 12px rgba(24, 144, 255, 0.22);
         }
         .portal-estudiante .course-card .ant-progress {
           filter: drop-shadow(0 8px 16px rgba(15, 23, 42, 0.12));
@@ -1546,6 +1614,13 @@ export default function PortalEstudiante() {
           }
           .portal-estudiante .ant-table-cell {
             white-space: normal;
+          }
+          .portal-estudiante .student-menu-btn {
+            min-height: 58px;
+            padding: 6px 4px;
+          }
+          .portal-estudiante .student-menu-label {
+            font-size: 10px;
           }
         }
       `}</style>
