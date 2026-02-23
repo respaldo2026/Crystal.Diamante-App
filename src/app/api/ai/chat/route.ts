@@ -1282,7 +1282,114 @@ function isShortAffirmativeReply(message: string): boolean {
   if (/^s+i+$/i.test(text)) return true;
   if (/^s+i+p+$/i.test(text)) return true;
 
-  return /^(si|dale|ok|okay|claro|listo|perfecto|de una|por favor|si por favor|claro que si|clase|ciclo|ambos|los dos)$/i.test(text);
+  return /^(si|dale|ok|okay|okey|claro|listo|perfecto|de una|por favor|si por favor|claro que si|esta bien|ta bien|todo bien|entendido|clase|ciclo|ambos|los dos)$/i.test(text);
+}
+
+function isNoiseOnlyMessage(message: string): boolean {
+  const raw = String(message || "").trim();
+  if (!raw) return true;
+
+  const normalized = normalizeForMatch(raw);
+  if (!normalized) {
+    return /^[.?!,;:¡!¿?()\-_/]+$/.test(raw);
+  }
+
+  return false;
+}
+
+function isNeutralAcknowledgement(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  if (text.includes("?")) return false;
+
+  return /^(ok|okay|okey|listo|perfecto|esta bien|ta bien|entendido|vale|de acuerdo|super|genial|claro)$/i.test(text);
+}
+
+function buildNoiseFollowupFromHistory(history: Array<{ user: string; agent: string }>): string {
+  const pendingTopic = inferPendingTopicFromHistory(history);
+
+  if (/medios\s+de\s+pago|formas\s+de\s+pago|metodo\s+de\s+pago/.test(normalizeForMatch(pendingTopic))) {
+    return "Te leí 👌 Para avanzar, dime cuál te queda mejor: *Nequi*, *Bancolombia*, *Sistecrédito*, *tarjeta* o *efectivo*.";
+  }
+
+  if (/dias\s+y\s+horario|horario|grupo/.test(normalizeForMatch(pendingTopic))) {
+    return "Te leí 👌 ¿Quieres que te confirme *solo el horario actual* o que te revise si hay *otro grupo* disponible?";
+  }
+
+  if (/inscribirme|separar\s+cupo|pasos\s+de\s+inscripcion/.test(normalizeForMatch(pendingTopic))) {
+    return "Te leí 👌 Si quieres, seguimos de una con los *pasos para separar tu cupo*.";
+  }
+
+  return "Te leí 👌 ¿Quieres que sigamos con *horarios*, *inversión* o *inscripción*?";
+}
+
+function isOnlyScheduleConfirmationQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const asksOnly = /\b(solo|solamente|unico|unica|ese|esa|asi|asi no mas)\b/i.test(text);
+  const asksSchedule = /\b(horario|hora|grupo|turno)\b/i.test(text);
+  const asksAlternative = /\b(otro|otra|mas|adicional|distinto|diferente|manejan|tienen|hay)\b/i.test(text);
+
+  return asksSchedule && (asksOnly || asksAlternative);
+}
+
+function buildOnlyScheduleConfirmationReply(
+  detectedProgram: any | null,
+  courses: any[]
+): string | null {
+  if (!detectedProgram) {
+    return "¡Claro! Para confirmarte si hay más horarios, dime el *curso* que te interesa y te respondo con precisión.";
+  }
+
+  const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
+  const relatedCourses = (courses || []).filter((course) => {
+    const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+    const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
+    return Boolean(sameProgramId || sameProgramName);
+  });
+
+  const schedules = Array.from(
+    new Set(
+      relatedCourses
+        .map((course) => String(course?.horario || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (schedules.length <= 1) {
+    const scheduleText = schedules[0] || "Por confirmar";
+    return `✅ Sí, por ahora manejamos ese horario para *${detectedProgram.nombre}*: *${scheduleText}*.`;
+  }
+
+  const options = schedules.slice(0, 3).map((item) => `• ${item}`).join("\n");
+  return `No, también tenemos más opciones de horario para *${detectedProgram.nombre}*:\n${options}\n\n¿Cuál te queda mejor para ayudarte a separar cupo?`;
+}
+
+function buildNaturalAckReply(
+  message: string,
+  lastAgentMessage: string,
+  detectedProgram: any | null
+): string | null {
+  if (!isNeutralAcknowledgement(message)) return null;
+
+  const normalizedLast = normalizeForMatch(lastAgentMessage || "");
+  if (!normalizedLast) return null;
+
+  if (/medios\s+de\s+pago|formas\s+de\s+pago|fechas\s+de\s+pago|mensualidad|inscripcion/.test(normalizedLast)) {
+    return "Perfecto 🙌 Si quieres, te ayudo a escoger el medio de pago que más te convenga y te dejo listo el siguiente paso.";
+  }
+
+  if (/horario|inicio|grupo|dias/.test(normalizedLast)) {
+    const programName = detectedProgram?.nombre ? ` de *${detectedProgram.nombre}*` : "";
+    return `Genial 😊 Si ese horario${programName} te funciona, te comparto ahora mismo los pasos para separar cupo.`;
+  }
+
+  if (/instagram|redes|siguenos/.test(normalizedLast)) {
+    return "¡Súper! 😊 Si quieres, te paso el link directo para que veas trabajos y resultados reales.";
+  }
+
+  return "Perfecto 😊 ¿Te ayudo con *horarios*, *inversión* o *inscripción*?";
 }
 
 function isClosureAcknowledgement(message: string, lastAgentMessage: string): boolean {
@@ -2363,6 +2470,10 @@ function buildIntentFocusedDirectResponse(
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
   }
 
+  if (isNoiseOnlyMessage(message)) {
+    return buildNoiseFollowupFromHistory(history);
+  }
+
   if (isPureGreeting(message)) {
     const hour = getColombiaNowDate().getHours();
     const greeting = getTimeSlotGreeting(hour);
@@ -2377,6 +2488,18 @@ function buildIntentFocusedDirectResponse(
   let intent = detectUserIntent(message);
   const normalizedMessage = normalizeForMatch(message);
   const lastAgentForFlow = history[history.length - 1]?.agent || "";
+
+  if (isOnlyScheduleConfirmationQuestion(message)) {
+    return buildOnlyScheduleConfirmationReply(detectedProgram, courses);
+  }
+
+  if (intent === "general") {
+    const naturalAckReply = buildNaturalAckReply(message, lastAgentForFlow, detectedProgram);
+    if (naturalAckReply) {
+      return naturalAckReply;
+    }
+  }
+
   if (isClosureAcknowledgement(message, lastAgentForFlow)) {
     return "Perfecto 😊 Quedo atenta. Nos vemos en la fecha acordada y, si necesitas algo antes, me escribes por aquí.";
   }
