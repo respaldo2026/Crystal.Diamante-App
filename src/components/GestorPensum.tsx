@@ -57,22 +57,30 @@ interface Pensum {
   activo: boolean;
 }
 
+const normalizeHttpUrl = (value?: string | null): string => {
+  const raw = String(value || "").trim().replace(/&amp;/gi, "&");
+  if (!raw) return "";
+
+  try {
+    const parsed = new URL(raw);
+    if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+};
+
 const extractIframeSrc = (value?: string | null): string => {
   const raw = String(value || "").trim();
   if (!raw) return "";
 
   const iframeMatch = raw.match(/<iframe[^>]*src=["']([^"']+)["'][^>]*>/i);
-  if (iframeMatch?.[1]) {
-    return iframeMatch[1].trim();
-  }
-
-  return raw;
+  const candidate = iframeMatch?.[1] ? iframeMatch[1].trim() : raw;
+  return normalizeHttpUrl(candidate);
 };
 
-const isHttpUrl = (value?: string | null): boolean => {
-  const text = String(value || "").trim();
-  return /^https?:\/\//i.test(text);
-};
+const isHttpUrl = (value?: string | null): boolean => Boolean(normalizeHttpUrl(value));
 
 interface PensumCurso {
   id: string;
@@ -182,6 +190,8 @@ export default function GestorPensum({
   const [modalMaterialCicloVisible, setModalMaterialCicloVisible] = useState(false);
   const [editingMaterialCiclo, setEditingMaterialCiclo] = useState<MaterialCiclo | null>(null);
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace' | 'iframe'>('archivo');
+  const [mostrarListaCompletaCiclo, setMostrarListaCompletaCiclo] = useState(false);
+  const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
 
   // Estados para navegación
   const [selectedCicloId, setSelectedCicloId] = useState<string | null>(null);
@@ -1066,7 +1076,7 @@ export default function GestorPensum({
         }
       } else if (tipoOrigenSeleccionado === 'enlace') {
         // Es un enlace externo
-        urlArchivo = formValues.url_externa;
+        urlArchivo = normalizeHttpUrl(formValues.url_externa);
         if (!isHttpUrl(urlArchivo)) {
           throw new Error("La URL del enlace debe iniciar con http:// o https://");
         }
@@ -1287,15 +1297,24 @@ export default function GestorPensum({
             size="small"
             title="Materiales del ciclo (lista general)"
             style={{ marginBottom: 16 }}
-            extra={canManageMateriales ? (
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => abrirModalMaterialCiclo()}
-              >
-                Agregar material del ciclo
-              </Button>
-            ) : null}
+            extra={(
+              <Space wrap>
+                <Button
+                  onClick={() => setMostrarListaCompletaCiclo((prev) => !prev)}
+                >
+                  {mostrarListaCompletaCiclo ? "Ver resumida" : "Ver lista completa"}
+                </Button>
+                {canManageMateriales ? (
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => abrirModalMaterialCiclo()}
+                  >
+                    Agregar material del ciclo
+                  </Button>
+                ) : null}
+              </Space>
+            )}
           >
             {materialesCicloGeneralOrdenados.length === 0 ? (
               <Text type="secondary">No hay materiales generales registrados en este ciclo.</Text>
@@ -1303,37 +1322,14 @@ export default function GestorPensum({
               <Table
                 size="small"
                 loading={loadingMaterialesCiclo}
-                pagination={{ pageSize: 8, hideOnSinglePage: true }}
+                pagination={mostrarListaCompletaCiclo ? false : { pageSize: 8, hideOnSinglePage: true }}
                 rowKey={(record) => String(record?.id || record?.nombre)}
                 dataSource={materialesCicloGeneralOrdenados}
                 columns={[
                   {
                     title: "Producto",
                     dataIndex: "nombre",
-                    render: (value, record) => (
-                      <Space size={8} wrap style={{ width: "100%", justifyContent: "space-between" }}>
-                        <Text>{value}</Text>
-                        {canManageMateriales ? (
-                          <Space size={4}>
-                            <Button
-                              key={`editar-ciclo-${record.id}`}
-                              type="link"
-                              icon={<EditOutlined />}
-                              onClick={() => abrirModalMaterialCiclo(record)}
-                              style={{ padding: 0, height: "auto" }}
-                            />
-                            <Button
-                              key={`eliminar-ciclo-${record.id}`}
-                              type="link"
-                              danger
-                              icon={<DeleteOutlined />}
-                              onClick={() => handleEliminarMaterialCiclo(record.id)}
-                              style={{ padding: 0, height: "auto" }}
-                            />
-                          </Space>
-                        ) : null}
-                      </Space>
-                    ),
+                    render: (value) => <Text>{value}</Text>,
                   },
                   {
                     title: "Cantidad",
@@ -1346,6 +1342,34 @@ export default function GestorPensum({
                     align: "center",
                     render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
                   },
+                  ...(canManageMateriales
+                    ? [
+                        {
+                          title: "Acciones",
+                          key: "acciones",
+                          align: "right" as const,
+                          render: (_: any, record: MaterialCiclo) => (
+                            <Space size={4}>
+                              <Button
+                                key={`editar-ciclo-${record.id}`}
+                                type="link"
+                                icon={<EditOutlined />}
+                                onClick={() => abrirModalMaterialCiclo(record)}
+                                style={{ padding: 0, height: "auto" }}
+                              />
+                              <Button
+                                key={`eliminar-ciclo-${record.id}`}
+                                type="link"
+                                danger
+                                icon={<DeleteOutlined />}
+                                onClick={() => handleEliminarMaterialCiclo(record.id)}
+                                style={{ padding: 0, height: "auto" }}
+                              />
+                            </Space>
+                          ),
+                        },
+                      ]
+                    : []),
                 ]}
               />
             )}
@@ -1389,6 +1413,9 @@ export default function GestorPensum({
                 }}
               >
                 3. Agregar Material Necesario
+              </Button>
+              <Button onClick={() => setMostrarListaCompletaNecesarios((prev) => !prev)}>
+                {mostrarListaCompletaNecesarios ? "Ver insumos resumidos" : "Ver lista completa de insumos"}
               </Button>
             </Space>
           </div>
@@ -1567,7 +1594,7 @@ export default function GestorPensum({
                       <Table
                         size="small"
                         loading={loadingMaterialesClase}
-                        pagination={{ pageSize: 5, hideOnSinglePage: true }}
+                        pagination={mostrarListaCompletaNecesarios ? false : { pageSize: 5, hideOnSinglePage: true }}
                         rowKey={(record) => String(record?.id || record?.nombre_material)}
                         dataSource={materialesNecesariosTema}
                         style={{ marginTop: 8 }}
@@ -1575,32 +1602,7 @@ export default function GestorPensum({
                           {
                             title: "Producto",
                             dataIndex: "nombre_material",
-                            render: (_value, record) => (
-                              <Space size={6} wrap style={{ width: "100%", justifyContent: "space-between" }}>
-                                <Space size={6} wrap>
-                                  <Text>{record.materiales_ciclo?.nombre || record.nombre_material}</Text>
-                                </Space>
-                                {canManageMateriales ? (
-                                  <Space size={4}>
-                                    <Button
-                                      key={`editar-necesario-${record.id}`}
-                                      type="link"
-                                      icon={<EditOutlined />}
-                                      onClick={() => abrirModalMaterialClase(curso.id, record)}
-                                      style={{ padding: 0, height: "auto" }}
-                                    />
-                                    <Button
-                                      key={`eliminar-necesario-${record.id}`}
-                                      type="link"
-                                      danger
-                                      icon={<DeleteOutlined />}
-                                      onClick={() => handleEliminarMaterialClase(record.id)}
-                                      style={{ padding: 0, height: "auto" }}
-                                    />
-                                  </Space>
-                                ) : null}
-                              </Space>
-                            ),
+                            render: (_value, record) => <Text>{record.materiales_ciclo?.nombre || record.nombre_material}</Text>,
                           },
                           {
                             title: "Cantidad",
@@ -1616,6 +1618,34 @@ export default function GestorPensum({
                             align: "center",
                             render: (value) => (value?.incluido_kit ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
                           },
+                          ...(canManageMateriales
+                            ? [
+                                {
+                                  title: "Acciones",
+                                  key: "acciones",
+                                  align: "right" as const,
+                                  render: (_: any, record: MaterialClase) => (
+                                    <Space size={4}>
+                                      <Button
+                                        key={`editar-necesario-${record.id}`}
+                                        type="link"
+                                        icon={<EditOutlined />}
+                                        onClick={() => abrirModalMaterialClase(curso.id, record)}
+                                        style={{ padding: 0, height: "auto" }}
+                                      />
+                                      <Button
+                                        key={`eliminar-necesario-${record.id}`}
+                                        type="link"
+                                        danger
+                                        icon={<DeleteOutlined />}
+                                        onClick={() => handleEliminarMaterialClase(record.id)}
+                                        style={{ padding: 0, height: "auto" }}
+                                      />
+                                    </Space>
+                                  ),
+                                },
+                              ]
+                            : []),
                         ]}
                       />
                     )}

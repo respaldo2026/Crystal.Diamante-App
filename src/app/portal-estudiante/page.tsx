@@ -151,11 +151,25 @@ export default function PortalEstudiante() {
     return <FileOutlined />;
   };
 
+  const normalizeHttpUrl = (value?: string | null) => {
+    const raw = String(value || "").trim().replace(/&amp;/gi, "&");
+    if (!raw) return "";
+
+    try {
+      const parsed = new URL(raw);
+      if (!["http:", "https:"].includes(parsed.protocol)) return "";
+      parsed.hash = "";
+      return parsed.toString();
+    } catch {
+      return "";
+    }
+  };
+
   const extractIframeSrc = (value?: string | null) => {
     const raw = String(value || "").trim();
     if (!raw) return "";
     const match = raw.match(/<iframe[^>]*src=["']([^"']+)["'][^>]*>/i);
-    return String(match?.[1] || raw).trim();
+    return normalizeHttpUrl(String(match?.[1] || raw).trim());
   };
 
   const isIframeMaterial = (material: any) => {
@@ -168,7 +182,7 @@ export default function PortalEstudiante() {
   const abrirMaterialDidactico = (material: any, titulo: string) => {
     const src = extractIframeSrc(material?.url_archivo);
     if (!src) {
-      message.warning("Este material no tiene un enlace válido");
+      message.warning("Este material no tiene un enlace válido para previsualizar.");
       return;
     }
 

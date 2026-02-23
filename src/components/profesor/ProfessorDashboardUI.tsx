@@ -100,11 +100,25 @@ const normalizeText = (value?: string | null) =>
 
 const normalizeTheme = (value?: string | null) => normalizeText(value).replace(/^\d+\s*/, "").trim();
 
+const normalizeHttpUrl = (value?: string | null) => {
+  const raw = String(value || "").trim().replace(/&amp;/gi, "&");
+  if (!raw) return "";
+
+  try {
+    const parsed = new URL(raw);
+    if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+};
+
 const extractIframeSrc = (value?: string | null) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
   const match = raw.match(/<iframe[^>]*src=["']([^"']+)["'][^>]*>/i);
-  return String(match?.[1] || raw).trim();
+  return normalizeHttpUrl(String(match?.[1] || raw).trim());
 };
 
 const isIframeMaterial = (material: any) => {
