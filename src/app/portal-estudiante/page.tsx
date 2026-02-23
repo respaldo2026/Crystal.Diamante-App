@@ -132,6 +132,36 @@ export default function PortalEstudiante() {
   const normalizarTemaComparacion = (valor?: string | null) =>
     normalizarTexto(valor).replace(/^\d+\s*/, "").trim();
 
+  const limpiarTituloMaterial = (titulo?: string | null) => {
+    const raw = String(titulo || "").trim();
+    if (!raw) return "";
+
+    const sinPrefijoTema = raw.replace(/^\s*tema\s*[:\-]\s*/i, "").trim();
+    return sinPrefijoTema || raw;
+  };
+
+  const getMaterialCanonicalTitle = (material: any, temaReferencia?: string | null) => {
+    const parsed = parseTemaTituloMaterial(material?.titulo);
+    const tituloLimpio = limpiarTituloMaterial(parsed?.tituloLimpio || material?.titulo || "");
+
+    const temaRefNorm = normalizarTemaComparacion(temaReferencia || parsed?.tema || "");
+    const tituloNorm = normalizarTemaComparacion(tituloLimpio);
+
+    if (temaRefNorm && tituloNorm === temaRefNorm) {
+      return temaReferencia || parsed?.tema || tituloLimpio;
+    }
+
+    return tituloLimpio;
+  };
+
+  const getMaterialCanonicalKey = (material: any, temaReferencia?: string | null) => {
+    const parsed = parseTemaTituloMaterial(material?.titulo);
+    const temaKey = normalizarTemaComparacion(parsed?.tema || temaReferencia || "");
+    const tituloKey = normalizarTexto(getMaterialCanonicalTitle(material, temaReferencia));
+    const tipoKey = normalizarTexto(material?.tipo_material || "");
+    return String(`${material?.programa_id || ''}-${material?.pensum_id || ''}-${temaKey}-${tituloKey}-${tipoKey}`);
+  };
+
   const getMaterialIcon = (material: any) => {
     const tipo = String(material?.tipo_material || "").toLowerCase();
     const url = String(material?.url_archivo || "").toLowerCase();
@@ -452,12 +482,7 @@ export default function PortalEstudiante() {
 
         const materialesData = await obtenerMaterialesPorProgramas(programaIds);
         const materialesUnicos = deduplicarLista(materialesData || [], (m: any) =>
-          (() => {
-            const parsed = parseTemaTituloMaterial(m?.titulo);
-            const temaKey = normalizarTexto(parsed.tema);
-            const tituloKey = normalizarTexto(parsed.tituloLimpio);
-            return String(`${m?.programa_id || ''}-${m?.pensum_id || ''}-${temaKey}-${tituloKey}-${normalizarTexto(m?.tipo_material || '')}`);
-          })()
+          getMaterialCanonicalKey(m)
         );
         setMateriales(materialesUnicos);
 
@@ -776,10 +801,7 @@ export default function PortalEstudiante() {
 
     const materialesPrograma = deduplicarLista(
       materiales.filter((m: any) => String(m?.programa_id) === String(programaIdSeleccionado)),
-      (m: any) => {
-        const parsed = parseTemaTituloMaterial(m?.titulo);
-        return String(`${m?.pensum_id || ''}-${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`);
-      }
+      (m: any) => getMaterialCanonicalKey(m)
     );
 
     const materialesClasePrograma = deduplicarLista(
@@ -819,10 +841,7 @@ export default function PortalEstudiante() {
           if (temaMaterial) return temaMaterial === temaObjetivo;
           return tituloLimpio.includes(temaObjetivo) || descripcion.includes(temaObjetivo);
         }),
-        (m: any) => {
-          const parsed = parseTemaTituloMaterial(m?.titulo);
-          return `${normalizarTexto(parsed.tema)}-${normalizarTexto(parsed.tituloLimpio)}-${normalizarTexto(m?.tipo_material || '')}`;
-        }
+        (m: any) => getMaterialCanonicalKey(m, tema?.nombre_curso)
       );
 
     const obtenerInsumosTema = (tema: any, cicloId?: string) =>
@@ -982,8 +1001,7 @@ export default function PortalEstudiante() {
                                 recursosTema.length ? (
                                   <Space wrap size={isMobile ? 6 : 10} direction={isMobile ? "vertical" : "horizontal"}>
                                     {recursosTema.map((item: any, itemIndex: number) => {
-                                      const parsed = parseTemaTituloMaterial(item.titulo);
-                                      const titulo = parsed.tituloLimpio || item.titulo || "Recurso";
+                                      const titulo = getMaterialCanonicalTitle(item, tema?.nombre_curso) || item.titulo || "Recurso";
                                       return (
                                         <Tag
                                           key={`${temaId}-recurso-${itemIndex}`}
