@@ -1750,6 +1750,12 @@ function isPaymentMethodQuestion(message: string): boolean {
 
 function isSocialMediaQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
+
+  // Excepciones explícitas para evitar falsos positivos
+  if (/\b(una sola vez|una pregunta|una vez|cada mes|cuantas clases|por mes)\b/i.test(text)) {
+    return false;
+  }
+
   return /\b(red|redes|redes sociales|instagram|insta|facebook|face|youtube|tiktok|tik tok|ig|perfil|perfiles|siguelos|siguenos|tienen redes|tienes redes)\b/i.test(text);
 }
 
@@ -2768,7 +2774,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
 
   if (asksKitPurchase) {
     const programLabel = detectedProgram?.nombre ? ` para *${detectedProgram.nombre}*` : "";
-    return `¡Buena pregunta! 👌\n\n✅ Sí, te damos *kit mensual de productos*${programLabel}.\n🧰 Sobre implementos/herramientas: no necesitas comprar todo de una; se maneja según clase y avance.\n\nSi quieres, te comparto la lista exacta de lo que ponemos nosotros y lo que podrías traer en el primer mes.`;
+    return `¡Buena pregunta! 👌\n\n✅ Tienes que comprar *muy pocos productos*.\n\n✨ Te entregamos un *kit mensual* que cubre casi todos los materiales que necesitas para tus prácticas.\n\nY si algo te hace falta, ¡tranquila! La academia te lo presta para que no te varas en clase 😊\n\n¿Te gustaría ver qué incluye el kit?`;
   }
 
   if (asksMorningSchedule) {
