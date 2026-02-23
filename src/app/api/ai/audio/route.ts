@@ -712,9 +712,14 @@ function buildAgentPrompt(
 
 function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "general" {
   const text = normalizeForMatch(message);
+  const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
+  const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
+  const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|cuanto vale|cuanto es|cuanto cuesta)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
+  const hasScheduleIntent = /\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text);
 
-  if (/\b(precio|precios|costo|costos|cuanto|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text)) return "precio";
-  if (/\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text)) return "horario";
+  if (hasDurationIntent || hasClassFrequencyIntent) return "horario";
+  if (hasPriceIntent) return "precio";
+  if (hasScheduleIntent) return "horario";
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) return "temario";
   if (/\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|implementos|lista\s+de\s+materiales)\b/i.test(text)) return "materiales";
   if (/\b(inscrib|matricul|pago|admisiones|contacto|numero|whatsapp|separar\s+cupo)\b/i.test(text)) return "inscripcion";
@@ -958,6 +963,64 @@ function formatCurrencyCOP(value: number): string {
 function isDurationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   return /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
+}
+
+function isClassFrequencyQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia|las clases son cada)\b/i.test(text);
+}
+
+function isCertificationQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(que titulo sale|con que titulo|titulo obtengo|que certificado|certificado|diploma|tecnico|tecnica|graduo|se gradua)\b/i.test(text);
+}
+
+function inferClassFrequencyFromSchedule(schedule: string): string {
+  const text = normalizeForMatch(schedule || "");
+  if (!text) return "con la frecuencia del grupo disponible";
+
+  if (/\b(lunes\s*a\s*viernes|lunes\s*-\s*viernes|lun\s*a\s*vie|l\s*a\s*v|lv)\b/i.test(text)) {
+    return "de lunes a viernes";
+  }
+  if (/\b(sabados\s+y\s*domingos|fin\s+de\s+semana|fines\s+de\s+semana)\b/i.test(text)) {
+    return "los fines de semana";
+  }
+
+  const days = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+    .filter((day) => new RegExp(`\\b${day}\\b`, "i").test(text));
+
+  if (days.length === 1) return `una vez por semana (${days[0]})`;
+  if (days.length > 1 && days.length <= 3) return `${days.length} veces por semana (${days.join(", ")})`;
+  if (days.length > 3) return "varias veces por semana";
+
+  return `según este horario: ${schedule}`;
+}
+
+function wasPromptAskedRecently(history: Array<{ user: string; agent: string }>, prompt: string): boolean {
+  const normalizedPrompt = normalizeForMatch(prompt);
+  if (!normalizedPrompt) return false;
+
+  const recentAgentMessages = (Array.isArray(history) ? history : [])
+    .slice(-2)
+    .map((item) => String(item?.agent || ""));
+
+  return recentAgentMessages.some((msg) => {
+    const normalizedMsg = normalizeForMatch(msg);
+    if (!normalizedMsg) return false;
+
+    const wordsA = new Set(normalizedMsg.split(" ").filter(Boolean));
+    const wordsB = new Set(normalizedPrompt.split(" ").filter(Boolean));
+    if (!wordsA.size || !wordsB.size) return false;
+
+    let intersection = 0;
+    for (const w of wordsA) {
+      if (wordsB.has(w)) intersection += 1;
+    }
+    const base = Math.min(wordsA.size, wordsB.size);
+    const overlapRatio = base ? intersection / base : 0;
+
+    return overlapRatio >= 0.82;
+  });
 }
 
 function isFastTrackQuestion(message: string): boolean {
@@ -1607,6 +1670,25 @@ function buildIntentFocusedDirectResponse(
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
   }
 
+  if (detectedProgram && isLikelyProgramOnlyReply(message) && !/[?¿]/.test(message)) {
+    const pendingTopic = inferPendingTopicFromHistory(history);
+    if (/dias\s+y\s+horario|horario|inicio|fecha/.test(normalizeForMatch(pendingTopic))) {
+      const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const hasUpcomingStart = Boolean(
+        primaryCourse?.fecha_inicio &&
+          !Number.isNaN(new Date(primaryCourse.fecha_inicio).getTime()) &&
+          new Date(primaryCourse.fecha_inicio).setHours(0, 0, 0, 0) >= today.getTime()
+      );
+      const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
+      const schedule = primaryCourse?.horario || "Por confirmar";
+      return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que sigamos con la *inversión* o con *inscripción*?`;
+    }
+
+    return `Perfecto 👌 Te refieres a *${detectedProgram.nombre}*.\n\nPara ayudarte mejor, ¿prefieres que empecemos por *horarios*, *inversión* o *inscripción*?`;
+  }
+
   let intent = detectUserIntent(message);
   const normalizedMessage = normalizeForMatch(message);
   const lastAgentForFlow = history[history.length - 1]?.agent || "";
@@ -1617,6 +1699,8 @@ function buildIntentFocusedDirectResponse(
   const asksFastTrack = isFastTrackQuestion(message);
   let asksLocation = isLocationQuestion(message);
   const asksGeneralInfo = isCourseInfoRequest(message);
+  const asksClassFrequency = isClassFrequencyQuestion(message);
+  const asksCertification = isCertificationQuestion(message);
   const asksPaymentMethodsOrDates = isPaymentMethodsOrDatesQuestion(message);
   const asksStepOne = isStepOneSelection(message);
   const asksPrice = /\b(precio|cuanto|costo|valor|inscripcion|mensualidad|inversion)\b/i.test(normalizedMessage);
@@ -1867,6 +1951,18 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     return `📚 *${detectedProgram.nombre}*\n\n⏳ *Duración:* ${duration || "el tiempo definido en el plan académico"}${totalClasses ? ` (${totalClasses})` : ""}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta ahora la *inversión*?`;
   }
 
+  if (asksClassFrequency) {
+    const schedule = primaryCourse?.horario || "Por confirmar";
+    const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
+    const frequency = inferClassFrequencyFromSchedule(schedule);
+
+    return `✅ Para *${detectedProgram.nombre}*, las clases son *${frequency}*.\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario actual:* ${schedule}\n\n¿Quieres que te comparta también la *inversión*?`;
+  }
+
+  if (asksCertification) {
+    return `🎓 Al finalizar *${detectedProgram.nombre}* recibes *certificado* emitido por la academia.\n\nSi quieres, también te confirmo duración, horarios y proceso de inscripción.`;
+  }
+
   if (asksGeneralInfo || intent === "general") {
     const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : "duración según plan académico");
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
@@ -2001,6 +2097,18 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
         nextStepPrompt = "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?";
       } else if (nextStepType !== "date" && !lastAgentAskedDateOrSchedule) {
         nextStepPrompt = "📅 ¿Quieres que te confirme también la *fecha de inicio* y *horario* disponible?";
+      }
+    }
+
+    const promptCandidates = [
+      "✅ ¿Quieres que te confirme los *medios de pago* y las *fechas de pago*?",
+      "📝 ¿Quieres que te comparta los *pasos de inscripción* y cómo *separar cupo*?",
+      "📅 ¿Quieres que te confirme también la *fecha de inicio* y *horario* disponible?",
+    ];
+    if (wasPromptAskedRecently(history, nextStepPrompt)) {
+      const alternative = promptCandidates.find((candidate) => !wasPromptAskedRecently(history, candidate));
+      if (alternative) {
+        nextStepPrompt = alternative;
       }
     }
 
