@@ -181,7 +181,6 @@ export default function GestorPensum({
   const [editingMaterialClase, setEditingMaterialClase] = useState<MaterialClase | null>(null);
   const [modalMaterialCicloVisible, setModalMaterialCicloVisible] = useState(false);
   const [editingMaterialCiclo, setEditingMaterialCiclo] = useState<MaterialCiclo | null>(null);
-  const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace'>('archivo');
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace' | 'iframe'>('archivo');
 
   // Estados para navegación
@@ -917,7 +916,6 @@ export default function GestorPensum({
       message.warning("Solo administración y secretaría pueden gestionar materiales.");
       return;
     }
-    const esEnlace = material.mime_type === "link" || material.nombre_archivo === "Enlace Externo";
     const esIframe = material.mime_type === "iframe";
     const esEnlace = !esIframe && (material.mime_type === "link" || material.nombre_archivo === "Enlace Externo");
     setEditingMaterial(material);
@@ -1066,7 +1064,6 @@ export default function GestorPensum({
           tamanoBytes = editingMaterial.tamano_bytes;
           mimeType = editingMaterial.mime_type;
         }
-      } else if (tipoOrigenSeleccionado === 'enlace') {
       } else if (tipoOrigenSeleccionado === 'enlace') {
         // Es un enlace externo
         urlArchivo = formValues.url_externa;
@@ -1878,6 +1875,7 @@ export default function GestorPensum({
              >
                <Radio.Button value="archivo">Subir Archivo</Radio.Button>
                <Radio.Button value="enlace">Enlace (YouTube, Drive, etc.)</Radio.Button>
+               <Radio.Button value="iframe">Código iframe (Gamma)</Radio.Button>
              </Radio.Group>
           </Form.Item>
 
@@ -1896,7 +1894,6 @@ export default function GestorPensum({
                 <Button icon={<UploadOutlined />}>Seleccionar Archivo</Button>
               </Upload>
             </Form.Item>
-          ) : (
           ) : tipoOrigen === 'enlace' ? (
             <Form.Item
               name="url_externa"
