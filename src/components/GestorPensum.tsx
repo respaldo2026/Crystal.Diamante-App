@@ -57,6 +57,23 @@ interface Pensum {
   activo: boolean;
 }
 
+const extractIframeSrc = (value?: string | null): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const iframeMatch = raw.match(/<iframe[^>]*src=["']([^"']+)["'][^>]*>/i);
+  if (iframeMatch?.[1]) {
+    return iframeMatch[1].trim();
+  }
+
+  return raw;
+};
+
+const isHttpUrl = (value?: string | null): boolean => {
+  const text = String(value || "").trim();
+  return /^https?:\/\//i.test(text);
+};
+
 interface PensumCurso {
   id: string;
   nombre_curso: string;
@@ -165,6 +182,7 @@ export default function GestorPensum({
   const [modalMaterialCicloVisible, setModalMaterialCicloVisible] = useState(false);
   const [editingMaterialCiclo, setEditingMaterialCiclo] = useState<MaterialCiclo | null>(null);
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace'>('archivo');
+  const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace' | 'iframe'>('archivo');
 
   // Estados para navegación
   const [selectedCicloId, setSelectedCicloId] = useState<string | null>(null);
@@ -900,15 +918,19 @@ export default function GestorPensum({
       return;
     }
     const esEnlace = material.mime_type === "link" || material.nombre_archivo === "Enlace Externo";
+    const esIframe = material.mime_type === "iframe";
+    const esEnlace = !esIframe && (material.mime_type === "link" || material.nombre_archivo === "Enlace Externo");
     setEditingMaterial(material);
     setFileList([]);
-    setTipoOrigen(esEnlace ? 'enlace' : 'archivo');
+    setTipoOrigen(esIframe ? 'iframe' : esEnlace ? 'enlace' : 'archivo');
+    const iframeSrc = extractIframeSrc(material.url_archivo);
     formMaterial.setFieldsValue({
       tema_relacionado: temaNombre,
       titulo: material.titulo,
       descripcion: material.descripcion,
       tipo_material: material.tipo_material,
       url_externa: esEnlace ? material.url_archivo : undefined,
+      iframe_code: esIframe && iframeSrc ? `<iframe src="${iframeSrc}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>` : undefined,
     });
     setDrawerMaterialesVisible(true);
   };
@@ -1045,17 +1067,39 @@ export default function GestorPensum({
           mimeType = editingMaterial.mime_type;
         }
       } else if (tipoOrigenSeleccionado === 'enlace') {
+      } else if (tipoOrigenSeleccionado === 'enlace') {
         // Es un enlace externo
         urlArchivo = formValues.url_externa;
+        if (!isHttpUrl(urlArchivo)) {
+          throw new Error("La URL del enlace debe iniciar con http:// o https://");
+        }
         nombreArchivo = "Enlace Externo";
         tamanoBytes = 0;
         mimeType = "link";
+      } else if (tipoOrigenSeleccionado === 'iframe') {
+        const iframeCode = String(formValues.iframe_code || "").trim();
+        const iframeSrc = extractIframeSrc(iframeCode);
+
+        if (!iframeCode) {
+          throw new Error("Pega el código iframe de Gamma.");
+        }
+
+        if (!isHttpUrl(iframeSrc)) {
+          throw new Error("No se pudo detectar una URL válida dentro del iframe.");
+        }
+
+        urlArchivo = iframeSrc;
+        nombreArchivo = "Presentación embebida";
+        tamanoBytes = 0;
+        mimeType = "iframe";
       }
+                setTipoOrigen('archivo');
 
       // Guardar en base de datos
       const { data: authData } = await supabaseBrowserClient.auth.getUser();
       const authUser = authData?.user;
       if (!authUser) {
+               <Radio.Button value="iframe">Código iframe (Gamma)</Radio.Button>
         message.error("Debes iniciar sesión para subir material");
         return;
       }
@@ -1853,6 +1897,7 @@ export default function GestorPensum({
               </Upload>
             </Form.Item>
           ) : (
+          ) : tipoOrigen === 'enlace' ? (
             <Form.Item
               name="url_externa"
               label="URL del Enlace"
@@ -1862,6 +1907,18 @@ export default function GestorPensum({
               ]}
             >
               <Input prefix={<LinkOutlined />} placeholder="https://youtube.com/..." />
+            </Form.Item>
+          ) : (
+            <Form.Item
+              name="iframe_code"
+              label="Código iframe de Gamma"
+              rules={[{ required: true, message: "Pega el código iframe" }]}
+              extra="Pega aquí el embed completo que te da Gamma."
+            >
+              <Input.TextArea
+                rows={6}
+                placeholder='<iframe src="https://gamma.app/embed/..." width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
+              />
             </Form.Item>
           )}
 

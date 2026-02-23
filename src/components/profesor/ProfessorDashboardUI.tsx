@@ -21,6 +21,7 @@ import {
   Drawer,
   Empty,
   List,
+  Modal,
   Progress,
   Row,
   Table,
@@ -34,7 +35,7 @@ import {
 import dayjs from "dayjs";
 import { ProfessorDashboardData } from "@hooks/useProfessorDashboard";
 import { construirNombreGrupo } from "@utils/grupos";
-import { obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas, obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
+import { obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas, obtenerMaterialesPorProgramas, obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 type CourseActionContext = "attendance" | "grades" | "materials" | "default";
@@ -71,6 +72,48 @@ const dedupeByKey = <T,>(items: T[] = [], keySelector: (item: T) => string): T[]
   return Array.from(map.values());
 };
 
+const parseTemaTituloMaterial = (titulo?: string | null) => {
+  const raw = String(titulo || "").trim();
+  const match = raw.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
+  if (!match) {
+    return {
+      tema: "",
+      tituloLimpio: raw,
+    };
+  }
+
+  return {
+    tema: String(match[1] || "").trim(),
+    tituloLimpio: String(match[2] || raw).trim(),
+  };
+};
+
+const normalizeText = (value?: string | null) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const normalizeTheme = (value?: string | null) => normalizeText(value).replace(/^\d+\s*/, "").trim();
+
+const extractIframeSrc = (value?: string | null) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const match = raw.match(/<iframe[^>]*src=["']([^"']+)["'][^>]*>/i);
+  return String(match?.[1] || raw).trim();
+};
+
+const isIframeMaterial = (material: any) => {
+  const mime = String(material?.mime_type || "").toLowerCase();
+  const tipo = String(material?.tipo_material || "").toLowerCase();
+  const url = String(material?.url_archivo || "").toLowerCase();
+  return mime === "iframe" || tipo === "iframe" || url.includes("<iframe") || url.includes("gamma.app");
+};
+
 export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dashboard, onOpenCourse }) => {
   const resolvedDashboard: ProfessorDashboardData = dashboard ?? {
     loading: true,
@@ -93,9 +136,15 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   const [materialesPensum, setMaterialesPensum] = useState<any[]>([]);
   const [materialesCiclo, setMaterialesCiclo] = useState<any[]>([]);
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
+  const [materialesDidacticos, setMaterialesDidacticos] = useState<any[]>([]);
   const [cursoMaterialSeleccionado, setCursoMaterialSeleccionado] = useState<any | null>(null);
   const [cicloSeleccionadoId, setCicloSeleccionadoId] = useState<string | null>(null);
   const [temaSeleccionadoId, setTemaSeleccionadoId] = useState<string | null>(null);
+  const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
+    open: false,
+    title: "",
+    src: "",
+  });
   const [logoAcademia, setLogoAcademia] = useState<string | null>(null);
 
   const currencyFormatter = useMemo(
@@ -242,6 +291,51 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
       .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0));
   }, [materialesClase, cicloMaterialSeleccionado?.id, temaSeleccionadoId]);
 
+  const materialesDidacticosTema = useMemo(() => {
+    if (!cursoMaterialSeleccionado?.programaId || !temaSeleccionadoId) return [];
+
+    const temaActual = temasMateriales.find((tema: any) => String(tema.id) === String(temaSeleccionadoId));
+    const temaObjetivo = normalizeTheme(temaActual?.nombre_curso);
+
+    return (materialesDidacticos || [])
+      .filter((item: any) => String(item?.programa_id) === String(cursoMaterialSeleccionado.programaId))
+      .filter((item: any) => {
+        if (cicloMaterialSeleccionado?.id && item?.pensum_id && String(item.pensum_id) !== String(cicloMaterialSeleccionado.id)) {
+          return false;
+        }
+
+        const parsed = parseTemaTituloMaterial(item?.titulo);
+        const temaMaterial = normalizeTheme(parsed.tema);
+        const tituloLimpio = normalizeText(parsed.tituloLimpio);
+        const descripcion = normalizeText(item?.descripcion || "");
+
+        if (!temaObjetivo) return true;
+        if (temaMaterial) return temaMaterial === temaObjetivo;
+        return tituloLimpio.includes(temaObjetivo) || descripcion.includes(temaObjetivo);
+      })
+      .sort((a: any, b: any) => {
+        const fechaA = a?.created_at ? new Date(a.created_at).getTime() : 0;
+        const fechaB = b?.created_at ? new Date(b.created_at).getTime() : 0;
+        return fechaB - fechaA;
+      });
+  }, [materialesDidacticos, cursoMaterialSeleccionado?.programaId, temaSeleccionadoId, temasMateriales, cicloMaterialSeleccionado?.id]);
+
+  const abrirMaterialDidactico = (material: any, title: string) => {
+    const src = extractIframeSrc(material?.url_archivo);
+    if (!src) return;
+
+    if (isIframeMaterial(material)) {
+      setIframePreview({
+        open: true,
+        title: title || "Presentación",
+        src,
+      });
+      return;
+    }
+
+    window.open(src, "_blank", "noopener,noreferrer");
+  };
+
   const handleOpenMaterials = (curso: any) => {
     setCursoMaterialSeleccionado(curso);
     setCicloSeleccionadoId(null);
@@ -255,14 +349,16 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
       setMaterialsLoading(true);
       try {
         const programaId = String(cursoMaterialSeleccionado.programaId);
-        const [pensumData, materialesCicloData, materialesClaseData] = await Promise.all([
+        const [pensumData, materialesCicloData, materialesClaseData, materialesDidacticosData] = await Promise.all([
           obtenerPensumPorProgramas([programaId]),
           obtenerMaterialesCicloPorProgramas([programaId]),
           obtenerMaterialesClasePorProgramas([programaId]),
+          obtenerMaterialesPorProgramas([programaId]),
         ]);
         setMaterialesPensum(pensumData || []);
         setMaterialesCiclo(materialesCicloData || []);
         setMaterialesClase(materialesClaseData || []);
+        setMaterialesDidacticos(materialesDidacticosData || []);
 
         const primerCiclo = (pensumData || [])[0];
         setCicloSeleccionadoId(primerCiclo?.id || null);
@@ -273,6 +369,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
         setMaterialesPensum([]);
         setMaterialesCiclo([]);
         setMaterialesClase([]);
+        setMaterialesDidacticos([]);
       } finally {
         setMaterialsLoading(false);
       }
@@ -798,9 +895,62 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                   />
                 )}
               </Card>
+
+              <Card size="small" title="Material didáctico del tema">
+                {materialesDidacticosTema.length === 0 ? (
+                  <Empty description="Sin material didáctico" />
+                ) : (
+                  <List
+                    dataSource={materialesDidacticosTema}
+                    renderItem={(item: any) => {
+                      const parsed = parseTemaTituloMaterial(item?.titulo);
+                      const titulo = parsed.tituloLimpio || item?.titulo || "Material";
+                      return (
+                        <List.Item
+                          actions={[
+                            <Button
+                              key={`ver-material-${item.id}`}
+                              type="link"
+                              onClick={() => abrirMaterialDidactico(item, titulo)}
+                            >
+                              Ver
+                            </Button>,
+                          ]}
+                        >
+                          <List.Item.Meta
+                            title={<Typography.Text strong>{titulo}</Typography.Text>}
+                            description={item?.descripcion || null}
+                          />
+                        </List.Item>
+                      );
+                    }}
+                  />
+                )}
+              </Card>
             </Space>
           )}
         </Drawer>
+
+        <Modal
+          title={iframePreview.title || "Presentación"}
+          open={iframePreview.open}
+          onCancel={() => setIframePreview({ open: false, title: "", src: "" })}
+          footer={null}
+          width={980}
+          destroyOnClose
+        >
+          <iframe
+            src={iframePreview.src}
+            title={iframePreview.title || "Presentación"}
+            width="100%"
+            height={620}
+            style={{ border: 0, borderRadius: 8 }}
+            allow="fullscreen"
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        </Modal>
 
         <Drawer
           title="Resumen financiero"

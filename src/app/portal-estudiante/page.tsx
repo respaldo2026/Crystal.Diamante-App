@@ -23,7 +23,8 @@ import {
   Dropdown,
   Checkbox,
   Collapse,
-  Grid
+  Grid,
+  Modal,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -82,6 +83,11 @@ export default function PortalEstudiante() {
   const [cicloRutaId, setCicloRutaId] = useState<string | null>(null);
   const [temaRutaId, setTemaRutaId] = useState<string | null>(null);
   const [checklistInsumos, setChecklistInsumos] = useState<Record<string, boolean>>({});
+  const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
+    open: false,
+    title: "",
+    src: "",
+  });
   const isFetchingRef = useRef(false);
   const hasFetchedOnceRef = useRef(false);
 
@@ -133,6 +139,7 @@ export default function PortalEstudiante() {
     const texto = `${tipo} ${url} ${titulo}`;
 
     if (texto.includes("canva.com")) return <LinkOutlined />;
+    if (texto.includes("gamma.app") || tipo.includes("iframe") || String(material?.mime_type || "").toLowerCase() === "iframe") return <VideoCameraOutlined />;
     if (texto.includes("youtube.com") || texto.includes("youtu.be")) return <YoutubeOutlined />;
     if (texto.match(/\.(mp4|mov|avi|mkv|webm)$/) || texto.includes("video")) return <PlayCircleOutlined />;
     if (texto.match(/\.(png|jpg|jpeg|gif|webp|svg)$/) || texto.includes("imagen")) return <PictureOutlined />;
@@ -142,6 +149,39 @@ export default function PortalEstudiante() {
     if (texto.match(/\.pdf$/) || texto.includes("pdf")) return <FileTextOutlined />;
     if (url.startsWith("http")) return <LinkOutlined />;
     return <FileOutlined />;
+  };
+
+  const extractIframeSrc = (value?: string | null) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const match = raw.match(/<iframe[^>]*src=["']([^"']+)["'][^>]*>/i);
+    return String(match?.[1] || raw).trim();
+  };
+
+  const isIframeMaterial = (material: any) => {
+    const mime = String(material?.mime_type || "").toLowerCase();
+    const tipo = String(material?.tipo_material || "").toLowerCase();
+    const url = String(material?.url_archivo || "").toLowerCase();
+    return mime === "iframe" || tipo === "iframe" || url.includes("<iframe") || url.includes("gamma.app");
+  };
+
+  const abrirMaterialDidactico = (material: any, titulo: string) => {
+    const src = extractIframeSrc(material?.url_archivo);
+    if (!src) {
+      message.warning("Este material no tiene un enlace válido");
+      return;
+    }
+
+    if (isIframeMaterial(material)) {
+      setIframePreview({
+        open: true,
+        title: titulo || "Presentación",
+        src,
+      });
+      return;
+    }
+
+    window.open(src, "_blank", "noopener,noreferrer");
   };
 
   const obtenerSaludoBienvenida = (genero?: string | null) => {
@@ -935,11 +975,7 @@ export default function PortalEstudiante() {
                                           key={`${temaId}-recurso-${itemIndex}`}
                                           icon={getMaterialIcon(item)}
                                           style={{ cursor: item?.url_archivo ? "pointer" : "default" }}
-                                          onClick={() => {
-                                            if (item?.url_archivo) {
-                                              window.open(item.url_archivo, "_blank", "noopener,noreferrer");
-                                            }
-                                          }}
+                                          onClick={() => abrirMaterialDidactico(item, titulo)}
                                         >
                                           {titulo}
                                         </Tag>
@@ -1361,6 +1397,26 @@ export default function PortalEstudiante() {
           }
         ]}
       />
+      <Modal
+        title={iframePreview.title || "Presentación"}
+        open={iframePreview.open}
+        onCancel={() => setIframePreview({ open: false, title: "", src: "" })}
+        footer={null}
+        width={isMobile ? "95%" : 980}
+        destroyOnClose
+      >
+        <iframe
+          src={iframePreview.src}
+          title={iframePreview.title || "Presentación"}
+          width="100%"
+          height={isMobile ? 420 : 620}
+          style={{ border: 0, borderRadius: 8 }}
+          allow="fullscreen"
+          allowFullScreen
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      </Modal>
       <style jsx global>{`
         .portal-estudiante .header-row {
           align-items: center;
