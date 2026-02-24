@@ -143,24 +143,26 @@ export default function EstudiantesList() {
         const mats = obtenerMatriculasVigentes(record);
         if (mats.length === 0) return { label: 'Sin pagos', color: 'default' as const };
 
-        let mensualidadesPagadasMesActual = 0;
-        let mensualidadesPendientesMesActual = 0;
+        let matriculasConPagoMesActual = 0;
         let mensualidadesPendientesVencidasMesActual = 0;
-        let inscripcionPagada = 0;
 
         mats.forEach((m: any) => {
             const st = pagosStats[m.id];
-            mensualidadesPagadasMesActual += st?.mensualidadesPagadasMesActual || 0;
-            mensualidadesPendientesMesActual += st?.mensualidadesPendientesMesActual || 0;
+            if ((st?.mensualidadesPagadasMesActual || 0) > 0) {
+                matriculasConPagoMesActual += 1;
+            }
             mensualidadesPendientesVencidasMesActual += st?.mensualidadesPendientesVencidasMesActual || 0;
-            inscripcionPagada += st?.inscripcionPagada || 0;
         });
 
-        if (mensualidadesPendientesVencidasMesActual > 0) return { label: 'Pendiente', color: 'orange' as const };
-        if (mensualidadesPendientesMesActual > 0) return { label: 'Pendiente', color: 'gold' as const };
-        if (mensualidadesPagadasMesActual > 0) return { label: 'Pagado', color: 'green' as const };
-        if (inscripcionPagada > 0) return { label: 'Inscripción pagada', color: 'blue' as const };
-        return { label: 'Sin pagos', color: 'default' as const };
+        if (matriculasConPagoMesActual >= mats.length) {
+            return { label: 'Pagado', color: 'green' as const };
+        }
+
+        if (mensualidadesPendientesVencidasMesActual > 0) {
+            return { label: 'Pendiente', color: 'orange' as const };
+        }
+
+        return { label: 'Pendiente', color: 'gold' as const };
     };
 
     const dataSource = useMemo(
