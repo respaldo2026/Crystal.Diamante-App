@@ -44,6 +44,243 @@ ALTER TABLE public.pagos_nomina ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sesiones_clase ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.temas_curso ENABLE ROW LEVEL SECURITY;
 
+-- Reponer políticas esenciales en asistencias y sesiones_clase
+-- (este script las elimina arriba; sin recrearlas produce 403 al insertar)
+DROP POLICY IF EXISTS "asistencias_select_staff_or_owner" ON public.asistencias;
+DROP POLICY IF EXISTS "asistencias_insert_staff_or_teacher" ON public.asistencias;
+DROP POLICY IF EXISTS "asistencias_update_staff_or_teacher" ON public.asistencias;
+DROP POLICY IF EXISTS "asistencias_delete_staff_or_teacher" ON public.asistencias;
+
+CREATE POLICY "asistencias_select_staff_or_owner"
+ON public.asistencias
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR EXISTS (
+    SELECT 1
+    FROM public.matriculas m
+    JOIN public.cursos c ON c.id = m.curso_id
+    WHERE m.id = asistencias.matricula_id
+      AND c.profesor_id = auth.uid()
+  )
+  OR EXISTS (
+    SELECT 1
+    FROM public.matriculas m
+    WHERE m.id = asistencias.matricula_id
+      AND m.estudiante_id = auth.uid()
+  )
+);
+
+CREATE POLICY "asistencias_insert_staff_or_teacher"
+ON public.asistencias
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR EXISTS (
+    SELECT 1
+    FROM public.matriculas m
+    JOIN public.cursos c ON c.id = m.curso_id
+    WHERE m.id = asistencias.matricula_id
+      AND c.profesor_id = auth.uid()
+  )
+);
+
+CREATE POLICY "asistencias_update_staff_or_teacher"
+ON public.asistencias
+FOR UPDATE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR EXISTS (
+    SELECT 1
+    FROM public.matriculas m
+    JOIN public.cursos c ON c.id = m.curso_id
+    WHERE m.id = asistencias.matricula_id
+      AND c.profesor_id = auth.uid()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR EXISTS (
+    SELECT 1
+    FROM public.matriculas m
+    JOIN public.cursos c ON c.id = m.curso_id
+    WHERE m.id = asistencias.matricula_id
+      AND c.profesor_id = auth.uid()
+  )
+);
+
+CREATE POLICY "asistencias_delete_staff_or_teacher"
+ON public.asistencias
+FOR DELETE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR EXISTS (
+    SELECT 1
+    FROM public.matriculas m
+    JOIN public.cursos c ON c.id = m.curso_id
+    WHERE m.id = asistencias.matricula_id
+      AND c.profesor_id = auth.uid()
+  )
+);
+
+DROP POLICY IF EXISTS "sesiones_select_staff_or_teacher" ON public.sesiones_clase;
+DROP POLICY IF EXISTS "sesiones_insert_staff_or_teacher" ON public.sesiones_clase;
+DROP POLICY IF EXISTS "sesiones_update_staff_or_teacher" ON public.sesiones_clase;
+DROP POLICY IF EXISTS "sesiones_delete_staff_or_teacher" ON public.sesiones_clase;
+
+CREATE POLICY "sesiones_select_staff_or_teacher"
+ON public.sesiones_clase
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR profesor_id = auth.uid()
+  OR EXISTS (
+    SELECT 1 FROM public.cursos c
+    WHERE c.id = sesiones_clase.curso_id
+      AND c.profesor_id = auth.uid()
+  )
+);
+
+CREATE POLICY "sesiones_insert_staff_or_teacher"
+ON public.sesiones_clase
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR (
+    EXISTS (
+      SELECT 1 FROM public.cursos c
+      WHERE c.id = sesiones_clase.curso_id
+        AND c.profesor_id = auth.uid()
+    )
+    AND (sesiones_clase.profesor_id IS NULL OR sesiones_clase.profesor_id = auth.uid())
+  )
+);
+
+CREATE POLICY "sesiones_update_staff_or_teacher"
+ON public.sesiones_clase
+FOR UPDATE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR profesor_id = auth.uid()
+  OR EXISTS (
+    SELECT 1 FROM public.cursos c
+    WHERE c.id = sesiones_clase.curso_id
+      AND c.profesor_id = auth.uid()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR (
+    EXISTS (
+      SELECT 1 FROM public.cursos c
+      WHERE c.id = sesiones_clase.curso_id
+        AND c.profesor_id = auth.uid()
+    )
+    AND (sesiones_clase.profesor_id IS NULL OR sesiones_clase.profesor_id = auth.uid())
+  )
+);
+
+CREATE POLICY "sesiones_delete_staff_or_teacher"
+ON public.sesiones_clase
+FOR DELETE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN (
+        'admin','administrador','director','desarrollo',
+        'secretaria','secretario','administrativo',
+        'coordinador','coordinadora','tesoreria','tesorero','caja','cajero'
+      )
+  )
+  OR profesor_id = auth.uid()
+  OR EXISTS (
+    SELECT 1 FROM public.cursos c
+    WHERE c.id = sesiones_clase.curso_id
+      AND c.profesor_id = auth.uid()
+  )
+);
+
 -- ================================================================
 -- PARTE 2: HABILITAR RLS EN TABLAS PÚBLICAS SIN PROTECCIÓN
 -- ================================================================
