@@ -9,7 +9,7 @@ with ranked as (
     id,
     row_number() over (
       partition by quiz_id, matricula_id
-      order by coalesce(updated_at, enviado_at, created_at) desc, id desc
+      order by coalesce(updated_at, enviado_at) desc, id desc
     ) as rn
   from public.quiz_intentos_clase
 )
