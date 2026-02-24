@@ -59,6 +59,10 @@ import { descargarCertificado as descargarCertificadoPDF } from "@utils/certific
 dayjs.locale("es");
 
 const { Title, Text } = Typography;
+const UMBRAL_APROBACION_QUIZ = 70;
+
+const quizAprobado = (calificacion: number | null | undefined) =>
+  Number(calificacion || 0) > UMBRAL_APROBACION_QUIZ;
 
 export default function PortalEstudiante() {
   const screens = Grid.useBreakpoint();
@@ -658,9 +662,13 @@ export default function PortalEstudiante() {
   const abrirQuiz = async (quiz: any) => {
     try {
       const intentoExistente = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
-      if (intentoExistente) {
-        message.info("Este quiz ya fue enviado.");
+      if (intentoExistente && quizAprobado(Number(intentoExistente?.calificacion || 0))) {
+        message.info("Este quiz ya está aprobado.");
         return;
+      }
+
+      if (intentoExistente && !quizAprobado(Number(intentoExistente?.calificacion || 0))) {
+        message.info("Aún no alcanzas más de 70%. Debes repetir el quiz.");
       }
 
       const { data: preguntasData, error } = await supabaseBrowserClient
@@ -753,7 +761,12 @@ export default function PortalEstudiante() {
 
       if (errorIntento) throw errorIntento;
 
-      message.success(`Quiz enviado. Resultado: ${correctas}/${total} (${calificacion}%)`);
+      const aprobado = quizAprobado(calificacion);
+      message.success(
+        aprobado
+          ? `Quiz aprobado: ${correctas}/${total} (${calificacion}%).`
+          : `Quiz no aprobado: ${correctas}/${total} (${calificacion}%). Debes repetirlo.`
+      );
       setQuizModalOpen(false);
       setQuizActivo(null);
       setQuizPreguntas([]);
@@ -1514,7 +1527,8 @@ export default function PortalEstudiante() {
                   render: (_: any, quiz: any) => {
                     const intento = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
                     if (!intento) return <Tag color="orange">Pendiente</Tag>;
-                    return <Tag color="green">Enviado</Tag>;
+                    const aprobado = quizAprobado(Number(intento?.calificacion || 0));
+                    return <Tag color={aprobado ? "green" : "red"}>{aprobado ? "Aprobado" : "Repetir"}</Tag>;
                   },
                 },
                 {
@@ -1525,10 +1539,11 @@ export default function PortalEstudiante() {
                     const correctas = Number(intento?.respuestas_correctas || 0);
                     const total = Number(intento?.total_preguntas || 0);
                     const score = Number(intento?.calificacion || 0);
+                    const aprobado = quizAprobado(score);
                     return (
                       <Space direction="vertical" size={0}>
                         <Text>{`${correctas}/${total}`}</Text>
-                        <Tag color={score >= 70 ? "green" : "red"}>{`${score}%`}</Tag>
+                        <Tag color={aprobado ? "green" : "red"}>{`${score}%`}</Tag>
                       </Space>
                     );
                   },
@@ -1537,13 +1552,14 @@ export default function PortalEstudiante() {
                   title: "Acción",
                   render: (_: any, quiz: any) => {
                     const intento = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
+                    const aprobado = quizAprobado(Number(intento?.calificacion || 0));
                     return (
                       <Button
-                        type={intento ? "default" : "primary"}
-                        disabled={Boolean(intento)}
+                        type={aprobado ? "default" : "primary"}
+                        disabled={aprobado}
                         onClick={() => abrirQuiz(quiz)}
                       >
-                        {intento ? "Completado" : "Responder"}
+                        {aprobado ? "Aprobado" : intento ? "Repetir quiz" : "Responder"}
                       </Button>
                     );
                   },
