@@ -791,8 +791,15 @@ export default function StudentDetailView() {
         title: "Estado",
         dataIndex: "estado",
         key: "estado",
-        render: (val: string | null) => {
-          const estado = (val || "pendiente").toLowerCase();
+        render: (val: string | null, record: Pago) => {
+          let estado = (val || "pendiente").toLowerCase();
+          const isPagado = estado === "pagado";
+          const isVencido = record.fecha_vencimiento && dayjs(record.fecha_vencimiento).isBefore(dayjs(), 'day') && !isPagado;
+
+          if (isVencido) {
+            estado = "vencido";
+          }
+
           let color: string = "default";
           if (estado === "pagado") color = "success";
           else if (estado === "pendiente") color = "warning";
