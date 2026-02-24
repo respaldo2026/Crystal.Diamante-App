@@ -64,7 +64,7 @@ const UMBRAL_APROBACION_QUIZ_PORCENTAJE = 75;
 const UMBRAL_APROBACION_QUIZ_NOTA = (UMBRAL_APROBACION_QUIZ_PORCENTAJE / 100) * 5;
 
 const quizAprobado = (calificacion: number | null | undefined) =>
-  Number(calificacion || 0) > UMBRAL_APROBACION_QUIZ_NOTA;
+  Number(calificacion || 0) >= UMBRAL_APROBACION_QUIZ_NOTA;
 
 export default function PortalEstudiante() {
   const screens = Grid.useBreakpoint();
@@ -258,6 +258,21 @@ export default function PortalEstudiante() {
       etiqueta: "Bioseguridad",
       color: "geekblue",
     };
+  };
+
+  const obtenerTextoOpcionQuiz = (pregunta: any, opcion?: string | null) => {
+    const letra = String(opcion || "").toUpperCase();
+    if (!letra) return "Sin respuesta";
+
+    const opciones: Record<string, string> = {
+      A: String(pregunta?.opcion_a || ""),
+      B: String(pregunta?.opcion_b || ""),
+      C: String(pregunta?.opcion_c || ""),
+      D: String(pregunta?.opcion_d || ""),
+    };
+
+    const texto = opciones[letra] || "";
+    return texto ? `${letra}) ${texto}` : letra;
   };
 
   const normalizeHttpUrl = (value?: string | null) => {
@@ -850,15 +865,63 @@ export default function PortalEstudiante() {
         }
       });
 
+      const preguntaPorId = new Map<string, any>();
+      (quizPreguntas || []).forEach((pregunta: any) => {
+        preguntaPorId.set(String(pregunta.id), pregunta);
+      });
+
+      const respuestasErradas = respuestas
+        .map((respuesta) => {
+          const pregunta = preguntaPorId.get(String(respuesta.pregunta_id));
+          const correcta = String(correctaPorPregunta.get(String(respuesta.pregunta_id)) || "").toUpperCase();
+          const marcada = String(respuesta.respuesta || "").toUpperCase();
+          if (!correcta || marcada === correcta) return null;
+
+          return {
+            orden: Number(pregunta?.orden || 0),
+            pregunta: String(pregunta?.pregunta || "Pregunta"),
+            respuestaMarcada: obtenerTextoOpcionQuiz(pregunta, marcada),
+            respuestaCorrecta: obtenerTextoOpcionQuiz(pregunta, correcta),
+          };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => a.orden - b.orden);
+
       const total = respuestas.length || 1;
       const porcentaje = Number(((correctas / total) * 100).toFixed(2));
       const calificacion = Number(((correctas / total) * 5).toFixed(2));
       const aprobado = quizAprobado(calificacion);
 
       if (!aprobado) {
-        message.warning(
-          `Debes superar ${UMBRAL_APROBACION_QUIZ_PORCENTAJE}% para guardar el quiz. Resultado actual: ${calificacion}/5 (${porcentaje}%).`
-        );
+        Modal.warning({
+          title: "Debes mejorar tu puntaje para poder continuar",
+          okText: "Entendido",
+          width: isMobile ? "94vw" : 780,
+          content: (
+            <Space direction="vertical" size={10} style={{ width: "100%" }}>
+              <Text>
+                {`Resultado actual: ${calificacion}/5 (${porcentaje}%). Debes obtener mínimo ${UMBRAL_APROBACION_QUIZ_PORCENTAJE}% para continuar.`}
+              </Text>
+              <Text strong>Respuestas por mejorar:</Text>
+              <List
+                size="small"
+                bordered
+                dataSource={respuestasErradas}
+                locale={{ emptyText: "No se encontraron respuestas erradas para mostrar." }}
+                renderItem={(item: any) => (
+                  <List.Item>
+                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                      <Text strong>{`Pregunta ${item.orden || "-"}`}</Text>
+                      <Text>{item.pregunta}</Text>
+                      <Text type="danger">{`Tu respuesta: ${item.respuestaMarcada}`}</Text>
+                      <Text type="success">{`Respuesta correcta: ${item.respuestaCorrecta}`}</Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            </Space>
+          ),
+        });
         return;
       }
 
