@@ -24,7 +24,7 @@ import {
   Collapse,
   Grid,
   Modal,
-  Select,
+  Radio,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -48,6 +48,7 @@ import {
   ClockCircleOutlined,
   GiftOutlined,
   YoutubeOutlined,
+  LockOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
@@ -1356,6 +1357,23 @@ export default function PortalEstudiante() {
                     const temaId = String(tema?.id || `tema-${temaIndex}`);
                     const recursosTema = obtenerRecursosTema(tema, cicloId);
                     const insumosTema = obtenerInsumosTema(tema, cicloId);
+                    const quizPendientePrevio = (temasCiclo || []).slice(0, temaIndex).find((temaPrevio: any) => {
+                      const quizPrevio = (quizzesClase || []).find(
+                        (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaPrevio?.id || "")
+                      );
+
+                      if (!quizPrevio) return false;
+
+                      const intentoPrevio = (quizIntentos || []).find(
+                        (intento: any) =>
+                          String(intento?.quiz_id || "") === String(quizPrevio?.id || "") &&
+                          String(intento?.matricula_id || "") === String(matriculaSeleccionada?.id || "")
+                      );
+
+                      const notaPrevia = intentoPrevio ? Number(intentoPrevio?.calificacion || 0) : null;
+                      return notaPrevia == null || !quizAprobado(notaPrevia);
+                    });
+                    const temaBloqueado = Boolean(quizPendientePrevio);
                     const quizTema = (quizzesClase || []).find(
                       (quiz: any) => String(quiz?.pensum_curso_id || "") === String(tema?.id || "")
                     );
@@ -1390,7 +1408,16 @@ export default function PortalEstudiante() {
                                 </div>
                               ) : null}
 
-                              {vista === "plan" ? (
+                              {temaBloqueado ? (
+                                <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                                  <Tag color="red" icon={<LockOutlined />}>
+                                    Clase bloqueada
+                                  </Tag>
+                                  <Text type="secondary" style={{ fontSize: 12 }}>
+                                    {`Debes aprobar el quiz de ${quizPendientePrevio?.nombre_curso || "la clase anterior"} para visualizar esta clase.`}
+                                  </Text>
+                                </Space>
+                              ) : vista === "plan" ? (
                                 <Space direction="vertical" size={6} style={{ width: "100%" }}>
                                   <Space
                                     size={8}
@@ -2103,10 +2130,12 @@ export default function PortalEstudiante() {
                         return <Tag color={indicador.color}>{`${indicador.emoji} ${indicador.etiqueta}`}</Tag>;
                       })()}
                       <Text>{preguntaActual.pregunta}</Text>
-                      <Select
-                        placeholder="Selecciona una respuesta"
+                      <Radio.Group
                         value={quizRespuestas[String(preguntaActual.id)]}
-                        onChange={(value) => {
+                        onChange={(event) => {
+                          const value = String(event?.target?.value || "");
+                          if (!value) return;
+
                           setQuizRespuestas((prev) => ({
                             ...prev,
                             [String(preguntaActual.id)]: value,
@@ -2123,13 +2152,15 @@ export default function PortalEstudiante() {
                             }, 180);
                           }
                         }}
-                        options={[
-                          { value: "A", label: `A) ${preguntaActual.opcion_a}` },
-                          { value: "B", label: `B) ${preguntaActual.opcion_b}` },
-                          { value: "C", label: `C) ${preguntaActual.opcion_c}` },
-                          { value: "D", label: `D) ${preguntaActual.opcion_d}` },
-                        ]}
-                      />
+                        style={{ width: "100%" }}
+                      >
+                        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                          <Radio value="A" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{`A) ${preguntaActual.opcion_a}`}</Radio>
+                          <Radio value="B" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{`B) ${preguntaActual.opcion_b}`}</Radio>
+                          <Radio value="C" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{`C) ${preguntaActual.opcion_c}`}</Radio>
+                          <Radio value="D" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{`D) ${preguntaActual.opcion_d}`}</Radio>
+                        </Space>
+                      </Radio.Group>
                     </Space>
                   </Card>
                 ) : null}

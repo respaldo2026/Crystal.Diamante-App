@@ -1,5 +1,5 @@
 -- Carga masiva: Quiz de Bioseguridad (25 preguntas)
--- Requisito de aprobación: MÁS de 70% (ya aplicado en la app)
+-- Requisito de aprobación: MÁS de 75% (ya aplicado en la app)
 --
 -- PASOS:
 -- 1) Reemplaza el UUID de v_pensum_curso_id por el ID real del tema/clase "Bioseguridad".
@@ -47,7 +47,7 @@ BEGIN
     v_pensum_id,
     v_pensum_curso_id,
     'Quiz de Bioseguridad',
-    'Cuestionario oficial de bioseguridad (25 preguntas). Aprobación: más de 70%.',
+    'Cuestionario oficial de bioseguridad (25 preguntas). Aprobación: más de 75%.',
     25,
     true,
     true
