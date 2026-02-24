@@ -183,6 +183,20 @@ interface MaterialCiclo {
   activo: boolean;
 }
 
+interface QuizClase {
+  id: string;
+  programa_id: number;
+  pensum_id?: string | null;
+  pensum_curso_id: string;
+  titulo: string;
+  descripcion?: string | null;
+  total_preguntas: number;
+  activo: boolean;
+  publicado: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface GestorPensumProps {
   programaId: string;
   programaNombre: string;
@@ -200,6 +214,7 @@ export default function GestorPensum({
   const [formCiclo] = Form.useForm();
   const [formMaterialClase] = Form.useForm();
   const [formMaterialCiclo] = Form.useForm();
+  const [formQuiz] = Form.useForm();
 
   // Estados para pensum
   const [pensums, setPensums] = useState<Pensum[]>([]);
@@ -240,6 +255,11 @@ export default function GestorPensum({
   const [editingMaterialClase, setEditingMaterialClase] = useState<MaterialClase | null>(null);
   const [modalMaterialCicloVisible, setModalMaterialCicloVisible] = useState(false);
   const [editingMaterialCiclo, setEditingMaterialCiclo] = useState<MaterialCiclo | null>(null);
+  const [quizzesClase, setQuizzesClase] = useState<QuizClase[]>([]);
+  const [loadingQuizzesClase, setLoadingQuizzesClase] = useState(false);
+  const [modalQuizVisible, setModalQuizVisible] = useState(false);
+  const [editingQuiz, setEditingQuiz] = useState<QuizClase | null>(null);
+  const [cursoQuizActivo, setCursoQuizActivo] = useState<PensumCurso | null>(null);
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace' | 'iframe'>('archivo');
   const [mostrarListaCompletaCiclo, setMostrarListaCompletaCiclo] = useState(false);
   const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
@@ -787,6 +807,128 @@ export default function GestorPensum({
     }
   }, [programaId, message]);
 
+  const cargarQuizzesClase = useCallback(async () => {
+    setLoadingQuizzesClase(true);
+    try {
+      const { data, error } = await supabaseBrowserClient
+        .from("quizzes_clase")
+        .select("id, programa_id, pensum_id, pensum_curso_id, titulo, descripcion, total_preguntas, activo, publicado, created_at, updated_at")
+        .eq("programa_id", Number(programaId))
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setQuizzesClase((data || []) as QuizClase[]);
+    } catch (error) {
+      message.error("Error al cargar quizzes por clase");
+      logger.error(error);
+    } finally {
+      setLoadingQuizzesClase(false);
+    }
+  }, [programaId, message]);
+
+  const abrirModalQuiz = (curso: PensumCurso, quiz?: QuizClase | null) => {
+    if (!canManageMateriales) {
+      message.warning("Solo administración y secretaría pueden gestionar quizzes.");
+      return;
+    }
+
+    setCursoQuizActivo(curso);
+    setEditingQuiz(quiz || null);
+    formQuiz.setFieldsValue({
+      titulo: quiz?.titulo || `Quiz - ${curso.nombre_curso}`,
+      descripcion: quiz?.descripcion || "",
+      total_preguntas: quiz?.total_preguntas || 25,
+      publicado: quiz?.publicado ?? false,
+      activo: quiz?.activo ?? true,
+    });
+    setModalQuizVisible(true);
+  };
+
+  const handleGuardarQuiz = async () => {
+    try {
+      if (!canManageMateriales) {
+        message.warning("Solo administración y secretaría pueden gestionar quizzes.");
+        return;
+      }
+
+      if (!cursoQuizActivo) {
+        message.error("Selecciona un tema para crear el quiz.");
+        return;
+      }
+
+      const values = await formQuiz.validateFields();
+      const payload = {
+        programa_id: Number(programaId),
+        pensum_id: selectedCicloId,
+        pensum_curso_id: cursoQuizActivo.id,
+        titulo: String(values.titulo || "").trim(),
+        descripcion: values.descripcion || null,
+        total_preguntas: Number(values.total_preguntas || 25),
+        publicado: Boolean(values.publicado),
+        activo: values.activo ?? true,
+      };
+
+      if (editingQuiz) {
+        const { error } = await supabaseBrowserClient
+          .from("quizzes_clase")
+          .update(payload)
+          .eq("id", editingQuiz.id);
+        if (error) throw error;
+        message.success("Quiz actualizado");
+      } else {
+        const { error } = await supabaseBrowserClient
+          .from("quizzes_clase")
+          .upsert(payload, { onConflict: "pensum_curso_id" });
+        if (error) throw error;
+        message.success("Quiz creado para la clase");
+      }
+
+      setModalQuizVisible(false);
+      setEditingQuiz(null);
+      setCursoQuizActivo(null);
+      formQuiz.resetFields();
+      await cargarQuizzesClase();
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message || "Error al guardar quiz");
+      } else {
+        message.error("Error al guardar quiz");
+      }
+    }
+  };
+
+  const handleEliminarQuiz = (quizId: string) => {
+    if (!canManageMateriales) {
+      message.warning("Solo administración y secretaría pueden gestionar quizzes.");
+      return;
+    }
+
+    modal.confirm({
+      title: "Eliminar quiz de la clase",
+      content: "¿Seguro que deseas eliminar este quiz?",
+      okText: "Eliminar",
+      okType: "danger",
+      onOk: async () => {
+        try {
+          const { error } = await supabaseBrowserClient
+            .from("quizzes_clase")
+            .delete()
+            .eq("id", quizId);
+
+          if (error) throw error;
+          message.success("Quiz eliminado");
+          await cargarQuizzesClase();
+        } catch (error) {
+          if (error instanceof Error) {
+            message.error(error.message || "Error al eliminar quiz");
+          } else {
+            message.error("Error al eliminar quiz");
+          }
+        }
+      },
+    });
+  };
+
   const abrirModalMaterialClase = (cursoId: string, material?: MaterialClase) => {
     if (!canManageMateriales) {
       message.warning("Solo administración y secretaría pueden gestionar materiales.");
@@ -1065,6 +1207,10 @@ export default function GestorPensum({
   useEffect(() => {
     cargarMaterialesClase();
   }, [cargarMaterialesClase]);
+
+  useEffect(() => {
+    cargarQuizzesClase();
+  }, [cargarQuizzesClase]);
 
   const parseTemaFromTitulo = (titulo: string) => {
     const match = titulo.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
@@ -1380,6 +1526,15 @@ export default function GestorPensum({
     : 0;
   const totalMaterialDidactico = materialesCicloDidactico.length;
   const totalMaterialNecesario = materialesClaseCiclo.length;
+  const quizzesPorTemaId = useMemo(() => {
+    const map = new Map<string, QuizClase>();
+    (quizzesClase || []).forEach((quiz) => {
+      const key = String(quiz?.pensum_curso_id || "");
+      if (!key) return;
+      map.set(key, quiz);
+    });
+    return map;
+  }, [quizzesClase]);
 
   const clasesMaestrasPrograma = useMemo(() => {
     const cicloOrderById = new Map<string, number>();
@@ -1405,9 +1560,10 @@ export default function GestorPensum({
         descripcion: curso?.descripcion || "",
         horas: Number(curso?.horas || 0),
         tipo: curso?.tipo_curso || "obligatorio",
+        quiz: quizzesPorTemaId.get(String(curso?.id || "")) || null,
       };
     });
-  }, [cursosPrograma, pensums]);
+  }, [cursosPrograma, pensums, quizzesPorTemaId]);
 
   const abrirClaseDesdeTabla = useCallback((record: any) => {
     const cicloId = String(record?.cicloId || "");
@@ -1485,6 +1641,7 @@ export default function GestorPensum({
             ) : (
               <Table
                 size="small"
+                loading={loadingQuizzesClase}
                 rowKey="key"
                 dataSource={clasesMaestrasPrograma}
                 pagination={{ pageSize: 20, hideOnSinglePage: true }}
@@ -1637,6 +1794,7 @@ export default function GestorPensum({
               </Tag>
               <Tag color="purple">Material didáctico: {totalMaterialDidactico}</Tag>
               <Tag color="green">Material necesario: {totalMaterialNecesario}</Tag>
+              <Tag color="geekblue">Quizzes: {quizzesClase.length}</Tag>
               {totalClasesEsperadasPrograma > 0 && (
                 <Button size="small" onClick={sincronizarListaClasesPrograma}>
                   Sincronizar clases del programa
@@ -1703,6 +1861,20 @@ export default function GestorPensum({
                     dataIndex: "incluido_kit",
                     align: "center",
                     render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                  },
+                  {
+                    title: "Quiz",
+                    key: "quiz",
+                    width: 180,
+                    render: (_: any, record: any) => {
+                      const quiz = record?.quiz;
+                      if (!quiz) return <Tag>Sin quiz</Tag>;
+                      return (
+                        <Tag color={quiz.publicado ? "green" : "orange"}>
+                          {quiz.publicado ? "Publicado" : "Borrador"}
+                        </Tag>
+                      );
+                    },
                   },
                   ...(canManageMateriales
                     ? [
@@ -1802,6 +1974,7 @@ export default function GestorPensum({
                 const materialesNecesariosTema = materialesClaseCiclo.filter(
                   (material) => material.pensum_curso_id === curso.id,
                 );
+                const quizTema = quizzesPorTemaId.get(String(curso.id));
 
                 return (
                   <Card
@@ -1828,6 +2001,12 @@ export default function GestorPensum({
                                     label: "Agregar material necesario",
                                     icon: <PlusOutlined />,
                                     onClick: () => abrirModalMaterialClase(curso.id),
+                                  },
+                                  {
+                                    key: `gestionar-quiz-${curso.id}`,
+                                    label: quizTema ? "Editar quiz" : "Crear quiz",
+                                    icon: <CheckCircleOutlined />,
+                                    onClick: () => abrirModalQuiz(curso, quizTema),
                                   },
                                 ]
                               : []),
@@ -1945,6 +2124,38 @@ export default function GestorPensum({
                         )}
                       />
                     )}
+
+                    <Divider style={{ margin: "10px 0" }} />
+                    <Text strong style={{ fontSize: 13 }}>Quiz de clase</Text>
+                    <div style={{ marginTop: 6, marginBottom: 10 }}>
+                      {quizTema ? (
+                        <Space size={8} wrap>
+                          <Tag color={quizTema.publicado ? "green" : "orange"}>
+                            {quizTema.publicado ? "Publicado" : "Borrador"}
+                          </Tag>
+                          <Tag>{quizTema.total_preguntas || 25} preguntas</Tag>
+                          {canManageMateriales ? (
+                            <>
+                              <Button size="small" onClick={() => abrirModalQuiz(curso, quizTema)}>
+                                Editar quiz
+                              </Button>
+                              <Button size="small" danger onClick={() => handleEliminarQuiz(quizTema.id)}>
+                                Eliminar
+                              </Button>
+                            </>
+                          ) : null}
+                        </Space>
+                      ) : (
+                        <Space size={8} wrap>
+                          <Text type="secondary">Sin quiz configurado para esta clase.</Text>
+                          {canManageMateriales ? (
+                            <Button size="small" type="primary" ghost onClick={() => abrirModalQuiz(curso, null)}>
+                              Crear quiz
+                            </Button>
+                          ) : null}
+                        </Space>
+                      )}
+                    </div>
 
                     <Divider style={{ margin: "10px 0" }} />
                     <Text strong style={{ fontSize: 13 }}>Materiales necesarios</Text>
@@ -2123,6 +2334,71 @@ export default function GestorPensum({
 
           <Form.Item name="orden" label="Orden" initialValue={1}>
             <InputNumber min={1} style={{ width: "100%" }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editingQuiz ? "Editar quiz de clase" : "Crear quiz de clase"}
+        open={modalQuizVisible}
+        onOk={handleGuardarQuiz}
+        onCancel={() => {
+          setModalQuizVisible(false);
+          setEditingQuiz(null);
+          setCursoQuizActivo(null);
+          formQuiz.resetFields();
+        }}
+      >
+        <Form form={formQuiz} layout="vertical">
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={
+              cursoQuizActivo
+                ? `Tema: ${cursoQuizActivo.nombre_curso}`
+                : "Selecciona un tema"
+            }
+            description="Configura aquí el quiz por clase. En el siguiente paso podremos cargar las 25 preguntas con sus respuestas correctas."
+          />
+
+          <Form.Item
+            name="titulo"
+            label="Título del quiz"
+            rules={[{ required: true, message: "El título es obligatorio" }]}
+          >
+            <Input placeholder="Ej: Quiz Clase 5" />
+          </Form.Item>
+
+          <Form.Item name="descripcion" label="Descripción">
+            <Input.TextArea rows={2} placeholder="Instrucciones para el estudiante" />
+          </Form.Item>
+
+          <Form.Item
+            name="total_preguntas"
+            label="Total de preguntas"
+            initialValue={25}
+            rules={[{ required: true, message: "Ingresa el total de preguntas" }]}
+          >
+            <InputNumber min={1} max={100} style={{ width: "100%" }} />
+          </Form.Item>
+
+          <Form.Item name="publicado" label="Estado de publicación" initialValue={false}>
+            <Select
+              options={[
+                { value: false, label: "Borrador (no visible para estudiantes)" },
+                { value: true, label: "Publicado (visible para estudiantes)" },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item name="activo" label="Activo" initialValue={true}>
+            <Select
+              options={[
+                { value: true, label: "Sí" },
+                { value: false, label: "No" },
+              ]}
+            />
           </Form.Item>
         </Form>
       </Modal>

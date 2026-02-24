@@ -24,6 +24,7 @@ import {
   Collapse,
   Grid,
   Modal,
+  Select,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -74,6 +75,13 @@ export default function PortalEstudiante() {
   const [materiales, setMateriales] = useState<any[]>([]);
   const [materialesCiclo, setMaterialesCiclo] = useState<any[]>([]);
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
+  const [quizzesClase, setQuizzesClase] = useState<any[]>([]);
+  const [quizIntentos, setQuizIntentos] = useState<any[]>([]);
+  const [quizPreguntas, setQuizPreguntas] = useState<any[]>([]);
+  const [quizModalOpen, setQuizModalOpen] = useState(false);
+  const [quizActivo, setQuizActivo] = useState<any | null>(null);
+  const [quizSaving, setQuizSaving] = useState(false);
+  const [quizRespuestas, setQuizRespuestas] = useState<Record<string, string>>({});
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
@@ -100,6 +108,18 @@ export default function PortalEstudiante() {
       resultado.push(item);
     }
     return resultado;
+  };
+
+  const obtenerMatriculaDeQuiz = (quiz: any) => {
+    const temaId = String(quiz?.pensum_curso_id || "");
+    const temaEncontrado = (pensum || []).find((ciclo: any) =>
+      (ciclo?.pensum_cursos || []).some((tema: any) => String(tema?.id) === temaId)
+    );
+
+    const programaId = String(quiz?.programa_id || temaEncontrado?.programa_id || "");
+    return (matriculas || []).find(
+      (matricula: any) => String(matricula?.cursos?.programa_id || "") === programaId
+    ) || null;
   };
 
   const normalizarTexto = (valor?: string | null) =>
@@ -544,6 +564,17 @@ export default function PortalEstudiante() {
           .in("matricula_id", matriculaIds)
           .order("fecha_evaluacion", { ascending: false });
         setCalificaciones(dataCalificaciones || []);
+
+        if (matriculaIds.length > 0) {
+          const { data: intentosQuizData } = await supabaseBrowserClient
+            .from("quiz_intentos_clase")
+            .select("*")
+            .in("matricula_id", matriculaIds)
+            .order("enviado_at", { ascending: false });
+          setQuizIntentos(intentosQuizData || []);
+        } else {
+          setQuizIntentos([]);
+        }
       }
 
       // 4. Cargar Pensum y Materiales si hay programas
@@ -566,6 +597,19 @@ export default function PortalEstudiante() {
           String(`${m?.programa_id || ''}-${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${(m?.nombre_material || '').trim().toLowerCase()}-${m?.cantidad || ''}-${(m?.unidad || '').trim().toLowerCase()}-${(m?.observaciones || '').trim().toLowerCase()}`)
         );
         setMaterialesClase(materialesClaseUnicos);
+
+        const { data: dataQuizzes } = await supabaseBrowserClient
+          .from("quizzes_clase")
+          .select("*")
+          .in("programa_id", programaIds)
+          .eq("activo", true)
+          .eq("publicado", true)
+          .order("created_at", { ascending: false });
+
+        setQuizzesClase(dataQuizzes || []);
+      } else {
+        setQuizzesClase([]);
+        setQuizIntentos([]);
       }
 
       // 5. Calcular Avance y Certificados
@@ -608,6 +652,118 @@ export default function PortalEstudiante() {
     } catch (err: any) {
       logger.error(err);
       message.error("No se pudo descargar el certificado");
+    }
+  };
+
+  const abrirQuiz = async (quiz: any) => {
+    try {
+      const intentoExistente = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
+      if (intentoExistente) {
+        message.info("Este quiz ya fue enviado.");
+        return;
+      }
+
+      const { data: preguntasData, error } = await supabaseBrowserClient
+        .from("quiz_preguntas_clase")
+        .select("id, orden, pregunta, opcion_a, opcion_b, opcion_c, opcion_d")
+        .eq("quiz_id", quiz.id)
+        .eq("activo", true)
+        .order("orden", { ascending: true });
+
+      if (error) throw error;
+
+      if (!preguntasData || preguntasData.length === 0) {
+        message.warning("Este quiz aún no tiene preguntas cargadas.");
+        return;
+      }
+
+      setQuizActivo(quiz);
+      setQuizPreguntas(preguntasData);
+      setQuizRespuestas({});
+      setQuizModalOpen(true);
+    } catch (error) {
+      logger.error("Error al abrir quiz", error);
+      message.error("No se pudo abrir el quiz");
+    }
+  };
+
+  const enviarQuiz = async () => {
+    if (!quizActivo) return;
+
+    const respuestas = quizPreguntas.map((pregunta: any) => {
+      const respuesta = quizRespuestas[String(pregunta.id)] || "";
+      return {
+        pregunta_id: pregunta.id,
+        respuesta,
+      };
+    });
+
+    const sinResponder = respuestas.filter((r) => !r.respuesta).length;
+    if (sinResponder > 0) {
+      message.warning(`Debes responder todas las preguntas. Faltan ${sinResponder}.`);
+      return;
+    }
+
+    try {
+      setQuizSaving(true);
+
+      const { data: preguntasConRespuesta, error: errorCorrectas } = await supabaseBrowserClient
+        .from("quiz_preguntas_clase")
+        .select("id, respuesta_correcta")
+        .eq("quiz_id", quizActivo.id)
+        .eq("activo", true);
+
+      if (errorCorrectas) throw errorCorrectas;
+
+      const correctaPorPregunta = new Map<string, string>();
+      (preguntasConRespuesta || []).forEach((pregunta: any) => {
+        correctaPorPregunta.set(String(pregunta.id), String(pregunta.respuesta_correcta || "").toUpperCase());
+      });
+
+      let correctas = 0;
+      respuestas.forEach((respuesta) => {
+        const correcta = correctaPorPregunta.get(String(respuesta.pregunta_id)) || "";
+        if (correcta && correcta === String(respuesta.respuesta || "").toUpperCase()) {
+          correctas += 1;
+        }
+      });
+
+      const total = respuestas.length || 1;
+      const calificacion = Number(((correctas / total) * 100).toFixed(2));
+
+      const matriculaQuiz = obtenerMatriculaDeQuiz(quizActivo);
+      if (!matriculaQuiz?.id) {
+        message.error("No se encontró matrícula para registrar el resultado del quiz.");
+        return;
+      }
+
+      const payload = {
+        quiz_id: quizActivo.id,
+        matricula_id: Number(matriculaQuiz.id),
+        estudiante_id: estudiante?.id || null,
+        respuestas,
+        respuestas_correctas: correctas,
+        total_preguntas: total,
+        calificacion,
+      };
+
+      const { error: errorIntento } = await supabaseBrowserClient
+        .from("quiz_intentos_clase")
+        .upsert(payload, { onConflict: "quiz_id,matricula_id" });
+
+      if (errorIntento) throw errorIntento;
+
+      message.success(`Quiz enviado. Resultado: ${correctas}/${total} (${calificacion}%)`);
+      setQuizModalOpen(false);
+      setQuizActivo(null);
+      setQuizPreguntas([]);
+      setQuizRespuestas({});
+      await cargarDatos();
+    } catch (error) {
+      logger.error("Error enviando quiz", error);
+      message.error("No se pudo enviar el quiz");
+    } finally {
+      setQuizSaving(false);
     }
   };
 
@@ -1327,8 +1483,71 @@ export default function PortalEstudiante() {
               locale={{ emptyText: "No hay calificaciones registradas" }}
               columns={[
                 { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
+                { title: "Concepto", dataIndex: "concepto", render: (v) => v || "-" },
                 { title: "Nota", dataIndex: "calificacion", render: (c) => <Tag color={c >= 70 ? "green" : "red"}>{c}</Tag> },
                 { title: "Fecha", dataIndex: "fecha_evaluacion", render: (f) => formatDate(f) },
+              ]}
+            />
+          </Card>
+
+          <Card size="small" title="Quiz por clase">
+            <Table
+              dataSource={quizzesClase}
+              rowKey="id"
+              size="small"
+              scroll={{ x: 720 }}
+              pagination={{ pageSize: 6 }}
+              locale={{ emptyText: "No hay quizzes publicados" }}
+              columns={[
+                {
+                  title: "Clase",
+                  render: (_: any, quiz: any) => {
+                    const tema = (pensum || [])
+                      .flatMap((ciclo: any) => ciclo?.pensum_cursos || [])
+                      .find((item: any) => String(item?.id) === String(quiz?.pensum_curso_id));
+                    return tema?.nombre_curso || "Clase";
+                  },
+                },
+                { title: "Quiz", dataIndex: "titulo", render: (v) => v || "Quiz" },
+                {
+                  title: "Estado",
+                  render: (_: any, quiz: any) => {
+                    const intento = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
+                    if (!intento) return <Tag color="orange">Pendiente</Tag>;
+                    return <Tag color="green">Enviado</Tag>;
+                  },
+                },
+                {
+                  title: "Resultado",
+                  render: (_: any, quiz: any) => {
+                    const intento = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
+                    if (!intento) return "-";
+                    const correctas = Number(intento?.respuestas_correctas || 0);
+                    const total = Number(intento?.total_preguntas || 0);
+                    const score = Number(intento?.calificacion || 0);
+                    return (
+                      <Space direction="vertical" size={0}>
+                        <Text>{`${correctas}/${total}`}</Text>
+                        <Tag color={score >= 70 ? "green" : "red"}>{`${score}%`}</Tag>
+                      </Space>
+                    );
+                  },
+                },
+                {
+                  title: "Acción",
+                  render: (_: any, quiz: any) => {
+                    const intento = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
+                    return (
+                      <Button
+                        type={intento ? "default" : "primary"}
+                        disabled={Boolean(intento)}
+                        onClick={() => abrirQuiz(quiz)}
+                      >
+                        {intento ? "Completado" : "Responder"}
+                      </Button>
+                    );
+                  },
+                },
               ]}
             />
           </Card>
@@ -1564,6 +1783,60 @@ export default function PortalEstudiante() {
       <Card className="student-section-card">
         {renderSeccionActiva()}
       </Card>
+
+      <Modal
+        title={quizActivo?.titulo || "Responder quiz"}
+        open={quizModalOpen}
+        onOk={enviarQuiz}
+        okText="Enviar quiz"
+        confirmLoading={quizSaving}
+        onCancel={() => {
+          setQuizModalOpen(false);
+          setQuizActivo(null);
+          setQuizPreguntas([]);
+          setQuizRespuestas({});
+        }}
+        width={820}
+      >
+        <Space direction="vertical" size={14} style={{ width: "100%" }}>
+          <Alert
+            type="info"
+            showIcon
+            message={quizActivo?.descripcion || "Responde todas las preguntas antes de enviar."}
+            description={`Total de preguntas: ${quizPreguntas.length}`}
+          />
+
+          {quizPreguntas.map((pregunta: any, index: number) => (
+            <Card
+              key={pregunta.id}
+              size="small"
+              title={`Pregunta ${index + 1}`}
+              bodyStyle={{ paddingTop: 12 }}
+            >
+              <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                <Text>{pregunta.pregunta}</Text>
+                <Select
+                  placeholder="Selecciona una respuesta"
+                  value={quizRespuestas[String(pregunta.id)]}
+                  onChange={(value) =>
+                    setQuizRespuestas((prev) => ({
+                      ...prev,
+                      [String(pregunta.id)]: value,
+                    }))
+                  }
+                  options={[
+                    { value: "A", label: `A) ${pregunta.opcion_a}` },
+                    { value: "B", label: `B) ${pregunta.opcion_b}` },
+                    { value: "C", label: `C) ${pregunta.opcion_c}` },
+                    { value: "D", label: `D) ${pregunta.opcion_d}` },
+                  ]}
+                />
+              </Space>
+            </Card>
+          ))}
+        </Space>
+      </Modal>
+
       <Modal
         title={iframePreview.title || "Presentación"}
         open={iframePreview.open}

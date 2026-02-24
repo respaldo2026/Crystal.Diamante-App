@@ -93,6 +93,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [temas, setTemas] = useState<Tema[]>([]);
   const [materiales, setMateriales] = useState<any[]>([]);
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
+  const [quizzesClase, setQuizzesClase] = useState<any[]>([]);
+  const [resultadosQuiz, setResultadosQuiz] = useState<any[]>([]);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalSesionVisible, setModalSesionVisible] = useState(false);
@@ -199,6 +201,19 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         const nombre = tema?.nombre_curso || tema?.titulo || "";
         const key = normalizarTema(nombre);
         if (key) map.set(key, String(tema.id));
+      });
+    });
+    return map;
+  }, [ciclosOrdenados]);
+
+  const nombreTemaPorId = useMemo(() => {
+    const map = new Map<string, string>();
+    ciclosOrdenados.forEach((ciclo: any) => {
+      const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+      temasCiclo.forEach((tema: any) => {
+        const key = String(tema?.id || "");
+        if (!key) return;
+        map.set(key, String(tema?.nombre_curso || tema?.titulo || "Tema"));
       });
     });
     return map;
@@ -550,6 +565,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const cargarDatos = useCallback(async (id: string) => {
     setLoading(true);
     try {
+      let matriculaIdsCurso: number[] = [];
+
       // Curso
       const { data: cursoData, error: errorCurso } = await supabaseBrowserClient
         .from("cursos")
@@ -626,6 +643,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         setEstadoEdicion(estadosIniciales);
 
         const matriculaIds = estudiantesConAsistencia.map((e) => e.id);
+        matriculaIdsCurso = matriculaIds;
         if (matriculaIds.length > 0) {
           const { data: califData } = await supabaseBrowserClient
             .from("calificaciones")
@@ -657,10 +675,35 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         setTemas(temasData || []);
         setMateriales(materialesData || []);
         setMaterialesClase(materialesClaseData || []);
+
+        const { data: quizzesData } = await supabaseBrowserClient
+          .from("quizzes_clase")
+          .select("id, programa_id, pensum_curso_id, titulo, total_preguntas, activo, publicado")
+          .eq("programa_id", Number(cursoConProfesor.programa_id))
+          .eq("activo", true)
+          .order("created_at", { ascending: false });
+
+        setQuizzesClase(quizzesData || []);
+
+        if (matriculaIdsCurso.length > 0 && (quizzesData || []).length > 0) {
+          const quizIds = (quizzesData || []).map((quiz: any) => quiz.id);
+          const { data: intentosData } = await supabaseBrowserClient
+            .from("quiz_intentos_clase")
+            .select("id, quiz_id, matricula_id, respuestas_correctas, total_preguntas, calificacion, enviado_at")
+            .in("quiz_id", quizIds)
+            .in("matricula_id", matriculaIdsCurso)
+            .order("enviado_at", { ascending: false });
+
+          setResultadosQuiz(intentosData || []);
+        } else {
+          setResultadosQuiz([]);
+        }
       } else {
         setTemas([]);
         setMateriales([]);
         setMaterialesClase([]);
+        setQuizzesClase([]);
+        setResultadosQuiz([]);
       }
 
       // Sesiones de clase
@@ -1326,6 +1369,55 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   showIcon
                   style={{ padding: "8px 10px" }}
                 />
+
+                <Card
+                  title={<Text strong style={{ fontSize: 14 }}>Resultados de Quiz por Clase</Text>}
+                  bodyStyle={{ padding: 10 }}
+                  headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
+                >
+                  <Table
+                    size="small"
+                    dataSource={resultadosQuiz}
+                    rowKey="id"
+                    pagination={{ pageSize: 8 }}
+                    scroll={{ x: "max-content" }}
+                    locale={{ emptyText: "No hay intentos de quiz registrados" }}
+                    columns={[
+                      {
+                        title: "Estudiante",
+                        render: (_: any, record: any) => {
+                          const estudiante = estudiantes.find((item) => String(item.id) === String(record?.matricula_id));
+                          return estudiante?.nombre_completo || "-";
+                        },
+                      },
+                      {
+                        title: "Clase",
+                        render: (_: any, record: any) => {
+                          const quiz = quizzesClase.find((item: any) => String(item?.id) === String(record?.quiz_id));
+                          const temaId = String(quiz?.pensum_curso_id || "");
+                          return nombreTemaPorId.get(temaId) || quiz?.titulo || "Quiz";
+                        },
+                      },
+                      {
+                        title: "Aciertos",
+                        render: (_: any, record: any) => `${Number(record?.respuestas_correctas || 0)}/${Number(record?.total_preguntas || 0)}`,
+                      },
+                      {
+                        title: "Calificación",
+                        dataIndex: "calificacion",
+                        render: (valor: number) => (
+                          <Tag color={Number(valor || 0) >= 70 ? "green" : "red"}>{Number(valor || 0)}%</Tag>
+                        ),
+                      },
+                      {
+                        title: "Fecha",
+                        dataIndex: "enviado_at",
+                        render: (fecha: string) => (fecha ? dayjs(fecha).format("DD/MM/YYYY HH:mm") : "-"),
+                      },
+                    ]}
+                  />
+                </Card>
+
                 {temas.length === 0 ? (
                   <Card><Empty description="No hay temario cargado" /></Card>
                 ) : (
