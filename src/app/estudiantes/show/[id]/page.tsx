@@ -22,6 +22,7 @@ import {
   Space,
   Tooltip,
   Modal,
+  Popconfirm,
 } from "antd";
 import {
   UserOutlined,
@@ -39,6 +40,7 @@ import {
   CameraOutlined,
   UploadOutlined,
   ReloadOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import { message, Upload } from "antd";
 import type { UploadFile } from "antd";
@@ -122,6 +124,7 @@ export default function StudentDetailView() {
   const [matriculas, setMatriculas] = useState<Matricula[]>([]);
   const [pagosHistorial, setPagosHistorial] = useState<Pago[]>([]);
   const [asistenciasHistorial, setAsistenciasHistorial] = useState<AsistenciaEstudiante[]>([]);
+  const [deletingAsistenciaId, setDeletingAsistenciaId] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState("");
@@ -388,6 +391,27 @@ export default function StudentDetailView() {
       setLoading(false);
     }
   }, [idEstudiante]);
+
+  const eliminarAsistencia = async (asistenciaId: string) => {
+    try {
+      setDeletingAsistenciaId(asistenciaId);
+
+      const { error } = await supabaseBrowserClient
+        .from("asistencias")
+        .delete()
+        .eq("id", asistenciaId);
+
+      if (error) throw error;
+
+      setAsistenciasHistorial((prev) => prev.filter((item) => String(item.id) !== String(asistenciaId)));
+      message.success("Asistencia eliminada correctamente");
+    } catch (error) {
+      console.error("Error eliminando asistencia", error);
+      message.error("No se pudo eliminar la asistencia");
+    } finally {
+      setDeletingAsistenciaId(null);
+    }
+  };
 
   useEffect(() => {
     cargarDatosCompletos();
@@ -1428,6 +1452,30 @@ export default function StudentDetailView() {
                         <Tag color={estado === "presente" ? "green" : "red"}>
                           {String(estado || "-").toUpperCase()}
                         </Tag>
+                      ),
+                    },
+                    {
+                      title: "Acciones",
+                      key: "acciones",
+                      width: 110,
+                      render: (_: any, record: AsistenciaEstudiante) => (
+                        <Popconfirm
+                          title="¿Eliminar asistencia?"
+                          description="Este cambio impacta panel profesor, panel estudiante y este perfil."
+                          okText="Eliminar"
+                          cancelText="Cancelar"
+                          okButtonProps={{ danger: true, loading: deletingAsistenciaId === String(record.id) }}
+                          onConfirm={() => eliminarAsistencia(String(record.id))}
+                        >
+                          <Button
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            loading={deletingAsistenciaId === String(record.id)}
+                          >
+                            Borrar
+                          </Button>
+                        </Popconfirm>
                       ),
                     },
                   ]}
