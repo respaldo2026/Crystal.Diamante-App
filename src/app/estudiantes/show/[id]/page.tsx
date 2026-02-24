@@ -107,7 +107,7 @@ type AsistenciaEstudiante = {
   estado: string | null;
   observaciones?: string | null;
   matricula_id: number | null;
-  curso: string;
+  clase_numero?: number | null;
   tema_visto?: string | null;
 };
 
@@ -150,6 +150,14 @@ export default function StudentDetailView() {
     const raw = String(pago?.periodo_pagado || pago?.observaciones || "");
     const match = raw.match(/\d+/);
     return match ? Number(match[0]) : null;
+  };
+
+  const extractClassNumber = (value?: string | null): number | null => {
+    const text = String(value || "");
+    const match = text.match(/clase\s*#?\s*(\d{1,3})/i);
+    if (!match?.[1]) return null;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? parsed : null;
   };
 
   const esInscripcion = (pago: any) => {
@@ -245,7 +253,7 @@ export default function StudentDetailView() {
 
           const sesionesQuery = supabaseBrowserClient
             .from("sesiones_clase")
-            .select("curso_id, fecha, tema_visto")
+            .select("curso_id, fecha, tema_visto, observaciones")
             .in("curso_id", cursoIds);
 
           const { data: sesionesData } = await (fechaMin && fechaMax
@@ -253,10 +261,15 @@ export default function StudentDetailView() {
             : sesionesQuery);
 
           const temaPorCursoFecha = new Map<string, string>();
+          const claseNumeroPorCursoFecha = new Map<string, number | null>();
           (sesionesData || []).forEach((sesion: any) => {
             const key = `${sesion?.curso_id || ""}-${sesion?.fecha || ""}`;
             if (!temaPorCursoFecha.has(key)) {
               temaPorCursoFecha.set(key, sesion?.tema_visto || "");
+              claseNumeroPorCursoFecha.set(
+                key,
+                extractClassNumber(sesion?.observaciones || sesion?.tema_visto || "")
+              );
             }
           });
 
@@ -276,7 +289,11 @@ export default function StudentDetailView() {
               estado: asistencia.estado || null,
               observaciones: asistencia.observaciones || null,
               matricula_id: asistencia.matricula_id || null,
-              curso: construirNombreGrupo(cursoData) || "Curso",
+              clase_numero:
+                extractClassNumber(asistencia?.observaciones || "") ??
+                claseNumeroPorCursoFecha.get(key) ??
+                extractClassNumber(temaPorCursoFecha.get(key) || "") ??
+                null,
               tema_visto: temaPorCursoFecha.get(key) || null,
             };
           });
@@ -1435,9 +1452,10 @@ export default function StudentDetailView() {
                       render: (val: string | null) => (val ? formatDate(val) : "-")
                     },
                     {
-                      title: "Curso",
-                      dataIndex: "curso",
-                      render: (val: string) => <Text strong>{val || "Curso"}</Text>,
+                      title: "N° Clase",
+                      dataIndex: "clase_numero",
+                      width: 110,
+                      render: (val: number | null) => (val ? <Text strong>{val}</Text> : <Text type="secondary">-</Text>),
                     },
                     {
                       title: "Tema visto",
