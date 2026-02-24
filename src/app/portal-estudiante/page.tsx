@@ -289,6 +289,43 @@ export default function PortalEstudiante() {
     return mime === "iframe" || tipo === "iframe" || url.includes("<iframe") || url.includes("gamma.app");
   };
 
+  const isPdfMaterial = (material: any) => {
+    const mime = String(material?.mime_type || "").toLowerCase();
+    const tipo = String(material?.tipo_material || "").toLowerCase();
+    const url = String(material?.url_archivo || "").toLowerCase();
+    const nombre = String(material?.nombre_archivo || "").toLowerCase();
+    const titulo = String(material?.titulo || "").toLowerCase();
+    const texto = `${mime} ${tipo} ${url} ${nombre} ${titulo}`;
+    return mime.includes("pdf") || tipo.includes("pdf") || nombre.endsWith(".pdf") || /\.pdf(?:$|\?|#)/i.test(url) || texto.includes(" pdf ");
+  };
+
+  const obtenerPdfRelacionado = (material: any, recursosTema: any[] = []) => {
+    if (!Array.isArray(recursosTema) || !recursosTema.length) return null;
+
+    const parsedActual = parseTemaTituloMaterial(material?.titulo);
+    const tituloBase = normalizarTexto(getMaterialCanonicalTitle(material, parsedActual?.tema));
+    const temaBase = normalizarTemaComparacion(parsedActual?.tema || "");
+
+    const recursosPdf = recursosTema.filter((recurso: any) => isPdfMaterial(recurso));
+    if (!recursosPdf.length) return null;
+
+    const porTitulo = recursosPdf.find((recurso: any) => {
+      const parsed = parseTemaTituloMaterial(recurso?.titulo);
+      const tituloRecurso = normalizarTexto(getMaterialCanonicalTitle(recurso, parsed?.tema || parsedActual?.tema));
+      return Boolean(tituloBase) && tituloRecurso === tituloBase;
+    });
+    if (porTitulo) return porTitulo;
+
+    const porTema = recursosPdf.find((recurso: any) => {
+      if (!temaBase) return false;
+      const parsed = parseTemaTituloMaterial(recurso?.titulo);
+      return normalizarTemaComparacion(parsed?.tema || "") === temaBase;
+    });
+    if (porTema) return porTema;
+
+    return recursosPdf[0] || null;
+  };
+
   const abrirMaterialDidactico = (material: any, titulo: string) => {
     const src = extractIframeSrc(material?.url_archivo);
     if (!src) {
@@ -319,24 +356,38 @@ export default function PortalEstudiante() {
     window.open(src, "_blank", "noopener,noreferrer");
   };
 
-  const descargarMaterialDidactico = (material: any, titulo: string) => {
-    const src = extractIframeSrc(material?.url_archivo);
+  const descargarMaterialDidactico = (material: any, titulo: string, recursosTema: any[] = []) => {
+    const materialDescarga = isPdfMaterial(material) ? material : obtenerPdfRelacionado(material, recursosTema);
+
+    if (!materialDescarga && isIframeMaterial(material)) {
+      message.warning("Este recurso usa Gamma y no tiene versión PDF asociada para descarga.");
+      return;
+    }
+
+    const objetivoDescarga = materialDescarga || material;
+    const src = extractIframeSrc(objetivoDescarga?.url_archivo);
     if (!src) {
       message.warning("Este material no tiene un enlace válido para descargar.");
       return;
     }
 
-    if (isIframeMaterial(material)) {
+    if (isIframeMaterial(objetivoDescarga)) {
       message.info("Este material es interactivo. Se abrirá en una nueva pestaña para descarga/exportación desde origen.");
       window.open(src, "_blank", "noopener,noreferrer");
       return;
     }
 
+    const nombreArchivo = String(objetivoDescarga?.nombre_archivo || "").trim();
+    const nombreBase = String(titulo || "material-didactico").trim() || "material-didactico";
+    const downloadName = nombreArchivo.toLowerCase().endsWith(".pdf")
+      ? nombreArchivo
+      : `${nombreBase}.pdf`;
+
     const enlace = document.createElement("a");
     enlace.href = src;
     enlace.target = "_blank";
     enlace.rel = "noopener noreferrer";
-    enlace.download = String(titulo || "material-didactico").trim() || "material-didactico";
+    enlace.download = downloadName;
     document.body.appendChild(enlace);
     enlace.click();
     document.body.removeChild(enlace);
@@ -1301,7 +1352,7 @@ export default function PortalEstudiante() {
                                                   <Button size="small" type="default" onClick={() => abrirMaterialDidactico(item, titulo)}>
                                                     Ver
                                                   </Button>
-                                                  <Button size="small" type="primary" ghost icon={<DownloadOutlined />} onClick={() => descargarMaterialDidactico(item, titulo)}>
+                                                  <Button size="small" type="primary" ghost icon={<DownloadOutlined />} onClick={() => descargarMaterialDidactico(item, titulo, recursosTema)}>
                                                     Descargar
                                                   </Button>
                                                 </Space>
