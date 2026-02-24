@@ -897,11 +897,6 @@ export default function PortalEstudiante() {
         return;
       }
 
-      const intentoPrevio = (quizIntentos || []).find(
-        (intento: any) =>
-          String(intento?.quiz_id || "") === String(quizActivo?.id || "") &&
-          String(intento?.matricula_id || "") === String(matriculaQuiz?.id || "")
-      );
       const aprobado = quizAprobado(calificacion);
 
       const payload = {
@@ -937,6 +932,24 @@ export default function PortalEstudiante() {
 
         if (errorCrearIntento) throw errorCrearIntento;
       }
+
+      const intentoLocal = {
+        id: String(intentosExistentes?.[0]?.id || `${quizActivo.id}-${matriculaQuiz.id}`),
+        ...payload,
+        enviado_at: new Date().toISOString(),
+      };
+
+      setQuizIntentos((prev) => {
+        const base = Array.isArray(prev) ? prev : [];
+        const restantes = base.filter(
+          (intento: any) =>
+            !(
+              String(intento?.quiz_id || "") === String(payload.quiz_id || "") &&
+              String(intento?.matricula_id || "") === String(payload.matricula_id || "")
+            )
+        );
+        return [intentoLocal, ...restantes];
+      });
 
       if (!aprobado) {
         const primeraErrada = (respuestasErradas || [])[0] as any;
@@ -978,7 +991,7 @@ export default function PortalEstudiante() {
             </Space>
           ),
         });
-        await cargarDatos();
+        message.info(`Intento guardado: ${calificacion}/5 (${porcentaje}%). Puedes volver a intentarlo.`);
         return;
       }
 
