@@ -319,6 +319,29 @@ export default function PortalEstudiante() {
     window.open(src, "_blank", "noopener,noreferrer");
   };
 
+  const descargarMaterialDidactico = (material: any, titulo: string) => {
+    const src = extractIframeSrc(material?.url_archivo);
+    if (!src) {
+      message.warning("Este material no tiene un enlace válido para descargar.");
+      return;
+    }
+
+    if (isIframeMaterial(material)) {
+      message.info("Este material es interactivo. Se abrirá en una nueva pestaña para descarga/exportación desde origen.");
+      window.open(src, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const enlace = document.createElement("a");
+    enlace.href = src;
+    enlace.target = "_blank";
+    enlace.rel = "noopener noreferrer";
+    enlace.download = String(titulo || "material-didactico").trim() || "material-didactico";
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+  };
+
   const obtenerSaludoBienvenida = (genero?: string | null) => {
     const generoNormalizado = String(genero || "")
       .trim()
@@ -1223,6 +1246,17 @@ export default function PortalEstudiante() {
                     const temaId = String(tema?.id || `tema-${temaIndex}`);
                     const recursosTema = obtenerRecursosTema(tema, cicloId);
                     const insumosTema = obtenerInsumosTema(tema, cicloId);
+                    const quizTema = (quizzesClase || []).find(
+                      (quiz: any) => String(quiz?.pensum_curso_id || "") === String(tema?.id || "")
+                    );
+                    const intentoQuizTema = quizTema
+                      ? (quizIntentos || []).find(
+                          (intento: any) =>
+                            String(intento?.quiz_id || "") === String(quizTema?.id || "") &&
+                            String(intento?.matricula_id || "") === String(matriculaSeleccionada?.id || "")
+                        )
+                      : null;
+                    const notaQuizTema = intentoQuizTema ? Number(intentoQuizTema?.calificacion || 0) : null;
                     const insumosMarcados = insumosTema.filter((insumo: any) => {
                       const key = `${matriculaSeleccionada.id}|${temaId}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
                       return Boolean(checklistInsumos[key]);
@@ -1242,25 +1276,52 @@ export default function PortalEstudiante() {
                               ) : null}
 
                               {vista === "plan" ? (
-                                recursosTema.length ? (
-                                  <Space wrap size={isMobile ? 6 : 10} direction={isMobile ? "vertical" : "horizontal"}>
-                                    {recursosTema.map((item: any, itemIndex: number) => {
-                                      const titulo = getMaterialCanonicalTitle(item, tema?.nombre_curso) || item.titulo || "Recurso";
-                                      return (
-                                        <Tag
-                                          key={`${temaId}-recurso-${itemIndex}`}
-                                          icon={getMaterialIcon(item)}
-                                          style={{ cursor: item?.url_archivo ? "pointer" : "default" }}
-                                          onClick={() => abrirMaterialDidactico(item, titulo)}
-                                        >
-                                          {titulo}
-                                        </Tag>
-                                      );
-                                    })}
+                                <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                                  {recursosTema.length ? (
+                                    <Space wrap size={isMobile ? 6 : 10} direction={isMobile ? "vertical" : "horizontal"}>
+                                      {recursosTema.map((item: any, itemIndex: number) => {
+                                        const titulo = getMaterialCanonicalTitle(item, tema?.nombre_curso) || item.titulo || "Recurso";
+                                        return (
+                                              <Space
+                                                key={`${temaId}-recurso-${itemIndex}`}
+                                                size={8}
+                                                wrap
+                                                style={{
+                                                  width: "100%",
+                                                  justifyContent: "space-between",
+                                                  border: "1px solid #f0f0f0",
+                                                  borderRadius: 8,
+                                                  padding: "6px 8px",
+                                                }}
+                                              >
+                                                <Space size={6} wrap>
+                                                  <Tag icon={getMaterialIcon(item)}>{titulo}</Tag>
+                                                </Space>
+                                                <Space size={4}>
+                                                  <Button size="small" type="default" onClick={() => abrirMaterialDidactico(item, titulo)}>
+                                                    Ver
+                                                  </Button>
+                                                  <Button size="small" type="primary" ghost icon={<DownloadOutlined />} onClick={() => descargarMaterialDidactico(item, titulo)}>
+                                                    Descargar
+                                                  </Button>
+                                                </Space>
+                                              </Space>
+                                        );
+                                      })}
+                                    </Space>
+                                  ) : (
+                                    <Text type="secondary" style={{ fontSize: 12 }}>Sin material didáctico</Text>
+                                  )}
+
+                                  <Space wrap size={8}>
+                                    <Tag color="geekblue">
+                                      {`Actividad evaluatoria: ${quizTema?.titulo || "Sin actividad"}`}
+                                    </Tag>
+                                    <Tag color={notaQuizTema == null ? "default" : quizAprobado(notaQuizTema) ? "green" : "red"}>
+                                      {`Calificación: ${notaQuizTema == null ? "-" : `${notaQuizTema}/5`}`}
+                                    </Tag>
                                   </Space>
-                                ) : (
-                                  <Text type="secondary" style={{ fontSize: 12 }}>Sin material didáctico</Text>
-                                )
+                                </Space>
                               ) : insumosTema.length ? (
                                 <Space direction="vertical" size={4} style={{ width: "100%" }}>
                                   {insumosTema.map((insumo: any, itemIndex: number) => {
