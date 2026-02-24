@@ -59,10 +59,11 @@ import { descargarCertificado as descargarCertificadoPDF } from "@utils/certific
 dayjs.locale("es");
 
 const { Title, Text } = Typography;
-const UMBRAL_APROBACION_QUIZ = 70;
+const UMBRAL_APROBACION_QUIZ_PORCENTAJE = 70;
+const UMBRAL_APROBACION_QUIZ_NOTA = (UMBRAL_APROBACION_QUIZ_PORCENTAJE / 100) * 5;
 
 const quizAprobado = (calificacion: number | null | undefined) =>
-  Number(calificacion || 0) > UMBRAL_APROBACION_QUIZ;
+  Number(calificacion || 0) > UMBRAL_APROBACION_QUIZ_NOTA;
 
 export default function PortalEstudiante() {
   const screens = Grid.useBreakpoint();
@@ -737,7 +738,8 @@ export default function PortalEstudiante() {
       });
 
       const total = respuestas.length || 1;
-      const calificacion = Number(((correctas / total) * 100).toFixed(2));
+      const porcentaje = Number(((correctas / total) * 100).toFixed(2));
+      const calificacion = Number(((correctas / total) * 5).toFixed(2));
 
       const matriculaQuiz = obtenerMatriculaDeQuiz(quizActivo);
       if (!matriculaQuiz?.id) {
@@ -764,8 +766,8 @@ export default function PortalEstudiante() {
       const aprobado = quizAprobado(calificacion);
       message.success(
         aprobado
-          ? `Quiz aprobado: ${correctas}/${total} (${calificacion}%).`
-          : `Quiz no aprobado: ${correctas}/${total} (${calificacion}%). Debes repetirlo.`
+          ? `Quiz aprobado. Calificación final: ${calificacion}/5 (${porcentaje}%).`
+          : `Quiz no aprobado. Calificación final: ${calificacion}/5 (${porcentaje}%). Debes repetirlo.`
       );
       setQuizModalOpen(false);
       setQuizActivo(null);
@@ -1497,7 +1499,18 @@ export default function PortalEstudiante() {
               columns={[
                 { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
                 { title: "Concepto", dataIndex: "concepto", render: (v) => v || "-" },
-                { title: "Nota", dataIndex: "calificacion", render: (c) => <Tag color={c >= 70 ? "green" : "red"}>{c}</Tag> },
+                {
+                  title: "Nota",
+                  dataIndex: "calificacion",
+                  render: (c, r: any) => {
+                    const valor = Number(c || 0);
+                    const esQuiz = String(r?.tipo_evaluacion || "").toLowerCase() === "quiz";
+                    if (esQuiz) {
+                      return <Tag color={quizAprobado(valor) ? "green" : "red"}>{`${valor}/5`}</Tag>;
+                    }
+                    return <Tag color={valor >= 70 ? "green" : "red"}>{valor}</Tag>;
+                  },
+                },
                 { title: "Fecha", dataIndex: "fecha_evaluacion", render: (f) => formatDate(f) },
               ]}
             />
@@ -1539,11 +1552,13 @@ export default function PortalEstudiante() {
                     const correctas = Number(intento?.respuestas_correctas || 0);
                     const total = Number(intento?.total_preguntas || 0);
                     const score = Number(intento?.calificacion || 0);
+                    const porcentaje = total > 0 ? Number(((correctas / total) * 100).toFixed(2)) : 0;
                     const aprobado = quizAprobado(score);
                     return (
                       <Space direction="vertical" size={0}>
                         <Text>{`${correctas}/${total}`}</Text>
-                        <Tag color={aprobado ? "green" : "red"}>{`${score}%`}</Tag>
+                        <Tag color={aprobado ? "green" : "red"}>{`${score}/5`}</Tag>
+                        <Text type="secondary" style={{ fontSize: 11 }}>{`${porcentaje}%`}</Text>
                       </Space>
                     );
                   },
