@@ -6,20 +6,16 @@ returns trigger
 language plpgsql
 as $$
 declare
-  v_tema_id uuid;
   v_concepto text;
   v_actualizadas integer := 0;
+  v_quiz_titulo text;
 begin
-  select q.pensum_curso_id
-    into v_tema_id
+  select q.titulo
+    into v_quiz_titulo
   from public.quizzes_clase q
   where q.id = new.quiz_id;
 
-  if v_tema_id is null then
-    return new;
-  end if;
-
-  v_concepto := 'Quiz de clase';
+  v_concepto := concat('Quiz de clase: ', coalesce(nullif(trim(v_quiz_titulo), ''), 'Quiz'));
 
   update public.calificaciones
      set nota = new.calificacion,
@@ -27,15 +23,14 @@ begin
          fecha_evaluacion = new.enviado_at::date,
          observaciones = concat('Quiz: ', new.respuestas_correctas, '/', new.total_preguntas, ' correctas')
    where matricula_id = new.matricula_id
-     and tema_id = v_tema_id
-     and tipo_evaluacion = 'quiz';
+     and tipo_evaluacion = 'quiz'
+     and concepto = v_concepto;
 
   get diagnostics v_actualizadas = row_count;
 
   if v_actualizadas = 0 then
     insert into public.calificaciones (
       matricula_id,
-      tema_id,
       concepto,
       nota,
       calificacion,
@@ -45,7 +40,6 @@ begin
     )
     values (
       new.matricula_id,
-      v_tema_id,
       v_concepto,
       new.calificacion,
       new.calificacion,
