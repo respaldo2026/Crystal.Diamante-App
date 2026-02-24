@@ -215,6 +215,50 @@ export default function PortalEstudiante() {
     return <FileOutlined />;
   };
 
+  const getIndicadorVisualPreguntaQuiz = (pregunta?: string | null) => {
+    const texto = normalizarTexto(pregunta);
+
+    const reglas = [
+      {
+        regex: /(hepatitis|vih|vph|virus|bacteria|hongo|microorganismo|infeccion|onicomicosis|pseudomonas)/,
+        emoji: "🦠",
+        etiqueta: "Riesgo biológico",
+        color: "red",
+      },
+      {
+        regex: /(autoclave|estufa|esteriliz|desinfeccion|detergente|glutaraldehido|amonio|poe)/,
+        emoji: "🧪",
+        etiqueta: "Esterilización",
+        color: "purple",
+      },
+      {
+        regex: /(anatomia|mano|una|uña|falange|tendon|hiponiquio|lecho|matriz|placa ungueal)/,
+        emoji: "🖐️",
+        etiqueta: "Anatomía ungueal",
+        color: "blue",
+      },
+      {
+        regex: /(residuo|bolsa roja|bolsa negra|guardian|cortopunzante|desechar|descartar)/,
+        emoji: "♻️",
+        etiqueta: "Gestión de residuos",
+        color: "green",
+      },
+      {
+        regex: /(accidente biologico|sangre|riesgo|protocolo|supuracion|enrojecimiento|dolor)/,
+        emoji: "⚠️",
+        etiqueta: "Protocolo de seguridad",
+        color: "orange",
+      },
+    ];
+
+    const regla = reglas.find((item) => item.regex.test(texto));
+    return regla || {
+      emoji: "📘",
+      etiqueta: "Bioseguridad",
+      color: "geekblue",
+    };
+  };
+
   const normalizeHttpUrl = (value?: string | null) => {
     const raw = String(value || "").trim().replace(/&amp;/gi, "&");
     if (!raw) return "";
@@ -2051,6 +2095,10 @@ export default function PortalEstudiante() {
                     bodyStyle={{ paddingTop: 12 }}
                   >
                     <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                      {(() => {
+                        const indicador = getIndicadorVisualPreguntaQuiz(preguntaActual.pregunta);
+                        return <Tag color={indicador.color}>{`${indicador.emoji} ${indicador.etiqueta}`}</Tag>;
+                      })()}
                       <Text>{preguntaActual.pregunta}</Text>
                       <Select
                         placeholder="Selecciona una respuesta"
