@@ -1407,7 +1407,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                         dataIndex: "calificacion",
                         render: (valor: number) => {
                           const nota = Number(valor || 0);
-                          const aprobado = nota > 3.5;
+                          const aprobado = nota > 3.75;
                           return <Tag color={aprobado ? "green" : "red"}>{`${nota}/5`}</Tag>;
                         },
                       },

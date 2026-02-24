@@ -59,7 +59,7 @@ import { descargarCertificado as descargarCertificadoPDF } from "@utils/certific
 dayjs.locale("es");
 
 const { Title, Text } = Typography;
-const UMBRAL_APROBACION_QUIZ_PORCENTAJE = 70;
+const UMBRAL_APROBACION_QUIZ_PORCENTAJE = 75;
 const UMBRAL_APROBACION_QUIZ_NOTA = (UMBRAL_APROBACION_QUIZ_PORCENTAJE / 100) * 5;
 
 const quizAprobado = (calificacion: number | null | undefined) =>
@@ -852,6 +852,14 @@ export default function PortalEstudiante() {
       const total = respuestas.length || 1;
       const porcentaje = Number(((correctas / total) * 100).toFixed(2));
       const calificacion = Number(((correctas / total) * 5).toFixed(2));
+      const aprobado = quizAprobado(calificacion);
+
+      if (!aprobado) {
+        message.warning(
+          `Debes superar ${UMBRAL_APROBACION_QUIZ_PORCENTAJE}% para guardar el quiz. Resultado actual: ${calificacion}/5 (${porcentaje}%).`
+        );
+        return;
+      }
 
       const matriculaQuiz = obtenerMatriculaDeQuiz(quizActivo);
       if (!matriculaQuiz?.id) {
@@ -893,12 +901,7 @@ export default function PortalEstudiante() {
         if (errorCrearIntento) throw errorCrearIntento;
       }
 
-      const aprobado = quizAprobado(calificacion);
-      message.success(
-        aprobado
-          ? `Quiz aprobado. Calificación final: ${calificacion}/5 (${porcentaje}%).`
-          : `Quiz no aprobado. Calificación final: ${calificacion}/5 (${porcentaje}%). Debes repetirlo.`
-      );
+      message.success(`Quiz aprobado y guardado. Calificación final: ${calificacion}/5 (${porcentaje}%).`);
       setQuizModalOpen(false);
       setQuizActivo(null);
       setQuizPreguntas([]);
