@@ -41,6 +41,7 @@ import {
   UploadOutlined,
   ReloadOutlined,
   DeleteOutlined,
+  FilePdfOutlined,
 } from "@ant-design/icons";
 import { message, Upload } from "antd";
 import type { UploadFile } from "antd";
@@ -849,40 +850,40 @@ export default function StudentDetailView() {
         render: (url: string | null, record: Pago) =>
           url ? (
             <Space size={6} wrap>
-              <Button size="small" onClick={() => window.open(url, "_blank")}>
-                Ver PDF
-              </Button>
-              <Button size="small" icon={<PrinterOutlined />} onClick={() => handleReimprimirTicket(url)}>
-                Reimprimir
-              </Button>
-              <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRegenerarTicket(record)}>
-                Regenerar
-              </Button>
-              <Button
-                size="small"
-                icon={<WhatsAppOutlined />}
-                onClick={() => {
-                  const telefono = contactoPerfil.telefono || contactoPerfil.whatsapp;
-                  if (!telefono) {
-                    message.warning("El estudiante no tiene teléfono registrado");
-                    return;
-                  }
+              <Tooltip title="Ver PDF">
+                <Button size="small" icon={<FilePdfOutlined />} onClick={() => window.open(url, "_blank")} />
+              </Tooltip>
+              <Tooltip title="Reimprimir">
+                <Button size="small" icon={<PrinterOutlined />} onClick={() => handleReimprimirTicket(url)} />
+              </Tooltip>
+              <Tooltip title="Regenerar ticket">
+                <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRegenerarTicket(record)} />
+              </Tooltip>
+              <Tooltip title="Enviar por WhatsApp">
+                <Button
+                  size="small"
+                  icon={<WhatsAppOutlined />}
+                  onClick={() => {
+                    const telefono = contactoPerfil.telefono || contactoPerfil.whatsapp;
+                    if (!telefono) {
+                      message.warning("El estudiante no tiene teléfono registrado");
+                      return;
+                    }
 
-                  const curso = construirNombreGrupo(record.matriculas?.cursos) || "tu curso";
-                  const monto = record.monto ? `$${record.monto.toLocaleString("es-CO")}` : "(monto no indicado)";
-                  const msg = `Hola ${contactoPerfil.nombre}, te compartimos tu ticket de pago (${monto}) del curso ${curso}: ${url}`;
-                  enviarWhatsapp(telefono, msg);
-                }}
-              >
-                Enviar
-              </Button>
+                    const curso = construirNombreGrupo(record.matriculas?.cursos) || "tu curso";
+                    const monto = record.monto ? `$${record.monto.toLocaleString("es-CO")}` : "(monto no indicado)";
+                    const msg = `Hola ${contactoPerfil.nombre}, te compartimos tu ticket de pago (${monto}) del curso ${curso}: ${url}`;
+                    enviarWhatsapp(telefono, msg);
+                  }}
+                />
+              </Tooltip>
             </Space>
           ) : (
             <Space size={6} wrap>
               <Text type="secondary">No disponible</Text>
-              <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRegenerarTicket(record)}>
-                Regenerar
-              </Button>
+              <Tooltip title="Regenerar ticket">
+                <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRegenerarTicket(record)} />
+              </Tooltip>
             </Space>
           ),
       },
