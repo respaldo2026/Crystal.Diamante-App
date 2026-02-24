@@ -315,23 +315,46 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         message.warning("Ingresa una nota válida (0 a 5)");
         return;
       }
+
+      const matriculaIdNumerico = Number(matriculaId);
+      if (!Number.isFinite(matriculaIdNumerico)) {
+        message.error("No se pudo guardar la nota: matrícula inválida.");
+        return;
+      }
+
+      const temaActual = temas.find((t) => String(t.id) === String(temaId));
+      const conceptoTema = `Tema: ${temaActual?.nombre_ciclo || temaActual?.titulo || String(temaId)}`;
+      const temaIdTexto = String(temaId || "").trim();
+      const temaIdEsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(temaIdTexto);
       const key = `${temaId}-${matriculaId}`;
       setSavingCalificacionId(key);
       try {
         const payload: any = {
-          tema_id: temaId,
-          matricula_id: matriculaId,
+          matricula_id: matriculaIdNumerico,
+          concepto: conceptoTema,
           nota,
           calificacion: nota,
           tipo_evaluacion: "tema",
+          fecha_evaluacion: dayjs().format("YYYY-MM-DD"),
         };
+        if (temaIdEsUuid) {
+          payload.tema_id = temaIdTexto;
+        }
 
-        const { data: existente, error: errExistente } = await supabaseBrowserClient
+        let queryExistente = supabaseBrowserClient
           .from("calificaciones")
           .select("id")
-          .eq("matricula_id", matriculaId)
-          .eq("tema_id", temaId)
-          .maybeSingle();
+          .eq("matricula_id", matriculaIdNumerico);
+
+        if (temaIdEsUuid) {
+          queryExistente = queryExistente.eq("tema_id", temaIdTexto);
+        } else {
+          queryExistente = queryExistente
+            .eq("tipo_evaluacion", "tema")
+            .eq("concepto", conceptoTema);
+        }
+
+        const { data: existente, error: errExistente } = await queryExistente.maybeSingle();
 
         if (errExistente) {
           message.error("Error validando nota de tema: " + errExistente.message);
@@ -342,9 +365,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           const { error: errUpdate } = await supabaseBrowserClient
             .from("calificaciones")
             .update({
+              concepto: conceptoTema,
               nota,
               calificacion: nota,
               tipo_evaluacion: "tema",
+              fecha_evaluacion: dayjs().format("YYYY-MM-DD"),
             })
             .eq("id", existente.id);
 
@@ -358,7 +383,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             .insert(payload);
 
           if (errInsert) {
-            message.error("Error guardando nota de tema: " + errInsert.message);
+            const detalle = [errInsert.message, errInsert.details, errInsert.hint]
+              .filter(Boolean)
+              .join(" | ");
+            message.error("Error guardando nota de tema: " + detalle);
             return;
           }
         }
@@ -378,7 +406,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         setSavingCalificacionId(null);
       }
     },
-    [message]
+    [message, temas]
   );
 
   // Resolver params si es una Promise
