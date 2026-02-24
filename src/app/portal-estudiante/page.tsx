@@ -87,6 +87,7 @@ export default function PortalEstudiante() {
   const [quizActivo, setQuizActivo] = useState<any | null>(null);
   const [quizSaving, setQuizSaving] = useState(false);
   const [quizRespuestas, setQuizRespuestas] = useState<Record<string, string>>({});
+  const [quizBloqueActual, setQuizBloqueActual] = useState(1);
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
@@ -689,6 +690,7 @@ export default function PortalEstudiante() {
       setQuizActivo(quiz);
       setQuizPreguntas(preguntasData);
       setQuizRespuestas({});
+      setQuizBloqueActual(1);
       setQuizModalOpen(true);
     } catch (error) {
       logger.error("Error al abrir quiz", error);
@@ -773,6 +775,7 @@ export default function PortalEstudiante() {
       setQuizActivo(null);
       setQuizPreguntas([]);
       setQuizRespuestas({});
+      setQuizBloqueActual(1);
       await cargarDatos();
     } catch (error) {
       logger.error("Error enviando quiz", error);
@@ -1818,53 +1821,125 @@ export default function PortalEstudiante() {
       <Modal
         title={quizActivo?.titulo || "Responder quiz"}
         open={quizModalOpen}
-        onOk={enviarQuiz}
-        okText="Enviar quiz"
         confirmLoading={quizSaving}
         onCancel={() => {
           setQuizModalOpen(false);
           setQuizActivo(null);
           setQuizPreguntas([]);
           setQuizRespuestas({});
+          setQuizBloqueActual(1);
         }}
-        width={820}
+        width={isMobile ? "96vw" : 820}
+        styles={{ body: { maxHeight: isMobile ? "70vh" : "75vh", overflowY: "auto" } }}
+        footer={(() => {
+          const preguntasPorBloque = 5;
+          const totalBloques = Math.max(1, Math.ceil((quizPreguntas?.length || 0) / preguntasPorBloque));
+          const esUltimoBloque = quizBloqueActual >= totalBloques;
+
+          return (
+            <Space style={{ width: "100%", justifyContent: "space-between" }}>
+              <Button
+                onClick={() => setQuizBloqueActual((prev) => Math.max(1, prev - 1))}
+                disabled={quizBloqueActual <= 1 || quizSaving}
+              >
+                Anterior
+              </Button>
+
+              {!esUltimoBloque ? (
+                <Button
+                  type="primary"
+                  onClick={() => {
+                    const start = (quizBloqueActual - 1) * preguntasPorBloque;
+                    const end = start + preguntasPorBloque;
+                    const bloqueActual = (quizPreguntas || []).slice(start, end);
+                    const faltantes = bloqueActual.filter((p: any) => !quizRespuestas[String(p.id)]).length;
+
+                    if (faltantes > 0) {
+                      message.warning(`Responde las ${preguntasPorBloque} preguntas del bloque antes de continuar.`);
+                      return;
+                    }
+
+                    setQuizBloqueActual((prev) => Math.min(totalBloques, prev + 1));
+                  }}
+                  disabled={quizSaving}
+                >
+                  Siguiente bloque
+                </Button>
+              ) : (
+                <Button type="primary" onClick={enviarQuiz} loading={quizSaving}>
+                  Enviar quiz
+                </Button>
+              )}
+            </Space>
+          );
+        })()}
       >
         <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          <Alert
-            type="info"
-            showIcon
-            message={quizActivo?.descripcion || "Responde todas las preguntas antes de enviar."}
-            description={`Total de preguntas: ${quizPreguntas.length}`}
-          />
+          {(() => {
+            const preguntasPorBloque = 5;
+            const totalBloques = Math.max(1, Math.ceil((quizPreguntas?.length || 0) / preguntasPorBloque));
+            const inicio = (quizBloqueActual - 1) * preguntasPorBloque;
+            const fin = inicio + preguntasPorBloque;
+            const preguntasBloque = (quizPreguntas || []).slice(inicio, fin);
+            const respondidas = (quizPreguntas || []).filter((p: any) => Boolean(quizRespuestas[String(p.id)])).length;
+            const progreso = quizPreguntas.length > 0
+              ? Math.round((respondidas / quizPreguntas.length) * 100)
+              : 0;
 
-          {quizPreguntas.map((pregunta: any, index: number) => (
-            <Card
-              key={pregunta.id}
-              size="small"
-              title={`Pregunta ${index + 1}`}
-              bodyStyle={{ paddingTop: 12 }}
-            >
-              <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                <Text>{pregunta.pregunta}</Text>
-                <Select
-                  placeholder="Selecciona una respuesta"
-                  value={quizRespuestas[String(pregunta.id)]}
-                  onChange={(value) =>
-                    setQuizRespuestas((prev) => ({
-                      ...prev,
-                      [String(pregunta.id)]: value,
-                    }))
-                  }
-                  options={[
-                    { value: "A", label: `A) ${pregunta.opcion_a}` },
-                    { value: "B", label: `B) ${pregunta.opcion_b}` },
-                    { value: "C", label: `C) ${pregunta.opcion_c}` },
-                    { value: "D", label: `D) ${pregunta.opcion_d}` },
-                  ]}
+            return (
+              <>
+                <Card size="small">
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Row justify="space-between" align="middle">
+                      <Col>
+                        <Text strong>{`Bloque ${quizBloqueActual} de ${totalBloques}`}</Text>
+                      </Col>
+                      <Col>
+                        <Tag>{`${respondidas}/${quizPreguntas.length} respondidas`}</Tag>
+                      </Col>
+                    </Row>
+                    <Progress percent={progreso} size="small" />
+                  </Space>
+                </Card>
+
+                <Alert
+                  type="info"
+                  showIcon
+                  message={quizActivo?.descripcion || "Responde todas las preguntas antes de enviar."}
+                  description={`Este quiz está dividido en bloques de 5 preguntas para una experiencia más cómoda en móvil y escritorio.`}
                 />
-              </Space>
-            </Card>
-          ))}
+
+                {preguntasBloque.map((pregunta: any, index: number) => (
+                  <Card
+                    key={pregunta.id}
+                    size="small"
+                    title={`Pregunta ${inicio + index + 1}`}
+                    bodyStyle={{ paddingTop: 12 }}
+                  >
+                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                      <Text>{pregunta.pregunta}</Text>
+                      <Select
+                        placeholder="Selecciona una respuesta"
+                        value={quizRespuestas[String(pregunta.id)]}
+                        onChange={(value) =>
+                          setQuizRespuestas((prev) => ({
+                            ...prev,
+                            [String(pregunta.id)]: value,
+                          }))
+                        }
+                        options={[
+                          { value: "A", label: `A) ${pregunta.opcion_a}` },
+                          { value: "B", label: `B) ${pregunta.opcion_b}` },
+                          { value: "C", label: `C) ${pregunta.opcion_c}` },
+                          { value: "D", label: `D) ${pregunta.opcion_d}` },
+                        ]}
+                      />
+                    </Space>
+                  </Card>
+                ))}
+              </>
+            );
+          })()}
         </Space>
       </Modal>
 
