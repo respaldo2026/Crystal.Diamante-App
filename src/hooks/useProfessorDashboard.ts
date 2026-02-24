@@ -32,7 +32,7 @@ export interface ProfesorDashboardStats {
   porcentajeAsistencia: number;
   promedioCalificaciones: number;
   pendientesPorCalificar: number;
-  asistenciaChart: Array<{ fecha: string; porcentaje: number; presentes: number; total: number }>;
+  asistenciaChart: Array<{ fecha: string; porcentaje: number; presentes: number; total: number; clases?: string | null }>;
   calificacionesChart: Array<{ fecha: string; promedio: number; evaluaciones: number }>;
   topCursos: Array<{ nombre: string; estudiantes: number; asistencia?: number | null }>;
   horasQuincena: number;
@@ -47,6 +47,7 @@ export interface ProfesorDashboardSesion {
   cursoId: string;
   curso: string;
   tema?: string | null;
+  claseNumero?: number | null;
   horas?: number | null;
 }
 
@@ -108,6 +109,14 @@ const isAsistenciaPositiva = (estado?: string | null) => {
 };
 
 const safeNumber = (value: number) => (Number.isFinite(value) ? value : 0);
+
+const extractClassNumber = (value?: string | null): number | null => {
+  const text = String(value || "");
+  const match = text.match(/clase\s*#?\s*(\d{1,3})/i);
+  if (!match?.[1]) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 const normalizeDayText = (value: string): string =>
   value
@@ -220,14 +229,14 @@ export const fetchProfessorDashboardData = async (
       : Promise.resolve({ data: [], error: null }),
     supabaseBrowserClient
       .from("sesiones_clase")
-      .select("id, fecha, horas_dictadas, curso_id, tema_visto")
+      .select("id, fecha, horas_dictadas, curso_id, tema_visto, observaciones")
       .eq("profesor_id", profesorId)
       .gte("fecha", startOfMonth)
       .lte("fecha", endOfMonth)
       .order("fecha", { ascending: true }),
     supabaseBrowserClient
       .from("sesiones_clase")
-      .select("id, fecha, horas_dictadas, tema_visto, curso_id")
+      .select("id, fecha, horas_dictadas, tema_visto, observaciones, curso_id")
       .eq("profesor_id", profesorId)
       .gte("fecha", dayjs().startOf("day").format("YYYY-MM-DD"))
       .order("fecha", { ascending: true })
@@ -382,7 +391,14 @@ export const fetchProfessorDashboardData = async (
     })),
   ].sort((a, b) => dayjs(b.fecha).valueOf() - dayjs(a.fecha).valueOf());
 
-  const asistenciaPorFecha = new Map<string, { presentes: number; total: number }>();
+  const claseNumeroPorCursoFecha = new Map<string, number | null>();
+  (sesionesMesData || []).forEach((sesion: any) => {
+    if (!sesion?.curso_id || !sesion?.fecha) return;
+    const key = `${sesion.curso_id}-${sesion.fecha}`;
+    claseNumeroPorCursoFecha.set(key, extractClassNumber(sesion?.observaciones || sesion?.tema_visto));
+  });
+
+  const asistenciaPorFecha = new Map<string, { presentes: number; total: number; clases: Set<number> }>();
   const asistenciaPorCurso = new Map<string, { presentes: number; total: number }>();
 
   asistenciasData.forEach((asistencia: any) => {
@@ -390,10 +406,15 @@ export const fetchProfessorDashboardData = async (
     const cursoId = asistencia.matriculas?.curso_id;
     const present = isAsistenciaPositiva(asistencia.estado);
 
-    const acumuladoFecha = asistenciaPorFecha.get(fechaClave) || { presentes: 0, total: 0 };
+    const claseNumero = cursoId ? claseNumeroPorCursoFecha.get(`${cursoId}-${asistencia.fecha}`) ?? null : null;
+    const acumuladoFecha = asistenciaPorFecha.get(fechaClave) || { presentes: 0, total: 0, clases: new Set<number>() };
+    if (typeof claseNumero === "number" && Number.isFinite(claseNumero)) {
+      acumuladoFecha.clases.add(claseNumero);
+    }
     asistenciaPorFecha.set(fechaClave, {
       presentes: acumuladoFecha.presentes + (present ? 1 : 0),
       total: acumuladoFecha.total + 1,
+      clases: acumuladoFecha.clases,
     });
 
     if (cursoId) {
@@ -408,11 +429,13 @@ export const fetchProfessorDashboardData = async (
   const asistenciaChart = Array.from(asistenciaPorFecha.entries())
     .map(([fecha, values]) => {
       const porcentaje = values.total > 0 ? Math.round((values.presentes / values.total) * 100) : 0;
+      const clasesOrdenadas = Array.from(values.clases || []).sort((a, b) => a - b);
       return {
         fecha,
         porcentaje,
         presentes: values.presentes,
         total: values.total,
+        clases: clasesOrdenadas.length > 0 ? `Clase #${clasesOrdenadas.join(", #")}` : null,
       };
     })
     .slice(-8);
@@ -472,6 +495,7 @@ export const fetchProfessorDashboardData = async (
     cursoId: sesion.curso_id,
     curso: cursoNombreMap.get(sesion.curso_id) || "Curso",
     tema: sesion.tema_visto,
+    claseNumero: extractClassNumber(sesion.observaciones || sesion.tema_visto),
     horas: Number(sesion.horas_dictadas) || null,
   }));
 

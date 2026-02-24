@@ -128,6 +128,14 @@ export default function PortalEstudiante() {
     };
   };
 
+  const extractClassNumber = (value?: string | null): number | null => {
+    const text = String(value || "");
+    const match = text.match(/clase\s*#?\s*(\d{1,3})/i);
+    if (!match?.[1]) return null;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   const normalizarTemaComparacion = (valor?: string | null) =>
     normalizarTexto(valor).replace(/^\d+\s*/, "").trim();
 
@@ -495,7 +503,7 @@ export default function PortalEstudiante() {
 
           const sesionesQuery = supabaseBrowserClient
             .from("sesiones_clase")
-            .select("curso_id, fecha, tema_visto")
+            .select("curso_id, fecha, tema_visto, observaciones")
             .in("curso_id", cursoIds);
 
           const { data: sesionesData } = await (fechaMin && fechaMax
@@ -503,10 +511,12 @@ export default function PortalEstudiante() {
             : sesionesQuery);
 
           const temaPorCursoFecha = new Map<string, string>();
+          const claseNumeroPorCursoFecha = new Map<string, number | null>();
           (sesionesData || []).forEach((sesion: any) => {
             const key = `${sesion?.curso_id || ""}-${sesion?.fecha || ""}`;
             if (!temaPorCursoFecha.has(key)) {
               temaPorCursoFecha.set(key, sesion?.tema_visto || "");
+              claseNumeroPorCursoFecha.set(key, extractClassNumber(sesion?.observaciones || sesion?.tema_visto));
             }
           });
 
@@ -516,6 +526,7 @@ export default function PortalEstudiante() {
             return {
               ...asistencia,
               tema_visto: temaPorCursoFecha.get(key) || null,
+              clase_numero: extractClassNumber(asistencia?.observaciones) ?? claseNumeroPorCursoFecha.get(key) ?? null,
             };
           });
         }
@@ -1242,6 +1253,7 @@ export default function PortalEstudiante() {
               columns={[
                 { title: "Fecha", dataIndex: "fecha", render: (f) => formatDate(f) },
                 { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
+                { title: "Clase #", dataIndex: "clase_numero", width: 90, render: (n) => n || "-" },
                 { title: "Tema visto", dataIndex: "tema_visto", render: (t) => t || "-" },
                 { title: "Estado", dataIndex: "estado", render: (e) => <Tag color={e === "presente" ? "green" : "red"}>{e?.toUpperCase()}</Tag> },
               ]}

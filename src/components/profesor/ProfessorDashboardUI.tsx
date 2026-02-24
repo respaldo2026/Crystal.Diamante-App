@@ -187,7 +187,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
 
   const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre } = resolvedDashboard;
   const statsData = stats ?? fallbackStats;
-  const proximasSesionesData = dedupeByKey(proximasSesiones || [], (sesion: any) => `${sesion.cursoId ?? ""}-${sesion.fecha ?? ""}-${sesion.tema ?? ""}`);
+  const proximasSesionesData = dedupeByKey(proximasSesiones || [], (sesion: any) => `${sesion.cursoId ?? ""}-${sesion.fecha ?? ""}-${sesion.tema ?? ""}-${sesion.claseNumero ?? ""}`);
   const pendientesData = dedupeByKey(pendientes || [], (pendiente: any) => `${pendiente.cursoId ?? ""}-${pendiente.concepto ?? ""}-${pendiente.fecha ?? ""}`);
   const pagosData = dedupeByKey(pagos || [], (pago: any) => `${pago.id ?? ""}-${pago.fecha ?? ""}-${pago.monto ?? ""}-${pago.tipo ?? ""}`);
   const [financialOpen, setFinancialOpen] = useState(false);
@@ -242,7 +242,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     },
     tooltip: {
       formatter: (datum: any) => ({
-        name: "Asistencia",
+        name: datum?.clases ? `Asistencia (${datum.clases})` : "Asistencia",
         value: `${datum.porcentaje}%`,
       }),
     },
@@ -815,6 +815,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                           description={
                             <Space split={<Divider type="vertical" />}> 
                               <span>{dayjs(sesion.fecha).format("ddd D MMM, HH:mm")}</span>
+                              {sesion.claseNumero ? <span>Clase #{sesion.claseNumero}</span> : null}
                               {sesion.tema ? <span>{sesion.tema}</span> : null}
                               {sesion.horas ? <span>{sesion.horas} hrs</span> : null}
                             </Space>

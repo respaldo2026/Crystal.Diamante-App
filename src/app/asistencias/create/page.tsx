@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Input, Grid } from "antd";
+import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Input, Grid, Select } from "antd";
 import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -24,6 +24,8 @@ export default function TomarAsistencia() {
   const [cursoNombre, setCursoNombre] = useState<string>("");
   const [cursos, setCursos] = useState<any[]>([]);
   const [temaVisto, setTemaVisto] = useState("");
+  const [numeroClase, setNumeroClase] = useState<number | null>(null);
+  const [clasesDisponibles, setClasesDisponibles] = useState<Array<{ numero: number; nombre: string }>>([]);
   
   // Estado local para guardar la asistencia antes de enviarla
   // Formato: { "id_matricula": "presente", ... }
@@ -109,6 +111,63 @@ export default function TomarAsistencia() {
 
     cargarClase();
   }, [cursoSeleccionado, message]);
+
+  useEffect(() => {
+    if (!cursoSeleccionado) {
+      setClasesDisponibles([]);
+      setNumeroClase(null);
+      return;
+    }
+
+    const cargarClasesTemario = async () => {
+      try {
+        const { data, error } = await supabaseBrowserClient
+          .from("temas_curso")
+          .select("id, titulo, orden")
+          .eq("curso_id", cursoSeleccionado)
+          .order("orden", { ascending: true });
+
+        if (error) {
+          console.error(error);
+          setClasesDisponibles([]);
+          return;
+        }
+
+        const base = (data || []).map((item: any, index: number) => ({
+          numero: Number(item?.orden) > 0 ? Number(item.orden) : index + 1,
+          nombre: item?.titulo || `Clase ${index + 1}`,
+        }));
+
+        const uniqueByNumero = Array.from(
+          new Map(base.map((item) => [item.numero, item])).values()
+        ).sort((a, b) => a.numero - b.numero);
+
+        setClasesDisponibles(uniqueByNumero);
+        if (uniqueByNumero.length > 0) {
+          setNumeroClase((prev) => prev ?? uniqueByNumero[0].numero);
+        }
+      } catch (error) {
+        console.error(error);
+        setClasesDisponibles([]);
+      }
+    };
+
+    cargarClasesTemario();
+  }, [cursoSeleccionado]);
+
+  const opcionesClase = useMemo(() => {
+    if (clasesDisponibles.length > 0) {
+      return clasesDisponibles.map((clase) => ({
+        value: clase.numero,
+        label: `Clase ${clase.numero} · ${clase.nombre}`,
+      }));
+    }
+
+    return Array.from({ length: 60 }, (_, i) => {
+      const numero = i + 1;
+      return { value: numero, label: `Clase ${numero}` };
+    });
+  }, [clasesDisponibles]);
 
   // Función para cambiar estado individual
   const toggleEstado = useCallback((matriculaId: number) => {
@@ -209,14 +268,23 @@ export default function TomarAsistencia() {
       return;
     }
 
+    if (!numeroClase || Number(numeroClase) <= 0) {
+      message.warning("Selecciona el número de la clase antes de guardar");
+      return;
+    }
+
     setGuardando(true);
     try {
       const cursoSeleccionadoData = cursos.find((c) => Number(c.id) === Number(cursoSeleccionado));
       const temaLimpio = temaVisto.trim();
       const fechaSesion = fecha.format("YYYY-MM-DD");
+      const claseSeleccionada = clasesDisponibles.find((c) => Number(c.numero) === Number(numeroClase));
+      const nombreClase = temaLimpio || claseSeleccionada?.nombre || `Clase ${numeroClase}`;
+      const referenciaClase = `Clase #${numeroClase}`;
+      const detalleClase = `${referenciaClase} · ${nombreClase}`;
 
       const guardarTemaSesion = async () => {
-        if (!temaLimpio) return;
+        if (!nombreClase) return;
 
         const { data: sesionExistente, error: errSesionExistente } = await supabaseBrowserClient
           .from("sesiones_clase")
@@ -232,7 +300,7 @@ export default function TomarAsistencia() {
         if (sesionExistente?.id) {
           const { error: errUpdateSesion } = await supabaseBrowserClient
             .from("sesiones_clase")
-            .update({ tema_visto: temaLimpio })
+            .update({ tema_visto: nombreClase, observaciones: detalleClase })
             .eq("id", sesionExistente.id);
 
           if (errUpdateSesion) throw errUpdateSesion;
@@ -246,8 +314,8 @@ export default function TomarAsistencia() {
             profesor_id: cursoSeleccionadoData?.profesor_id || null,
             fecha: fechaSesion,
             horas_dictadas: 0,
-            tema_visto: temaLimpio,
-            observaciones: "Sesión registrada desde llamado de lista",
+            tema_visto: nombreClase,
+            observaciones: `${detalleClase}. Sesión registrada desde llamado de lista`,
           });
 
         if (errInsertSesion) throw errInsertSesion;
@@ -257,7 +325,7 @@ export default function TomarAsistencia() {
         matricula_id: alumno.id,
         fecha: fechaSesion,
         estado: asistenciasMap[alumno.id],
-        observaciones: "Clase regular",
+        observaciones: detalleClase,
       }));
 
       const { error } = await supabaseBrowserClient
@@ -273,7 +341,7 @@ export default function TomarAsistencia() {
             message.warning("⚠️ La asistencia ya existía, pero no se pudo guardar el tema del día.");
             return;
           }
-          message.warning(temaLimpio
+          message.warning(nombreClase
             ? "⚠️ La asistencia ya existía para esta fecha. Se actualizó el tema del día."
             : "⚠️ Ya se tomó asistencia para este curso en esta fecha.");
           return;
@@ -403,9 +471,29 @@ export default function TomarAsistencia() {
               />
             </div>
           </Col>
+          <Col xs={24} md={12}>
+            <div>
+              <Text strong>Número de clase:</Text>
+              <Select
+                style={{ width: "100%", marginTop: 8 }}
+                value={numeroClase ?? undefined}
+                options={opcionesClase}
+                onChange={(value) => {
+                  setNumeroClase(Number(value));
+                  const clase = clasesDisponibles.find((item) => Number(item.numero) === Number(value));
+                  if (clase?.nombre && !temaVisto.trim()) {
+                    setTemaVisto(clase.nombre);
+                  }
+                }}
+                placeholder="Selecciona el número de la clase"
+                showSearch
+                optionFilterProp="label"
+              />
+            </div>
+          </Col>
           <Col xs={24}>
             <div>
-              <Text strong>Tema visto del día (opcional):</Text>
+              <Text strong>Nombre de la clase (editable):</Text>
               <Input
                 style={{ marginTop: 8 }}
                 value={temaVisto}
@@ -413,6 +501,7 @@ export default function TomarAsistencia() {
                 placeholder="Ej: Técnica de limado, preparación de uña y aplicación de gel"
                 maxLength={180}
               />
+              <Text type="secondary">El número de clase es el dato fijo; el nombre puede ajustarse cuando sea necesario.</Text>
             </div>
           </Col>
         </Row>
