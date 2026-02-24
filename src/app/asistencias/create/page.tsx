@@ -39,12 +39,28 @@ export default function TomarAsistencia() {
     [cursoIdParam, searchParams]
   );
 
+  const extractTotalClases = useCallback((value: unknown): number | null => {
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber) && asNumber > 0) {
+      return Math.floor(asNumber);
+    }
+
+    const text = String(value || "").trim();
+    if (!text) return null;
+
+    const match = text.match(/(\d{1,3})\s*clases?/i) || text.match(/^(\d{1,3})$/);
+    if (!match?.[1]) return null;
+
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, []);
+
   // Cargar cursos al inicio
   useEffect(() => {
     const cargarCursos = async () => {
       const { data } = await supabaseBrowserClient
         .from("cursos")
-        .select("id, nombre, profesor_id")
+        .select("id, nombre, profesor_id, total_clases, programa_id, programas(id, nombre, total_clases, duracion)")
         .eq("estado", "activo");
       setCursos(data || []);
     };
@@ -125,22 +141,71 @@ export default function TomarAsistencia() {
 
     const cargarClasesTemario = async () => {
       try {
-        const { data, error } = await supabaseBrowserClient
-          .from("temas_curso")
-          .select("id, titulo, orden")
-          .eq("curso_id", cursoSeleccionado)
-          .order("orden", { ascending: true });
+        const { data: cursoData, error: errorCurso } = await supabaseBrowserClient
+          .from("cursos")
+          .select("id, programa_id, total_clases, programas(id, total_clases, duracion)")
+          .eq("id", cursoSeleccionado)
+          .maybeSingle();
 
-        if (error) {
-          console.error(error);
+        if (errorCurso) {
+          console.error(errorCurso);
           setClasesDisponibles([]);
           return;
         }
 
-        const base = (data || []).map((item: any, index: number) => ({
-          numero: Number(item?.orden) > 0 ? Number(item.orden) : index + 1,
-          nombre: item?.titulo || `Clase ${index + 1}`,
-        }));
+        let base: Array<{ numero: number; nombre: string }> = [];
+
+        if (cursoData?.programa_id) {
+          const { data: ciclosData, error: errorCiclos } = await supabaseBrowserClient
+            .from("pensum")
+            .select("id, numero_ciclo, orden")
+            .eq("programa_id", Number(cursoData.programa_id))
+            .eq("activo", true)
+            .order("orden", { ascending: true });
+
+          if (errorCiclos) {
+            console.error(errorCiclos);
+          }
+
+          const ciclos = (ciclosData || []) as any[];
+          const pensumIds = ciclos.map((c) => c.id).filter(Boolean);
+
+          if (pensumIds.length > 0) {
+            const { data: temasPrograma, error: errorTemasPrograma } = await supabaseBrowserClient
+              .from("pensum_cursos")
+              .select("id, nombre_curso, orden, pensum_id")
+              .in("pensum_id", pensumIds);
+
+            if (errorTemasPrograma) {
+              console.error(errorTemasPrograma);
+            } else {
+              const ordenCicloByPensum = new Map<string, number>();
+              ciclos.forEach((c) => {
+                ordenCicloByPensum.set(
+                  String(c.id),
+                  Number(c?.orden || c?.numero_ciclo || 9999)
+                );
+              });
+
+              const temasOrdenados = ((temasPrograma || []) as any[])
+                .slice()
+                .sort((a, b) => {
+                  const cicloA = ordenCicloByPensum.get(String(a?.pensum_id || "")) ?? 9999;
+                  const cicloB = ordenCicloByPensum.get(String(b?.pensum_id || "")) ?? 9999;
+                  if (cicloA !== cicloB) return cicloA - cicloB;
+                  const ordenA = Number(a?.orden || 9999);
+                  const ordenB = Number(b?.orden || 9999);
+                  if (ordenA !== ordenB) return ordenA - ordenB;
+                  return String(a?.nombre_curso || "").localeCompare(String(b?.nombre_curso || ""), "es", { sensitivity: "base" });
+                });
+
+              base = temasOrdenados.map((item: any, index: number) => ({
+                numero: index + 1,
+                nombre: item?.nombre_curso || `Clase ${index + 1}`,
+              }));
+            }
+          }
+        }
 
         const uniqueByNumero = Array.from(
           new Map(base.map((item) => [item.numero, item])).values()
@@ -164,11 +229,17 @@ export default function TomarAsistencia() {
       }));
     }
 
-    return Array.from({ length: 60 }, (_, i) => {
+    const cursoActual = cursos.find((c) => Number(c.id) === Number(cursoSeleccionado));
+    const totalDesdeCurso = extractTotalClases(cursoActual?.total_clases);
+    const totalDesdePrograma = extractTotalClases(cursoActual?.programas?.total_clases);
+    const totalDesdeDuracionPrograma = extractTotalClases(cursoActual?.programas?.duracion);
+    const totalClasesPrograma = totalDesdeCurso || totalDesdePrograma || totalDesdeDuracionPrograma || 20;
+
+    return Array.from({ length: totalClasesPrograma }, (_, i) => {
       const numero = i + 1;
       return { value: numero, label: `Clase ${numero}` };
     });
-  }, [clasesDisponibles]);
+  }, [clasesDisponibles, cursos, cursoSeleccionado, extractTotalClases]);
 
   // Función para cambiar estado individual
   const toggleEstado = useCallback((matriculaId: number) => {

@@ -131,6 +131,7 @@ const isHttpUrl = (value?: string | null): boolean => Boolean(normalizeHttpUrl(v
 
 interface PensumCurso {
   id: string;
+  pensum_id?: string;
   nombre_curso: string;
   descripcion: string;
   horas: number;
@@ -207,12 +208,15 @@ export default function GestorPensum({
     id: number;
     nombre: string;
     duracion: string;
+    total_clases?: number;
+    horas_por_clase?: number;
     [key: string]: unknown;
   }
   const [programaData, setProgramaData] = useState<ProgramaData | null>(null);
 
   // Estados para cursos del pensum
   const [cursosPensum, setCursosPensum] = useState<PensumCurso[]>([]);
+  const [cursosPrograma, setCursosPrograma] = useState<PensumCurso[]>([]);
   const [loadingCursos, setLoadingCursos] = useState(false);
   const [modalCursoVisible, setModalCursoVisible] = useState(false);
   const [editingCurso, setEditingCurso] = useState<PensumCurso | null>(null);
@@ -527,6 +531,124 @@ export default function GestorPensum({
       setLoadingCursos(false);
     }
   }, [message, normalizarOrdenTemas]);
+
+  const cargarCursosPrograma = useCallback(async (pensumsActuales?: Pensum[]) => {
+    try {
+      const sourcePensums = Array.isArray(pensumsActuales) ? pensumsActuales : pensums;
+      const ids = (sourcePensums || []).map((p) => String(p.id)).filter(Boolean);
+
+      if (ids.length === 0) {
+        setCursosPrograma([]);
+        return;
+      }
+
+      const { data, error } = await supabaseBrowserClient
+        .from("pensum_cursos")
+        .select("id, pensum_id, nombre_curso, descripcion, horas, creditos, tipo_curso, orden")
+        .in("pensum_id", ids);
+
+      if (error) throw error;
+
+      const cicloOrderByPensum = new Map<string, number>();
+      (sourcePensums || []).forEach((ciclo) => {
+        const order = Number(ciclo?.orden || ciclo?.numero_ciclo || 9999);
+        cicloOrderByPensum.set(String(ciclo.id), Number.isFinite(order) ? order : 9999);
+      });
+
+      const sorted = ((data || []) as PensumCurso[])
+        .slice()
+        .sort((a, b) => {
+          const cicloA = cicloOrderByPensum.get(String(a?.pensum_id || "")) ?? 9999;
+          const cicloB = cicloOrderByPensum.get(String(b?.pensum_id || "")) ?? 9999;
+          if (cicloA !== cicloB) return cicloA - cicloB;
+          const ordenA = Number(a?.orden || 9999);
+          const ordenB = Number(b?.orden || 9999);
+          if (ordenA !== ordenB) return ordenA - ordenB;
+          return String(a?.nombre_curso || "").localeCompare(String(b?.nombre_curso || ""), "es", { sensitivity: "base" });
+        });
+
+      setCursosPrograma(sorted);
+    } catch (error) {
+      console.error(error);
+      setCursosPrograma([]);
+    }
+  }, [pensums]);
+
+  const sincronizarListaClasesPrograma = useCallback(async () => {
+    const totalEsperado = Number(programaData?.total_clases || 0);
+    if (!Number.isFinite(totalEsperado) || totalEsperado <= 0) {
+      message.warning("Define 'Total de clases' en el programa antes de sincronizar la lista.");
+      return;
+    }
+
+    const ciclosOrdenados = (pensums || [])
+      .slice()
+      .sort((a, b) => Number(a?.orden || a?.numero_ciclo || 9999) - Number(b?.orden || b?.numero_ciclo || 9999));
+
+    if (ciclosOrdenados.length === 0) {
+      message.warning("No hay ciclos en el pensum. Primero configura los ciclos del programa.");
+      return;
+    }
+
+    const totalActual = cursosPrograma.length;
+    if (totalActual >= totalEsperado) {
+      message.info(`La lista ya tiene ${totalActual} clases. No se agregaron nuevas.`);
+      return;
+    }
+
+    const porCiclo = new Map<string, PensumCurso[]>();
+    (cursosPrograma || []).forEach((curso) => {
+      const key = String(curso?.pensum_id || "");
+      const current = porCiclo.get(key) || [];
+      current.push(curso);
+      porCiclo.set(key, current);
+    });
+
+    const maxOrdenPorCiclo = new Map<string, number>();
+    ciclosOrdenados.forEach((ciclo) => {
+      const key = String(ciclo.id);
+      const maxOrden = Math.max(
+        0,
+        ...(porCiclo.get(key) || []).map((item) => Number(item?.orden || 0)).filter((n) => Number.isFinite(n))
+      );
+      maxOrdenPorCiclo.set(key, maxOrden);
+    });
+
+    const horasBase = Number(programaData?.horas_por_clase || 0);
+    const inserts: Array<Record<string, any>> = [];
+
+    for (let classNumber = totalActual + 1; classNumber <= totalEsperado; classNumber += 1) {
+      const targetCiclo = ciclosOrdenados[(classNumber - 1) % ciclosOrdenados.length];
+      const cicloKey = String(targetCiclo.id);
+      const ordenActual = (maxOrdenPorCiclo.get(cicloKey) || 0) + 1;
+      maxOrdenPorCiclo.set(cicloKey, ordenActual);
+
+      inserts.push({
+        pensum_id: targetCiclo.id,
+        nombre_curso: `Clase ${classNumber}`,
+        descripcion: `Clase ${classNumber} del programa`,
+        horas: Number.isFinite(horasBase) ? horasBase : 0,
+        creditos: 0,
+        tipo_curso: "obligatorio",
+        orden: ordenActual,
+      });
+    }
+
+    if (!inserts.length) return;
+
+    const { error } = await supabaseBrowserClient.from("pensum_cursos").insert(inserts);
+    if (error) {
+      message.error(`No se pudo sincronizar la lista: ${error.message}`);
+      return;
+    }
+
+    await cargarCursosPrograma(ciclosOrdenados);
+    if (selectedCicloId) {
+      await cargarCursosPensum(selectedCicloId);
+    }
+
+    message.success(`Lista sincronizada: ${totalEsperado} clases disponibles para el programa.`);
+  }, [programaData, pensums, cursosPrograma, message, cargarCursosPrograma, selectedCicloId, cargarCursosPensum]);
 
   const handleGuardarCurso = async () => {
     try {
@@ -915,6 +1037,10 @@ export default function GestorPensum({
   }, [cargarPensums]);
 
   useEffect(() => {
+    cargarCursosPrograma();
+  }, [pensums, cargarCursosPrograma]);
+
+  useEffect(() => {
     if (selectedCicloId) {
       const cicloSeleccionado = pensums.find(p => p.id === selectedCicloId);
       if (cicloSeleccionado) {
@@ -1242,6 +1368,11 @@ export default function GestorPensum({
 
   const cicloSeleccionado = pensums.find((p) => p.id === selectedCicloId) || null;
   const totalTemas = cursosPensum.length;
+  const totalTemasPrograma = cursosPrograma.length;
+  const totalClasesEsperadasPrograma = Number(programaData?.total_clases || 0);
+  const faltantesPrograma = totalClasesEsperadasPrograma > 0
+    ? Math.max(0, totalClasesEsperadasPrograma - totalTemasPrograma)
+    : 0;
   const totalMaterialDidactico = materialesCicloDidactico.length;
   const totalMaterialNecesario = materialesClaseCiclo.length;
 
@@ -1260,12 +1391,25 @@ export default function GestorPensum({
           {programaData && (
             <Alert
               message={`Ciclos generados automáticamente`}
-              description={`Este programa tiene configurados ${pensums.length} ciclo(s) según la duración "${programaData.duracion}". Selecciona un ciclo para gestionar sus temas y materiales.`}
+              description={`Este programa tiene configurados ${pensums.length} ciclo(s) según la duración "${programaData.duracion}". Clases del programa: ${totalTemasPrograma}${totalClasesEsperadasPrograma > 0 ? ` / ${totalClasesEsperadasPrograma}` : ""}. Selecciona un ciclo para gestionar sus temas y materiales.`}
               type="info"
               showIcon
               style={{ marginBottom: 24 }}
             />
           )}
+
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Space wrap size={12}>
+              <Tag color={faltantesPrograma > 0 ? "orange" : "green"}>
+                Lista de clases: {totalTemasPrograma}{totalClasesEsperadasPrograma > 0 ? ` / ${totalClasesEsperadasPrograma}` : ""}
+              </Tag>
+              {totalClasesEsperadasPrograma > 0 && (
+                <Button type="primary" onClick={sincronizarListaClasesPrograma}>
+                  {faltantesPrograma > 0 ? `Completar ${faltantesPrograma} clases faltantes` : "Sincronizar lista de clases"}
+                </Button>
+              )}
+            </Space>
+          </Card>
 
           <div style={{ marginBottom: 24 }}>
             <Text strong style={{ fontSize: 16 }}>
@@ -1354,8 +1498,16 @@ export default function GestorPensum({
           <Card size="small" style={{ marginBottom: 16 }}>
             <Space wrap size={12}>
               <Tag color="blue">Temas: {totalTemas}</Tag>
+              <Tag color={faltantesPrograma > 0 ? "orange" : "green"}>
+                Programa: {totalTemasPrograma}{totalClasesEsperadasPrograma > 0 ? ` / ${totalClasesEsperadasPrograma}` : ""}
+              </Tag>
               <Tag color="purple">Material didáctico: {totalMaterialDidactico}</Tag>
               <Tag color="green">Material necesario: {totalMaterialNecesario}</Tag>
+              {totalClasesEsperadasPrograma > 0 && (
+                <Button size="small" onClick={sincronizarListaClasesPrograma}>
+                  Sincronizar clases del programa
+                </Button>
+              )}
             </Space>
           </Card>
 

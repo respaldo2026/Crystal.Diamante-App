@@ -95,9 +95,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modalTemaVisible, setModalTemaVisible] = useState(false);
   const [modalSesionVisible, setModalSesionVisible] = useState(false);
-  const [formTema] = Form.useForm();
   const [formSesion] = Form.useForm();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -833,26 +831,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     }
   };
 
-  const onAddTema = async (values: any) => {
-    try {
-      const { error } = await supabaseBrowserClient
-        .from("temas_curso")
-        .insert({
-          curso_id: parseInt(cursoId),
-          titulo: values.titulo,
-          descripcion: values.descripcion,
-          orden: values.orden || (temas.length + 1)
-        });
-
-      if (error) throw error;
-      formTema.resetFields();
-      setModalTemaVisible(false);
-      await cargarDatos(cursoId);
-    } catch (error) {
-      console.error("Error agregando tema:", error);
-    }
-  };
-
   const onAddSesion = async (values: any) => {
     try {
       const { error } = await supabaseBrowserClient
@@ -872,20 +850,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       await cargarDatos(cursoId);
     } catch (error) {
       console.error("Error agregando sesión:", error);
-    }
-  };
-
-  const onDeleteTema = async (temaId: string) => {
-    try {
-      const { error } = await supabaseBrowserClient
-        .from("temas_curso")
-        .delete()
-        .eq("id", temaId);
-
-      if (error) throw error;
-      await cargarDatos(cursoId);
-    } catch (error) {
-      console.error("Error eliminando tema:", error);
     }
   };
 
@@ -1095,8 +1059,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               <Card
                 title="Contenido del Curso - Pensum"
                 extra={isAdminView ? (
-                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalTemaVisible(true)}>
-                    Agregar Tema
+                  <Button type="primary" icon={<BookOutlined />} onClick={() => router.push("/programas")}>
+                    Gestionar en Programas
                   </Button>
                 ) : null}
               >
@@ -1149,11 +1113,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                               return (
                                 <List.Item
                                   key={temaId}
-                                  actions={isAdminView ? [
-                                    <Button key={`eliminar-tema-${temaId}`} type="link" danger icon={<DeleteOutlined />} onClick={() => onDeleteTema(tema.id)}>
-                                      Eliminar
-                                    </Button>
-                                  ] : []}
+                                  actions={[]}
                                 >
                                   <List.Item.Meta
                                     avatar={<span style={{ fontSize: 20, fontWeight: 700, color: "#2563eb" }}>{tema.orden || temaIndex + 1}</span>}
@@ -1455,26 +1415,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           }
         ]}
       />
-
-      {/* MODAL AGREGAR TEMA */}
-      <Modal
-        title="Agregar Tema al Temario"
-        open={isAdminView && modalTemaVisible}
-        onOk={() => formTema.submit()}
-        onCancel={() => setModalTemaVisible(false)}
-      >
-        <Form form={formTema} layout="vertical" onFinish={onAddTema}>
-          <Form.Item label="Número de Orden" name="orden">
-            <InputNumber min={1} placeholder="Ej: 1, 2, 3..." />
-          </Form.Item>
-          <Form.Item label="Título del Tema" name="titulo" rules={[{ required: true }]}>
-            <Input placeholder="Ej: Introducción a React" />
-          </Form.Item>
-          <Form.Item label="Descripción" name="descripcion">
-            <Input.TextArea rows={3} placeholder="Describe brevemente qué se cubrirá en este tema..." />
-          </Form.Item>
-        </Form>
-      </Modal>
 
       {/* MODAL REGISTRAR SESIÓN */}
       <Modal
