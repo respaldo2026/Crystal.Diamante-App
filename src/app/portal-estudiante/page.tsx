@@ -878,6 +878,7 @@ export default function PortalEstudiante() {
           if (!correcta || marcada === correcta) return null;
 
           return {
+            preguntaId: String(respuesta.pregunta_id || ""),
             orden: Number(pregunta?.orden || 0),
             pregunta: String(pregunta?.pregunta || "Pregunta"),
             respuestaMarcada: obtenerTextoOpcionQuiz(pregunta, marcada),
@@ -901,66 +902,7 @@ export default function PortalEstudiante() {
           String(intento?.quiz_id || "") === String(quizActivo?.id || "") &&
           String(intento?.matricula_id || "") === String(matriculaQuiz?.id || "")
       );
-      const intentoPrevioAprobado = quizAprobado(Number(intentoPrevio?.calificacion || 0));
       const aprobado = quizAprobado(calificacion);
-
-      if (!aprobado) {
-        const primeraErrada = (respuestasErradas || [])[0] as any;
-        const primeraErradaIndex = (quizPreguntas || []).findIndex(
-          (pregunta: any) => String(pregunta?.id || "") === String(primeraErrada?.preguntaId || "")
-        );
-
-        Modal.warning({
-          title: "Debes mejorar tu puntaje para poder continuar",
-          okText: "Entendido",
-          width: isMobile ? "94vw" : 780,
-          onOk: () => {
-            if (intentoPrevioAprobado) {
-              setQuizModalOpen(false);
-              setQuizActivo(null);
-              setQuizPreguntas([]);
-              setQuizRespuestas({});
-              setQuizPreguntaActual(0);
-              setQuizAnimando(false);
-              return;
-            }
-
-            if (primeraErradaIndex >= 0) {
-              setQuizPreguntaActual(primeraErradaIndex);
-            }
-          },
-          content: (
-            <Space direction="vertical" size={10} style={{ width: "100%" }}>
-              <Text>
-                {`Resultado actual: ${calificacion}/5 (${porcentaje}%). Debes obtener mínimo ${UMBRAL_APROBACION_QUIZ_PORCENTAJE}% para continuar.`}
-              </Text>
-              {intentoPrevioAprobado ? (
-                <Text type="secondary">
-                  Ya tienes un intento previo aprobado. Se conserva esa calificación para continuar en el pensum.
-                </Text>
-              ) : null}
-              <Text strong>Respuestas por mejorar:</Text>
-              <List
-                size="small"
-                bordered
-                dataSource={respuestasErradas}
-                locale={{ emptyText: "No se encontraron respuestas erradas para mostrar." }}
-                renderItem={(item: any) => (
-                  <List.Item>
-                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                      <Text strong>{`Pregunta ${item.orden || "-"}`}</Text>
-                      <Text>{item.pregunta}</Text>
-                      <Text type="danger">{`Tu respuesta: ${item.respuestaMarcada}`}</Text>
-                      <Text type="success">{`Respuesta correcta: ${item.respuestaCorrecta}`}</Text>
-                    </Space>
-                  </List.Item>
-                )}
-              />
-            </Space>
-          ),
-        });
-        return;
-      }
 
       const payload = {
         quiz_id: quizActivo.id,
@@ -994,6 +936,50 @@ export default function PortalEstudiante() {
           .insert(payload);
 
         if (errorCrearIntento) throw errorCrearIntento;
+      }
+
+      if (!aprobado) {
+        const primeraErrada = (respuestasErradas || [])[0] as any;
+        const primeraErradaIndex = (quizPreguntas || []).findIndex(
+          (pregunta: any) => String(pregunta?.id || "") === String(primeraErrada?.preguntaId || "")
+        );
+
+        Modal.warning({
+          title: "Debes mejorar tu puntaje para poder continuar",
+          okText: "Entendido",
+          width: isMobile ? "94vw" : 780,
+          onOk: () => {
+            if (primeraErradaIndex >= 0) {
+              setQuizPreguntaActual(primeraErradaIndex);
+            }
+          },
+          content: (
+            <Space direction="vertical" size={10} style={{ width: "100%" }}>
+              <Text>
+                {`Resultado actual: ${calificacion}/5 (${porcentaje}%). Debes obtener mínimo ${UMBRAL_APROBACION_QUIZ_PORCENTAJE}% para continuar.`}
+              </Text>
+              <Text strong>Respuestas por mejorar:</Text>
+              <List
+                size="small"
+                bordered
+                dataSource={respuestasErradas}
+                locale={{ emptyText: "No se encontraron respuestas erradas para mostrar." }}
+                renderItem={(item: any) => (
+                  <List.Item>
+                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                      <Text strong>{`Pregunta ${item.orden || "-"}`}</Text>
+                      <Text>{item.pregunta}</Text>
+                      <Text type="danger">{`Tu respuesta: ${item.respuestaMarcada}`}</Text>
+                      <Text type="success">{`Respuesta correcta: ${item.respuestaCorrecta}`}</Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            </Space>
+          ),
+        });
+        await cargarDatos();
+        return;
       }
 
       message.success(`Quiz aprobado y guardado. Calificación final: ${calificacion}/5 (${porcentaje}%).`);
