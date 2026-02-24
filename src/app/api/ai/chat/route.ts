@@ -1208,6 +1208,15 @@ Si el usuario pregunta por un curso/programa que NO está listado arriba, respon
 NO inventes horarios, precios ni fechas que no estén en el contexto.
 `;
 
+  prompt += `\n# 🗣️ MODO HUMANO OBLIGATORIO (PRIORIDAD MÁXIMA):
+1) Responde PRIMERO la pregunta exacta del usuario en la primera línea.
+2) No cambies de tema: si pregunta horario, responde horario; si pregunta pagos, responde pagos.
+3) Evita discurso robótico o de plantilla. Usa lenguaje natural, claro y cercano.
+4) Máximo 2 bloques cortos y una sola pregunta de seguimiento.
+5) No metas información no pedida ni invitaciones comerciales si no aportan a la pregunta actual.
+6) Si no hay dato exacto, dilo directo y ofrece el siguiente paso más útil en una frase.
+`;
+
   prompt += `\n# Mensaje del usuario:\n${userMessage}\n\n# Tu respuesta (como ${persona}):`;
 
   return prompt;
@@ -3724,6 +3733,9 @@ function buildContextualDirective(
       ? 'CASO ESPECIAL: Si pregunta por "otro curso" o "próximo grupo", NO envíes ficha comercial completa. Responde corto, natural y humano: 1) reconoce que el grupo actual puede ir avanzado, 2) da fecha/horario solo si están confirmados, 3) si no hay fecha, dilo claramente sin rodeos, 4) cierra con una sola pregunta de seguimiento.'
       : 'Mantén el enfoque en resolver la pregunta puntual sin sobrecargar con información no solicitada.',
     'REGLA DE ORO: 1 intención del usuario = 1 bloque corto de respuesta. No mezcles precio+duración+beneficios+temario en el mismo mensaje salvo que el usuario lo pida.',
+    'REGLA DE NATURALIDAD: escribe como asesor humano por WhatsApp; evita frases de guion, repeticiones y cierres de venta forzados.',
+    'REGLA DE RESPUESTA DIRECTA: abre la respuesta contestando exactamente la última pregunta del usuario en una frase corta.',
+    'REGLA DE FOCO: no hagas preguntas de "¿qué curso te interesa?" si ya está claro por contexto.',
     'Si hay objeción, estructura la respuesta en: 1) Empatía breve, 2) Dato concreto del curso, 3) Propuesta clara, 4) CTA corta.',
     'Prohibido responder con: "¿En qué curso estás interesado?" cuando el usuario ya mencionó un curso o tema específico.',
     noRepeatRule
