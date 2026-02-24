@@ -831,11 +831,29 @@ export default function PortalEstudiante() {
         calificacion,
       };
 
-      const { error: errorIntento } = await supabaseBrowserClient
+      const { data: intentoExistente, error: errorBuscarIntento } = await supabaseBrowserClient
         .from("quiz_intentos_clase")
-        .upsert(payload, { onConflict: "quiz_id,matricula_id" });
+        .select("id")
+        .eq("quiz_id", quizActivo.id)
+        .eq("matricula_id", Number(matriculaQuiz.id))
+        .maybeSingle();
 
-      if (errorIntento) throw errorIntento;
+      if (errorBuscarIntento) throw errorBuscarIntento;
+
+      if (intentoExistente?.id) {
+        const { error: errorActualizarIntento } = await supabaseBrowserClient
+          .from("quiz_intentos_clase")
+          .update(payload)
+          .eq("id", intentoExistente.id);
+
+        if (errorActualizarIntento) throw errorActualizarIntento;
+      } else {
+        const { error: errorCrearIntento } = await supabaseBrowserClient
+          .from("quiz_intentos_clase")
+          .insert(payload);
+
+        if (errorCrearIntento) throw errorCrearIntento;
+      }
 
       const aprobado = quizAprobado(calificacion);
       message.success(
