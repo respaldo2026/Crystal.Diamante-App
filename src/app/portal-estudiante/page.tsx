@@ -738,12 +738,6 @@ export default function PortalEstudiante() {
 
   const abrirQuiz = async (quiz: any) => {
     try {
-      const intentoExistente = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
-      if (intentoExistente) {
-        const notaAnterior = Number(intentoExistente?.calificacion || 0);
-        message.info(`Puedes repetir el quiz para mejorar tu nota actual (${notaAnterior}/5).`);
-      }
-
       const { data: preguntasData, error } = await supabaseBrowserClient
         .from("quiz_preguntas_clase")
         .select("id, orden, pregunta, opcion_a, opcion_b, opcion_c, opcion_d")
@@ -2047,13 +2041,6 @@ export default function PortalEstudiante() {
                     <Progress percent={progreso} size="small" />
                   </Space>
                 </Card>
-
-                <Alert
-                  type="info"
-                  showIcon
-                  message={quizActivo?.descripcion || "Responde todas las preguntas antes de enviar."}
-                  description={`Al responder, avanzas automáticamente con una transición suave. Puedes volver con el botón Anterior.`}
-                />
 
                 {preguntaActual ? (
                   <Card
