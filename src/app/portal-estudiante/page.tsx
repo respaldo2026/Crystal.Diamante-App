@@ -87,7 +87,8 @@ export default function PortalEstudiante() {
   const [quizActivo, setQuizActivo] = useState<any | null>(null);
   const [quizSaving, setQuizSaving] = useState(false);
   const [quizRespuestas, setQuizRespuestas] = useState<Record<string, string>>({});
-  const [quizBloqueActual, setQuizBloqueActual] = useState(1);
+  const [quizPreguntaActual, setQuizPreguntaActual] = useState(0);
+  const [quizAnimando, setQuizAnimando] = useState(false);
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
@@ -664,13 +665,9 @@ export default function PortalEstudiante() {
   const abrirQuiz = async (quiz: any) => {
     try {
       const intentoExistente = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
-      if (intentoExistente && quizAprobado(Number(intentoExistente?.calificacion || 0))) {
-        message.info("Este quiz ya está aprobado.");
-        return;
-      }
-
-      if (intentoExistente && !quizAprobado(Number(intentoExistente?.calificacion || 0))) {
-        message.info("Aún no alcanzas más de 70%. Debes repetir el quiz.");
+      if (intentoExistente) {
+        const notaAnterior = Number(intentoExistente?.calificacion || 0);
+        message.info(`Puedes repetir el quiz para mejorar tu nota actual (${notaAnterior}/5).`);
       }
 
       const { data: preguntasData, error } = await supabaseBrowserClient
@@ -690,7 +687,8 @@ export default function PortalEstudiante() {
       setQuizActivo(quiz);
       setQuizPreguntas(preguntasData);
       setQuizRespuestas({});
-      setQuizBloqueActual(1);
+      setQuizPreguntaActual(0);
+      setQuizAnimando(false);
       setQuizModalOpen(true);
     } catch (error) {
       logger.error("Error al abrir quiz", error);
@@ -775,7 +773,8 @@ export default function PortalEstudiante() {
       setQuizActivo(null);
       setQuizPreguntas([]);
       setQuizRespuestas({});
-      setQuizBloqueActual(1);
+      setQuizPreguntaActual(0);
+      setQuizAnimando(false);
       await cargarDatos();
     } catch (error) {
       logger.error("Error enviando quiz", error);
@@ -1570,14 +1569,12 @@ export default function PortalEstudiante() {
                   title: "Acción",
                   render: (_: any, quiz: any) => {
                     const intento = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
-                    const aprobado = quizAprobado(Number(intento?.calificacion || 0));
                     return (
                       <Button
-                        type={aprobado ? "default" : "primary"}
-                        disabled={aprobado}
+                        type="primary"
                         onClick={() => abrirQuiz(quiz)}
                       >
-                        {aprobado ? "Aprobado" : intento ? "Repetir quiz" : "Responder"}
+                        {intento ? "Mejorar nota" : "Responder"}
                       </Button>
                     );
                   },
@@ -1827,48 +1824,31 @@ export default function PortalEstudiante() {
           setQuizActivo(null);
           setQuizPreguntas([]);
           setQuizRespuestas({});
-          setQuizBloqueActual(1);
+          setQuizPreguntaActual(0);
+          setQuizAnimando(false);
         }}
         width={isMobile ? "96vw" : 820}
         styles={{ body: { maxHeight: isMobile ? "70vh" : "75vh", overflowY: "auto" } }}
         footer={(() => {
           const preguntasPorBloque = 5;
-          const totalBloques = Math.max(1, Math.ceil((quizPreguntas?.length || 0) / preguntasPorBloque));
-          const esUltimoBloque = quizBloqueActual >= totalBloques;
+          const totalPreguntas = quizPreguntas?.length || 0;
+          const esUltimaPregunta = quizPreguntaActual >= Math.max(0, totalPreguntas - 1);
 
           return (
             <Space style={{ width: "100%", justifyContent: "space-between" }}>
               <Button
-                onClick={() => setQuizBloqueActual((prev) => Math.max(1, prev - 1))}
-                disabled={quizBloqueActual <= 1 || quizSaving}
+                onClick={() => setQuizPreguntaActual((prev) => Math.max(0, prev - 1))}
+                disabled={quizPreguntaActual <= 0 || quizSaving || quizAnimando}
               >
                 Anterior
               </Button>
 
-              {!esUltimoBloque ? (
-                <Button
-                  type="primary"
-                  onClick={() => {
-                    const start = (quizBloqueActual - 1) * preguntasPorBloque;
-                    const end = start + preguntasPorBloque;
-                    const bloqueActual = (quizPreguntas || []).slice(start, end);
-                    const faltantes = bloqueActual.filter((p: any) => !quizRespuestas[String(p.id)]).length;
-
-                    if (faltantes > 0) {
-                      message.warning(`Responde las ${preguntasPorBloque} preguntas del bloque antes de continuar.`);
-                      return;
-                    }
-
-                    setQuizBloqueActual((prev) => Math.min(totalBloques, prev + 1));
-                  }}
-                  disabled={quizSaving}
-                >
-                  Siguiente bloque
+              {esUltimaPregunta ? (
+                <Button type="primary" onClick={enviarQuiz} loading={quizSaving}>
+                  Finalizar y enviar
                 </Button>
               ) : (
-                <Button type="primary" onClick={enviarQuiz} loading={quizSaving}>
-                  Enviar quiz
-                </Button>
+                <Text type="secondary">Selecciona una respuesta para continuar →</Text>
               )}
             </Space>
           );
@@ -1877,13 +1857,15 @@ export default function PortalEstudiante() {
         <Space direction="vertical" size={14} style={{ width: "100%" }}>
           {(() => {
             const preguntasPorBloque = 5;
-            const totalBloques = Math.max(1, Math.ceil((quizPreguntas?.length || 0) / preguntasPorBloque));
-            const inicio = (quizBloqueActual - 1) * preguntasPorBloque;
-            const fin = inicio + preguntasPorBloque;
-            const preguntasBloque = (quizPreguntas || []).slice(inicio, fin);
+            const totalPreguntas = quizPreguntas?.length || 0;
+            const totalBloques = Math.max(1, Math.ceil(totalPreguntas / preguntasPorBloque));
+            const quizBloqueActual = Math.floor(quizPreguntaActual / preguntasPorBloque) + 1;
+            const inicioBloque = (quizBloqueActual - 1) * preguntasPorBloque;
+            const finBloque = Math.min(inicioBloque + preguntasPorBloque, totalPreguntas);
+            const preguntaActual = quizPreguntas[quizPreguntaActual];
             const respondidas = (quizPreguntas || []).filter((p: any) => Boolean(quizRespuestas[String(p.id)])).length;
-            const progreso = quizPreguntas.length > 0
-              ? Math.round((respondidas / quizPreguntas.length) * 100)
+            const progreso = totalPreguntas > 0
+              ? Math.round((respondidas / totalPreguntas) * 100)
               : 0;
 
             return (
@@ -1895,7 +1877,15 @@ export default function PortalEstudiante() {
                         <Text strong>{`Bloque ${quizBloqueActual} de ${totalBloques}`}</Text>
                       </Col>
                       <Col>
-                        <Tag>{`${respondidas}/${quizPreguntas.length} respondidas`}</Tag>
+                        <Tag>{`${respondidas}/${totalPreguntas} respondidas`}</Tag>
+                      </Col>
+                    </Row>
+                    <Row justify="space-between" align="middle">
+                      <Col>
+                        <Text type="secondary">{`Pregunta ${quizPreguntaActual + 1} de ${totalPreguntas}`}</Text>
+                      </Col>
+                      <Col>
+                        <Text type="secondary">{`Rango bloque: ${inicioBloque + 1}-${finBloque}`}</Text>
                       </Col>
                     </Row>
                     <Progress percent={progreso} size="small" />
@@ -1906,37 +1896,49 @@ export default function PortalEstudiante() {
                   type="info"
                   showIcon
                   message={quizActivo?.descripcion || "Responde todas las preguntas antes de enviar."}
-                  description={`Este quiz está dividido en bloques de 5 preguntas para una experiencia más cómoda en móvil y escritorio.`}
+                  description={`Al responder, avanzas automáticamente con una transición suave. Puedes volver con el botón Anterior.`}
                 />
 
-                {preguntasBloque.map((pregunta: any, index: number) => (
+                {preguntaActual ? (
                   <Card
-                    key={pregunta.id}
+                    key={String(preguntaActual.id)}
+                    className={`quiz-question-transition ${quizAnimando ? "is-leaving" : ""}`}
                     size="small"
-                    title={`Pregunta ${inicio + index + 1}`}
+                    title={`Pregunta ${quizPreguntaActual + 1}`}
                     bodyStyle={{ paddingTop: 12 }}
                   >
                     <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                      <Text>{pregunta.pregunta}</Text>
+                      <Text>{preguntaActual.pregunta}</Text>
                       <Select
                         placeholder="Selecciona una respuesta"
-                        value={quizRespuestas[String(pregunta.id)]}
-                        onChange={(value) =>
+                        value={quizRespuestas[String(preguntaActual.id)]}
+                        onChange={(value) => {
                           setQuizRespuestas((prev) => ({
                             ...prev,
-                            [String(pregunta.id)]: value,
-                          }))
-                        }
+                            [String(preguntaActual.id)]: value,
+                          }));
+
+                          const totalPreguntasLocal = quizPreguntas?.length || 0;
+                          const esUltima = quizPreguntaActual >= Math.max(0, totalPreguntasLocal - 1);
+
+                          if (!esUltima && !quizAnimando) {
+                            setQuizAnimando(true);
+                            window.setTimeout(() => {
+                              setQuizPreguntaActual((prev) => Math.min(totalPreguntasLocal - 1, prev + 1));
+                              setQuizAnimando(false);
+                            }, 180);
+                          }
+                        }}
                         options={[
-                          { value: "A", label: `A) ${pregunta.opcion_a}` },
-                          { value: "B", label: `B) ${pregunta.opcion_b}` },
-                          { value: "C", label: `C) ${pregunta.opcion_c}` },
-                          { value: "D", label: `D) ${pregunta.opcion_d}` },
+                          { value: "A", label: `A) ${preguntaActual.opcion_a}` },
+                          { value: "B", label: `B) ${preguntaActual.opcion_b}` },
+                          { value: "C", label: `C) ${preguntaActual.opcion_c}` },
+                          { value: "D", label: `D) ${preguntaActual.opcion_d}` },
                         ]}
                       />
                     </Space>
                   </Card>
-                ))}
+                ) : null}
               </>
             );
           })()}
@@ -1988,6 +1990,15 @@ export default function PortalEstudiante() {
         }
         .portal-estudiante .student-section-card {
           border-radius: 14px;
+        }
+        .portal-estudiante .quiz-question-transition {
+          transition: opacity 0.18s ease, transform 0.18s ease;
+          opacity: 1;
+          transform: translateX(0);
+        }
+        .portal-estudiante .quiz-question-transition.is-leaving {
+          opacity: 0.2;
+          transform: translateX(10px);
         }
         .portal-estudiante .student-menu-btn {
           border-radius: 12px;
