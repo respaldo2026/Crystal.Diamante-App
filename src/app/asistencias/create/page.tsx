@@ -143,8 +143,9 @@ export default function TomarAsistencia() {
         ).sort((a, b) => a.numero - b.numero);
 
         setClasesDisponibles(uniqueByNumero);
-        if (uniqueByNumero.length > 0) {
-          setNumeroClase((prev) => prev ?? uniqueByNumero[0].numero);
+        const primeraClase = uniqueByNumero.at(0);
+        if (primeraClase) {
+          setNumeroClase((prev) => prev ?? primeraClase.numero);
         }
       } catch (error) {
         console.error(error);
