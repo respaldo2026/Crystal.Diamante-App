@@ -2171,12 +2171,33 @@ export default function PortalEstudiante() {
                         }}
                         style={{ width: "100%" }}
                       >
-                        <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                          <Radio value="A" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{`A) ${preguntaActual.opcion_a}`}</Radio>
-                          <Radio value="B" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{`B) ${preguntaActual.opcion_b}`}</Radio>
-                          <Radio value="C" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{`C) ${preguntaActual.opcion_c}`}</Radio>
-                          <Radio value="D" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{`D) ${preguntaActual.opcion_d}`}</Radio>
-                        </Space>
+                        {(() => {
+                          const opcionSeleccionada = quizRespuestas[String(preguntaActual.id)] || "";
+                          const opciones = [
+                            { value: "A", label: `A) ${preguntaActual.opcion_a}` },
+                            { value: "B", label: `B) ${preguntaActual.opcion_b}` },
+                            { value: "C", label: `C) ${preguntaActual.opcion_c}` },
+                            { value: "D", label: `D) ${preguntaActual.opcion_d}` },
+                          ];
+
+                          return (
+                            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                              {opciones.map((opcion) => {
+                                const activa = opcionSeleccionada === opcion.value;
+                                return (
+                                  <label
+                                    key={opcion.value}
+                                    className={`quiz-option-card ${activa ? "is-active" : ""}`}
+                                  >
+                                    <Radio value={opcion.value} style={{ whiteSpace: "normal", lineHeight: 1.35 }}>
+                                      {opcion.label}
+                                    </Radio>
+                                  </label>
+                                );
+                              })}
+                            </Space>
+                          );
+                        })()}
                       </Radio.Group>
                     </Space>
                   </Card>
@@ -2241,6 +2262,25 @@ export default function PortalEstudiante() {
         .portal-estudiante .quiz-question-transition.is-leaving {
           opacity: 0.2;
           transform: translateX(10px);
+        }
+        .portal-estudiante .quiz-option-card {
+          width: 100%;
+          display: block;
+          border: 1px solid #d9d9d9;
+          border-radius: 10px;
+          padding: 8px 10px;
+          background: #fff;
+          cursor: pointer;
+          transition: all 0.18s ease;
+        }
+        .portal-estudiante .quiz-option-card:hover {
+          border-color: #91caff;
+          background: #f5faff;
+        }
+        .portal-estudiante .quiz-option-card.is-active {
+          border-color: #1677ff;
+          background: #e6f4ff;
+          box-shadow: inset 0 0 0 1px #1677ff22;
         }
         .portal-estudiante .student-menu-btn {
           border-radius: 12px;
