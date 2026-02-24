@@ -1312,6 +1312,11 @@ export default function PortalEstudiante() {
                       const key = `${matriculaSeleccionada.id}|${temaId}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
                       return Boolean(checklistInsumos[key]);
                     }).length;
+                    const recursoPdfTema = obtenerPdfRelacionado({ titulo: tema?.nombre_curso }, recursosTema);
+                    const recursoPrincipalTema = recursosTema.find((recurso: any) => !isPdfMaterial(recurso)) || recursoPdfTema || recursosTema[0] || null;
+                    const tituloRecursoPrincipal = recursoPrincipalTema
+                      ? getMaterialCanonicalTitle(recursoPrincipalTema, tema?.nombre_curso) || tema?.nombre_curso || "Tema"
+                      : tema?.nombre_curso || "Tema";
 
                     return (
                       <List.Item key={temaId}>
@@ -1328,41 +1333,62 @@ export default function PortalEstudiante() {
 
                               {vista === "plan" ? (
                                 <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                                  {recursosTema.length ? (
-                                    <Space wrap size={isMobile ? 6 : 10} direction={isMobile ? "vertical" : "horizontal"}>
-                                      {recursosTema.map((item: any, itemIndex: number) => {
-                                        const titulo = getMaterialCanonicalTitle(item, tema?.nombre_curso) || item.titulo || "Recurso";
-                                        return (
-                                              <Space
-                                                key={`${temaId}-recurso-${itemIndex}`}
-                                                size={8}
-                                                wrap
-                                                style={{
-                                                  width: "100%",
-                                                  justifyContent: "space-between",
-                                                  border: "1px solid #f0f0f0",
-                                                  borderRadius: 8,
-                                                  padding: "6px 8px",
-                                                }}
-                                              >
-                                                <Space size={6} wrap>
-                                                  <Tag icon={getMaterialIcon(item)}>{titulo}</Tag>
-                                                </Space>
-                                                <Space size={4}>
-                                                  <Button size="small" type="default" onClick={() => abrirMaterialDidactico(item, titulo)}>
-                                                    Ver
-                                                  </Button>
-                                                  <Button size="small" type="primary" ghost icon={<DownloadOutlined />} onClick={() => descargarMaterialDidactico(item, titulo, recursosTema)}>
-                                                    Descargar
-                                                  </Button>
-                                                </Space>
-                                              </Space>
-                                        );
-                                      })}
+                                  <Space
+                                    size={8}
+                                    wrap
+                                    style={{
+                                      width: "100%",
+                                      justifyContent: "space-between",
+                                      border: "1px solid #f0f0f0",
+                                      borderRadius: 8,
+                                      padding: "6px 8px",
+                                    }}
+                                  >
+                                    <Button
+                                      type="link"
+                                      size="small"
+                                      icon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FilePdfOutlined />}
+                                      onClick={() => {
+                                        if (!recursoPrincipalTema) {
+                                          message.warning("Este tema aún no tiene material didáctico disponible.");
+                                          return;
+                                        }
+                                        abrirMaterialDidactico(recursoPrincipalTema, tituloRecursoPrincipal);
+                                      }}
+                                      style={{ paddingInline: 0 }}
+                                    >
+                                      {tema?.nombre_curso || "Tema"}
+                                    </Button>
+
+                                    <Space size={4}>
+                                      <Button
+                                        size="small"
+                                        type="default"
+                                        icon={<DownloadOutlined />}
+                                        onClick={() => {
+                                          if (!recursoPrincipalTema) {
+                                            message.warning("Este tema aún no tiene recurso para descargar.");
+                                            return;
+                                          }
+                                          descargarMaterialDidactico(recursoPrincipalTema, tituloRecursoPrincipal, recursosTema);
+                                        }}
+                                      />
+
+                                      <Button
+                                        size="small"
+                                        type={quizTema ? "primary" : "default"}
+                                        ghost
+                                        icon={<SafetyCertificateOutlined />}
+                                        disabled={!quizTema}
+                                        onClick={() => {
+                                          if (!quizTema) return;
+                                          abrirQuiz(quizTema);
+                                        }}
+                                      >
+                                        Quiz
+                                      </Button>
                                     </Space>
-                                  ) : (
-                                    <Text type="secondary" style={{ fontSize: 12 }}>Sin material didáctico</Text>
-                                  )}
+                                  </Space>
 
                                   <Space wrap size={8}>
                                     <Tag color="geekblue">
