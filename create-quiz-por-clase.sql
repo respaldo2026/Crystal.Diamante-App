@@ -135,23 +135,27 @@ alter table public.quiz_preguntas_clase enable row level security;
 alter table public.quiz_intentos_clase enable row level security;
 
 -- lectura para usuarios autenticados
-create policy if not exists "quizzes_clase_select_auth"
+drop policy if exists "quizzes_clase_select_auth" on public.quizzes_clase;
+create policy "quizzes_clase_select_auth"
 on public.quizzes_clase for select
 to authenticated
 using (true);
 
-create policy if not exists "quiz_preguntas_clase_select_auth"
+drop policy if exists "quiz_preguntas_clase_select_auth" on public.quiz_preguntas_clase;
+create policy "quiz_preguntas_clase_select_auth"
 on public.quiz_preguntas_clase for select
 to authenticated
 using (true);
 
-create policy if not exists "quiz_intentos_clase_select_auth"
+drop policy if exists "quiz_intentos_clase_select_auth" on public.quiz_intentos_clase;
+create policy "quiz_intentos_clase_select_auth"
 on public.quiz_intentos_clase for select
 to authenticated
 using (true);
 
 -- gestión para roles administrativos (usa tabla perfiles)
-create policy if not exists "quizzes_clase_manage_admin"
+drop policy if exists "quizzes_clase_manage_admin" on public.quizzes_clase;
+create policy "quizzes_clase_manage_admin"
 on public.quizzes_clase for all
 to authenticated
 using (
@@ -169,7 +173,8 @@ with check (
   )
 );
 
-create policy if not exists "quiz_preguntas_clase_manage_admin"
+drop policy if exists "quiz_preguntas_clase_manage_admin" on public.quiz_preguntas_clase;
+create policy "quiz_preguntas_clase_manage_admin"
 on public.quiz_preguntas_clase for all
 to authenticated
 using (
@@ -188,18 +193,21 @@ with check (
 );
 
 -- cada estudiante puede registrar/ver su intento
-create policy if not exists "quiz_intentos_insert_own"
+drop policy if exists "quiz_intentos_insert_own" on public.quiz_intentos_clase;
+create policy "quiz_intentos_insert_own"
 on public.quiz_intentos_clase for insert
 to authenticated
 with check (estudiante_id = auth.uid());
 
-create policy if not exists "quiz_intentos_update_own"
+drop policy if exists "quiz_intentos_update_own" on public.quiz_intentos_clase;
+create policy "quiz_intentos_update_own"
 on public.quiz_intentos_clase for update
 to authenticated
 using (estudiante_id = auth.uid())
 with check (estudiante_id = auth.uid());
 
-create policy if not exists "quiz_intentos_select_own_or_admin"
+drop policy if exists "quiz_intentos_select_own_or_admin" on public.quiz_intentos_clase;
+create policy "quiz_intentos_select_own_or_admin"
 on public.quiz_intentos_clase for select
 to authenticated
 using (
