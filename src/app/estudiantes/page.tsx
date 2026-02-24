@@ -109,6 +109,9 @@ export default function EstudiantesList() {
         mensualidadesPagadas: number;
         mensualidadesPendientes: number;
         mensualidadesPendientesVencidas: number;
+        mensualidadesPagadasMesActual: number;
+        mensualidadesPendientesMesActual: number;
+        mensualidadesPendientesVencidasMesActual: number;
     }>>({});
     const [loadingPagos, setLoadingPagos] = useState(false);
     const [calcularAsistencia, setCalcularAsistencia] = useState(false);
@@ -140,22 +143,22 @@ export default function EstudiantesList() {
         const mats = obtenerMatriculasVigentes(record);
         if (mats.length === 0) return { label: 'Sin pagos', color: 'default' as const };
 
-        let mensualidadesPagadas = 0;
-        let mensualidadesPendientes = 0;
-        let mensualidadesPendientesVencidas = 0;
+        let mensualidadesPagadasMesActual = 0;
+        let mensualidadesPendientesMesActual = 0;
+        let mensualidadesPendientesVencidasMesActual = 0;
         let inscripcionPagada = 0;
 
         mats.forEach((m: any) => {
             const st = pagosStats[m.id];
-            mensualidadesPagadas += st?.mensualidadesPagadas || 0;
-            mensualidadesPendientes += st?.mensualidadesPendientes || 0;
-            mensualidadesPendientesVencidas += st?.mensualidadesPendientesVencidas || 0;
+            mensualidadesPagadasMesActual += st?.mensualidadesPagadasMesActual || 0;
+            mensualidadesPendientesMesActual += st?.mensualidadesPendientesMesActual || 0;
+            mensualidadesPendientesVencidasMesActual += st?.mensualidadesPendientesVencidasMesActual || 0;
             inscripcionPagada += st?.inscripcionPagada || 0;
         });
 
-        if (mensualidadesPendientesVencidas > 0) return { label: 'Pendiente', color: 'orange' as const };
-        if (mensualidadesPendientes > 0) return { label: 'Pendiente', color: 'gold' as const };
-        if (mensualidadesPagadas > 0) return { label: 'Al día', color: 'green' as const };
+        if (mensualidadesPendientesVencidasMesActual > 0) return { label: 'Pendiente', color: 'orange' as const };
+        if (mensualidadesPendientesMesActual > 0) return { label: 'Pendiente', color: 'gold' as const };
+        if (mensualidadesPagadasMesActual > 0) return { label: 'Pagado', color: 'green' as const };
         if (inscripcionPagada > 0) return { label: 'Inscripción pagada', color: 'blue' as const };
         return { label: 'Sin pagos', color: 'default' as const };
     };
@@ -232,7 +235,7 @@ export default function EstudiantesList() {
             try {
                 const { data: pagos } = await supabaseBrowserClient
                     .from('pagos')
-                    .select('matricula_id, estado, fecha_vencimiento, numero_cuota, periodo_pagado')
+                    .select('matricula_id, estado, fecha_pago, fecha_vencimiento, numero_cuota, periodo_pagado')
                     .in('matricula_id', matriculaIds);
 
                 const hoy = dayjs().startOf('day');
@@ -244,6 +247,9 @@ export default function EstudiantesList() {
                     mensualidadesPagadas: number;
                     mensualidadesPendientes: number;
                     mensualidadesPendientesVencidas: number;
+                    mensualidadesPagadasMesActual: number;
+                    mensualidadesPendientesMesActual: number;
+                    mensualidadesPendientesVencidasMesActual: number;
                 }> = {};
                 (pagos || []).forEach((p: any) => {
                     const matriculaId = p?.matricula_id;
@@ -257,18 +263,35 @@ export default function EstudiantesList() {
                             mensualidadesPagadas: 0,
                             mensualidadesPendientes: 0,
                             mensualidadesPendientesVencidas: 0,
+                            mensualidadesPagadasMesActual: 0,
+                            mensualidadesPendientesMesActual: 0,
+                            mensualidadesPendientesVencidasMesActual: 0,
                         };
                     }
                     const esInscripcion = esPagoInscripcion(p);
+                    const fechaVencimiento = p.fecha_vencimiento ? dayjs(p.fecha_vencimiento) : null;
+                    const fechaPago = p.fecha_pago ? dayjs(p.fecha_pago) : null;
+                    const referenciaMesActual = fechaVencimiento || fechaPago;
+                    const esMesActual = Boolean(referenciaMesActual && referenciaMesActual.isSame(hoy, 'month'));
+
                     if (p.estado === 'pagado') stats[matriculaId].pagados += 1;
                     if (p.estado === 'pagado' && esInscripcion) stats[matriculaId].inscripcionPagada += 1;
-                    if (p.estado === 'pagado' && !esInscripcion) stats[matriculaId].mensualidadesPagadas += 1;
+                    if (p.estado === 'pagado' && !esInscripcion) {
+                        stats[matriculaId].mensualidadesPagadas += 1;
+                        if (esMesActual) stats[matriculaId].mensualidadesPagadasMesActual += 1;
+                    }
                     if (p.estado === 'pendiente') {
                         stats[matriculaId].pendientes += 1;
-                        if (!esInscripcion) stats[matriculaId].mensualidadesPendientes += 1;
+                        if (!esInscripcion) {
+                            stats[matriculaId].mensualidadesPendientes += 1;
+                            if (esMesActual) stats[matriculaId].mensualidadesPendientesMesActual += 1;
+                        }
                         if (p.fecha_vencimiento && dayjs(p.fecha_vencimiento).endOf('day').isBefore(hoy)) {
                             stats[matriculaId].pendientesVencidos += 1;
-                            if (!esInscripcion) stats[matriculaId].mensualidadesPendientesVencidas += 1;
+                            if (!esInscripcion) {
+                                stats[matriculaId].mensualidadesPendientesVencidas += 1;
+                                if (esMesActual) stats[matriculaId].mensualidadesPendientesVencidasMesActual += 1;
+                            }
                         }
                     }
                 });
