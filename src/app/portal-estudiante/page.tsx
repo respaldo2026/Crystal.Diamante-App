@@ -878,20 +878,20 @@ export default function PortalEstudiante() {
         calificacion,
       };
 
-      const { data: intentoExistente, error: errorBuscarIntento } = await supabaseBrowserClient
+      const { data: intentosExistentes, error: errorBuscarIntento } = await supabaseBrowserClient
         .from("quiz_intentos_clase")
         .select("id")
         .eq("quiz_id", quizActivo.id)
-        .eq("matricula_id", Number(matriculaQuiz.id))
-        .maybeSingle();
+        .eq("matricula_id", Number(matriculaQuiz.id));
 
       if (errorBuscarIntento) throw errorBuscarIntento;
 
-      if (intentoExistente?.id) {
+      if ((intentosExistentes || []).length > 0) {
         const { error: errorActualizarIntento } = await supabaseBrowserClient
           .from("quiz_intentos_clase")
           .update(payload)
-          .eq("id", intentoExistente.id);
+          .eq("quiz_id", quizActivo.id)
+          .eq("matricula_id", Number(matriculaQuiz.id));
 
         if (errorActualizarIntento) throw errorActualizarIntento;
       } else {
