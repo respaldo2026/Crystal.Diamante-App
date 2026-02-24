@@ -1490,7 +1490,7 @@ export default function PortalEstudiante() {
                       : tema?.nombre_curso || "Tema";
 
                     return (
-                      <List.Item key={temaId}>
+                      <List.Item key={temaId} className={temaBloqueado ? "tema-bloqueado" : ""}>
                         <List.Item.Meta
                           avatar={<span style={{ fontSize: 20, fontWeight: 700, color: colorNumeroTema }}>{tema.orden || temaIndex + 1}</span>}
                           title={<Text strong>{tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}</Text>}
@@ -2376,6 +2376,15 @@ export default function PortalEstudiante() {
           border-color: #1677ff;
           background: #e6f4ff;
           box-shadow: inset 0 0 0 1px #1677ff22;
+        }
+        .portal-estudiante .tema-bloqueado {
+          opacity: 0.65;
+          background: #fafafa;
+          border-radius: 8px;
+          padding: 6px 0;
+        }
+        .portal-estudiante .tema-bloqueado .ant-typography {
+          color: #8c8c8c;
         }
         .portal-estudiante .student-menu-btn {
           border-radius: 12px;
