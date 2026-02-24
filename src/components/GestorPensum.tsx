@@ -243,6 +243,7 @@ export default function GestorPensum({
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace' | 'iframe'>('archivo');
   const [mostrarListaCompletaCiclo, setMostrarListaCompletaCiclo] = useState(false);
   const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
+  const [mostrarTablaMaestraClases, setMostrarTablaMaestraClases] = useState(false);
   const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
     open: false,
     title: "",
@@ -1394,6 +1395,7 @@ export default function GestorPensum({
     return (cursosPrograma || []).map((curso, index) => {
       const cicloId = String(curso?.pensum_id || "");
       return {
+        id: String(curso?.id || `clase-${index + 1}`),
         key: String(curso?.id || `clase-${index + 1}`),
         numero: index + 1,
         cicloId,
@@ -1406,6 +1408,27 @@ export default function GestorPensum({
       };
     });
   }, [cursosPrograma, pensums]);
+
+  const abrirClaseDesdeTabla = useCallback((record: any) => {
+    const cicloId = String(record?.cicloId || "");
+    if (cicloId) {
+      setSelectedCicloId(cicloId);
+    }
+  }, []);
+
+  const editarNombreClaseDesdeTabla = useCallback((record: any) => {
+    const curso = (cursosPrograma || []).find((item) => String(item?.id) === String(record?.id));
+    if (!curso) return;
+
+    const cicloId = String(curso?.pensum_id || record?.cicloId || "");
+    if (cicloId) {
+      setSelectedCicloId(cicloId);
+    }
+
+    setEditingCurso(curso);
+    formCurso.setFieldsValue(curso);
+    setModalCursoVisible(true);
+  }, [cursosPrograma, formCurso]);
 
   return (
     <Drawer
@@ -1446,8 +1469,18 @@ export default function GestorPensum({
             size="small"
             title="Tabla maestra de clases (vista completa)"
             style={{ marginBottom: 16 }}
+            extra={(
+              <Button
+                type={mostrarTablaMaestraClases ? "primary" : "default"}
+                onClick={() => setMostrarTablaMaestraClases((prev) => !prev)}
+              >
+                {mostrarTablaMaestraClases ? "Ocultar tabla" : "Ver tabla completa"}
+              </Button>
+            )}
           >
-            {clasesMaestrasPrograma.length === 0 ? (
+            {!mostrarTablaMaestraClases ? (
+              <Text type="secondary">Pulsa "Ver tabla completa" para visualizar y gestionar todas las clases de una sola mirada.</Text>
+            ) : clasesMaestrasPrograma.length === 0 ? (
               <Text type="secondary">Aún no hay clases creadas en el programa.</Text>
             ) : (
               <Table
@@ -1455,7 +1488,7 @@ export default function GestorPensum({
                 rowKey="key"
                 dataSource={clasesMaestrasPrograma}
                 pagination={{ pageSize: 20, hideOnSinglePage: true }}
-                scroll={{ x: 760 }}
+                scroll={{ x: 980 }}
                 columns={[
                   {
                     title: "Clase #",
@@ -1466,25 +1499,18 @@ export default function GestorPensum({
                   {
                     title: "Ciclo",
                     dataIndex: "cicloNombre",
-                    width: 170,
-                    render: (value: string, record: any) => (
-                      <Space>
-                        <Tag color="blue">{value}</Tag>
-                        <Button
-                          type="link"
-                          size="small"
-                          style={{ padding: 0, height: "auto" }}
-                          onClick={() => setSelectedCicloId(String(record.cicloId || ""))}
-                        >
-                          Ir
-                        </Button>
-                      </Space>
-                    ),
+                    width: 240,
+                    render: (value: string) => <Tag color="blue">{value}</Tag>,
                   },
                   {
                     title: "Tema/Clase",
                     dataIndex: "tema",
-                    ellipsis: true,
+                    width: 360,
+                    render: (value: string) => (
+                      <Text style={{ display: "block" }} ellipsis={{ tooltip: value }}>
+                        {value}
+                      </Text>
+                    ),
                   },
                   {
                     title: "Horas",
@@ -1498,6 +1524,21 @@ export default function GestorPensum({
                     dataIndex: "tipo",
                     width: 130,
                     render: (v: string) => <Tag>{v || "obligatorio"}</Tag>,
+                  },
+                  {
+                    title: "Acciones",
+                    key: "acciones",
+                    width: 170,
+                    render: (_: any, record: any) => (
+                      <Space size={8}>
+                        <Button size="small" onClick={() => abrirClaseDesdeTabla(record)}>
+                          Entrar
+                        </Button>
+                        <Button size="small" type="primary" ghost onClick={() => editarNombreClaseDesdeTabla(record)}>
+                          Editar nombre
+                        </Button>
+                      </Space>
+                    ),
                   },
                 ]}
               />
