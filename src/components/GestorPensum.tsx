@@ -616,9 +616,13 @@ export default function GestorPensum({
 
     const horasBase = Number(programaData?.horas_por_clase || 0);
     const inserts: Array<Record<string, any>> = [];
+    const ciclosCount = ciclosOrdenados.length;
 
     for (let classNumber = totalActual + 1; classNumber <= totalEsperado; classNumber += 1) {
-      const targetCiclo = ciclosOrdenados[(classNumber - 1) % ciclosOrdenados.length];
+      const targetCiclo = ciclosOrdenados[(classNumber - 1) % ciclosCount] ?? ciclosOrdenados[0];
+      if (!targetCiclo) {
+        continue;
+      }
       const cicloKey = String(targetCiclo.id);
       const ordenActual = (maxOrdenPorCiclo.get(cicloKey) || 0) + 1;
       maxOrdenPorCiclo.set(cicloKey, ordenActual);
