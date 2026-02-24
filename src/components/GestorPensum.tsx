@@ -1479,7 +1479,7 @@ export default function GestorPensum({
             )}
           >
             {!mostrarTablaMaestraClases ? (
-              <Text type="secondary">Pulsa "Ver tabla completa" para visualizar y gestionar todas las clases de una sola mirada.</Text>
+              <Text type="secondary">Pulsa &quot;Ver tabla completa&quot; para visualizar y gestionar todas las clases de una sola mirada.</Text>
             ) : clasesMaestrasPrograma.length === 0 ? (
               <Text type="secondary">Aún no hay clases creadas en el programa.</Text>
             ) : (
