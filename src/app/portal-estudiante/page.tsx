@@ -523,10 +523,14 @@ export default function PortalEstudiante() {
           asistenciasConTema = (dataAsistencias || []).map((asistencia: any) => {
             const cursoId = asistencia?.matriculas?.curso_id;
             const key = `${cursoId || ""}-${asistencia?.fecha || ""}`;
+            const temaSesion = temaPorCursoFecha.get(key) || null;
+            const temaAsistencia = asistencia?.tema_visto || null;
+            const detalleRegistro = String(asistencia?.observaciones || "").trim();
             return {
               ...asistencia,
-              tema_visto: temaPorCursoFecha.get(key) || null,
+              tema_visto: temaSesion || temaAsistencia,
               clase_numero: extractClassNumber(asistencia?.observaciones) ?? claseNumeroPorCursoFecha.get(key) ?? null,
+              registro_clase: detalleRegistro || temaSesion || temaAsistencia || null,
             };
           });
         }
@@ -1254,7 +1258,41 @@ export default function PortalEstudiante() {
                 { title: "Fecha", dataIndex: "fecha", render: (f) => formatDate(f) },
                 { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
                 { title: "Clase #", dataIndex: "clase_numero", width: 90, render: (n) => n || "-" },
-                { title: "Tema visto", dataIndex: "tema_visto", render: (t) => t || "-" },
+                {
+                  title: "Tema visto",
+                  dataIndex: "tema_visto",
+                  render: (t, r: any) => {
+                    const tema = t || "-";
+                    const registro = String(r?.registro_clase || "").trim();
+
+                    if (!isMobile) {
+                      return tema;
+                    }
+
+                    if (!registro || registro === tema) {
+                      return tema;
+                    }
+
+                    return (
+                      <Space direction="vertical" size={2}>
+                        <span>{tema}</span>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {registro}
+                        </Text>
+                      </Space>
+                    );
+                  },
+                },
+                ...(!isMobile
+                  ? [
+                      {
+                        title: "Registro de clase",
+                        dataIndex: "registro_clase",
+                        width: 260,
+                        render: (v: string) => v || "-",
+                      },
+                    ]
+                  : []),
                 { title: "Estado", dataIndex: "estado", render: (e) => <Tag color={e === "presente" ? "green" : "red"}>{e?.toUpperCase()}</Tag> },
               ]}
             />
