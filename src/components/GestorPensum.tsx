@@ -1380,6 +1380,33 @@ export default function GestorPensum({
   const totalMaterialDidactico = materialesCicloDidactico.length;
   const totalMaterialNecesario = materialesClaseCiclo.length;
 
+  const clasesMaestrasPrograma = useMemo(() => {
+    const cicloOrderById = new Map<string, number>();
+    const cicloLabelById = new Map<string, string>();
+
+    (pensums || []).forEach((ciclo) => {
+      const key = String(ciclo?.id || "");
+      if (!key) return;
+      cicloOrderById.set(key, Number(ciclo?.orden || ciclo?.numero_ciclo || 9999));
+      cicloLabelById.set(key, ciclo?.nombre_ciclo || `Ciclo ${ciclo?.numero_ciclo || "?"}`);
+    });
+
+    return (cursosPrograma || []).map((curso, index) => {
+      const cicloId = String(curso?.pensum_id || "");
+      return {
+        key: String(curso?.id || `clase-${index + 1}`),
+        numero: index + 1,
+        cicloId,
+        cicloOrden: cicloOrderById.get(cicloId) ?? 9999,
+        cicloNombre: cicloLabelById.get(cicloId) || "Sin ciclo",
+        tema: curso?.nombre_curso || `Clase ${index + 1}`,
+        descripcion: curso?.descripcion || "",
+        horas: Number(curso?.horas || 0),
+        tipo: curso?.tipo_curso || "obligatorio",
+      };
+    });
+  }, [cursosPrograma, pensums]);
+
   return (
     <Drawer
       title={`Gestión: ${programaNombre}`}
@@ -1413,6 +1440,68 @@ export default function GestorPensum({
                 </Button>
               )}
             </Space>
+          </Card>
+
+          <Card
+            size="small"
+            title="Tabla maestra de clases (vista completa)"
+            style={{ marginBottom: 16 }}
+          >
+            {clasesMaestrasPrograma.length === 0 ? (
+              <Text type="secondary">Aún no hay clases creadas en el programa.</Text>
+            ) : (
+              <Table
+                size="small"
+                rowKey="key"
+                dataSource={clasesMaestrasPrograma}
+                pagination={{ pageSize: 20, hideOnSinglePage: true }}
+                scroll={{ x: 760 }}
+                columns={[
+                  {
+                    title: "Clase #",
+                    dataIndex: "numero",
+                    width: 90,
+                    sorter: (a, b) => Number(a.numero) - Number(b.numero),
+                  },
+                  {
+                    title: "Ciclo",
+                    dataIndex: "cicloNombre",
+                    width: 170,
+                    render: (value: string, record: any) => (
+                      <Space>
+                        <Tag color="blue">{value}</Tag>
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ padding: 0, height: "auto" }}
+                          onClick={() => setSelectedCicloId(String(record.cicloId || ""))}
+                        >
+                          Ir
+                        </Button>
+                      </Space>
+                    ),
+                  },
+                  {
+                    title: "Tema/Clase",
+                    dataIndex: "tema",
+                    ellipsis: true,
+                  },
+                  {
+                    title: "Horas",
+                    dataIndex: "horas",
+                    width: 90,
+                    align: "center",
+                    render: (v: number) => (v > 0 ? v : "-"),
+                  },
+                  {
+                    title: "Tipo",
+                    dataIndex: "tipo",
+                    width: 130,
+                    render: (v: string) => <Tag>{v || "obligatorio"}</Tag>,
+                  },
+                ]}
+              />
+            )}
           </Card>
 
           <div style={{ marginBottom: 24 }}>
