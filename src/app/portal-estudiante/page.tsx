@@ -1533,7 +1533,6 @@ export default function PortalEstudiante() {
                                           message.warning("Este tema aún no tiene material didáctico disponible.");
                                           return;
                                         }
-                                            preguntaId: String(pregunta?.id || ""),
                                         abrirMaterialDidactico(recursoPrincipalTema, tituloRecursoPrincipal);
                                       }}
                                       style={{ paddingInline: 0 }}
