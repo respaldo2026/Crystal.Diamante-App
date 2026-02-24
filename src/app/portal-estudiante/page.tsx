@@ -2129,7 +2129,24 @@ export default function PortalEstudiante() {
                         const indicador = getIndicadorVisualPreguntaQuiz(preguntaActual.pregunta);
                         return <Tag color={indicador.color}>{`${indicador.emoji} ${indicador.etiqueta}`}</Tag>;
                       })()}
-                      <Text>{preguntaActual.pregunta}</Text>
+
+                      <Card
+                        size="small"
+                        title={<Text strong>Pregunta</Text>}
+                        bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
+                      >
+                        <Text strong style={{ fontSize: 15, lineHeight: 1.45 }}>
+                          {preguntaActual.pregunta}
+                        </Text>
+                      </Card>
+
+                      <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                        <Text strong>Opciones de respuesta</Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          Selecciona una opción para continuar.
+                        </Text>
+                      </Space>
+
                       <Radio.Group
                         value={quizRespuestas[String(preguntaActual.id)]}
                         onChange={(event) => {
