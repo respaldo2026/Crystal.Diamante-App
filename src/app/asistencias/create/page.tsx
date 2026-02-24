@@ -116,8 +116,12 @@ export default function TomarAsistencia() {
     if (!cursoSeleccionado) {
       setClasesDisponibles([]);
       setNumeroClase(null);
+      setTemaVisto("");
       return;
     }
+
+    setNumeroClase(null);
+    setTemaVisto("");
 
     const cargarClasesTemario = async () => {
       try {
@@ -143,10 +147,6 @@ export default function TomarAsistencia() {
         ).sort((a, b) => a.numero - b.numero);
 
         setClasesDisponibles(uniqueByNumero);
-        const primeraClase = uniqueByNumero.at(0);
-        if (primeraClase) {
-          setNumeroClase((prev) => prev ?? primeraClase.numero);
-        }
       } catch (error) {
         console.error(error);
         setClasesDisponibles([]);
@@ -406,6 +406,7 @@ export default function TomarAsistencia() {
     (v) => v === "ausente"
   ).length;
   const totalHabilitados = alumnos.filter((a) => a.estado === "activo" || a.estado === "en curso").length;
+  const claseSeleccionadaValida = Boolean(numeroClase && Number(numeroClase) > 0);
 
   return (
     <div style={{ padding: "24px" }}>
@@ -490,6 +491,9 @@ export default function TomarAsistencia() {
                 showSearch
                 optionFilterProp="label"
               />
+              {!claseSeleccionadaValida && (
+                <Text type="danger">Selecciona el número de clase para continuar con el llamado de lista.</Text>
+              )}
             </div>
           </Col>
           <Col xs={24}>
@@ -511,6 +515,15 @@ export default function TomarAsistencia() {
       {/* LISTA DE ESTUDIANTES */}
       {cursoSeleccionado && (
         <>
+          {!claseSeleccionadaValida && (
+            <Alert
+              style={{ marginBottom: 16 }}
+              type="warning"
+              showIcon
+              message="Antes de llamar lista, selecciona el número de la clase en el Paso 1."
+            />
+          )}
+
           <Card
             title={`👥 Paso 2: Marca Asistencia - ${cursoNombre}`}
             style={{ marginBottom: 20 }}
@@ -520,6 +533,7 @@ export default function TomarAsistencia() {
                   onClick={marcarTodoPresente}
                   type="dashed"
                   icon={<CheckOutlined />}
+                  disabled={!claseSeleccionadaValida}
                 >
                   Todos Presentes
                 </Button>
@@ -528,6 +542,7 @@ export default function TomarAsistencia() {
                   type="dashed"
                   danger
                   icon={<CloseOutlined />}
+                  disabled={!claseSeleccionadaValida}
                 >
                   Todos Ausentes
                 </Button>
@@ -623,6 +638,7 @@ export default function TomarAsistencia() {
                   size="large"
                   icon={<SaveOutlined />}
                   loading={guardando}
+                  disabled={!claseSeleccionadaValida}
                   onClick={guardarAsistencia}
                 >
                   💾 Guardar Asistencia
