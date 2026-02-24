@@ -261,7 +261,7 @@ export default function PortalEstudiante() {
   };
 
   const obtenerTextoOpcionQuiz = (pregunta: any, opcion?: string | null) => {
-    const letra = String(opcion || "").toUpperCase();
+    const letra = normalizarClaveOpcionQuiz(opcion);
     if (!letra) return "Sin respuesta";
 
     const opciones: Record<string, string> = {
@@ -273,6 +273,18 @@ export default function PortalEstudiante() {
 
     const texto = opciones[letra] || "";
     return texto ? `${letra}) ${texto}` : letra;
+  };
+
+  const normalizarClaveOpcionQuiz = (valor?: string | null) => {
+    const raw = String(valor || "").trim().toUpperCase();
+    if (!raw) return "";
+    if (["A", "B", "C", "D"].includes(raw)) return raw;
+    if (/^OPCION[_\s-]*A$/i.test(raw)) return "A";
+    if (/^OPCION[_\s-]*B$/i.test(raw)) return "B";
+    if (/^OPCION[_\s-]*C$/i.test(raw)) return "C";
+    if (/^OPCION[_\s-]*D$/i.test(raw)) return "D";
+    const match = raw.match(/[ABCD]/);
+    return match ? match[0] : "";
   };
 
   const normalizeHttpUrl = (value?: string | null) => {
@@ -854,13 +866,14 @@ export default function PortalEstudiante() {
 
       const correctaPorPregunta = new Map<string, string>();
       (preguntasConRespuesta || []).forEach((pregunta: any) => {
-        correctaPorPregunta.set(String(pregunta.id), String(pregunta.respuesta_correcta || "").toUpperCase());
+        correctaPorPregunta.set(String(pregunta.id), normalizarClaveOpcionQuiz(pregunta.respuesta_correcta));
       });
 
       let correctas = 0;
       respuestas.forEach((respuesta) => {
         const correcta = correctaPorPregunta.get(String(respuesta.pregunta_id)) || "";
-        if (correcta && correcta === String(respuesta.respuesta || "").toUpperCase()) {
+        const marcada = normalizarClaveOpcionQuiz(respuesta.respuesta);
+        if (correcta && correcta === marcada) {
           correctas += 1;
         }
       });
@@ -873,8 +886,8 @@ export default function PortalEstudiante() {
       const respuestasErradas = respuestas
         .map((respuesta) => {
           const pregunta = preguntaPorId.get(String(respuesta.pregunta_id));
-          const correcta = String(correctaPorPregunta.get(String(respuesta.pregunta_id)) || "").toUpperCase();
-          const marcada = String(respuesta.respuesta || "").toUpperCase();
+          const correcta = normalizarClaveOpcionQuiz(correctaPorPregunta.get(String(respuesta.pregunta_id)) || "");
+          const marcada = normalizarClaveOpcionQuiz(respuesta.respuesta);
           if (!correcta || marcada === correcta) return null;
 
           return {
@@ -959,12 +972,15 @@ export default function PortalEstudiante() {
 
         Modal.warning({
           title: "Debes mejorar tu puntaje para poder continuar",
-          okText: "Entendido",
+          okText: "Repetir ahora",
           width: isMobile ? "94vw" : 780,
+          maskClosable: false,
           onOk: () => {
             if (primeraErradaIndex >= 0) {
               setQuizPreguntaActual(primeraErradaIndex);
+              return;
             }
+            setQuizPreguntaActual(0);
           },
           content: (
             <Space direction="vertical" size={10} style={{ width: "100%" }}>
@@ -1809,7 +1825,7 @@ export default function PortalEstudiante() {
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <Card size="small" title="Calificaciones">
             <Table
-              dataSource={calificaciones}
+              dataSource={(calificaciones || []).filter((item: any) => String(item?.tipo_evaluacion || "").toLowerCase() !== "quiz")}
               rowKey="id"
               size="small"
               scroll={{ x: 520 }}
