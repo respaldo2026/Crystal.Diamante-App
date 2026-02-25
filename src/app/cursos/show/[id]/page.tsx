@@ -571,10 +571,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
     const existeTemaSeleccionado = temas.some((tema) => String(tema.id) === String(temaSeleccionadoId || ""));
     if (!existeTemaSeleccionado) {
-      const primerTema = temas[0];
-      if (primerTema?.id) {
-        setTemaSeleccionadoId(String(primerTema.id));
-      }
+      setTemaSeleccionadoId(null);
     }
   }, [temas, temaSeleccionadoId]);
 
@@ -1498,119 +1495,126 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   <Card><Empty description="No hay temario cargado" /></Card>
                 ) : (
                   <Card
-                    title={
-                      <Space wrap>
-                        <Text strong style={{ fontSize: 14 }}>Notas por clase</Text>
-                        <Select
-                          value={temaSeleccionadoId || undefined}
-                          onChange={(value) => setTemaSeleccionadoId(String(value))}
-                          style={{ minWidth: isMobile ? 220 : 320 }}
-                          options={temas.map((tema) => ({
-                            label: tema.nombre_ciclo || tema.titulo || `Tema ${tema.id}`,
-                            value: String(tema.id),
-                          }))}
-                        />
-                      </Space>
-                    }
+                    title={<Text strong style={{ fontSize: 14 }}>Notas por clase</Text>}
                     bodyStyle={{ padding: 10 }}
                     headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
                   >
                     <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
-                      {temaSeleccionado
-                        ? `Clase seleccionada: ${temaSeleccionado.nombre_ciclo || temaSeleccionado.titulo || "Tema"}`
-                        : "Selecciona una clase para calificar."}
+                      Haz clic en una clase para desplegar sus calificaciones. Solo una clase permanece abierta a la vez.
                     </Text>
 
-                    <Table
-                      size="small"
-                      dataSource={estudiantes}
-                      rowKey="id"
-                      pagination={{ pageSize: 10 }}
-                      tableLayout="fixed"
-                      scroll={{ x: "max-content" }}
-                      columns={[
-                        {
-                          title: "Estudiante",
-                          dataIndex: "nombre_completo",
-                          render: (text: string, record: any) => (
-                            <Space direction="vertical" size={0}>
-                              <Text strong>{text}</Text>
-                              {record.estado === "pendiente_pago" ? <Tag color="default">PENDIENTE PAGO</Tag> : null}
+                    <Collapse
+                      accordion
+                      activeKey={temaSeleccionadoId || undefined}
+                      onChange={(key) => setTemaSeleccionadoId(typeof key === "string" ? key : null)}
+                      items={temas.map((tema) => {
+                        const temaId = String(tema.id);
+                        const notasTema = estudiantes
+                          .map((record) => calificacionesTema[temaId]?.[String(record.id)] ?? null)
+                          .filter((nota): nota is number => typeof nota === "number" && !Number.isNaN(nota));
+                        const promedioTema = notasTema.length
+                          ? Number((notasTema.reduce((sum, nota) => sum + nota, 0) / notasTema.length).toFixed(2))
+                          : 0;
+
+                        return {
+                          key: temaId,
+                          label: (
+                            <Space wrap size={12}>
+                              <Text strong>{tema.nombre_ciclo || tema.titulo || "Clase"}</Text>
+                              <Tag color="blue">{`${notasTema.length}/${estudiantes.length} calificadas`}</Tag>
+                              <Tag color={promedioTema >= 3.75 ? "green" : promedioTema >= 3 ? "gold" : "red"}>
+                                Promedio: {`${promedioTema.toFixed(1)}/5`}
+                              </Tag>
                             </Space>
                           ),
-                        },
-                        {
-                          title: "Asistencia",
-                          dataIndex: "asistencia_porcentaje",
-                          width: 110,
-                          render: (valor: number) => `${Number(valor || 0)}%`,
-                        },
-                        {
-                          title: "Nota actual",
-                          width: 120,
-                          render: (_: any, record: any) => {
-                            if (!temaSeleccionadoId) return <Text type="secondary">-</Text>;
-                            const current = calificacionesTema[String(temaSeleccionadoId)]?.[String(record.id)] ?? null;
-                            if (current == null || Number.isNaN(current)) return <Text type="secondary">Pendiente</Text>;
-                            const color = current >= 3.75 ? "green" : current >= 3 ? "gold" : "red";
-                            return <Tag color={color}>{current.toFixed(1)}</Tag>;
-                          },
-                        },
-                        {
-                          title: "Calificar (0-5)",
-                          width: 150,
-                          render: (_: any, record: any) => {
-                            const habilitado = record.estado !== "pendiente_pago" && !!temaSeleccionadoId;
-                            const current = temaSeleccionadoId
-                              ? calificacionesTema[String(temaSeleccionadoId)]?.[String(record.id)] ?? null
-                              : null;
+                          children: (
+                            <Table
+                              size="small"
+                              dataSource={estudiantes}
+                              rowKey="id"
+                              pagination={{ pageSize: 10 }}
+                              tableLayout="fixed"
+                              scroll={{ x: "max-content" }}
+                              columns={[
+                                {
+                                  title: "Estudiante",
+                                  dataIndex: "nombre_completo",
+                                  render: (text: string, record: any) => (
+                                    <Space direction="vertical" size={0}>
+                                      <Text strong>{text}</Text>
+                                      {record.estado === "pendiente_pago" ? <Tag color="default">PENDIENTE PAGO</Tag> : null}
+                                    </Space>
+                                  ),
+                                },
+                                {
+                                  title: "Asistencia",
+                                  dataIndex: "asistencia_porcentaje",
+                                  width: 110,
+                                  render: (valor: number) => `${Number(valor || 0)}%`,
+                                },
+                                {
+                                  title: "Nota actual",
+                                  width: 120,
+                                  render: (_: any, record: any) => {
+                                    const current = calificacionesTema[temaId]?.[String(record.id)] ?? null;
+                                    if (current == null || Number.isNaN(current)) return <Text type="secondary">Pendiente</Text>;
+                                    const color = current >= 3.75 ? "green" : current >= 3 ? "gold" : "red";
+                                    return <Tag color={color}>{current.toFixed(1)}</Tag>;
+                                  },
+                                },
+                                {
+                                  title: "Calificar (0-5)",
+                                  width: 150,
+                                  render: (_: any, record: any) => {
+                                    const habilitado = record.estado !== "pendiente_pago";
+                                    const current = calificacionesTema[temaId]?.[String(record.id)] ?? null;
 
-                            return (
-                              <InputNumber
-                                min={0}
-                                max={5}
-                                step={0.1}
-                                value={current}
-                                disabled={!habilitado}
-                                onChange={(val) => {
-                                  if (!temaSeleccionadoId) return;
-                                  setCalificacionesTema((prev) => ({
-                                    ...prev,
-                                    [String(temaSeleccionadoId)]: {
-                                      ...(prev[String(temaSeleccionadoId)] || {}),
-                                      [String(record.id)]: val === null ? null : Number(val),
-                                    },
-                                  }));
-                                }}
-                                style={{ width: 120 }}
-                              />
-                            );
-                          },
-                        },
-                        {
-                          title: "Guardar",
-                          width: 120,
-                          render: (_: any, record: any) => {
-                            if (!temaSeleccionadoId) {
-                              return <Button size="small" disabled>Guardar</Button>;
-                            }
-                            const current = calificacionesTema[String(temaSeleccionadoId)]?.[String(record.id)] ?? null;
-                            const habilitado = record.estado !== "pendiente_pago";
-                            const saving = savingCalificacionId === `${temaSeleccionadoId}-${record.id}`;
-                            return (
-                              <Button
-                                type="primary"
-                                size="small"
-                                disabled={!habilitado || current == null || Number.isNaN(current)}
-                                loading={saving}
-                                onClick={() => guardarNotaTema(temaSeleccionadoId, record.id, current)}
-                              >
-                                Guardar
-                              </Button>
-                            );
-                          },
-                        },
-                      ]}
+                                    return (
+                                      <InputNumber
+                                        min={0}
+                                        max={5}
+                                        step={0.1}
+                                        value={current}
+                                        disabled={!habilitado}
+                                        onChange={(val) => {
+                                          setCalificacionesTema((prev) => ({
+                                            ...prev,
+                                            [temaId]: {
+                                              ...(prev[temaId] || {}),
+                                              [String(record.id)]: val === null ? null : Number(val),
+                                            },
+                                          }));
+                                        }}
+                                        style={{ width: 120 }}
+                                      />
+                                    );
+                                  },
+                                },
+                                {
+                                  title: "Guardar",
+                                  width: 120,
+                                  render: (_: any, record: any) => {
+                                    const current = calificacionesTema[temaId]?.[String(record.id)] ?? null;
+                                    const habilitado = record.estado !== "pendiente_pago";
+                                    const saving = savingCalificacionId === `${temaId}-${record.id}`;
+                                    return (
+                                      <Button
+                                        type="primary"
+                                        size="small"
+                                        disabled={!habilitado || current == null || Number.isNaN(current)}
+                                        loading={saving}
+                                        onClick={() => guardarNotaTema(temaId, record.id, current)}
+                                      >
+                                        Guardar
+                                      </Button>
+                                    );
+                                  },
+                                },
+                              ]}
+                            />
+                          ),
+                        };
+                      })}
                     />
                   </Card>
                 )}
