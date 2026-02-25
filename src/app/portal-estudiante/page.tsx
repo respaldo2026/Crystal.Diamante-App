@@ -89,6 +89,15 @@ export default function PortalEstudiante() {
   const [quizRespuestas, setQuizRespuestas] = useState<Record<string, string>>({});
   const [quizPreguntaActual, setQuizPreguntaActual] = useState(0);
   const [quizAnimando, setQuizAnimando] = useState(false);
+  const [quizResultado, setQuizResultado] = useState<{
+    calificacion: number;
+    porcentaje: number;
+    aprobado: boolean;
+    respuestasErradas: any[];
+    totalPreguntas: number;
+    correctas: number;
+  } | null>(null);
+  const [quizResultadoVisible, setQuizResultadoVisible] = useState(false);
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
@@ -989,60 +998,29 @@ export default function PortalEstudiante() {
         return [intentoLocal, ...restantes];
       });
 
-      if (!aprobado) {
-        const primeraErrada = (respuestasErradas || [])[0] as any;
-        const primeraErradaIndex = (quizPreguntas || []).findIndex(
-          (pregunta: any) => String(pregunta?.id || "") === String(primeraErrada?.preguntaId || "")
-        );
-
-        Modal.warning({
-          title: "Debes mejorar tu puntaje para poder continuar",
-          okText: "Repetir ahora",
-          width: isMobile ? "94vw" : 780,
-          maskClosable: false,
-          onOk: () => {
-            if (primeraErradaIndex >= 0) {
-              setQuizPreguntaActual(primeraErradaIndex);
-              return;
-            }
-            setQuizPreguntaActual(0);
-          },
-          content: (
-            <Space direction="vertical" size={10} style={{ width: "100%" }}>
-              <Text>
-                {`Resultado actual: ${calificacion}/5 (${porcentaje}%). Debes obtener mínimo ${UMBRAL_APROBACION_QUIZ_PORCENTAJE}% para continuar.`}
-              </Text>
-              <Text strong>Respuestas por mejorar:</Text>
-              <List
-                size="small"
-                bordered
-                dataSource={respuestasErradas}
-                locale={{ emptyText: "No se encontraron respuestas erradas para mostrar." }}
-                renderItem={(item: any) => (
-                  <List.Item>
-                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                      <Text strong>{`Pregunta ${item.orden || "-"}`}</Text>
-                      <Text>{item.pregunta}</Text>
-                      <Text type="danger">{`Tu respuesta: ${item.respuestaMarcada}`}</Text>
-                      <Text type="success">{`Respuesta correcta: ${item.respuestaCorrecta}`}</Text>
-                    </Space>
-                  </List.Item>
-                )}
-              />
-            </Space>
-          ),
-        });
-        message.info(`Intento guardado: ${calificacion}/5 (${porcentaje}%). Puedes volver a intentarlo.`);
-        return;
-      }
-
-      message.success(`Quiz aprobado y guardado. Calificación final: ${calificacion}/5 (${porcentaje}%).`);
+      // Cerrar el quiz siempre
       setQuizModalOpen(false);
       setQuizActivo(null);
       setQuizPreguntas([]);
       setQuizRespuestas({});
       setQuizPreguntaActual(0);
       setQuizAnimando(false);
+
+      // Mostrar popup de resultado (grande, con nota y preguntas erradas)
+      setQuizResultado({
+        calificacion,
+        porcentaje,
+        aprobado,
+        respuestasErradas: respuestasErradas as any[],
+        totalPreguntas: total,
+        correctas,
+      });
+      setQuizResultadoVisible(true);
+
+      // Auto-ocultar después de 8 segundos si no hay errores, 12 si hay errores
+      const autoCloseDelay = (respuestasErradas as any[]).length > 0 ? 12000 : 8000;
+      setTimeout(() => setQuizResultadoVisible(false), autoCloseDelay);
+
       await cargarDatos();
     } catch (error) {
       logger.error("Error enviando quiz", error);
@@ -2076,6 +2054,100 @@ export default function PortalEstudiante() {
       <Card className="student-section-card">
         {renderSeccionActiva()}
       </Card>
+
+      {/* ── Modal resultado del quiz ── */}
+      <Modal
+        open={quizResultadoVisible}
+        onCancel={() => setQuizResultadoVisible(false)}
+        footer={
+          quizResultado && !quizResultado.aprobado ? (
+            <Button
+              type="primary"
+              onClick={() => setQuizResultadoVisible(false)}
+            >
+              Entendido, volver a intentarlo
+            </Button>
+          ) : (
+            <Button type="primary" onClick={() => setQuizResultadoVisible(false)}>
+              Cerrar
+            </Button>
+          )
+        }
+        width={isMobile ? "94vw" : 600}
+        centered
+        title={null}
+        styles={{ body: { padding: isMobile ? 16 : 32 } }}
+      >
+        {quizResultado && (
+          <Space direction="vertical" size={20} style={{ width: "100%", textAlign: "center" }}>
+            {/* Nota grande */}
+            <div
+              style={{
+                width: 140,
+                height: 140,
+                borderRadius: "50%",
+                background: quizResultado.aprobado
+                  ? "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)"
+                  : "linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto",
+                boxShadow: quizResultado.aprobado
+                  ? "0 8px 32px rgba(82,196,26,0.4)"
+                  : "0 8px 32px rgba(255,77,79,0.4)",
+              }}
+            >
+              <span style={{ color: "#fff", fontSize: 40, fontWeight: 800, lineHeight: 1 }}>
+                {quizResultado.calificacion.toFixed(1)}
+              </span>
+              <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 14 }}>/5.0</span>
+            </div>
+
+            <div>
+              <Text style={{ fontSize: 22, fontWeight: 700, display: "block" }}>
+                {quizResultado.aprobado ? "¡Felicitaciones! " : "Sigue intentando "}
+                {quizResultado.aprobado ? "🎉" : "💪"}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 15 }}>
+                {`${quizResultado.correctas} de ${quizResultado.totalPreguntas} correctas · ${quizResultado.porcentaje}%`}
+              </Text>
+              <br />
+              {!quizResultado.aprobado && (
+                <Text type="danger" style={{ fontSize: 13 }}>
+                  {`Necesitas mínimo ${UMBRAL_APROBACION_QUIZ_PORCENTAJE}% para aprobar.`}
+                </Text>
+              )}
+            </div>
+
+            {/* Preguntas mal respondidas */}
+            {quizResultado.respuestasErradas.length > 0 && (
+              <div style={{ textAlign: "left", width: "100%" }}>
+                <Text strong style={{ fontSize: 14 }}>
+                  {`Preguntas por mejorar (${quizResultado.respuestasErradas.length}):`}
+                </Text>
+                <List
+                  size="small"
+                  bordered
+                  style={{ marginTop: 8, maxHeight: 280, overflowY: "auto" }}
+                  dataSource={quizResultado.respuestasErradas}
+                  renderItem={(item: any) => (
+                    <List.Item>
+                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                        <Text strong style={{ fontSize: 12 }}>{`Pregunta ${item.orden || "-"}`}</Text>
+                        <Text style={{ fontSize: 13 }}>{item.pregunta}</Text>
+                        <Text type="danger" style={{ fontSize: 12 }}>{`✗ Tu respuesta: ${item.respuestaMarcada}`}</Text>
+                        <Text type="success" style={{ fontSize: 12 }}>{`✓ Correcta: ${item.respuestaCorrecta}`}</Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            )}
+          </Space>
+        )}
+      </Modal>
 
       <Modal
         title={quizActivo?.titulo || "Responder quiz"}
