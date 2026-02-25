@@ -609,6 +609,9 @@ export default function CajaPage() {
         abrirTicketPagoDesdeBlob(blob);
       }
 
+      // Abrir cajón automáticamente al imprimir/generar el tiquete de facturación
+      abrirCajonRegistrador();
+
       // Subir ticket a storage y asociarlo a todos los pagos del lote
       if (pagosActualizados.length > 0) {
         try {
@@ -634,11 +637,6 @@ export default function CajaPage() {
         } catch (storageError) {
           console.error("Error guardando ticket:", storageError);
         }
-      }
-
-      // Abrir cajón registrador si es efectivo
-      if (values.metodo_pago === "efectivo") {
-        abrirCajonRegistrador();
       }
 
       if (estudianteSeleccionado?.telefono && (estudianteSeleccionado?.notif_whatsapp ?? true)) {
