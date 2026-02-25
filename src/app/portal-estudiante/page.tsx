@@ -1017,10 +1017,6 @@ export default function PortalEstudiante() {
       });
       setQuizResultadoVisible(true);
 
-      // Auto-ocultar después de 8 segundos si no hay errores, 12 si hay errores
-      const autoCloseDelay = (respuestasErradas as any[]).length > 0 ? 12000 : 8000;
-      setTimeout(() => setQuizResultadoVisible(false), autoCloseDelay);
-
       await cargarDatos();
     } catch (error) {
       logger.error("Error enviando quiz", error);
