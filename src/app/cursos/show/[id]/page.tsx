@@ -691,7 +691,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         const matriculaIdsTemp = estudiantesConAsistencia.map((e) => e.id);
         let moraSet = new Set<number>();
         if (matriculaIdsTemp.length > 0) {
-          const hoy = new Date().toISOString().split("T")[0];
+          const hoy: string = new Date().toISOString().slice(0, 10);
           const { data: pagosData } = await supabaseBrowserClient
             .from("pagos")
             .select("matricula_id, estado, fecha_vencimiento")
