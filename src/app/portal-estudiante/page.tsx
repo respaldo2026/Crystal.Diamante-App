@@ -73,7 +73,6 @@ export default function PortalEstudiante() {
   const [loading, setLoading] = useState(true);
   const [estudiante, setEstudiante] = useState<any>(null);
   const [asistencias, setAsistencias] = useState<any[]>([]);
-  const [calificaciones, setCalificaciones] = useState<any[]>([]);
   const [avancePorCurso, setAvancePorCurso] = useState<any[]>([]);
   const [certificados, setCertificados] = useState<any[]>([]);
   const [pagos, setPagos] = useState<any[]>([]);
@@ -709,14 +708,6 @@ export default function PortalEstudiante() {
         }
 
         setAsistencias(asistenciasConTema);
-
-        // Calificaciones
-        const { data: dataCalificaciones } = await supabaseBrowserClient
-          .from("calificaciones")
-          .select("*, matriculas(id, cursos(nombre))")
-          .in("matricula_id", matriculaIds)
-          .order("fecha_evaluacion", { ascending: false });
-        setCalificaciones(dataCalificaciones || []);
 
         if (matriculaIds.length > 0) {
           const { data: intentosQuizData } = await supabaseBrowserClient
@@ -1652,7 +1643,27 @@ export default function PortalEstudiante() {
     );
   };
 
-  const renderPensum = () => renderRutaAcademica("plan");
+  const renderPensum = () => (
+    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      {renderRutaAcademica("plan")}
+
+      <Card size="small" title="Certificados">
+        <Table
+          dataSource={certificados}
+          rowKey="id"
+          size="small"
+          scroll={{ x: 520 }}
+          pagination={{ pageSize: 5 }}
+          locale={{ emptyText: "No hay certificados disponibles" }}
+          columns={[
+            { title: "Curso", render: (_, r: any) => r.cursos?.nombre },
+            { title: "Nota Final", dataIndex: "nota_final" },
+            { title: "Acción", render: (_, r) => <Button icon={<DownloadOutlined />} onClick={() => descargarCertificado(r)}>Descargar</Button> },
+          ]}
+        />
+      </Card>
+    </Space>
+  );
 
   const renderMaterialesKits = () => renderRutaAcademica("kits");
 
@@ -1664,7 +1675,6 @@ export default function PortalEstudiante() {
     { key: "3", label: "Lista de materiales", icon: <FileOutlined /> },
     { key: "4", label: "Materiales del ciclo", icon: <BookOutlined /> },
     { key: "5", label: "Pensum", icon: <BookOutlined /> },
-    { key: "7", label: "Calificaciones", icon: <FileTextOutlined /> },
   ];
 
   const renderSeccionActiva = () => {
@@ -1819,121 +1829,6 @@ export default function PortalEstudiante() {
 
     if (activeTab === "4") return renderMaterialesCiclo();
     if (activeTab === "5") return renderPensum();
-
-    if (activeTab === "7") {
-      return (
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Card size="small" title="Calificaciones">
-            <Table
-              dataSource={(calificaciones || []).filter((item: any) => String(item?.tipo_evaluacion || "").toLowerCase() !== "quiz")}
-              rowKey="id"
-              size="small"
-              scroll={{ x: 520 }}
-              pagination={{ pageSize: 6 }}
-              locale={{ emptyText: "No hay calificaciones registradas" }}
-              columns={[
-                { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
-                { title: "Concepto", dataIndex: "concepto", render: (v) => v || "-" },
-                {
-                  title: "Nota",
-                  dataIndex: "calificacion",
-                  render: (c, r: any) => {
-                    const valor = Number(c || 0);
-                    const esQuiz = String(r?.tipo_evaluacion || "").toLowerCase() === "quiz";
-                    if (esQuiz) {
-                      return <Tag color={quizAprobado(valor) ? "green" : "red"}>{`${valor}/5`}</Tag>;
-                    }
-                    return <Tag color={valor >= 70 ? "green" : "red"}>{valor}</Tag>;
-                  },
-                },
-                { title: "Fecha", dataIndex: "fecha_evaluacion", render: (f) => formatDate(f) },
-              ]}
-            />
-          </Card>
-
-          <Card size="small" title="Quiz por clase">
-            <Table
-              dataSource={quizzesClase}
-              rowKey="id"
-              size="small"
-              scroll={{ x: 720 }}
-              pagination={{ pageSize: 6 }}
-              locale={{ emptyText: "No hay quizzes publicados" }}
-              columns={[
-                {
-                  title: "Clase",
-                  render: (_: any, quiz: any) => {
-                    const tema = (pensum || [])
-                      .flatMap((ciclo: any) => ciclo?.pensum_cursos || [])
-                      .find((item: any) => String(item?.id) === String(quiz?.pensum_curso_id));
-                    return tema?.nombre_curso || "Clase";
-                  },
-                },
-                { title: "Quiz", dataIndex: "titulo", render: (v) => v || "Quiz" },
-                {
-                  title: "Estado",
-                  render: (_: any, quiz: any) => {
-                    const intento = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
-                    if (!intento) return <Tag color="orange">Pendiente</Tag>;
-                    const aprobado = quizAprobado(Number(intento?.calificacion || 0));
-                    return <Tag color={aprobado ? "green" : "red"}>{aprobado ? "Aprobado" : "Repetir"}</Tag>;
-                  },
-                },
-                {
-                  title: "Resultado",
-                  render: (_: any, quiz: any) => {
-                    const intento = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
-                    if (!intento) return "-";
-                    const correctas = Number(intento?.respuestas_correctas || 0);
-                    const total = Number(intento?.total_preguntas || 0);
-                    const score = Number(intento?.calificacion || 0);
-                    const porcentaje = total > 0 ? Number(((correctas / total) * 100).toFixed(2)) : 0;
-                    const aprobado = quizAprobado(score);
-                    return (
-                      <Space direction="vertical" size={0}>
-                        <Text>{`${correctas}/${total}`}</Text>
-                        <Tag color={aprobado ? "green" : "red"}>{`${score}/5`}</Tag>
-                        <Text type="secondary" style={{ fontSize: 11 }}>{`${porcentaje}%`}</Text>
-                      </Space>
-                    );
-                  },
-                },
-                {
-                  title: "Acción",
-                  render: (_: any, quiz: any) => {
-                    const intento = (quizIntentos || []).find((it: any) => String(it?.quiz_id) === String(quiz?.id));
-                    return (
-                      <Button
-                        type="primary"
-                        onClick={() => abrirQuiz(quiz)}
-                      >
-                        {intento ? "Mejorar nota" : "Responder"}
-                      </Button>
-                    );
-                  },
-                },
-              ]}
-            />
-          </Card>
-
-          <Card size="small" title="Certificados">
-            <Table
-              dataSource={certificados}
-              rowKey="id"
-              size="small"
-              scroll={{ x: 520 }}
-              pagination={{ pageSize: 5 }}
-              locale={{ emptyText: "No hay certificados disponibles" }}
-              columns={[
-                { title: "Curso", render: (_, r: any) => r.cursos?.nombre },
-                { title: "Nota Final", dataIndex: "nota_final" },
-                { title: "Acción", render: (_, r) => <Button icon={<DownloadOutlined />} onClick={() => descargarCertificado(r)}>Descargar</Button> },
-              ]}
-            />
-          </Card>
-        </Space>
-      );
-    }
 
     return null;
   };
