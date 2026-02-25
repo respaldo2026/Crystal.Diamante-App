@@ -143,23 +143,31 @@ export default function EstudiantesList() {
         const mats = obtenerMatriculasVigentes(record);
         if (mats.length === 0) return { label: 'Sin pagos', color: 'default' as const };
 
-        let matriculasConPagoMesActual = 0;
+        let matriculasConPagoVigente = 0;
+        let matriculasConPendienteMesActual = 0;
         let mensualidadesPendientesVencidasMesActual = 0;
 
         mats.forEach((m: any) => {
             const st = pagosStats[m.id];
-            if ((st?.mensualidadesPagadasMesActual || 0) > 0) {
-                matriculasConPagoMesActual += 1;
+            if ((st?.mensualidadesPagadas || 0) > 0) {
+                matriculasConPagoVigente += 1;
+            }
+            if ((st?.mensualidadesPendientesMesActual || 0) > 0) {
+                matriculasConPendienteMesActual += 1;
             }
             mensualidadesPendientesVencidasMesActual += st?.mensualidadesPendientesVencidasMesActual || 0;
         });
 
-        if (matriculasConPagoMesActual >= mats.length) {
-            return { label: 'Pagado', color: 'green' as const };
-        }
-
         if (mensualidadesPendientesVencidasMesActual > 0) {
             return { label: 'Pendiente', color: 'orange' as const };
+        }
+
+        if (matriculasConPendienteMesActual > 0) {
+            return { label: 'Pendiente', color: 'gold' as const };
+        }
+
+        if (matriculasConPagoVigente > 0) {
+            return { label: 'Pagado', color: 'green' as const };
         }
 
         return { label: 'Pendiente', color: 'gold' as const };
@@ -241,6 +249,7 @@ export default function EstudiantesList() {
                     .in('matricula_id', matriculaIds);
 
                 const hoy = dayjs().startOf('day');
+                const finMesActual = hoy.endOf('month');
                 const stats: Record<number, {
                     pagados: number;
                     pendientes: number;
@@ -273,26 +282,27 @@ export default function EstudiantesList() {
                     const esInscripcion = esPagoInscripcion(p);
                     const fechaVencimiento = p.fecha_vencimiento ? dayjs(p.fecha_vencimiento) : null;
                     const fechaPago = p.fecha_pago ? dayjs(p.fecha_pago) : null;
-                    const referenciaMesActual = fechaVencimiento || fechaPago;
-                    const esMesActual = Boolean(referenciaMesActual && referenciaMesActual.isSame(hoy, 'month'));
+                    const esExigibleEsteMes = !fechaVencimiento || !fechaVencimiento.endOf('day').isAfter(finMesActual);
 
                     if (p.estado === 'pagado') stats[matriculaId].pagados += 1;
                     if (p.estado === 'pagado' && esInscripcion) stats[matriculaId].inscripcionPagada += 1;
                     if (p.estado === 'pagado' && !esInscripcion) {
                         stats[matriculaId].mensualidadesPagadas += 1;
-                        if (esMesActual) stats[matriculaId].mensualidadesPagadasMesActual += 1;
+                        if ((fechaPago && fechaPago.isSame(hoy, 'month')) || esExigibleEsteMes) {
+                            stats[matriculaId].mensualidadesPagadasMesActual += 1;
+                        }
                     }
                     if (p.estado === 'pendiente') {
                         stats[matriculaId].pendientes += 1;
                         if (!esInscripcion) {
                             stats[matriculaId].mensualidadesPendientes += 1;
-                            if (esMesActual) stats[matriculaId].mensualidadesPendientesMesActual += 1;
+                            if (esExigibleEsteMes) stats[matriculaId].mensualidadesPendientesMesActual += 1;
                         }
                         if (p.fecha_vencimiento && dayjs(p.fecha_vencimiento).endOf('day').isBefore(hoy)) {
                             stats[matriculaId].pendientesVencidos += 1;
                             if (!esInscripcion) {
                                 stats[matriculaId].mensualidadesPendientesVencidas += 1;
-                                if (esMesActual) stats[matriculaId].mensualidadesPendientesVencidasMesActual += 1;
+                                if (esExigibleEsteMes) stats[matriculaId].mensualidadesPendientesVencidasMesActual += 1;
                             }
                         }
                     }
