@@ -623,7 +623,9 @@ Cierre sugerido:
 ⚠️ NUNCA inventes información.
 
 6️⃣ Embudo de Cierre
-📱 WhatsApp Admisiones: +57 301 203 8582
+📱 WhatsApp Admisiones (número de la academia): +57 301 203 8582
+
+⚠️ IMPORTANTE: Este número (+57 301 203 8582) ES el número de la academia. Si alguien pregunta "¿cuál es el número de la academia?", "¿me das el teléfono?", "¿cómo los contacto?" → responde SIEMPRE con este número.
 
 Entrega el número cuando:
 ✔ Preguntan por precios
@@ -1887,6 +1889,11 @@ function isSocialMediaQuestion(message: string): boolean {
     return false;
   }
 
+  // Preguntan por número, teléfono o contacto de la academia
+  if (/\b(numero|telefono|contacto|whatsapp|llamar|llamarles|llamarte|donde\s+llamo|como\s+los\s+contacto|como\s+te\s+contacto|como\s+contactarlos|como\s+contacto|dame\s+el\s+numero|cual\s+es\s+el\s+numero|me\s+das\s+el\s+numero|el\s+numero\s+de|numero\s+de\s+la|contacto\s+de\s+la|admisiones)\b/i.test(text)) {
+    return true;
+  }
+
   return /\b(red|redes|redes sociales|instagram|insta|facebook|face|youtube|tiktok|tik tok|ig|perfil|perfiles|siguelos|siguenos|tienen redes|tienes redes)\b/i.test(text);
 }
 
@@ -2394,7 +2401,7 @@ function buildSeparaCupoPaymentReply(
   academy: any,
   courses: any[]
 ): string {
-  const admissionsContact = academy?.whatsapp || "+57 301 203 8582";
+  const admissionsContact = academy?.whatsapp_admisiones || academy?.whatsapp || ADMISSIONS_NUMBER;
   const nequiNumber = "3006402575";
 
   const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
@@ -2557,14 +2564,24 @@ function normalizeSocialUrl(raw: string, platform: "instagram" | "facebook" | "y
   return withoutSpaces;
 }
 
+/** Número de admisiones/academia por defecto */
+const ADMISSIONS_NUMBER = "+57 301 203 8582";
+
 function buildSocialMediaReply(academy: any | null, userMessage: string = ""): string {
   const ig = normalizeSocialUrl(academy?.instagram || "", "instagram");
   const fb = normalizeSocialUrl(academy?.facebook || "", "facebook");
   const yt = normalizeSocialUrl(academy?.youtube || "", "youtube");
-  const wa = String(academy?.whatsapp || "").trim();
-  const phone = String(academy?.telefono || "").trim();
+  // Siempre usar el número de la academia como fallback para WhatsApp/teléfono
+  const wa = String(academy?.whatsapp_admisiones || academy?.whatsapp || ADMISSIONS_NUMBER).trim();
+  const phone = String(academy?.telefono || wa).trim();
 
   const asksInstagram = /\b(instagram|insta|ig|perfil\s+de\s+instagram)\b/i.test(normalizeForMatch(userMessage));
+  const asksContact = /\b(numero|telefono|contacto|whatsapp|llamar|admisiones)\b/i.test(normalizeForMatch(userMessage));
+
+  // Si sólo preguntan por número/contacto, respuesta directa y concisa
+  if (asksContact && !asksInstagram) {
+    return `¡Claro! 📱 El número de contacto de la academia (Admisiones) es:\n\n*${wa}* (WhatsApp)\n\nEscrívenos por ahí y te atendemos de inmediato 🙌`;
+  }
 
   if (ig && asksInstagram) {
     return `📸 Instagram oficial:\n${ig}\n\nSi quieres, también te comparto Facebook y YouTube.`;
@@ -2574,14 +2591,10 @@ function buildSocialMediaReply(academy: any | null, userMessage: string = ""): s
   if (ig) lines.push(`📸 Instagram:\n${ig}`);
   if (fb) lines.push(`👤 Facebook:\n${fb}`);
   if (yt) lines.push(`🎥 YouTube:\n${yt}`);
-  if (wa) lines.push(`💬 WhatsApp: ${wa}`);
-  if (phone) lines.push(`📞 Teléfono: ${phone}`);
+  lines.push(`💬 WhatsApp Admisiones: ${wa}`);
+  if (phone && phone !== wa) lines.push(`📞 Teléfono: ${phone}`);
 
-  if (!lines.length) {
-    return "¡Sí! 🙌 Te comparto nuestras redes en un momento. Si prefieres, también te atiendo por WhatsApp para ayudarte de inmediato.";
-  }
-
-  return `¡Sí, claro! 🙌 Estas son nuestras redes y canales de contacto:\n\n${lines.join("\n\n")}\n\nSi quieres, también te recomiendo por cuál canal te responden más rápido.`;
+  return `¡Sí, claro! 🙌 Estas son nuestras redes y canales de contacto:\n\n${lines.join("\n\n")}\n\nPara inscribirte o resolver dudas rápidamente, escríbenos al WhatsApp de Admisiones: *${wa}* 😊`;
 }
 
 function isPaymentMethodsOrDatesQuestion(message: string): boolean {
