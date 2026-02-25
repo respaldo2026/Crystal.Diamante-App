@@ -571,7 +571,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
     const existeTemaSeleccionado = temas.some((tema) => String(tema.id) === String(temaSeleccionadoId || ""));
     if (!existeTemaSeleccionado) {
-      setTemaSeleccionadoId(String(temas[0].id));
+      const primerTema = temas[0];
+      if (primerTema?.id) {
+        setTemaSeleccionadoId(String(primerTema.id));
+      }
     }
   }, [temas, temaSeleccionadoId]);
 
