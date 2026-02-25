@@ -49,6 +49,7 @@ import {
   GiftOutlined,
   YoutubeOutlined,
   LockOutlined,
+  StarFilled,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
@@ -96,6 +97,7 @@ export default function PortalEstudiante() {
     respuestasErradas: any[];
     totalPreguntas: number;
     correctas: number;
+    tituloQuiz?: string;
   } | null>(null);
   const [quizResultadoVisible, setQuizResultadoVisible] = useState(false);
   const [matriculas, setMatriculas] = useState<any[]>([]);
@@ -1014,12 +1016,15 @@ export default function PortalEstudiante() {
         respuestasErradas: respuestasErradas as any[],
         totalPreguntas: total,
         correctas,
+        tituloQuiz: quizActivo?.titulo || "",
       });
       setQuizResultadoVisible(true);
 
-      // Auto-ocultar después de 8 segundos si no hay errores, 12 si hay errores
-      const autoCloseDelay = (respuestasErradas as any[]).length > 0 ? 12000 : 8000;
-      setTimeout(() => setQuizResultadoVisible(false), autoCloseDelay);
+      // Auto-ocultar: si reprobó, 12s si hay errores o 8s; si aprobó no auto-cerrar
+      if (!aprobado) {
+        const autoCloseDelay = (respuestasErradas as any[]).length > 0 ? 12000 : 8000;
+        setTimeout(() => setQuizResultadoVisible(false), autoCloseDelay);
+      }
 
       await cargarDatos();
     } catch (error) {
@@ -2059,94 +2064,250 @@ export default function PortalEstudiante() {
       <Modal
         open={quizResultadoVisible}
         onCancel={() => setQuizResultadoVisible(false)}
-        footer={
-          quizResultado && !quizResultado.aprobado ? (
-            <Button
-              type="primary"
-              onClick={() => setQuizResultadoVisible(false)}
-            >
-              Entendido, volver a intentarlo
-            </Button>
-          ) : (
-            <Button type="primary" onClick={() => setQuizResultadoVisible(false)}>
-              Cerrar
-            </Button>
-          )
-        }
-        width={isMobile ? "94vw" : 600}
+        footer={null}
+        width={quizResultado?.aprobado ? (isMobile ? "96vw" : 620) : (isMobile ? "94vw" : 560)}
         centered
         title={null}
-        styles={{ body: { padding: isMobile ? 16 : 32 } }}
+        closable
+        styles={{
+          body: { padding: 0 },
+          content: quizResultado?.aprobado
+            ? { background: "linear-gradient(160deg, #1a0533 0%, #2d0a5c 40%, #0d2a6e 100%)", borderRadius: 16, overflow: "hidden" }
+            : { borderRadius: 16, overflow: "hidden" },
+        }}
       >
-        {quizResultado && (
-          <Space direction="vertical" size={20} style={{ width: "100%", textAlign: "center" }}>
-            {/* Nota grande */}
-            <div
-              style={{
-                width: 140,
-                height: 140,
-                borderRadius: "50%",
-                background: quizResultado.aprobado
-                  ? "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)"
-                  : "linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto",
-                boxShadow: quizResultado.aprobado
-                  ? "0 8px 32px rgba(82,196,26,0.4)"
-                  : "0 8px 32px rgba(255,77,79,0.4)",
-              }}
-            >
-              <span style={{ color: "#fff", fontSize: 40, fontWeight: 800, lineHeight: 1 }}>
-                {quizResultado.calificacion.toFixed(1)}
-              </span>
-              <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 14 }}>/5.0</span>
+        {quizResultado && quizResultado.aprobado ? (
+          /* ——— PANTALLA DE LOGRO (aprobado) ——— */
+          <div style={{ color: "#fff" }}>
+
+            {/* Estrellas decorativas superiores */}
+            <div style={{
+              position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+              pointerEvents: "none", overflow: "hidden", borderRadius: 16,
+            }}>
+              {[...Array(12)].map((_, i) => (
+                <StarFilled
+                  key={i}
+                  style={{
+                    position: "absolute",
+                    color: `rgba(255,215,0,${0.12 + (i % 4) * 0.07})`,
+                    fontSize: 10 + (i % 5) * 6,
+                    top: `${(i * 37) % 90}%`,
+                    left: `${(i * 53 + 5) % 95}%`,
+                    transform: `rotate(${i * 25}deg)`,
+                  }}
+                />
+              ))}
             </div>
 
-            <div>
-              <Text style={{ fontSize: 22, fontWeight: 700, display: "block" }}>
-                {quizResultado.aprobado ? "¡Felicitaciones! " : "Sigue intentando "}
-                {quizResultado.aprobado ? "🎉" : "💪"}
-              </Text>
-              <Text type="secondary" style={{ fontSize: 15 }}>
-                {`${quizResultado.correctas} de ${quizResultado.totalPreguntas} correctas · ${quizResultado.porcentaje}%`}
-              </Text>
-              <br />
-              {!quizResultado.aprobado && (
+            {/* Cabecera con logo */}
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              paddingTop: 28, paddingBottom: 12, position: "relative",
+            }}>
+              {logoAcademia ? (
+                <img
+                  src={logoAcademia}
+                  alt="Academia"
+                  style={{ height: 52, maxWidth: 180, objectFit: "contain", marginBottom: 6, filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.4))" }}
+                />
+              ) : (
+                <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, letterSpacing: 2, marginBottom: 6 }}>ACADEMIA CRYSTAL DIAMANTE</Text>
+              )}
+              <div style={{ width: 48, height: 2, background: "linear-gradient(90deg, transparent, #ffd700, transparent)" }} />
+            </div>
+
+            {/* Trofeo + nota */}
+            <div style={{ textAlign: "center", padding: "8px 24px 0" }}>
+              <div style={{ fontSize: 56, lineHeight: 1, marginBottom: 4 }}>🏆</div>
+              <div style={{
+                display: "inline-flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center",
+                width: 110, height: 110, borderRadius: "50%",
+                background: "linear-gradient(135deg, #ffd700 0%, #ff9500 100%)",
+                boxShadow: "0 0 40px rgba(255,215,0,0.55), 0 4px 20px rgba(0,0,0,0.4)",
+                margin: "4px auto 10px",
+              }}>
+                <span style={{ color: "#1a0533", fontSize: 38, fontWeight: 900, lineHeight: 1 }}>
+                  {quizResultado.calificacion.toFixed(1)}
+                </span>
+                <span style={{ color: "rgba(26,5,51,0.75)", fontSize: 12, fontWeight: 600 }}>/5.0</span>
+              </div>
+
+              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, marginBottom: 4, lineHeight: 1.2 }}>
+                ¡Lo lograste{estudiante?.nombre_completo ? `, ${estudiante.nombre_completo.split(" ")[0]}` : ""}! 🎉
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 14, marginBottom: 2 }}>
+                {quizResultado.tituloQuiz && (
+                  <span>📚 <em>{quizResultado.tituloQuiz}</em></span>
+                )}
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
+                {quizResultado.correctas} de {quizResultado.totalPreguntas} correctas · {quizResultado.porcentaje}%
+              </div>
+            </div>
+
+            {/* Tarjeta compartible */}
+            <div style={{
+              margin: "16px 20px 0",
+              padding: "14px 16px",
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.09)",
+              border: "1px solid rgba(255,215,0,0.25)",
+              backdropFilter: "blur(4px)",
+            }}>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>
+                ✨ Presume tu logro
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, lineHeight: 1.6 }}>
+                {`🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`}
+              </div>
+            </div>
+
+            {/* Botones de compartir */}
+            <div style={{ padding: "14px 20px 8px" }}>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 10, textAlign: "center", textTransform: "uppercase", letterSpacing: 1 }}>
+                Comparte en
+              </div>
+              <Row gutter={[10, 10]} justify="center">
+                {/* WhatsApp */}
+                <Col>
+                  <Button
+                    icon={<WhatsAppOutlined />}
+                    size="large"
+                    style={{
+                      background: "#25D366", color: "#fff",
+                      border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13,
+                      height: 44, paddingInline: 18,
+                      boxShadow: "0 3px 12px rgba(37,211,102,0.4)",
+                    }}
+                    onClick={() => {
+                      const texto = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`;
+                      window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
+                    }}
+                  >
+                    WhatsApp
+                  </Button>
+                </Col>
+                {/* Facebook */}
+                <Col>
+                  <Button
+                    size="large"
+                    style={{
+                      background: "#1877F2", color: "#fff",
+                      border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13,
+                      height: 44, paddingInline: 18,
+                      boxShadow: "0 3px 12px rgba(24,119,242,0.4)",
+                    }}
+                    onClick={() => {
+                      const texto = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. #AcademiaCrystalDiamante #Logro #Aprendizaje`;
+                      window.open(`https://www.facebook.com/sharer.php?quote=${encodeURIComponent(texto)}&u=${encodeURIComponent(window.location.origin)}`, "_blank");
+                    }}
+                  >
+                    📘 Facebook
+                  </Button>
+                </Col>
+                {/* Instagram — copia el texto y abre Instagram */}
+                <Col>
+                  <Button
+                    size="large"
+                    style={{
+                      background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
+                      color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13,
+                      height: 44, paddingInline: 18,
+                      boxShadow: "0 3px 12px rgba(220,39,67,0.4)",
+                    }}
+                    onClick={() => {
+                      const texto = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`;
+                      navigator.clipboard.writeText(texto).then(() => {
+                        message.success("📋 ¡Texto copiado! Pégalo en tu historia o post de Instagram 🎉");
+                        window.open("https://www.instagram.com/", "_blank");
+                      });
+                    }}
+                  >
+                    📸 Instagram
+                  </Button>
+                </Col>
+              </Row>
+            </div>
+
+            {/* Botón cerrar */}
+            <div style={{ padding: "12px 20px 24px", textAlign: "center" }}>
+              <Button
+                type="primary"
+                size="large"
+                style={{
+                  background: "linear-gradient(90deg, #ffd700, #ff9500)",
+                  border: "none", color: "#1a0533", fontWeight: 800,
+                  borderRadius: 10, fontSize: 14, height: 44, paddingInline: 32,
+                  boxShadow: "0 4px 16px rgba(255,215,0,0.4)",
+                }}
+                onClick={() => setQuizResultadoVisible(false)}
+              >
+                🌟 ¡Ya presumí mi logro! Cerrar
+              </Button>
+            </div>
+          </div>
+        ) : quizResultado && !quizResultado.aprobado ? (
+          /* ——— PANTALLA DE REPROBADO ——— */
+          <div style={{ padding: isMobile ? 16 : 28 }}>
+            <Space direction="vertical" size={20} style={{ width: "100%", textAlign: "center" }}>
+              <div
+                style={{
+                  width: 130, height: 130, borderRadius: "50%",
+                  background: "linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%)",
+                  display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center",
+                  margin: "0 auto",
+                  boxShadow: "0 8px 32px rgba(255,77,79,0.4)",
+                }}
+              >
+                <span style={{ color: "#fff", fontSize: 40, fontWeight: 800, lineHeight: 1 }}>
+                  {quizResultado.calificacion.toFixed(1)}
+                </span>
+                <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 14 }}>/5.0</span>
+              </div>
+              <div>
+                <Text style={{ fontSize: 22, fontWeight: 700, display: "block" }}>
+                  Sigue intentando 💪
+                </Text>
+                <Text type="secondary" style={{ fontSize: 15 }}>
+                  {`${quizResultado.correctas} de ${quizResultado.totalPreguntas} correctas · ${quizResultado.porcentaje}%`}
+                </Text>
+                <br />
                 <Text type="danger" style={{ fontSize: 13 }}>
                   {`Necesitas mínimo ${UMBRAL_APROBACION_QUIZ_PORCENTAJE}% para aprobar.`}
                 </Text>
-              )}
-            </div>
-
-            {/* Preguntas mal respondidas */}
-            {quizResultado.respuestasErradas.length > 0 && (
-              <div style={{ textAlign: "left", width: "100%" }}>
-                <Text strong style={{ fontSize: 14 }}>
-                  {`Preguntas por mejorar (${quizResultado.respuestasErradas.length}):`}
-                </Text>
-                <List
-                  size="small"
-                  bordered
-                  style={{ marginTop: 8, maxHeight: 280, overflowY: "auto" }}
-                  dataSource={quizResultado.respuestasErradas}
-                  renderItem={(item: any) => (
-                    <List.Item>
-                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                        <Text strong style={{ fontSize: 12 }}>{`Pregunta ${item.orden || "-"}`}</Text>
-                        <Text style={{ fontSize: 13 }}>{item.pregunta}</Text>
-                        <Text type="danger" style={{ fontSize: 12 }}>{`✗ Tu respuesta: ${item.respuestaMarcada}`}</Text>
-                        <Text type="success" style={{ fontSize: 12 }}>{`✓ Correcta: ${item.respuestaCorrecta}`}</Text>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
               </div>
-            )}
-          </Space>
-        )}
+              {quizResultado.respuestasErradas.length > 0 && (
+                <div style={{ textAlign: "left", width: "100%" }}>
+                  <Text strong style={{ fontSize: 14 }}>
+                    {`Preguntas por mejorar (${quizResultado.respuestasErradas.length}):`}
+                  </Text>
+                  <List
+                    size="small"
+                    bordered
+                    style={{ marginTop: 8, maxHeight: 260, overflowY: "auto" }}
+                    dataSource={quizResultado.respuestasErradas}
+                    renderItem={(item: any) => (
+                      <List.Item>
+                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                          <Text strong style={{ fontSize: 12 }}>{`Pregunta ${item.orden || "-"}`}</Text>
+                          <Text style={{ fontSize: 13 }}>{item.pregunta}</Text>
+                          <Text type="danger" style={{ fontSize: 12 }}>{`✗ Tu respuesta: ${item.respuestaMarcada}`}</Text>
+                          <Text type="success" style={{ fontSize: 12 }}>{`✓ Correcta: ${item.respuestaCorrecta}`}</Text>
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                </div>
+              )}
+              <Button type="primary" danger onClick={() => setQuizResultadoVisible(false)}>
+                Entendido, volver a intentarlo
+              </Button>
+            </Space>
+          </div>
+        ) : null}
       </Modal>
 
       <Modal
