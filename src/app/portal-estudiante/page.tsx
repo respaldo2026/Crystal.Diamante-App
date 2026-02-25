@@ -282,8 +282,40 @@ export default function PortalEstudiante() {
     if (/^OPCION[_\s-]*B$/i.test(raw)) return "B";
     if (/^OPCION[_\s-]*C$/i.test(raw)) return "C";
     if (/^OPCION[_\s-]*D$/i.test(raw)) return "D";
-    const match = raw.match(/[ABCD]/);
-    return match ? match[0] : "";
+    return "";
+  };
+
+  const normalizarTextoComparacionQuiz = (valor?: string | null) =>
+    String(valor || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ");
+
+  const resolverClaveOpcionQuiz = (pregunta: any, valor?: string | null) => {
+    const claveDirecta = normalizarClaveOpcionQuiz(valor);
+    if (claveDirecta) return claveDirecta;
+
+    const textoObjetivo = normalizarTextoComparacionQuiz(valor);
+    if (!textoObjetivo) return "";
+
+    const opciones: Array<{ key: string; texto: string }> = [
+      { key: "A", texto: String(pregunta?.opcion_a || "") },
+      { key: "B", texto: String(pregunta?.opcion_b || "") },
+      { key: "C", texto: String(pregunta?.opcion_c || "") },
+      { key: "D", texto: String(pregunta?.opcion_d || "") },
+    ];
+
+    const exacta = opciones.find((op) => normalizarTextoComparacionQuiz(op.texto) === textoObjetivo);
+    if (exacta) return exacta.key;
+
+    const contiene = opciones.find((op) => {
+      const normalizado = normalizarTextoComparacionQuiz(op.texto);
+      return normalizado && (textoObjetivo.includes(normalizado) || normalizado.includes(textoObjetivo));
+    });
+
+    return contiene?.key || "";
   };
 
   const normalizeHttpUrl = (value?: string | null) => {
@@ -855,30 +887,32 @@ export default function PortalEstudiante() {
 
       if (errorCorrectas) throw errorCorrectas;
 
-      const correctaPorPregunta = new Map<string, string>();
-      (preguntasConRespuesta || []).forEach((pregunta: any) => {
-        correctaPorPregunta.set(String(pregunta.id), normalizarClaveOpcionQuiz(pregunta.respuesta_correcta));
-      });
-
-      let correctas = 0;
-      respuestas.forEach((respuesta) => {
-        const correcta = correctaPorPregunta.get(String(respuesta.pregunta_id)) || "";
-        const marcada = normalizarClaveOpcionQuiz(respuesta.respuesta);
-        if (correcta && correcta === marcada) {
-          correctas += 1;
-        }
-      });
-
       const preguntaPorId = new Map<string, any>();
       (quizPreguntas || []).forEach((pregunta: any) => {
         preguntaPorId.set(String(pregunta.id), pregunta);
       });
 
+      const correctaPorPregunta = new Map<string, string>();
+      (preguntasConRespuesta || []).forEach((pregunta: any) => {
+        const preguntaBase = preguntaPorId.get(String(pregunta.id));
+        correctaPorPregunta.set(String(pregunta.id), resolverClaveOpcionQuiz(preguntaBase, pregunta.respuesta_correcta));
+      });
+
+      let correctas = 0;
+      respuestas.forEach((respuesta) => {
+        const preguntaBase = preguntaPorId.get(String(respuesta.pregunta_id));
+        const correcta = correctaPorPregunta.get(String(respuesta.pregunta_id)) || "";
+        const marcada = resolverClaveOpcionQuiz(preguntaBase, respuesta.respuesta);
+        if (correcta && correcta === marcada) {
+          correctas += 1;
+        }
+      });
+
       const respuestasErradas = respuestas
         .map((respuesta) => {
           const pregunta = preguntaPorId.get(String(respuesta.pregunta_id));
-          const correcta = normalizarClaveOpcionQuiz(correctaPorPregunta.get(String(respuesta.pregunta_id)) || "");
-          const marcada = normalizarClaveOpcionQuiz(respuesta.respuesta);
+          const correcta = resolverClaveOpcionQuiz(pregunta, correctaPorPregunta.get(String(respuesta.pregunta_id)) || "");
+          const marcada = resolverClaveOpcionQuiz(pregunta, respuesta.respuesta);
           if (!correcta || marcada === correcta) return null;
 
           return {
