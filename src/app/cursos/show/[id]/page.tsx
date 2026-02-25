@@ -44,6 +44,7 @@ interface Student {
   asistencia_porcentaje: number;
   totalClases: number;
   presentes: number;
+  enMora?: boolean;
 }
 
 interface Tema {
@@ -686,17 +687,39 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             };
           })
         );
-        setEstudiantes(estudiantesConAsistencia);
+        // Cargar pagos pendientes vencidos para detectar mora
+        const matriculaIdsTemp = estudiantesConAsistencia.map((e) => e.id);
+        let moraSet = new Set<number>();
+        if (matriculaIdsTemp.length > 0) {
+          const hoy = new Date().toISOString().split("T")[0];
+          const { data: pagosData } = await supabaseBrowserClient
+            .from("pagos")
+            .select("matricula_id, estado, fecha_vencimiento")
+            .in("matricula_id", matriculaIdsTemp)
+            .eq("estado", "pendiente");
+          (pagosData || []).forEach((p: any) => {
+            if (p.fecha_vencimiento && p.fecha_vencimiento < hoy) {
+              moraSet.add(Number(p.matricula_id));
+            }
+          });
+        }
+
+        const estudiantesConMora = estudiantesConAsistencia.map((e) => ({
+          ...e,
+          enMora: moraSet.has(e.id),
+        }));
+
+        setEstudiantes(estudiantesConMora);
         const notasIniciales: Record<string, number | null> = {};
         const estadosIniciales: Record<string, string> = {};
-        estudiantesConAsistencia.forEach((est) => {
+        estudiantesConMora.forEach((est) => {
           notasIniciales[String(est.id)] = est.nota_final ?? null;
           estadosIniciales[String(est.id)] = est.estado;
         });
         setNotaEdicion(notasIniciales);
         setEstadoEdicion(estadosIniciales);
 
-        const matriculaIds = estudiantesConAsistencia.map((e) => e.id);
+        const matriculaIds = estudiantesConMora.map((e) => e.id);
         matriculaIdsCurso = matriculaIds;
         if (matriculaIds.length > 0) {
           const { data: califData } = await supabaseBrowserClient
@@ -791,8 +814,27 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         title: "Nombre",
         dataIndex: "nombre_completo",
         ellipsis: true,
-        width: isMobile ? 160 : 220,
-        render: (text: string) => <Text strong>{text}</Text>,
+        width: isMobile ? 180 : 260,
+        render: (text: string, record: Student) => (
+          <Space size={6} align="center">
+            <Text strong style={record.enMora ? { color: "#cf1322" } : undefined}>{text}</Text>
+            {record.enMora && (
+              <Tag
+                color="error"
+                style={{
+                  fontWeight: 800,
+                  fontSize: 11,
+                  padding: "0 6px",
+                  borderRadius: 6,
+                  lineHeight: "20px",
+                  animation: "none",
+                }}
+              >
+                💳 MORA
+              </Tag>
+            )}
+          </Space>
+        ),
       },
       { title: "Identificación", dataIndex: "identificacion", width: 150, responsive: ["md"] as Breakpoint[] },
       { title: "Email", dataIndex: "email", ellipsis: true, responsive: ["lg"] as Breakpoint[] },
@@ -1399,6 +1441,22 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             label: <span><UserOutlined /> Estudiantes ({totalEstudiantes})</span>,
             children: (
               <Card title="Lista de Estudiantes Matriculados">
+                {(() => {
+                  const enMoraCount = estudiantes.filter((e) => e.enMora).length;
+                  return enMoraCount > 0 ? (
+                    <Alert
+                      type="error"
+                      showIcon
+                      style={{ marginBottom: 12, borderRadius: 8 }}
+                      message={
+                        <span style={{ fontWeight: 700 }}>
+                          ⚠️ {enMoraCount} estudiante{enMoraCount > 1 ? "s" : ""} con pago vencido
+                        </span>
+                      }
+                      description="Los estudiantes marcados en rojo tienen cuotas vencidas sin pagar. Aparecen resaltados en la tabla."
+                    />
+                  ) : null;
+                })()}
                 <Table
                   dataSource={estudiantes}
                   rowKey="id"
@@ -1407,6 +1465,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   size={isMobile ? "small" : "middle"}
                   tableLayout="fixed"
                   scroll={{ x: "max-content" }}
+                  onRow={(record: Student) =>
+                    record.enMora
+                      ? { style: { background: "#fff1f0", borderLeft: "4px solid #ff4d4f" } }
+                      : {}
+                  }
                 />
               </Card>
             )

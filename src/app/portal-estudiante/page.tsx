@@ -1123,6 +1123,17 @@ export default function PortalEstudiante() {
     return [...pagosNormalizados, ...extras];
   }, [pagos, matriculas]);
 
+  /** true si el estudiante tiene al menos una cuota vencida sin pagar */
+  const enMora = React.useMemo(() => {
+    const hoy = dayjs().startOf("day");
+    return pagosConPendientes.some((p: any) => {
+      if (p.estado !== "pendiente") return false;
+      if (!p.fecha_vencimiento) return false;
+      // vencida = la fecha de cobro ya pasó
+      return hoy.isAfter(dayjs(p.fecha_vencimiento));
+    });
+  }, [pagosConPendientes]);
+
   const renderFinanciero = () => {
     const pendientes = pagosConPendientes
       .filter(p => p.estado === 'pendiente')
@@ -1688,10 +1699,10 @@ export default function PortalEstudiante() {
 
   const menuSecciones = [
     { key: "1", label: "Mis Cursos", icon: <BookOutlined /> },
-    { key: "2", label: "Financiero", icon: <DollarCircleOutlined /> },
-    { key: "3", label: "Lista de materiales", icon: <FileOutlined /> },
-    { key: "4", label: "Materiales del ciclo", icon: <BookOutlined /> },
-    { key: "5", label: "Pensum", icon: <BookOutlined /> },
+    { key: "2", label: enMora ? "💰 Financiero ⚠️" : "Financiero", icon: <DollarCircleOutlined /> },
+    { key: "3", label: enMora ? "🔒 Materiales" : "Lista de materiales", icon: <FileOutlined /> },
+    { key: "4", label: enMora ? "🔒 Ciclo" : "Materiales del ciclo", icon: <BookOutlined /> },
+    { key: "5", label: enMora ? "🔒 Pensum" : "Pensum", icon: <BookOutlined /> },
   ];
 
   const renderSeccionActiva = () => {
@@ -1835,6 +1846,75 @@ export default function PortalEstudiante() {
     }
 
     if (activeTab === "2") return renderFinanciero();
+
+    // ── Bloqueo por mora ───────────────────────────────────────────
+    if (enMora && (activeTab === "3" || activeTab === "4" || activeTab === "5")) {
+      return (
+        <div
+          style={{
+            borderRadius: 12,
+            overflow: "hidden",
+            background: "linear-gradient(135deg, #fff1f0 0%, #fff7e6 100%)",
+            border: "2px solid #ff4d4f",
+            padding: isMobile ? "24px 16px" : "40px 48px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: isMobile ? 48 : 64, lineHeight: 1, marginBottom: 12 }}>🔒</div>
+          <div
+            style={{
+              background: "#ff4d4f",
+              color: "#fff",
+              fontWeight: 800,
+              fontSize: isMobile ? 16 : 20,
+              borderRadius: 8,
+              padding: "8px 24px",
+              display: "inline-block",
+              marginBottom: 16,
+              letterSpacing: 0.5,
+            }}
+          >
+            ⚠️ ACCESO BLOQUEADO — PAGO PENDIENTE
+          </div>
+          <div style={{ fontSize: isMobile ? 14 : 16, color: "#333", marginBottom: 8, lineHeight: 1.7 }}>
+            Tienes <strong>una o más cuotas vencidas</strong> sin pagar.
+            <br />
+            Para acceder a los materiales y el pensum del curso debes estar al día con tus pagos.
+          </div>
+          <div style={{ fontSize: 13, color: "#888", marginBottom: 20 }}>
+            Consulta la pestaña <strong>💰 Financiero</strong> para ver los detalles.
+          </div>
+          <Space wrap>
+            <Button
+              type="primary"
+              danger
+              size="large"
+              onClick={() => setActiveTab("2")}
+              style={{ borderRadius: 8, fontWeight: 700 }}
+            >
+              Ver mis pagos pendientes
+            </Button>
+            {whatsappAdmisiones && (
+              <Button
+                size="large"
+                icon={<WhatsAppOutlined />}
+                style={{
+                  background: "#25D366", color: "#fff", border: "none",
+                  borderRadius: 8, fontWeight: 700,
+                }}
+                onClick={() => {
+                  const texto = `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Tengo pagos pendientes y necesito regularizar mi situación para acceder al material del curso.`;
+                  window.open(`https://wa.me/${whatsappAdmisiones}?text=${encodeURIComponent(texto)}`, "_blank");
+                }}
+              >
+                Contactar Admisiones
+              </Button>
+            )}
+          </Space>
+        </div>
+      );
+    }
+    // ──────────────────────────────────────────────────────────────
 
     if (activeTab === "3") {
       return (
