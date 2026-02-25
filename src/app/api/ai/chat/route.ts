@@ -542,9 +542,14 @@ Sigue siempre este orden:
 ⚠️ NUNCA reinicies el embudo si el cliente ya identificó su programa o ya está en medio de una conversación activa.
 ⚠️ Si el cliente confirma algo con una sola palabra o frase corta (ej: "sí", "sí claro", "porfavor", "dale", "ok", "claro", "sí señor"), SIEMPRE interpreta esa respuesta como confirmación de la pregunta que acabas de hacer y responde en consecuencia. NUNCA vuelvas a preguntar "¿prefieres horarios, inversión o inscripción?" si ya se lo preguntaste antes.
 ⚠️ Si el cliente dice "en curso" o "ya estoy estudiando", cambia a modo soporte: ayúdale con su duda puntual sin ofrecer inscripciones.
-⚠️ "Por los horarios" / "los horarios" / "horario" siempre significa que quiere ver horarios — NUNCA lo confundas con "inversión" ni le muestres precios.
+⚠️ "Por los horarios" / "los horarios" / "horario" / "horarios" SIEMPRE significa que quiere ver horarios — NUNCA lo confundas con "inversión" ni le muestres precios. Responde directamente con días y horas.
+⚠️ "Son todos los días?" / "Todos los días hay?" / "¿Es todos los días?" → responde DIRECTAMENTE sí o no con el horario. NUNCA devuelvas el menú de horarios/inversión/inscripción.
 ⚠️ Preguntas de sí/no (ej: "¿Solo es un día a la semana?", "¿Es presencial?", "¿Hay cupos?") → responde PRIMERO sí o no de forma directa y breve, luego agrega el detalle relevante.
 ⚠️ Si el cliente explica que no puede en el horario actual (ej: trabajo lunes-viernes, necesita sábados) → NO le ofrezcas el grupo que ya sabe que no le sirve. Valida su situación, confirma que aún no hay ese horario y pregunta si quiere quedar en lista de espera o si alguna otra opción le funcionaría.
+⚠️ "Aparte los [número]" / "Aparte de la inscripción" / "¿Y aparte de eso?" → el usuario está en una conversación de precios y pregunta por costos adicionales. Explica directamente: mensualidad $260.000/mes (incluye kit). NO muestres el menú inicial.
+⚠️ "Puedo ir personal" / "¿Puedo ir en persona?" → confirma que SÍ pueden atenderte en la academia y pide que indique cuándo puede ir. NO muestres el menú de horarios/inversión/inscripción.
+⚠️ Si el usuario muestra frustración ("cuando atienda una persona de verdad", "no me entiendes", "siempre lo mismo") → pide disculpas brevemente, reconoce la limitación y da el número de Admisiones directamente.
+⚠️ Si el usuario ya dijo "Horarios" y recibió el menú en respuesta — y lo repite — es porque el sistema no respondió su pregunta. Responde INMEDIATAMENTE con los horarios, sin preguntar de nuevo qué tema prefiere.
 
 🔹 Guía de respuestas cercanas (preguntas frecuentes)
 Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
@@ -1260,8 +1265,8 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
   const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|cuanto vale|cuanto es|cuanto cuesta)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
-  const hasScheduleIntent = /\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text);
-  const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horario|hora)\b/i.test(text);
+  const hasScheduleIntent = /\b(horarios?|horas?|dias?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|todos\s+los\s+dias|cuantos\s+dias|que\s+dias)\b/i.test(text);
+  const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horarios?|horas?)\b/i.test(text);
   const hasMaterialsKeyword = /\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text);
   // "llevar" solo cuenta como requisito si NO hay keyword de materiales (evitar que "llevar materiales" sea requisito)
   const hasRequirementsIntent = /\b(requisito|requisitos|edad|anos|menor|mayor|cedula|documento|necesito|experiencia|conocimiento)\b/i.test(text)
@@ -1319,7 +1324,14 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   const tokenCount = text.split(" ").filter(Boolean).length;
   if (tokenCount > 4) return false;
 
-  return !/\b(precio|horario|hora|material|temario|inscrip|matricul|pago|cuanto|cuando|donde|ubicacion|ubicados|direccion|cali|sabado|sabados|fin de semana|trabajo|lunes|viernes)\b/i.test(text);
+  // Excluir si contiene números (ej: "aparte los 190", "los 260")
+  if (/\d+/.test(text)) return false;
+
+  // Excluir si contiene palabras de intención real (plurales incluidos)
+  const hasIntentKeyword = /\b(?:precio|horarios?|horas?|materiales?|temarios?|inscrip\w*|matricul\w*|pagos?|cuantos?|cuando|donde|ubicaci[oó]n|ubicados?|direcci[oó]n|cali|s[aá]bados?|fin\s+de\s+semana|trabajo|lunes|viernes|personal|presencial|dias?|todos?|ir\s+a|puedo\s+ir|aparte|ademas|ademas?|mas\s+all[aá]|cobr[a-z]+)\b/i.test(text);
+  if (hasIntentKeyword) return false;
+
+  return true;
 }
 
 function isShortAffirmativeReply(message: string): boolean {
@@ -1775,9 +1787,32 @@ function isLocationQuestion(message: string): boolean {
   return false;
 }
 
+function isFrustrationMessage(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(?:persona\s+(?:real|de\s+verdad)|humano|asesor\s+humano|no\s+entiendes?|no\s+me\s+ayudas?|hablar\s+con\s+alguien|quiero\s+hablar\s+con|cuando\s+atienda|atienda\s+una\s+persona|me\s+escriben\s+cuando|misma\s+respuesta|siempre\s+lo\s+mismo|sigues\s+igual|no\s+me\s+entiendes|bot\s+inutil|sigues\s+preguntando\s+lo\s+mismo|ya\s+te\s+dije|ya\s+te\s+respondi|no\s+sirves?)\b/i.test(text);
+}
+
 function isOutOfCaliConstraintMessage(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(no\s+estoy\s+en\s+cali|no\s+vivo\s+en\s+cali|estoy\s+fuera\s+de\s+cali|soy\s+de\s+otra\s+ciudad|vivo\s+en\s+otra\s+ciudad|no\s+estoy\s+en\s+la\s+ciudad)\b/i.test(text);
+
+  // Frases directas de ubicación propia
+  if (/\b(no\s+estoy\s+en\s+cali|no\s+vivo\s+en\s+cali|estoy\s+fuera\s+de\s+cali|soy\s+de\s+otra\s+ciudad|vivo\s+en\s+otra\s+ciudad|no\s+estoy\s+en\s+la\s+ciudad)\b/i.test(text)) {
+    return true;
+  }
+
+  // "vivo en X", "estoy en X", "resido en X", "soy de X" donde X NO es Cali
+  // Patrón: el usuario indica SU ciudad, no pregunta por la ubicación de la academia
+  if (/\b(?:vivo|resido|soy\s+de|vengo\s+de)\s+en\s+(?!cali\b)\w+/i.test(text)) return true;
+  if (/\b(?:vivo|resido)\s+en\s+(?!cali\b)\w+/i.test(text)) return true;
+
+  // "Vivo en [ciudad colombiana conocida]" — cubre "vivo en manizales gracias"
+  const otherColombianCities = /\b(?:bogota|medellin|barranquilla|cartagena|bucaramanga|manizales|pereira|cucuta|ibague|armenia|villavicencio|neiva|santa\s+marta|monteria|pasto|sincelejo|valledupar|tunja|popayan|bello|soacha|soledad|dosquebradas|floridablanca|palmira|buga|tulua|girardot|fusagasuga|zipaquira|chia|cajica|mosquera|facatativa)\b/i;
+  // Solo si el usuario afirma vivir/estar ahí (no si pregunta si la academia está ahí)
+  if (/\b(?:vivo|estoy|soy\s+de|resido|vengo\s+de)\s+(?:en\s+)?/.test(text) && otherColombianCities.test(text)) {
+    return true;
+  }
+
+  return false;
 }
 
 function isSaturdayPreferenceConstraint(message: string): boolean {
@@ -2759,8 +2794,14 @@ function buildIntentFocusedDirectResponse(
     return `${greeting}, bienvenid@ a *${academyName}* 💎\n\n¿En qué te puedo ayudar hoy? Puedo contarte sobre nuestros cursos, fechas de inicio, precios e inscripciones 🙌`;
   }
 
+  // Detectar frustración del usuario antes de cualquier otro flujo
+  if (isFrustrationMessage(message)) {
+    const wa = academy?.whatsapp_admisiones || academy?.whatsapp || ADMISSIONS_NUMBER;
+    return `Entiendo tu molestia y lo siento mucho 🙏 A veces soy limitada en ciertas preguntas.\n\nTe comunico con alguien de *Admisiones* para que te atienda personalmente:\n📲 WhatsApp: *${wa}*\n\nEscríbeles directamente y te resolverán todo de inmediato 💙`;
+  }
+
   if (isOutOfCaliConstraintMessage(message)) {
-    return `Gracias por contarlo 🙌 Actualmente nuestra atención académica es *presencial en Cali* (oriente, La Cosmetikera - segundo piso).\n\nSi estás fuera de Cali, te puedo ayudar de dos formas:\n1) Te comparto el plan para que programes tu inscripción cuando puedas venir.\n2) Te dejo en lista para avisarte si abrimos modalidad especial para tu caso.\n\n¿Qué prefieres?`;
+    return `Gracias por contarlo 🙌 Actualmente nuestra atención académica es *presencial en Cali* (oriente, La Cosmetikera - segundo piso).\n\nSi estás fuera de Cali, puedo ayudarte así:\n✅ Te comparto toda la info del curso para que lo tengas listo.\n📋 Te dejo en lista para avisarte si abrimos grupo especial para tu zona.\n\n¿Qué prefieres?`;
   }
 
   const saturdayReply = buildSaturdayConstraintReply(message, detectedProgram, courses, programs);
