@@ -1700,8 +1700,8 @@ export default function PortalEstudiante() {
   const menuSecciones = [
     { key: "1", label: "Mis Cursos", icon: <BookOutlined /> },
     { key: "2", label: enMora ? "💰 Financiero ⚠️" : "Financiero", icon: <DollarCircleOutlined /> },
-    { key: "3", label: enMora ? "🔒 Materiales" : "Lista de materiales", icon: <FileOutlined /> },
-    { key: "4", label: enMora ? "🔒 Ciclo" : "Materiales del ciclo", icon: <BookOutlined /> },
+    { key: "3", label: enMora ? "🔒 Materiales" : (isMobile ? "Materiales" : "Lista de materiales"), icon: <FileOutlined /> },
+    { key: "4", label: enMora ? "🔒 Ciclo" : (isMobile ? "Ciclo" : "Materiales del ciclo"), icon: <BookOutlined /> },
     { key: "5", label: enMora ? "🔒 Pensum" : "Pensum", icon: <BookOutlined /> },
   ];
 
@@ -2249,16 +2249,17 @@ export default function PortalEstudiante() {
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 10, textAlign: "center", textTransform: "uppercase", letterSpacing: 1 }}>
                 Comparte en
               </div>
-              <Row gutter={[10, 10]} justify="center">
+              <Row gutter={[8, 8]} justify="center">
                 {/* WhatsApp */}
-                <Col>
+                <Col xs={24} sm={8}>
                   <Button
+                    block
                     icon={<WhatsAppOutlined />}
                     size="large"
                     style={{
                       background: "#25D366", color: "#fff",
                       border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13,
-                      height: 44, paddingInline: 18,
+                      height: 44,
                       boxShadow: "0 3px 12px rgba(37,211,102,0.4)",
                     }}
                     onClick={() => {
@@ -2270,13 +2271,14 @@ export default function PortalEstudiante() {
                   </Button>
                 </Col>
                 {/* Facebook */}
-                <Col>
+                <Col xs={24} sm={8}>
                   <Button
+                    block
                     size="large"
                     style={{
                       background: "#1877F2", color: "#fff",
                       border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13,
-                      height: 44, paddingInline: 18,
+                      height: 44,
                       boxShadow: "0 3px 12px rgba(24,119,242,0.4)",
                     }}
                     onClick={() => {
@@ -2288,13 +2290,14 @@ export default function PortalEstudiante() {
                   </Button>
                 </Col>
                 {/* Instagram — copia el texto y abre Instagram */}
-                <Col>
+                <Col xs={24} sm={8}>
                   <Button
+                    block
                     size="large"
                     style={{
                       background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
                       color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13,
-                      height: 44, paddingInline: 18,
+                      height: 44,
                       boxShadow: "0 3px 12px rgba(220,39,67,0.4)",
                     }}
                     onClick={() => {
@@ -2312,14 +2315,15 @@ export default function PortalEstudiante() {
             </div>
 
             {/* Botón cerrar */}
-            <div style={{ padding: "12px 20px 24px", textAlign: "center" }}>
+            <div style={{ padding: "12px 16px 24px", textAlign: "center" }}>
               <Button
+                block
                 type="primary"
                 size="large"
                 style={{
                   background: "linear-gradient(90deg, #ffd700, #ff9500)",
                   border: "none", color: "#1a0533", fontWeight: 800,
-                  borderRadius: 10, fontSize: 14, height: 44, paddingInline: 32,
+                  borderRadius: 10, fontSize: 14, height: 44,
                   boxShadow: "0 4px 16px rgba(255,215,0,0.4)",
                 }}
                 onClick={() => setQuizResultadoVisible(false)}
@@ -2410,7 +2414,7 @@ export default function PortalEstudiante() {
           const esUltimaPregunta = quizPreguntaActual >= Math.max(0, totalPreguntas - 1);
 
           return (
-            <Space style={{ width: "100%", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", gap: 8 }}>
               <Button
                 onClick={() => setQuizPreguntaActual((prev) => Math.max(0, prev - 1))}
                 disabled={quizPreguntaActual <= 0 || quizSaving || quizAnimando}
@@ -2423,9 +2427,11 @@ export default function PortalEstudiante() {
                   Finalizar y enviar
                 </Button>
               ) : (
-                <Text type="secondary">Selecciona una respuesta para continuar →</Text>
+                <Text type="secondary" style={{ fontSize: isMobile ? 11 : 13 }}>
+                  {isMobile ? "Selecciona →" : "Selecciona una respuesta para continuar →"}
+                </Text>
               )}
-            </Space>
+            </div>
           );
         })()}
       >
@@ -2702,23 +2708,29 @@ export default function PortalEstudiante() {
         }
         @media (max-width: 576px) {
           .portal-estudiante {
-            padding: 12px !important;
+            padding: 8px !important;
           }
           .portal-estudiante .header-row {
             text-align: center;
           }
           .portal-estudiante .academy-logo {
-            height: 48px;
+            height: 44px;
           }
           .portal-estudiante .header-actions {
             text-align: center !important;
-            margin-top: 12px;
+            margin-top: 10px;
           }
           .portal-estudiante .header-actions .ant-btn {
             width: 100%;
           }
           .portal-estudiante .ant-card-head-title {
             white-space: normal;
+          }
+          .portal-estudiante .ant-card-head {
+            padding-inline: 12px;
+          }
+          .portal-estudiante .ant-card-body {
+            padding-inline: 12px;
           }
           .portal-estudiante .course-card .ant-card-body {
             display: flex;
@@ -2730,13 +2742,34 @@ export default function PortalEstudiante() {
           }
           .portal-estudiante .ant-table-cell {
             white-space: normal;
+            padding: 6px 8px !important;
           }
           .portal-estudiante .student-menu-btn {
-            min-height: 58px;
-            padding: 6px 4px;
+            min-height: 56px;
+            padding: 5px 3px;
           }
           .portal-estudiante .student-menu-label {
-            font-size: 10px;
+            font-size: 9.5px;
+          }
+          .portal-estudiante .student-menu-card .ant-card-body {
+            padding: 10px 8px;
+          }
+          .portal-estudiante .student-section-card .ant-card-body {
+            padding: 12px;
+          }
+          .portal-estudiante .ant-modal-content {
+            padding: 0;
+          }
+        }
+        @media (max-width: 400px) {
+          .portal-estudiante .student-menu-label {
+            display: none;
+          }
+          .portal-estudiante .student-menu-icon {
+            font-size: 20px;
+          }
+          .portal-estudiante .student-menu-btn {
+            min-height: 46px;
           }
         }
       `}</style>
