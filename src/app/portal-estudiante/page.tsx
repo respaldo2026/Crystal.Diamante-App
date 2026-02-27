@@ -100,6 +100,7 @@ export default function PortalEstudiante() {
     tituloQuiz?: string;
   } | null>(null);
   const [quizResultadoVisible, setQuizResultadoVisible] = useState(false);
+  const logrocardRef = useRef<HTMLDivElement>(null);
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
@@ -2044,6 +2045,83 @@ export default function PortalEstudiante() {
     );
   }
 
+  // ── Generar imagen del logro y compartir en redes ──
+  const generarImagenLogro = async (): Promise<File | null> => {
+    if (!logrocardRef.current) return null;
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(logrocardRef.current, {
+        backgroundColor: "#1a0533",
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        imageTimeout: 8000,
+      } as any);
+      return await new Promise<File | null>((resolve) => {
+        canvas.toBlob((blob) => {
+          if (!blob) { resolve(null); return; }
+          resolve(new File([blob], "logro-crystal.png", { type: "image/png" }));
+        }, "image/png");
+      });
+    } catch (err) {
+      console.error("[compartir] Error generando imagen:", err);
+      return null;
+    }
+  };
+
+  const compartirLogro = async (plataforma: "whatsapp" | "facebook" | "instagram") => {
+    if (!quizResultado) return;
+    const texto = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`;
+
+    const imageFile = await generarImagenLogro();
+
+    // 1️⃣ Web Share API con archivo (funciona en móvil Android/iOS)
+    if (imageFile && typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+      try {
+        await navigator.share({ files: [imageFile], text: texto });
+        return;
+      } catch (_) { /* usuario canceló o error */ }
+    }
+
+    // 2️⃣ Fallback: descargar imagen y abrir la red social
+    if (imageFile) {
+      const url = URL.createObjectURL(imageFile);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "logro-crystal.png";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setTimeout(() => {
+        if (plataforma === "whatsapp") {
+          message.info("🖼️ Imagen descargada. Envíala por WhatsApp junto con el mensaje 💪");
+          window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
+        } else if (plataforma === "facebook") {
+          message.info("🖼️ Imagen descargada. Súbela a tu publicación de Facebook 📘");
+          window.open(`https://www.facebook.com/`, "_blank");
+        } else {
+          navigator.clipboard.writeText(texto).catch(() => {});
+          message.success("🖼️ ¡Imagen descargada y texto copiado! Pégalos en tu historia de Instagram 🎉");
+          window.open("https://www.instagram.com/", "_blank");
+        }
+      }, 600);
+    } else {
+      // 3️⃣ Sin imagen: solo texto
+      if (plataforma === "whatsapp") {
+        window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
+      } else if (plataforma === "facebook") {
+        window.open(`https://www.facebook.com/sharer.php?quote=${encodeURIComponent(texto)}&u=${encodeURIComponent(window.location.origin)}`, "_blank");
+      } else {
+        navigator.clipboard.writeText(texto).catch(() => {});
+        message.success("📋 ¡Texto copiado! Pégalo en tu historia de Instagram 🎉");
+        window.open("https://www.instagram.com/", "_blank");
+      }
+    }
+  };
+
   return (
     <div className="portal-estudiante" style={{ padding: isMobile ? "12px" : "20px", maxWidth: "1200px", margin: "0 auto" }}>
       <Card style={{ marginBottom: 20 }}>
@@ -2140,6 +2218,8 @@ export default function PortalEstudiante() {
         {renderSeccionActiva()}
       </Card>
 
+      {/* ── Funciones de compartir con imagen ── */}
+
       {/* ── Modal resultado del quiz ── */}
       <Modal
         open={quizResultadoVisible}
@@ -2159,6 +2239,9 @@ export default function PortalEstudiante() {
         {quizResultado && quizResultado.aprobado ? (
           /* ——— PANTALLA DE LOGRO (aprobado) ——— */
           <div style={{ color: "#fff" }}>
+
+            {/* Contenido capturable para imagen compartible */}
+            <div ref={logrocardRef} style={{ paddingBottom: 20 }}>
 
             {/* Estrellas decorativas superiores */}
             <div style={{
@@ -2244,6 +2327,8 @@ export default function PortalEstudiante() {
               </div>
             </div>
 
+            </div>{/* fin contenido capturable */}
+
             {/* Botones de compartir */}
             <div style={{ padding: "14px 20px 8px" }}>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 10, textAlign: "center", textTransform: "uppercase", letterSpacing: 1 }}>
@@ -2262,10 +2347,7 @@ export default function PortalEstudiante() {
                       height: 44,
                       boxShadow: "0 3px 12px rgba(37,211,102,0.4)",
                     }}
-                    onClick={() => {
-                      const texto = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`;
-                      window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
-                    }}
+                    onClick={() => compartirLogro("whatsapp")}
                   >
                     WhatsApp
                   </Button>
@@ -2281,10 +2363,7 @@ export default function PortalEstudiante() {
                       height: 44,
                       boxShadow: "0 3px 12px rgba(24,119,242,0.4)",
                     }}
-                    onClick={() => {
-                      const texto = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. #AcademiaCrystalDiamante #Logro #Aprendizaje`;
-                      window.open(`https://www.facebook.com/sharer.php?quote=${encodeURIComponent(texto)}&u=${encodeURIComponent(window.location.origin)}`, "_blank");
-                    }}
+                    onClick={() => compartirLogro("facebook")}
                   >
                     📘 Facebook
                   </Button>
@@ -2300,13 +2379,7 @@ export default function PortalEstudiante() {
                       height: 44,
                       boxShadow: "0 3px 12px rgba(220,39,67,0.4)",
                     }}
-                    onClick={() => {
-                      const texto = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`;
-                      navigator.clipboard.writeText(texto).then(() => {
-                        message.success("📋 ¡Texto copiado! Pégalo en tu historia o post de Instagram 🎉");
-                        window.open("https://www.instagram.com/", "_blank");
-                      });
-                    }}
+                    onClick={() => compartirLogro("instagram")}
                   >
                     📸 Instagram
                   </Button>
