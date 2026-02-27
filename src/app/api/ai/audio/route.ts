@@ -750,7 +750,10 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   const tokenCount = text.split(" ").filter(Boolean).length;
   if (tokenCount > 4) return false;
 
-  return !/\b(precio|horario|hora|material|temario|inscrip|matricul|pago|cuanto|cuando|donde)\b/i.test(text);
+  // Si es afirmación corta colombiana ("Si de una", "dale", "de una") → no es nombre de programa
+  if (isShortAffirmativeReply(message)) return false;
+
+  return !/\b(precio|horario|hora|material|temario|inscrip|matricul|pago|cuanto|cuando|donde|reservar|cupo|separar)\b/i.test(text);
 }
 
 function isShortAffirmativeReply(message: string): boolean {
@@ -1709,6 +1712,15 @@ function buildIntentFocusedDirectResponse(
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
   }
 
+  // Pregunta directa de visita presencial → responder SÍ primero, luego dirección
+  const asksPresencialVisit = /\b(puedo\s+ir|puedo\s+pasar|puedo\s+ir\s+presencial|puedo\s+ir\s+personal|ir\s+presencial|ir\s+en\s+persona|voy\s+a\s+ir|voy\s+presencial|puedo\s+visitar)\b/i.test(normalizeForMatch(message));
+  if (asksPresencialVisit && !/\b(pagar|pago|nequi|efectivo|transferencia)\b/i.test(normalizeForMatch(message))) {
+    const direccion = String(academy?.direccion || "Calle 53 #30a 101 - Barrio Comuneros 1").trim();
+    const mapsUrl = String(academy?.maps_url || "").trim();
+    const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
+    return `¡Sí, claro! 🙌 Puedes venir directamente a nuestra sede:\n\n📍 *${direccion}*${mapsLine}\n\n¿Cuándo puedes venir? Así coordinamos para que te atiendan de inmediato 😊`;
+  }
+
   if (detectedProgram && isLikelyProgramOnlyReply(message) && !/[?¿]/.test(message)) {
     const pendingTopic = inferPendingTopicFromHistory(history);
     if (/dias\s+y\s+horario|horario|inicio|fecha/.test(normalizeForMatch(pendingTopic))) {
@@ -1722,10 +1734,10 @@ function buildIntentFocusedDirectResponse(
       );
       const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
       const schedule = primaryCourse?.horario || "Por confirmar";
-      return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que sigamos con la *inversión* o con *inscripción*?`;
+      return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta los pasos para *separar tu cupo* ya? 🔥`;
     }
 
-    return `Perfecto 👌 Te refieres a *${detectedProgram.nombre}*.\n\nPara ayudarte mejor, ¿prefieres que empecemos por *horarios*, *inversión* o *inscripción*?`;
+    return `Perfecto 👌 Te refieres a *${detectedProgram.nombre}*. ¿Te comparto los *horarios e inversión* o prefieres ir directo a *separar cupo*? 🔥`;
   }
 
   let intent = detectUserIntent(message);
@@ -1813,6 +1825,15 @@ function buildIntentFocusedDirectResponse(
 
   if (confirmsReserveFlow || confirmsReserveFlowFromContext) {
     return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
+  }
+
+  // Contacto/número → responder antes que flujo de inscripción
+  const asksContactDirect = /\b(numero|telefono|contacto|whatsapp|llamar|admisiones|dame\s+el\s+numero|me\s+das\s+el\s+numero|contacto\s+de)\b/i.test(normalizeForMatch(message));
+  if (asksContactDirect) {
+    const wa = String(academy?.whatsapp_admisiones || academy?.whatsapp || "").trim();
+    if (wa) {
+      return `¡Claro! 📱 Número de Admisiones: *${wa}* (WhatsApp)\n\nEscríveles directamente y te atienden de inmediato 🙌`;
+    }
   }
 
   if (intent === "inscripcion") {

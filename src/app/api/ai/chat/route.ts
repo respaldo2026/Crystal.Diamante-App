@@ -1327,8 +1327,11 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   // Excluir si contiene números (ej: "aparte los 190", "los 260")
   if (/\d+/.test(text)) return false;
 
+  // Si es afirmación corta colombiana ("Si de una", "dale", "de una") → no es nombre de programa
+  if (isShortAffirmativeReply(message)) return false;
+
   // Excluir si contiene palabras de intención real (plurales incluidos)
-  const hasIntentKeyword = /\b(?:precio|horarios?|horas?|materiales?|temarios?|inscrip\w*|matricul\w*|pagos?|cuantos?|cuando|donde|ubicaci[oó]n|ubicados?|direcci[oó]n|cali|s[aá]bados?|fin\s+de\s+semana|trabajo|lunes|viernes|personal|presencial|dias?|todos?|ir\s+a|puedo\s+ir|aparte|ademas|ademas?|mas\s+all[aá]|cobr[a-z]+)\b/i.test(text);
+  const hasIntentKeyword = /\b(?:precio|horarios?|horas?|materiales?|temarios?|inscrip\w*|matricul\w*|pagos?|cuantos?|cuando|donde|ubicaci[oó]n|ubicados?|direcci[oó]n|cali|s[aá]bados?|fin\s+de\s+semana|trabajo|lunes|viernes|personal|presencial|dias?|todos?|ir\s+a|puedo\s+ir|aparte|ademas|ademas?|mas\s+all[aá]|cobr[a-z]+|reservar|cupo|separar)\b/i.test(text);
   if (hasIntentKeyword) return false;
 
   return true;
@@ -1382,7 +1385,7 @@ function buildNoiseFollowupFromHistory(history: Array<{ user: string; agent: str
     return "Te leí 👌 Si quieres, seguimos de una con los *pasos para separar tu cupo*.";
   }
 
-  return "Te leí 👌 ¿Quieres que sigamos con *horarios*, *inversión* o *inscripción*?";
+  return "Te leí 👌 ¿Quieres que te cuente los *horarios*, *la inversión* o los *pasos para inscribirte*?";
 }
 
 function isOnlyScheduleConfirmationQuestion(message: string): boolean {
@@ -1451,7 +1454,7 @@ function buildNaturalAckReply(
     return "¡Súper! 😊 Si quieres, te paso el link directo para que veas trabajos y resultados reales.";
   }
 
-  return "Perfecto 😊 ¿Te ayudo con *horarios*, *inversión* o *inscripción*?";
+  return "Perfecto 😊 ¿Quieres que te cuente los *horarios*, *la inversión* o los *pasos para inscribirte*?";
 }
 
 function isClosureAcknowledgement(message: string, lastAgentMessage: string): boolean {
@@ -2800,6 +2803,15 @@ function buildIntentFocusedDirectResponse(
     return `Entiendo tu molestia y lo siento mucho 🙏 A veces soy limitada en ciertas preguntas.\n\nTe comunico con alguien de *Admisiones* para que te atienda personalmente:\n📲 WhatsApp: *${wa}*\n\nEscríbeles directamente y te resolverán todo de inmediato 💙`;
   }
 
+  // Pregunta directa de visita presencial → responder SÍ primero, luego dirección
+  const asksPresencialVisit = /\b(puedo\s+ir|puedo\s+pasar|puedo\s+ir\s+presencial|puedo\s+ir\s+personal|ir\s+presencial|ir\s+en\s+persona|voy\s+a\s+ir|voy\s+presencial|puedo\s+visitar|puedo\s+ir\s+a\s+la\s+sede)\b/i.test(normalizeForMatch(message));
+  if (asksPresencialVisit && !isPaymentMethodQuestion(message)) {
+    const direccion = String(academy?.direccion || "Calle 53 #30a 101 - Barrio Comuneros 1").trim();
+    const mapsUrl = String(academy?.maps_url || "").trim();
+    const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
+    return `¡Sí, claro! 🙌 Puedes venir directamente a nuestra sede:\n\n📍 *${direccion}*${mapsLine}\n\n¿Cuándo puedes venir? Así coordinamos para que te atiendan de inmediato 😊`;
+  }
+
   if (isOutOfCaliConstraintMessage(message)) {
     return `Gracias por contarlo 🙌 Actualmente nuestra atención académica es *presencial en Cali* (oriente, La Cosmetikera - segundo piso).\n\nSi estás fuera de Cali, puedo ayudarte así:\n✅ Te comparto toda la info del curso para que lo tengas listo.\n📋 Te dejo en lista para avisarte si abrimos grupo especial para tu zona.\n\n¿Qué prefieres?`;
   }
@@ -2822,10 +2834,10 @@ function buildIntentFocusedDirectResponse(
       );
       const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
       const schedule = primaryCourse?.horario || "Por confirmar";
-      return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que sigamos con la *inversión* o con *inscripción*?`;
+      return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta los pasos para *separar tu cupo* ya? 🔥`;
     }
 
-    return `Perfecto 👌 Te refieres a *${detectedProgram.nombre}*.\n\nPara ayudarte mejor, ¿prefieres que empecemos por *horarios*, *inversión* o *inscripción*?`;
+    return `Perfecto 👌 Te refieres a *${detectedProgram.nombre}*. ¿Te comparto los *horarios e inversión* o prefieres ir directo a *separar cupo*? 🔥`;
   }
 
   let intent = detectUserIntent(message);
@@ -2932,6 +2944,11 @@ function buildIntentFocusedDirectResponse(
     return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
   }
 
+  // Contacto/número de admisiones → responder ANTES que el flujo de inscripción
+  if (asksSocialMedia) {
+    return buildSocialMediaReply(academy, message);
+  }
+
   if (intent === "inscripcion") {
     return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
   }
@@ -2956,10 +2973,6 @@ ${locationReference}
 Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     }
     return `¡Claro! 😊\n\n${locationReference}\n\nEnseguida te comparto la ubicación exacta por aquí.\n\nSi prefieres, también te envío el WhatsApp de admisiones para guiarte paso a paso.`;
-  }
-
-  if (asksSocialMedia) {
-    return buildSocialMediaReply(academy, message);
   }
 
   const asksKitPurchase = isKitPurchaseQuestion(message);
