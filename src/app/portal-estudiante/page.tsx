@@ -1527,8 +1527,12 @@ export default function PortalEstudiante() {
                     const temaId = String(tema?.id || `tema-${temaIndex}`);
                     const recursosTema = obtenerRecursosTema(tema, cicloId);
                     const insumosTema = obtenerInsumosTema(tema, cicloId);
-                    // Bloqueo en cascada: bloqueado si el ciclo está bloqueado O si supera la primera clase activa
-                    const temaBloqueado = cicloBloqueado || temaIndex > primerIndexActual;
+                    // Bloqueo en cascada:
+                    // - vista "plan": bloqueado por módulo O por clase (quiz pendiente)
+                    // - vistas de materiales/kits: solo por módulo, nunca por clase
+                    const temaBloqueado = vista === "plan"
+                      ? (cicloBloqueado || temaIndex > primerIndexActual)
+                      : cicloBloqueado;
                     const quizTema = (quizzesClase || []).find(
                       (quiz: any) => String(quiz?.pensum_curso_id || "") === String(tema?.id || "")
                     );
