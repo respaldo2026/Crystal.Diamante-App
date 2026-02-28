@@ -1375,6 +1375,27 @@ export default function PortalEstudiante() {
       return null;
     })();
 
+    // ── Cascade: calcular el primer ciclo incompleto (todos los posteriores quedan bloqueados) ──
+    const isCicloCompleto = (ciclo: any): boolean => {
+      const temas = obtenerTemasCiclo(ciclo);
+      for (const t of temas) {
+        const quiz = (quizzesClase || []).find(
+          (q: any) => String(q?.pensum_curso_id || "") === String(t?.id || "")
+        );
+        if (!quiz) continue; // sin quiz = auto-aprobado
+        const intento = (quizIntentos || []).find(
+          (it: any) => String(it?.quiz_id || "") === String(quiz?.id || "")
+        );
+        const nota = intento ? Number(intento?.calificacion || 0) : null;
+        if (nota == null || !quizAprobado(nota)) return false;
+      }
+      return true;
+    };
+    let primerCicloIncompletoIndex = ciclosPrograma.length;
+    for (let ci = 0; ci < ciclosPrograma.length; ci++) {
+      if (!isCicloCompleto(ciclosPrograma[ci])) { primerCicloIncompletoIndex = ci; break; }
+    }
+
     return (
       <Card
         title={tituloPrincipal}
@@ -1419,17 +1440,37 @@ export default function PortalEstudiante() {
             const temasCiclo = obtenerTemasCiclo(ciclo);
             const materialesGenerales = obtenerMaterialesCiclo(cicloId);
 
+            // Estado en cascada de este ciclo: bloqueado si hay un ciclo previo incompleto
+            const cicloBloqueado = index > primerCicloIncompletoIndex;
+            // Índice de la primera clase no completada (= clase "actual"); todas las posteriores bloqueadas
+            const primerIndexActual = cicloBloqueado ? 0 : (() => {
+              for (let ti = 0; ti < temasCiclo.length; ti++) {
+                const quiz = (quizzesClase || []).find(
+                  (q: any) => String(q?.pensum_curso_id || "") === String(temasCiclo[ti]?.id || "")
+                );
+                if (!quiz) continue;
+                const intento = (quizIntentos || []).find(
+                  (it: any) => String(it?.quiz_id || "") === String(quiz?.id || "")
+                );
+                const nota = intento ? Number(intento?.calificacion || 0) : null;
+                if (nota == null || !quizAprobado(nota)) return ti;
+              }
+              return temasCiclo.length; // todas completadas
+            })();
+
             return {
               key: cicloId,
+              collapsible: cicloBloqueado ? "disabled" : undefined,
+              className: cicloBloqueado ? "ciclo-bloqueado" : "",
               label: (
-                <Space size={16} align="center">
+                <Space size={16} align="center" style={{ opacity: cicloBloqueado ? 0.4 : 1, filter: cicloBloqueado ? "grayscale(0.7)" : undefined }}>
                   <div
                     style={{
                       width: 44,
                       height: 44,
                       borderRadius: 16,
-                      background: colorDiferenciadorCiclo,
-                      color: "#f8fafc",
+                      background: cicloBloqueado ? "#d9d9d9" : colorDiferenciadorCiclo,
+                      color: cicloBloqueado ? "#a0a0a0" : "#f8fafc",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1440,7 +1481,7 @@ export default function PortalEstudiante() {
                     {cicloNumero}
                   </div>
                   <div>
-                    <Text strong style={{ fontSize: 16 }}>{cicloNombre}</Text>
+                    <Text strong style={{ fontSize: 16, color: cicloBloqueado ? "#bfbfbf" : undefined }}>{cicloNombre}</Text>
                     {vista === "kits" ? (
                       <div><Text type="secondary">Materiales por tema</Text></div>
                     ) : ciclo?.descripcion ? (
@@ -1485,24 +1526,8 @@ export default function PortalEstudiante() {
                     const temaId = String(tema?.id || `tema-${temaIndex}`);
                     const recursosTema = obtenerRecursosTema(tema, cicloId);
                     const insumosTema = obtenerInsumosTema(tema, cicloId);
-                    // Solo comprueba la clase INMEDIATAMENTE anterior: pasar su quiz desbloquea únicamente la siguiente
-                    const temaPrevioInmediato = temaIndex > 0 ? (temasCiclo || [])[temaIndex - 1] : null;
-                    const quizPendientePrevio = temaPrevioInmediato
-                      ? (() => {
-                          const quizPrevio = (quizzesClase || []).find(
-                            (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaPrevioInmediato?.id || "")
-                          );
-                          if (!quizPrevio) return null;
-                          // quizIntentos ya está filtrado por los IDs del estudiante, no hace falta filtrar por matricula_id
-                          const intentoPrevio = (quizIntentos || []).find(
-                            (intento: any) =>
-                              String(intento?.quiz_id || "") === String(quizPrevio?.id || "")
-                          );
-                          const notaPrevia = intentoPrevio ? Number(intentoPrevio?.calificacion || 0) : null;
-                          return notaPrevia == null || !quizAprobado(notaPrevia) ? temaPrevioInmediato : null;
-                        })()
-                      : null;
-                    const temaBloqueado = Boolean(quizPendientePrevio);
+                    // Bloqueo en cascada: bloqueado si el ciclo está bloqueado O si supera la primera clase activa
+                    const temaBloqueado = cicloBloqueado || temaIndex > primerIndexActual;
                     const quizTema = (quizzesClase || []).find(
                       (quiz: any) => String(quiz?.pensum_curso_id || "") === String(tema?.id || "")
                     );
@@ -2707,6 +2732,9 @@ export default function PortalEstudiante() {
           border-color: #1677ff;
           background: #e6f4ff;
           box-shadow: inset 0 0 0 1px #1677ff22;
+        }
+        .portal-estudiante .ciclo-bloqueado {
+          pointer-events: none;
         }
         .portal-estudiante .tema-bloqueado {
           opacity: 0.45;
