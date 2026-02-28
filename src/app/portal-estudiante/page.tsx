@@ -1494,10 +1494,10 @@ export default function PortalEstudiante() {
                             (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaPrevioInmediato?.id || "")
                           );
                           if (!quizPrevio) return null;
+                          // quizIntentos ya está filtrado por los IDs del estudiante, no hace falta filtrar por matricula_id
                           const intentoPrevio = (quizIntentos || []).find(
                             (intento: any) =>
-                              String(intento?.quiz_id || "") === String(quizPrevio?.id || "") &&
-                              String(intento?.matricula_id || "") === String(matriculaSeleccionada?.id || "")
+                              String(intento?.quiz_id || "") === String(quizPrevio?.id || "")
                           );
                           const notaPrevia = intentoPrevio ? Number(intentoPrevio?.calificacion || 0) : null;
                           return notaPrevia == null || !quizAprobado(notaPrevia) ? temaPrevioInmediato : null;
@@ -1507,11 +1507,11 @@ export default function PortalEstudiante() {
                     const quizTema = (quizzesClase || []).find(
                       (quiz: any) => String(quiz?.pensum_curso_id || "") === String(tema?.id || "")
                     );
+                    // quizIntentos ya está filtrado por los IDs del estudiante, no hace falta filtrar por matricula_id
                     const intentoQuizTema = quizTema
                       ? (quizIntentos || []).find(
                           (intento: any) =>
-                            String(intento?.quiz_id || "") === String(quizTema?.id || "") &&
-                            String(intento?.matricula_id || "") === String(matriculaSeleccionada?.id || "")
+                            String(intento?.quiz_id || "") === String(quizTema?.id || "")
                         )
                       : null;
                     const notaQuizTema = intentoQuizTema ? Number(intentoQuizTema?.calificacion || 0) : null;
