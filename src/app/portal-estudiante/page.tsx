@@ -1678,10 +1678,15 @@ export default function PortalEstudiante() {
                                                   setCicloRutaId(cicloId);
                                                 }}
                                               >
-                                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                                  {nombreInsumo}
-                                                  {cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}
-                                                </Text>
+                                                <Space size={4}>
+                                                  <Text type="secondary" style={{ fontSize: 12 }}>
+                                                    {nombreInsumo}
+                                                    {cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}
+                                                  </Text>
+                                                  {(insumo.materiales_ciclo?.incluido_kit || insumo.incluido_kit) && (
+                                                    <GiftOutlined style={{ color: "#d81b87", fontSize: 12 }} />
+                                                  )}
+                                                </Space>
                                               </Checkbox>
                                             </Space>
                                           );
@@ -1741,7 +1746,6 @@ export default function PortalEstudiante() {
     { key: "1", label: "Mis Cursos", icon: <BookOutlined /> },
     { key: "2", label: enMora ? "💰 Financiero ⚠️" : "Financiero", icon: <DollarCircleOutlined /> },
     { key: "3", label: enMora ? "🔒 Materiales" : (isMobile ? "Materiales" : "Lista de materiales"), icon: <FileOutlined /> },
-    { key: "4", label: enMora ? "🔒 Ciclo" : (isMobile ? "Ciclo" : "Materiales del ciclo"), icon: <BookOutlined /> },
     { key: "5", label: enMora ? "🔒 Pensum" : "Pensum", icon: <BookOutlined /> },
   ];
 
@@ -1888,7 +1892,7 @@ export default function PortalEstudiante() {
     if (activeTab === "2") return renderFinanciero();
 
     // ── Bloqueo por mora ───────────────────────────────────────────
-    if (enMora && (activeTab === "3" || activeTab === "4" || activeTab === "5")) {
+    if (enMora && (activeTab === "3" || activeTab === "5")) {
       return (
         <div
           style={{
@@ -1964,7 +1968,6 @@ export default function PortalEstudiante() {
       );
     }
 
-    if (activeTab === "4") return renderMaterialesCiclo();
     if (activeTab === "5") return renderPensum();
 
     return null;
