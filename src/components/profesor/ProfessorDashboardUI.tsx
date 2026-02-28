@@ -11,12 +11,16 @@ import {
   StarOutlined,
   UserAddOutlined,
   GiftOutlined,
+  SafetyCertificateOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import {
   Badge,
   Button,
   Card,
   Col,
+  Collapse,
   Divider,
   Drawer,
   Empty,
@@ -200,6 +204,8 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   const [cursoMaterialSeleccionado, setCursoMaterialSeleccionado] = useState<any | null>(null);
   const [cicloSeleccionadoId, setCicloSeleccionadoId] = useState<string | null>(null);
   const [temaSeleccionadoId, setTemaSeleccionadoId] = useState<string | null>(null);
+  const [quizzesProfesor, setQuizzesProfesor] = useState<any[]>([]);
+  const [quizPreguntasProfesor, setQuizPreguntasProfesor] = useState<any[]>([]);
   const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
     open: false,
     title: "",
@@ -409,6 +415,18 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
       });
   }, [materialesDidacticos, cursoMaterialSeleccionado?.programaId, temaSeleccionadoId, temasMateriales, cicloMaterialSeleccionado?.id]);
 
+  const quizDelTema = useMemo(() => {
+    if (!temaSeleccionadoId) return null;
+    const quiz = quizzesProfesor.find(
+      (q: any) => String(q.pensum_curso_id || "") === String(temaSeleccionadoId)
+    );
+    if (!quiz) return null;
+    const preguntas = quizPreguntasProfesor
+      .filter((p: any) => String(p.quiz_id || "") === String(quiz.id))
+      .sort((a: any, b: any) => Number(a.orden || 0) - Number(b.orden || 0));
+    return { ...quiz, preguntas };
+  }, [quizzesProfesor, quizPreguntasProfesor, temaSeleccionadoId]);
+
   const abrirMaterialDidactico = (material: any, title: string) => {
     const src = extractIframeSrc(material?.url_archivo);
     if (!src) return;
@@ -457,6 +475,27 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
         setMaterialesCiclo(materialesCicloData || []);
         setMaterialesClase(materialesClaseData || []);
         setMaterialesDidacticos(materialesDidacticosData || []);
+
+        // Cargar quizzes del programa
+        const { data: quizzesData } = await supabaseBrowserClient
+          .from("quizzes_clase")
+          .select("id, titulo, pensum_curso_id, programa_id")
+          .eq("programa_id", programaId)
+          .eq("activo", true)
+          .eq("publicado", true);
+        setQuizzesProfesor(quizzesData || []);
+
+        if ((quizzesData || []).length > 0) {
+          const quizIds = (quizzesData || []).map((q: any) => q.id);
+          const { data: preguntasData } = await supabaseBrowserClient
+            .from("quiz_preguntas_clase")
+            .select("id, quiz_id, pregunta, opcion_a, opcion_b, opcion_c, opcion_d, respuesta_correcta, orden")
+            .in("quiz_id", quizIds)
+            .order("orden", { ascending: true });
+          setQuizPreguntasProfesor(preguntasData || []);
+        } else {
+          setQuizPreguntasProfesor([]);
+        }
 
         const primerCiclo = (pensumData || [])[0];
         setCicloSeleccionadoId(primerCiclo?.id || null);
@@ -1054,6 +1093,64 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       );
                     }}
                   />
+                )}
+              </Card>
+
+              <Card
+                size="small"
+                title={
+                  <Space>
+                    <SafetyCertificateOutlined style={{ color: "#d81b87" }} />
+                    <span>Evaluación del tema</span>
+                  </Space>
+                }
+              >
+                {!quizDelTema ? (
+                  <Empty description="Sin quiz publicado para este tema" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                ) : (
+                  <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                    <Tag color="purple" style={{ marginBottom: 4 }}>{quizDelTema.titulo}</Tag>
+                    <Collapse
+                      size="small"
+                      ghost
+                      items={quizDelTema.preguntas.map((pregunta: any, idx: number) => ({
+                        key: String(pregunta.id || idx),
+                        label: (
+                          <Typography.Text strong style={{ fontSize: 13 }}>
+                            {`${idx + 1}. ${pregunta.pregunta}`}
+                          </Typography.Text>
+                        ),
+                        children: (
+                          <Space direction="vertical" size={6} style={{ width: "100%", paddingLeft: 8 }}>
+                            {(["a", "b", "c", "d"] as const).map((letra) => {
+                              const texto = pregunta[`opcion_${letra}`];
+                              if (!texto) return null;
+                              const esCorrecta =
+                                (pregunta.respuesta_correcta || "").toUpperCase() === letra.toUpperCase();
+                              return (
+                                <Space key={letra} size={8} align="start">
+                                  {esCorrecta ? (
+                                    <CheckCircleOutlined style={{ color: "#16a34a", marginTop: 2 }} />
+                                  ) : (
+                                    <CloseCircleOutlined style={{ color: "#d1d5db", marginTop: 2 }} />
+                                  )}
+                                  <Typography.Text
+                                    style={{
+                                      color: esCorrecta ? "#16a34a" : undefined,
+                                      fontWeight: esCorrecta ? 600 : 400,
+                                      fontSize: 13,
+                                    }}
+                                  >
+                                    {`${letra.toUpperCase()}. ${texto}`}
+                                  </Typography.Text>
+                                </Space>
+                              );
+                            })}
+                          </Space>
+                        ),
+                      }))}
+                    />
+                  </Space>
                 )}
               </Card>
             </Space>
