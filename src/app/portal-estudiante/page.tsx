@@ -61,8 +61,8 @@ import { descargarCertificado as descargarCertificadoPDF } from "@utils/certific
 dayjs.locale("es");
 
 const { Title, Text } = Typography;
-const UMBRAL_APROBACION_QUIZ_PORCENTAJE = 75;
-const UMBRAL_APROBACION_QUIZ_NOTA = (UMBRAL_APROBACION_QUIZ_PORCENTAJE / 100) * 5;
+const UMBRAL_APROBACION_QUIZ_PORCENTAJE = 76; // 3.8/5
+const UMBRAL_APROBACION_QUIZ_NOTA = 3.8; // nota mínima para aprobar y desbloquear siguiente clase
 
 const quizAprobado = (calificacion: number | null | undefined) =>
   Number(calificacion || 0) >= UMBRAL_APROBACION_QUIZ_NOTA;
@@ -2434,7 +2434,7 @@ export default function PortalEstudiante() {
                 </Text>
                 <br />
                 <Text type="danger" style={{ fontSize: 13 }}>
-                  {`Necesitas mínimo ${UMBRAL_APROBACION_QUIZ_PORCENTAJE}% para aprobar.`}
+                  {`Necesitas mínimo ${UMBRAL_APROBACION_QUIZ_NOTA}/5 (${UMBRAL_APROBACION_QUIZ_PORCENTAJE}%) para aprobar y desbloquear la siguiente clase.`}
                 </Text>
               </div>
               {quizResultado.respuestasErradas.length > 0 && (
