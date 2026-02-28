@@ -1486,22 +1486,23 @@ export default function PortalEstudiante() {
                     const temaId = String(tema?.id || `tema-${temaIndex}`);
                     const recursosTema = obtenerRecursosTema(tema, cicloId);
                     const insumosTema = obtenerInsumosTema(tema, cicloId);
-                    const quizPendientePrevio = (temasCiclo || []).slice(0, temaIndex).find((temaPrevio: any) => {
-                      const quizPrevio = (quizzesClase || []).find(
-                        (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaPrevio?.id || "")
-                      );
-
-                      if (!quizPrevio) return false;
-
-                      const intentoPrevio = (quizIntentos || []).find(
-                        (intento: any) =>
-                          String(intento?.quiz_id || "") === String(quizPrevio?.id || "") &&
-                          String(intento?.matricula_id || "") === String(matriculaSeleccionada?.id || "")
-                      );
-
-                      const notaPrevia = intentoPrevio ? Number(intentoPrevio?.calificacion || 0) : null;
-                      return notaPrevia == null || !quizAprobado(notaPrevia);
-                    });
+                    // Solo comprueba la clase INMEDIATAMENTE anterior: pasar su quiz desbloquea únicamente la siguiente
+                    const temaPrevioInmediato = temaIndex > 0 ? (temasCiclo || [])[temaIndex - 1] : null;
+                    const quizPendientePrevio = temaPrevioInmediato
+                      ? (() => {
+                          const quizPrevio = (quizzesClase || []).find(
+                            (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaPrevioInmediato?.id || "")
+                          );
+                          if (!quizPrevio) return null;
+                          const intentoPrevio = (quizIntentos || []).find(
+                            (intento: any) =>
+                              String(intento?.quiz_id || "") === String(quizPrevio?.id || "") &&
+                              String(intento?.matricula_id || "") === String(matriculaSeleccionada?.id || "")
+                          );
+                          const notaPrevia = intentoPrevio ? Number(intentoPrevio?.calificacion || 0) : null;
+                          return notaPrevia == null || !quizAprobado(notaPrevia) ? temaPrevioInmediato : null;
+                        })()
+                      : null;
                     const temaBloqueado = Boolean(quizPendientePrevio);
                     const quizTema = (quizzesClase || []).find(
                       (quiz: any) => String(quiz?.pensum_curso_id || "") === String(tema?.id || "")
