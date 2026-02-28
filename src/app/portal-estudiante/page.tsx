@@ -1636,46 +1636,64 @@ export default function PortalEstudiante() {
                                   </Space>
                                 </Space>
                               ) : insumosTema.length ? (
-                                <Space direction="vertical" size={4} style={{ width: "100%" }}>
-                                  {insumosTema.map((insumo: any, itemIndex: number) => {
-                                    const key = `${matriculaSeleccionada.id}|${temaId}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
-                                    const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
-                                    const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
-                                    return (
-                                      <Space key={`${temaId}-insumo-${itemIndex}`} size={6} wrap>
-                                        {insumo.obligatorio ? (
-                                          <CheckCircleOutlined style={{ color: "#16a34a" }} />
-                                        ) : (
-                                          <ClockCircleOutlined style={{ color: "#f59e0b" }} />
+                                <Collapse
+                                  ghost
+                                  size="small"
+                                  style={{ marginTop: 4 }}
+                                  items={[{
+                                    key: temaId,
+                                    label: (
+                                      <Space size={8}>
+                                        <Text type="secondary" style={{ fontSize: 12 }}>
+                                          {`${insumosTema.length} material${insumosTema.length !== 1 ? "es" : ""}`}
+                                        </Text>
+                                        {insumosMarcados > 0 && (
+                                          <Tag color="green" style={{ fontSize: 11, padding: "0 5px" }}>
+                                            {`${insumosMarcados}/${insumosTema.length} listos`}
+                                          </Tag>
                                         )}
-                                        <Checkbox
-                                          checked={Boolean(checklistInsumos[key])}
-                                          onChange={(event) => {
-                                            setChecklistInsumos((prev) => ({
-                                              ...prev,
-                                              [key]: event.target.checked,
-                                            }));
-                                            setTemaRutaId(temaId);
-                                            setCicloRutaId(cicloId);
-                                          }}
-                                        >
-                                          <Text type="secondary" style={{ fontSize: 12 }}>
-                                            {nombreInsumo}
-                                            {cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}
-                                          </Text>
-                                        </Checkbox>
                                       </Space>
-                                    );
-                                  })}
-                                </Space>
+                                    ),
+                                    children: (
+                                      <Space direction="vertical" size={4} style={{ width: "100%", paddingLeft: 4 }}>
+                                        {insumosTema.map((insumo: any, itemIndex: number) => {
+                                          const key = `${matriculaSeleccionada.id}|${temaId}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+                                          const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
+                                          const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
+                                          return (
+                                            <Space key={`${temaId}-insumo-${itemIndex}`} size={6} wrap>
+                                              {insumo.obligatorio ? (
+                                                <CheckCircleOutlined style={{ color: "#16a34a" }} />
+                                              ) : (
+                                                <ClockCircleOutlined style={{ color: "#f59e0b" }} />
+                                              )}
+                                              <Checkbox
+                                                checked={Boolean(checklistInsumos[key])}
+                                                onChange={(event) => {
+                                                  setChecklistInsumos((prev) => ({
+                                                    ...prev,
+                                                    [key]: event.target.checked,
+                                                  }));
+                                                  setTemaRutaId(temaId);
+                                                  setCicloRutaId(cicloId);
+                                                }}
+                                              >
+                                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                                  {nombreInsumo}
+                                                  {cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}
+                                                </Text>
+                                              </Checkbox>
+                                            </Space>
+                                          );
+                                        })}
+                                      </Space>
+                                    ),
+                                  }]}
+                                />
                               ) : (
                                 <Text type="secondary" style={{ fontSize: 12 }}>Sin materiales registrados</Text>
                               )}
-                              {vista === "kits" && insumosTema.length > 0 ? (
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {insumosMarcados}/{insumosTema.length} listos
-                                </Text>
-                              ) : null}
+                              {vista === "kits" && insumosTema.length > 0 ? null : null}
                             </Space>
                           }
                         />
