@@ -1465,6 +1465,7 @@ export default function PortalEstudiante() {
               label: (
                 <Space size={16} align="center" style={{ opacity: cicloBloqueado ? 0.4 : 1, filter: cicloBloqueado ? "grayscale(0.7)" : undefined }}>
                   <div
+                    className="ciclo-avatar"
                     style={{
                       width: 44,
                       height: 44,
@@ -1572,13 +1573,8 @@ export default function PortalEstudiante() {
                                   <Space
                                     size={8}
                                     wrap
-                                    style={{
-                                      width: "100%",
-                                      justifyContent: "space-between",
-                                      border: "1px solid #f0f0f0",
-                                      borderRadius: 8,
-                                      padding: "6px 8px",
-                                    }}
+                                    className="tema-material-row"
+                                    style={{ justifyContent: "space-between" }}
                                   >
                                     <Button
                                       type="link"
@@ -1596,7 +1592,7 @@ export default function PortalEstudiante() {
                                       {tema?.nombre_curso || "Tema"}
                                     </Button>
 
-                                    <Space size={4}>
+                                    <Space size={4} className="tema-acciones-row">
                                       <Button
                                         size="small"
                                         type="default"
