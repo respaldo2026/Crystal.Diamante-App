@@ -260,6 +260,9 @@ export default function GestorPensum({
   const [modalQuizVisible, setModalQuizVisible] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState<QuizClase | null>(null);
   const [cursoQuizActivo, setCursoQuizActivo] = useState<PensumCurso | null>(null);
+  const [generandoQuizIA, setGenerandoQuizIA] = useState(false);
+  const [pdfClaseActual, setPdfClaseActual] = useState<{ url: string; nombre: string } | null>(null);
+  const [pdfsCiclo, setPdfsCiclo] = useState<{ id: string; url: string; nombre: string; titulo: string }[]>([]);
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace' | 'iframe'>('archivo');
   const [mostrarListaCompletaCiclo, setMostrarListaCompletaCiclo] = useState(false);
   const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
@@ -834,6 +837,33 @@ export default function GestorPensum({
 
     setCursoQuizActivo(curso);
     setEditingQuiz(quiz || null);
+
+    // Recopilar TODOS los PDFs del ciclo activo
+    const pensumIdBuscar = curso.pensum_id || selectedCicloId;
+    const todosPdfs = materiales
+      .filter(
+        (m) =>
+          m.mime_type === "application/pdf" &&
+          m.url_archivo &&
+          (pensumIdBuscar ? m.pensum_id === pensumIdBuscar : true)
+      )
+      .map((m) => ({
+        id: m.id,
+        url: m.url_archivo,
+        nombre: m.nombre_archivo || m.titulo,
+        titulo: m.titulo,
+      }));
+    setPdfsCiclo(todosPdfs);
+
+    // Preseleccionar el PDF cuyo título contenga el nombre del curso (coincidencia parcial)
+    const nombreCursoNorm = curso.nombre_curso.toLowerCase();
+    const pdfPreseleccionado =
+      todosPdfs.find((p) =>
+        p.titulo.toLowerCase().includes(nombreCursoNorm) ||
+        p.nombre.toLowerCase().includes(nombreCursoNorm)
+      ) || todosPdfs[0] || null;
+    setPdfClaseActual(pdfPreseleccionado);
+
     formQuiz.setFieldsValue({
       titulo: quiz?.titulo || `Quiz - ${curso.nombre_curso}`,
       descripcion: quiz?.descripcion || "",
@@ -927,6 +957,107 @@ export default function GestorPensum({
         }
       },
     });
+  };
+
+  const generarQuizConIA = async () => {
+    if (!pdfClaseActual) {
+      message.error("No hay PDF disponible para este ciclo. Sube primero el material en PDF en la sección de Materiales.");
+      return;
+    }
+    if (!cursoQuizActivo) return;
+
+    setGenerandoQuizIA(true);
+    try {
+      // 1. Llamar al endpoint para generar preguntas con IA
+      const res = await fetch("/api/ai/generate-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pdf_url: pdfClaseActual.url,
+          titulo_clase: cursoQuizActivo.nombre_curso,
+          pensum_curso_id: cursoQuizActivo.id,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Error al generar preguntas con IA");
+      }
+
+      const { preguntas, total, titulo_sugerido } = await res.json();
+
+      if (!preguntas || preguntas.length === 0) {
+        throw new Error("La IA no generó preguntas. Intenta de nuevo.");
+      }
+
+      // 2. Crear o actualizar el quiz en quizzes_clase
+      const quizPayload = {
+        programa_id: Number(programaId),
+        pensum_id: selectedCicloId,
+        pensum_curso_id: cursoQuizActivo.id,
+        titulo: formQuiz.getFieldValue("titulo") || titulo_sugerido,
+        descripcion: formQuiz.getFieldValue("descripcion") || `Generado automáticamente con IA a partir del PDF: ${pdfClaseActual.nombre}`,
+        total_preguntas: total,
+        publicado: formQuiz.getFieldValue("publicado") ?? false,
+        activo: formQuiz.getFieldValue("activo") ?? true,
+      };
+
+      let quizId: string;
+      if (editingQuiz) {
+        quizId = editingQuiz.id;
+        const { error } = await supabaseBrowserClient
+          .from("quizzes_clase")
+          .update(quizPayload)
+          .eq("id", quizId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabaseBrowserClient
+          .from("quizzes_clase")
+          .upsert(quizPayload, { onConflict: "pensum_curso_id" })
+          .select("id")
+          .single();
+        if (error) throw error;
+        quizId = data.id;
+      }
+
+      // 3. Eliminar preguntas existentes y reemplazar con las generadas
+      await supabaseBrowserClient
+        .from("quiz_preguntas_clase")
+        .delete()
+        .eq("quiz_id", quizId);
+
+      const preguntasInsert = preguntas.map((p: any) => ({
+        quiz_id: quizId,
+        orden: p.orden,
+        pregunta: p.pregunta,
+        opcion_a: p.opcion_a,
+        opcion_b: p.opcion_b,
+        opcion_c: p.opcion_c,
+        opcion_d: p.opcion_d,
+        respuesta_correcta: p.respuesta_correcta,
+        activo: true,
+      }));
+
+      const { error: insertError } = await supabaseBrowserClient
+        .from("quiz_preguntas_clase")
+        .insert(preguntasInsert);
+
+      if (insertError) throw insertError;
+
+      message.success(`✅ Quiz generado con IA: ${total} preguntas creadas para "${cursoQuizActivo.nombre_curso}"`);
+
+      setModalQuizVisible(false);
+      setEditingQuiz(null);
+      setCursoQuizActivo(null);
+      setPdfClaseActual(null);
+      setPdfsCiclo([]);
+      formQuiz.resetFields();
+      await cargarQuizzesClase();
+    } catch (error: any) {
+      message.error(error?.message || "Error al generar quiz con IA");
+    } finally {
+      setGenerandoQuizIA(false);
+    }
   };
 
   const abrirModalMaterialClase = (cursoId: string, material?: MaterialClase) => {
@@ -2341,13 +2472,50 @@ export default function GestorPensum({
       <Modal
         title={editingQuiz ? "Editar quiz de clase" : "Crear quiz de clase"}
         open={modalQuizVisible}
-        onOk={handleGuardarQuiz}
         onCancel={() => {
           setModalQuizVisible(false);
           setEditingQuiz(null);
           setCursoQuizActivo(null);
+          setPdfClaseActual(null);
+          setPdfsCiclo([]);
           formQuiz.resetFields();
         }}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setModalQuizVisible(false);
+              setEditingQuiz(null);
+              setCursoQuizActivo(null);
+              setPdfClaseActual(null);
+              setPdfsCiclo([]);
+              formQuiz.resetFields();
+            }}
+            disabled={generandoQuizIA}
+          >
+            Cancelar
+          </Button>,
+          pdfClaseActual && (
+            <Button
+              key="ia"
+              type="primary"
+              style={{ background: "#722ed1", borderColor: "#722ed1" }}
+              loading={generandoQuizIA}
+              onClick={generarQuizConIA}
+              icon={<span>✨</span>}
+            >
+              {generandoQuizIA ? "Generando con IA…" : "✨ Generar 25 preguntas con IA"}
+            </Button>
+          ),
+          <Button
+            key="ok"
+            type="primary"
+            onClick={handleGuardarQuiz}
+            disabled={generandoQuizIA}
+          >
+            {editingQuiz ? "Guardar cambios" : "Crear quiz"}
+          </Button>,
+        ].filter(Boolean)}
       >
         <Form form={formQuiz} layout="vertical">
           <Alert
@@ -2356,11 +2524,47 @@ export default function GestorPensum({
             style={{ marginBottom: 12 }}
             message={
               cursoQuizActivo
-                ? `Tema: ${cursoQuizActivo.nombre_curso}`
+                ? `Clase: ${cursoQuizActivo.nombre_curso}`
                 : "Selecciona un tema"
             }
-            description="Configura aquí el quiz por clase. En el siguiente paso podremos cargar las 25 preguntas con sus respuestas correctas."
+            description="Configura el quiz de esta clase. Selecciona el PDF de la clase y genera las preguntas automáticamente con IA."
           />
+
+          {pdfsCiclo.length > 0 ? (
+            <Form.Item
+              label={<span>📄 PDF de esta clase <small style={{ color: '#888' }}>(elige el que le corresponde)</small></span>}
+              style={{ marginBottom: 12 }}
+            >
+              <Select
+                value={pdfClaseActual?.url || undefined}
+                onChange={(val) => {
+                  const sel = pdfsCiclo.find((p) => p.url === val);
+                  setPdfClaseActual(sel ? { url: sel.url, nombre: sel.nombre } : null);
+                }}
+                placeholder="Selecciona el PDF de esta clase"
+                options={pdfsCiclo.map((p) => ({
+                  value: p.url,
+                  label: p.titulo || p.nombre,
+                }))}
+                style={{ width: "100%" }}
+              />
+              {pdfClaseActual && (
+                <div style={{ marginTop: 4, fontSize: 12, color: '#555' }}>
+                  <FileOutlined /> {pdfClaseActual.nombre}
+                  {" — "}
+                  <small style={{ color: '#722ed1' }}>Haz clic en ✨ Generar para crear las preguntas con IA</small>
+                </div>
+              )}
+            </Form.Item>
+          ) : (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message="Sin PDFs en este ciclo"
+              description="No hay PDFs subidos para este ciclo. Ve a la pestaña de Materiales, sube el PDF de cada clase con su tema relacionado, y luego vuelve aquí a generar el quiz."
+            />
+          )}
 
           <Form.Item
             name="titulo"
