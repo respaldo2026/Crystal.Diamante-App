@@ -358,28 +358,30 @@ export default function TomarAsistencia() {
       const guardarTemaSesion = async () => {
         if (!nombreClase) return;
 
-        const { data: sesionExistente, error: errSesionExistente } = await supabaseBrowserClient
+        // 1. Buscar sesión existente usando limit(1) para evitar error 400 de maybeSingle con múltiples filas
+        const { data: sesionesExistentes, error: errBuscar } = await supabaseBrowserClient
           .from("sesiones_clase")
           .select("id")
           .eq("curso_id", cursoSeleccionado)
           .eq("fecha", fechaSesion)
-          .maybeSingle();
+          .limit(1);
 
-        if (errSesionExistente) {
-          throw errSesionExistente;
-        }
+        if (errBuscar) throw errBuscar;
+
+        const sesionExistente = sesionesExistentes?.[0] || null;
 
         if (sesionExistente?.id) {
-          const { error: errUpdateSesion } = await supabaseBrowserClient
+          // 2a. Ya existe → actualizar tema
+          const { error: errUpdate } = await supabaseBrowserClient
             .from("sesiones_clase")
             .update({ tema_visto: nombreClase, observaciones: detalleClase })
             .eq("id", sesionExistente.id);
-
-          if (errUpdateSesion) throw errUpdateSesion;
+          if (errUpdate) throw errUpdate;
           return;
         }
 
-        const { error: errInsertSesion } = await supabaseBrowserClient
+        // 2b. No existe → insertar, ignorando 409 si acaso hay race condition
+        const { error: errInsert } = await supabaseBrowserClient
           .from("sesiones_clase")
           .insert({
             curso_id: cursoSeleccionado,
@@ -390,7 +392,26 @@ export default function TomarAsistencia() {
             observaciones: `${detalleClase}. Sesión registrada desde llamado de lista`,
           });
 
-        if (errInsertSesion) throw errInsertSesion;
+        // Si hay 409 (conflicto de unicidad por race condition), hacer update como fallback
+        if (errInsert) {
+          if (errInsert.code === "23505") {
+            const { data: sesion2 } = await supabaseBrowserClient
+              .from("sesiones_clase")
+              .select("id")
+              .eq("curso_id", cursoSeleccionado)
+              .eq("fecha", fechaSesion)
+              .limit(1);
+            const id2 = sesion2?.[0]?.id;
+            if (id2) {
+              await supabaseBrowserClient
+                .from("sesiones_clase")
+                .update({ tema_visto: nombreClase, observaciones: detalleClase })
+                .eq("id", id2);
+            }
+            return;
+          }
+          throw errInsert;
+        }
       };
 
       const registros = alumnos.map((alumno) => ({
