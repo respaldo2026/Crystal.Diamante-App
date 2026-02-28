@@ -48,7 +48,6 @@ import {
   ClockCircleOutlined,
   GiftOutlined,
   YoutubeOutlined,
-  LockOutlined,
   StarFilled,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -1515,6 +1514,8 @@ export default function PortalEstudiante() {
                         )
                       : null;
                     const notaQuizTema = intentoQuizTema ? Number(intentoQuizTema?.calificacion || 0) : null;
+                    const temaCompletado = notaQuizTema != null && quizAprobado(notaQuizTema);
+                    const colorAvatarTema = temaBloqueado ? "#bfbfbf" : temaCompletado ? "#16a34a" : colorNumeroTema;
                     const insumosMarcados = insumosTema.filter((insumo: any) => {
                       const key = `${matriculaSeleccionada.id}|${temaId}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
                       return Boolean(checklistInsumos[key]);
@@ -1526,9 +1527,12 @@ export default function PortalEstudiante() {
                       : tema?.nombre_curso || "Tema";
 
                     return (
-                      <List.Item key={temaId} className={temaBloqueado ? "tema-bloqueado" : ""}>
+                      <List.Item
+                        key={temaId}
+                        className={temaBloqueado ? "tema-bloqueado" : temaCompletado ? "tema-completado" : "tema-activo"}
+                      >
                         <List.Item.Meta
-                          avatar={<span style={{ fontSize: 20, fontWeight: 700, color: colorNumeroTema }}>{tema.orden || temaIndex + 1}</span>}
+                          avatar={<span style={{ fontSize: 20, fontWeight: 700, color: colorAvatarTema }}>{tema.orden || temaIndex + 1}</span>}
                           title={<Text strong>{tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}</Text>}
                           description={
                             <Space direction="vertical" size={4}>
@@ -1538,16 +1542,7 @@ export default function PortalEstudiante() {
                                 </div>
                               ) : null}
 
-                              {temaBloqueado ? (
-                                <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                                  <Tag color="red" icon={<LockOutlined />}>
-                                    Clase bloqueada
-                                  </Tag>
-                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                    {`Debes aprobar el quiz de ${quizPendientePrevio?.nombre_curso || "la clase anterior"} para visualizar esta clase.`}
-                                  </Text>
-                                </Space>
-                              ) : vista === "plan" ? (
+                              {temaBloqueado ? null : vista === "plan" ? (
                                 <Space direction="vertical" size={6} style={{ width: "100%" }}>
                                   <Space
                                     size={8}
@@ -2714,13 +2709,34 @@ export default function PortalEstudiante() {
           box-shadow: inset 0 0 0 1px #1677ff22;
         }
         .portal-estudiante .tema-bloqueado {
-          opacity: 0.65;
-          background: #fafafa;
+          opacity: 0.45;
+          background: #f5f5f5;
           border-radius: 8px;
           padding: 6px 0;
+          filter: grayscale(0.6);
         }
         .portal-estudiante .tema-bloqueado .ant-typography {
-          color: #8c8c8c;
+          color: #b8b8b8 !important;
+        }
+        .portal-estudiante .tema-bloqueado .ant-btn,
+        .portal-estudiante .tema-bloqueado .ant-tag {
+          opacity: 0.4;
+          pointer-events: none;
+        }
+        .portal-estudiante .tema-completado {
+          background: linear-gradient(to right, #f0fdf4, #ffffff);
+          border-radius: 8px;
+          border-left: 3px solid #4ade80;
+          padding: 6px 0 6px 8px;
+        }
+        .portal-estudiante .tema-completado .ant-list-item-meta-title .ant-typography {
+          color: #15803d;
+        }
+        .portal-estudiante .tema-activo {
+          background: linear-gradient(to right, #fdf4ff, #ffffff);
+          border-radius: 8px;
+          border-left: 3px solid #d81b87;
+          padding: 6px 0 6px 8px;
         }
         .portal-estudiante .student-menu-btn {
           border-radius: 12px;
