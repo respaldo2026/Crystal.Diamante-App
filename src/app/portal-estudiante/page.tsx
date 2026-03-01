@@ -2059,11 +2059,13 @@ export default function PortalEstudiante() {
     return (
       <div className="portal-splash-loading">
         <div className="portal-splash-loading-inner">
-          {logoAcademia ? (
-            <img src={logoAcademia} alt="Crystal Diamante" className="splash-loading-logo" />
-          ) : (
-            <div className="splash-loading-fallback">CD</div>
-          )}
+          <div className="splash-loading-logo-box">
+            {logoAcademia ? (
+              <img src={logoAcademia} alt="Crystal Diamante" className="splash-loading-logo" />
+            ) : (
+              <div className="splash-loading-fallback">CD</div>
+            )}
+          </div>
           <div className="splash-loading-dots">
             <span /><span /><span />
           </div>
@@ -2157,28 +2159,26 @@ export default function PortalEstudiante() {
         {/* Decoración sutil */}
         <div className="portal-header-bg" />
 
-        {/* Logo con protagonismo flotante */}
-        <div className="portal-header-logo-container">
-          <div className="portal-header-logo-ring">
-            {logoAcademia ? (
-              <img src={logoAcademia} alt="Logo academia" className="portal-header-logo" />
-            ) : (
-              <div className="portal-header-logo-fallback">CD</div>
-            )}
-          </div>
-        </div>
-
         {/* Header Content */}
         <div className="portal-header-content">
-          <div className="portal-header-text">
-            <span className="portal-header-greeting">
-              {obtenerSaludoBienvenida(estudiante?.genero)}
-            </span>
-            <h1 className="portal-header-name">
-              {estudiante?.nombre_completo
-                ? estudiante.nombre_completo.split(" ")[0]
-                : "Estudiante"}
-            </h1>
+          <div className="portal-header-brand">
+            <div className="portal-header-logo-ring">
+              {logoAcademia ? (
+                <img src={logoAcademia} alt="Logo academia" className="portal-header-logo" />
+              ) : (
+                <div className="portal-header-logo-fallback">CD</div>
+              )}
+            </div>
+            <div className="portal-header-text">
+              <span className="portal-header-greeting">
+                {obtenerSaludoBienvenida(estudiante?.genero)}
+              </span>
+              <h1 className="portal-header-name">
+                {estudiante?.nombre_completo
+                  ? estudiante.nombre_completo.split(" ")[0]
+                  : "Estudiante"}
+              </h1>
+            </div>
           </div>
 
           {/* WhatsApp Action */}
@@ -2217,9 +2217,6 @@ export default function PortalEstudiante() {
             </Dropdown>
           )}
         </div>
-
-        {/* Borde sutil inferior moderno en lugar de ola grosera */}
-        <div className="portal-header-bottom-fade"></div>
       </div>
 
       {/* ────── MENÚ DE NAVEGACIÓN ────── */}
@@ -2712,24 +2709,36 @@ export default function PortalEstudiante() {
           from { transform: scale(0.7); opacity: 0; }
           to   { transform: scale(1);    opacity: 1; }
         }
+        .splash-loading-logo-box {
+          width: 92px;
+          height: 92px;
+          border-radius: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fff;
+          border: 1.5px solid #f2d2e5;
+          box-shadow: 0 8px 24px rgba(216,27,135,0.12);
+        }
         .splash-loading-logo {
-          width: 130px;
-          height: 130px;
+          max-width: 74px;
+          max-height: 74px;
+          width: auto;
+          height: auto;
           object-fit: contain;
-          border-radius: 28px;
-          filter: drop-shadow(0 8px 24px rgba(216,27,135,0.2));
+          display: block;
         }
         .splash-loading-fallback {
-          width: 130px;
-          height: 130px;
-          border-radius: 28px;
+          width: 74px;
+          height: 74px;
+          border-radius: 16px;
           background: linear-gradient(135deg, #fdf0f7 0%, #fff 100%);
-          border: 2.5px solid #d81b87;
+          border: 2px solid #d81b87;
           display: flex;
           align-items: center;
           justify-content: center;
           color: #d81b87;
-          font-size: 40px;
+          font-size: 28px;
           font-weight: 800;
         }
         .splash-loading-dots {
@@ -2751,89 +2760,93 @@ export default function PortalEstudiante() {
         }
 
         /* ──────────────────────────────────────
-           HEADER BANNER  (fucsia + blanco, logo centrado alineado)
+           HEADER COMPACTO
         ────────────────────────────────────── */
         .portal-header-banner {
           position: relative;
+          overflow: hidden;
           background: linear-gradient(160deg, #d81b87 0%, #b81775 100%);
-          padding: 24px 20px 48px;
+          padding: 12px 14px;
           margin-bottom: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          border-bottom-left-radius: 36px;
-          border-bottom-right-radius: 36px;
-          box-shadow: 0 8px 24px rgba(216,27,135,0.15);
+          border-bottom-left-radius: 18px;
+          border-bottom-right-radius: 18px;
+          box-shadow: 0 6px 16px rgba(216,27,135,0.14);
         }
         .portal-header-bg {
           position: absolute;
           inset: 0;
           background-image:
-            radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.12) 0%, transparent 60%);
+            radial-gradient(ellipse at 20% 0%, rgba(255,255,255,0.14) 0%, transparent 60%);
           pointer-events: none;
-          border-bottom-left-radius: 36px;
-          border-bottom-right-radius: 36px;
+          border-bottom-left-radius: 18px;
+          border-bottom-right-radius: 18px;
         }
 
-        /* Logo Layout Rediseñado */
-        .portal-header-logo-container {
-          position: relative;
-          display: flex;
-          justify-content: center;
-          margin-bottom: 20px;
-          z-index: 2;
-        }
-        .portal-header-logo-ring {
-          width: 88px;
-          height: 88px;
-          background: #fff;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-          padding: 4px;
-        }
-        .portal-header-logo {
-          width: 100%;
-          height: 100%;
-          object-fit: contain;
-          border-radius: 50%;
-        }
-        .portal-header-logo-fallback {
-          color: #d81b87;
-          font-size: 32px;
-          font-weight: 800;
-        }
-
-        /* Content Layout */
         .portal-header-content {
+          position: relative;
+          z-index: 2;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          width: 100%;
-          max-width: 800px;
-          z-index: 2;
+          gap: 10px;
+        }
+        .portal-header-brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+          flex: 1;
+        }
+        .portal-header-logo-ring {
+          width: 52px;
+          height: 52px;
+          background: #fff;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+          flex-shrink: 0;
+        }
+        .portal-header-logo {
+          max-width: 38px;
+          max-height: 38px;
+          width: auto;
+          height: auto;
+          object-fit: contain;
+          display: block;
+        }
+        .portal-header-logo-fallback {
+          color: #d81b87;
+          font-size: 20px;
+          font-weight: 800;
         }
         .portal-header-text {
           display: flex;
           flex-direction: column;
           align-items: flex-start;
           flex: 1;
+          min-width: 0;
         }
         .portal-header-greeting {
           color: rgba(255,255,255,0.85);
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 600;
-          letter-spacing: 1px;
+          letter-spacing: 0.8px;
           text-transform: uppercase;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .portal-header-name {
           color: #fff;
-          font-size: clamp(22px, 5vw, 28px);
+          font-size: clamp(16px, 4.3vw, 20px);
           font-weight: 800;
-          line-height: 1.2;
+          line-height: 1.15;
           margin: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         /* Modern WhatsApp Button */
@@ -2844,20 +2857,21 @@ export default function PortalEstudiante() {
           background: #fff;
           color: #d81b87;
           font-weight: 700;
-          font-size: 13px;
-          padding: 8px 16px;
+          font-size: 12px;
+          padding: 7px 12px;
           border: none;
-          border-radius: 12px;
+          border-radius: 10px;
           cursor: pointer;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          box-shadow: 0 3px 10px rgba(0,0,0,0.1);
           transition: transform 0.2s, box-shadow 0.2s;
+          flex-shrink: 0;
         }
         .portal-wa-btn-modern:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+          transform: translateY(-1px);
+          box-shadow: 0 5px 12px rgba(0,0,0,0.14);
         }
         .portal-wa-btn-modern .anticon {
-          font-size: 16px;
+          font-size: 14px;
           color: #25d366;
         }
 
@@ -2872,9 +2886,9 @@ export default function PortalEstudiante() {
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
-          margin-bottom: 24px;
+          margin-bottom: 16px;
           border-radius: 16px;
-          margin: -24px 16px 20px;
+          margin: 10px 12px 16px;
           position: relative;
           z-index: 3;
           padding: 4px;
@@ -3110,23 +3124,30 @@ export default function PortalEstudiante() {
         /* ── Móvil (≤576px) ── */
         @media (max-width: 576px) {
           .portal-header-banner {
-            padding: 22px 14px 50px;
+            padding: 10px 10px;
           }
           .portal-header-logo-ring {
-            width: 80px;
-            height: 80px;
-            border-radius: 22px;
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
           }
           .portal-header-logo {
-            width: 66px;
-            height: 66px;
+            max-width: 32px;
+            max-height: 32px;
           }
-          .portal-wa-btn {
-            padding: 7px 15px;
-            font-size: 12px;
+          .portal-header-content {
+            gap: 8px;
+          }
+          .portal-header-name {
+            font-size: 16px;
+          }
+          .portal-wa-btn-modern {
+            padding: 6px 10px;
+            font-size: 11px;
+            border-radius: 9px;
           }
           .portal-nav-bar {
-            margin: -18px 8px 14px;
+            margin: 8px 8px 14px;
             border-radius: 12px;
           }
           .portal-nav-item {
