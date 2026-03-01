@@ -48,6 +48,7 @@ import {
   GiftOutlined,
   YoutubeOutlined,
   StarFilled,
+  BarsOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
@@ -2628,21 +2629,36 @@ export default function PortalEstudiante() {
         className="gamma-fullscreen-modal"
       >
         <div className="gamma-iframe-topbar">
-          <div className="gamma-iframe-brand">
+          <button
+            type="button"
+            className="gamma-iframe-menu"
+            onClick={() => setIframePreview({ open: false, title: "", src: "" })}
+            aria-label="Volver"
+          >
+            <BarsOutlined />
+          </button>
+
+          <div className="gamma-iframe-center-logo" aria-hidden="true">
             {logoAcademia ? (
               <img src={logoAcademia} alt="Logo academia" className="gamma-iframe-logo" />
             ) : (
               <div className="gamma-iframe-logo-fallback">CD</div>
             )}
-            <span className="gamma-iframe-title">{iframePreview.title || "Presentación"}</span>
           </div>
+
           <button
             type="button"
-            className="gamma-iframe-close"
-            onClick={() => setIframePreview({ open: false, title: "", src: "" })}
-            aria-label="Cerrar visor"
+            className="gamma-iframe-whatsapp"
+            onClick={() =>
+              abrirWhatsapp(
+                whatsappAgente || whatsappAdmisiones,
+                `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo con este material del portal.`
+              )
+            }
+            aria-label="WhatsApp"
           >
-            ✕
+            <WhatsAppOutlined />
+            <span>WhatsApp</span>
           </button>
         </div>
         <iframe
@@ -3125,14 +3141,30 @@ export default function PortalEstudiante() {
             padding: 0 10px;
             z-index: 4;
           }
-          .gamma-iframe-brand {
+          .gamma-iframe-menu {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #4b5563;
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+          .gamma-iframe-center-logo {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
             display: flex;
             align-items: center;
-            gap: 8px;
-            min-width: 0;
+            justify-content: center;
+            pointer-events: none;
           }
           .gamma-iframe-logo {
-            max-width: 34px;
+            max-width: 116px;
             max-height: 34px;
             width: auto;
             height: auto;
@@ -3152,34 +3184,39 @@ export default function PortalEstudiante() {
             align-items: center;
             justify-content: center;
           }
-          .gamma-iframe-title {
-            color: #111827;
-            font-size: 14px;
-            font-weight: 600;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: min(60vw, 620px);
-          }
-          .gamma-iframe-close {
-            border: 1px solid #e5e7eb;
+          .gamma-iframe-whatsapp {
+            border: 1px solid #d9f7e2;
             background: #fff;
-            color: #6b7280;
-            width: 34px;
+            color: #059669;
             height: 34px;
             border-radius: 10px;
             cursor: pointer;
-            line-height: 1;
-            font-size: 17px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            gap: 6px;
+            padding: 0 10px;
+            font-size: 12px;
+            font-weight: 600;
             flex-shrink: 0;
           }
-          .gamma-iframe-close:hover {
-            border-color: #d1d5db;
-            color: #111827;
+          .gamma-iframe-whatsapp .anticon {
+            color: #25d366;
+            font-size: 14px;
+          }
+          .gamma-iframe-whatsapp:hover,
+          .gamma-iframe-menu:hover {
             background: #f9fafb;
+            border-color: #d1d5db;
+          }
+          @media (max-width: 400px) {
+            .gamma-iframe-whatsapp span {
+              display: none;
+            }
+            .gamma-iframe-whatsapp {
+              width: 34px;
+              padding: 0;
+            }
           }
         }
 
