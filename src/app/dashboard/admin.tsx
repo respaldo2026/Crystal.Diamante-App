@@ -15,6 +15,7 @@ import {
   Row,
   Segmented,
   Skeleton,
+  Grid,
   Space,
   Statistic,
   Tag,
@@ -86,6 +87,8 @@ const formatCurrency = (value: number) => {
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const screens = Grid.useBreakpoint();
+  const isMobile = screens.md === false;
   const isMountedRef = useRef(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("30d");
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
@@ -467,24 +470,24 @@ export default function AdminDashboard() {
 
   return (
     <div style={{
-      padding: window.innerWidth < 768 ? "16px 8px" : "24px 12px",
+      padding: isMobile ? "16px 8px" : "24px 12px",
     }}>
       <div style={{
         display: "flex",
-        flexDirection: window.innerWidth < 768 ? "column" : "row",
+        flexDirection: isMobile ? "column" : "row",
         justifyContent: "space-between",
-        alignItems: window.innerWidth < 768 ? "flex-start" : "center",
+        alignItems: isMobile ? "flex-start" : "center",
         marginBottom: 24,
         gap: 16,
       }}>
         <div>
-          <Title level={window.innerWidth < 768 ? 4 : 3} style={{ marginBottom: 4 }}>Panel administrativo</Title>
+          <Title level={isMobile ? 4 : 3} style={{ marginBottom: 4 }}>Panel administrativo</Title>
           <Text type="secondary" style={{
-            fontSize: window.innerWidth < 768 ? "12px" : "14px",
+            fontSize: isMobile ? "12px" : "14px",
           }}>Visualiza indicadores clave y toma decisiones con datos confiables.</Text>
         </div>
         <Space size={8} align="center" wrap style={{
-          width: window.innerWidth < 768 ? "100%" : "auto",
+          width: isMobile ? "100%" : "auto",
         }}>
           <Segmented
             options={[
@@ -494,16 +497,16 @@ export default function AdminDashboard() {
             ]}
             value={timeRange}
             onChange={handleRangeChange}
-            size={window.innerWidth < 768 ? "small" : "middle"}
+            size={isMobile ? "small" : "middle"}
             style={{
-              fontSize: window.innerWidth < 768 ? "12px" : "14px",
+              fontSize: isMobile ? "12px" : "14px",
             }}
           />
           <Button
             icon={<SyncOutlined />}
             onClick={fetchData}
             loading={refreshing && !initialLoading}
-            size={window.innerWidth < 768 ? "small" : "middle"}
+            size={isMobile ? "small" : "middle"}
           />
         </Space>
       </div>
@@ -525,24 +528,24 @@ export default function AdminDashboard() {
           {metricCards.map(card => (
             <Col key={card.key} xs={12} sm={12} md={8} lg={6}>
               <Card style={{
-                padding: window.innerWidth < 768 ? "12px" : "16px",
+                padding: isMobile ? "12px" : "16px",
               }}>
                 <Space direction="vertical" size={4} style={{ width: "100%" }}>
-                  <Space align="center" size={window.innerWidth < 768 ? 6 : 12} style={{
+                  <Space align="center" size={isMobile ? 6 : 12} style={{
                     flexWrap: "wrap",
                   }}>
                     <span style={{
-                      fontSize: window.innerWidth < 768 ? "16px" : "20px",
+                      fontSize: isMobile ? "16px" : "20px",
                     }}>
                       {card.icon}
                     </span>
                     <Text type="secondary" style={{
-                      fontSize: window.innerWidth < 768 ? "11px" : "13px",
+                      fontSize: isMobile ? "11px" : "13px",
                       flex: 1,
                     }}>{card.title}</Text>
                     {card.extra && (
                       <div style={{
-                        fontSize: window.innerWidth < 768 ? "10px" : "12px",
+                        fontSize: isMobile ? "10px" : "12px",
                       }}>
                         {card.extra}
                       </div>
@@ -555,7 +558,7 @@ export default function AdminDashboard() {
                     precision={card.precision}
                     valueStyle={{
                       ...card.valueStyle,
-                      fontSize: window.innerWidth < 768 ? "16px" : "24px",
+                      fontSize: isMobile ? "16px" : "24px",
                     }}
                   />
                 </Space>
@@ -570,20 +573,20 @@ export default function AdminDashboard() {
           <Spin spinning={initialLoading || (refreshing && !initialLoading)} tip="Actualizando ingresos...">
             <Card title={
               <Space size={8}>
-                <RiseOutlined style={{ color: "#1677ff", fontSize: window.innerWidth < 768 ? "16px" : "20px" }} />
+                <RiseOutlined style={{ color: "#1677ff", fontSize: isMobile ? "16px" : "20px" }} />
                 <span style={{
-                  fontSize: window.innerWidth < 768 ? "14px" : "16px",
+                  fontSize: isMobile ? "14px" : "16px",
                 }}>Evolución de ingresos</span>
               </Space>
             } style={{
-              marginBottom: window.innerWidth < 768 ? "12px" : "0px",
+              marginBottom: isMobile ? "12px" : "0px",
             }}>
               {ingresosSeries.length === 0 ? (
                 <Empty description="Sin información para el rango seleccionado" />
               ) : (
                 <Line {...{
                   ...lineConfig,
-                  height: window.innerWidth < 768 ? 200 : 280,
+                  height: isMobile ? 200 : 280,
                 }} />
               )}
             </Card>
@@ -592,14 +595,14 @@ export default function AdminDashboard() {
         <Col xs={24} md={8}>
           <Spin spinning={initialLoading || (refreshing && !initialLoading)} tip="Cargando distribución...">
             <Card title={<span style={{
-              fontSize: window.innerWidth < 768 ? "14px" : "16px",
+              fontSize: isMobile ? "14px" : "16px",
             }}>Distribución por método de pago</span>}>
               {metodosSeries.length === 0 ? (
                 <Empty description="Registra pagos para ver la distribución" />
               ) : (
                 <Pie {...{
                   ...pieConfig,
-                  height: window.innerWidth < 768 ? 200 : 300,
+                  height: isMobile ? 200 : 300,
                 }} />
               )}
             </Card>

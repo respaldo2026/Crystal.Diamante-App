@@ -127,11 +127,11 @@ export default function PortalEstudiante() {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setShowLoadingUi(true);
     }, 180);
 
-    return () => window.clearTimeout(timeoutId);
+    return () => clearTimeout(timeoutId);
   }, [loading]);
 
   const deduplicarLista = <T,>(items: T[], resolverClave: (item: T) => string) => {

@@ -143,6 +143,7 @@ export default function SecretariaDashboard() {
   const { message: messageApi } = App.useApp();
   const router = useRouter();
   const { token } = theme.useToken();
+  const [isClientMounted, setIsClientMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [programas, setProgramas] = useState<any[]>([]);
   const [cursosActivos, setCursosActivos] = useState<any[]>([]);
@@ -176,6 +177,10 @@ export default function SecretariaDashboard() {
         .reduce((acc, cuota) => acc + Number(cuota.monto || 0), 0),
     [cuotasDisponibles, cuotasSeleccionadasIds]
   );
+
+  useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
   const matriculasOptions = useMemo(
     () =>
       matriculasEstudiante.map((matricula) => ({
@@ -963,6 +968,10 @@ Formamos profesionales en belleza y estética.
       </List.Item>
     );
   };
+
+  if (!isClientMounted) {
+    return null;
+  }
 
   return (
     <div style={{

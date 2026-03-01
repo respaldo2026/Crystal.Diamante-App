@@ -748,11 +748,11 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setShowUserLoader(true);
     }, 180);
 
-    return () => window.clearTimeout(timeoutId);
+    return () => clearTimeout(timeoutId);
   }, [userLoading]);
 
   const themeConfig = useMemo(
@@ -885,9 +885,6 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const normalizedRole = useMemo(() => {
     const rawRole = (user as any)?.rol ?? (user as any)?.role ?? "";
     const normalized = typeof rawRole === "string" ? rawRole.toLowerCase() : "";
-    console.log("[AppShell] User object:", user);
-    console.log("[AppShell] Raw role:", rawRole);
-    console.log("[AppShell] Normalized role:", normalized);
     return normalized;
   }, [user]);
 
@@ -966,19 +963,14 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
   const resources = useMemo(() => {
     if (userLoading || !user) {
-      console.log("[AppShell] Resources - No user or loading, returning []");
       return [];
     }
 
-    console.log("[AppShell] Resources - Building for role:", normalizedRole);
-
     if (normalizedRole === "admin" || normalizedRole === "director") {
-      console.log("[AppShell] Returning admin/director resources");
       return allResources;
     }
 
     if (normalizedRole === "profesor") {
-      console.log("[AppShell] Returning profesor resources");
       return [
         {
           name: "mi-oficina",
@@ -992,7 +984,6 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     }
 
     if (normalizedRole === "estudiante") {
-      console.log("[AppShell] Returning estudiante resources");
       return [
         {
           name: "portal-estudiante",
@@ -1053,15 +1044,12 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const shouldShowGlobalLoader = showUserLoader || (roleNeedsPermissions && permisosLoading);
 
   if (shouldShowGlobalLoader) {
-    console.log('[AppShell] Mostrando loader:', { userLoading, permisosLoading, roleNeedsPermissions });
     return (
       <FullScreenLoader
         subtitle={userLoading ? "Validando sesión..." : "Cargando aplicación..."}
       />
     );
   }
-  
-  console.log('[AppShell] Renderizando app con usuario:', user?.id, 'rol:', normalizedRole);
 
   return (
     <RefineKbarProvider>
