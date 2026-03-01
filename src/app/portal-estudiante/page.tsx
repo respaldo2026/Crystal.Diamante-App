@@ -441,7 +441,7 @@ export default function PortalEstudiante() {
     return recursosPdf[0] || null;
   };
 
-  const abrirMaterialDidactico = (material: any, titulo: string) => {
+  const abrirMaterialDidactico = (material: any, titulo: string, temaIdForQuiz?: string) => {
     const src = extractIframeSrc(material?.url_archivo);
     if (!src) {
       message.warning("Este material no tiene un enlace válido para previsualizar.");
@@ -464,7 +464,7 @@ export default function PortalEstudiante() {
         open: true,
         title: titulo || "Presentación",
         src: toGammaEmbedUrl(src),
-        temaId: String(material?.pensum_curso_id || material?.tema_id || ""),
+        temaId: String(temaIdForQuiz || material?.pensum_curso_id || material?.tema_id || ""),
       });
       return;
     }
@@ -1629,7 +1629,7 @@ export default function PortalEstudiante() {
                                           message.warning("Este tema aún no tiene material didáctico disponible.");
                                           return;
                                         }
-                                        abrirMaterialDidactico(recursoPrincipalTema, tituloRecursoPrincipal);
+                                        abrirMaterialDidactico(recursoPrincipalTema, tituloRecursoPrincipal, temaId);
                                       }}
                                       style={{ paddingInline: 0 }}
                                     >
@@ -2708,7 +2708,7 @@ export default function PortalEstudiante() {
               className="gamma-iframe-quiz-btn"
               onClick={irQuizDesdeIframe}
             >
-              {quizDirectoIframe ? "Ir al Quiz" : "Ir a Pensum"}
+              {quizDirectoIframe ? "Ir directo al Quiz" : "Ir a Pensum"}
             </button>
           </div>
         )}

@@ -638,8 +638,8 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }
             src={brandingLogo}
             alt="Academia Crystal Diamante"
             style={{
-              maxHeight: isVerySmall ? 34 : 40,
-              maxWidth: isVerySmall ? 128 : 150,
+              maxHeight: isVerySmall ? 36 : 44,
+              maxWidth: isVerySmall ? 138 : 165,
               width: "auto",
               height: "auto",
               objectFit: "contain",
