@@ -900,6 +900,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const roleNeedsPermissions = normalizedRole.length > 0 &&
     !["admin", "director", "profesor", "estudiante"].includes(normalizedRole);
   const isStudentPortalRoute = Boolean(pathname?.startsWith("/portal-estudiante"));
+  const isStudentContext = normalizedRole === "estudiante" || isStudentPortalRoute;
 
   const shouldUseLayout = !isAuthRoute && Boolean(user);
 
@@ -1039,7 +1040,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     });
   }, [user, userLoading, normalizedRole, permisosLoading, permisos]);
 
-  const shouldShowGlobalLoader = !isStudentPortalRoute && (showUserLoader || (roleNeedsPermissions && permisosLoading));
+  const shouldShowGlobalLoader = !isStudentContext && (showUserLoader || (roleNeedsPermissions && permisosLoading));
 
   if (shouldShowGlobalLoader) {
     return (
