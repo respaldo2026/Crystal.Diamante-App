@@ -16,23 +16,17 @@ export const GlobalLoadingScreen: React.FC<GlobalLoadingScreenProps> = ({
   subtitle = "Cargando tu experiencia...",
 }) => {
   const imageSrc = logoUrl || "/icon.svg";
-  const [showFallbackImage, setShowFallbackImage] = React.useState(false);
 
   return (
     <div className="global-loading-screen" role="status" aria-live="polite" aria-label="Cargando aplicación">
       <div className="global-loading-card">
         <div className="global-loading-media">
-          {!showFallbackImage ? (
-            <Lottie
-              animationData={globalLoaderAnimation}
-              loop
-              autoplay
-              className="global-loading-lottie"
-              onDataFailed={() => setShowFallbackImage(true)}
-            />
-          ) : (
-            <img src={imageSrc} alt={title} className="global-loading-logo" />
-          )}
+          <Lottie
+            animationData={globalLoaderAnimation}
+            loop
+            autoplay
+            className="global-loading-lottie"
+          />
         </div>
         <div className="global-loading-title">{title}</div>
         <div className="global-loading-subtitle">{subtitle}</div>
