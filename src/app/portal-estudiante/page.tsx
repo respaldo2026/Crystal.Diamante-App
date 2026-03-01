@@ -19,7 +19,6 @@ import {
   List,
   Typography,
   Space,
-  Dropdown,
   Checkbox,
   Collapse,
   Grid,
@@ -2167,54 +2166,11 @@ export default function PortalEstudiante() {
               ? estudiante.nombre_completo.split(" ")[0]
               : "Estudiante"}
           </div>
-
-          {/* WhatsApp Action */}
-          {(whatsappAgente || whatsappAdmisiones) && (
-            <Dropdown
-              trigger={["click"]}
-              menu={{
-                items: [
-                  {
-                    key: "agente",
-                    label: "Agente Académico",
-                    onClick: () =>
-                      abrirWhatsapp(
-                        whatsappAgente,
-                        `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Tengo una consulta sobre mis cursos en el portal.`
-                      ),
-                    disabled: !whatsappAgente,
-                  },
-                  {
-                    key: "admisiones",
-                    label: "Departamento de Admisiones",
-                    onClick: () =>
-                      abrirWhatsapp(
-                        whatsappAdmisiones,
-                        `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo de Admisiones.`
-                      ),
-                    disabled: !whatsappAdmisiones,
-                  },
-                ],
-              }}
-            >
-              <button className="portal-wa-btn-modern">
-                <WhatsAppOutlined />
-                <span>Ayuda</span>
-              </button>
-            </Dropdown>
-          )}
         </div>
       </div>
 
       {/* ────── MENÚ DE NAVEGACIÓN ────── */}
       <div className="portal-nav-bar">
-        <div className="portal-nav-brand" aria-hidden="true">
-          {logoAcademia ? (
-            <img src={logoAcademia} alt="Logo academia" className="portal-nav-logo" />
-          ) : (
-            <div className="portal-nav-logo-fallback">CD</div>
-          )}
-        </div>
         {menuSecciones.map((item) => {
           const active = activeTab === item.key;
           return (
@@ -2796,39 +2752,12 @@ export default function PortalEstudiante() {
           letter-spacing: 0.2px;
         }
 
-        /* Modern WhatsApp Button */
-        .portal-wa-btn-modern {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          background: #fff;
-          color: #d81b87;
-          font-weight: 700;
-          font-size: 12px;
-          padding: 7px 12px;
-          border: none;
-          border-radius: 10px;
-          cursor: pointer;
-          box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-          transition: transform 0.2s, box-shadow 0.2s;
-          flex-shrink: 0;
-        }
-        .portal-wa-btn-modern:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 5px 12px rgba(0,0,0,0.14);
-        }
-        .portal-wa-btn-modern .anticon {
-          font-size: 14px;
-          color: #25d366;
-        }
-
         /* ──────────────────────────────────────
            BARRA DE NAVEGACIÓN
         ────────────────────────────────────── */
         .portal-nav-bar {
           display: flex;
           align-items: center;
-          gap: 2px;
           background: #fff;
           border: 1px solid #f0f0f0;
           box-shadow: 0 8px 24px rgba(0,0,0,0.04);
@@ -2841,33 +2770,6 @@ export default function PortalEstudiante() {
           position: relative;
           z-index: 3;
           padding: 4px;
-        }
-        .portal-nav-brand {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          background: #fff;
-          border: 1px solid #f2d2e5;
-          box-shadow: 0 2px 8px rgba(216,27,135,0.12);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-right: 2px;
-          flex: 0 0 44px;
-        }
-        .portal-nav-logo {
-          max-width: 34px;
-          max-height: 34px;
-          width: auto;
-          height: auto;
-          object-fit: contain;
-          display: block;
-        }
-        .portal-nav-logo-fallback {
-          color: #d81b87;
-          font-size: 18px;
-          font-weight: 800;
-          line-height: 1;
         }
         .portal-nav-bar::-webkit-scrollbar { display: none; }
         .portal-nav-item {
@@ -3108,24 +3010,9 @@ export default function PortalEstudiante() {
           .portal-header-title {
             font-size: 14px;
           }
-          .portal-wa-btn-modern {
-            padding: 6px 10px;
-            font-size: 11px;
-            border-radius: 9px;
-          }
           .portal-nav-bar {
             margin: 8px 8px 14px;
             border-radius: 12px;
-          }
-          .portal-nav-brand {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            flex-basis: 38px;
-          }
-          .portal-nav-logo {
-            max-width: 28px;
-            max-height: 28px;
           }
           .portal-nav-item {
             min-width: 64px;
