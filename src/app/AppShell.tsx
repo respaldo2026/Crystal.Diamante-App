@@ -227,6 +227,8 @@ const allResources = [
   },
 ];
 
+const DEFAULT_BRANDING_LOGO = "/branding/logo-default.png";
+
 const normalizeWhatsappPhone = (value?: string | null): string | null => {
   if (!value) return null;
   const text = String(value).trim();
@@ -598,7 +600,7 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({
   const [logoLoadError, setLogoLoadError] = useState(false);
 
   const isStudentPortal = Boolean(pathname?.startsWith("/portal-estudiante"));
-  const displayLogo = logoLoadError ? "/icon.svg" : (brandingLogo || "/icon.svg");
+  const displayLogo = logoLoadError ? DEFAULT_BRANDING_LOGO : (brandingLogo || DEFAULT_BRANDING_LOGO);
 
   useEffect(() => {
     setLogoLoadError(false);
@@ -733,7 +735,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const { mode } = useColorMode();
   const pathname = usePathname();
   const [brandingName, setBrandingName] = useState("Crystal App");
-  const [brandingLogo, setBrandingLogo] = useState<string | null>("/icon.svg");
+  const [brandingLogo, setBrandingLogo] = useState<string | null>(DEFAULT_BRANDING_LOGO);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAcademia, setWhatsappAcademia] = useState<string | null>("573012038582");
 
@@ -916,7 +918,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
         if (fallback.error) {
           console.warn("[AppShell] Error cargando branding fallback:", fallback.error?.message || fallback.error);
-          setBrandingLogo("/icon.svg");
+          setBrandingLogo(DEFAULT_BRANDING_LOGO);
           setWhatsappAgente(null);
           setWhatsappAcademia("573012038582");
           return;
@@ -928,7 +930,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data?.nombre_academia) setBrandingName(data.nombre_academia);
-      setBrandingLogo((data as any)?.logo_url || "/icon.svg");
+      setBrandingLogo((data as any)?.logo_url || DEFAULT_BRANDING_LOGO);
 
       const agente = normalizeWhatsappPhone((data as any)?.whatsapp_agente || (data as any)?.whatsapp || null);
       const academia = normalizeWhatsappPhone(
