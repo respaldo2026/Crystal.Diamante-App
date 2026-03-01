@@ -592,83 +592,91 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }
   if (!isStudentPortal) return null;
 
   return (
-    <Layout.Header
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 1000,
-        height: isVerySmall ? 52 : 56,
-        lineHeight: isVerySmall ? "52px" : "56px",
-        padding: isVerySmall ? "0 10px" : "0 12px",
-        background: "#fff",
-        borderBottom: "1px solid #f0f0f0",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}
-    >
-      <Button
-        type="text"
-        shape="circle"
-        size="middle"
-        icon={<BarsOutlined />}
-        onClick={() => {
-          if (isMobile) {
-            setMobileSiderOpen(true);
-          } else {
-            setSiderCollapsed(!siderCollapsed);
-          }
-        }}
-        aria-label="Abrir menú"
-      />
-
-      <div
+    <>
+      <Layout.Header
         style={{
-          position: "absolute",
-          left: "50%",
-          transform: "translateX(-50%)",
+          position: "sticky",
+          top: 0,
+          zIndex: 1000,
+          height: isVerySmall ? 52 : 56,
+          lineHeight: isVerySmall ? "52px" : "56px",
+          padding: isVerySmall ? "0 10px" : "0 12px",
+          background: "#fff",
+          borderBottom: "1px solid #f0f0f0",
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
-          pointerEvents: "none",
+          justifyContent: "space-between",
         }}
       >
-        {brandingLogo ? (
-          <img
-            src={brandingLogo}
-            alt="Academia Crystal Diamante"
-            style={{
-              maxHeight: isVerySmall ? 36 : 44,
-              maxWidth: isVerySmall ? 138 : 165,
-              width: "auto",
-              height: "auto",
-              objectFit: "contain",
-              display: "block",
-            }}
-          />
-        ) : (
-          <span style={{ color: "#d81b87", fontWeight: 700, fontSize: 14 }}>Crystal Diamante</span>
-        )}
-      </div>
+        <Button
+          type="text"
+          shape="circle"
+          size="middle"
+          icon={<BarsOutlined />}
+          onClick={() => {
+            if (isMobile) {
+              setMobileSiderOpen(true);
+            } else {
+              setSiderCollapsed(!siderCollapsed);
+            }
+          }}
+          aria-label="Abrir menú"
+        />
 
-      <Button
-        type="text"
-        icon={<WhatsAppOutlined style={{ color: "#25d366" }} />}
-        onClick={() => window.open("https://wa.me/573012038582", "_blank", "noopener,noreferrer")}
-        style={{
-          border: "1px solid #d9f7e2",
-          borderRadius: isVerySmall ? 8 : 10,
-          color: "#059669",
-          fontWeight: 600,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: isVerySmall ? 32 : 34,
-          minWidth: isVerySmall ? 32 : 34,
-          paddingInline: isVerySmall ? 8 : 10,
-        }}
-      />
-    </Layout.Header>
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          {brandingLogo ? (
+            <img
+              src={brandingLogo}
+              alt="Academia Crystal Diamante"
+              style={{
+                maxHeight: isVerySmall ? 36 : 44,
+                maxWidth: isVerySmall ? 138 : 165,
+                width: "auto",
+                height: "auto",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          ) : (
+            <span style={{ color: "#d81b87", fontWeight: 700, fontSize: 14 }}>Crystal Diamante</span>
+          )}
+        </div>
+
+        <Button
+          type="text"
+          icon={<WhatsAppOutlined style={{ color: "#25d366" }} />}
+          onClick={() => window.open("https://wa.me/573012038582", "_blank", "noopener,noreferrer")}
+          style={{
+            border: "1px solid #d9f7e2",
+            borderRadius: isVerySmall ? 8 : 10,
+            color: "#059669",
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: isVerySmall ? 32 : 34,
+            minWidth: isVerySmall ? 32 : 34,
+            paddingInline: isVerySmall ? 8 : 10,
+          }}
+        />
+      </Layout.Header>
+      <style jsx global>{`
+        .ant-layout-sider-zero-width-trigger,
+        .ant-layout-sider-trigger {
+          display: none !important;
+        }
+      `}</style>
+    </>
   );
 };
 
