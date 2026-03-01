@@ -2157,8 +2157,8 @@ export default function PortalEstudiante() {
         {/* Decoración sutil */}
         <div className="portal-header-bg" />
 
-        {/* Logo con protagonismo */}
-        <div className="portal-header-logo-hero">
+        {/* Logo con protagonismo flotante */}
+        <div className="portal-header-logo-container">
           <div className="portal-header-logo-ring">
             {logoAcademia ? (
               <img src={logoAcademia} alt="Logo academia" className="portal-header-logo" />
@@ -2168,58 +2168,58 @@ export default function PortalEstudiante() {
           </div>
         </div>
 
-        {/* Bienvenida */}
-        <div className="portal-header-welcome">
-          <span className="portal-header-greeting">
-            {obtenerSaludoBienvenida(estudiante?.genero)}
-          </span>
-          <h1 className="portal-header-name">
-            {estudiante?.nombre_completo
-              ? estudiante.nombre_completo.split(" ")[0]
-              : "Estudiante"}
-          </h1>
+        {/* Header Content */}
+        <div className="portal-header-content">
+          <div className="portal-header-text">
+            <span className="portal-header-greeting">
+              {obtenerSaludoBienvenida(estudiante?.genero)}
+            </span>
+            <h1 className="portal-header-name">
+              {estudiante?.nombre_completo
+                ? estudiante.nombre_completo.split(" ")[0]
+                : "Estudiante"}
+            </h1>
+          </div>
+
+          {/* WhatsApp Action */}
+          {(whatsappAgente || whatsappAdmisiones) && (
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "agente",
+                    label: "Agente Académico",
+                    onClick: () =>
+                      abrirWhatsapp(
+                        whatsappAgente,
+                        `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Tengo una consulta sobre mis cursos en el portal.`
+                      ),
+                    disabled: !whatsappAgente,
+                  },
+                  {
+                    key: "admisiones",
+                    label: "Departamento de Admisiones",
+                    onClick: () =>
+                      abrirWhatsapp(
+                        whatsappAdmisiones,
+                        `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo de Admisiones.`
+                      ),
+                    disabled: !whatsappAdmisiones,
+                  },
+                ],
+              }}
+            >
+              <button className="portal-wa-btn-modern">
+                <WhatsAppOutlined />
+                <span>Ayuda</span>
+              </button>
+            </Dropdown>
+          )}
         </div>
 
-        {/* WhatsApp */}
-        {(whatsappAgente || whatsappAdmisiones) && (
-          <Dropdown
-            trigger={["click"]}
-            menu={{
-              items: [
-                {
-                  key: "agente",
-                  label: "Hablar con Agente",
-                  onClick: () =>
-                    abrirWhatsapp(
-                      whatsappAgente,
-                      `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Tengo una consulta sobre mis cursos en el portal.`
-                    ),
-                  disabled: !whatsappAgente,
-                },
-                {
-                  key: "admisiones",
-                  label: "Hablar con Admisiones",
-                  onClick: () =>
-                    abrirWhatsapp(
-                      whatsappAdmisiones,
-                      `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo de Admisiones.`
-                    ),
-                  disabled: !whatsappAdmisiones,
-                },
-              ],
-            }}
-          >
-            <button className="portal-wa-btn" aria-label="Contactar por WhatsApp">
-              <WhatsAppOutlined />
-              <span>WhatsApp</span>
-            </button>
-          </Dropdown>
-        )}
-
-        {/* Curva inferior */}
-        <svg className="portal-header-wave" viewBox="0 0 1440 60" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M0,40 C480,70 960,10 1440,40 L1440,60 L0,60 Z" fill="#f7f7f8" />
-        </svg>
+        {/* Borde sutil inferior moderno en lugar de ola grosera */}
+        <div className="portal-header-bottom-fade"></div>
       </div>
 
       {/* ────── MENÚ DE NAVEGACIÓN ────── */}
@@ -2751,121 +2751,114 @@ export default function PortalEstudiante() {
         }
 
         /* ──────────────────────────────────────
-           HEADER BANNER  (fucsia + blanco, logo centrado)
+           HEADER BANNER  (fucsia + blanco, logo centrado alineado)
         ────────────────────────────────────── */
         .portal-header-banner {
           position: relative;
-          overflow: hidden;
-          background: linear-gradient(160deg, #e0207f 0%, #d81b87 50%, #c5176f 100%);
-          padding: 30px 20px 56px;
+          background: linear-gradient(160deg, #d81b87 0%, #b81775 100%);
+          padding: 24px 20px 48px;
           margin-bottom: 0;
-          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          border-bottom-left-radius: 36px;
+          border-bottom-right-radius: 36px;
+          box-shadow: 0 8px 24px rgba(216,27,135,0.15);
         }
         .portal-header-bg {
           position: absolute;
           inset: 0;
           background-image:
-            radial-gradient(ellipse at 20% 0%, rgba(255,255,255,0.15) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 100%, rgba(255,255,255,0.08) 0%, transparent 50%);
+            radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.12) 0%, transparent 60%);
           pointer-events: none;
+          border-bottom-left-radius: 36px;
+          border-bottom-right-radius: 36px;
         }
-        /* Logo centrado con protagonismo */
-        .portal-header-logo-hero {
+
+        /* Logo Layout Rediseñado */
+        .portal-header-logo-container {
           position: relative;
           display: flex;
           justify-content: center;
-          margin-bottom: 14px;
+          margin-bottom: 20px;
+          z-index: 2;
         }
         .portal-header-logo-ring {
-          width: 96px;
-          height: 96px;
-          background: rgba(255,255,255,0.95);
-          border-radius: 26px;
+          width: 88px;
+          height: 88px;
+          background: #fff;
+          border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow:
-            0 0 0 4px rgba(255,255,255,0.35),
-            0 12px 36px rgba(0,0,0,0.15);
-          overflow: hidden;
-          transition: transform 0.3s ease;
-        }
-        .portal-header-logo-ring:hover {
-          transform: scale(1.04);
+          box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+          padding: 4px;
         }
         .portal-header-logo {
-          width: 80px;
-          height: 80px;
+          width: 100%;
+          height: 100%;
           object-fit: contain;
-          border-radius: 18px;
+          border-radius: 50%;
         }
         .portal-header-logo-fallback {
           color: #d81b87;
           font-size: 32px;
           font-weight: 800;
-          letter-spacing: -1px;
         }
-        /* Bienvenida centrada debajo del logo */
-        .portal-header-welcome {
-          position: relative;
-          max-width: 400px;
-          margin: 0 auto 16px;
+
+        /* Content Layout */
+        .portal-header-content {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          max-width: 800px;
+          z-index: 2;
+        }
+        .portal-header-text {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          flex: 1;
         }
         .portal-header-greeting {
-          display: block;
           color: rgba(255,255,255,0.85);
-          font-size: 12px;
-          font-weight: 500;
-          letter-spacing: 1.8px;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 1px;
           text-transform: uppercase;
-          margin-bottom: 2px;
         }
         .portal-header-name {
           color: #fff;
-          font-size: clamp(24px, 6vw, 34px);
+          font-size: clamp(22px, 5vw, 28px);
           font-weight: 800;
-          line-height: 1.15;
-          letter-spacing: -0.5px;
+          line-height: 1.2;
           margin: 0;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
         }
-        /* Botón WhatsApp */
-        .portal-wa-btn {
-          position: relative;
-          display: inline-flex;
+
+        /* Modern WhatsApp Button */
+        .portal-wa-btn-modern {
+          display: flex;
           align-items: center;
-          gap: 7px;
-          background: rgba(255,255,255,0.18);
-          backdrop-filter: blur(6px);
-          -webkit-backdrop-filter: blur(6px);
-          border: 1.5px solid rgba(255,255,255,0.35);
-          color: #fff;
-          font-weight: 600;
+          gap: 6px;
+          background: #fff;
+          color: #d81b87;
+          font-weight: 700;
           font-size: 13px;
-          padding: 9px 20px;
-          border-radius: 999px;
+          padding: 8px 16px;
+          border: none;
+          border-radius: 12px;
           cursor: pointer;
-          transition: background 0.18s, border-color 0.18s, transform 0.14s;
-          white-space: nowrap;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          transition: transform 0.2s, box-shadow 0.2s;
         }
-        .portal-wa-btn:hover {
-          background: rgba(37,211,102,0.22);
-          border-color: rgba(37,211,102,0.6);
-          transform: translateY(-1px);
+        .portal-wa-btn-modern:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(0,0,0,0.15);
         }
-        .portal-wa-btn .anticon {
+        .portal-wa-btn-modern .anticon {
           font-size: 16px;
-        }
-        /* Curva inferior */
-        .portal-header-wave {
-          position: absolute;
-          bottom: -1px;
-          left: 0;
-          width: 100%;
-          height: 54px;
-          pointer-events: none;
+          color: #25d366;
         }
 
         /* ──────────────────────────────────────
@@ -2874,16 +2867,17 @@ export default function PortalEstudiante() {
         .portal-nav-bar {
           display: flex;
           background: #fff;
-          border-bottom: none;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+          border: 1px solid #f0f0f0;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.04);
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
-          margin-bottom: 16px;
-          border-radius: 14px;
-          margin: -22px 12px 16px;
+          margin-bottom: 24px;
+          border-radius: 16px;
+          margin: -24px 16px 20px;
           position: relative;
-          z-index: 2;
+          z-index: 3;
+          padding: 4px;
         }
         .portal-nav-bar::-webkit-scrollbar { display: none; }
         .portal-nav-item {
@@ -2895,43 +2889,32 @@ export default function PortalEstudiante() {
           gap: 4px;
           flex: 1;
           min-width: 72px;
-          padding: 12px 8px 10px;
+          padding: 10px 8px;
           background: none;
           border: none;
+          border-radius: 12px;
           cursor: pointer;
           color: #8c8c8c;
           font-size: 11px;
           font-weight: 500;
-          transition: color 0.18s;
-          white-space: nowrap;
+          transition: all 0.2s;
         }
         .portal-nav-item:hover {
+          background: #fdf0f7;
           color: #d81b87;
         }
         .portal-nav-item--active {
+          background: #fdf0f7;
           color: #d81b87;
           font-weight: 700;
         }
         .portal-nav-icon {
           font-size: 20px;
-          line-height: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          margin-bottom: 2px;
         }
-        .portal-nav-label {
-          font-size: 11px;
-          line-height: 1.2;
-          text-align: center;
-        }
+        /* Eliminar el indicador inferior, usamos background */
         .portal-nav-indicator {
-          position: absolute;
-          bottom: 0;
-          left: 20%;
-          right: 20%;
-          height: 3px;
-          background: #d81b87;
-          border-radius: 3px 3px 0 0;
+          display: none;
         }
 
         /* ──────────────────────────────────────
