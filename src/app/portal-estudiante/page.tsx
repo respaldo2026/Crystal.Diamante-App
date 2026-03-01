@@ -2161,7 +2161,12 @@ export default function PortalEstudiante() {
 
         {/* Header Content */}
         <div className="portal-header-content">
-          <div className="portal-header-title">Portal Estudiantil</div>
+          <div className="portal-header-title">
+            {obtenerSaludoBienvenida(estudiante?.genero)},{" "}
+            {estudiante?.nombre_completo
+              ? estudiante.nombre_completo.split(" ")[0]
+              : "Estudiante"}
+          </div>
 
           {/* WhatsApp Action */}
           {(whatsappAgente || whatsappAdmisiones) && (

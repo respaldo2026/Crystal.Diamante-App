@@ -16,6 +16,7 @@ import {
   ThemedLayout,
   ThemedTitle,
   useThemedLayoutContext,
+  type RefineThemedLayoutHeaderProps,
   type RefineLayoutThemedTitleProps,
 } from "@refinedev/antd";
 import {
@@ -53,6 +54,7 @@ import {
   SunOutlined,
   NotificationOutlined,
   ShoppingCartOutlined,
+  WhatsAppOutlined,
 } from "@ant-design/icons";
 import routerProvider from "@refinedev/nextjs-router";
 import { dataProvider } from "@/providers/data-provider";
@@ -570,6 +572,105 @@ const ThemeToggleButton = () => {
   );
 };
 
+type PortalHeaderProps = RefineThemedLayoutHeaderProps & {
+  pathname?: string | null;
+  brandingLogo?: string | null;
+};
+
+const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }) => {
+  const {
+    siderCollapsed,
+    setSiderCollapsed,
+    setMobileSiderOpen,
+  } = useThemedLayoutContext();
+  const breakpoint = Grid.useBreakpoint();
+  const isMobile = typeof breakpoint.lg === "undefined" ? false : !breakpoint.lg;
+
+  const isStudentPortal = Boolean(pathname?.startsWith("/portal-estudiante"));
+
+  if (!isStudentPortal) return null;
+
+  return (
+    <Layout.Header
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 1000,
+        height: 56,
+        lineHeight: "56px",
+        padding: "0 12px",
+        background: "#fff",
+        borderBottom: "1px solid #f0f0f0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <Button
+        type="text"
+        shape="circle"
+        size="middle"
+        icon={<BarsOutlined />}
+        onClick={() => {
+          if (isMobile) {
+            setMobileSiderOpen(true);
+          } else {
+            setSiderCollapsed(!siderCollapsed);
+          }
+        }}
+        aria-label="Abrir menú"
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "none",
+        }}
+      >
+        {brandingLogo ? (
+          <img
+            src={brandingLogo}
+            alt="Academia Crystal Diamante"
+            style={{
+              maxHeight: 34,
+              maxWidth: 120,
+              width: "auto",
+              height: "auto",
+              objectFit: "contain",
+              display: "block",
+            }}
+          />
+        ) : (
+          <span style={{ color: "#d81b87", fontWeight: 700, fontSize: 14 }}>Crystal Diamante</span>
+        )}
+      </div>
+
+      <Button
+        type="text"
+        icon={<WhatsAppOutlined style={{ color: "#25d366" }} />}
+        onClick={() => window.open("https://wa.me/573012038582", "_blank", "noopener,noreferrer")}
+        style={{
+          border: "1px solid #d9f7e2",
+          borderRadius: 10,
+          color: "#059669",
+          fontWeight: 600,
+          display: "inline-flex",
+          alignItems: "center",
+          height: 34,
+          paddingInline: 10,
+        }}
+      >
+        WhatsApp
+      </Button>
+    </Layout.Header>
+  );
+};
+
 const AppInner = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: userLoading } = useCurrentUser();
   const { permisos, loading: permisosLoading } = useRolesPermissions();
@@ -873,6 +974,13 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
               <ThemedLayout
                 initialSiderCollapsed={false}
                 Sider={CustomSider}
+                Header={(headerProps) => (
+                  <PortalTopHeader
+                    {...headerProps}
+                    pathname={pathname}
+                    brandingLogo={brandingLogo}
+                  />
+                )}
                 Title={({ collapsed }) => (
                   <ThemedTitle
                     collapsed={collapsed}
