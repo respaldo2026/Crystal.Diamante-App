@@ -4,7 +4,7 @@ import React, { useEffect } from "react";
 import { Edit, useForm } from "@refinedev/antd";
 import { Form, Input, DatePicker, Row, Col, Divider, message, InputNumber, Spin } from "antd";
 import dayjs from "dayjs";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { 
     UserOutlined, PhoneOutlined, MailOutlined, HomeOutlined, 
@@ -14,6 +14,7 @@ import { logger } from "@utils/logger";
 
 export default function ProfesorEdit() {
     const params = useParams();
+    const router = useRouter();
     const id = params?.id as string;
 
     const { formProps, saveButtonProps, onFinish, formLoading } = useForm({
@@ -28,6 +29,12 @@ export default function ProfesorEdit() {
     });
 
     useEffect(() => {
+        if (!id) {
+            message.error("Profesor no válido. Redirigiendo al listado.");
+            router.replace("/profesores");
+            return;
+        }
+
         if (!id) return;
         const cargarInfoProfesor = async () => {
             const { data, error } = await supabaseBrowserClient
@@ -46,7 +53,7 @@ export default function ProfesorEdit() {
         };
 
         cargarInfoProfesor();
-    }, [id, formProps.form]);
+    }, [id, formProps.form, router]);
 
     const handleOnFinish = async (values: any) => {
         try {
@@ -63,15 +70,12 @@ export default function ProfesorEdit() {
             if (id && (typeof valorHora !== "undefined" || typeof tipo_contrato !== "undefined" || typeof especialidad !== "undefined")) {
                 const { error: infoError } = await supabaseBrowserClient
                     .from("profesores_info")
-                    .upsert(
-                        {
-                            perfil_id: id,
-                            valor_hora: typeof valorHora !== "undefined" ? valorHora : null,
-                            tipo_contrato: typeof tipo_contrato !== "undefined" ? (tipo_contrato || null) : null,
-                            especialidad: typeof especialidad !== "undefined" ? (especialidad || null) : null,
-                        },
-                        { onConflict: "perfil_id" },
-                    );
+                    .update({
+                        valor_hora: typeof valorHora !== "undefined" ? valorHora : null,
+                        tipo_contrato: typeof tipo_contrato !== "undefined" ? (tipo_contrato || null) : null,
+                        especialidad: typeof especialidad !== "undefined" ? (especialidad || null) : null,
+                    })
+                    .eq("perfil_id", id);
                 if (infoError) {
                     throw infoError;
                 }
@@ -81,7 +85,8 @@ export default function ProfesorEdit() {
             delete perfilData.especialidad;
             await onFinish(perfilData);
         } catch (err) {
-            message.error("Error procesando el formulario");
+            logger.error("Error guardando profesores_info/perfil", err);
+            message.error("No se pudo guardar la información del profesor");
         }
     };
 
