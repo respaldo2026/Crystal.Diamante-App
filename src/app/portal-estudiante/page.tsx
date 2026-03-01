@@ -114,6 +114,8 @@ export default function PortalEstudiante() {
     temaId: "",
   });
   const [iframePromptVisible, setIframePromptVisible] = useState(false);
+  const [iframeTrackingSupported, setIframeTrackingSupported] = useState(true);
+  const iframeEmbedRef = useRef<HTMLIFrameElement>(null);
   const isFetchingRef = useRef(false);
   const hasFetchedOnceRef = useRef(false);
 
@@ -610,25 +612,80 @@ export default function PortalEstudiante() {
   useEffect(() => {
     if (!iframePreview.open) {
       setIframePromptVisible(false);
+      setIframeTrackingSupported(true);
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      setIframePromptVisible(true);
-    }, 18000);
+    let intervalId: number | null = null;
 
-    return () => window.clearTimeout(timer);
+    const verificarFinLectura = () => {
+      const iframe = iframeEmbedRef.current;
+      if (!iframe) return;
+
+      try {
+        const iframeWindow = iframe.contentWindow;
+        const iframeDoc = iframeWindow?.document;
+        if (!iframeWindow || !iframeDoc) return;
+
+        setIframeTrackingSupported((prev) => (prev ? prev : true));
+
+        const root = iframeDoc.documentElement;
+        const body = iframeDoc.body;
+
+        const scrollTop = Math.max(
+          iframeWindow.scrollY || 0,
+          root?.scrollTop || 0,
+          body?.scrollTop || 0,
+        );
+        const scrollHeight = Math.max(
+          root?.scrollHeight || 0,
+          body?.scrollHeight || 0,
+        );
+        const viewportHeight = iframeWindow.innerHeight || root?.clientHeight || body?.clientHeight || 0;
+
+        if (scrollHeight > 0 && scrollTop + viewportHeight >= scrollHeight - 24) {
+          setIframePromptVisible(true);
+        }
+      } catch {
+        setIframeTrackingSupported((prev) => (prev ? false : prev));
+        if (intervalId) {
+          window.clearInterval(intervalId);
+          intervalId = null;
+        }
+      }
+    };
+
+    intervalId = window.setInterval(verificarFinLectura, 1200);
+    const primerCheck = window.setTimeout(verificarFinLectura, 900);
+
+    return () => {
+      if (intervalId) window.clearInterval(intervalId);
+      window.clearTimeout(primerCheck);
+    };
   }, [iframePreview.open, iframePreview.src]);
 
   const quizDirectoIframe = React.useMemo(() => {
     const temaId = String(iframePreview.temaId || "");
-    if (!temaId) return null;
-    return (quizzesClase || []).find((quiz: any) => String(quiz?.pensum_curso_id || "") === temaId) || null;
-  }, [quizzesClase, iframePreview.temaId]);
+
+    if (temaId) {
+      return (quizzesClase || []).find((quiz: any) => String(quiz?.pensum_curso_id || "") === temaId) || null;
+    }
+
+    const tituloNormalizado = normalizarTexto(iframePreview.title || "");
+    if (!tituloNormalizado) return null;
+
+    const temaPorTitulo = (pensum || [])
+      .flatMap((ciclo: any) => ciclo?.pensum_cursos || [])
+      .find((tema: any) => normalizarTexto(tema?.nombre_curso || tema?.titulo || "") === tituloNormalizado);
+
+    if (!temaPorTitulo?.id) return null;
+    return (quizzesClase || []).find((quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaPorTitulo.id)) || null;
+  }, [quizzesClase, iframePreview.temaId, iframePreview.title, pensum]);
 
   const cerrarIframeAPensum = () => {
     setActiveTab("5");
     setIframePromptVisible(false);
+    setIframeTrackingSupported(true);
     setIframePreview({ open: false, title: "", src: "", temaId: "" });
   };
 
@@ -640,6 +697,7 @@ export default function PortalEstudiante() {
     }
 
     setIframePromptVisible(false);
+    setIframeTrackingSupported(true);
     setIframePreview({ open: false, title: "", src: "", temaId: "" });
     setActiveTab("5");
     abrirQuiz(quizDirectoIframe);
@@ -2683,19 +2741,31 @@ export default function PortalEstudiante() {
             )}
           </div>
 
-          <button
-            type="button"
-            className="gamma-iframe-whatsapp"
-            onClick={() =>
-              abrirWhatsapp(
-                whatsappAgente || whatsappAdmisiones,
-                `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo con este material del portal.`
-              )
-            }
-            aria-label="WhatsApp"
-          >
-            <WhatsAppOutlined />
-          </button>
+          <div className="gamma-iframe-actions">
+            {!iframeTrackingSupported && !iframePromptVisible && (
+              <button
+                type="button"
+                className="gamma-iframe-finish"
+                onClick={() => setIframePromptVisible(true)}
+              >
+                Finalicé lectura
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="gamma-iframe-whatsapp"
+              onClick={() =>
+                abrirWhatsapp(
+                  whatsappAgente || whatsappAdmisiones,
+                  `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo con este material del portal.`
+                )
+              }
+              aria-label="WhatsApp"
+            >
+              <WhatsAppOutlined />
+            </button>
+          </div>
         </div>
 
         {iframePromptVisible && (
@@ -2714,8 +2784,10 @@ export default function PortalEstudiante() {
         )}
 
         <iframe
+          ref={iframeEmbedRef}
           src={iframePreview.src}
           title={iframePreview.title || "Presentación"}
+          onLoad={() => setIframePromptVisible(false)}
           style={{ width: "100%", height: "calc(100vh - 56px)", border: 0, marginTop: "56px" }}
           allow="fullscreen; clipboard-read; clipboard-write"
           allowFullScreen
@@ -3209,6 +3281,27 @@ export default function PortalEstudiante() {
             justify-content: center;
             pointer-events: none;
           }
+          .gamma-iframe-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .gamma-iframe-finish {
+            border: 1px solid #f2d2e5;
+            background: #fff;
+            color: #b81775;
+            height: 34px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 10px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+            flex-shrink: 0;
+          }
           .gamma-iframe-logo {
             max-width: 116px;
             max-height: 34px;
@@ -3298,6 +3391,9 @@ export default function PortalEstudiante() {
               min-width: 62px;
               padding: 0 8px;
               font-size: 11px;
+            }
+            .gamma-iframe-finish {
+              display: none;
             }
             .gamma-iframe-quiz-cta {
               flex-direction: column;
