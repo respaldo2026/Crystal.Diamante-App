@@ -30,23 +30,17 @@ export function useCurrentUser() {
   const { data: user, isLoading, error } = useQuery({
     queryKey: ["current-user"],
     queryFn: async (): Promise<CurrentUser | null> => {
-      console.log('[useCurrentUser] Iniciando query...');
-      
       try {
         const { data: { session }, error: sessionError } = await supabaseBrowserClient.auth.getSession();
         if (sessionError) {
-          console.warn('[useCurrentUser] Error de sesión (fallback a null):', sessionError);
           return null;
         }
 
         const authUser = session?.user ?? null;
         
         if (!authUser) {
-          console.log('[useCurrentUser] No hay usuario autenticado');
           return null;
         }
-
-        console.log('[useCurrentUser] Usuario auth encontrado:', authUser.id);
 
         const perfilResult = await withTimeout(
           Promise.resolve(
@@ -69,11 +63,8 @@ export function useCurrentUser() {
         const { data: perfil, error } = perfilResult as { data: any; error: any };
 
         if (error || !perfil) {
-          console.warn('[useCurrentUser] No se encontró perfil, usando datos de auth');
           return { id: authUser.id, email: authUser.email, rol: undefined };
         }
-
-        console.log('[useCurrentUser] Perfil cargado:', perfil.rol);
         
         return {
           id: perfil.id,
@@ -82,7 +73,6 @@ export function useCurrentUser() {
           nombre_completo: perfil.nombre_completo,
         };
       } catch (err) {
-        console.error('[useCurrentUser] Error en queryFn (fallback seguro):', err);
         return null;
       }
     },
@@ -126,7 +116,6 @@ export function useCurrentUser() {
 
   // Memorizamos el resultado para evitar re-renders innecesarios
   const result = useMemo(() => {
-    console.log('[useCurrentUser] Estado actual:', { user: user?.id, loading: isLoading, error });
     return {
       user: user ?? null,
       loading: isLoading,
