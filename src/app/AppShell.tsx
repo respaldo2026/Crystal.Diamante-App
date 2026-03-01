@@ -898,13 +898,39 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const cargarBranding = async () => {
-      const { data } = await supabaseBrowserClient
+      let data: any = null;
+
+      const primary = await supabaseBrowserClient
         .from("configuracion")
         .select("nombre_academia, logo_url, whatsapp, whatsapp_agente, whatsapp_admisiones, telefono")
-        .order("updated_at", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false, nullsFirst: false })
+        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      if (primary.error) {
+        console.warn("[AppShell] Error cargando branding con columnas extendidas:", primary.error?.message || primary.error);
+
+        const fallback = await supabaseBrowserClient
+          .from("configuracion")
+          .select("*")
+          .order("updated_at", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (fallback.error) {
+          console.warn("[AppShell] Error cargando branding fallback:", fallback.error?.message || fallback.error);
+          setBrandingLogo("/icon.svg");
+          setWhatsappAgente(null);
+          setWhatsappAcademia("573012038582");
+          return;
+        }
+
+        data = fallback.data;
+      } else {
+        data = primary.data;
+      }
 
       if (data?.nombre_academia) setBrandingName(data.nombre_academia);
       setBrandingLogo((data as any)?.logo_url || "/icon.svg");
