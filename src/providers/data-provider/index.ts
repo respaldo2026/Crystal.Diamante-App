@@ -3,10 +3,30 @@
 import { dataProvider as dataProviderSupabase } from "@refinedev/supabase";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import type { DataProvider, UpdateParams, UpdateResponse, BaseRecord } from "@refinedev/core";
+import { endGlobalLoading, startGlobalLoading } from "@utils/global-loading";
 
 const supabaseDataProvider = dataProviderSupabase(supabaseBrowserClient);
 
-export const dataProvider: DataProvider = {
+const wrapWithGlobalLoading = (provider: DataProvider): DataProvider => {
+  const entries = Object.entries(provider).map(([key, value]) => {
+    if (typeof value !== "function") return [key, value];
+
+    const wrapped = async (...args: any[]) => {
+      startGlobalLoading();
+      try {
+        return await (value as (...innerArgs: any[]) => Promise<any>)(...args);
+      } finally {
+        endGlobalLoading();
+      }
+    };
+
+    return [key, wrapped];
+  });
+
+  return Object.fromEntries(entries) as DataProvider;
+};
+
+const baseDataProvider: DataProvider = {
   ...supabaseDataProvider,
   
   update: async <TData extends BaseRecord = BaseRecord, TVariables = {}>({ resource, id, variables, meta }: UpdateParams<TVariables>): Promise<UpdateResponse<TData>> => {
@@ -91,3 +111,5 @@ export const dataProvider: DataProvider = {
     }
   },
 };
+
+export const dataProvider: DataProvider = wrapWithGlobalLoading(baseDataProvider);

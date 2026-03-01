@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useCallback, useEffect, useState } from "react";
+import React, { useMemo, useCallback, useEffect, useRef, useState } from "react";
 import {
   Refine,
   useLogout,
@@ -22,7 +22,6 @@ import {
 import {
   ConfigProvider,
   App as AntdApp,
-  Spin,
   Layout,
   Menu,
   Drawer,
@@ -65,6 +64,8 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { RolesPermissionsProvider, useRolesPermissions } from "@/contexts/roles-permissions-context";
 import { ColorModeContextProvider, useColorMode } from "@/contexts/color-mode";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { GlobalLoadingScreen } from "@/components/GlobalLoadingScreen";
+import { isGlobalLoadingActive, subscribeGlobalLoading } from "@utils/global-loading";
 
 const allResources = [
   {
@@ -541,21 +542,10 @@ const CustomSider: React.FC<CustomSiderProps> = ({
   );
 };
 
-const FullScreenLoader = () => (
-  <div
-    style={{
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "center",
-      alignItems: "center",
-      height: "100vh",
-      gap: 16,
-    }}
-  >
-    <Spin size="large" />
-    <div style={{ color: "#666", fontSize: 14 }}>Cargando…</div>
-  </div>
-);
+const FullScreenLoader: React.FC<{ logoUrl?: string | null; subtitle?: string }> = ({
+  logoUrl,
+  subtitle,
+}) => <GlobalLoadingScreen logoUrl={logoUrl} subtitle={subtitle} />;
 
 const ThemeToggleButton = () => {
   const { mode, toggle } = useColorMode();
@@ -744,6 +734,10 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAcademia, setWhatsappAcademia] = useState<string | null>("573012038582");
+  const [globalLoading, setGlobalLoading] = useState<boolean>(isGlobalLoadingActive());
+  const [routeLoading, setRouteLoading] = useState<boolean>(false);
+  const [bootLoading, setBootLoading] = useState<boolean>(true);
+  const previousPathnameRef = useRef<string | null>(null);
 
   const isDarkMode = mode === "dark";
 
@@ -924,6 +918,46 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     cargarBranding();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = subscribeGlobalLoading((active) => {
+      setGlobalLoading(active);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setBootLoading(false);
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pathname) return;
+
+    if (previousPathnameRef.current == null) {
+      previousPathnameRef.current = pathname;
+      return;
+    }
+
+    if (previousPathnameRef.current !== pathname) {
+      previousPathnameRef.current = pathname;
+      setRouteLoading(true);
+
+      const timeout = window.setTimeout(() => {
+        setRouteLoading(false);
+      }, 450);
+
+      return () => {
+        window.clearTimeout(timeout);
+      };
+    }
+  }, [pathname]);
+
   React.useEffect(() => {
     if (!userLoading && !user && !isAuthRoute) {
       router.replace("/login");
@@ -1016,9 +1050,21 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     });
   }, [user, userLoading, normalizedRole, permisosLoading, permisos]);
 
-  if (userLoading || (roleNeedsPermissions && permisosLoading)) {
+  const shouldShowGlobalLoader =
+    bootLoading ||
+    userLoading ||
+    (roleNeedsPermissions && permisosLoading) ||
+    routeLoading ||
+    globalLoading;
+
+  if (shouldShowGlobalLoader) {
     console.log('[AppShell] Mostrando loader:', { userLoading, permisosLoading, roleNeedsPermissions });
-    return <FullScreenLoader />;
+    return (
+      <FullScreenLoader
+        logoUrl={brandingLogo}
+        subtitle={userLoading ? "Validando sesión..." : "Cargando aplicación..."}
+      />
+    );
   }
   
   console.log('[AppShell] Renderizando app con usuario:', user?.id, 'rol:', normalizedRole);
