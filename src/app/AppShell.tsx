@@ -29,6 +29,7 @@ import {
   Button,
   Grid,
   theme,
+  Dropdown,
 } from "antd";
 import type { MenuProps } from "antd";
 import { usePathname, useRouter } from "next/navigation";
@@ -225,6 +226,18 @@ const allResources = [
     },
   },
 ];
+
+const normalizeWhatsappPhone = (value?: string | null): string | null => {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const matchWa = text.match(/wa\.me\/(\d+)/i);
+  const base = matchWa?.[1] || text;
+  let digits = base.replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.length === 10) digits = `57${digits}`;
+  return digits;
+};
 
 const LOGOUT_MENU_KEY = "__logout";
 
@@ -575,9 +588,16 @@ const ThemeToggleButton = () => {
 type PortalHeaderProps = RefineThemedLayoutHeaderProps & {
   pathname?: string | null;
   brandingLogo?: string | null;
+  whatsappAgente?: string | null;
+  whatsappAcademia?: string | null;
 };
 
-const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }) => {
+const PortalTopHeader: React.FC<PortalHeaderProps> = ({
+  pathname,
+  brandingLogo,
+  whatsappAgente,
+  whatsappAcademia,
+}) => {
   const {
     siderCollapsed,
     setSiderCollapsed,
@@ -588,6 +608,27 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }
   const isVerySmall = typeof breakpoint.sm === "undefined" ? false : !breakpoint.sm;
 
   const isStudentPortal = Boolean(pathname?.startsWith("/portal-estudiante"));
+
+  const openWhatsapp = useCallback((phone: string | null, text: string) => {
+    if (!phone) return;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  }, []);
+
+  const whatsappItems: MenuProps["items"] = useMemo(
+    () => [
+      {
+        key: "agente",
+        label: "Hablar con Agente",
+        disabled: !whatsappAgente,
+      },
+      {
+        key: "academia",
+        label: "Hablar con Academia",
+        disabled: !whatsappAcademia,
+      },
+    ],
+    [whatsappAgente, whatsappAcademia]
+  );
 
   if (!isStudentPortal) return null;
 
@@ -652,23 +693,37 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }
           )}
         </div>
 
-        <Button
-          type="text"
-          icon={<WhatsAppOutlined style={{ color: "#25d366" }} />}
-          onClick={() => window.open("https://wa.me/573012038582", "_blank", "noopener,noreferrer")}
-          style={{
-            border: "1px solid #d9f7e2",
-            borderRadius: isVerySmall ? 8 : 10,
-            color: "#059669",
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: isVerySmall ? 32 : 34,
-            minWidth: isVerySmall ? 32 : 34,
-            paddingInline: isVerySmall ? 8 : 10,
+        <Dropdown
+          trigger={["click"]}
+          menu={{
+            items: whatsappItems,
+            onClick: ({ key }) => {
+              const messageText = "Hola, soy estudiante del portal y necesito apoyo.";
+              if (key === "agente") {
+                openWhatsapp(whatsappAgente || null, messageText);
+                return;
+              }
+              openWhatsapp(whatsappAcademia || null, messageText);
+            },
           }}
-        />
+        >
+          <Button
+            type="text"
+            icon={<WhatsAppOutlined style={{ color: "#25d366" }} />}
+            style={{
+              border: "1px solid #d9f7e2",
+              borderRadius: isVerySmall ? 8 : 10,
+              color: "#059669",
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: isVerySmall ? 32 : 34,
+              minWidth: isVerySmall ? 32 : 34,
+              paddingInline: isVerySmall ? 8 : 10,
+            }}
+          />
+        </Dropdown>
       </Layout.Header>
       <style jsx global>{`
         .ant-layout-sider-zero-width-trigger,
@@ -687,6 +742,8 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const [brandingName, setBrandingName] = useState("Crystal App");
   const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
+  const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
+  const [whatsappAcademia, setWhatsappAcademia] = useState<string | null>("573012038582");
 
   const isDarkMode = mode === "dark";
 
@@ -846,7 +903,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     const cargarBranding = async () => {
       const { data } = await supabaseBrowserClient
         .from("configuracion")
-        .select("nombre_academia, logo_url")
+        .select("nombre_academia, logo_url, whatsapp, whatsapp_agente, whatsapp_admisiones, telefono")
         .order("updated_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false, nullsFirst: false })
         .limit(1)
@@ -854,6 +911,14 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
       if (data?.nombre_academia) setBrandingName(data.nombre_academia);
       if (data?.logo_url) setBrandingLogo(data.logo_url);
+
+      const agente = normalizeWhatsappPhone((data as any)?.whatsapp_agente || (data as any)?.whatsapp || null);
+      const academia = normalizeWhatsappPhone(
+        (data as any)?.whatsapp_admisiones || (data as any)?.telefono || (data as any)?.whatsapp || "573012038582"
+      );
+
+      setWhatsappAgente(agente);
+      setWhatsappAcademia(academia);
     };
 
     cargarBranding();
@@ -988,6 +1053,8 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
                     {...headerProps}
                     pathname={pathname}
                     brandingLogo={brandingLogo}
+                    whatsappAgente={whatsappAgente}
+                    whatsappAcademia={whatsappAcademia}
                   />
                 )}
                 Title={({ collapsed }) => (

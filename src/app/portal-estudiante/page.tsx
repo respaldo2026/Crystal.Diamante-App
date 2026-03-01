@@ -24,6 +24,7 @@ import {
   Grid,
   Modal,
   Radio,
+  Dropdown,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -557,6 +558,27 @@ export default function PortalEstudiante() {
     const enlace = `https://wa.me/${telefono}?text=${encodeURIComponent(mensajeBase)}`;
     window.open(enlace, "_blank", "noopener,noreferrer");
   };
+
+  const abrirWhatsappSoporte = (destino: "agente" | "academia", mensajeBase: string) => {
+    const telefono = destino === "agente" ? whatsappAgente : whatsappAdmisiones;
+    abrirWhatsapp(telefono, mensajeBase);
+  };
+
+  const whatsappSoporteItems = React.useMemo(
+    () => [
+      {
+        key: "agente",
+        label: "Hablar con Agente",
+        disabled: !whatsappAgente,
+      },
+      {
+        key: "academia",
+        label: "Hablar con Academia",
+        disabled: !whatsappAdmisiones,
+      },
+    ],
+    [whatsappAgente, whatsappAdmisiones]
+  );
 
   useEffect(() => {
     if (hasFetchedOnceRef.current || isFetchingRef.current) return;
@@ -2813,19 +2835,27 @@ export default function PortalEstudiante() {
               </button>
             )}
 
-            <button
-              type="button"
-              className="gamma-iframe-whatsapp"
-              onClick={() =>
-                abrirWhatsapp(
-                  whatsappAgente || whatsappAdmisiones,
-                  `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo con este material del portal.`
-                )
-              }
-              aria-label="WhatsApp"
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: whatsappSoporteItems,
+                onClick: ({ key }) => {
+                  const destino = key === "agente" ? "agente" : "academia";
+                  abrirWhatsappSoporte(
+                    destino,
+                    `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo con este material del portal.`
+                  );
+                },
+              }}
             >
-              <WhatsAppOutlined />
-            </button>
+              <button
+                type="button"
+                className="gamma-iframe-whatsapp"
+                aria-label="WhatsApp"
+              >
+                <WhatsAppOutlined />
+              </button>
+            </Dropdown>
           </div>
         </div>
 
