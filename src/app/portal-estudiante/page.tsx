@@ -2161,25 +2161,7 @@ export default function PortalEstudiante() {
 
         {/* Header Content */}
         <div className="portal-header-content">
-          <div className="portal-header-brand">
-            <div className="portal-header-logo-ring">
-              {logoAcademia ? (
-                <img src={logoAcademia} alt="Logo academia" className="portal-header-logo" />
-              ) : (
-                <div className="portal-header-logo-fallback">CD</div>
-              )}
-            </div>
-            <div className="portal-header-text">
-              <span className="portal-header-greeting">
-                {obtenerSaludoBienvenida(estudiante?.genero)}
-              </span>
-              <h1 className="portal-header-name">
-                {estudiante?.nombre_completo
-                  ? estudiante.nombre_completo.split(" ")[0]
-                  : "Estudiante"}
-              </h1>
-            </div>
-          </div>
+          <div className="portal-header-title">Portal Estudiantil</div>
 
           {/* WhatsApp Action */}
           {(whatsappAgente || whatsappAdmisiones) && (
@@ -2221,6 +2203,13 @@ export default function PortalEstudiante() {
 
       {/* ────── MENÚ DE NAVEGACIÓN ────── */}
       <div className="portal-nav-bar">
+        <div className="portal-nav-brand" aria-hidden="true">
+          {logoAcademia ? (
+            <img src={logoAcademia} alt="Logo academia" className="portal-nav-logo" />
+          ) : (
+            <div className="portal-nav-logo-fallback">CD</div>
+          )}
+        </div>
         {menuSecciones.map((item) => {
           const active = activeTab === item.key;
           return (
@@ -2790,63 +2779,16 @@ export default function PortalEstudiante() {
           justify-content: space-between;
           gap: 10px;
         }
-        .portal-header-brand {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          min-width: 0;
-          flex: 1;
-        }
-        .portal-header-logo-ring {
-          width: 52px;
-          height: 52px;
-          background: #fff;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-          flex-shrink: 0;
-        }
-        .portal-header-logo {
-          max-width: 38px;
-          max-height: 38px;
-          width: auto;
-          height: auto;
-          object-fit: contain;
-          display: block;
-        }
-        .portal-header-logo-fallback {
-          color: #d81b87;
-          font-size: 20px;
-          font-weight: 800;
-        }
-        .portal-header-text {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          flex: 1;
-          min-width: 0;
-        }
-        .portal-header-greeting {
-          color: rgba(255,255,255,0.85);
-          font-size: 10px;
-          font-weight: 600;
-          letter-spacing: 0.8px;
-          text-transform: uppercase;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .portal-header-name {
+        .portal-header-title {
           color: #fff;
-          font-size: clamp(16px, 4.3vw, 20px);
-          font-weight: 800;
-          line-height: 1.15;
+          font-size: clamp(15px, 4vw, 18px);
+          font-weight: 700;
+          line-height: 1.2;
           margin: 0;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          letter-spacing: 0.2px;
         }
 
         /* Modern WhatsApp Button */
@@ -2880,6 +2822,8 @@ export default function PortalEstudiante() {
         ────────────────────────────────────── */
         .portal-nav-bar {
           display: flex;
+          align-items: center;
+          gap: 2px;
           background: #fff;
           border: 1px solid #f0f0f0;
           box-shadow: 0 8px 24px rgba(0,0,0,0.04);
@@ -2892,6 +2836,33 @@ export default function PortalEstudiante() {
           position: relative;
           z-index: 3;
           padding: 4px;
+        }
+        .portal-nav-brand {
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+          background: #fff;
+          border: 1px solid #f2d2e5;
+          box-shadow: 0 2px 8px rgba(216,27,135,0.12);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-right: 2px;
+          flex: 0 0 44px;
+        }
+        .portal-nav-logo {
+          max-width: 34px;
+          max-height: 34px;
+          width: auto;
+          height: auto;
+          object-fit: contain;
+          display: block;
+        }
+        .portal-nav-logo-fallback {
+          color: #d81b87;
+          font-size: 18px;
+          font-weight: 800;
+          line-height: 1;
         }
         .portal-nav-bar::-webkit-scrollbar { display: none; }
         .portal-nav-item {
@@ -3126,20 +3097,11 @@ export default function PortalEstudiante() {
           .portal-header-banner {
             padding: 10px 10px;
           }
-          .portal-header-logo-ring {
-            width: 46px;
-            height: 46px;
-            border-radius: 12px;
-          }
-          .portal-header-logo {
-            max-width: 32px;
-            max-height: 32px;
-          }
           .portal-header-content {
             gap: 8px;
           }
-          .portal-header-name {
-            font-size: 16px;
+          .portal-header-title {
+            font-size: 14px;
           }
           .portal-wa-btn-modern {
             padding: 6px 10px;
@@ -3149,6 +3111,16 @@ export default function PortalEstudiante() {
           .portal-nav-bar {
             margin: 8px 8px 14px;
             border-radius: 12px;
+          }
+          .portal-nav-brand {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            flex-basis: 38px;
+          }
+          .portal-nav-logo {
+            max-width: 28px;
+            max-height: 28px;
           }
           .portal-nav-item {
             min-width: 64px;
