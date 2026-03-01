@@ -2156,9 +2156,6 @@ export default function PortalEstudiante() {
 
       {/* ────── HEADER MODERNO ────── */}
       <div className="portal-header-banner">
-        {/* Decoración sutil */}
-        <div className="portal-header-bg" />
-
         {/* Header Content */}
         <div className="portal-header-content">
           <div className="portal-header-title">
@@ -2751,20 +2748,11 @@ export default function PortalEstudiante() {
           position: relative;
           overflow: hidden;
           background: linear-gradient(160deg, #d81b87 0%, #b81775 100%);
-          padding: 12px 14px;
+          padding: 10px 14px;
           margin-bottom: 0;
           border-bottom-left-radius: 18px;
           border-bottom-right-radius: 18px;
           box-shadow: 0 6px 16px rgba(216,27,135,0.14);
-        }
-        .portal-header-bg {
-          position: absolute;
-          inset: 0;
-          background-image:
-            radial-gradient(ellipse at 20% 0%, rgba(255,255,255,0.14) 0%, transparent 60%);
-          pointer-events: none;
-          border-bottom-left-radius: 18px;
-          border-bottom-right-radius: 18px;
         }
 
         .portal-header-content {
