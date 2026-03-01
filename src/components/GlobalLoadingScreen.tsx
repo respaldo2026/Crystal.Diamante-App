@@ -2,7 +2,7 @@
 
 import React from "react";
 import Lottie from "lottie-react";
-import globalLoaderAnimation from "@/assets/lottie/global-loader.json";
+import globalLoaderAnimation from "@/assets/lottie/logo-loader.json";
 
 type GlobalLoadingScreenProps = {
   logoUrl?: string | null;
