@@ -585,6 +585,7 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }
   } = useThemedLayoutContext();
   const breakpoint = Grid.useBreakpoint();
   const isMobile = typeof breakpoint.lg === "undefined" ? false : !breakpoint.lg;
+  const isVerySmall = typeof breakpoint.sm === "undefined" ? false : !breakpoint.sm;
 
   const isStudentPortal = Boolean(pathname?.startsWith("/portal-estudiante"));
 
@@ -596,9 +597,9 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }
         position: "sticky",
         top: 0,
         zIndex: 1000,
-        height: 56,
-        lineHeight: "56px",
-        padding: "0 12px",
+        height: isVerySmall ? 52 : 56,
+        lineHeight: isVerySmall ? "52px" : "56px",
+        padding: isVerySmall ? "0 10px" : "0 12px",
         background: "#fff",
         borderBottom: "1px solid #f0f0f0",
         display: "flex",
@@ -637,8 +638,8 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }
             src={brandingLogo}
             alt="Academia Crystal Diamante"
             style={{
-              maxHeight: 34,
-              maxWidth: 120,
+              maxHeight: isVerySmall ? 34 : 40,
+              maxWidth: isVerySmall ? 128 : 150,
               width: "auto",
               height: "auto",
               objectFit: "contain",
@@ -656,16 +657,18 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }
         onClick={() => window.open("https://wa.me/573012038582", "_blank", "noopener,noreferrer")}
         style={{
           border: "1px solid #d9f7e2",
-          borderRadius: 10,
+          borderRadius: isVerySmall ? 8 : 10,
           color: "#059669",
           fontWeight: 600,
           display: "inline-flex",
           alignItems: "center",
-          height: 34,
-          paddingInline: 10,
+          justifyContent: "center",
+          height: isVerySmall ? 32 : 34,
+          minWidth: isVerySmall ? 32 : 34,
+          paddingInline: isVerySmall ? 8 : 10,
         }}
       >
-        WhatsApp
+        {!isVerySmall ? "WhatsApp" : null}
       </Button>
     </Layout.Header>
   );
