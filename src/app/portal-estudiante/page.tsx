@@ -119,6 +119,20 @@ export default function PortalEstudiante() {
   const iframeEmbedRef = useRef<HTMLIFrameElement>(null);
   const isFetchingRef = useRef(false);
   const hasFetchedOnceRef = useRef(false);
+  const [showLoadingUi, setShowLoadingUi] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      setShowLoadingUi(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowLoadingUi(true);
+    }, 180);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loading]);
 
   const deduplicarLista = <T,>(items: T[], resolverClave: (item: T) => string) => {
     const vistos = new Set<string>();
@@ -2236,23 +2250,29 @@ export default function PortalEstudiante() {
     setActiveTab("7");
   };
 
-  if (loading) {
+  if (loading && showLoadingUi) {
     return (
-      <div className="portal-splash-loading">
-        <div className="portal-splash-loading-inner">
-          <div className="splash-loading-logo-box">
-            {logoAcademia ? (
-              <img src={logoAcademia} alt="Crystal Diamante" className="splash-loading-logo" />
-            ) : (
-              <div className="splash-loading-fallback">CD</div>
-            )}
+      <div style={{ padding: 16, maxWidth: 1080, margin: "0 auto" }}>
+        <Card style={{ borderRadius: 14 }}>
+          <Skeleton active title={{ width: "48%" }} paragraph={{ rows: 1 }} />
+          <div style={{ marginTop: 12 }}>
+            <Skeleton.Button active block style={{ height: 44 }} />
           </div>
-          <div className="splash-loading-dots">
-            <span /><span /><span />
+          <div style={{ marginTop: 12 }}>
+            <Skeleton active title={false} paragraph={{ rows: 6 }} />
           </div>
+        </Card>
+        <div style={{ marginTop: 12 }}>
+          <Card style={{ borderRadius: 14 }}>
+            <Skeleton active title={{ width: "36%" }} paragraph={{ rows: 4 }} />
+          </Card>
         </div>
       </div>
     );
+  }
+
+  if (loading) {
+    return null;
   }
 
   // ── Generar imagen del logro y compartir en redes ──

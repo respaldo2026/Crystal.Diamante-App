@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { Card, Skeleton } from "antd";
 
 type GlobalLoadingScreenProps = {
   logoUrl?: string | null;
@@ -11,14 +10,18 @@ type GlobalLoadingScreenProps = {
 
 export const GlobalLoadingScreen: React.FC<GlobalLoadingScreenProps> = ({
   title = "Cargando...",
+  subtitle,
 }) => {
   return (
     <div className="global-loading-screen" role="status" aria-live="polite" aria-label="Cargando aplicación">
-      <Card className="global-loading-card" bodyStyle={{ padding: 16 }}>
+      <div className="global-loading-card">
         <div className="global-loading-title">{title}</div>
-        <Skeleton.Button active block style={{ height: 36, marginBottom: 12 }} />
-        <Skeleton active paragraph={{ rows: 4 }} title={{ width: "60%" }} />
-      </Card>
+        {subtitle ? <div className="global-loading-subtitle">{subtitle}</div> : null}
+        <div className="skeleton-block skeleton-lg" />
+        <div className="skeleton-block skeleton-sm" />
+        <div className="skeleton-block skeleton-md" />
+        <div className="skeleton-block skeleton-md" />
+      </div>
 
       <style jsx>{`
         .global-loading-screen {
@@ -34,13 +37,51 @@ export const GlobalLoadingScreen: React.FC<GlobalLoadingScreenProps> = ({
 
         .global-loading-card {
           width: min(420px, 100%);
+          border: 1px solid #f1f5f9;
+          border-radius: 12px;
+          padding: 16px;
+          background: #fff;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
         }
 
         .global-loading-title {
           color: #111827;
           font-size: 16px;
           font-weight: 700;
+          margin-bottom: 8px;
+        }
+
+        .global-loading-subtitle {
+          color: #6b7280;
+          font-size: 13px;
           margin-bottom: 14px;
+        }
+
+        .skeleton-block {
+          position: relative;
+          overflow: hidden;
+          border-radius: 8px;
+          background: #eef2f7;
+          margin-bottom: 10px;
+        }
+
+        .skeleton-block::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          transform: translateX(-100%);
+          background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.75) 50%, transparent 100%);
+          animation: shimmer 1.1s infinite;
+        }
+
+        .skeleton-lg { height: 38px; }
+        .skeleton-sm { height: 18px; width: 42%; }
+        .skeleton-md { height: 16px; width: 100%; }
+
+        @keyframes shimmer {
+          100% {
+            transform: translateX(100%);
+          }
         }
       `}</style>
     </div>

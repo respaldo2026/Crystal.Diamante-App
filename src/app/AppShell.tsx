@@ -738,8 +738,22 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const [brandingLogo, setBrandingLogo] = useState<string | null>(DEFAULT_BRANDING_LOGO);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAcademia, setWhatsappAcademia] = useState<string | null>("573012038582");
+  const [showUserLoader, setShowUserLoader] = useState(false);
 
   const isDarkMode = mode === "dark";
+
+  useEffect(() => {
+    if (!userLoading) {
+      setShowUserLoader(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowUserLoader(true);
+    }, 180);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [userLoading]);
 
   const themeConfig = useMemo(
     () => ({
@@ -1036,7 +1050,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     });
   }, [user, userLoading, normalizedRole, permisosLoading, permisos]);
 
-  const shouldShowGlobalLoader = userLoading || (roleNeedsPermissions && permisosLoading);
+  const shouldShowGlobalLoader = showUserLoader || (roleNeedsPermissions && permisosLoading);
 
   if (shouldShowGlobalLoader) {
     console.log('[AppShell] Mostrando loader:', { userLoading, permisosLoading, roleNeedsPermissions });
