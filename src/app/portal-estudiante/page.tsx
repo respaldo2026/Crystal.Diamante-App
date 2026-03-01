@@ -2612,12 +2612,13 @@ export default function PortalEstudiante() {
       </Modal>
 
       <Modal
-        title={iframePreview.title || "Presentación"}
+        title={null}
         open={iframePreview.open}
         onCancel={() => setIframePreview({ open: false, title: "", src: "" })}
         footer={null}
         width="100%"
         centered
+        closable={false}
         style={{ top: 0, padding: 0 }}
         styles={{ 
           body: { padding: 0, height: "100vh", overflow: "hidden" },
@@ -2626,10 +2627,28 @@ export default function PortalEstudiante() {
         destroyOnClose
         className="gamma-fullscreen-modal"
       >
+        <div className="gamma-iframe-topbar">
+          <div className="gamma-iframe-brand">
+            {logoAcademia ? (
+              <img src={logoAcademia} alt="Logo academia" className="gamma-iframe-logo" />
+            ) : (
+              <div className="gamma-iframe-logo-fallback">CD</div>
+            )}
+            <span className="gamma-iframe-title">{iframePreview.title || "Presentación"}</span>
+          </div>
+          <button
+            type="button"
+            className="gamma-iframe-close"
+            onClick={() => setIframePreview({ open: false, title: "", src: "" })}
+            aria-label="Cerrar visor"
+          >
+            ✕
+          </button>
+        </div>
         <iframe
           src={iframePreview.src}
           title={iframePreview.title || "Presentación"}
-          style={{ width: "100%", height: "100%", border: 0 }}
+          style={{ width: "100%", height: "calc(100vh - 56px)", border: 0, marginTop: "56px" }}
           allow="fullscreen; clipboard-read; clipboard-write"
           allowFullScreen
           loading="lazy"
@@ -3090,6 +3109,77 @@ export default function PortalEstudiante() {
           .portal-estudiante .ant-modal-footer .ant-btn {
             width: 100%;
             margin: 0;
+          }
+
+          .gamma-iframe-topbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            z-index: 4;
+          }
+          .gamma-iframe-brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+          }
+          .gamma-iframe-logo {
+            max-width: 34px;
+            max-height: 34px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            display: block;
+          }
+          .gamma-iframe-logo-fallback {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            border: 1px solid #f2d2e5;
+            background: #fff;
+            color: #d81b87;
+            font-size: 15px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .gamma-iframe-title {
+            color: #111827;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: min(60vw, 620px);
+          }
+          .gamma-iframe-close {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #6b7280;
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            cursor: pointer;
+            line-height: 1;
+            font-size: 17px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+          .gamma-iframe-close:hover {
+            border-color: #d1d5db;
+            color: #111827;
+            background: #f9fafb;
           }
         }
 
