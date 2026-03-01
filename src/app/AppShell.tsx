@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useCallback, useEffect, useRef, useState } from "react";
+import React, { useMemo, useCallback, useEffect, useState } from "react";
 import {
   Refine,
   useLogout,
@@ -65,7 +65,6 @@ import { RolesPermissionsProvider, useRolesPermissions } from "@/contexts/roles-
 import { ColorModeContextProvider, useColorMode } from "@/contexts/color-mode";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { GlobalLoadingScreen } from "@/components/GlobalLoadingScreen";
-import { isGlobalLoadingActive, subscribeGlobalLoading } from "@utils/global-loading";
 
 const allResources = [
   {
@@ -737,10 +736,6 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const [brandingLogo, setBrandingLogo] = useState<string | null>("/icon.svg");
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAcademia, setWhatsappAcademia] = useState<string | null>("573012038582");
-  const [globalLoading, setGlobalLoading] = useState<boolean>(isGlobalLoadingActive());
-  const [routeLoading, setRouteLoading] = useState<boolean>(false);
-  const [bootLoading, setBootLoading] = useState<boolean>(true);
-  const previousPathnameRef = useRef<string | null>(null);
 
   const isDarkMode = mode === "dark";
 
@@ -947,46 +942,6 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     cargarBranding();
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = subscribeGlobalLoading((active) => {
-      setGlobalLoading(active);
-    });
-
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setBootLoading(false);
-    }, 350);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!pathname) return;
-
-    if (previousPathnameRef.current == null) {
-      previousPathnameRef.current = pathname;
-      return;
-    }
-
-    if (previousPathnameRef.current !== pathname) {
-      previousPathnameRef.current = pathname;
-      setRouteLoading(true);
-
-      const timeout = window.setTimeout(() => {
-        setRouteLoading(false);
-      }, 450);
-
-      return () => {
-        window.clearTimeout(timeout);
-      };
-    }
-  }, [pathname]);
-
   React.useEffect(() => {
     if (!userLoading && !user && !isAuthRoute) {
       router.replace("/login");
@@ -1079,18 +1034,12 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     });
   }, [user, userLoading, normalizedRole, permisosLoading, permisos]);
 
-  const shouldShowGlobalLoader =
-    bootLoading ||
-    userLoading ||
-    (roleNeedsPermissions && permisosLoading) ||
-    routeLoading ||
-    globalLoading;
+  const shouldShowGlobalLoader = userLoading || (roleNeedsPermissions && permisosLoading);
 
   if (shouldShowGlobalLoader) {
     console.log('[AppShell] Mostrando loader:', { userLoading, permisosLoading, roleNeedsPermissions });
     return (
       <FullScreenLoader
-        logoUrl={brandingLogo}
         subtitle={userLoading ? "Validando sesión..." : "Cargando aplicación..."}
       />
     );
