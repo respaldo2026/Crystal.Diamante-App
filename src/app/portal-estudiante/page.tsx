@@ -104,6 +104,7 @@ export default function PortalEstudiante() {
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
   const [logoAcademia, setLogoAcademia] = useState<string | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
   const [matriculaRutaId, setMatriculaRutaId] = useState<string | null>(null);
   const [cicloRutaId, setCicloRutaId] = useState<string | null>(null);
   const [temaRutaId, setTemaRutaId] = useState<string | null>(null);
@@ -557,6 +558,12 @@ export default function PortalEstudiante() {
   useEffect(() => {
     if (hasFetchedOnceRef.current || isFetchingRef.current) return;
     cargarDatos();
+  }, []);
+
+  // Splash: se oculta después de 2.6 s (2 s visible + 0.6 s fadeOut)
+  useEffect(() => {
+    const t = setTimeout(() => setShowSplash(false), 2600);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -2177,13 +2184,28 @@ export default function PortalEstudiante() {
   return (
     <div className="portal-estudiante" style={{ padding: isMobile ? "0" : "20px", maxWidth: "1200px", margin: "0 auto" }}>
 
+      {/* ────── SPLASH SCREEN ────── */}
+      {showSplash && (
+        <div className="portal-splash">
+          <div className="portal-splash-inner">
+            {logoAcademia ? (
+              <img src={logoAcademia} alt="Crystal Diamante" className="splash-logo" />
+            ) : (
+              <div className="splash-logo-fallback">CD</div>
+            )}
+            <div className="splash-bar" />
+            <p className="splash-tagline">Crystal Diamante</p>
+          </div>
+        </div>
+      )}
+
       {/* ────── HEADER MODERNO ────── */}
       <div className="portal-header-banner">
-        {/* Fondo con gradiente + deco */}
+        {/* Deco de fondo */}
         <div className="portal-header-bg" />
 
         <div className="portal-header-content">
-          {/* Logo grande */}
+          {/* Logo grande con anillo magenta */}
           <div className="portal-header-logo-wrap">
             {logoAcademia ? (
               <img src={logoAcademia} alt="Logo academia" className="portal-header-logo" />
@@ -2716,28 +2738,100 @@ export default function PortalEstudiante() {
       </Modal>
       <style jsx global>{`
         /* ──────────────────────────────────────
-           HEADER BANNER
+           SPLASH SCREEN
+        ────────────────────────────────────── */
+        .portal-splash {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          background: #0d0d0d;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: splashFadeOut 0.6s ease 2s forwards;
+          pointer-events: all;
+        }
+        @keyframes splashFadeOut {
+          from { opacity: 1; pointer-events: all; }
+          to   { opacity: 0; pointer-events: none; }
+        }
+        .portal-splash-inner {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 18px;
+        }
+        .splash-logo {
+          width: 150px;
+          height: 150px;
+          object-fit: contain;
+          border-radius: 24px;
+          animation: splashLogoIn 0.75s cubic-bezier(0.34,1.56,0.64,1) forwards;
+        }
+        .splash-logo-fallback {
+          width: 150px;
+          height: 150px;
+          border-radius: 24px;
+          background: #1a1a1a;
+          border: 2px solid #d81b87;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          font-size: 42px;
+          font-weight: 800;
+          animation: splashLogoIn 0.75s cubic-bezier(0.34,1.56,0.64,1) forwards;
+        }
+        @keyframes splashLogoIn {
+          from { transform: scale(0.55); opacity: 0; }
+          to   { transform: scale(1);    opacity: 1; }
+        }
+        .splash-bar {
+          width: 40px;
+          height: 3px;
+          background: #d81b87;
+          border-radius: 2px;
+          animation: splashItemIn 0.45s ease 0.6s forwards;
+          opacity: 0;
+        }
+        .splash-tagline {
+          color: rgba(255,255,255,0.5);
+          font-size: 12px;
+          font-weight: 500;
+          letter-spacing: 3.5px;
+          text-transform: uppercase;
+          margin: 0;
+          animation: splashItemIn 0.45s ease 0.8s forwards;
+          opacity: 0;
+        }
+        @keyframes splashItemIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ──────────────────────────────────────
+           HEADER BANNER  (negro + magenta)
         ────────────────────────────────────── */
         .portal-header-banner {
           position: relative;
           overflow: hidden;
-          background: linear-gradient(135deg, #d81b87 0%, #7c3aed 55%, #2563eb 100%);
-          padding: 28px 20px 48px;
+          background: #0d0d0d;
+          padding: 28px 20px 50px;
           margin-bottom: 0;
         }
         .portal-header-bg {
           position: absolute;
           inset: 0;
           background-image:
-            radial-gradient(circle at 15% 50%, rgba(255,255,255,0.08) 0%, transparent 50%),
-            radial-gradient(circle at 85% 20%, rgba(255,255,255,0.06) 0%, transparent 40%);
+            radial-gradient(circle at 10% 80%, rgba(216,27,135,0.18) 0%, transparent 45%),
+            radial-gradient(circle at 90% 10%, rgba(216,27,135,0.10) 0%, transparent 40%);
           pointer-events: none;
         }
         .portal-header-content {
           position: relative;
           display: flex;
           align-items: center;
-          gap: 16px;
+          gap: 18px;
           flex-wrap: wrap;
           max-width: 800px;
           margin: 0 auto;
@@ -2745,24 +2839,22 @@ export default function PortalEstudiante() {
         /* Logo */
         .portal-header-logo-wrap {
           flex-shrink: 0;
-          width: 80px;
-          height: 80px;
-          background: rgba(255,255,255,0.15);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border-radius: 20px;
-          border: 2px solid rgba(255,255,255,0.3);
+          width: 84px;
+          height: 84px;
+          background: #1a1a1a;
+          border-radius: 22px;
+          border: 2.5px solid #d81b87;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+          box-shadow: 0 0 0 6px rgba(216,27,135,0.12), 0 8px 28px rgba(0,0,0,0.5);
           overflow: hidden;
         }
         .portal-header-logo {
-          width: 68px;
-          height: 68px;
+          width: 72px;
+          height: 72px;
           object-fit: contain;
-          border-radius: 12px;
+          border-radius: 14px;
         }
         .portal-header-logo-fallback {
           color: #fff;
@@ -2776,10 +2868,10 @@ export default function PortalEstudiante() {
           min-width: 0;
         }
         .portal-header-greeting {
-          color: rgba(255,255,255,0.78);
-          font-size: 13px;
-          font-weight: 500;
-          letter-spacing: 0.3px;
+          color: #d81b87;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 1.5px;
           text-transform: uppercase;
         }
         .portal-header-name {
@@ -2788,38 +2880,38 @@ export default function PortalEstudiante() {
           font-weight: 800;
           line-height: 1.1;
           letter-spacing: -0.5px;
-          margin-top: 2px;
+          margin-top: 3px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         .portal-header-subtitle {
-          color: rgba(255,255,255,0.6);
+          color: rgba(255,255,255,0.35);
           font-size: 11px;
-          margin-top: 4px;
-          letter-spacing: 0.4px;
+          margin-top: 5px;
+          letter-spacing: 0.5px;
         }
         /* Botón WhatsApp */
         .portal-wa-btn {
           display: flex;
           align-items: center;
           gap: 7px;
-          background: rgba(255,255,255,0.18);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          border: 1.5px solid rgba(255,255,255,0.35);
-          color: #fff;
-          font-weight: 700;
+          background: transparent;
+          border: 1.5px solid rgba(255,255,255,0.2);
+          color: rgba(255,255,255,0.85);
+          font-weight: 600;
           font-size: 13px;
           padding: 9px 18px;
           border-radius: 999px;
           cursor: pointer;
-          transition: background 0.18s, transform 0.14s;
+          transition: border-color 0.18s, color 0.18s, background 0.18s, transform 0.14s;
           white-space: nowrap;
           flex-shrink: 0;
         }
         .portal-wa-btn:hover {
-          background: rgba(37,211,102,0.75);
+          background: rgba(37,211,102,0.14);
+          border-color: #25d366;
+          color: #25d366;
           transform: translateY(-1px);
         }
         .portal-wa-btn .anticon {
@@ -2893,7 +2985,7 @@ export default function PortalEstudiante() {
           left: 20%;
           right: 20%;
           height: 3px;
-          background: linear-gradient(90deg, #d81b87, #7c3aed);
+          background: #d81b87;
           border-radius: 3px 3px 0 0;
         }
 
@@ -3110,16 +3202,17 @@ export default function PortalEstudiante() {
         /* ── Móvil (≤576px) ── */
         @media (max-width: 576px) {
           .portal-header-banner {
-            padding: 20px 14px 44px;
+            padding: 20px 14px 46px;
           }
           .portal-header-logo-wrap {
-            width: 64px;
-            height: 64px;
-            border-radius: 16px;
+            width: 70px;
+            height: 70px;
+            border-radius: 18px;
+            box-shadow: 0 0 0 5px rgba(216,27,135,0.12), 0 6px 20px rgba(0,0,0,0.5);
           }
           .portal-header-logo {
-            width: 54px;
-            height: 54px;
+            width: 58px;
+            height: 58px;
           }
           .portal-wa-btn {
             padding: 7px 13px;
