@@ -229,14 +229,14 @@ export const fetchProfessorDashboardData = async (
       : Promise.resolve({ data: [], error: null }),
     supabaseBrowserClient
       .from("sesiones_clase")
-      .select("id, fecha, horas_dictadas, curso_id, tema_visto, observaciones")
+      .select("id, fecha, horas_dictadas, curso_id, tema_visto")
       .eq("profesor_id", profesorId)
       .gte("fecha", startOfMonth)
       .lte("fecha", endOfMonth)
       .order("fecha", { ascending: true }),
     supabaseBrowserClient
       .from("sesiones_clase")
-      .select("id, fecha, horas_dictadas, tema_visto, observaciones, curso_id")
+      .select("id, fecha, horas_dictadas, tema_visto, curso_id")
       .eq("profesor_id", profesorId)
       .gte("fecha", dayjs().startOf("day").format("YYYY-MM-DD"))
       .order("fecha", { ascending: true })
@@ -395,7 +395,7 @@ export const fetchProfessorDashboardData = async (
   (sesionesMesData || []).forEach((sesion: any) => {
     if (!sesion?.curso_id || !sesion?.fecha) return;
     const key = `${sesion.curso_id}-${sesion.fecha}`;
-    claseNumeroPorCursoFecha.set(key, extractClassNumber(sesion?.observaciones || sesion?.tema_visto));
+    claseNumeroPorCursoFecha.set(key, extractClassNumber(sesion?.tema_visto));
   });
 
   const asistenciaPorFecha = new Map<string, { presentes: number; total: number; clases: Set<number> }>();
@@ -495,7 +495,7 @@ export const fetchProfessorDashboardData = async (
     cursoId: sesion.curso_id,
     curso: cursoNombreMap.get(sesion.curso_id) || "Curso",
     tema: sesion.tema_visto,
-    claseNumero: extractClassNumber(sesion.observaciones || sesion.tema_visto),
+    claseNumero: extractClassNumber(sesion.tema_visto),
     horas: Number(sesion.horas_dictadas) || null,
   }));
 
