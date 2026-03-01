@@ -667,9 +667,7 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({ pathname, brandingLogo }
           minWidth: isVerySmall ? 32 : 34,
           paddingInline: isVerySmall ? 8 : 10,
         }}
-      >
-        {!isVerySmall ? "WhatsApp" : null}
-      </Button>
+      />
     </Layout.Header>
   );
 };

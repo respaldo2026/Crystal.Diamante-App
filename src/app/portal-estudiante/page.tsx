@@ -48,7 +48,6 @@ import {
   GiftOutlined,
   YoutubeOutlined,
   StarFilled,
-  BarsOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
@@ -108,11 +107,13 @@ export default function PortalEstudiante() {
   const [cicloRutaId, setCicloRutaId] = useState<string | null>(null);
   const [temaRutaId, setTemaRutaId] = useState<string | null>(null);
   const [checklistInsumos, setChecklistInsumos] = useState<Record<string, boolean>>({});
-  const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
+  const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string; temaId: string }>({
     open: false,
     title: "",
     src: "",
+    temaId: "",
   });
+  const [iframePromptVisible, setIframePromptVisible] = useState(false);
   const isFetchingRef = useRef(false);
   const hasFetchedOnceRef = useRef(false);
 
@@ -463,6 +464,7 @@ export default function PortalEstudiante() {
         open: true,
         title: titulo || "Presentación",
         src: toGammaEmbedUrl(src),
+        temaId: String(material?.pensum_curso_id || material?.tema_id || ""),
       });
       return;
     }
@@ -604,6 +606,44 @@ export default function PortalEstudiante() {
       setTemaRutaId(null);
     }
   }, [matriculas, matriculaRutaId]);
+
+  useEffect(() => {
+    if (!iframePreview.open) {
+      setIframePromptVisible(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setIframePromptVisible(true);
+    }, 18000);
+
+    return () => window.clearTimeout(timer);
+  }, [iframePreview.open, iframePreview.src]);
+
+  const quizDirectoIframe = React.useMemo(() => {
+    const temaId = String(iframePreview.temaId || "");
+    if (!temaId) return null;
+    return (quizzesClase || []).find((quiz: any) => String(quiz?.pensum_curso_id || "") === temaId) || null;
+  }, [quizzesClase, iframePreview.temaId]);
+
+  const cerrarIframeAPensum = () => {
+    setActiveTab("5");
+    setIframePromptVisible(false);
+    setIframePreview({ open: false, title: "", src: "", temaId: "" });
+  };
+
+  const irQuizDesdeIframe = () => {
+    if (!quizDirectoIframe) {
+      message.info("Este tema aún no tiene quiz activo. Revisa el pensum.");
+      cerrarIframeAPensum();
+      return;
+    }
+
+    setIframePromptVisible(false);
+    setIframePreview({ open: false, title: "", src: "", temaId: "" });
+    setActiveTab("5");
+    abrirQuiz(quizDirectoIframe);
+  };
 
   const cargarDatos = async () => {
     if (isFetchingRef.current) return;
@@ -2612,7 +2652,7 @@ export default function PortalEstudiante() {
       <Modal
         title={null}
         open={iframePreview.open}
-        onCancel={() => setIframePreview({ open: false, title: "", src: "" })}
+        onCancel={cerrarIframeAPensum}
         footer={null}
         width="100%"
         centered
@@ -2629,10 +2669,10 @@ export default function PortalEstudiante() {
           <button
             type="button"
             className="gamma-iframe-menu"
-            onClick={() => setIframePreview({ open: false, title: "", src: "" })}
-            aria-label="Volver"
+            onClick={cerrarIframeAPensum}
+            aria-label="Cerrar y volver a pensum"
           >
-            <BarsOutlined />
+            Cerrar
           </button>
 
           <div className="gamma-iframe-center-logo" aria-hidden="true">
@@ -2655,9 +2695,24 @@ export default function PortalEstudiante() {
             aria-label="WhatsApp"
           >
             <WhatsAppOutlined />
-            <span>WhatsApp</span>
           </button>
         </div>
+
+        {iframePromptVisible && (
+          <div className="gamma-iframe-quiz-cta">
+            <div className="gamma-iframe-quiz-text">
+              ¿Terminaste la lectura? Valida tu conocimiento con el quiz del tema.
+            </div>
+            <button
+              type="button"
+              className="gamma-iframe-quiz-btn"
+              onClick={irQuizDesdeIframe}
+            >
+              {quizDirectoIframe ? "Ir al Quiz" : "Ir a Pensum"}
+            </button>
+          </div>
+        )}
+
         <iframe
           src={iframePreview.src}
           title={iframePreview.title || "Presentación"}
@@ -3133,7 +3188,7 @@ export default function PortalEstudiante() {
             border: 1px solid #e5e7eb;
             background: #fff;
             color: #4b5563;
-            width: 34px;
+            min-width: 70px;
             height: 34px;
             border-radius: 10px;
             cursor: pointer;
@@ -3141,6 +3196,9 @@ export default function PortalEstudiante() {
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            padding: 0 10px;
+            font-size: 12px;
+            font-weight: 600;
           }
           .gamma-iframe-center-logo {
             position: absolute;
@@ -3177,13 +3235,14 @@ export default function PortalEstudiante() {
             background: #fff;
             color: #059669;
             height: 34px;
+            width: 34px;
             border-radius: 10px;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            padding: 0 10px;
+            gap: 0;
+            padding: 0;
             font-size: 12px;
             font-weight: 600;
             flex-shrink: 0;
@@ -3192,18 +3251,58 @@ export default function PortalEstudiante() {
             color: #25d366;
             font-size: 14px;
           }
+
+          .gamma-iframe-quiz-cta {
+            position: absolute;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            z-index: 6;
+            background: rgba(255,255,255,0.98);
+            border: 1px solid #f2d2e5;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+          }
+          .gamma-iframe-quiz-text {
+            color: #374151;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+          .gamma-iframe-quiz-btn {
+            border: none;
+            background: #d81b87;
+            color: #fff;
+            height: 34px;
+            border-radius: 10px;
+            padding: 0 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            flex-shrink: 0;
+          }
+          .gamma-iframe-quiz-btn:hover {
+            background: #b81775;
+          }
           .gamma-iframe-whatsapp:hover,
           .gamma-iframe-menu:hover {
             background: #f9fafb;
             border-color: #d1d5db;
           }
           @media (max-width: 400px) {
-            .gamma-iframe-whatsapp span {
-              display: none;
+            .gamma-iframe-menu {
+              min-width: 62px;
+              padding: 0 8px;
+              font-size: 11px;
             }
-            .gamma-iframe-whatsapp {
-              width: 34px;
-              padding: 0;
+            .gamma-iframe-quiz-cta {
+              flex-direction: column;
+              align-items: stretch;
+              gap: 8px;
             }
           }
         }
