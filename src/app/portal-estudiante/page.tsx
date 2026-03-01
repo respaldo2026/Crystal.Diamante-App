@@ -2837,7 +2837,12 @@ export default function PortalEstudiante() {
             <button
               type="button"
               className="gamma-iframe-quiz-btn"
-              onClick={irQuizDesdeIframe}
+              onClick={(e) => {
+                console.log("🖱️  CLICK en botón quiz");
+                console.log("  - Event:", e);
+                console.log("  - currentTarget:", e.currentTarget);
+                irQuizDesdeIframe();
+              }}
             >
               {quizDirectoIframe ? "Ir directo al Quiz" : "Ir a Pensum"}
             </button>
