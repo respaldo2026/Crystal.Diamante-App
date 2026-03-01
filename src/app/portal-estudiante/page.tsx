@@ -702,45 +702,22 @@ export default function PortalEstudiante() {
 
   const quizDirectoIframe = React.useMemo(() => {
     const temaId = String(iframePreview.temaId || "");
-    
-    // Logs de diagnóstico
-    if (iframePreview.temaId || iframePreview.title) {
-      console.log("📊 Buscando quiz para iframe:");
-      console.log("  - temaId:", temaId);
-      console.log("  - title:", iframePreview.title);
-      console.log("  - quizzesClase disponibles:", quizzesClase?.map((q: any) => ({
-        id: q.id,
-        titulo: q.titulo,
-        pensum_curso_id: q.pensum_curso_id
-      })) || []);
-    }
 
     if (temaId) {
       const found = (quizzesClase || []).find((quiz: any) => String(quiz?.pensum_curso_id || "") === temaId);
-      if (found) {
-        console.log("✅ Quiz encontrado por temaId:", found);
-        return found;
-      }
-      console.log("⚠️  No encontrado quiz con temaId:", temaId);
+      if (found) return found;
     }
 
     const tituloNormalizado = normalizarTexto(iframePreview.title || "");
-    if (!tituloNormalizado) {
-      console.log("⚠️  Título vacío o inválido");
-      return null;
-    }
+    if (!tituloNormalizado) return null;
 
     const temaPorTitulo = (pensum || [])
       .flatMap((ciclo: any) => ciclo?.pensum_cursos || [])
       .find((tema: any) => normalizarTexto(tema?.nombre_curso || tema?.titulo || "") === tituloNormalizado);
 
-    if (!temaPorTitulo?.id) {
-      console.log("⚠️  No encontrado tema por título normalizado:", tituloNormalizado);
-      return null;
-    }
+    if (!temaPorTitulo?.id) return null;
     
     const found = (quizzesClase || []).find((quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaPorTitulo.id));
-    console.log("Buscando quiz por temaPorTitulo.id:", temaPorTitulo.id, "-> encontrado:", !!found);
     return found || null;
   }, [quizzesClase, iframePreview.temaId, iframePreview.title, pensum]);
 
@@ -752,37 +729,24 @@ export default function PortalEstudiante() {
   };
 
   const irQuizDesdeIframe = async () => {
-    console.log("🔵 irQuizDesdeIframe llamada");
-    console.log("  - iframePreview.temaId:", iframePreview.temaId);
-    console.log("  - iframePreview.title:", iframePreview.title);
-    console.log("  - quizDirectoIframe:", quizDirectoIframe);
-    console.log("  - quizzesClase.length:", quizzesClase?.length || 0);
-
     let quiz = quizDirectoIframe;
 
     // Si no encontró por temaId, buscar por título normalizado
     if (!quiz && iframePreview.title && quizzesClase?.length) {
       const tituloNormalizado = normalizarTexto(iframePreview.title);
-      console.log("⚠️  Buscando quiz por título normalizado:", tituloNormalizado);
       
       quiz = (quizzesClase || []).find((q: any) => {
         const tituloQuiz = normalizarTexto(q?.titulo || "");
         return tituloQuiz === tituloNormalizado;
       });
-      
-      if (quiz) {
-        console.log("✅ Quiz encontrado por título:", quiz);
-      }
     }
 
     if (!quiz) {
-      console.warn("⚠️  No hay quiz encontrado");
       message.info("Este tema aún no tiene quiz activo. Revisa el pensum.");
       cerrarIframeAPensum();
       return;
     }
 
-    console.log("✅ Abriendo quiz:", quiz);
     setIframePromptVisible(false);
     setIframeTrackingSupported(true);
     setIframePreview({ open: false, title: "", src: "", temaId: "" });
@@ -793,7 +757,6 @@ export default function PortalEstudiante() {
     
     try {
       await abrirQuiz(quiz);
-      console.log("✅ Quiz abierto exitosamente");
     } catch (error) {
       console.error("❌ Error abriendo quiz:", error);
       message.error("No se pudo abrir el quiz");
@@ -2887,10 +2850,7 @@ export default function PortalEstudiante() {
             <button
               type="button"
               className="gamma-iframe-quiz-btn"
-              onClick={(e) => {
-                console.log("🖱️  CLICK en botón quiz");
-                console.log("  - Event:", e);
-                console.log("  - currentTarget:", e.currentTarget);
+              onClick={() => {
                 irQuizDesdeIframe();
               }}
             >

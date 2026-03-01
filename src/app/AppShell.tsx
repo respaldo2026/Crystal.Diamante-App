@@ -899,6 +899,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
   const roleNeedsPermissions = normalizedRole.length > 0 &&
     !["admin", "director", "profesor", "estudiante"].includes(normalizedRole);
+  const isStudentPortalRoute = Boolean(pathname?.startsWith("/portal-estudiante"));
 
   const shouldUseLayout = !isAuthRoute && Boolean(user);
 
@@ -910,15 +911,13 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
 
       const primary = await supabaseBrowserClient
         .from("configuracion")
-        .select("nombre_academia, logo_url, whatsapp, whatsapp_agente, whatsapp_admisiones, telefono")
+        .select("nombre_academia, logo_url, whatsapp, telefono")
         .order("updated_at", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (primary.error) {
-        console.warn("[AppShell] Error cargando branding con columnas extendidas:", primary.error?.message || primary.error);
-
         const fallback = await supabaseBrowserClient
           .from("configuracion")
           .select("*")
@@ -928,7 +927,6 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
           .maybeSingle();
 
         if (fallback.error) {
-          console.warn("[AppShell] Error cargando branding fallback:", fallback.error?.message || fallback.error);
           setBrandingLogo(DEFAULT_BRANDING_LOGO);
           setWhatsappAgente(null);
           setWhatsappAcademia("573012038582");
@@ -1041,7 +1039,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
     });
   }, [user, userLoading, normalizedRole, permisosLoading, permisos]);
 
-  const shouldShowGlobalLoader = showUserLoader || (roleNeedsPermissions && permisosLoading);
+  const shouldShowGlobalLoader = !isStudentPortalRoute && (showUserLoader || (roleNeedsPermissions && permisosLoading));
 
   if (shouldShowGlobalLoader) {
     return (
