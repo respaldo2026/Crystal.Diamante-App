@@ -596,8 +596,14 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({
   const breakpoint = Grid.useBreakpoint();
   const isMobile = typeof breakpoint.lg === "undefined" ? false : !breakpoint.lg;
   const isVerySmall = typeof breakpoint.sm === "undefined" ? false : !breakpoint.sm;
+  const [logoLoadError, setLogoLoadError] = useState(false);
 
   const isStudentPortal = Boolean(pathname?.startsWith("/portal-estudiante"));
+  const displayLogo = logoLoadError ? "/icon.svg" : (brandingLogo || "/icon.svg");
+
+  useEffect(() => {
+    setLogoLoadError(false);
+  }, [brandingLogo]);
 
   const openWhatsapp = useCallback((phone: string | null, text: string) => {
     if (!phone) return;
@@ -665,22 +671,19 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({
             pointerEvents: "none",
           }}
         >
-          {brandingLogo ? (
-            <img
-              src={brandingLogo}
-              alt="Academia Crystal Diamante"
-              style={{
-                maxHeight: isVerySmall ? 36 : 44,
-                maxWidth: isVerySmall ? 138 : 165,
-                width: "auto",
-                height: "auto",
-                objectFit: "contain",
-                display: "block",
-              }}
-            />
-          ) : (
-            <span style={{ color: "#d81b87", fontWeight: 700, fontSize: 14 }}>Crystal Diamante</span>
-          )}
+          <img
+            src={displayLogo}
+            alt="Academia Crystal Diamante"
+            onError={() => setLogoLoadError(true)}
+            style={{
+              maxHeight: isVerySmall ? 36 : 44,
+              maxWidth: isVerySmall ? 138 : 165,
+              width: "auto",
+              height: "auto",
+              objectFit: "contain",
+              display: "block",
+            }}
+          />
         </div>
 
         <Dropdown
@@ -731,7 +734,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
   const { mode } = useColorMode();
   const pathname = usePathname();
   const [brandingName, setBrandingName] = useState("Crystal App");
-  const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
+  const [brandingLogo, setBrandingLogo] = useState<string | null>("/icon.svg");
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAcademia, setWhatsappAcademia] = useState<string | null>("573012038582");
   const [globalLoading, setGlobalLoading] = useState<boolean>(isGlobalLoadingActive());
@@ -904,7 +907,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
         .maybeSingle();
 
       if (data?.nombre_academia) setBrandingName(data.nombre_academia);
-      if (data?.logo_url) setBrandingLogo(data.logo_url);
+      setBrandingLogo((data as any)?.logo_url || "/icon.svg");
 
       const agente = normalizeWhatsappPhone((data as any)?.whatsapp_agente || (data as any)?.whatsapp || null);
       const academia = normalizeWhatsappPhone(
