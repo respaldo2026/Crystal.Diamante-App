@@ -2744,7 +2744,7 @@ export default function PortalEstudiante() {
           position: fixed;
           inset: 0;
           z-index: 9999;
-          background: #0d0d0d;
+          background: #fff;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -2772,12 +2772,12 @@ export default function PortalEstudiante() {
           width: 150px;
           height: 150px;
           border-radius: 24px;
-          background: #1a1a1a;
-          border: 2px solid #d81b87;
+          background: #fdf0f7;
+          border: 2.5px solid #d81b87;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #fff;
+          color: #d81b87;
           font-size: 42px;
           font-weight: 800;
           animation: splashLogoIn 0.75s cubic-bezier(0.34,1.56,0.64,1) forwards;
@@ -2795,7 +2795,7 @@ export default function PortalEstudiante() {
           opacity: 0;
         }
         .splash-tagline {
-          color: rgba(255,255,255,0.5);
+          color: rgba(216,27,135,0.65);
           font-size: 12px;
           font-weight: 500;
           letter-spacing: 3.5px;
@@ -2810,12 +2810,12 @@ export default function PortalEstudiante() {
         }
 
         /* ──────────────────────────────────────
-           HEADER BANNER  (negro + magenta)
+           HEADER BANNER  (fucsia + blanco)
         ────────────────────────────────────── */
         .portal-header-banner {
           position: relative;
           overflow: hidden;
-          background: #0d0d0d;
+          background: #d81b87;
           padding: 28px 20px 50px;
           margin-bottom: 0;
         }
@@ -2823,8 +2823,8 @@ export default function PortalEstudiante() {
           position: absolute;
           inset: 0;
           background-image:
-            radial-gradient(circle at 10% 80%, rgba(216,27,135,0.18) 0%, transparent 45%),
-            radial-gradient(circle at 90% 10%, rgba(216,27,135,0.10) 0%, transparent 40%);
+            radial-gradient(circle at 10% 80%, rgba(255,255,255,0.12) 0%, transparent 45%),
+            radial-gradient(circle at 90% 10%, rgba(255,255,255,0.08) 0%, transparent 40%);
           pointer-events: none;
         }
         .portal-header-content {
@@ -2841,13 +2841,13 @@ export default function PortalEstudiante() {
           flex-shrink: 0;
           width: 84px;
           height: 84px;
-          background: #1a1a1a;
+          background: rgba(255,255,255,0.22);
           border-radius: 22px;
-          border: 2.5px solid #d81b87;
+          border: 2.5px solid rgba(255,255,255,0.55);
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 0 0 6px rgba(216,27,135,0.12), 0 8px 28px rgba(0,0,0,0.5);
+          box-shadow: 0 0 0 6px rgba(255,255,255,0.12), 0 8px 28px rgba(0,0,0,0.18);
           overflow: hidden;
         }
         .portal-header-logo {
@@ -2868,7 +2868,7 @@ export default function PortalEstudiante() {
           min-width: 0;
         }
         .portal-header-greeting {
-          color: #d81b87;
+          color: rgba(255,255,255,0.8);
           font-size: 11px;
           font-weight: 600;
           letter-spacing: 1.5px;
@@ -2886,7 +2886,7 @@ export default function PortalEstudiante() {
           text-overflow: ellipsis;
         }
         .portal-header-subtitle {
-          color: rgba(255,255,255,0.35);
+          color: rgba(255,255,255,0.7);
           font-size: 11px;
           margin-top: 5px;
           letter-spacing: 0.5px;
