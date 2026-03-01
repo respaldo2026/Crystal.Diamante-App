@@ -104,7 +104,6 @@ export default function PortalEstudiante() {
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
   const [whatsappAdmisiones, setWhatsappAdmisiones] = useState<string | null>(null);
   const [logoAcademia, setLogoAcademia] = useState<string | null>(null);
-  const [showSplash, setShowSplash] = useState(true);
   const [matriculaRutaId, setMatriculaRutaId] = useState<string | null>(null);
   const [cicloRutaId, setCicloRutaId] = useState<string | null>(null);
   const [temaRutaId, setTemaRutaId] = useState<string | null>(null);
@@ -558,12 +557,6 @@ export default function PortalEstudiante() {
   useEffect(() => {
     if (hasFetchedOnceRef.current || isFetchingRef.current) return;
     cargarDatos();
-  }, []);
-
-  // Splash: se oculta después de 2.6 s (2 s visible + 0.6 s fadeOut)
-  useEffect(() => {
-    const t = setTimeout(() => setShowSplash(false), 2600);
-    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -2064,42 +2057,17 @@ export default function PortalEstudiante() {
 
   if (loading) {
     return (
-      <div className="portal-estudiante" style={{ maxWidth: "1200px", margin: "0 auto" }}>
-        <div style={{
-          height: 160,
-          background: "linear-gradient(135deg, #d81b87 0%, #7c3aed 55%, #2563eb 100%)",
-          borderRadius: "0 0 0 0",
-          marginBottom: 0,
-          display: "flex",
-          alignItems: "center",
-          padding: "0 20px",
-          gap: 16,
-        }}>
-          <Skeleton.Avatar active size={80} shape="square" style={{ borderRadius: 16 }} />
-          <div style={{ flex: 1 }}>
-            <Skeleton active paragraph={{ rows: 1 }} title={{ width: "50%" }} />
+      <div className="portal-splash-loading">
+        <div className="portal-splash-loading-inner">
+          {logoAcademia ? (
+            <img src={logoAcademia} alt="Crystal Diamante" className="splash-loading-logo" />
+          ) : (
+            <div className="splash-loading-fallback">CD</div>
+          )}
+          <div className="splash-loading-dots">
+            <span /><span /><span />
           </div>
         </div>
-
-        <div style={{ background: "#fff", height: 52, display: "flex", alignItems: "center", padding: "0 12px", gap: 8, marginBottom: 16 }}>
-          <Skeleton.Button active size="small" style={{ width: 90 }} />
-          <Skeleton.Button active size="small" style={{ width: 90 }} />
-          <Skeleton.Button active size="small" style={{ width: 90 }} />
-          <Skeleton.Button active size="small" style={{ width: 90 }} />
-        </div>
-
-        <Row gutter={[16, 16]} style={{ padding: "0 12px" }}>
-          <Col xs={24} lg={12}>
-            <Card>
-              <Skeleton active paragraph={{ rows: 5 }} title={{ width: "60%" }} />
-            </Card>
-          </Col>
-          <Col xs={24} lg={12}>
-            <Card>
-              <Skeleton active paragraph={{ rows: 5 }} title={{ width: "55%" }} />
-            </Card>
-          </Col>
-        </Row>
       </div>
     );
   }
@@ -2184,89 +2152,73 @@ export default function PortalEstudiante() {
   return (
     <div className="portal-estudiante" style={{ padding: isMobile ? "0" : "20px", maxWidth: "1200px", margin: "0 auto" }}>
 
-      {/* ────── SPLASH SCREEN ────── */}
-      {showSplash && (
-        <div className="portal-splash">
-          <div className="portal-splash-inner">
-            {logoAcademia ? (
-              <img src={logoAcademia} alt="Crystal Diamante" className="splash-logo" />
-            ) : (
-              <div className="splash-logo-fallback">CD</div>
-            )}
-            <div className="splash-bar" />
-            <p className="splash-tagline">Crystal Diamante</p>
-          </div>
-        </div>
-      )}
-
       {/* ────── HEADER MODERNO ────── */}
       <div className="portal-header-banner">
-        {/* Deco de fondo */}
+        {/* Decoración sutil */}
         <div className="portal-header-bg" />
 
-        <div className="portal-header-content">
-          {/* Logo grande con anillo magenta */}
-          <div className="portal-header-logo-wrap">
+        {/* Logo con protagonismo */}
+        <div className="portal-header-logo-hero">
+          <div className="portal-header-logo-ring">
             {logoAcademia ? (
               <img src={logoAcademia} alt="Logo academia" className="portal-header-logo" />
             ) : (
               <div className="portal-header-logo-fallback">CD</div>
             )}
           </div>
-
-          {/* Texto bienvenida */}
-          <div className="portal-header-text">
-            <div className="portal-header-greeting">
-              {obtenerSaludoBienvenida(estudiante?.genero)}
-            </div>
-            <div className="portal-header-name">
-              {estudiante?.nombre_completo
-                ? estudiante.nombre_completo.split(" ")[0]
-                : "Estudiante"}
-            </div>
-            <div className="portal-header-subtitle">Portal Estudiantil · Crystal Diamante</div>
-          </div>
-
-          {/* WhatsApp */}
-          {(whatsappAgente || whatsappAdmisiones) && (
-            <Dropdown
-              trigger={["click"]}
-              menu={{
-                items: [
-                  {
-                    key: "agente",
-                    label: "Hablar con Agente",
-                    onClick: () =>
-                      abrirWhatsapp(
-                        whatsappAgente,
-                        `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Tengo una consulta sobre mis cursos en el portal.`
-                      ),
-                    disabled: !whatsappAgente,
-                  },
-                  {
-                    key: "admisiones",
-                    label: "Hablar con Admisiones",
-                    onClick: () =>
-                      abrirWhatsapp(
-                        whatsappAdmisiones,
-                        `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo de Admisiones.`
-                      ),
-                    disabled: !whatsappAdmisiones,
-                  },
-                ],
-              }}
-            >
-              <button className="portal-wa-btn" aria-label="Contactar por WhatsApp">
-                <WhatsAppOutlined />
-                <span>WhatsApp</span>
-              </button>
-            </Dropdown>
-          )}
         </div>
 
-        {/* Ola decorativa inferior */}
-        <svg className="portal-header-wave" viewBox="0 0 1440 40" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M0,20 C360,50 1080,-10 1440,20 L1440,40 L0,40 Z" fill="#fff" />
+        {/* Bienvenida */}
+        <div className="portal-header-welcome">
+          <span className="portal-header-greeting">
+            {obtenerSaludoBienvenida(estudiante?.genero)}
+          </span>
+          <h1 className="portal-header-name">
+            {estudiante?.nombre_completo
+              ? estudiante.nombre_completo.split(" ")[0]
+              : "Estudiante"}
+          </h1>
+        </div>
+
+        {/* WhatsApp */}
+        {(whatsappAgente || whatsappAdmisiones) && (
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                {
+                  key: "agente",
+                  label: "Hablar con Agente",
+                  onClick: () =>
+                    abrirWhatsapp(
+                      whatsappAgente,
+                      `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Tengo una consulta sobre mis cursos en el portal.`
+                    ),
+                  disabled: !whatsappAgente,
+                },
+                {
+                  key: "admisiones",
+                  label: "Hablar con Admisiones",
+                  onClick: () =>
+                    abrirWhatsapp(
+                      whatsappAdmisiones,
+                      `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo de Admisiones.`
+                    ),
+                  disabled: !whatsappAdmisiones,
+                },
+              ],
+            }}
+          >
+            <button className="portal-wa-btn" aria-label="Contactar por WhatsApp">
+              <WhatsAppOutlined />
+              <span>WhatsApp</span>
+            </button>
+          </Dropdown>
+        )}
+
+        {/* Curva inferior */}
+        <svg className="portal-header-wave" viewBox="0 0 1440 60" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M0,40 C480,70 960,10 1440,40 L1440,60 L0,60 Z" fill="#f7f7f8" />
         </svg>
       </div>
 
@@ -2738,9 +2690,9 @@ export default function PortalEstudiante() {
       </Modal>
       <style jsx global>{`
         /* ──────────────────────────────────────
-           SPLASH SCREEN
+           LOADING SPLASH (reemplaza skeleton)
         ────────────────────────────────────── */
-        .portal-splash {
+        .portal-splash-loading {
           position: fixed;
           inset: 0;
           z-index: 9999;
@@ -2748,182 +2700,171 @@ export default function PortalEstudiante() {
           display: flex;
           align-items: center;
           justify-content: center;
-          animation: splashFadeOut 0.6s ease 2s forwards;
-          pointer-events: all;
         }
-        @keyframes splashFadeOut {
-          from { opacity: 1; pointer-events: all; }
-          to   { opacity: 0; pointer-events: none; }
-        }
-        .portal-splash-inner {
+        .portal-splash-loading-inner {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 18px;
+          gap: 28px;
+          animation: splashContentIn 0.6s cubic-bezier(0.34,1.56,0.64,1);
         }
-        .splash-logo {
-          width: 150px;
-          height: 150px;
+        @keyframes splashContentIn {
+          from { transform: scale(0.7); opacity: 0; }
+          to   { transform: scale(1);    opacity: 1; }
+        }
+        .splash-loading-logo {
+          width: 130px;
+          height: 130px;
           object-fit: contain;
-          border-radius: 24px;
-          animation: splashLogoIn 0.75s cubic-bezier(0.34,1.56,0.64,1) forwards;
+          border-radius: 28px;
+          filter: drop-shadow(0 8px 24px rgba(216,27,135,0.2));
         }
-        .splash-logo-fallback {
-          width: 150px;
-          height: 150px;
-          border-radius: 24px;
-          background: #fdf0f7;
+        .splash-loading-fallback {
+          width: 130px;
+          height: 130px;
+          border-radius: 28px;
+          background: linear-gradient(135deg, #fdf0f7 0%, #fff 100%);
           border: 2.5px solid #d81b87;
           display: flex;
           align-items: center;
           justify-content: center;
           color: #d81b87;
-          font-size: 42px;
+          font-size: 40px;
           font-weight: 800;
-          animation: splashLogoIn 0.75s cubic-bezier(0.34,1.56,0.64,1) forwards;
         }
-        @keyframes splashLogoIn {
-          from { transform: scale(0.55); opacity: 0; }
-          to   { transform: scale(1);    opacity: 1; }
+        .splash-loading-dots {
+          display: flex;
+          gap: 8px;
         }
-        .splash-bar {
-          width: 40px;
-          height: 3px;
+        .splash-loading-dots span {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
           background: #d81b87;
-          border-radius: 2px;
-          animation: splashItemIn 0.45s ease 0.6s forwards;
-          opacity: 0;
+          animation: dotBounce 1.2s ease-in-out infinite;
         }
-        .splash-tagline {
-          color: rgba(216,27,135,0.65);
-          font-size: 12px;
-          font-weight: 500;
-          letter-spacing: 3.5px;
-          text-transform: uppercase;
-          margin: 0;
-          animation: splashItemIn 0.45s ease 0.8s forwards;
-          opacity: 0;
-        }
-        @keyframes splashItemIn {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0); }
+        .splash-loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+        .splash-loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes dotBounce {
+          0%, 80%, 100% { transform: scale(0.4); opacity: 0.3; }
+          40% { transform: scale(1); opacity: 1; }
         }
 
         /* ──────────────────────────────────────
-           HEADER BANNER  (fucsia + blanco)
+           HEADER BANNER  (fucsia + blanco, logo centrado)
         ────────────────────────────────────── */
         .portal-header-banner {
           position: relative;
           overflow: hidden;
-          background: #d81b87;
-          padding: 28px 20px 50px;
+          background: linear-gradient(160deg, #e0207f 0%, #d81b87 50%, #c5176f 100%);
+          padding: 30px 20px 56px;
           margin-bottom: 0;
+          text-align: center;
         }
         .portal-header-bg {
           position: absolute;
           inset: 0;
           background-image:
-            radial-gradient(circle at 10% 80%, rgba(255,255,255,0.12) 0%, transparent 45%),
-            radial-gradient(circle at 90% 10%, rgba(255,255,255,0.08) 0%, transparent 40%);
+            radial-gradient(ellipse at 20% 0%, rgba(255,255,255,0.15) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 100%, rgba(255,255,255,0.08) 0%, transparent 50%);
           pointer-events: none;
         }
-        .portal-header-content {
+        /* Logo centrado con protagonismo */
+        .portal-header-logo-hero {
           position: relative;
           display: flex;
-          align-items: center;
-          gap: 18px;
-          flex-wrap: wrap;
-          max-width: 800px;
-          margin: 0 auto;
+          justify-content: center;
+          margin-bottom: 14px;
         }
-        /* Logo */
-        .portal-header-logo-wrap {
-          flex-shrink: 0;
-          width: 84px;
-          height: 84px;
-          background: rgba(255,255,255,0.22);
-          border-radius: 22px;
-          border: 2.5px solid rgba(255,255,255,0.55);
+        .portal-header-logo-ring {
+          width: 96px;
+          height: 96px;
+          background: rgba(255,255,255,0.95);
+          border-radius: 26px;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 0 0 6px rgba(255,255,255,0.12), 0 8px 28px rgba(0,0,0,0.18);
+          box-shadow:
+            0 0 0 4px rgba(255,255,255,0.35),
+            0 12px 36px rgba(0,0,0,0.15);
           overflow: hidden;
+          transition: transform 0.3s ease;
+        }
+        .portal-header-logo-ring:hover {
+          transform: scale(1.04);
         }
         .portal-header-logo {
-          width: 72px;
-          height: 72px;
+          width: 80px;
+          height: 80px;
           object-fit: contain;
-          border-radius: 14px;
+          border-radius: 18px;
         }
         .portal-header-logo-fallback {
-          color: #fff;
-          font-size: 28px;
+          color: #d81b87;
+          font-size: 32px;
           font-weight: 800;
           letter-spacing: -1px;
         }
-        /* Texto */
-        .portal-header-text {
-          flex: 1;
-          min-width: 0;
+        /* Bienvenida centrada debajo del logo */
+        .portal-header-welcome {
+          position: relative;
+          max-width: 400px;
+          margin: 0 auto 16px;
         }
         .portal-header-greeting {
-          color: rgba(255,255,255,0.8);
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 1.5px;
+          display: block;
+          color: rgba(255,255,255,0.85);
+          font-size: 12px;
+          font-weight: 500;
+          letter-spacing: 1.8px;
           text-transform: uppercase;
+          margin-bottom: 2px;
         }
         .portal-header-name {
           color: #fff;
-          font-size: clamp(22px, 5vw, 30px);
+          font-size: clamp(24px, 6vw, 34px);
           font-weight: 800;
-          line-height: 1.1;
+          line-height: 1.15;
           letter-spacing: -0.5px;
-          margin-top: 3px;
+          margin: 0;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .portal-header-subtitle {
-          color: rgba(255,255,255,0.7);
-          font-size: 11px;
-          margin-top: 5px;
-          letter-spacing: 0.5px;
-        }
         /* Botón WhatsApp */
         .portal-wa-btn {
-          display: flex;
+          position: relative;
+          display: inline-flex;
           align-items: center;
           gap: 7px;
-          background: transparent;
-          border: 1.5px solid rgba(255,255,255,0.2);
-          color: rgba(255,255,255,0.85);
+          background: rgba(255,255,255,0.18);
+          backdrop-filter: blur(6px);
+          -webkit-backdrop-filter: blur(6px);
+          border: 1.5px solid rgba(255,255,255,0.35);
+          color: #fff;
           font-weight: 600;
           font-size: 13px;
-          padding: 9px 18px;
+          padding: 9px 20px;
           border-radius: 999px;
           cursor: pointer;
-          transition: border-color 0.18s, color 0.18s, background 0.18s, transform 0.14s;
+          transition: background 0.18s, border-color 0.18s, transform 0.14s;
           white-space: nowrap;
-          flex-shrink: 0;
         }
         .portal-wa-btn:hover {
-          background: rgba(37,211,102,0.14);
-          border-color: #25d366;
-          color: #25d366;
+          background: rgba(37,211,102,0.22);
+          border-color: rgba(37,211,102,0.6);
           transform: translateY(-1px);
         }
         .portal-wa-btn .anticon {
           font-size: 16px;
         }
-        /* Ola inferior */
+        /* Curva inferior */
         .portal-header-wave {
           position: absolute;
           bottom: -1px;
           left: 0;
           width: 100%;
-          height: 42px;
+          height: 54px;
           pointer-events: none;
         }
 
@@ -2933,12 +2874,16 @@ export default function PortalEstudiante() {
         .portal-nav-bar {
           display: flex;
           background: #fff;
-          border-bottom: 1px solid #eee;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+          border-bottom: none;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.06);
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
           margin-bottom: 16px;
+          border-radius: 14px;
+          margin: -22px 12px 16px;
+          position: relative;
+          z-index: 2;
         }
         .portal-nav-bar::-webkit-scrollbar { display: none; }
         .portal-nav-item {
@@ -2996,36 +2941,16 @@ export default function PortalEstudiante() {
           padding: 0 12px 24px;
           min-height: 300px;
         }
+        .portal-estudiante {
+          background: #f7f7f8;
+          min-height: 100vh;
+        }
         @media (min-width: 576px) {
           .portal-section-wrap {
             padding: 0 4px 24px;
           }
         }
 
-        /* ──────────────────────────────────────
-           CABECERA — legado mantenido
-        ────────────────────────────────────── */
-        .portal-estudiante .header-row {
-          align-items: center;
-        }
-        .portal-estudiante .academy-logo {
-          height: 60px;
-          width: auto;
-          object-fit: contain;
-        }
-        .portal-estudiante .whatsapp-button {
-          padding: 0 18px;
-          height: 38px;
-          border-radius: 999px;
-          font-weight: 600;
-          letter-spacing: 0.2px;
-        }
-        .portal-estudiante .student-menu-card {
-          border-radius: 14px;
-        }
-        .portal-estudiante .student-section-card {
-          border-radius: 14px;
-        }
         .portal-estudiante .quiz-question-transition {
           transition: opacity 0.18s ease, transform 0.18s ease;
           opacity: 1;
@@ -3202,21 +3127,24 @@ export default function PortalEstudiante() {
         /* ── Móvil (≤576px) ── */
         @media (max-width: 576px) {
           .portal-header-banner {
-            padding: 20px 14px 46px;
+            padding: 22px 14px 50px;
           }
-          .portal-header-logo-wrap {
-            width: 70px;
-            height: 70px;
-            border-radius: 18px;
-            box-shadow: 0 0 0 5px rgba(216,27,135,0.12), 0 6px 20px rgba(0,0,0,0.5);
+          .portal-header-logo-ring {
+            width: 80px;
+            height: 80px;
+            border-radius: 22px;
           }
           .portal-header-logo {
-            width: 58px;
-            height: 58px;
+            width: 66px;
+            height: 66px;
           }
           .portal-wa-btn {
-            padding: 7px 13px;
+            padding: 7px 15px;
             font-size: 12px;
+          }
+          .portal-nav-bar {
+            margin: -18px 8px 14px;
+            border-radius: 12px;
           }
           .portal-nav-item {
             min-width: 64px;
