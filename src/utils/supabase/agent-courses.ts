@@ -26,6 +26,7 @@ interface AcademyInfo {
   youtube: string | null
   website: string | null
   whatsapp: string | null
+  whatsapp_admisiones: string | null
 }
 
 interface ProgramInfo {
@@ -1103,6 +1104,21 @@ export function detectProgramFromMessage(message: string, programs: ProgramInfo[
       const normalizedToken = normalizeText(token)
       if (normalizedMessage.includes(normalizedToken) || messageTokensExpanded.includes(normalizedToken)) {
         score += 1
+      }
+    }
+
+    // Stem matching: "mirada" ↔ "miradas", "perfecta" ↔ "perfectas" (singular/plural)
+    for (const progToken of programTokens) {
+      const nProgToken = normalizeText(progToken)
+      if (nProgToken.length < 5) continue
+      for (const msgToken of messageTokens) {
+        const nMsgToken = normalizeText(msgToken)
+        if (nMsgToken.length < 5) continue
+        const shorter = nProgToken.length <= nMsgToken.length ? nProgToken : nMsgToken
+        const longer  = nProgToken.length >  nMsgToken.length ? nProgToken : nMsgToken
+        if (longer.startsWith(shorter) && shorter.length >= Math.floor(longer.length * 0.85)) {
+          score += 0.6
+        }
       }
     }
 

@@ -628,9 +628,9 @@ Cierre sugerido:
 ⚠️ NUNCA inventes información.
 
 6️⃣ Embudo de Cierre
-📱 WhatsApp Admisiones (número de la academia): +57 301 203 8582
+📱 WhatsApp Admisiones (número de la academia): {{admissions_number}}
 
-⚠️ IMPORTANTE: Este número (+57 301 203 8582) ES el número de la academia. Si alguien pregunta "¿cuál es el número de la academia?", "¿me das el teléfono?", "¿cómo los contacto?" → responde SIEMPRE con este número.
+⚠️ IMPORTANTE: Este número ({{admissions_number}}) ES el número de la academia. Si alguien pregunta "¿cuál es el número de la academia?", "¿me das el teléfono?", "¿cómo los contacto?" → responde SIEMPRE con este número.
 
 Entrega el número cuando:
 ✔ Preguntan por precios
@@ -640,7 +640,7 @@ Entrega el número cuando:
 Cierre tipo:
 "¡Perfecto! Me encanta tu interés en convertirte en profesional 💎
 Para reservar tu cupo, escribe directamente a Admisiones:
-📱 +57 301 203 8582"
+📱 {{admissions_number}}"
 
 7️⃣ Pensum – Curso de Uñas
 (SOLO si preguntan por contenido o pensum)
@@ -1155,7 +1155,8 @@ function buildAgentPrompt(
   knowledgeChunks: string[],
   conversationHistory: Array<{user: string, agent: string, created_at?: string | null}> = [],
   hierarchicalContext: string = "",
-  contextualDirective: string = ""
+  contextualDirective: string = "",
+  admissionsNumber: string = ADMISSIONS_NUMBER
 ): string {
   const persona = settings?.persona_name || "Dany";
   const bio = settings?.persona_bio || "Asesor experto masculino de la Academia de Belleza Crystal Diamante en Cali.";
@@ -1175,15 +1176,23 @@ function buildAgentPrompt(
   const greetingRule = alreadyGreeted
     ? `⚠️ YA SALUDASTE HOY (${expectedSlotGreeting}). Ve directo a la respuesta. PROHIBIDO repetir saludos en este mismo día.`
     : greeting
-    ? `Saluda SOLO UNA VEZ por día y usa una franja horaria coherente (${expectedSlotGreeting}). Si vas a saludar, usa este saludo base: "${greeting}". Después del primer saludo del día, responde sin volver a saludar.`
-    : `Saluda SOLO UNA VEZ por día con franja horaria coherente (${expectedSlotGreeting}). Después del primer saludo del día, responde sin volver a saludar.`;
+    ? `Saluda SOLO UNA VEZ por día y usa una franja horaria coherente (${expectedSlotGreeting}).
+Si vas a saludar, usa este saludo base como referencia: "${greeting}".
+Personaliza el saludo devolviendo el mismo tono del usuario (si dice "Buenas", responde "¡Buenas!" o "¡${expectedSlotGreeting}!").
+Presenta la academia brevemente y haz UNA sola pregunta abierta para entender qué necesita.
+Ejemplo natural: "¡${expectedSlotGreeting}! 😊 Bienvenida/o a Crystal Diamante. ¿Estás buscando información sobre algún curso o tienes alguna duda?"
+Después del primer saludo del día, responde sin volver a saludar.`
+    : `Saluda SOLO UNA VEZ por día con franja horaria coherente (${expectedSlotGreeting}).
+Devuelve el mismo tono del usuario: si dice "Buenas" → responde "¡Buenas! 😊"; si dice "Hola" → "¡Hola! 💎".
+Presenta la academia en UNA frase y haz UNA pregunta abierta. Ejemplo: "¡${expectedSlotGreeting}! Bienvenida/o a Academia Crystal Diamante 💎 ¿En qué te puedo ayudar?"
+Después del primer saludo del día, responde sin volver a saludar.`;
 
   const salesProtocol = showsBuyingIntent
     ? `✅ **DETECTADO: El usuario muestra INTENCION DE COMPRA**
 
 **ACCION OBLIGATORIA:**
 1. Confirma su interes de forma positiva y motivadora
-2. Proporciona el numero de Admisiones: **+57 301 203 8582** (WhatsApp)
+2. Proporciona el numero de Admisiones: **${admissionsNumber}** (WhatsApp)
 3. Invitalo a escribir para agendar inscripcion o visita
 
 **EJEMPLO DE CIERRE:**
@@ -1191,7 +1200,7 @@ function buildAgentPrompt(
 
 Para finalizar tu inscripcion y reservar tu cupo, escribe directamente a nuestro equipo de Admisiones:
 
-📱 **WhatsApp Admisiones: +57 301 203 8582**
+📱 **WhatsApp Admisiones: ${admissionsNumber}**
 
 Ellos te guiaran en el proceso de pago, confirmaran tu grupo y resolveran cualquier duda. ¡Nos vemos pronto en la academia! 💎✨"`
     : `⚠️ **FASE DE INFORMACION** - NO proporciones el numero de Admisiones aun.
@@ -1202,7 +1211,7 @@ Ayuda al usuario a conocer:
 • Horarios de grupos disponibles
 • Beneficios del programa
 
-**Solo daras el numero de contacto (+57 301 203 8582) cuando:**
+**Solo daras el numero de contacto (${admissionsNumber}) cuando:**
 ✓ Ya haya preguntado por precios
 ✓ Ya haya preguntado por horarios
 ✓ Muestre señales claras: "quiero inscribirme", "como me inscribo", "donde pago", "cuando puedo empezar"`;
@@ -1215,6 +1224,7 @@ Ayuda al usuario a conocer:
     greeting_rule: greetingRule,
     fallback_response: fallback,
     sales_protocol: salesProtocol,
+    admissions_number: admissionsNumber,
   });
 
   if (hierarchicalContext) {
@@ -1263,7 +1273,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const text = normalizeForMatch(message);
   const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
-  const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|cuanto vale|cuanto es|cuanto cuesta)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
+  const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
   const hasScheduleIntent = /\b(horarios?|horas?|dias?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|todos\s+los\s+dias|cuantos\s+dias|que\s+dias)\b/i.test(text);
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horarios?|horas?)\b/i.test(text);
@@ -2439,7 +2449,7 @@ function buildSeparaCupoPaymentReply(
   academy: any,
   courses: any[]
 ): string {
-  const admissionsContact = academy?.whatsapp_admisiones || academy?.whatsapp || ADMISSIONS_NUMBER;
+  const admissionsContact = academy?.whatsapp_admisiones || ADMISSIONS_NUMBER;
   const nequiNumber = "3006402575";
 
   const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
@@ -2797,9 +2807,23 @@ function buildIntentFocusedDirectResponse(
     return `${greeting}, bienvenid@ a *${academyName}* 💎\n\n¿En qué te puedo ayudar hoy? Puedo contarte sobre nuestros cursos, fechas de inicio, precios e inscripciones 🙌`;
   }
 
+  // Detectar tristeza/decepción por falta de cupo o programa no disponible
+  const isDisappointedNoCupo = /\b(ya\s+no\s+hay|no\s+hay|no\s+queda[n]?|no\s+tiene[n]?|que\s+lastima|que\s+pena|que\s+mal)\b.*\b(cupo|cupos|espacio|lugar|disponible|inscripcion)\b/i.test(normalizeForMatch(message))
+    || /\b(ya\s+no\s+hay\s+cupo|no\s+quedan?\s+cupos?|cupo(s)?\s+agotado(s)?)\b/i.test(normalizeForMatch(message));
+  if (isDisappointedNoCupo) {
+    const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
+    const disponibles = Number(primaryCourse?.cupos_disponibles ?? 0);
+    const programLabel = detectedProgram ? ` de *${detectedProgram.nombre}*` : "";
+    if (disponibles > 0) {
+      const nextStart = primaryCourse?.fecha_inicio ? (formatDateLong(primaryCourse.fecha_inicio) || formatDateShort(primaryCourse.fecha_inicio)) : "Por confirmar";
+      return `¡Tranquila! 😊 Sí hay cupos disponibles${programLabel}.\n\n✅ Quedan *${disponibles}* cupo${disponibles === 1 ? "" : "s"} para el grupo que inicia el *${nextStart}*.\n\n¿Quieres que te cuente los pasos para separarlo ahora?`;
+    }
+    return `Te entiendo, es frustrante cuando el tiempo aprieta 🙏\n\nEn este momento los cupos${programLabel} están muy solicitados. Pero puedo avisarte apenas se abra un nuevo grupo o si hay cancelación.\n\n¿Quieres que te deje en lista de espera?`;
+  }
+
   // Detectar frustración del usuario antes de cualquier otro flujo
   if (isFrustrationMessage(message)) {
-    const wa = academy?.whatsapp_admisiones || academy?.whatsapp || ADMISSIONS_NUMBER;
+    const wa = academy?.whatsapp_admisiones || ADMISSIONS_NUMBER;
     return `Entiendo tu molestia y lo siento mucho 🙏 A veces soy limitada en ciertas preguntas.\n\nTe comunico con alguien de *Admisiones* para que te atienda personalmente:\n📲 WhatsApp: *${wa}*\n\nEscríbeles directamente y te resolverán todo de inmediato 💙`;
   }
 
@@ -2821,7 +2845,7 @@ function buildIntentFocusedDirectResponse(
     return saturdayReply;
   }
 
-  if (detectedProgram && isLikelyProgramOnlyReply(message) && !/[?¿]/.test(message)) {
+  if (detectedProgram && isLikelyProgramOnlyReply(message) && !/[?¿]/.test(message) && detectUserIntent(message) === "general") {
     const pendingTopic = inferPendingTopicFromHistory(history);
     if (/dias\s+y\s+horario|horario|inicio|fecha/.test(normalizeForMatch(pendingTopic))) {
       const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
@@ -2947,6 +2971,19 @@ function buildIntentFocusedDirectResponse(
   // Contacto/número de admisiones → responder ANTES que el flujo de inscripción
   if (asksSocialMedia) {
     return buildSocialMediaReply(academy, message);
+  }
+
+  // Pregunta de sí/no sobre disponibilidad de inscripción → responder SÍ primero
+  const isEnrollmentAvailabilityQuestion = /\b(todavia|todavía|aún|aun|siguen?|sigue|hay|tienen?|queda[n]?|esta\s+abierta?|abiert[ao])\b.*\b(inscripcion|inscripciones|cupo|cupos|matricula|disponible|vigente)\b/i.test(normalizeForMatch(message))
+    || /\b(inscripcion|cupo|matricula).*\b(todavia|todavía|aun|siguen?|vigente|abierto)\b/i.test(normalizeForMatch(message));
+  if (isEnrollmentAvailabilityQuestion && intent === "inscripcion") {
+    const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
+    const disponibles = Number(primaryCourse?.cupos_disponibles ?? 0);
+    const cuposStr = disponibles > 0 ? `✅ Quedan *${disponibles}* cupos` : "✅ Hay cupos disponibles";
+    const programLabel = detectedProgram ? ` para *${detectedProgram.nombre}*` : "";
+    const nextStart = primaryCourse?.fecha_inicio ? (formatDateLong(primaryCourse.fecha_inicio) || formatDateShort(primaryCourse.fecha_inicio)) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+    return `¡Sí! 😊 La inscripción${programLabel} está abierta.\n\n${cuposStr}.\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te guíe para separar tu cupo?`;
   }
 
   if (intent === "inscripcion") {
@@ -4149,6 +4186,7 @@ export async function POST(req: NextRequest) {
     
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
+    const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
     const mediosPago = await getMediosPago();
 
     let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs, mediosPago);
@@ -4264,7 +4302,8 @@ export async function POST(req: NextRequest) {
       knowledgeChunks,
       history,
       hierarchicalContext,
-      contextualDirective
+      contextualDirective,
+      admissionsContact
     );
 
     // Generar respuesta
