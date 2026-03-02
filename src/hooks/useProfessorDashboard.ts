@@ -70,6 +70,21 @@ export interface ProfesorDashboardPago {
   periodo?: { inicio?: string | null; fin?: string | null } | null;
 }
 
+export interface ProfesorDashboardCalificacionUltimaClase {
+  matriculaId: number;
+  estudiante: string;
+  quiz: number | null;
+  actividad: number | null;
+}
+
+export interface ProfesorDashboardCalificacionesGrupo {
+  cursoId: string;
+  curso: string;
+  fechaUltimaClase?: string | null;
+  temaUltimaClase?: string | null;
+  estudiantes: ProfesorDashboardCalificacionUltimaClase[];
+}
+
 export interface ProfessorDashboardData {
   loading: boolean;
   profesorNombre?: string;
@@ -78,6 +93,7 @@ export interface ProfessorDashboardData {
   proximasSesiones: ProfesorDashboardSesion[];
   pendientes: ProfesorDashboardPendiente[];
   pagos: ProfesorDashboardPago[];
+  calificacionesRecientesPorGrupo: ProfesorDashboardCalificacionesGrupo[];
 }
 
 const emptyStats: ProfesorDashboardStats = {
@@ -109,6 +125,29 @@ const isAsistenciaPositiva = (estado?: string | null) => {
 };
 
 const safeNumber = (value: number) => (Number.isFinite(value) ? value : 0);
+
+const normalizeEvaluationText = (value?: string | null): string =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const resolveEvaluationKind = (tipo?: string | null, concepto?: string | null): "quiz" | "actividad" | null => {
+  const merged = `${normalizeEvaluationText(tipo)} ${normalizeEvaluationText(concepto)}`.trim();
+  if (!merged) return null;
+  if (merged.includes("quiz") || merged.includes("quizz")) return "quiz";
+  if (
+    merged.includes("actividad") ||
+    merged.includes("taller") ||
+    merged.includes("trabajo") ||
+    merged.includes("practica") ||
+    merged.includes("tema")
+  ) {
+    return "actividad";
+  }
+  return null;
+};
 
 const extractClassNumber = (value?: string | null): number | null => {
   const text = String(value || "");
@@ -219,11 +258,11 @@ export const fetchProfessorDashboardData = async (
   const startOfMonth = dayjs().startOf("month").format("YYYY-MM-DD");
   const endOfMonth = dayjs().endOf("month").format("YYYY-MM-DD");
 
-  const [matriculasResult, sesionesMesResult, proximasSesionesResult] = await Promise.all([
+  const [matriculasResult, sesionesMesResult, proximasSesionesResult, sesionesHistoricasResult] = await Promise.all([
     cursoIds.length > 0
       ? supabaseBrowserClient
           .from("matriculas")
-          .select("id, curso_id")
+          .select("id, curso_id, estudiante_id, perfiles!matriculas_estudiante_id_fkey(nombre_completo)")
           .eq("estado", "activo")
           .in("curso_id", cursoIds)
       : Promise.resolve({ data: [], error: null }),
@@ -241,6 +280,13 @@ export const fetchProfessorDashboardData = async (
       .gte("fecha", dayjs().startOf("day").format("YYYY-MM-DD"))
       .order("fecha", { ascending: true })
       .limit(6),
+    supabaseBrowserClient
+      .from("sesiones_clase")
+      .select("id, fecha, tema_visto, curso_id")
+      .eq("profesor_id", profesorId)
+      .lte("fecha", dayjs().format("YYYY-MM-DD"))
+      .order("fecha", { ascending: false })
+      .limit(200),
   ]);
 
   if (matriculasResult.error) {
@@ -252,10 +298,14 @@ export const fetchProfessorDashboardData = async (
   if (proximasSesionesResult.error) {
     console.error("Error obteniendo próximas sesiones", proximasSesionesResult.error);
   }
+  if (sesionesHistoricasResult.error) {
+    console.error("Error obteniendo sesiones históricas", sesionesHistoricasResult.error);
+  }
 
   const matriculasData = matriculasResult.data || [];
   const sesionesMesData = sesionesMesResult.data || [];
   const proximasSesionesData = proximasSesionesResult.data || [];
+  const sesionesHistoricas = sesionesHistoricasResult.data || [];
 
   const matriculaIds = matriculasData.map((matricula: any) => matricula.id);
 
@@ -301,7 +351,7 @@ export const fetchProfessorDashboardData = async (
     matriculaIds.length > 0
       ? supabaseBrowserClient
           .from("calificaciones")
-          .select("id, concepto, nota, calificacion, fecha_evaluacion, tipo_evaluacion, matriculas:matriculas!calificaciones_matricula_id_fkey(curso_id)")
+          .select("id, matricula_id, concepto, nota, calificacion, fecha_evaluacion, tipo_evaluacion")
           .in("matricula_id", matriculaIds)
           .gte("fecha_evaluacion", dayjs().subtract(90, "day").format("YYYY-MM-DD"))
           .order("fecha_evaluacion", { ascending: true })
@@ -319,9 +369,17 @@ export const fetchProfessorDashboardData = async (
   const calificacionesData = calificacionesResult.data || [];
 
   const estudiantesPorCurso = new Map<string, number>();
+  const matriculaCursoMap = new Map<number, string>();
+  const matriculaEstudianteMap = new Map<number, string>();
   matriculasData.forEach((matricula: any) => {
-    const actual = estudiantesPorCurso.get(matricula.curso_id) || 0;
-    estudiantesPorCurso.set(matricula.curso_id, actual + 1);
+    const cursoId = String(matricula.curso_id);
+    const matriculaId = Number(matricula.id);
+    const actual = estudiantesPorCurso.get(cursoId) || 0;
+    estudiantesPorCurso.set(cursoId, actual + 1);
+    if (Number.isFinite(matriculaId)) {
+      matriculaCursoMap.set(matriculaId, cursoId);
+      matriculaEstudianteMap.set(matriculaId, matricula?.perfiles?.nombre_completo || "Estudiante");
+    }
   });
 
   const horasMes = sesionesMesData.reduce(
@@ -464,7 +522,7 @@ export const fetchProfessorDashboardData = async (
       total: acumuladoFecha.total + 1,
     });
 
-    const cursoId = calificacion.matriculas?.curso_id;
+    const cursoId = calificacion?.matricula_id ? matriculaCursoMap.get(Number(calificacion.matricula_id)) : undefined;
     if (cursoId) {
       const acumuladoCurso = calificacionesPorCurso.get(cursoId) || { suma: 0, total: 0 };
       calificacionesPorCurso.set(cursoId, {
@@ -535,13 +593,12 @@ export const fetchProfessorDashboardData = async (
     .slice(0, 6);
 
   const ultimaSesionPorCurso = new Map<string, { fecha: string; tema?: string | null }>();
-  sesionesMesData.forEach((sesion: any) => {
-    if (!sesion.fecha || !sesion.curso_id) return;
-    const fechaSesion = dayjs(sesion.fecha);
-    if (fechaSesion.isAfter(dayjs())) return; // solo sesiones pasadas o de hoy
-    const existente = ultimaSesionPorCurso.get(sesion.curso_id);
-    if (!existente || fechaSesion.isAfter(dayjs(existente.fecha))) {
-      ultimaSesionPorCurso.set(sesion.curso_id, { fecha: sesion.fecha, tema: sesion.tema_visto });
+  sesionesHistoricas.forEach((sesion: any) => {
+    if (!sesion?.fecha || !sesion?.curso_id) return;
+    const cursoId = String(sesion.curso_id);
+    const existente = ultimaSesionPorCurso.get(cursoId);
+    if (!existente || dayjs(sesion.fecha).isAfter(dayjs(existente.fecha))) {
+      ultimaSesionPorCurso.set(cursoId, { fecha: sesion.fecha, tema: sesion.tema_visto });
     }
   });
 
@@ -552,8 +609,8 @@ export const fetchProfessorDashboardData = async (
     )
     .map((calificacion: any) => ({
       id: calificacion.id,
-      curso: cursoNombreMap.get(calificacion.matriculas?.curso_id) || "Curso",
-      cursoId: calificacion.matriculas?.curso_id || null,
+      curso: cursoNombreMap.get(String(matriculaCursoMap.get(Number(calificacion.matricula_id)) || "")) || "Curso",
+      cursoId: String(matriculaCursoMap.get(Number(calificacion.matricula_id)) || "") || null,
       concepto: calificacion.concepto || calificacion.tipo_evaluacion || "Sin concepto",
       fecha: calificacion.fecha_evaluacion,
       tipo: calificacion.tipo_evaluacion,
@@ -613,12 +670,78 @@ export const fetchProfessorDashboardData = async (
     totalPagadoMes: Number(totalPagadoMes.toFixed(2)),
   };
 
+  const calificacionesRecientesPorGrupo: ProfesorDashboardCalificacionesGrupo[] = cursosEnriquecidos.map((curso) => {
+    const ultimaClase = ultimaSesionPorCurso.get(String(curso.id));
+    const fechaUltimaClase = ultimaClase?.fecha || null;
+    const filas = new Map<number, ProfesorDashboardCalificacionUltimaClase>();
+
+    matriculasData
+      .filter((matricula: any) => String(matricula.curso_id) === String(curso.id))
+      .forEach((matricula: any) => {
+        const matriculaId = Number(matricula.id);
+        if (!Number.isFinite(matriculaId)) return;
+        filas.set(matriculaId, {
+          matriculaId,
+          estudiante: matriculaEstudianteMap.get(matriculaId) || "Estudiante",
+          quiz: null,
+          actividad: null,
+        });
+      });
+
+    if (fechaUltimaClase) {
+      calificacionesData.forEach((calificacion: any) => {
+        const matriculaId = Number(calificacion.matricula_id);
+        if (!Number.isFinite(matriculaId)) return;
+        const cursoId = matriculaCursoMap.get(matriculaId);
+        if (String(cursoId || "") !== String(curso.id)) return;
+
+        const fechaEvaluacion = calificacion.fecha_evaluacion ? dayjs(calificacion.fecha_evaluacion) : null;
+        if (!fechaEvaluacion || !fechaEvaluacion.isSame(dayjs(fechaUltimaClase), "day")) return;
+
+        const nota = Number(calificacion.nota ?? calificacion.calificacion);
+        if (!Number.isFinite(nota)) return;
+
+        const kind = resolveEvaluationKind(calificacion.tipo_evaluacion, calificacion.concepto);
+        if (!kind) return;
+
+        const row = filas.get(matriculaId) || {
+          matriculaId,
+          estudiante: matriculaEstudianteMap.get(matriculaId) || "Estudiante",
+          quiz: null,
+          actividad: null,
+        };
+
+        if (kind === "quiz") {
+          row.quiz = nota;
+        }
+        if (kind === "actividad") {
+          row.actividad = nota;
+        }
+
+        filas.set(matriculaId, row);
+      });
+    }
+
+    const estudiantes = Array.from(filas.values()).sort((a, b) =>
+      a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }),
+    );
+
+    return {
+      cursoId: String(curso.id),
+      curso: curso.nombre,
+      fechaUltimaClase,
+      temaUltimaClase: ultimaClase?.tema || null,
+      estudiantes,
+    };
+  });
+
   return {
     stats: statsPayload,
     cursos: cursosEnriquecidos,
     proximasSesiones: mergedProximasSesiones,
     pendientes: pendientesList,
     pagos: pagosRecientes,
+    calificacionesRecientesPorGrupo,
   };
 };
 
@@ -630,6 +753,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
   const [proximasSesiones, setProximasSesiones] = useState<ProfesorDashboardSesion[]>([]);
   const [pendientes, setPendientes] = useState<ProfesorDashboardPendiente[]>([]);
   const [pagos, setPagos] = useState<ProfesorDashboardPago[]>([]);
+  const [calificacionesRecientesPorGrupo, setCalificacionesRecientesPorGrupo] = useState<ProfesorDashboardCalificacionesGrupo[]>([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -650,6 +774,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
         setProximasSesiones(data.proximasSesiones);
         setPendientes(data.pendientes);
         setPagos(data.pagos);
+        setCalificacionesRecientesPorGrupo(data.calificacionesRecientesPorGrupo || []);
       } catch (error) {
         console.error("Error general obteniendo dashboard del profesor", error);
         setStats(emptyStats);
@@ -657,6 +782,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
         setProximasSesiones([]);
         setPendientes([]);
         setPagos([]);
+        setCalificacionesRecientesPorGrupo([]);
       } finally {
         setLoading(false);
       }
@@ -673,5 +799,6 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
     proximasSesiones,
     pendientes,
     pagos,
+    calificacionesRecientesPorGrupo,
   };
 };

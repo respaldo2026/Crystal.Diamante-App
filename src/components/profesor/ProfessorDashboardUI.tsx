@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Column, Line } from "@ant-design/plots";
+import { Line } from "@ant-design/plots";
 import {
   BookOutlined,
   CalendarOutlined,
@@ -188,9 +188,10 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     proximasSesiones: [],
     pendientes: [],
     pagos: [],
+    calificacionesRecientesPorGrupo: [],
   };
 
-  const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre } = resolvedDashboard;
+  const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre, calificacionesRecientesPorGrupo } = resolvedDashboard;
   const statsData = stats ?? fallbackStats;
   const proximasSesionesData = dedupeByKey(proximasSesiones || [], (sesion: any) => `${sesion.cursoId ?? ""}-${sesion.fecha ?? ""}-${sesion.tema ?? ""}-${sesion.claseNumero ?? ""}`);
   const pendientesData = dedupeByKey(pendientes || [], (pendiente: any) => `${pendiente.cursoId ?? ""}-${pendiente.concepto ?? ""}-${pendiente.fecha ?? ""}`);
@@ -264,25 +265,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     },
   };
 
-  const calificacionesConfig = {
-    data: statsData.calificacionesChart || [],
-    xField: "fecha",
-    yField: "promedio",
-    color: "#6366f1",
-    height: 240,
-    columnWidthRatio: 0.6,
-    tooltip: {
-      formatter: (datum: any) => ({
-        name: "Promedio",
-        value: datum.promedio,
-      }),
-    },
-    yAxis: {
-      min: 0,
-      max: 100,
-    },
-  };
-
   const topCursos = useMemo(
     () => dedupeByKey(statsData.topCursos || [], (curso: any) => `${curso.id ?? curso.nombre ?? ""}`),
     [statsData.topCursos],
@@ -319,7 +301,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   }, [cursosOrdenados]);
 
   const hasAsistenciaData = (statsData.asistenciaChart || []).length > 0;
-  const hasCalificacionesData = (statsData.calificacionesChart || []).length > 0;
+  const hasCalificacionesRecientes = (calificacionesRecientesPorGrupo || []).length > 0;
   const hasTopCursos = (topCursos || []).length > 0;
 
   const menuProfesor = [
@@ -907,10 +889,10 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           </Col>
         </Row>
 
-        {(hasAsistenciaData || hasCalificacionesData || hasTopCursos) && (
+        {(hasAsistenciaData || hasCalificacionesRecientes || hasTopCursos) && (
           <Row ref={analiticaSectionRef} gutter={[12, 12]} style={{ marginTop: 10 }}>
             {hasAsistenciaData && (
-              <Col xs={24} lg={hasCalificacionesData ? 12 : 24}>
+              <Col xs={24} lg={hasCalificacionesRecientes ? 12 : 24}>
                 <Card
                   variant="borderless"
                   title={<span style={{ fontWeight: 600 }}>Tendencia de asistencia</span>}
@@ -922,15 +904,66 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
               </Col>
             )}
 
-            {hasCalificacionesData && (
+            {hasCalificacionesRecientes && (
               <Col xs={24} lg={hasAsistenciaData ? 12 : 24}>
                 <Card
                   variant="borderless"
-                  title={<span style={{ fontWeight: 600 }}>Desempeño académico</span>}
-                  extra={<Tag color="blue">Evaluaciones</Tag>}
+                  title={<span style={{ fontWeight: 600 }}>Últimas calificaciones por grupo</span>}
+                  extra={<Tag color="geekblue">Última clase</Tag>}
                   style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
                 >
-                  <Column {...calificacionesConfig} />
+                  <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                    {(calificacionesRecientesPorGrupo || []).map((grupo: any) => (
+                      <Card
+                        key={grupo.cursoId}
+                        size="small"
+                        title={grupo.curso}
+                        extra={grupo.fechaUltimaClase ? dayjs(grupo.fechaUltimaClase).format("DD MMM YYYY") : "Sin clase"}
+                        styles={{ body: { padding: isMobile ? 8 : 12 } }}
+                      >
+                        {grupo.fechaUltimaClase ? (
+                          <>
+                            {grupo.temaUltimaClase ? (
+                              <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+                                Tema: {grupo.temaUltimaClase}
+                              </Typography.Text>
+                            ) : null}
+                            <Table
+                              size="small"
+                              pagination={false}
+                              rowKey={(record) => String(record.matriculaId)}
+                              dataSource={grupo.estudiantes || []}
+                              scroll={{ x: 380 }}
+                              columns={[
+                                {
+                                  title: "Estudiante",
+                                  dataIndex: "estudiante",
+                                  key: "estudiante",
+                                  render: (value) => <Typography.Text strong>{value}</Typography.Text>,
+                                },
+                                {
+                                  title: "Quiz",
+                                  dataIndex: "quiz",
+                                  key: "quiz",
+                                  width: 92,
+                                  render: (value) => (typeof value === "number" ? value.toFixed(1) : "—"),
+                                },
+                                {
+                                  title: "Actividad",
+                                  dataIndex: "actividad",
+                                  key: "actividad",
+                                  width: 110,
+                                  render: (value) => (typeof value === "number" ? value.toFixed(1) : "—"),
+                                },
+                              ]}
+                            />
+                          </>
+                        ) : (
+                          <Empty description="Sin clase registrada para este grupo" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        )}
+                      </Card>
+                    ))}
+                  </Space>
                 </Card>
               </Col>
             )}

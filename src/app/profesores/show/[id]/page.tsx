@@ -149,6 +149,7 @@ export default function ShowProfesorDashboard() {
         proximasSesiones: data.proximasSesiones,
         pendientes: data.pendientes,
         pagos: data.pagos,
+        calificacionesRecientesPorGrupo: data.calificacionesRecientesPorGrupo,
       }
     : null;
 

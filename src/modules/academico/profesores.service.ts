@@ -51,6 +51,7 @@ export async function obtenerDashboardProfesor(profesorId: string) {
       proximasSesiones: [],
       pendientes: [],
       pagos: [],
+      calificacionesRecientesPorGrupo: [],
     };
   }
 }
