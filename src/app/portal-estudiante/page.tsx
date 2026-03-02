@@ -66,6 +66,14 @@ const UMBRAL_APROBACION_QUIZ_NOTA = 3.8; // nota mínima para aprobar y desbloqu
 const quizAprobado = (calificacion: number | null | undefined) =>
   Number(calificacion || 0) >= UMBRAL_APROBACION_QUIZ_NOTA;
 
+const getActividadColor = (nota?: number | null): string => {
+  const value = Number(nota);
+  if (!Number.isFinite(value)) return "default";
+  if (value >= 4) return "green";
+  if (value >= 3) return "gold";
+  return "red";
+};
+
 export default function PortalEstudiante() {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -82,6 +90,7 @@ export default function PortalEstudiante() {
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
   const [quizzesClase, setQuizzesClase] = useState<any[]>([]);
   const [quizIntentos, setQuizIntentos] = useState<any[]>([]);
+  const [calificacionesActividad, setCalificacionesActividad] = useState<any[]>([]);
   const [quizPreguntas, setQuizPreguntas] = useState<any[]>([]);
   const [quizModalOpen, setQuizModalOpen] = useState(false);
   const [quizActivo, setQuizActivo] = useState<any | null>(null);
@@ -120,6 +129,22 @@ export default function PortalEstudiante() {
   const isFetchingRef = useRef(false);
   const hasFetchedOnceRef = useRef(false);
   const [showLoadingUi, setShowLoadingUi] = useState(false);
+
+  const actividadPorTemaMatricula = React.useMemo(() => {
+    const map = new Map<string, number>();
+    (calificacionesActividad || []).forEach((item: any) => {
+      const temaId = String(item?.tema_id || "");
+      const matriculaId = String(item?.matricula_id || "");
+      if (!temaId || !matriculaId) return;
+
+      const key = `${matriculaId}-${temaId}`;
+      if (map.has(key)) return;
+      const nota = Number(item?.calificacion ?? item?.nota);
+      if (!Number.isFinite(nota)) return;
+      map.set(key, nota);
+    });
+    return map;
+  }, [calificacionesActividad]);
 
   useEffect(() => {
     if (!loading) {
@@ -917,8 +942,18 @@ export default function PortalEstudiante() {
             .in("matricula_id", matriculaIds)
             .order("enviado_at", { ascending: false });
           setQuizIntentos(intentosQuizData || []);
+
+          const { data: calificacionesActividadData } = await supabaseBrowserClient
+            .from("calificaciones")
+            .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
+            .in("matricula_id", matriculaIds)
+            .in("tipo_evaluacion", ["actividad", "tema"])
+            .order("fecha_evaluacion", { ascending: false });
+
+          setCalificacionesActividad(calificacionesActividadData || []);
         } else {
           setQuizIntentos([]);
+          setCalificacionesActividad([]);
         }
       }
 
@@ -955,6 +990,7 @@ export default function PortalEstudiante() {
       } else {
         setQuizzesClase([]);
         setQuizIntentos([]);
+        setCalificacionesActividad([]);
       }
 
       // 5. Calcular Avance y Certificados
@@ -1702,6 +1738,7 @@ export default function PortalEstudiante() {
                         )
                       : null;
                     const notaQuizTema = intentoQuizTema ? Number(intentoQuizTema?.calificacion || 0) : null;
+                    const notaActividadTema = actividadPorTemaMatricula.get(`${matriculaSeleccionada?.id || ""}-${temaId}`) ?? null;
                     const temaCompletado = notaQuizTema != null && quizAprobado(notaQuizTema);
                     const colorAvatarTema = temaBloqueado ? "#bfbfbf" : temaCompletado ? "#16a34a" : colorNumeroTema;
                     const insumosMarcados = insumosTema.filter((insumo: any) => {
@@ -1786,10 +1823,13 @@ export default function PortalEstudiante() {
 
                                   <Space wrap size={8}>
                                     <Tag color="geekblue">
-                                      {`Actividad evaluatoria: ${quizTema?.titulo || "Sin actividad"}`}
+                                      {`Quiz: ${quizTema?.titulo || "Sin quiz"}`}
                                     </Tag>
                                     <Tag color={notaQuizTema == null ? "default" : quizAprobado(notaQuizTema) ? "green" : "red"}>
-                                      {`Calificación: ${notaQuizTema == null ? "-" : `${notaQuizTema}/5`}`}
+                                      {`Calificación quiz: ${notaQuizTema == null ? "-" : `${notaQuizTema}/5`}`}
+                                    </Tag>
+                                    <Tag color={getActividadColor(notaActividadTema)}>
+                                      {`Calificación actividad: ${notaActividadTema == null ? "-" : `${Number(notaActividadTema).toFixed(1)}/5`}`}
                                     </Tag>
                                   </Space>
                                 </Space>

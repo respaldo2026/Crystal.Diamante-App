@@ -77,6 +77,14 @@ const dedupeByKey = <T,>(items: T[] = [], keySelector: (item: T) => string): T[]
   return Array.from(map.values());
 };
 
+const getActividadColor = (nota?: number | null): string => {
+  const value = Number(nota);
+  if (!Number.isFinite(value)) return "default";
+  if (value >= 4) return "green";
+  if (value >= 3) return "gold";
+  return "red";
+};
+
 type ParamsLike = Promise<{ id: string }>;
 
 export default function CursoShowPage({ params }: { params: ParamsLike }) {
@@ -326,8 +334,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   const guardarNotaTema = useCallback(
     async (temaId: string | number, matriculaId: string | number, nota: number | null) => {
-      if (nota == null || Number.isNaN(nota)) {
-        message.warning("Ingresa una nota válida (0 a 5)");
+      if (nota == null || Number.isNaN(nota) || Number(nota) < 1 || Number(nota) > 5) {
+        message.warning("Ingresa una nota válida (1 a 5)");
         return;
       }
 
@@ -338,7 +346,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       }
 
       const temaActual = temas.find((t) => String(t.id) === String(temaId));
-      const conceptoTema = `Tema: ${temaActual?.nombre_ciclo || temaActual?.titulo || String(temaId)}`;
+      const conceptoTema = `Actividad: ${temaActual?.nombre_curso || temaActual?.titulo || String(temaId)}`;
       const temaIdTexto = String(temaId || "").trim();
       const temaIdEsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(temaIdTexto);
       const key = `${temaId}-${matriculaId}`;
@@ -349,7 +357,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           concepto: conceptoTema,
           nota,
           calificacion: nota,
-          tipo_evaluacion: "tema",
+          tipo_evaluacion: "actividad",
           fecha_evaluacion: dayjs().format("YYYY-MM-DD"),
         };
         if (temaIdEsUuid) {
@@ -365,7 +373,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           queryExistente = queryExistente.eq("tema_id", temaIdTexto);
         } else {
           queryExistente = queryExistente
-            .eq("tipo_evaluacion", "tema")
+            .in("tipo_evaluacion", ["actividad", "tema"])
             .eq("concepto", conceptoTema);
         }
 
@@ -383,7 +391,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               concepto: conceptoTema,
               nota,
               calificacion: nota,
-              tipo_evaluacion: "tema",
+              tipo_evaluacion: "actividad",
               fecha_evaluacion: dayjs().format("YYYY-MM-DD"),
             })
             .eq("id", existente.id);
@@ -423,6 +431,20 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     },
     [message, temas]
   );
+
+  const promedioActividadPorTema = useMemo(() => {
+    const map = new Map<string, number>();
+    temas.forEach((tema) => {
+      const temaId = String(tema.id);
+      const notas = estudiantes
+        .map((est) => calificacionesTema[temaId]?.[String(est.id)] ?? null)
+        .filter((nota): nota is number => typeof nota === "number" && !Number.isNaN(nota));
+
+      if (!notas.length) return;
+      map.set(temaId, Number((notas.reduce((sum, nota) => sum + nota, 0) / notas.length).toFixed(1)));
+    });
+    return map;
+  }, [calificacionesTema, estudiantes, temas]);
 
   // Resolver params si es una Promise
   useEffect(() => {
@@ -724,14 +746,17 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         if (matriculaIds.length > 0) {
           const { data: califData } = await supabaseBrowserClient
             .from("calificaciones")
-            .select("matricula_id, tema_id, nota, calificacion")
+            .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion")
             .in("matricula_id", matriculaIds);
 
           const mapa: Record<string, Record<string, number | null>> = {};
           (califData || []).forEach((c: any) => {
+            const tipo = String(c?.tipo_evaluacion || "").toLowerCase();
+            if (tipo && tipo !== "actividad" && tipo !== "tema") return;
             const temaKey = String(c.tema_id);
             const matKey = String(c.matricula_id);
             const valor = c.calificacion ?? c.nota ?? null;
+            if (!temaKey || temaKey === "undefined" || temaKey === "null") return;
             if (!mapa[temaKey]) mapa[temaKey] = {};
             mapa[temaKey][matKey] = valor;
           });
@@ -1289,6 +1314,25 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                         ) : (
                                           <Text type="secondary" style={{ fontSize: 12 }}>Sin material didactico</Text>
                                         )}
+
+                                        <Space wrap size={8}>
+                                          {(() => {
+                                            const quizTema = (quizzesClase || []).find(
+                                              (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaId)
+                                            );
+                                            const promedioActividad = promedioActividadPorTema.get(String(temaId));
+                                            return (
+                                              <>
+                                                <Tag color={quizTema ? "blue" : "default"}>
+                                                  {quizTema ? "Quiz habilitado" : "Sin quiz"}
+                                                </Tag>
+                                                <Tag color={getActividadColor(promedioActividad)}>
+                                                  {`Actividad: ${typeof promedioActividad === "number" ? `${promedioActividad.toFixed(1)}/5` : "Pendiente"}`}
+                                                </Tag>
+                                              </>
+                                            );
+                                          })()}
+                                        </Space>
                                       </Space>
                                     }
                                   />
@@ -1480,8 +1524,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             children: (
               <Space direction="vertical" size={12} style={{ width: "100%" }}>
                 <Alert
-                  message="Calificaciones por clase"
-                  description="Selecciona la clase (tema) para ver y guardar notas rápidamente. Los estudiantes pendientes de pago no pueden ser calificados."
+                  message="Calificaciones de actividad por clase"
+                  description="Selecciona la clase (tema) para ver y guardar la actividad calificable (1 a 5). Los estudiantes pendientes de pago no pueden ser calificados."
                   type="info"
                   showIcon
                   style={{ padding: "8px 10px" }}
@@ -1558,7 +1602,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   <Card><Empty description="No hay temario cargado" /></Card>
                 ) : (
                   <Card
-                    title={<Text strong style={{ fontSize: 14 }}>Notas por clase</Text>}
+                    title={<Text strong style={{ fontSize: 14 }}>Actividad por clase</Text>}
                     bodyStyle={{ padding: 10 }}
                     headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
                   >
@@ -1621,12 +1665,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                   render: (_: any, record: any) => {
                                     const current = calificacionesTema[temaId]?.[String(record.id)] ?? null;
                                     if (current == null || Number.isNaN(current)) return <Text type="secondary">Pendiente</Text>;
-                                    const color = current >= 3.75 ? "green" : current >= 3 ? "gold" : "red";
+                                    const color = getActividadColor(current);
                                     return <Tag color={color}>{current.toFixed(1)}</Tag>;
                                   },
                                 },
                                 {
-                                  title: "Calificar (0-5)",
+                                  title: "Actividad (1-5)",
                                   width: 150,
                                   render: (_: any, record: any) => {
                                     const habilitado = record.estado !== "pendiente_pago";
@@ -1634,7 +1678,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
                                     return (
                                       <InputNumber
-                                        min={0}
+                                        min={1}
                                         max={5}
                                         step={0.1}
                                         value={current}
