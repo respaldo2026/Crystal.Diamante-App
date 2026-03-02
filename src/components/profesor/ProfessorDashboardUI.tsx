@@ -593,17 +593,22 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                   borderRadius: 14,
                   background: "rgba(17, 24, 39, 0.45)",
                   border: "1px solid rgba(148,163,184,0.2)",
-                  maxWidth: 520,
+                  maxWidth: 560,
                 }}
                 styles={{ body: { padding: isMobile ? 8 : 10 } }}
               >
-                <Row gutter={[8, 8]}>
+                <Row gutter={isMobile ? [6, 6] : [8, 8]}>
                   {menuProfesor.map((item) => (
-                    <Col xs={12} sm={8} md={8} key={item.key}>
+                    <Col
+                      xs={item.key === "financiero" ? 24 : 12}
+                      sm={8}
+                      md={8}
+                      key={item.key}
+                    >
                       <Button
                         block
                         size="small"
-                        className="professor-menu-btn"
+                        className={`professor-menu-btn ${item.key === "financiero" ? "professor-menu-finance" : ""}`.trim()}
                         onClick={() => handleMenuProfesor(item.key)}
                       >
                         <span className="professor-menu-inner">
@@ -623,7 +628,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                 styles={{ body: { padding: isMobile ? 10 : 14 } }}
               >
                 <Row gutter={[10, 10]}>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12} sm={12}>
                     <Statistic
                       prefix={<BookOutlined style={{ color: "#60a5fa" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Cursos activos</span>}
@@ -631,7 +636,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       valueStyle={{ color: "#fff", fontWeight: 600 }}
                     />
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12} sm={12}>
                     <Statistic
                       prefix={<TeamOutlined style={{ color: "#34d399" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Estudiantes</span>}
@@ -639,7 +644,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       valueStyle={{ color: "#fff", fontWeight: 600 }}
                     />
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12} sm={12}>
                     <Statistic
                       prefix={<ClockCircleOutlined style={{ color: "#fbbf24" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Horas del mes</span>}
@@ -648,7 +653,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       valueStyle={{ color: "#fff", fontWeight: 600 }}
                     />
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12} sm={12}>
                     <Statistic
                       prefix={<CalendarOutlined style={{ color: "#38bdf8" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Horas quincena</span>}
@@ -673,7 +678,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           </Row>
         </Card>
 
-        <Row gutter={[12, 12]} style={{ marginBottom: 4 }}>
+        <Row gutter={[12, 12]} style={{ marginBottom: isMobile ? 0 : 4 }}>
           {[{
             key: "asistencia",
             title: "Asistencia promedio",
@@ -691,7 +696,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           }].map((item, index, arr) => (
             <Col
               key={item.key}
-              xs={24}
+              xs={12}
               sm={12}
               lg={arr.length === 2 ? 12 : 8}
               xl={arr.length === 2 ? 12 : 8}
@@ -719,7 +724,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           ))}
         </Row>
 
-        <Row gutter={[12, 12]} style={{ marginTop: 4 }}>
+        <Row gutter={[12, 12]} style={{ marginTop: isMobile ? 0 : 4 }}>
           <Col xs={24} lg={16}>
             <div ref={cursosSectionRef}>
               <Card
@@ -1304,6 +1309,10 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             white-space: normal;
           }
           @media (max-width: 576px) {
+            .ant-layout-sider-zero-width-trigger,
+            .ant-layout-sider-zero-width-trigger-left {
+              display: none !important;
+            }
             .profesor-dashboard {
               padding: 10px !important;
             }
@@ -1331,6 +1340,9 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             .profesor-dashboard .professor-menu-btn {
               min-height: 48px;
               padding: 5px 4px;
+            }
+            .profesor-dashboard .professor-menu-btn.professor-menu-finance {
+              min-height: 44px;
             }
             .profesor-dashboard .professor-menu-label {
               font-size: 10px;
