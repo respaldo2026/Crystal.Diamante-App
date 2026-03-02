@@ -24,6 +24,7 @@ import {
   Divider,
   Drawer,
   Empty,
+  Grid,
   List,
   Modal,
   Progress,
@@ -212,6 +213,8 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     src: "",
   });
   const [logoAcademia, setLogoAcademia] = useState<string | null>(null);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.sm;
   const cursosSectionRef = useRef<HTMLDivElement | null>(null);
   const sesionesSectionRef = useRef<HTMLDivElement | null>(null);
   const pendientesSectionRef = useRef<HTMLDivElement | null>(null);
@@ -547,7 +550,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
       className="profesor-dashboard"
       style={{
         minHeight: "100vh",
-        padding: "16px 10px 32px",
+        padding: isMobile ? "12px 8px 20px" : "16px 10px 32px",
         background: "linear-gradient(135deg, #f4f7ff 0%, #ffffff 100%)",
       }}
     >
@@ -564,23 +567,23 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
         <Card
           variant="borderless"
           style={{
-            borderRadius: 24,
+            borderRadius: isMobile ? 16 : 24,
             background: "linear-gradient(135deg, #1e3a8a 0%, #111827 100%)",
             marginBottom: 12,
             color: "#fff",
             boxShadow: "0 16px 36px -26px rgba(30,64,175,0.6)",
           }}
-          styles={{ body: { padding: "18px 20px" } }}
+          styles={{ body: { padding: isMobile ? "14px 12px" : "18px 20px" } }}
         >
           <Row gutter={[12, 12]} align="middle">
             <Col xs={24} md={14}>
               <Typography.Text style={{ color: "rgba(255,255,255,0.65)" }}>
                 {dayjs().format("dddd, D MMMM")}
               </Typography.Text>
-              <Typography.Title level={2} style={{ color: "#fff", marginTop: 4 }}>
+              <Typography.Title level={isMobile ? 3 : 2} style={{ color: "#fff", marginTop: 4, marginBottom: isMobile ? 8 : 14 }}>
                 {profesorNombre ? `Hola, ${profesorNombre}` : "Mi Oficina"}
               </Typography.Title>
-              <Typography.Paragraph style={{ color: "rgba(255,255,255,0.7)", marginBottom: 12 }}>
+              <Typography.Paragraph style={{ color: "rgba(255,255,255,0.7)", marginBottom: isMobile ? 8 : 12, fontSize: isMobile ? 13 : 14 }}>
                 Visualiza el pulso de tus cursos, haz seguimiento a tus estudiantes y mantén tus clases listas.
               </Typography.Paragraph>
               <Card
@@ -592,11 +595,11 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                   border: "1px solid rgba(148,163,184,0.2)",
                   maxWidth: 520,
                 }}
-                styles={{ body: { padding: 10 } }}
+                styles={{ body: { padding: isMobile ? 8 : 10 } }}
               >
                 <Row gutter={[8, 8]}>
                   {menuProfesor.map((item) => (
-                    <Col xs={8} sm={8} md={8} key={item.key}>
+                    <Col xs={12} sm={8} md={8} key={item.key}>
                       <Button
                         block
                         size="small"
@@ -616,11 +619,11 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             <Col xs={24} md={10}>
               <Card
                 variant="borderless"
-                style={{ borderRadius: 20, background: "rgba(17, 24, 39, 0.55)", color: "#fff" }}
-                styles={{ body: { padding: 14 } }}
+                style={{ borderRadius: isMobile ? 14 : 20, background: "rgba(17, 24, 39, 0.55)", color: "#fff" }}
+                styles={{ body: { padding: isMobile ? 10 : 14 } }}
               >
                 <Row gutter={[10, 10]}>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Statistic
                       prefix={<BookOutlined style={{ color: "#60a5fa" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Cursos activos</span>}
@@ -628,7 +631,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       valueStyle={{ color: "#fff", fontWeight: 600 }}
                     />
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Statistic
                       prefix={<TeamOutlined style={{ color: "#34d399" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Estudiantes</span>}
@@ -636,7 +639,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       valueStyle={{ color: "#fff", fontWeight: 600 }}
                     />
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Statistic
                       prefix={<ClockCircleOutlined style={{ color: "#fbbf24" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Horas del mes</span>}
@@ -645,7 +648,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       valueStyle={{ color: "#fff", fontWeight: 600 }}
                     />
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Statistic
                       prefix={<CalendarOutlined style={{ color: "#38bdf8" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Horas quincena</span>}
@@ -654,7 +657,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       valueStyle={{ color: "#fff", fontWeight: 600 }}
                     />
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Statistic
                       prefix={<StarOutlined style={{ color: "#a78bfa" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Promedio</span>}
@@ -696,19 +699,19 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
               <Card
                 variant="borderless"
                 style={{ borderRadius: 16, height: "100%", boxShadow: "0 12px 24px -22px rgba(15,23,42,0.26)" }}
-                styles={{ body: { padding: 12 } }}
+                styles={{ body: { padding: isMobile ? 10 : 12 } }}
               >
                 <Space size="small" align="start">
                   {item.icon}
                   <div>
-                    <Typography.Text type="secondary">{item.title}</Typography.Text>
-                    <Typography.Title level={4} style={{ margin: "6px 0" }}>
+                    <Typography.Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>{item.title}</Typography.Text>
+                    <Typography.Title level={isMobile ? 5 : 4} style={{ margin: "6px 0" }}>
                       {item.value}
                       {item.suffix && typeof item.value === "number" ? (
-                        <Typography.Text style={{ fontSize: 16, marginLeft: 4 }}>{item.suffix}</Typography.Text>
+                        <Typography.Text style={{ fontSize: isMobile ? 14 : 16, marginLeft: 4 }}>{item.suffix}</Typography.Text>
                       ) : null}
                     </Typography.Title>
-                    <Typography.Text style={{ color: "#667085" }}>{item.description}</Typography.Text>
+                    <Typography.Text style={{ color: "#667085", fontSize: isMobile ? 12 : 14 }}>{item.description}</Typography.Text>
                   </div>
                 </Space>
               </Card>
@@ -747,13 +750,13 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                               display: "flex",
                               flexDirection: "column",
                               gap: 6,
-                              minHeight: 150,
-                              padding: 10,
+                              minHeight: isMobile ? 132 : 150,
+                              padding: isMobile ? 9 : 10,
                             },
                           }}
                         >
                           <Space align="center" split={<Divider type="vertical" style={{ borderColor: "rgba(255,255,255,0.12)" }} />} wrap>
-                            <Typography.Title level={4} style={{ margin: 0, color: "#F8FAFC", fontSize: 18 }}>
+                            <Typography.Title level={isMobile ? 5 : 4} style={{ margin: 0, color: "#F8FAFC", fontSize: isMobile ? 16 : 18 }}>
                               {construirNombreGrupo(curso)}
                             </Typography.Title>
                             <Tag color={curso.estado === "activo" ? "green" : curso.estado === "pausado" ? "gold" : "blue"}>
@@ -796,7 +799,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                           <Button
                             type="primary"
                             block
-                            size="middle"
+                            size={isMobile ? "small" : "middle"}
                             style={{ marginTop: 4 }}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -807,7 +810,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                           </Button>
                           <Button
                             block
-                            size="middle"
+                            size={isMobile ? "small" : "middle"}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleOpenMaterials(curso);
@@ -960,7 +963,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
         <Drawer
           title={`Materiales del curso: ${cursoMaterialSeleccionado ? construirNombreGrupo(cursoMaterialSeleccionado) : "Curso"}`}
           placement="right"
-          width={460}
+          width={isMobile ? "100%" : 460}
           onClose={() => setMaterialsOpen(false)}
           open={materialsOpen}
         >
@@ -1185,7 +1188,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
         <Drawer
           title="Resumen financiero"
           placement="right"
-          width={420}
+          width={isMobile ? "100%" : 420}
           onClose={() => setFinancialOpen(false)}
           open={financialOpen}
         >
@@ -1212,7 +1215,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                 title: "Pagado este mes",
                 value: pagadoMesLabel,
               }].map((item, index) => (
-                <Col key={item.key} span={index === 4 ? 24 : 12}>
+                <Col key={item.key} xs={24} sm={index === 4 ? 24 : 12}>
                   <Card variant="borderless" style={{ borderRadius: 16, background: "#f8fafc" }}>
                     <Typography.Text type="secondary">{item.title}</Typography.Text>
                     <Typography.Title level={4} style={{ marginTop: 8 }}>
@@ -1302,36 +1305,41 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           }
           @media (max-width: 576px) {
             .profesor-dashboard {
-              padding: 12px !important;
+              padding: 10px !important;
+            }
+            .profesor-dashboard .ant-card-head {
+              min-height: 40px;
+              padding: 0 12px;
             }
             .profesor-dashboard .ant-card-head-title {
               white-space: normal;
+              font-size: 14px;
             }
             .profesor-dashboard .ant-typography {
               word-break: break-word;
-            }
-            .profesor-dashboard .ant-btn {
-              width: 100%;
-            }
-            .profesor-dashboard .ant-space {
-              width: 100%;
             }
             .profesor-dashboard .ant-list-item-meta-title,
             .profesor-dashboard .ant-list-item-meta-description {
               white-space: normal;
             }
             .profesor-dashboard .ant-card-body {
-              padding: 12px !important;
+              padding: 10px !important;
             }
             .profesor-dashboard .ant-drawer-content-wrapper {
               width: 100% !important;
             }
             .profesor-dashboard .professor-menu-btn {
-              min-height: 54px;
-              padding: 6px 4px;
+              min-height: 48px;
+              padding: 5px 4px;
             }
             .profesor-dashboard .professor-menu-label {
               font-size: 10px;
+            }
+            .profesor-dashboard .ant-statistic-title {
+              font-size: 12px;
+            }
+            .profesor-dashboard .ant-statistic-content {
+              font-size: 20px;
             }
           }
         `}</style>

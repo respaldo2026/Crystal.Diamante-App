@@ -22,6 +22,7 @@ import {
   Card,
   Col,
   Divider,
+  Grid,
   List,
   Row,
   Space,
@@ -47,6 +48,8 @@ export default function ShowProfesorDashboard() {
   const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.sm;
 
   React.useEffect(() => {
     if (!idProfesor) return;
@@ -179,7 +182,7 @@ export default function ShowProfesorDashboard() {
 
   if (!data) {
     return (
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: isMobile ? 12 : 24 }}>
         <Space direction="vertical" size="large">
           <Button icon={<ArrowLeftOutlined />} onClick={() => router.push("/profesores")}>Volver a profesores</Button>
           <Card>
@@ -192,37 +195,55 @@ export default function ShowProfesorDashboard() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <Space size="large" style={{ marginBottom: 24 }}>
+    <div style={{ padding: isMobile ? 12 : 24 }}>
+      <div style={{ maxWidth: 1240, margin: "0 auto" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: isMobile ? 8 : 12,
+          flexWrap: "wrap",
+          marginBottom: isMobile ? 12 : 16,
+        }}
+      >
         <Button icon={<ArrowLeftOutlined />} onClick={() => router.push("/profesores")}>Regresar</Button>
-        <Title level={3} style={{ margin: 0 }}>Ficha del profesor</Title>
+        <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>Ficha del profesor</Title>
         <Dropdown menu={{ items: menuItems }} trigger={["click"]}>
           <Button 
             icon={<MoreOutlined />} 
             loading={deleteLoading}
-            style={{ marginLeft: "auto" }}
+            style={{ marginLeft: screens.sm ? "auto" : 0, width: isMobile ? "100%" : "auto" }}
           >
             Acciones
           </Button>
         </Dropdown>
-      </Space>
+      </div>
 
-      <Tabs activeKey={activeKey} onChange={setActiveKey} items={[
+      <Tabs
+        activeKey={activeKey}
+        onChange={setActiveKey}
+        size={isMobile ? "small" : "middle"}
+        tabBarGutter={isMobile ? 16 : 32}
+        items={[
         {
           key: "perfil",
           label: "Resumen",
           children: (
-            <Space direction="vertical" size="large" style={{ width: "100%" }}>
-              <Card variant="borderless" style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}>
-                <Row gutter={[24, 24]} align="middle">
-                  <Col xs={24} md={6}>
-                    <Avatar size={96} style={{ backgroundColor: "#1e3a8a", fontSize: 36 }}>
+            <Space direction="vertical" size={isMobile ? "small" : "large"} style={{ width: "100%" }}>
+              <Card
+                variant="borderless"
+                style={{ borderRadius: isMobile ? 14 : 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
+                styles={{ body: { padding: isMobile ? 14 : 24 } }}
+              >
+                <Row gutter={isMobile ? [12, 12] : [24, 24]} align="middle">
+                  <Col xs={24} md={6} style={{ textAlign: isMobile ? "center" : "left" }}>
+                    <Avatar size={isMobile ? 80 : 96} style={{ backgroundColor: "#1e3a8a", fontSize: isMobile ? 30 : 36 }}>
                       {(perfil?.nombre_completo || "P").charAt(0).toUpperCase()}
                     </Avatar>
                   </Col>
                   <Col xs={24} md={18}>
-                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                      <Title level={3} style={{ margin: 0 }}>
+                    <Space direction="vertical" size={isMobile ? 6 : 8} style={{ width: "100%" }}>
+                      <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
                         {perfil?.nombre_completo || "Profesor"}
                       </Title>
                       <Space split={<Divider type="vertical" />} wrap>
@@ -241,7 +262,7 @@ export default function ShowProfesorDashboard() {
                     </Space>
                   </Col>
                 </Row>
-                <Divider style={{ margin: "24px 0" }} />
+                <Divider style={{ margin: isMobile ? "14px 0" : "24px 0" }} />
                 <Space size="middle" wrap>
                   <Button type="primary" icon={<DashboardOutlined />} onClick={() => setActiveKey("panel")}>
                     Abrir panel del profesor
@@ -249,19 +270,19 @@ export default function ShowProfesorDashboard() {
                 </Space>
               </Card>
 
-              <Row gutter={[24, 24]}>
-                <Col xs={24} md={8}>
-                  <Card variant="borderless" style={{ borderRadius: 16, height: "100%" }}>
+              <Row gutter={isMobile ? [12, 12] : [24, 24]}>
+                <Col xs={24} sm={12} md={8}>
+                  <Card variant="borderless" style={{ borderRadius: 16, height: "100%" }} styles={{ body: { padding: isMobile ? 12 : 24 } }}>
                     <Statistic title="Cursos activos" value={stats?.cursosActivos ?? 0} suffix="cursos" />
                   </Card>
                 </Col>
-                <Col xs={24} md={8}>
-                  <Card variant="borderless" style={{ borderRadius: 16, height: "100%" }}>
+                <Col xs={24} sm={12} md={8}>
+                  <Card variant="borderless" style={{ borderRadius: 16, height: "100%" }} styles={{ body: { padding: isMobile ? 12 : 24 } }}>
                     <Statistic title="Estudiantes en seguimiento" value={stats?.totalEstudiantes ?? 0} suffix="est." />
                   </Card>
                 </Col>
-                <Col xs={24} md={8}>
-                  <Card variant="borderless" style={{ borderRadius: 16, height: "100%" }}>
+                <Col xs={24} sm={12} md={8}>
+                  <Card variant="borderless" style={{ borderRadius: 16, height: "100%" }} styles={{ body: { padding: isMobile ? 12 : 24 } }}>
                     <Statistic title="Horas dictadas este mes" value={stats?.horasMes ?? 0} suffix="hrs" />
                   </Card>
                 </Col>
@@ -270,9 +291,10 @@ export default function ShowProfesorDashboard() {
               <Card
                 variant="borderless"
                 title={<Space><BookOutlined /> Cursos asignados</Space>}
-                style={{ borderRadius: 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
+                style={{ borderRadius: isMobile ? 14 : 20, boxShadow: "0 16px 35px -24px rgba(15,23,42,0.4)" }}
+                styles={{ body: { padding: isMobile ? 12 : 24 } }}
               >
-                <Row gutter={[16, 16]}>
+                <Row gutter={isMobile ? [10, 10] : [16, 16]}>
                   {(dashboard?.cursos || []).map((curso: any) => {
                     const next = nextSessionByCourse[String(curso.id)];
                     const isSoon = next?.isSoon;
@@ -286,7 +308,7 @@ export default function ShowProfesorDashboard() {
                           hoverable
                           onClick={() => handleOpenCourse(curso.id)}
                           style={{
-                            borderRadius: 16,
+                            borderRadius: isMobile ? 12 : 16,
                             border: isSoon ? "1px solid #A855F7" : undefined,
                             boxShadow: isSoon
                               ? "0 14px 36px -18px rgba(168,85,247,0.45)"
@@ -294,10 +316,10 @@ export default function ShowProfesorDashboard() {
                             cursor: "pointer",
                             background: "linear-gradient(135deg, rgba(168,85,247,0.08), rgba(14,165,233,0.05))",
                           }}
-                          bodyStyle={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 150 }}
+                          bodyStyle={{ display: "flex", flexDirection: "column", gap: isMobile ? 6 : 8, minHeight: isMobile ? 132 : 150, padding: isMobile ? 12 : 24 }}
                         >
                           <Space align="center" split={<Divider type="vertical" />} wrap>
-                            <Title level={4} style={{ margin: 0 }}>
+                            <Title level={isMobile ? 5 : 4} style={{ margin: 0 }}>
                               {curso.nombre}
                             </Title>
                             <Tag color={curso.estado === "activo" ? "green" : curso.estado === "pausado" ? "gold" : "blue"}>
@@ -372,7 +394,7 @@ export default function ShowProfesorDashboard() {
                           <List.Item.Meta
                             title={pendiente.concepto}
                             description={
-                              <Space split={<Divider type="vertical" />}>
+                              <Space split={<Divider type="vertical" />} wrap>
                                 <span>{pendiente.curso}</span>
                                 {pendiente.fecha ? <span>{dayjs(pendiente.fecha).format("DD MMM")}</span> : null}
                               </Space>
@@ -394,7 +416,9 @@ export default function ShowProfesorDashboard() {
             <ProfessorDashboardUI dashboard={dashboard} onOpenCourse={handleOpenCourse} />
           ),
         },
-      ]} />
+      ]}
+      />
+      </div>
     </div>
   );
 }
