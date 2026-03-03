@@ -226,11 +226,23 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   );
 
   const parseTemaFromTitulo = (titulo: string) => {
-    const match = titulo.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
-    if (!match) return { tema: undefined, tituloLimpio: titulo };
-    const tema = match[1]?.trim();
-    const tituloLimpio = (match[2] || titulo).trim();
-    return { tema, tituloLimpio };
+    const raw = String(titulo || "").trim();
+    const patrones = [
+      /^\s*tema\s*[:\-]\s*(.+?)\s+[—–]\s+(.+)$/i,
+      /^\s*\[\s*tema\s*[:\-]\s*(.+?)\s*\]\s*[—–]\s*(.+)$/i,
+      /^\s*tema\s*[:\-]\s*(.+?)\s+-\s+(.+)$/i,
+      /^\s*\[\s*tema\s*[:\-]\s*(.+?)\s*\]\s*:\s*(.+)$/i,
+    ];
+
+    for (const patron of patrones) {
+      const match = raw.match(patron);
+      if (!match) continue;
+      const tema = String(match[1] || "").trim();
+      const tituloLimpio = String(match[2] || raw).trim();
+      return { tema: tema || undefined, tituloLimpio };
+    }
+
+    return { tema: undefined, tituloLimpio: raw };
   };
 
   const normalizarTema = (valor?: string) =>
