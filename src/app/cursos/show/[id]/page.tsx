@@ -163,6 +163,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [savingCalificacionId, setSavingCalificacionId] = useState<string | null>(null);
   const [temaSeleccionadoId, setTemaSeleccionadoId] = useState<string | null>(null);
   const [modalActividadVisible, setModalActividadVisible] = useState(false);
+  const [soloPendientesActividad, setSoloPendientesActividad] = useState(false);
   const [temas, setTemas] = useState<Tema[]>([]);
   const [materiales, setMateriales] = useState<any[]>([]);
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
@@ -804,7 +805,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return { calificadas, pendientes, promedio };
   }, [calificacionesTema, estudiantes, temaSeleccionadoId]);
 
-  const abrirModalActividad = useCallback(() => {
+  const abrirModalActividad = useCallback((soloPendientes: boolean = false) => {
     const primerTema = clasesPensum[0];
     if (!primerTema) {
       message.warning("No hay clases disponibles para calificar.");
@@ -814,8 +815,15 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     if (!temaSeleccionadoId) {
       setTemaSeleccionadoId(String(primerTema.id));
     }
+    setSoloPendientesActividad(soloPendientes);
     setModalActividadVisible(true);
   }, [clasesPensum, message, temaSeleccionadoId]);
+
+  const estudiantesModalActividad = useMemo(() => {
+    if (!temaSeleccionadoId) return estudiantes;
+    if (!soloPendientesActividad) return estudiantes;
+    return pendientesActividad;
+  }, [estudiantes, pendientesActividad, soloPendientesActividad, temaSeleccionadoId]);
 
   const abrirQuizProfesor = useCallback(
     async (quiz: any) => {
@@ -2114,11 +2122,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                           </Text>
                           {temaSeleccionado ? (
                             pendientesActividad.length ? (
-                              <List
-                                size="small"
-                                dataSource={pendientesActividad}
-                                renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
-                              />
+                              <>
+                                <List
+                                  size="small"
+                                  dataSource={pendientesActividad}
+                                  renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
+                                />
+                                <Button size="small" type="primary" onClick={() => abrirModalActividad(true)}>
+                                  Calificar pendientes
+                                </Button>
+                              </>
                             ) : (
                               <Text type="secondary">Todos presentaron actividad en esta clase.</Text>
                             )
@@ -2180,7 +2193,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       <Modal
         title="Calificar actividad por clase"
         open={modalActividadVisible}
-        onCancel={() => setModalActividadVisible(false)}
+        onCancel={() => {
+          setModalActividadVisible(false);
+          setSoloPendientesActividad(false);
+        }}
         footer={null}
         width={isMobile ? "95%" : 980}
       >
@@ -2199,14 +2215,22 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           {!temaSeleccionadoId ? (
             <Empty description="Selecciona una clase para calificar" />
           ) : (
-            <Table
-              size="small"
-              dataSource={estudiantes}
-              rowKey="id"
-              pagination={{ pageSize: 10 }}
-              tableLayout="fixed"
-              scroll={{ x: "max-content" }}
-              columns={[
+            <>
+              {soloPendientesActividad ? (
+                <Space style={{ justifyContent: "space-between", width: "100%" }} wrap>
+                  <Tag color="gold">{`Mostrando solo pendientes (${estudiantesModalActividad.length})`}</Tag>
+                  <Button size="small" onClick={() => setSoloPendientesActividad(false)}>Ver todos</Button>
+                </Space>
+              ) : null}
+
+              <Table
+                size="small"
+                dataSource={estudiantesModalActividad}
+                rowKey="id"
+                pagination={{ pageSize: 10 }}
+                tableLayout="fixed"
+                scroll={{ x: "max-content" }}
+                columns={[
                 {
                   title: "Estudiante",
                   dataIndex: "nombre_completo",
@@ -2282,8 +2306,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     );
                   },
                 },
-              ]}
-            />
+                ]}
+              />
+            </>
           )}
         </Space>
       </Modal>
