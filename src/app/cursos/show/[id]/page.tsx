@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse, Grid } from "antd";
+import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse, Grid, Radio } from "antd";
 import type { Breakpoint } from "antd/es/_util/responsiveObserver";
 import {
   UserOutlined,
@@ -86,6 +86,65 @@ const getActividadColor = (nota?: number | null): string => {
   return "red";
 };
 
+const normalizarClaveOpcionQuiz = (valor?: string | null) => {
+  const raw = String(valor || "").trim().toUpperCase();
+  if (!raw) return "";
+  if (["A", "B", "C", "D"].includes(raw)) return raw;
+  if (/^OPCION[_\s-]*A$/i.test(raw)) return "A";
+  if (/^OPCION[_\s-]*B$/i.test(raw)) return "B";
+  if (/^OPCION[_\s-]*C$/i.test(raw)) return "C";
+  if (/^OPCION[_\s-]*D$/i.test(raw)) return "D";
+  return "";
+};
+
+const normalizarTextoComparacionQuiz = (valor?: string | null) =>
+  String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+
+const resolverClaveOpcionQuiz = (pregunta: any, valor?: string | null) => {
+  const claveDirecta = normalizarClaveOpcionQuiz(valor);
+  if (claveDirecta) return claveDirecta;
+
+  const textoObjetivo = normalizarTextoComparacionQuiz(valor);
+  if (!textoObjetivo) return "";
+
+  const opciones: Array<{ key: string; texto: string }> = [
+    { key: "A", texto: String(pregunta?.opcion_a || "") },
+    { key: "B", texto: String(pregunta?.opcion_b || "") },
+    { key: "C", texto: String(pregunta?.opcion_c || "") },
+    { key: "D", texto: String(pregunta?.opcion_d || "") },
+  ];
+
+  const exacta = opciones.find((op) => normalizarTextoComparacionQuiz(op.texto) === textoObjetivo);
+  if (exacta) return exacta.key;
+
+  const contiene = opciones.find((op) => {
+    const normalizado = normalizarTextoComparacionQuiz(op.texto);
+    return normalizado && (textoObjetivo.includes(normalizado) || normalizado.includes(textoObjetivo));
+  });
+
+  return contiene?.key || "";
+};
+
+const obtenerTextoOpcionQuiz = (pregunta: any, opcion?: string | null) => {
+  const letra = normalizarClaveOpcionQuiz(opcion);
+  if (!letra) return "Sin respuesta";
+
+  const opciones: Record<string, string> = {
+    A: String(pregunta?.opcion_a || ""),
+    B: String(pregunta?.opcion_b || ""),
+    C: String(pregunta?.opcion_c || ""),
+    D: String(pregunta?.opcion_d || ""),
+  };
+
+  const texto = opciones[letra] || "";
+  return texto ? `${letra}) ${texto}` : letra;
+};
+
 type ParamsLike = Promise<{ id: string }>;
 
 export default function CursoShowPage({ params }: { params: ParamsLike }) {
@@ -106,6 +165,28 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
   const [quizzesClase, setQuizzesClase] = useState<any[]>([]);
   const [resultadosQuiz, setResultadosQuiz] = useState<any[]>([]);
+  const [quizProfesorSeleccionadoId, setQuizProfesorSeleccionadoId] = useState<string | null>(null);
+  const [quizProfesorModalOpen, setQuizProfesorModalOpen] = useState(false);
+  const [quizProfesorActivo, setQuizProfesorActivo] = useState<any | null>(null);
+  const [quizProfesorPreguntas, setQuizProfesorPreguntas] = useState<any[]>([]);
+  const [quizProfesorRespuestas, setQuizProfesorRespuestas] = useState<Record<string, string>>({});
+  const [quizProfesorSaving, setQuizProfesorSaving] = useState(false);
+  const [quizProfesorResultado, setQuizProfesorResultado] = useState<{
+    quizId: string;
+    titulo: string;
+    calificacion: number;
+    porcentaje: number;
+    correctas: number;
+    totalPreguntas: number;
+    respuestas: Array<{
+      preguntaId: string;
+      orden: number;
+      pregunta: string;
+      respuestaMarcada: string;
+      respuestaCorrecta: string;
+      esCorrecta: boolean;
+    }>;
+  } | null>(null);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalSesionVisible, setModalSesionVisible] = useState(false);
@@ -639,6 +720,124 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
     return { calificadas, pendientes, promedio };
   }, [calificacionesTema, estudiantes, temaSeleccionadoId]);
+
+  const abrirQuizProfesor = useCallback(
+    async (quiz: any) => {
+      try {
+        const { data: preguntasData, error } = await supabaseBrowserClient
+          .from("quiz_preguntas_clase")
+          .select("id, orden, pregunta, opcion_a, opcion_b, opcion_c, opcion_d")
+          .eq("quiz_id", quiz.id)
+          .eq("activo", true)
+          .order("orden", { ascending: true });
+
+        if (error) throw error;
+        if (!preguntasData || preguntasData.length === 0) {
+          message.warning("Este quiz aún no tiene preguntas cargadas.");
+          return;
+        }
+
+        setQuizProfesorActivo(quiz);
+        setQuizProfesorPreguntas(preguntasData);
+        setQuizProfesorRespuestas({});
+        setQuizProfesorModalOpen(true);
+      } catch (error: any) {
+        console.error(error);
+        message.error("No se pudo abrir el quiz del profesor");
+      }
+    },
+    [message]
+  );
+
+  const enviarQuizProfesor = useCallback(async () => {
+    if (!quizProfesorActivo) return;
+
+    const respuestas = (quizProfesorPreguntas || []).map((pregunta: any) => ({
+      pregunta_id: pregunta.id,
+      respuesta: quizProfesorRespuestas[String(pregunta.id)] || "",
+    }));
+
+    const sinResponder = respuestas.filter((r) => !r.respuesta).length;
+    if (sinResponder > 0) {
+      message.warning(`Debes responder todas las preguntas. Faltan ${sinResponder}.`);
+      return;
+    }
+
+    try {
+      setQuizProfesorSaving(true);
+      const { data: preguntasConRespuesta, error } = await supabaseBrowserClient
+        .from("quiz_preguntas_clase")
+        .select("id, respuesta_correcta")
+        .eq("quiz_id", quizProfesorActivo.id)
+        .eq("activo", true);
+
+      if (error) throw error;
+
+      const preguntaPorId = new Map<string, any>();
+      (quizProfesorPreguntas || []).forEach((pregunta: any) => {
+        preguntaPorId.set(String(pregunta.id), pregunta);
+      });
+
+      const correctaPorPregunta = new Map<string, string>();
+      (preguntasConRespuesta || []).forEach((pregunta: any) => {
+        const preguntaBase = preguntaPorId.get(String(pregunta.id));
+        correctaPorPregunta.set(String(pregunta.id), resolverClaveOpcionQuiz(preguntaBase, pregunta.respuesta_correcta));
+      });
+
+      let correctas = 0;
+      const detalleRespuestas = respuestas
+        .map((respuesta: any) => {
+          const pregunta = preguntaPorId.get(String(respuesta.pregunta_id));
+          const correcta = resolverClaveOpcionQuiz(pregunta, correctaPorPregunta.get(String(respuesta.pregunta_id)) || "");
+          const marcada = resolverClaveOpcionQuiz(pregunta, respuesta.respuesta);
+          const esCorrecta = Boolean(correcta && marcada && marcada === correcta);
+          if (esCorrecta) correctas += 1;
+
+          return {
+            preguntaId: String(respuesta.pregunta_id || ""),
+            orden: Number(pregunta?.orden || 0),
+            pregunta: String(pregunta?.pregunta || "Pregunta"),
+            respuestaMarcada: obtenerTextoOpcionQuiz(pregunta, marcada),
+            respuestaCorrecta: obtenerTextoOpcionQuiz(pregunta, correcta),
+            esCorrecta,
+          };
+        })
+        .sort((a: any, b: any) => a.orden - b.orden);
+
+      const total = respuestas.length || 1;
+      const porcentaje = Number(((correctas / total) * 100).toFixed(2));
+      const calificacion = Number(((correctas / total) * 5).toFixed(2));
+
+      setQuizProfesorResultado({
+        quizId: String(quizProfesorActivo.id),
+        titulo: String(quizProfesorActivo.titulo || "Quiz"),
+        calificacion,
+        porcentaje,
+        correctas,
+        totalPreguntas: total,
+        respuestas: detalleRespuestas,
+      });
+      setQuizProfesorModalOpen(false);
+      message.success("Quiz del profesor enviado. Ya puedes revisar tus respuestas.");
+    } catch (error: any) {
+      console.error(error);
+      message.error("No se pudo evaluar el quiz del profesor");
+    } finally {
+      setQuizProfesorSaving(false);
+    }
+  }, [message, quizProfesorActivo, quizProfesorPreguntas, quizProfesorRespuestas]);
+
+  useEffect(() => {
+    const firstQuizId = quizzesClase?.[0]?.id;
+    if (!firstQuizId) {
+      setQuizProfesorSeleccionadoId(null);
+      return;
+    }
+
+    if (!quizProfesorSeleccionadoId || !quizzesClase.some((quiz: any) => String(quiz.id) === String(quizProfesorSeleccionadoId))) {
+      setQuizProfesorSeleccionadoId(String(firstQuizId));
+    }
+  }, [quizzesClase, quizProfesorSeleccionadoId]);
 
   const cargarDatos = useCallback(async (id: string) => {
     setLoading(true);
@@ -1554,6 +1753,34 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   bodyStyle={{ padding: 10 }}
                   headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
                 >
+                  <Space direction={isMobile ? "vertical" : "horizontal"} size={8} style={{ width: "100%", marginBottom: 10 }}>
+                    <Select
+                      placeholder="Selecciona un quiz"
+                      value={quizProfesorSeleccionadoId || undefined}
+                      style={{ minWidth: isMobile ? "100%" : 320 }}
+                      options={(quizzesClase || []).map((quiz: any) => {
+                        const temaId = String(quiz?.pensum_curso_id || "");
+                        const nombreTema = nombreTemaPorId.get(temaId) || quiz?.titulo || "Quiz";
+                        return { value: String(quiz.id), label: nombreTema };
+                      })}
+                      onChange={(value) => setQuizProfesorSeleccionadoId(String(value))}
+                    />
+                    <Button
+                      type="primary"
+                      disabled={!quizProfesorSeleccionadoId}
+                      onClick={() => {
+                        const quiz = (quizzesClase || []).find((item: any) => String(item.id) === String(quizProfesorSeleccionadoId));
+                        if (!quiz) {
+                          message.warning("Selecciona un quiz válido.");
+                          return;
+                        }
+                        abrirQuizProfesor(quiz);
+                      }}
+                    >
+                      Resolver quiz como profesor
+                    </Button>
+                  </Space>
+
                   <Table
                     size="small"
                     dataSource={resultadosQuizResumen}
@@ -1597,6 +1824,35 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       },
                     ]}
                   />
+
+                  {quizProfesorResultado ? (
+                    <Card
+                      size="small"
+                      style={{ marginTop: 12 }}
+                      title={<Text strong>{`Tus respuestas: ${quizProfesorResultado.titulo}`}</Text>}
+                    >
+                      <Space wrap size={8} style={{ marginBottom: 8 }}>
+                        <Tag color={getActividadColor(quizProfesorResultado.calificacion)}>{`Nota: ${quizProfesorResultado.calificacion.toFixed(1)}/5`}</Tag>
+                        <Tag color="blue">{`Aciertos: ${quizProfesorResultado.correctas}/${quizProfesorResultado.totalPreguntas}`}</Tag>
+                        <Tag>{`${quizProfesorResultado.porcentaje.toFixed(1)}%`}</Tag>
+                      </Space>
+
+                      <List
+                        size="small"
+                        dataSource={quizProfesorResultado.respuestas}
+                        renderItem={(item) => (
+                          <List.Item>
+                            <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                              <Text strong>{`${item.orden}. ${item.pregunta}`}</Text>
+                              <Text>{`Tu respuesta: ${item.respuestaMarcada}`}</Text>
+                              <Text type={item.esCorrecta ? undefined : "secondary"}>{`Correcta: ${item.respuestaCorrecta}`}</Text>
+                              <Tag color={item.esCorrecta ? "green" : "red"}>{item.esCorrecta ? "Correcta" : "Incorrecta"}</Tag>
+                            </Space>
+                          </List.Item>
+                        )}
+                      />
+                    </Card>
+                  ) : null}
                 </Card>
 
                 {temas.length === 0 ? (
@@ -1733,6 +1989,55 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       />
 
       {/* MODAL REGISTRAR SESIÓN */}
+      <Modal
+        title={quizProfesorActivo ? `Quiz profesor: ${quizProfesorActivo.titulo || "Quiz"}` : "Quiz profesor"}
+        open={quizProfesorModalOpen}
+        onOk={enviarQuizProfesor}
+        okText="Enviar respuestas"
+        okButtonProps={{ loading: quizProfesorSaving }}
+        onCancel={() => setQuizProfesorModalOpen(false)}
+        width={760}
+      >
+        {!quizProfesorPreguntas.length ? (
+          <Empty description="Este quiz no tiene preguntas" />
+        ) : (
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            {quizProfesorPreguntas.map((pregunta: any, index: number) => {
+              const preguntaId = String(pregunta.id);
+              return (
+                <Card
+                  key={preguntaId}
+                  size="small"
+                  title={<Text strong>{`Pregunta ${index + 1}`}</Text>}
+                  bodyStyle={{ padding: 10 }}
+                >
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Text>{pregunta?.pregunta || "Sin enunciado"}</Text>
+                    <Radio.Group
+                      value={quizProfesorRespuestas[preguntaId]}
+                      onChange={(event) => {
+                        const value = String(event?.target?.value || "");
+                        setQuizProfesorRespuestas((prev) => ({
+                          ...prev,
+                          [preguntaId]: value,
+                        }));
+                      }}
+                    >
+                      <Space direction="vertical">
+                        <Radio value="A">{`A) ${pregunta?.opcion_a || ""}`}</Radio>
+                        <Radio value="B">{`B) ${pregunta?.opcion_b || ""}`}</Radio>
+                        <Radio value="C">{`C) ${pregunta?.opcion_c || ""}`}</Radio>
+                        <Radio value="D">{`D) ${pregunta?.opcion_d || ""}`}</Radio>
+                      </Space>
+                    </Radio.Group>
+                  </Space>
+                </Card>
+              );
+            })}
+          </Space>
+        )}
+      </Modal>
+
       <Modal
         title="Registrar Sesión de Clase"
         open={modalSesionVisible}
