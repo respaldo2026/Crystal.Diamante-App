@@ -1411,6 +1411,28 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const quizzesActivosPublicados = (quizzesClase || []).filter((quiz: any) => quiz?.activo === true && quiz?.publicado === true).length;
   const quizzesNoDisponibles = Math.max((quizzesClase || []).length - quizzesActivosPublicados, 0);
   const ultimaSesionRegistrada = sesiones.length > 0 ? sesiones[0] : null;
+  const hoy = dayjs();
+  const sesionesMesActual = (sesiones || []).filter((sesion: any) => {
+    if (!sesion?.fecha) return false;
+    const fechaSesion = dayjs(sesion.fecha);
+    return fechaSesion.isValid() && fechaSesion.isSame(hoy, "month") && fechaSesion.isSame(hoy, "year");
+  });
+  const horasPrimeraQuincena = Number(
+    sesionesMesActual
+      .filter((sesion: any) => dayjs(sesion?.fecha).date() <= 15)
+      .reduce((acc: number, sesion: any) => acc + Number(sesion?.horas_dictadas || 0), 0)
+      .toFixed(1)
+  );
+  const horasSegundaQuincena = Number(
+    sesionesMesActual
+      .filter((sesion: any) => dayjs(sesion?.fecha).date() > 15)
+      .reduce((acc: number, sesion: any) => acc + Number(sesion?.horas_dictadas || 0), 0)
+      .toFixed(1)
+  );
+  const horasMesActual = Number((horasPrimeraQuincena + horasSegundaQuincena).toFixed(1));
+  const primeraQuincenaActiva = hoy.date() <= 15;
+  const horasQuincenaActual = primeraQuincenaActiva ? horasPrimeraQuincena : horasSegundaQuincena;
+  const etiquetaQuincenaActual = primeraQuincenaActiva ? "Horas 1-15" : "Horas 16-fin";
 
   return (
     <div style={{ padding: 24 }}>
@@ -1549,30 +1571,15 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               <Text style={{ color: "#f8fafc" }}><strong>Fecha de fin:</strong> {curso.fecha_fin ? dayjs(curso.fecha_fin).format('DD MMM YYYY') : "No definida"}</Text>
             </Space>
           </Card>
-          <Text style={{ color: "rgba(255,255,255,0.94)", fontSize: 15 }}>
-              👨‍🏫 Profesor: <strong>{curso.perfiles?.nombre_completo || "Sin asignar"}</strong> • 📅 Inicio: {dayjs(curso.fecha_inicio).format("DD MMM YYYY")} • ⏱️ Duración: {curso.duracion}
-          </Text>
+            <Text style={{ color: "rgba(255,255,255,0.94)", fontSize: 15 }}>
+              👨‍🏫 Profesor: <strong>{curso.perfiles?.nombre_completo || "Sin asignar"}</strong>
+            </Text>
           </div>
         </Space>
       </div>
 
-      {/* ESTADÍSTICAS RÁPIDAS */}
+      {/* ESTADÍSTICAS OPERATIVAS */}
       <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <Card>
-            <Statistic title="Estudiantes" value={totalEstudiantes} prefix={<UserOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <Card>
-            <Statistic title="Activos" value={estudiantesActivos} valueStyle={{ color: "#52c41a" }} prefix={<CheckCircleOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <Card>
-            <Statistic title="Asistencia" value={promedioAsistencia} suffix="%" valueStyle={{ color: promedioAsistencia >= 80 ? "#52c41a" : "#ff4d4f" }} />
-          </Card>
-        </Col>
         <Col xs={12} sm={12} md={8} lg={4}>
           <Card>
             <Statistic title="En Riesgo" value={estudiantesEnRiesgo} valueStyle={{ color: estudiantesEnRiesgo > 0 ? "#ff4d4f" : "#52c41a" }} />
@@ -1581,9 +1588,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         <Col xs={12} sm={12} md={8} lg={4}>
           <Card>
             <Statistic
-              title="Actividad"
-              value={temasConActividad}
-              suffix={`/ ${totalTemas || 0} temas`}
+              title="Actividad pendiente"
+              value={temasSinActividad}
+              suffix={`/ ${totalTemas || 0}`}
               valueStyle={{ color: temasSinActividad > 0 ? "#faad14" : "#52c41a" }}
             />
           </Card>
@@ -1591,10 +1598,34 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         <Col xs={12} sm={12} md={8} lg={4}>
           <Card>
             <Statistic
-              title="Quiz habilitados"
-              value={quizzesActivosPublicados}
-              suffix={`/ ${(quizzesClase || []).length || 0}`}
-              valueStyle={{ color: quizzesActivosPublicados > 0 ? "#1677ff" : "#8c8c8c" }}
+              title="Quiz no habilitados"
+              value={quizzesNoDisponibles}
+              valueStyle={{ color: quizzesNoDisponibles > 0 ? "#faad14" : "#1677ff" }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={8} lg={4}>
+          <Card>
+            <Statistic title="En mora" value={estudiantesEnMora} valueStyle={{ color: estudiantesEnMora > 0 ? "#ff4d4f" : "#52c41a" }} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={8} lg={4}>
+          <Card>
+            <Statistic
+              title={etiquetaQuincenaActual}
+              value={horasQuincenaActual}
+              suffix="h"
+              valueStyle={{ color: "#1677ff" }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={8} lg={4}>
+          <Card>
+            <Statistic
+              title="Horas mes"
+              value={horasMesActual}
+              suffix="h"
+              valueStyle={{ color: "#722ed1" }}
             />
           </Card>
         </Col>
@@ -1616,6 +1647,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               <Tag color={ultimaSesionRegistrada ? "cyan" : "default"}>
                 {`Última sesión: ${ultimaSesionRegistrada?.fecha ? dayjs(ultimaSesionRegistrada.fecha).format("DD/MM/YYYY") : "Sin registrar"}`}
               </Tag>
+              <Tag color="blue">{`Horas 1-15: ${horasPrimeraQuincena}h`}</Tag>
+              <Tag color="purple">{`Horas 16-fin: ${horasSegundaQuincena}h`}</Tag>
             </Space>
           </Col>
           <Col xs={24} md={8}>
