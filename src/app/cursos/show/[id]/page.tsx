@@ -307,6 +307,27 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     });
   }, [ciclosOrdenados]);
 
+  const ordenTemaPorId = useMemo(() => {
+    const map = new Map<string, number>();
+    clasesPensum.forEach((tema: any, index: number) => {
+      const temaId = String(tema?.id || "");
+      if (!temaId) return;
+      const orden = Number(tema?.orden ?? index + 1);
+      map.set(temaId, Number.isFinite(orden) && orden > 0 ? orden : index + 1);
+    });
+    return map;
+  }, [clasesPensum]);
+
+  const formatearNombreClase = useCallback(
+    (tema: any) => {
+      const temaId = String(tema?.id || "");
+      const orden = ordenTemaPorId.get(temaId);
+      const nombre = String(tema?.nombre_curso || tema?.titulo || "Clase");
+      return orden ? `${orden}. ${nombre}` : nombre;
+    },
+    [ordenTemaPorId]
+  );
+
   const temasPorNombre = useMemo(() => {
     const map = new Map<string, string>();
     ciclosOrdenados.forEach((ciclo: any) => {
@@ -719,6 +740,46 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
     return Array.from(unicos.values());
   }, [resultadosQuiz]);
+
+  const quizzesOrdenadosPorPensum = useMemo(() => {
+    const list = Array.isArray(quizzesClase) ? [...quizzesClase] : [];
+    return list.sort((a: any, b: any) => {
+      const temaA = String(a?.pensum_curso_id || "");
+      const temaB = String(b?.pensum_curso_id || "");
+      const ordenA = ordenTemaPorId.get(temaA) ?? 9999;
+      const ordenB = ordenTemaPorId.get(temaB) ?? 9999;
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      const nombreA = String(nombreTemaPorId.get(temaA) || a?.titulo || "Quiz");
+      const nombreB = String(nombreTemaPorId.get(temaB) || b?.titulo || "Quiz");
+      return nombreA.localeCompare(nombreB);
+    });
+  }, [nombreTemaPorId, ordenTemaPorId, quizzesClase]);
+
+  const pendientesActividad = useMemo(() => {
+    if (!temaSeleccionadoId) return [] as Student[];
+    return estudiantes.filter((est) => {
+      if (est.estado === "pendiente_pago") return false;
+      const nota = calificacionesTema[String(temaSeleccionadoId)]?.[String(est.id)] ?? null;
+      return nota == null || Number.isNaN(nota);
+    });
+  }, [calificacionesTema, estudiantes, temaSeleccionadoId]);
+
+  const quizSeleccionado = useMemo(() => {
+    if (!quizProfesorSeleccionadoId) return null;
+    return quizzesOrdenadosPorPensum.find((quiz: any) => String(quiz?.id) === String(quizProfesorSeleccionadoId)) || null;
+  }, [quizProfesorSeleccionadoId, quizzesOrdenadosPorPensum]);
+
+  const pendientesQuiz = useMemo(() => {
+    if (!quizSeleccionado) return [] as Student[];
+    const quizId = String(quizSeleccionado.id || "");
+    const presentados = new Set(
+      (resultadosQuizResumen || [])
+        .filter((item: any) => String(item?.quiz_id || "") === quizId)
+        .map((item: any) => String(item?.matricula_id || ""))
+    );
+
+    return estudiantes.filter((est) => est.estado !== "pendiente_pago" && !presentados.has(String(est.id)));
+  }, [estudiantes, quizSeleccionado, resultadosQuizResumen]);
 
   const temaSeleccionado = useMemo(() => {
     if (!temaSeleccionadoId) return null;
@@ -1916,12 +1977,14 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       placeholder="Selecciona un quiz"
                       value={quizProfesorSeleccionadoId || undefined}
                       style={{ minWidth: isMobile ? "100%" : 320 }}
-                      options={(quizzesClase || []).map((quiz: any) => {
+                      options={(quizzesOrdenadosPorPensum || []).map((quiz: any) => {
                         const temaId = String(quiz?.pensum_curso_id || "");
                         const nombreTema = nombreTemaPorId.get(temaId) || quiz?.titulo || "Quiz";
+                        const ordenTema = ordenTemaPorId.get(temaId);
+                        const nombreOrdenado = ordenTema ? `${ordenTema}. ${nombreTema}` : nombreTema;
                         const estado = quiz?.activo ? "Activo" : "Inactivo";
                         const publicacion = quiz?.publicado ? "Publicado" : "Borrador";
-                        return { value: String(quiz.id), label: `${nombreTema} • ${estado} • ${publicacion}` };
+                        return { value: String(quiz.id), label: `${nombreOrdenado} • ${estado} • ${publicacion}` };
                       })}
                       onChange={(value) => setQuizProfesorSeleccionadoId(String(value))}
                     />
@@ -1929,7 +1992,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       type="primary"
                       disabled={!quizProfesorSeleccionadoId}
                       onClick={() => {
-                        const quiz = (quizzesClase || []).find((item: any) => String(item.id) === String(quizProfesorSeleccionadoId));
+                        const quiz = (quizzesOrdenadosPorPensum || []).find((item: any) => String(item.id) === String(quizProfesorSeleccionadoId));
                         if (!quiz) {
                           message.warning("Selecciona un quiz válido.");
                           return;
@@ -2013,6 +2076,57 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       />
                     </Card>
                   ) : null}
+
+                  <Card size="small" style={{ marginTop: 12 }} title={<Text strong>Pendientes por presentar</Text>}>
+                    <Row gutter={[12, 12]}>
+                      <Col xs={24} md={12}>
+                        <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                          <Tag color={pendientesQuiz.length > 0 ? "gold" : "green"}>
+                            {`Quiz pendiente (${pendientesQuiz.length})`}
+                          </Tag>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {quizSeleccionado
+                              ? `Clase: ${nombreTemaPorId.get(String(quizSeleccionado.pensum_curso_id || "")) || quizSeleccionado.titulo || "Quiz"}`
+                              : "Selecciona un quiz para ver pendientes"}
+                          </Text>
+                          {quizSeleccionado ? (
+                            pendientesQuiz.length ? (
+                              <List
+                                size="small"
+                                dataSource={pendientesQuiz}
+                                renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
+                              />
+                            ) : (
+                              <Text type="secondary">Todos presentaron este quiz.</Text>
+                            )
+                          ) : null}
+                        </Space>
+                      </Col>
+                      <Col xs={24} md={12}>
+                        <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                          <Tag color={pendientesActividad.length > 0 ? "gold" : "green"}>
+                            {`Actividad pendiente (${pendientesActividad.length})`}
+                          </Tag>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {temaSeleccionado
+                              ? `Clase: ${temaSeleccionado?.nombre_curso || temaSeleccionado?.titulo || "Clase"}`
+                              : "Selecciona una clase para ver pendientes"}
+                          </Text>
+                          {temaSeleccionado ? (
+                            pendientesActividad.length ? (
+                              <List
+                                size="small"
+                                dataSource={pendientesActividad}
+                                renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
+                              />
+                            ) : (
+                              <Text type="secondary">Todos presentaron actividad en esta clase.</Text>
+                            )
+                          ) : null}
+                        </Space>
+                      </Col>
+                    </Row>
+                  </Card>
                 </Card>
 
                 {clasesPensum.length === 0 ? (
@@ -2035,7 +2149,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                           style={{ minWidth: isMobile ? "100%" : 320 }}
                           options={clasesPensum.map((tema: any) => ({
                             value: String(tema.id),
-                            label: tema.nombre_curso || tema.titulo || "Clase",
+                            label: formatearNombreClase(tema),
                           }))}
                           onChange={(value) => setTemaSeleccionadoId(String(value))}
                         />
@@ -2076,7 +2190,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             value={temaSeleccionadoId || undefined}
             options={clasesPensum.map((tema: any) => ({
               value: String(tema.id),
-              label: tema.nombre_curso || tema.titulo || "Clase",
+              label: formatearNombreClase(tema),
             }))}
             onChange={(value) => setTemaSeleccionadoId(String(value))}
             style={{ width: "100%" }}
