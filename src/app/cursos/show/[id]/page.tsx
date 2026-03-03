@@ -163,6 +163,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [savingCalificacionId, setSavingCalificacionId] = useState<string | null>(null);
   const [temaSeleccionadoId, setTemaSeleccionadoId] = useState<string | null>(null);
   const [modalActividadVisible, setModalActividadVisible] = useState(false);
+  const [modalRadarVisible, setModalRadarVisible] = useState(false);
   const [soloPendientesActividad, setSoloPendientesActividad] = useState(false);
   const [temas, setTemas] = useState<Tema[]>([]);
   const [materiales, setMateriales] = useState<any[]>([]);
@@ -1742,101 +1743,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         </Col>
       </Row>
 
-      <Card size="small" title="Radar pedagógico (acción sugerida)" style={{ marginBottom: 16 }}>
-        <Space wrap size={8} style={{ marginBottom: 10 }}>
-          <Tag color={estudiantesRezagados.length > 0 ? "red" : "green"}>
-            {`Estudiantes a intervenir: ${estudiantesRezagados.length}`}
-          </Tag>
-          <Tag color={temasCriticos.length > 0 ? "gold" : "green"}>
-            {`Temas críticos: ${temasCriticos.length}`}
-          </Tag>
-          <Tag color={quizzesAtencion.length > 0 ? "orange" : "green"}>
-            {`Quizzes que requieren ajuste: ${quizzesAtencion.length}`}
-          </Tag>
-        </Space>
-
-        <Row gutter={[12, 12]}>
-          <Col xs={24} md={8}>
-            <Card size="small" title="Estudiantes rezagados">
-              {estudiantesRezagados.length ? (
-                <List
-                  size="small"
-                  dataSource={estudiantesRezagados}
-                  renderItem={(est: any) => (
-                    <List.Item>
-                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                        <Text strong>{est.nombre_completo}</Text>
-                        <Space size={6} wrap>
-                          <Tag color={est.asistencia_porcentaje < (curso.porcentaje_minimo || 80) ? "red" : "green"}>{`Asistencia ${est.asistencia_porcentaje}%`}</Tag>
-                          <Tag color={est.nota_final != null && est.nota_final < 3.8 ? "red" : "blue"}>{`Nota ${est.nota_final != null ? Number(est.nota_final).toFixed(1) : "-"}`}</Tag>
-                          <Tag color={est.pendientesActividadEstudiante > 0 ? "gold" : "green"}>{`Pendientes ${est.pendientesActividadEstudiante}`}</Tag>
-                        </Space>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
-              ) : (
-                <Text type="secondary">Sin estudiantes en alerta académica por ahora.</Text>
-              )}
-            </Card>
-          </Col>
-
-          <Col xs={24} md={8}>
-            <Card size="small" title="Temas críticos del pensum">
-              {temasCriticos.length ? (
-                <List
-                  size="small"
-                  dataSource={temasCriticos}
-                  renderItem={(tema: any) => (
-                    <List.Item>
-                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                        <Text strong>{tema.nombreTema}</Text>
-                        <Space size={6} wrap>
-                          <Tag color={tema.promedio != null && tema.promedio < 3.8 ? "red" : "green"}>{`Promedio ${tema.promedio != null ? `${tema.promedio.toFixed(1)}/5` : "Sin nota"}`}</Tag>
-                          <Tag color={tema.cobertura < 70 ? "gold" : "blue"}>{`Cobertura ${tema.cobertura}%`}</Tag>
-                        </Space>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
-              ) : (
-                <Text type="secondary">No se detectan temas con bajo promedio o baja cobertura.</Text>
-              )}
-            </Card>
-          </Col>
-
-          <Col xs={24} md={8}>
-            <Card size="small" title="Quizzes a reforzar">
-              {quizzesAtencion.length ? (
-                <List
-                  size="small"
-                  dataSource={quizzesAtencion}
-                  renderItem={(quiz: any) => (
-                    <List.Item>
-                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                        <Text strong>{quiz.nombre}</Text>
-                        <Space size={6} wrap>
-                          <Tag color={quiz.promedio != null && quiz.promedio < 3.8 ? "red" : "green"}>{`Promedio ${quiz.promedio != null ? `${quiz.promedio.toFixed(1)}/5` : "Sin intentos"}`}</Tag>
-                          <Tag color={quiz.participacion < 70 ? "orange" : "blue"}>{`Participación ${quiz.participacion}%`}</Tag>
-                        </Space>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
-              ) : (
-                <Text type="secondary">Sin quizzes en alerta de rendimiento o participación.</Text>
-              )}
-            </Card>
-          </Col>
-        </Row>
-
-        <Space wrap style={{ marginTop: 12 }}>
-          <Button size="small" type="primary" onClick={() => setActiveTab("5")}>Ir a calificaciones</Button>
-          <Button size="small" onClick={() => setActiveTab("4")}>Revisar estudiantes</Button>
-          <Button size="small" onClick={() => setActiveTab("1")}>Reforzar temas del pensum</Button>
-        </Space>
-      </Card>
-
       <Card size="small" style={{ marginBottom: 16 }}>
         <Row gutter={[12, 12]} align="middle">
           <Col xs={24} md={16}>
@@ -1874,6 +1780,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               </Button>
               <Button size="small" type="primary" icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
                 Calificar clase
+              </Button>
+              <Button size="small" icon={<BarChartOutlined />} onClick={() => setModalRadarVisible(true)}>
+                Ver radar pedagógico
               </Button>
             </Space>
           </Col>
@@ -2437,6 +2346,134 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           }
         ]}
       />
+
+      <Modal
+        title="Radar pedagógico (opcional)"
+        open={modalRadarVisible}
+        onCancel={() => setModalRadarVisible(false)}
+        footer={null}
+        width={isMobile ? "96%" : 1100}
+      >
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Space wrap size={8}>
+            <Tag color={estudiantesRezagados.length > 0 ? "red" : "green"}>
+              {`Estudiantes a intervenir: ${estudiantesRezagados.length}`}
+            </Tag>
+            <Tag color={temasCriticos.length > 0 ? "gold" : "green"}>
+              {`Temas críticos: ${temasCriticos.length}`}
+            </Tag>
+            <Tag color={quizzesAtencion.length > 0 ? "orange" : "green"}>
+              {`Quizzes que requieren ajuste: ${quizzesAtencion.length}`}
+            </Tag>
+          </Space>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={8}>
+              <Card size="small" title="Estudiantes rezagados">
+                {estudiantesRezagados.length ? (
+                  <List
+                    size="small"
+                    dataSource={estudiantesRezagados}
+                    renderItem={(est: any) => (
+                      <List.Item>
+                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                          <Text strong>{est.nombre_completo}</Text>
+                          <Space size={6} wrap>
+                            <Tag color={est.asistencia_porcentaje < (curso.porcentaje_minimo || 80) ? "red" : "green"}>{`Asistencia ${est.asistencia_porcentaje}%`}</Tag>
+                            <Tag color={est.nota_final != null && est.nota_final < 3.8 ? "red" : "blue"}>{`Nota ${est.nota_final != null ? Number(est.nota_final).toFixed(1) : "-"}`}</Tag>
+                            <Tag color={est.pendientesActividadEstudiante > 0 ? "gold" : "green"}>{`Pendientes ${est.pendientesActividadEstudiante}`}</Tag>
+                          </Space>
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                ) : (
+                  <Text type="secondary">Sin estudiantes en alerta académica por ahora.</Text>
+                )}
+              </Card>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Card size="small" title="Temas críticos del pensum">
+                {temasCriticos.length ? (
+                  <List
+                    size="small"
+                    dataSource={temasCriticos}
+                    renderItem={(tema: any) => (
+                      <List.Item>
+                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                          <Text strong>{tema.nombreTema}</Text>
+                          <Space size={6} wrap>
+                            <Tag color={tema.promedio != null && tema.promedio < 3.8 ? "red" : "green"}>{`Promedio ${tema.promedio != null ? `${tema.promedio.toFixed(1)}/5` : "Sin nota"}`}</Tag>
+                            <Tag color={tema.cobertura < 70 ? "gold" : "blue"}>{`Cobertura ${tema.cobertura}%`}</Tag>
+                          </Space>
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                ) : (
+                  <Text type="secondary">No se detectan temas con bajo promedio o baja cobertura.</Text>
+                )}
+              </Card>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Card size="small" title="Quizzes a reforzar">
+                {quizzesAtencion.length ? (
+                  <List
+                    size="small"
+                    dataSource={quizzesAtencion}
+                    renderItem={(quiz: any) => (
+                      <List.Item>
+                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                          <Text strong>{quiz.nombre}</Text>
+                          <Space size={6} wrap>
+                            <Tag color={quiz.promedio != null && quiz.promedio < 3.8 ? "red" : "green"}>{`Promedio ${quiz.promedio != null ? `${quiz.promedio.toFixed(1)}/5` : "Sin intentos"}`}</Tag>
+                            <Tag color={quiz.participacion < 70 ? "orange" : "blue"}>{`Participación ${quiz.participacion}%`}</Tag>
+                          </Space>
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                ) : (
+                  <Text type="secondary">Sin quizzes en alerta de rendimiento o participación.</Text>
+                )}
+              </Card>
+            </Col>
+          </Row>
+
+          <Space wrap>
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => {
+                setActiveTab("5");
+                setModalRadarVisible(false);
+              }}
+            >
+              Ir a calificaciones
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                setActiveTab("4");
+                setModalRadarVisible(false);
+              }}
+            >
+              Revisar estudiantes
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                setActiveTab("1");
+                setModalRadarVisible(false);
+              }}
+            >
+              Reforzar temas del pensum
+            </Button>
+          </Space>
+        </Space>
+      </Modal>
 
       {/* MODAL REGISTRAR SESIÓN */}
       <Modal
