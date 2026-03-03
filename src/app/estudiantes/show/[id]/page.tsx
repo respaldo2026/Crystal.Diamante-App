@@ -285,7 +285,7 @@ export default function StudentDetailView() {
             .in("curso_id", cursoIds);
 
           const { data: sesionesData } = await (fechaMin && fechaMax
-            ? sesionesQuery.filter("fecha", "cs", `[${fechaMin},${fechaMax}]`)
+            ? sesionesQuery.gte("fecha", fechaMin).lte("fecha", fechaMax)
             : sesionesQuery);
 
           const temaPorCursoFecha = new Map<string, string>();
