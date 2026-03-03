@@ -50,6 +50,7 @@ interface Student {
 interface Tema {
   id: string;
   titulo: string;
+  nombre_curso?: string;
   descripcion?: string;
   orden?: number;
   numero_ciclo?: number;

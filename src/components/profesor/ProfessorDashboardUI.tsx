@@ -38,7 +38,7 @@ import {
   Typography,
 } from "antd";
 import dayjs from "dayjs";
-import { ProfessorDashboardData } from "@hooks/useProfessorDashboard";
+import { ProfessorDashboardData, ProfesorDashboardCalificacionUltimaClase, ProfesorDashboardCalificacionesGrupo } from "@hooks/useProfessorDashboard";
 import { construirNombreGrupo } from "@utils/grupos";
 import { obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas, obtenerMaterialesPorProgramas, obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -921,7 +921,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                   style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
                 >
                   <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                    {(calificacionesRecientesPorGrupo || []).map((grupo: any) => (
+                    {(calificacionesRecientesPorGrupo || []).map((grupo: ProfesorDashboardCalificacionesGrupo) => (
                       <Card
                         key={grupo.cursoId}
                         size="small"
@@ -936,10 +936,10 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                                 Tema: {grupo.temaUltimaClase}
                               </Typography.Text>
                             ) : null}
-                            <Table
+                            <Table<ProfesorDashboardCalificacionUltimaClase>
                               size="small"
                               pagination={false}
-                              rowKey={(record) => String(record.matriculaId)}
+                              rowKey="matriculaId"
                               dataSource={grupo.estudiantes || []}
                               scroll={{ x: 380 }}
                               columns={[
