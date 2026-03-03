@@ -1233,6 +1233,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   const totalEstudiantes = estudiantes.length;
   const estudiantesActivos = estudiantes.filter(e => e.estado === "activo").length;
+  const estudiantesEnMora = estudiantes.filter((e) => e.enMora).length;
   const promedioAsistencia = estudiantes.length > 0
     ? Math.round(estudiantes.reduce((sum, e) => sum + e.asistencia_porcentaje, 0) / estudiantes.length)
     : 0;
@@ -1243,6 +1244,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     : 0;
   const cuposTotales = curso.cupos || 0;
   const cuposOcupados = totalEstudiantes;
+  const totalTemas = temas.length;
+  const temasConActividad = promedioActividadPorTema.size;
+  const temasSinActividad = Math.max(totalTemas - temasConActividad, 0);
+  const quizzesActivosPublicados = (quizzesClase || []).filter((quiz: any) => quiz?.activo === true && quiz?.publicado === true).length;
+  const quizzesNoDisponibles = Math.max((quizzesClase || []).length - quizzesActivosPublicados, 0);
+  const ultimaSesionRegistrada = sesiones.length > 0 ? sesiones[0] : null;
 
   return (
     <div style={{ padding: 24 }}>
@@ -1390,27 +1397,78 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       {/* ESTADÍSTICAS RÁPIDAS */}
       <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={12} md={6}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <Card>
             <Statistic title="Estudiantes" value={totalEstudiantes} prefix={<UserOutlined />} />
           </Card>
         </Col>
-        <Col xs={12} sm={12} md={6}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <Card>
             <Statistic title="Activos" value={estudiantesActivos} valueStyle={{ color: "#52c41a" }} prefix={<CheckCircleOutlined />} />
           </Card>
         </Col>
-        <Col xs={12} sm={12} md={6}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <Card>
             <Statistic title="Asistencia" value={promedioAsistencia} suffix="%" valueStyle={{ color: promedioAsistencia >= 80 ? "#52c41a" : "#ff4d4f" }} />
           </Card>
         </Col>
-        <Col xs={12} sm={12} md={6}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <Card>
             <Statistic title="En Riesgo" value={estudiantesEnRiesgo} valueStyle={{ color: estudiantesEnRiesgo > 0 ? "#ff4d4f" : "#52c41a" }} />
           </Card>
         </Col>
+        <Col xs={12} sm={12} md={8} lg={4}>
+          <Card>
+            <Statistic
+              title="Actividad"
+              value={temasConActividad}
+              suffix={`/ ${totalTemas || 0} temas`}
+              valueStyle={{ color: temasSinActividad > 0 ? "#faad14" : "#52c41a" }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={8} lg={4}>
+          <Card>
+            <Statistic
+              title="Quiz habilitados"
+              value={quizzesActivosPublicados}
+              suffix={`/ ${(quizzesClase || []).length || 0}`}
+              valueStyle={{ color: quizzesActivosPublicados > 0 ? "#1677ff" : "#8c8c8c" }}
+            />
+          </Card>
+        </Col>
       </Row>
+
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Row gutter={[12, 12]} align="middle">
+          <Col xs={24} md={16}>
+            <Space size={[8, 8]} wrap>
+              <Tag color={temasSinActividad > 0 ? "gold" : "green"}>
+                {`Temas sin actividad calificada: ${temasSinActividad}`}
+              </Tag>
+              <Tag color={quizzesNoDisponibles > 0 ? "gold" : "blue"}>
+                {`Quizzes no habilitados: ${quizzesNoDisponibles}`}
+              </Tag>
+              <Tag color={estudiantesEnMora > 0 ? "red" : "green"}>
+                {`Estudiantes en mora: ${estudiantesEnMora}`}
+              </Tag>
+              <Tag color={ultimaSesionRegistrada ? "cyan" : "default"}>
+                {`Última sesión: ${ultimaSesionRegistrada?.fecha ? dayjs(ultimaSesionRegistrada.fecha).format("DD/MM/YYYY") : "Sin registrar"}`}
+              </Tag>
+            </Space>
+          </Col>
+          <Col xs={24} md={8}>
+            <Space wrap style={{ justifyContent: isMobile ? "flex-start" : "flex-end", width: "100%" }}>
+              <Button size="small" icon={<ClockCircleOutlined />} onClick={() => setActiveTab("3")}>
+                Registrar sesión
+              </Button>
+              <Button size="small" type="primary" icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
+                Calificar clase
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+      </Card>
 
       {/* TABS - OFICINA COMPLETA DEL PROFESOR */}
       <Tabs
