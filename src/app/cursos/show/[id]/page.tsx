@@ -946,8 +946,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         if (matriculaIds.length > 0) {
           const { data: califData } = await supabaseBrowserClient
             .from("calificaciones")
-            .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion")
-            .in("matricula_id", matriculaIds);
+            .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
+            .in("matricula_id", matriculaIds)
+            .in("tipo_evaluacion", ["actividad", "tema"])
+            .order("fecha_evaluacion", { ascending: false });
 
           const mapa: Record<string, Record<string, number | null>> = {};
           (califData || []).forEach((c: any) => {
@@ -958,6 +960,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             const valor = c.calificacion ?? c.nota ?? null;
             if (!temaKey || temaKey === "undefined" || temaKey === "null") return;
             if (!mapa[temaKey]) mapa[temaKey] = {};
+            if (typeof mapa[temaKey][matKey] === "number") return;
             mapa[temaKey][matKey] = valor;
           });
           setCalificacionesTema(mapa);
@@ -1884,9 +1887,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                           key: temaId,
                           label: (
                             <Space wrap size={12}>
-                              <Text strong>{tema.nombre_ciclo || tema.titulo || "Clase"}</Text>
+                              <Text strong>{tema.nombre_curso || tema.titulo || "Clase"}</Text>
                               <Tag color="blue">{`${notasTema.length}/${estudiantes.length} calificadas`}</Tag>
-                              <Tag color={promedioTema >= 3.75 ? "green" : promedioTema >= 3 ? "gold" : "red"}>
+                              <Tag color={getActividadColor(promedioTema)}>
                                 Promedio: {`${promedioTema.toFixed(1)}/5`}
                               </Tag>
                             </Space>
