@@ -286,6 +286,25 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return map;
   }, [ciclosOrdenados, materialesClaseUnicos]);
 
+  const clasesPensum = useMemo(() => {
+    const map = new Map<string, any>();
+    ciclosOrdenados.forEach((ciclo: any) => {
+      const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+      temasCiclo.forEach((tema: any) => {
+        const temaId = String(tema?.id || "");
+        if (!temaId || map.has(temaId)) return;
+        map.set(temaId, tema);
+      });
+    });
+
+    return Array.from(map.values()).sort((a: any, b: any) => {
+      const ordenA = Number(a?.orden ?? 0);
+      const ordenB = Number(b?.orden ?? 0);
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return String(a?.id || "").localeCompare(String(b?.id || ""));
+    });
+  }, [ciclosOrdenados]);
+
   const temasPorNombre = useMemo(() => {
     const map = new Map<string, string>();
     ciclosOrdenados.forEach((ciclo: any) => {
@@ -428,7 +447,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         return;
       }
 
-      const temaActual = temas.find((t) => String(t.id) === String(temaId));
+      const temaActual = clasesPensum.find((t) => String(t.id) === String(temaId));
       const conceptoTema = `Actividad: ${temaActual?.nombre_curso || temaActual?.titulo || String(temaId)}`;
       const temaIdTexto = String(temaId || "").trim();
       const temaIdEsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(temaIdTexto);
@@ -512,12 +531,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         setSavingCalificacionId(null);
       }
     },
-    [message, temas]
+    [clasesPensum, message]
   );
 
   const promedioActividadPorTema = useMemo(() => {
     const map = new Map<string, number>();
-    temas.forEach((tema) => {
+    clasesPensum.forEach((tema: any) => {
       const temaId = String(tema.id);
       const notas = estudiantes
         .map((est) => calificacionesTema[temaId]?.[String(est.id)] ?? null)
@@ -527,7 +546,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       map.set(temaId, Number((notas.reduce((sum, nota) => sum + nota, 0) / notas.length).toFixed(1)));
     });
     return map;
-  }, [calificacionesTema, estudiantes, temas]);
+  }, [calificacionesTema, clasesPensum, estudiantes]);
 
   // Resolver params si es una Promise
   useEffect(() => {
@@ -670,16 +689,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   );
 
   useEffect(() => {
-    if (!temas.length) {
+    if (!clasesPensum.length) {
       setTemaSeleccionadoId(null);
       return;
     }
 
-    const existeTemaSeleccionado = temas.some((tema) => String(tema.id) === String(temaSeleccionadoId || ""));
+    const existeTemaSeleccionado = clasesPensum.some((tema: any) => String(tema.id) === String(temaSeleccionadoId || ""));
     if (!existeTemaSeleccionado) {
       setTemaSeleccionadoId(null);
     }
-  }, [temas, temaSeleccionadoId]);
+  }, [clasesPensum, temaSeleccionadoId]);
 
   const resultadosQuizResumen = useMemo(() => {
     const ordenados = [...(resultadosQuiz || [])].sort((a: any, b: any) => {
@@ -701,8 +720,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   const temaSeleccionado = useMemo(() => {
     if (!temaSeleccionadoId) return null;
-    return temas.find((tema) => String(tema.id) === String(temaSeleccionadoId)) || null;
-  }, [temas, temaSeleccionadoId]);
+    return clasesPensum.find((tema: any) => String(tema.id) === String(temaSeleccionadoId)) || null;
+  }, [clasesPensum, temaSeleccionadoId]);
 
   const resumenCalificacionTema = useMemo(() => {
     if (!temaSeleccionadoId) {
@@ -723,7 +742,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   }, [calificacionesTema, estudiantes, temaSeleccionadoId]);
 
   const abrirModalActividad = useCallback(() => {
-    const primerTema = temas[0];
+    const primerTema = clasesPensum[0];
     if (!primerTema) {
       message.warning("No hay clases disponibles para calificar.");
       return;
@@ -733,7 +752,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       setTemaSeleccionadoId(String(primerTema.id));
     }
     setModalActividadVisible(true);
-  }, [message, temaSeleccionadoId, temas]);
+  }, [clasesPensum, message, temaSeleccionadoId]);
 
   const abrirQuizProfesor = useCallback(
     async (quiz: any) => {
@@ -1258,7 +1277,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     : 0;
   const cuposTotales = curso.cupos || 0;
   const cuposOcupados = totalEstudiantes;
-  const totalTemas = temas.length;
+  const totalTemas = clasesPensum.length;
   const temasConActividad = promedioActividadPorTema.size;
   const temasSinActividad = Math.max(totalTemas - temasConActividad, 0);
   const quizzesActivosPublicados = (quizzesClase || []).filter((quiz: any) => quiz?.activo === true && quiz?.publicado === true).length;
@@ -1937,7 +1956,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   ) : null}
                 </Card>
 
-                {temas.length === 0 ? (
+                {clasesPensum.length === 0 ? (
                   <Card><Empty description="No hay temario cargado" /></Card>
                 ) : (
                   <Card
@@ -1955,7 +1974,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                           placeholder="Selecciona una clase"
                           value={temaSeleccionadoId || undefined}
                           style={{ minWidth: isMobile ? "100%" : 320 }}
-                          options={temas.map((tema) => ({
+                          options={clasesPensum.map((tema: any) => ({
                             value: String(tema.id),
                             label: tema.nombre_curso || tema.titulo || "Clase",
                           }))}
@@ -1996,7 +2015,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           <Select
             placeholder="Selecciona una clase"
             value={temaSeleccionadoId || undefined}
-            options={temas.map((tema) => ({
+            options={clasesPensum.map((tema: any) => ({
               value: String(tema.id),
               label: tema.nombre_curso || tema.titulo || "Clase",
             }))}

@@ -51,6 +51,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { construirNombreGrupo } from "@utils/grupos";
 import { enviarWhatsapp } from "@utils/whatsapp";
+import { obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
@@ -64,6 +65,7 @@ type Matricula = {
   nota_final: number | null;
   cursos: {
     id: string;
+    programa_id?: number | null;
     nombre: string | null;
     descripcion: string | null;
     precio: number | null;
@@ -217,7 +219,7 @@ export default function StudentDetailView() {
         .select(
           `
             id, fecha_inicio, estado, monto_pagado, deuda_pendiente, nota_final, estado_academico,
-            cursos ( id, nombre, descripcion, precio, precio_mensualidad, duracion, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad), perfiles(nombre_completo) )
+            cursos ( id, programa_id, nombre, descripcion, precio, precio_mensualidad, duracion, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad), perfiles(nombre_completo) )
           `
         )
         .eq("estudiante_id", idEstudiante)
@@ -231,6 +233,31 @@ export default function StudentDetailView() {
 
       const matriculaIds = listaMats.map((m: any) => m.id).filter(Boolean);
       const cursoIds = listaMats.map((m: any) => m?.cursos?.id).filter(Boolean);
+      const programaIds = Array.from(
+        new Set(
+          listaMats
+            .map((m: any) => m?.cursos?.programa_id)
+            .filter((programaId: any) => programaId != null)
+            .map((programaId: any) => String(programaId))
+        )
+      );
+
+      const temaPorProgramaClase = new Map<string, string>();
+      if (programaIds.length > 0) {
+        const pensumData = await obtenerPensumPorProgramas(programaIds);
+        (pensumData || []).forEach((ciclo: any) => {
+          const programaId = String(ciclo?.programa_id || "");
+          if (!programaId) return;
+          const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+          temasCiclo.forEach((tema: any) => {
+            const orden = Number(tema?.orden ?? 0);
+            if (!Number.isFinite(orden) || orden <= 0) return;
+            const key = `${programaId}-${orden}`;
+            if (temaPorProgramaClase.has(key)) return;
+            temaPorProgramaClase.set(key, String(tema?.nombre_curso || tema?.titulo || `Clase ${orden}`));
+          });
+        });
+      }
 
       if (matriculaIds.length > 0) {
         const { data: dataAsistencias, error: errAsistencias } = await supabaseBrowserClient
@@ -283,6 +310,19 @@ export default function StudentDetailView() {
             const cursoData = cursoPorMatricula.get(Number(asistencia.matricula_id));
             const cursoId = cursoData?.id;
             const key = `${cursoId || ""}-${asistencia?.fecha || ""}`;
+            const claseNumero =
+              extractClassNumber(asistencia?.observaciones || "") ??
+              claseNumeroPorCursoFecha.get(key) ??
+              extractClassNumber(temaPorCursoFecha.get(key) || "") ??
+              null;
+            const temaSesion = String(temaPorCursoFecha.get(key) || "").trim();
+            const temaSesionEsGenerico = !temaSesion || /^clase\s*#?\s*\d+/i.test(temaSesion);
+            const programaIdCurso = String(cursoData?.programa_id || "");
+            const temaDesdePensum =
+              claseNumero && programaIdCurso
+                ? temaPorProgramaClase.get(`${programaIdCurso}-${claseNumero}`) || null
+                : null;
+            const temaFinal = temaSesionEsGenerico ? temaDesdePensum || temaSesion || null : temaSesion;
 
             return {
               id: String(asistencia.id),
@@ -290,12 +330,8 @@ export default function StudentDetailView() {
               estado: asistencia.estado || null,
               observaciones: asistencia.observaciones || null,
               matricula_id: asistencia.matricula_id || null,
-              clase_numero:
-                extractClassNumber(asistencia?.observaciones || "") ??
-                claseNumeroPorCursoFecha.get(key) ??
-                extractClassNumber(temaPorCursoFecha.get(key) || "") ??
-                null,
-              tema_visto: temaPorCursoFecha.get(key) || null,
+              clase_numero: claseNumero,
+              tema_visto: temaFinal,
             };
           });
 
