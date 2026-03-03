@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse, Grid, Radio } from "antd";
+import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse, Grid, Radio, Popover } from "antd";
 import type { Breakpoint } from "antd/es/_util/responsiveObserver";
 import {
   UserOutlined,
@@ -45,6 +45,8 @@ interface Student {
   totalClases: number;
   presentes: number;
   enMora?: boolean;
+  totalFaltas?: number;
+  faltasDetalle?: Array<{ fecha: string | null; tema: string }>;
 }
 
 interface Tema {
@@ -876,12 +878,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     setLoading(true);
     try {
       let matriculaIdsCurso: number[] = [];
+      const cursoIdNumerico = parseInt(id);
 
       // Curso
       const { data: cursoData, error: errorCurso } = await supabaseBrowserClient
         .from("cursos")
         .select("*")
-        .eq("id", parseInt(id))
+        .eq("id", cursoIdNumerico)
         .maybeSingle();
       
       if (errorCurso || !cursoData) {
@@ -903,6 +906,23 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       
       setCurso(cursoConProfesor);
 
+      const { data: sesionesParaAsistencia } = await supabaseBrowserClient
+        .from("sesiones_clase")
+        .select("fecha, tema_visto")
+        .eq("curso_id", cursoIdNumerico);
+
+      const temaPorFecha = new Map<string, string>();
+      (sesionesParaAsistencia || []).forEach((sesion: any) => {
+        const fecha = String(sesion?.fecha || "").trim();
+        if (!fecha || temaPorFecha.has(fecha)) return;
+        temaPorFecha.set(fecha, String(sesion?.tema_visto || "").trim());
+      });
+
+      const esEstadoFalta = (estado?: string | null) => {
+        const raw = String(estado || "").trim().toLowerCase();
+        return raw === "ausente" || raw === "falta" || raw === "no_asiste" || raw === "no_asistio";
+      };
+
       // Estudiantes
       const { data: matriculasData } = await supabaseBrowserClient
         .from("matriculas")
@@ -922,12 +942,20 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             // Obtener asistencia
             const { data: asistencias } = await supabaseBrowserClient
               .from("asistencias")
-              .select("estado")
+              .select("estado, fecha, observaciones")
               .eq("matricula_id", matricula.id);
 
             const totalClases = asistencias?.length || 0;
             const presentes = asistencias?.filter(a => a.estado === "presente").length || 0;
             const porcentaje = totalClases > 0 ? (presentes / totalClases) * 100 : 0;
+            const faltasDetalle = (asistencias || [])
+              .filter((a: any) => esEstadoFalta(a?.estado))
+              .map((a: any) => {
+                const fecha = a?.fecha ? String(a.fecha) : null;
+                const temaSesion = fecha ? String(temaPorFecha.get(fecha) || "").trim() : "";
+                const tema = temaSesion || String(a?.observaciones || "").trim() || "Clase sin tema";
+                return { fecha, tema };
+              });
 
             return {
               id: matricula.id,
@@ -938,7 +966,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               nota_final: matricula.nota_final,
               asistencia_porcentaje: Math.round(porcentaje),
               totalClases,
-              presentes
+              presentes,
+              totalFaltas: faltasDetalle.length,
+              faltasDetalle,
             };
           })
         );
@@ -1047,7 +1077,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       const { data: sesionesData } = await supabaseBrowserClient
         .from("sesiones_clase")
         .select("*")
-        .eq("curso_id", parseInt(id))
+        .eq("curso_id", cursoIdNumerico)
         .order("fecha", { ascending: false });
       setSesiones(sesionesData || []);
     } catch (error) {
@@ -1114,11 +1144,40 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       {
         title: "Asistencia",
         dataIndex: "asistencia_porcentaje",
-        render: (porcentaje: number) => {
+        render: (porcentaje: number, record: Student) => {
           let color = "success";
           if (porcentaje < 80) color = "warning";
           if (porcentaje < 70) color = "error";
-          return <Tag color={color}>{porcentaje}%</Tag>;
+
+          const faltas = record?.faltasDetalle || [];
+          const totalFaltas = Number(record?.totalFaltas || 0);
+
+          return (
+            <Space direction="vertical" size={2}>
+              <Tag color={color}>{porcentaje}%</Tag>
+              {totalFaltas > 0 ? (
+                <Popover
+                  trigger="click"
+                  title={`Faltas (${totalFaltas})`}
+                  content={
+                    <Space direction="vertical" size={4} style={{ maxWidth: 320 }}>
+                      {faltas.map((falta, index) => (
+                        <Text key={`${String(falta.fecha || "sin-fecha")}-${index}`} style={{ fontSize: 12 }}>
+                          {`${falta.fecha ? dayjs(falta.fecha).format("DD/MM/YYYY") : "Sin fecha"} · ${falta.tema}`}
+                        </Text>
+                      ))}
+                    </Space>
+                  }
+                >
+                  <Button type="link" size="small" style={{ padding: 0, height: "auto" }}>
+                    {`Ver faltas (${totalFaltas})`}
+                  </Button>
+                </Popover>
+              ) : (
+                <Text type="secondary" style={{ fontSize: 12 }}>Sin faltas</Text>
+              )}
+            </Space>
+          );
         },
         width: 100,
         sorter: (a: any, b: any) => a.asistencia_porcentaje - b.asistencia_porcentaje,
