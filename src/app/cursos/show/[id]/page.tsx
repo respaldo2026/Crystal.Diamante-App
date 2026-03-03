@@ -723,13 +723,14 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   }, [calificacionesTema, estudiantes, temaSeleccionadoId]);
 
   const abrirModalActividad = useCallback(() => {
-    if (!temas.length) {
+    const primerTema = temas[0];
+    if (!primerTema) {
       message.warning("No hay clases disponibles para calificar.");
       return;
     }
 
     if (!temaSeleccionadoId) {
-      setTemaSeleccionadoId(String(temas[0].id));
+      setTemaSeleccionadoId(String(primerTema.id));
     }
     setModalActividadVisible(true);
   }, [message, temaSeleccionadoId, temas]);
