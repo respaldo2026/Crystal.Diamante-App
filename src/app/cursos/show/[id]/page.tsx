@@ -1441,6 +1441,110 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const pagoMesActual = Number((horasMesActual * (tieneValorHora ? valorHoraProfesor : 0)).toFixed(0));
   const formatoCOP = (valor: number) => `$${Number(valor || 0).toLocaleString("es-CO")}`;
 
+  const estudiantesEvaluables = estudiantes.filter((est) => est.estado !== "pendiente_pago");
+  const totalEstudiantesEvaluables = estudiantesEvaluables.length;
+
+  const estudiantesRezagados = estudiantesEvaluables
+    .map((est) => {
+      const pendientesActividadEstudiante = clasesPensum.reduce((count, tema: any) => {
+        const temaId = String(tema?.id || "");
+        if (!temaId) return count;
+        const nota = calificacionesTema[temaId]?.[String(est.id)] ?? null;
+        return nota == null || Number.isNaN(nota) ? count + 1 : count;
+      }, 0);
+
+      const notaFinal = typeof est.nota_final === "number" ? est.nota_final : null;
+      const riesgoNota = notaFinal !== null && notaFinal < 3.8;
+      const riesgoAsistencia = est.asistencia_porcentaje < (curso.porcentaje_minimo || 80);
+      const riesgoPendientes = pendientesActividadEstudiante >= 2;
+
+      const scoreRiesgo = (riesgoAsistencia ? 2 : 0) + (riesgoNota ? 2 : 0) + (riesgoPendientes ? 1 : 0);
+
+      return {
+        ...est,
+        pendientesActividadEstudiante,
+        scoreRiesgo,
+      };
+    })
+    .filter((est) => est.scoreRiesgo > 0)
+    .sort((a, b) => {
+      if (b.scoreRiesgo !== a.scoreRiesgo) return b.scoreRiesgo - a.scoreRiesgo;
+      if (a.asistencia_porcentaje !== b.asistencia_porcentaje) return a.asistencia_porcentaje - b.asistencia_porcentaje;
+      return b.pendientesActividadEstudiante - a.pendientesActividadEstudiante;
+    })
+    .slice(0, 6);
+
+  const temasCriticos = clasesPensum
+    .map((tema: any) => {
+      const temaId = String(tema?.id || "");
+      const nombreTema = formatearNombreClase(tema);
+      const notasTema = estudiantesEvaluables
+        .map((est) => calificacionesTema[temaId]?.[String(est.id)] ?? null)
+        .filter((nota): nota is number => typeof nota === "number" && !Number.isNaN(nota));
+
+      const promedio = notasTema.length
+        ? Number((notasTema.reduce((sum, nota) => sum + nota, 0) / notasTema.length).toFixed(2))
+        : null;
+      const cobertura = totalEstudiantesEvaluables > 0
+        ? Number(((notasTema.length / totalEstudiantesEvaluables) * 100).toFixed(1))
+        : 0;
+
+      const scoreRiesgo = (promedio !== null && promedio < 3.8 ? 2 : 0) + (cobertura < 70 ? 1 : 0);
+
+      return {
+        temaId,
+        nombreTema,
+        promedio,
+        cobertura,
+        scoreRiesgo,
+      };
+    })
+    .filter((tema) => tema.scoreRiesgo > 0)
+    .sort((a, b) => {
+      if (b.scoreRiesgo !== a.scoreRiesgo) return b.scoreRiesgo - a.scoreRiesgo;
+      const promedioA = a.promedio ?? 0;
+      const promedioB = b.promedio ?? 0;
+      if (promedioA !== promedioB) return promedioA - promedioB;
+      return a.cobertura - b.cobertura;
+    })
+    .slice(0, 6);
+
+  const quizzesAtencion = quizzesOrdenadosPorPensum
+    .map((quiz: any) => {
+      const quizId = String(quiz?.id || "");
+      const intentosQuiz = (resultadosQuizResumen || []).filter((item: any) => String(item?.quiz_id || "") === quizId);
+      const promedio = intentosQuiz.length
+        ? Number((intentosQuiz.reduce((sum: number, item: any) => sum + Number(item?.calificacion || 0), 0) / intentosQuiz.length).toFixed(2))
+        : null;
+      const participacion = totalEstudiantesEvaluables > 0
+        ? Number(((intentosQuiz.length / totalEstudiantesEvaluables) * 100).toFixed(1))
+        : 0;
+
+      const temaId = String(quiz?.pensum_curso_id || "");
+      const nombreTema = nombreTemaPorId.get(temaId) || String(quiz?.titulo || "Quiz");
+      const ordenTema = ordenTemaPorId.get(temaId);
+      const nombre = ordenTema ? `${ordenTema}. ${nombreTema}` : nombreTema;
+
+      const scoreRiesgo = (promedio !== null && promedio < 3.8 ? 2 : 0) + (participacion < 70 ? 1 : 0);
+
+      return {
+        quizId,
+        nombre,
+        promedio,
+        participacion,
+        scoreRiesgo,
+      };
+    })
+    .filter((quiz) => quiz.scoreRiesgo > 0)
+    .sort((a, b) => {
+      if (b.scoreRiesgo !== a.scoreRiesgo) return b.scoreRiesgo - a.scoreRiesgo;
+      const promedioA = a.promedio ?? 0;
+      const promedioB = b.promedio ?? 0;
+      if (promedioA !== promedioB) return promedioA - promedioB;
+      return a.participacion - b.participacion;
+    })
+    .slice(0, 6);
+
   return (
     <div style={{ padding: 24 }}>
       {/* ENCABEZADO - OFICINA DEL PROFESOR */}
@@ -1637,6 +1741,101 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           </Card>
         </Col>
       </Row>
+
+      <Card size="small" title="Radar pedagógico (acción sugerida)" style={{ marginBottom: 16 }}>
+        <Space wrap size={8} style={{ marginBottom: 10 }}>
+          <Tag color={estudiantesRezagados.length > 0 ? "red" : "green"}>
+            {`Estudiantes a intervenir: ${estudiantesRezagados.length}`}
+          </Tag>
+          <Tag color={temasCriticos.length > 0 ? "gold" : "green"}>
+            {`Temas críticos: ${temasCriticos.length}`}
+          </Tag>
+          <Tag color={quizzesAtencion.length > 0 ? "orange" : "green"}>
+            {`Quizzes que requieren ajuste: ${quizzesAtencion.length}`}
+          </Tag>
+        </Space>
+
+        <Row gutter={[12, 12]}>
+          <Col xs={24} md={8}>
+            <Card size="small" title="Estudiantes rezagados">
+              {estudiantesRezagados.length ? (
+                <List
+                  size="small"
+                  dataSource={estudiantesRezagados}
+                  renderItem={(est: any) => (
+                    <List.Item>
+                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                        <Text strong>{est.nombre_completo}</Text>
+                        <Space size={6} wrap>
+                          <Tag color={est.asistencia_porcentaje < (curso.porcentaje_minimo || 80) ? "red" : "green"}>{`Asistencia ${est.asistencia_porcentaje}%`}</Tag>
+                          <Tag color={est.nota_final != null && est.nota_final < 3.8 ? "red" : "blue"}>{`Nota ${est.nota_final != null ? Number(est.nota_final).toFixed(1) : "-"}`}</Tag>
+                          <Tag color={est.pendientesActividadEstudiante > 0 ? "gold" : "green"}>{`Pendientes ${est.pendientesActividadEstudiante}`}</Tag>
+                        </Space>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ) : (
+                <Text type="secondary">Sin estudiantes en alerta académica por ahora.</Text>
+              )}
+            </Card>
+          </Col>
+
+          <Col xs={24} md={8}>
+            <Card size="small" title="Temas críticos del pensum">
+              {temasCriticos.length ? (
+                <List
+                  size="small"
+                  dataSource={temasCriticos}
+                  renderItem={(tema: any) => (
+                    <List.Item>
+                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                        <Text strong>{tema.nombreTema}</Text>
+                        <Space size={6} wrap>
+                          <Tag color={tema.promedio != null && tema.promedio < 3.8 ? "red" : "green"}>{`Promedio ${tema.promedio != null ? `${tema.promedio.toFixed(1)}/5` : "Sin nota"}`}</Tag>
+                          <Tag color={tema.cobertura < 70 ? "gold" : "blue"}>{`Cobertura ${tema.cobertura}%`}</Tag>
+                        </Space>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ) : (
+                <Text type="secondary">No se detectan temas con bajo promedio o baja cobertura.</Text>
+              )}
+            </Card>
+          </Col>
+
+          <Col xs={24} md={8}>
+            <Card size="small" title="Quizzes a reforzar">
+              {quizzesAtencion.length ? (
+                <List
+                  size="small"
+                  dataSource={quizzesAtencion}
+                  renderItem={(quiz: any) => (
+                    <List.Item>
+                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                        <Text strong>{quiz.nombre}</Text>
+                        <Space size={6} wrap>
+                          <Tag color={quiz.promedio != null && quiz.promedio < 3.8 ? "red" : "green"}>{`Promedio ${quiz.promedio != null ? `${quiz.promedio.toFixed(1)}/5` : "Sin intentos"}`}</Tag>
+                          <Tag color={quiz.participacion < 70 ? "orange" : "blue"}>{`Participación ${quiz.participacion}%`}</Tag>
+                        </Space>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ) : (
+                <Text type="secondary">Sin quizzes en alerta de rendimiento o participación.</Text>
+              )}
+            </Card>
+          </Col>
+        </Row>
+
+        <Space wrap style={{ marginTop: 12 }}>
+          <Button size="small" type="primary" onClick={() => setActiveTab("5")}>Ir a calificaciones</Button>
+          <Button size="small" onClick={() => setActiveTab("4")}>Revisar estudiantes</Button>
+          <Button size="small" onClick={() => setActiveTab("1")}>Reforzar temas del pensum</Button>
+        </Space>
+      </Card>
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Row gutter={[12, 12]} align="middle">
