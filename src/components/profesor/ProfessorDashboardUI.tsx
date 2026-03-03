@@ -105,6 +105,14 @@ const normalizeText = (value?: string | null) =>
 
 const normalizeTheme = (value?: string | null) => normalizeText(value).replace(/^\d+\s*/, "").trim();
 
+const getActividadColor = (nota?: number | null): string => {
+  const value = Number(nota);
+  if (!Number.isFinite(value)) return "default";
+  if (value >= 4) return "green";
+  if (value >= 3) return "gold";
+  return "red";
+};
+
 const normalizeHttpUrl = (value?: string | null) => {
   const raw = String(value || "").trim().replace(/&amp;/gi, "&");
   if (!raw) return "";
@@ -946,14 +954,24 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                                   dataIndex: "quiz",
                                   key: "quiz",
                                   width: 92,
-                                  render: (value) => (typeof value === "number" ? value.toFixed(1) : "—"),
+                                  render: (value) =>
+                                    typeof value === "number" ? (
+                                      <Tag color={getActividadColor(value)}>{value.toFixed(1)}</Tag>
+                                    ) : (
+                                      <Typography.Text type="secondary">—</Typography.Text>
+                                    ),
                                 },
                                 {
                                   title: "Actividad",
                                   dataIndex: "actividad",
                                   key: "actividad",
                                   width: 110,
-                                  render: (value) => (typeof value === "number" ? value.toFixed(1) : "—"),
+                                  render: (value) =>
+                                    typeof value === "number" ? (
+                                      <Tag color={getActividadColor(value)}>{value.toFixed(1)}</Tag>
+                                    ) : (
+                                      <Typography.Text type="secondary">—</Typography.Text>
+                                    ),
                                 },
                               ]}
                             />
