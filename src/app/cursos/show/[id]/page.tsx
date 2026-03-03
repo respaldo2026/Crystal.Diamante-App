@@ -985,7 +985,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           .from("quizzes_clase")
           .select("id, programa_id, pensum_curso_id, titulo, total_preguntas, activo, publicado")
           .eq("programa_id", Number(cursoConProfesor.programa_id))
-          .eq("activo", true)
           .order("created_at", { ascending: false });
 
         setQuizzesClase(quizzesData || []);
@@ -1521,13 +1520,19 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                         <Space wrap size={8}>
                                           {(() => {
                                             const quizTema = (quizzesClase || []).find(
+                                              (quiz: any) =>
+                                                String(quiz?.pensum_curso_id || "") === String(temaId) &&
+                                                quiz?.activo === true &&
+                                                quiz?.publicado === true
+                                            );
+                                            const quizTemaDisponible = (quizzesClase || []).find(
                                               (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaId)
                                             );
                                             const promedioActividad = promedioActividadPorTema.get(String(temaId));
                                             return (
                                               <>
-                                                <Tag color={quizTema ? "blue" : "default"}>
-                                                  {quizTema ? "Quiz habilitado" : "Sin quiz"}
+                                                <Tag color={quizTema ? "blue" : quizTemaDisponible ? "gold" : "default"}>
+                                                  {quizTema ? "Quiz habilitado" : quizTemaDisponible ? "Quiz no habilitado" : "Sin quiz"}
                                                 </Tag>
                                                 <Tag color={getActividadColor(promedioActividad)}>
                                                   {`Actividad: ${typeof promedioActividad === "number" ? `${promedioActividad.toFixed(1)}/5` : "Pendiente"}`}
@@ -1764,7 +1769,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       options={(quizzesClase || []).map((quiz: any) => {
                         const temaId = String(quiz?.pensum_curso_id || "");
                         const nombreTema = nombreTemaPorId.get(temaId) || quiz?.titulo || "Quiz";
-                        return { value: String(quiz.id), label: nombreTema };
+                        const estado = quiz?.activo ? "Activo" : "Inactivo";
+                        const publicacion = quiz?.publicado ? "Publicado" : "Borrador";
+                        return { value: String(quiz.id), label: `${nombreTema} • ${estado} • ${publicacion}` };
                       })}
                       onChange={(value) => setQuizProfesorSeleccionadoId(String(value))}
                     />
