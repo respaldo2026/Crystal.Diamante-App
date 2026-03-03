@@ -967,7 +967,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       if (cursoData?.profesor_id) {
         const { data: profesorData } = await supabaseBrowserClient
           .from("perfiles")
-          .select("nombre_completo")
+          .select("nombre_completo, valor_hora")
           .eq("id", cursoData.profesor_id)
           .single();
         cursoConProfesor = { ...cursoData, perfiles: profesorData };
@@ -1433,6 +1433,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const primeraQuincenaActiva = hoy.date() <= 15;
   const horasQuincenaActual = primeraQuincenaActiva ? horasPrimeraQuincena : horasSegundaQuincena;
   const etiquetaQuincenaActual = primeraQuincenaActiva ? "Horas 1-15" : "Horas 16-fin";
+  const valorHoraProfesor = Number(curso?.perfiles?.valor_hora ?? curso?.valor_hora ?? 0);
+  const tieneValorHora = Number.isFinite(valorHoraProfesor) && valorHoraProfesor > 0;
+  const pagoQuincenaActual = Number((horasQuincenaActual * (tieneValorHora ? valorHoraProfesor : 0)).toFixed(0));
+  const pagoPrimeraQuincena = Number((horasPrimeraQuincena * (tieneValorHora ? valorHoraProfesor : 0)).toFixed(0));
+  const pagoSegundaQuincena = Number((horasSegundaQuincena * (tieneValorHora ? valorHoraProfesor : 0)).toFixed(0));
+  const pagoMesActual = Number((horasMesActual * (tieneValorHora ? valorHoraProfesor : 0)).toFixed(0));
+  const formatoCOP = (valor: number) => `$${Number(valor || 0).toLocaleString("es-CO")}`;
 
   return (
     <div style={{ padding: 24 }}>
@@ -1649,6 +1656,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               </Tag>
               <Tag color="blue">{`Horas 1-15: ${horasPrimeraQuincena}h`}</Tag>
               <Tag color="purple">{`Horas 16-fin: ${horasSegundaQuincena}h`}</Tag>
+              {tieneValorHora ? (
+                <>
+                  <Tag color="green">{`Pago quincena actual: ${formatoCOP(pagoQuincenaActual)}`}</Tag>
+                  <Tag color="geekblue">{`Pago 1-15: ${formatoCOP(pagoPrimeraQuincena)}`}</Tag>
+                  <Tag color="magenta">{`Pago 16-fin: ${formatoCOP(pagoSegundaQuincena)}`}</Tag>
+                  <Tag color="success">{`Pago mes estimado: ${formatoCOP(pagoMesActual)}`}</Tag>
+                </>
+              ) : (
+                <Tag color="warning">Define valor/hora del profesor para estimar pago</Tag>
+              )}
             </Space>
           </Col>
           <Col xs={24} md={8}>
@@ -2199,7 +2216,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                           }))}
                           onChange={(value) => setTemaSeleccionadoId(String(value))}
                         />
-                        <Button type="primary" icon={<FormOutlined />} onClick={abrirModalActividad}>
+                        <Button type="primary" icon={<FormOutlined />} onClick={() => abrirModalActividad()}>
                           Calificar en modal
                         </Button>
                       </Space>
