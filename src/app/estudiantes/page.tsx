@@ -404,7 +404,13 @@ export default function EstudiantesList() {
                         const pagoTag = obtenerEstadoPago(record);
 
                         return (
-                            <Card key={record.id} style={{ borderRadius: 10 }} bodyStyle={{ padding: 10, position: "relative" }}>
+                            <Card
+                                key={record.id}
+                                hoverable
+                                style={{ borderRadius: 10, cursor: "pointer" }}
+                                bodyStyle={{ padding: 10, position: "relative" }}
+                                onClick={() => router.push(`/estudiantes/show/${record.id}`)}
+                            >
                                 <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 6 }}>
                                     <Tooltip title="Enviar WhatsApp">
                                         <Button 
@@ -416,46 +422,49 @@ export default function EstudiantesList() {
                                                 borderColor: '#b7eb8f', 
                                                 color: '#389e0d' 
                                             }}
-                                            onClick={() => {
+                                            onClick={(event) => {
+                                                event.stopPropagation();
                                                 const msg = `Hola ${record.nombre_completo}, te contactamos de la Academia...`;
                                                 enviarWhatsapp(record.telefono, msg);
                                             }}
                                         />
                                     </Tooltip>
 
-                                    <Dropdown
-                                        trigger={["click"]}
-                                        menu={{
-                                            items: [
-                                                {
-                                                    key: `ver-${record.id}`,
-                                                    label: "Ver perfil",
-                                                    onClick: () => router.push(`/estudiantes/show/${record.id}`),
-                                                },
-                                                {
-                                                    key: `editar-${record.id}`,
-                                                    label: "Editar",
-                                                    onClick: () => router.push(`/estudiantes/edit/${record.id}`),
-                                                },
-                                                { type: "divider" as const },
-                                                {
-                                                    key: `archivar-${record.id}`,
-                                                    label: "Archivar",
-                                                    danger: true,
-                                                    onClick: () => handleArchivarEstudiante(record, antMessage, modal, router),
-                                                },
-                                                {
-                                                    key: `eliminar-${record.id}`,
-                                                    label: "Eliminar",
-                                                    danger: true,
-                                                    disabled: user?.rol !== "admin",
-                                                    onClick: () => confirmarEliminarEstudiante(record, antMessage, modal, router, setDeletedIds),
-                                                },
-                                            ],
-                                        }}
-                                    >
-                                        <Button size="small" icon={<EllipsisOutlined />} />
-                                    </Dropdown>
+                                    <span onClick={(event) => event.stopPropagation()}>
+                                        <Dropdown
+                                            trigger={["click"]}
+                                            menu={{
+                                                items: [
+                                                    {
+                                                        key: `ver-${record.id}`,
+                                                        label: "Ver perfil",
+                                                        onClick: () => router.push(`/estudiantes/show/${record.id}`),
+                                                    },
+                                                    {
+                                                        key: `editar-${record.id}`,
+                                                        label: "Editar",
+                                                        onClick: () => router.push(`/estudiantes/edit/${record.id}`),
+                                                    },
+                                                    { type: "divider" as const },
+                                                    {
+                                                        key: `archivar-${record.id}`,
+                                                        label: "Archivar",
+                                                        danger: true,
+                                                        onClick: () => handleArchivarEstudiante(record, antMessage, modal, router),
+                                                    },
+                                                    {
+                                                        key: `eliminar-${record.id}`,
+                                                        label: "Eliminar",
+                                                        danger: true,
+                                                        disabled: user?.rol !== "admin",
+                                                        onClick: () => confirmarEliminarEstudiante(record, antMessage, modal, router, setDeletedIds),
+                                                    },
+                                                ],
+                                            }}
+                                        >
+                                            <Button size="small" icon={<EllipsisOutlined />} />
+                                        </Dropdown>
+                                    </span>
                                 </div>
 
                                 <Space direction="vertical" size={6} style={{ width: "100%", paddingRight: 56 }}>
@@ -498,6 +507,10 @@ export default function EstudiantesList() {
                     dataSource={filteredDataSource}
                     rowKey="id"
                     loading={tableProps.loading || loadingAsist || loadingPagos}
+                    onRow={(record: any) => ({
+                        onClick: () => router.push(`/estudiantes/show/${record.id}`),
+                        style: { cursor: "pointer" },
+                    })}
                     size={"middle"}
                     scroll={isTablet ? { x: 1100 } : undefined}
                     pagination={{
@@ -638,7 +651,7 @@ export default function EstudiantesList() {
                     width={70}
                     align="center"
                     render={(_, record: any) => (
-                        <Space direction="vertical" size={4} align="center">
+                        <Space direction="vertical" size={4} align="center" onClick={(event) => event.stopPropagation()}>
                             <Tooltip title="Enviar WhatsApp">
                                 <Button 
                                     shape="circle"
@@ -648,46 +661,49 @@ export default function EstudiantesList() {
                                         borderColor: '#b7eb8f', 
                                         color: '#389e0d' 
                                     }}
-                                    onClick={() => {
+                                    onClick={(event) => {
+                                        event.stopPropagation();
                                         const msg = `Hola ${record.nombre_completo}, te contactamos de la Academia...`;
                                         enviarWhatsapp(record.telefono, msg);
                                     }}
                                 />
                             </Tooltip>
 
-                            <Dropdown
-                                trigger={["click"]}
-                                menu={{
-                                    items: [
-                                        {
-                                            key: `ver-${record.id}`,
-                                            label: "Ver perfil",
-                                            onClick: () => router.push(`/estudiantes/show/${record.id}`),
-                                        },
-                                        {
-                                            key: `editar-${record.id}`,
-                                            label: "Editar",
-                                            onClick: () => router.push(`/estudiantes/edit/${record.id}`),
-                                        },
-                                        { type: "divider" as const },
-                                        {
-                                            key: `archivar-${record.id}`,
-                                            label: "Archivar",
-                                            danger: true,
-                                            onClick: () => handleArchivarEstudiante(record, antMessage, modal, router),
-                                        },
-                                        {
-                                            key: `eliminar-${record.id}`,
-                                            label: "Eliminar",
-                                            danger: true,
-                                            disabled: user?.rol !== "admin",
-                                            onClick: () => confirmarEliminarEstudiante(record, antMessage, modal, router, setDeletedIds),
-                                        },
-                                    ],
-                                }}
-                            >
-                                <Button size="small" icon={<EllipsisOutlined />} />
-                            </Dropdown>
+                            <span onClick={(event) => event.stopPropagation()}>
+                                <Dropdown
+                                    trigger={["click"]}
+                                    menu={{
+                                        items: [
+                                            {
+                                                key: `ver-${record.id}`,
+                                                label: "Ver perfil",
+                                                onClick: () => router.push(`/estudiantes/show/${record.id}`),
+                                            },
+                                            {
+                                                key: `editar-${record.id}`,
+                                                label: "Editar",
+                                                onClick: () => router.push(`/estudiantes/edit/${record.id}`),
+                                            },
+                                            { type: "divider" as const },
+                                            {
+                                                key: `archivar-${record.id}`,
+                                                label: "Archivar",
+                                                danger: true,
+                                                onClick: () => handleArchivarEstudiante(record, antMessage, modal, router),
+                                            },
+                                            {
+                                                key: `eliminar-${record.id}`,
+                                                label: "Eliminar",
+                                                danger: true,
+                                                disabled: user?.rol !== "admin",
+                                                onClick: () => confirmarEliminarEstudiante(record, antMessage, modal, router, setDeletedIds),
+                                            },
+                                        ],
+                                    }}
+                                >
+                                    <Button size="small" icon={<EllipsisOutlined />} />
+                                </Dropdown>
+                            </span>
                         </Space>
                     )}
                 />
