@@ -2207,6 +2207,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                             renderItem={(tema: any, temaIndex: number) => {
                               const temaId = String(tema?.id ?? `tema-${temaIndex}`);
                               const materialesTema = materialesDidacticosPorTema.get(temaId) ?? [];
+                              const presentacionesTema = materialesTema.filter((item: any) => isIframeMaterial(item));
                               const recursoPrincipalTema = materialesTema.find((item: any) => isIframeMaterial(item)) || materialesTema[0] || null;
                               return (
                                 <List.Item
@@ -2249,6 +2250,27 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                                 >
                                                   {tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}
                                                 </Button>
+                                                {presentacionesTema.length > 1 ? (
+                                                  <Space size={4} wrap>
+                                                    {presentacionesTema.map((presentacion: any, indexPresentacion: number) => (
+                                                      <Button
+                                                        key={String(presentacion?.id || `${temaId}-gamma-${indexPresentacion}`)}
+                                                        size="small"
+                                                        type="link"
+                                                        style={{ paddingInline: 0 }}
+                                                        onClick={() =>
+                                                          abrirMaterialTema(
+                                                            presentacion,
+                                                            presentacion?.titulo || `${tema.nombre_curso || tema.titulo || "Tema"} · Presentación ${indexPresentacion + 1}`,
+                                                            materialesTema
+                                                          )
+                                                        }
+                                                      >
+                                                        {`Presentación ${indexPresentacion + 1}`}
+                                                      </Button>
+                                                    ))}
+                                                  </Space>
+                                                ) : null}
                                                 <Button
                                                   size="small"
                                                   type={quizTema ? "primary" : "default"}

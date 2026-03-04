@@ -1612,10 +1612,6 @@ export default function GestorPensum({
       const esPdfActual = mimeType.toLowerCase().includes("pdf") || nombreArchivo.toLowerCase().endsWith(".pdf");
       const esIframeActual = mimeType === "iframe";
 
-      if (esIframeActual && iframeExistenteTema) {
-        throw new Error("Ya existe una presentación Gamma para este tema. Edita la existente o elimina la anterior antes de subir otra.");
-      }
-
       const descripcionOriginal = String(formValues.descripcion || "").trim();
       const prefijoRespaldo = "[PDF_RESPALDO_IFRAME]";
       let descripcionFinal = descripcionOriginal;

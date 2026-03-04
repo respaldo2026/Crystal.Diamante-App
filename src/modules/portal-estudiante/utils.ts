@@ -76,5 +76,6 @@ export const getMaterialCanonicalKey = (material: any, temaReferencia?: string |
   const temaKey = normalizarTemaComparacion(parsed?.tema || temaReferencia || "");
   const tituloKey = normalizarTexto(getMaterialCanonicalTitle(material, temaReferencia));
   const tipoKey = normalizarTexto(material?.tipo_material || "");
-  return String(`${material?.programa_id || ""}-${material?.pensum_id || ""}-${temaKey}-${tituloKey}-${tipoKey}`);
+  const urlKey = normalizarTexto(String(material?.url_archivo || "").replace(/^https?:\/\//i, ""));
+  return String(`${material?.programa_id || ""}-${material?.pensum_id || ""}-${temaKey}-${tituloKey}-${tipoKey}-${urlKey}`);
 };

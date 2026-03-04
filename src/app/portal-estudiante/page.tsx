@@ -1074,6 +1074,13 @@ export default function PortalEstudiante() {
                   renderItem={(tema: any, temaIndex: number) => {
                     const temaId = String(tema?.id || `tema-${temaIndex}`);
                     const recursosTema = obtenerRecursosTema(tema, cicloId);
+                    const presentacionesTema = recursosTema
+                      .filter((recurso: any) => isIframeMaterial(recurso))
+                      .map((recurso: any, index: number) => ({
+                        id: String(recurso?.id || `gamma-${index}`),
+                        titulo: getMaterialCanonicalTitle(recurso, tema?.nombre_curso) || `Presentación ${index + 1}`,
+                        material: recurso,
+                      }));
                     const insumosTema = obtenerInsumosTema(tema, cicloId);
                     // Bloqueo en cascada:
                     // - vista "plan": bloqueado por módulo O por clase (quiz pendiente)
@@ -1122,6 +1129,7 @@ export default function PortalEstudiante() {
                                   temaNombre={tema?.nombre_curso || "Tema"}
                                   recursoPrincipalTema={recursoPrincipalTema}
                                   tituloRecursoPrincipal={tituloRecursoPrincipal}
+                                  presentacionesTema={presentacionesTema}
                                   quizTema={quizTema}
                                   notaQuizTema={notaQuizTema}
                                   notaActividadTema={notaActividadTema}

@@ -10,6 +10,7 @@ type TemaMaterialActionsProps = {
   temaNombre?: string;
   recursoPrincipalTema: any;
   tituloRecursoPrincipal: string;
+  presentacionesTema?: Array<{ id: string; titulo: string; material: any }>;
   quizTema: any;
   notaQuizTema: number | null;
   notaActividadTema: number | null;
@@ -24,6 +25,7 @@ export const TemaMaterialActions = ({
   temaNombre,
   recursoPrincipalTema,
   tituloRecursoPrincipal,
+  presentacionesTema = [],
   quizTema,
   notaQuizTema,
   notaActividadTema,
@@ -74,6 +76,21 @@ export const TemaMaterialActions = ({
       </Space>
 
       <Space wrap size={8}>
+        {presentacionesTema.length > 1 ? (
+          <Space wrap size={6}>
+            {presentacionesTema.map((presentacion, index) => (
+              <Button
+                key={presentacion.id || `gamma-${index}`}
+                size="small"
+                type="link"
+                style={{ paddingInline: 0 }}
+                onClick={() => onOpenMaterialAction(presentacion.material, presentacion.titulo, temaId)}
+              >
+                {presentacion.titulo || `Presentación ${index + 1}`}
+              </Button>
+            ))}
+          </Space>
+        ) : null}
         <Tag color={notaQuizTema == null ? "default" : quizAprobado(notaQuizTema) ? "green" : "red"}>
           {`Calificación quiz: ${notaQuizTema == null ? "-" : `${notaQuizTema}/5`}`}
         </Tag>
