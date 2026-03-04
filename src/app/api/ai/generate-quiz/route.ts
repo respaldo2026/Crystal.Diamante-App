@@ -1,7 +1,7 @@
 /**
  * POST /api/ai/generate-quiz
  *
- * Lee el PDF asociado a una clase del pensum y genera 25 preguntas de opción múltiple
+ * Lee uno o varios PDFs asociados a una clase del pensum y genera 25 preguntas de opción múltiple
  * usando Gemini. Devuelve el arreglo de preguntas listo para insertar en quiz_preguntas_clase.
  */
 
@@ -21,8 +21,8 @@ export interface PreguntaGenerada {
 }
 
 const PROMPT_GENERAR_QUIZ = `Eres un experto en educación de belleza y cosmetología.
-A continuación recibirás el contenido de un PDF de estudio de una clase de academia de belleza.
-Genera EXACTAMENTE 25 preguntas de opción múltiple en español basadas en el contenido del PDF.
+A continuación recibirás el contenido de uno o varios PDFs de estudio de una clase de academia de belleza.
+Genera EXACTAMENTE 25 preguntas de opción múltiple en español basadas en TODO el contenido recibido.
 
 REGLAS ESTRICTAS:
 1. Devuelve ÚNICAMENTE un JSON puro, sin markdown, sin bloques de código, sin explicaciones.
@@ -114,15 +114,23 @@ function validarPreguntas(preguntas: PreguntaGenerada[]): PreguntaGenerada[] {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { pdf_url, titulo_clase, pensum_curso_id } = body as {
-      pdf_url: string;
+    const { pdf_url, pdf_urls, titulo_clase, pensum_curso_id } = body as {
+      pdf_url?: string;
+      pdf_urls?: string[];
       titulo_clase?: string;
       pensum_curso_id?: string;
     };
 
-    if (!pdf_url) {
+    const normalizarUrl = (value?: string | null) => String(value || "").trim();
+    const urlsEntrada = [
+      ...(Array.isArray(pdf_urls) ? pdf_urls : []),
+      pdf_url,
+    ];
+    const urlsPdf = Array.from(new Set(urlsEntrada.map(normalizarUrl).filter(Boolean)));
+
+    if (urlsPdf.length === 0) {
       return NextResponse.json(
-        { error: "Se requiere pdf_url para generar el quiz." },
+        { error: "Se requiere al menos un PDF (pdf_url o pdf_urls) para generar el quiz." },
         { status: 400 }
       );
     }
@@ -135,16 +143,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Descargar PDF
-    let base64Data: string;
-    let mimeType: string;
+    // Descargar PDFs
+    let documentosPdf: Array<{ base64: string; mimeType: string; url: string }> = [];
     try {
-      const result = await fetchPdfAsBase64(pdf_url);
-      base64Data = result.base64;
-      mimeType = result.mimeType;
+      documentosPdf = await Promise.all(
+        urlsPdf.map(async (url) => {
+          const result = await fetchPdfAsBase64(url);
+          return { ...result, url };
+        })
+      );
     } catch (fetchError: any) {
       return NextResponse.json(
-        { error: `No se pudo descargar el PDF: ${fetchError.message}` },
+        { error: `No se pudo descargar uno de los PDFs: ${fetchError.message}` },
         { status: 422 }
       );
     }
@@ -153,19 +163,23 @@ export async function POST(req: NextRequest) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    const promptTexto = titulo_clase
+    const promptTextoBase = titulo_clase
       ? `${PROMPT_GENERAR_QUIZ}\n\nEl tema de esta clase es: "${titulo_clase}". Enfoca las preguntas en este tema específico.`
       : PROMPT_GENERAR_QUIZ;
 
-    const result = await model.generateContent([
-      {
+    const promptTexto = `${promptTextoBase}\n\nCantidad de PDFs recibidos: ${documentosPdf.length}. Usa de forma integrada el contenido de todos los PDFs.`;
+
+    const partesContenido = [
+      ...documentosPdf.map((doc) => ({
         inlineData: {
-          data: base64Data,
-          mimeType,
+          data: doc.base64,
+          mimeType: doc.mimeType,
         },
-      },
+      })),
       promptTexto,
-    ]);
+    ];
+
+    const result = await model.generateContent(partesContenido);
 
     const rawText = result.response.text();
 
@@ -198,6 +212,7 @@ export async function POST(req: NextRequest) {
       success: true,
       preguntas,
       total: preguntas.length,
+      total_pdfs_procesados: documentosPdf.length,
       titulo_sugerido: titulo_clase
         ? `Quiz: ${titulo_clase}`
         : "Quiz de la clase",

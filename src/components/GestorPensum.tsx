@@ -838,12 +838,29 @@ export default function GestorPensum({
     setCursoQuizActivo(curso);
     setEditingQuiz(quiz || null);
 
-    // Recopilar TODOS los PDFs del ciclo activo
+    const temaCursoNorm = normalizarTema(curso.nombre_curso);
+
+    // Recopilar PDFs del tema/clase actual
+    const pdfsTema = materialesCicloDidactico
+      .filter((m) => {
+        if (!isPdfMaterial(m) || !m.url_archivo) return false;
+        const { tema: temaMaterial } = parseTemaFromTitulo(m.titulo);
+        const temaMaterialNorm = normalizarTema(temaMaterial || m.titulo);
+        return temaMaterialNorm === temaCursoNorm;
+      })
+      .map((m) => ({
+        id: m.id,
+        url: m.url_archivo,
+        nombre: m.nombre_archivo || m.titulo,
+        titulo: m.titulo,
+      }));
+
+    // Fallback: si no hay coincidencias de tema, usar PDFs del ciclo activo
     const pensumIdBuscar = curso.pensum_id || selectedCicloId;
-    const todosPdfs = materiales
+    const todosPdfsCiclo = materiales
       .filter(
         (m) =>
-          m.mime_type === "application/pdf" &&
+          isPdfMaterial(m) &&
           m.url_archivo &&
           (pensumIdBuscar ? m.pensum_id === pensumIdBuscar : true)
       )
@@ -853,6 +870,7 @@ export default function GestorPensum({
         nombre: m.nombre_archivo || m.titulo,
         titulo: m.titulo,
       }));
+    const todosPdfs = pdfsTema.length > 0 ? pdfsTema : todosPdfsCiclo;
     setPdfsCiclo(todosPdfs);
 
     // Preseleccionar el PDF cuyo título contenga el nombre del curso (coincidencia parcial)
@@ -960,11 +978,26 @@ export default function GestorPensum({
   };
 
   const generarQuizConIA = async () => {
-    if (!pdfClaseActual) {
-      message.error("No hay PDF disponible para este ciclo. Sube primero el material en PDF en la sección de Materiales.");
+    if (pdfsCiclo.length === 0 && !pdfClaseActual) {
+      message.error("No hay PDFs disponibles para esta clase. Sube primero el material en PDF en la sección de Materiales.");
       return;
     }
     if (!cursoQuizActivo) return;
+
+    const pdfsSeleccionados = (pdfsCiclo || []).filter((pdf) => Boolean(pdf?.url));
+    if (pdfsSeleccionados.length === 0 && pdfClaseActual?.url) {
+      pdfsSeleccionados.push({
+        id: "manual",
+        url: pdfClaseActual.url,
+        nombre: pdfClaseActual.nombre,
+        titulo: pdfClaseActual.nombre,
+      });
+    }
+
+    if (pdfsSeleccionados.length === 0) {
+      message.error("No se encontraron PDFs válidos para generar el quiz con IA.");
+      return;
+    }
 
     setGenerandoQuizIA(true);
     try {
@@ -973,7 +1006,8 @@ export default function GestorPensum({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pdf_url: pdfClaseActual.url,
+          pdf_url: pdfsSeleccionados[0]?.url,
+          pdf_urls: pdfsSeleccionados.map((pdf) => pdf.url),
           titulo_clase: cursoQuizActivo.nombre_curso,
           pensum_curso_id: cursoQuizActivo.id,
         }),
@@ -996,7 +1030,7 @@ export default function GestorPensum({
         pensum_id: selectedCicloId,
         pensum_curso_id: cursoQuizActivo.id,
         titulo: formQuiz.getFieldValue("titulo") || titulo_sugerido,
-        descripcion: formQuiz.getFieldValue("descripcion") || `Generado automáticamente con IA a partir del PDF: ${pdfClaseActual.nombre}`,
+        descripcion: formQuiz.getFieldValue("descripcion") || `Generado automáticamente con IA a partir de ${pdfsSeleccionados.length} PDF(s) de la clase.`,
         total_preguntas: total,
         publicado: formQuiz.getFieldValue("publicado") ?? false,
         activo: formQuiz.getFieldValue("activo") ?? true,
@@ -1044,7 +1078,7 @@ export default function GestorPensum({
 
       if (insertError) throw insertError;
 
-      message.success(`✅ Quiz generado con IA: ${total} preguntas creadas para "${cursoQuizActivo.nombre_curso}"`);
+      message.success(`✅ Quiz generado con IA usando ${pdfsSeleccionados.length} PDF(s): ${total} preguntas creadas para "${cursoQuizActivo.nombre_curso}"`);
 
       setModalQuizVisible(false);
       setEditingQuiz(null);
@@ -2615,42 +2649,38 @@ export default function GestorPensum({
                 ? `Clase: ${cursoQuizActivo.nombre_curso}`
                 : "Selecciona un tema"
             }
-            description="Configura el quiz de esta clase. Selecciona el PDF de la clase y genera las preguntas automáticamente con IA."
+            description="Configura el quiz de esta clase. La IA usará todos los PDFs detectados de este tema para generar las preguntas."
           />
 
           {pdfsCiclo.length > 0 ? (
             <Form.Item
-              label={<span>📄 PDF de esta clase <small style={{ color: '#888' }}>(elige el que le corresponde)</small></span>}
+              label={<span>📄 PDFs detectados para esta clase</span>}
               style={{ marginBottom: 12 }}
             >
-              <Select
-                value={pdfClaseActual?.url || undefined}
-                onChange={(val) => {
-                  const sel = pdfsCiclo.find((p) => p.url === val);
-                  setPdfClaseActual(sel ? { url: sel.url, nombre: sel.nombre } : null);
-                }}
-                placeholder="Selecciona el PDF de esta clase"
-                options={pdfsCiclo.map((p) => ({
-                  value: p.url,
-                  label: p.titulo || p.nombre,
-                }))}
-                style={{ width: "100%" }}
+              <List
+                size="small"
+                bordered
+                dataSource={pdfsCiclo}
+                renderItem={(pdf) => (
+                  <List.Item>
+                    <Space>
+                      <FileOutlined />
+                      <Text>{pdf.titulo || pdf.nombre}</Text>
+                    </Space>
+                  </List.Item>
+                )}
               />
-              {pdfClaseActual && (
-                <div style={{ marginTop: 4, fontSize: 12, color: '#555' }}>
-                  <FileOutlined /> {pdfClaseActual.nombre}
-                  {" — "}
-                  <small style={{ color: '#722ed1' }}>Haz clic en ✨ Generar para crear las preguntas con IA</small>
-                </div>
-              )}
+              <div style={{ marginTop: 4, fontSize: 12, color: '#555' }}>
+                <small style={{ color: '#722ed1' }}>Se usarán {pdfsCiclo.length} PDF(s) para generar el quiz con IA.</small>
+              </div>
             </Form.Item>
           ) : (
             <Alert
               type="warning"
               showIcon
               style={{ marginBottom: 12 }}
-              message="Sin PDFs en este ciclo"
-              description="No hay PDFs subidos para este ciclo. Ve a la pestaña de Materiales, sube el PDF de cada clase con su tema relacionado, y luego vuelve aquí a generar el quiz."
+              message="Sin PDFs en esta clase"
+              description="No hay PDFs asociados a esta clase. Ve a la pestaña de Materiales, sube los PDFs del tema y luego vuelve aquí a generar el quiz."
             />
           )}
 
