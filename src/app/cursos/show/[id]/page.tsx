@@ -1978,7 +1978,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             <Button size="small" icon={<ClockCircleOutlined />} onClick={() => setActiveTab("3")}>
               Registrar sesión
             </Button>
-            <Button size="small" type="primary" icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
+            <Button size="small" type="primary" icon={<FormOutlined />} onClick={() => abrirModalActividad()}>
               Calificar clase
             </Button>
             <Button size="small" icon={<BarChartOutlined />} onClick={() => setModalRadarVisible(true)}>
