@@ -21,10 +21,8 @@ import {
   Space,
   Checkbox,
   Collapse,
-  Grid,
   Modal,
   Radio,
-  Dropdown,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -48,35 +46,44 @@ import {
   ClockCircleOutlined,
   GiftOutlined,
   YoutubeOutlined,
-  StarFilled,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import { formatDate } from "@utils/date";
-import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas, obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas } from "@modules/academico/pensum.service";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { descargarCertificado as descargarCertificadoPDF } from "@utils/certificate";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { useFeatureFlag } from "@/hooks/useFeatureFlag";
+import { useDelayedLoader } from "@/modules/portal-estudiante/hooks/useDelayedLoader";
+import { QuizApprovedResult } from "@/modules/portal-estudiante/components/QuizApprovedResult";
+import { QuizFailedResult } from "@/modules/portal-estudiante/components/QuizFailedResult";
+import { TemaMaterialActions } from "@/modules/portal-estudiante/components/TemaMaterialActions";
+import { QuizQuestionFlow } from "@/modules/portal-estudiante/components/QuizQuestionFlow";
+import { QuizFlowFooter } from "@/modules/portal-estudiante/components/QuizFlowFooter";
+import { IframeMaterialModal } from "@/modules/portal-estudiante/components/IframeMaterialModal";
+import { fetchPortalEstudianteData } from "@/modules/portal-estudiante/services/portal-data.service";
+import {
+  extractClassNumber,
+  getActividadColor,
+  getMaterialCanonicalKey,
+  getMaterialCanonicalTitle,
+  normalizarTemaComparacion,
+  normalizarTexto,
+  parseTemaTituloMaterial,
+  quizAprobado,
+  UMBRAL_APROBACION_QUIZ_NOTA,
+  UMBRAL_APROBACION_QUIZ_PORCENTAJE,
+} from "@/modules/portal-estudiante/utils";
 
 dayjs.locale("es");
 
 const { Title, Text } = Typography;
-const UMBRAL_APROBACION_QUIZ_PORCENTAJE = 76; // 3.8/5
-const UMBRAL_APROBACION_QUIZ_NOTA = 3.8; // nota mínima para aprobar y desbloquear siguiente clase
-
-const quizAprobado = (calificacion: number | null | undefined) =>
-  Number(calificacion || 0) >= UMBRAL_APROBACION_QUIZ_NOTA;
-
-const getActividadColor = (nota?: number | null): string => {
-  const value = Number(nota);
-  if (!Number.isFinite(value)) return "default";
-  if (value >= 4) return "green";
-  if (value >= 3) return "gold";
-  return "red";
-};
 
 export default function PortalEstudiante() {
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md;
+  const portalMobileUiV1 = useFeatureFlag("portal_mobile_ui_v1", true);
+  const portalDelayedLoaderV1 = useFeatureFlag("portal_delayed_loader_v1", true);
+  const isMobileDetected = useIsMobile("md");
+  const isMobile = portalMobileUiV1 ? isMobileDetected : false;
   const [activeTab, setActiveTab] = useState("1");
   const [loading, setLoading] = useState(true);
   const [estudiante, setEstudiante] = useState<any>(null);
@@ -128,7 +135,7 @@ export default function PortalEstudiante() {
   const iframeEmbedRef = useRef<HTMLIFrameElement>(null);
   const isFetchingRef = useRef(false);
   const hasFetchedOnceRef = useRef(false);
-  const [showLoadingUi, setShowLoadingUi] = useState(false);
+  const showLoadingUi = useDelayedLoader(loading, portalDelayedLoaderV1 ? 180 : 0);
 
   const actividadPorTemaMatricula = React.useMemo(() => {
     const map = new Map<string, number>();
@@ -145,19 +152,6 @@ export default function PortalEstudiante() {
     });
     return map;
   }, [calificacionesActividad]);
-
-  useEffect(() => {
-    if (!loading) {
-      setShowLoadingUi(false);
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      setShowLoadingUi(true);
-    }, 180);
-
-    return () => clearTimeout(timeoutId);
-  }, [loading]);
 
   const deduplicarLista = <T,>(items: T[], resolverClave: (item: T) => string) => {
     const vistos = new Set<string>();
@@ -183,73 +177,6 @@ export default function PortalEstudiante() {
     ) || null;
   };
 
-  const normalizarTexto = (valor?: string | null) =>
-    String(valor || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const parseTemaTituloMaterial = (titulo?: string | null) => {
-    const raw = String(titulo || "").trim();
-    const match = raw.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
-    if (!match) {
-      return {
-        tema: "",
-        tituloLimpio: raw,
-      };
-    }
-
-    return {
-      tema: String(match[1] || "").trim(),
-      tituloLimpio: String(match[2] || raw).trim(),
-    };
-  };
-
-  const extractClassNumber = (value?: string | null): number | null => {
-    const text = String(value || "");
-    const match = text.match(/clase\s*#?\s*(\d{1,3})/i);
-    if (!match?.[1]) return null;
-    const parsed = Number(match[1]);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-
-  const normalizarTemaComparacion = (valor?: string | null) =>
-    normalizarTexto(valor).replace(/^\d+\s*/, "").trim();
-
-  const limpiarTituloMaterial = (titulo?: string | null) => {
-    const raw = String(titulo || "").trim();
-    if (!raw) return "";
-
-    const sinPrefijoTema = raw.replace(/^\s*tema\s*[:\-]\s*/i, "").trim();
-    return sinPrefijoTema || raw;
-  };
-
-  const getMaterialCanonicalTitle = (material: any, temaReferencia?: string | null) => {
-    const parsed = parseTemaTituloMaterial(material?.titulo);
-    const tituloLimpio = limpiarTituloMaterial(parsed?.tituloLimpio || material?.titulo || "");
-
-    const temaRefNorm = normalizarTemaComparacion(temaReferencia || parsed?.tema || "");
-    const tituloNorm = normalizarTemaComparacion(tituloLimpio);
-
-    if (temaRefNorm && tituloNorm === temaRefNorm) {
-      return temaReferencia || parsed?.tema || tituloLimpio;
-    }
-
-    return tituloLimpio;
-  };
-
-  const getMaterialCanonicalKey = (material: any, temaReferencia?: string | null) => {
-    const parsed = parseTemaTituloMaterial(material?.titulo);
-    const temaKey = normalizarTemaComparacion(parsed?.tema || temaReferencia || "");
-    const tituloKey = normalizarTexto(getMaterialCanonicalTitle(material, temaReferencia));
-    const tipoKey = normalizarTexto(material?.tipo_material || "");
-    return String(`${material?.programa_id || ''}-${material?.pensum_id || ''}-${temaKey}-${tituloKey}-${tipoKey}`);
-  };
-
   const getMaterialIcon = (material: any) => {
     const tipo = String(material?.tipo_material || "").toLowerCase();
     const url = String(material?.url_archivo || "").toLowerCase();
@@ -267,50 +194,6 @@ export default function PortalEstudiante() {
     if (texto.match(/\.pdf$/) || texto.includes("pdf")) return <FileTextOutlined />;
     if (url.startsWith("http")) return <LinkOutlined />;
     return <FileOutlined />;
-  };
-
-  const getIndicadorVisualPreguntaQuiz = (pregunta?: string | null) => {
-    const texto = normalizarTexto(pregunta);
-
-    const reglas = [
-      {
-        regex: /(hepatitis|vih|vph|virus|bacteria|hongo|microorganismo|infeccion|onicomicosis|pseudomonas)/,
-        emoji: "🦠",
-        etiqueta: "Riesgo biológico",
-        color: "red",
-      },
-      {
-        regex: /(autoclave|estufa|esteriliz|desinfeccion|detergente|glutaraldehido|amonio|poe)/,
-        emoji: "🧪",
-        etiqueta: "Esterilización",
-        color: "purple",
-      },
-      {
-        regex: /(anatomia|mano|una|uña|falange|tendon|hiponiquio|lecho|matriz|placa ungueal)/,
-        emoji: "🖐️",
-        etiqueta: "Anatomía ungueal",
-        color: "blue",
-      },
-      {
-        regex: /(residuo|bolsa roja|bolsa negra|guardian|cortopunzante|desechar|descartar)/,
-        emoji: "♻️",
-        etiqueta: "Gestión de residuos",
-        color: "green",
-      },
-      {
-        regex: /(accidente biologico|sangre|riesgo|protocolo|supuracion|enrojecimiento|dolor)/,
-        emoji: "⚠️",
-        etiqueta: "Protocolo de seguridad",
-        color: "orange",
-      },
-    ];
-
-    const regla = reglas.find((item) => item.regex.test(texto));
-    return regla || {
-      emoji: "📘",
-      etiqueta: "Bioseguridad",
-      color: "geekblue",
-    };
   };
 
   const obtenerTextoOpcionQuiz = (pregunta: any, opcion?: string | null) => {
@@ -569,25 +452,6 @@ export default function PortalEstudiante() {
     return "Te damos la bienvenida";
   };
 
-  const normalizarTelefonoWhatsapp = (valor?: string | null): string | null => {
-    if (!valor) return null;
-
-    const texto = String(valor).trim();
-    if (!texto) return null;
-
-    const matchWa = texto.match(/wa\.me\/(\d+)/i);
-    const base = matchWa?.[1] || texto;
-    let digitos = base.replace(/\D/g, "");
-
-    if (!digitos) return null;
-
-    if (digitos.length === 10) {
-      digitos = `57${digitos}`;
-    }
-
-    return digitos;
-  };
-
   const abrirWhatsapp = (telefono: string | null, mensajeBase: string) => {
     if (!telefono) {
       message.warning("No hay número de WhatsApp configurado");
@@ -796,221 +660,41 @@ export default function PortalEstudiante() {
       if (!hasFetchedOnceRef.current) {
         setLoading(true);
       }
+      const result = await fetchPortalEstudianteData();
 
-      const { data: { user }, error: authError } = await supabaseBrowserClient.auth.getUser();
-      if (authError || !user) {
-        message.error("No autenticado");
-        return;
-      }
-
-      const { data: perfil, error: errPerfil } = await supabaseBrowserClient
-        .from("perfiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (errPerfil || !perfil) {
-        message.error("Perfil no encontrado. Contacta a la administración.");
-        return;
-      }
-
-      setEstudiante(perfil);
-
-      const { data: config } = await supabaseBrowserClient
-        .from("configuracion")
-        .select("*")
-        .order("updated_at", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false, nullsFirst: false })
-        .limit(1)
-        .maybeSingle();
-
-      const numeroAgente = normalizarTelefonoWhatsapp((config as any)?.whatsapp_agente || (config as any)?.whatsapp || null);
-      const numeroAdmisiones = normalizarTelefonoWhatsapp((config as any)?.whatsapp_admisiones || (config as any)?.telefono || (config as any)?.whatsapp || null);
-
-      setWhatsappAgente(numeroAgente);
-      setWhatsappAdmisiones(numeroAdmisiones);
-      setLogoAcademia((config as any)?.logo_url || null);
-
-      // 1. Cargar Matrículas con Cursos y Programas
-      const { data: dataMatriculas } = await supabaseBrowserClient
-        .from("matriculas")
-        .select(`
-          *,
-          cursos (
-            *,
-            programas (*)
-          )
-        `)
-        .eq("estudiante_id", user.id)
-        .neq("estado", "cancelado");
-
-      setMatriculas(dataMatriculas || []);
-
-      const matriculaIds = dataMatriculas?.map(m => m.id) || [];
-      const programaIds = dataMatriculas?.map(m => m.cursos?.programa_id).filter(Boolean) || [];
-      const cursoIds = (dataMatriculas || [])
-        .map((m: any) => m?.curso_id || m?.cursos?.id)
-        .filter(Boolean);
-
-      // 2. Cargar Pagos (Independiente de matrículas activas para ver historial completo)
-      const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
-        .from("pagos")
-        .select("*")
-        .eq("estudiante_id", user.id)
-        .order("fecha_vencimiento", { ascending: true });
-      
-      if (errPagos) logger.error("Error cargando pagos:", errPagos);
-
-      let pagosFinales = dataPagos || [];
-
-      if (pagosFinales.length === 0 && matriculaIds.length > 0) {
-        const { data: pagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
-          .from("pagos")
-          .select("*")
-          .in("matricula_id", matriculaIds)
-          .order("fecha_vencimiento", { ascending: true });
-
-        if (errPagosPorMatricula) {
-          logger.error("Error cargando pagos por matrícula:", errPagosPorMatricula);
-        } else {
-          pagosFinales = pagosPorMatricula || [];
-        }
-      }
-
-      setPagos(pagosFinales);
-
-      // 3. Cargar datos relacionados a matrículas activas
-      if (matriculaIds.length > 0) {
-        // Asistencias
-        const { data: dataAsistencias } = await supabaseBrowserClient
-          .from("asistencias")
-          .select("*, matriculas(id, curso_id, cursos(nombre))")
-          .in("matricula_id", matriculaIds)
-          .order("fecha", { ascending: false });
-
-        let asistenciasConTema = dataAsistencias || [];
-
-        if ((dataAsistencias || []).length > 0 && cursoIds.length > 0) {
-          const fechas = (dataAsistencias || [])
-            .map((a: any) => a?.fecha)
-            .filter(Boolean)
-            .sort();
-
-          const fechaMin = fechas[0];
-          const fechaMax = fechas[fechas.length - 1];
-
-          const sesionesQuery = supabaseBrowserClient
-            .from("sesiones_clase")
-            .select("curso_id, fecha, tema_visto, observaciones")
-            .in("curso_id", cursoIds);
-
-          const { data: sesionesData } = await (fechaMin && fechaMax
-            ? sesionesQuery.gte("fecha", fechaMin).lte("fecha", fechaMax)
-            : sesionesQuery);
-
-          const temaPorCursoFecha = new Map<string, string>();
-          const claseNumeroPorCursoFecha = new Map<string, number | null>();
-          (sesionesData || []).forEach((sesion: any) => {
-            const key = `${sesion?.curso_id || ""}-${sesion?.fecha || ""}`;
-            if (!temaPorCursoFecha.has(key)) {
-              temaPorCursoFecha.set(key, sesion?.tema_visto || "");
-              claseNumeroPorCursoFecha.set(key, extractClassNumber(sesion?.observaciones || sesion?.tema_visto));
-            }
-          });
-
-          asistenciasConTema = (dataAsistencias || []).map((asistencia: any) => {
-            const cursoId = asistencia?.matriculas?.curso_id;
-            const key = `${cursoId || ""}-${asistencia?.fecha || ""}`;
-            const temaSesion = temaPorCursoFecha.get(key) || null;
-            const temaAsistencia = asistencia?.tema_visto || null;
-            const detalleRegistro = String(asistencia?.observaciones || "").trim();
-            return {
-              ...asistencia,
-              tema_visto: temaSesion || temaAsistencia,
-              clase_numero: extractClassNumber(asistencia?.observaciones) ?? claseNumeroPorCursoFecha.get(key) ?? null,
-              registro_clase: detalleRegistro || temaSesion || temaAsistencia || null,
-            };
-          });
+      if (!result.ok) {
+        if (result.code === "NOT_AUTHENTICATED") {
+          message.error("No autenticado");
+          return;
         }
 
-        setAsistencias(asistenciasConTema);
-
-        if (matriculaIds.length > 0) {
-          const { data: intentosQuizData } = await supabaseBrowserClient
-            .from("quiz_intentos_clase")
-            .select("*")
-            .in("matricula_id", matriculaIds)
-            .order("enviado_at", { ascending: false });
-          setQuizIntentos(intentosQuizData || []);
-
-          const { data: calificacionesActividadData } = await supabaseBrowserClient
-            .from("calificaciones")
-            .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
-            .in("matricula_id", matriculaIds)
-            .in("tipo_evaluacion", ["actividad", "tema"])
-            .order("fecha_evaluacion", { ascending: false });
-
-          setCalificacionesActividad(calificacionesActividadData || []);
-        } else {
-          setQuizIntentos([]);
-          setCalificacionesActividad([]);
+        if (result.code === "PROFILE_NOT_FOUND") {
+          message.error("Perfil no encontrado. Contacta a la administración.");
+          return;
         }
+
+        throw result.error;
       }
 
-      // 4. Cargar Pensum y Materiales si hay programas
-      if (programaIds.length > 0) {
-        const pensumData = await obtenerPensumPorProgramas(programaIds);
-        setPensum(pensumData);
+      const { payload } = result;
 
-        const materialesData = await obtenerMaterialesPorProgramas(programaIds);
-        const materialesUnicos = deduplicarLista(materialesData || [], (m: any) =>
-          getMaterialCanonicalKey(m)
-        );
-        setMateriales(materialesUnicos);
+      setEstudiante(payload.estudiante);
+      setWhatsappAgente(payload.whatsappAgente);
+      setWhatsappAdmisiones(payload.whatsappAdmisiones);
+      setLogoAcademia(payload.logoAcademia);
 
-        const materialesCicloData = await obtenerMaterialesCicloPorProgramas(programaIds);
-        const materialesCicloUnicos = deduplicarLista(materialesCicloData || [], (m: any) => String(m?.id || ""));
-        setMaterialesCiclo(materialesCicloUnicos);
-
-        const materialesClaseData = await obtenerMaterialesClasePorProgramas(programaIds);
-        const materialesClaseUnicos = deduplicarLista(materialesClaseData || [], (m: any) =>
-          String(`${m?.programa_id || ''}-${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${(m?.nombre_material || '').trim().toLowerCase()}-${m?.cantidad || ''}-${(m?.unidad || '').trim().toLowerCase()}-${(m?.observaciones || '').trim().toLowerCase()}`)
-        );
-        setMaterialesClase(materialesClaseUnicos);
-
-        const { data: dataQuizzes } = await supabaseBrowserClient
-          .from("quizzes_clase")
-          .select("*")
-          .in("programa_id", programaIds)
-          .eq("activo", true)
-          .eq("publicado", true)
-          .order("created_at", { ascending: false });
-
-        setQuizzesClase(dataQuizzes || []);
-      } else {
-        setQuizzesClase([]);
-        setQuizIntentos([]);
-        setCalificacionesActividad([]);
-      }
-
-      // 5. Calcular Avance y Certificados
-      if (dataMatriculas) {
-        const avance = dataMatriculas.map((m: any) => ({
-          matriculaId: m.id,
-          curso: m.cursos?.nombre,
-          programa: m.cursos?.programas?.nombre,
-          programaId: m.cursos?.programa_id,
-          diasSemana: m.cursos?.dias_semana,
-          horaInicio: m.cursos?.hora_inicio,
-          horaFin: m.cursos?.hora_fin,
-          nota: m.nota_final || 0,
-          estado: m.estado_academico
-        }));
-        setAvancePorCurso(avance);
-
-        const certs = dataMatriculas.filter((m: any) => m.estado_academico === 'aprobado' && m.nota_final >= 70);
-        setCertificados(certs);
-      }
+      setMatriculas(payload.matriculas);
+      setPagos(payload.pagos);
+      setAsistencias(payload.asistencias);
+      setQuizIntentos(payload.quizIntentos);
+      setCalificacionesActividad(payload.calificacionesActividad);
+      setPensum(payload.pensum);
+      setMateriales(payload.materiales);
+      setMaterialesCiclo(payload.materialesCiclo);
+      setMaterialesClase(payload.materialesClase);
+      setQuizzesClase(payload.quizzesClase);
+      setAvancePorCurso(payload.avancePorCurso);
+      setCertificados(payload.certificados);
     } catch (error) {
       logger.error("Error:", error);
       message.error("Error cargando información del portal");
@@ -1768,71 +1452,21 @@ export default function PortalEstudiante() {
                               ) : null}
 
                               {temaBloqueado ? null : vista === "plan" ? (
-                                <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                                  <Space
-                                    size={8}
-                                    wrap
-                                    className="tema-material-row"
-                                    style={{ justifyContent: "space-between" }}
-                                  >
-                                    <Button
-                                      type="link"
-                                      size="small"
-                                      icon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FilePdfOutlined />}
-                                      onClick={() => {
-                                        if (!recursoPrincipalTema) {
-                                          message.warning("Este tema aún no tiene material didáctico disponible.");
-                                          return;
-                                        }
-                                        abrirMaterialDidactico(recursoPrincipalTema, tituloRecursoPrincipal, temaId);
-                                      }}
-                                      style={{ paddingInline: 0 }}
-                                    >
-                                      {tema?.nombre_curso || "Tema"}
-                                    </Button>
-
-                                    <Space size={4} className="tema-acciones-row">
-                                      <Button
-                                        size="small"
-                                        type="default"
-                                        icon={<DownloadOutlined />}
-                                        onClick={() => {
-                                          if (!recursoPrincipalTema) {
-                                            message.warning("Este tema aún no tiene recurso para descargar.");
-                                            return;
-                                          }
-                                          descargarMaterialDidactico(recursoPrincipalTema, tituloRecursoPrincipal, recursosTema);
-                                        }}
-                                      />
-
-                                      <Button
-                                        size="small"
-                                        type={quizTema ? "primary" : "default"}
-                                        ghost
-                                        icon={<SafetyCertificateOutlined />}
-                                        disabled={!quizTema}
-                                        onClick={() => {
-                                          if (!quizTema) return;
-                                          abrirQuiz(quizTema);
-                                        }}
-                                      >
-                                        Quiz
-                                      </Button>
-                                    </Space>
-                                  </Space>
-
-                                  <Space wrap size={8}>
-                                    <Tag color="geekblue">
-                                      {`Quiz: ${quizTema?.titulo || "Sin quiz"}`}
-                                    </Tag>
-                                    <Tag color={notaQuizTema == null ? "default" : quizAprobado(notaQuizTema) ? "green" : "red"}>
-                                      {`Calificación quiz: ${notaQuizTema == null ? "-" : `${notaQuizTema}/5`}`}
-                                    </Tag>
-                                    <Tag color={getActividadColor(notaActividadTema)}>
-                                      {`Calificación actividad: ${notaActividadTema == null ? "-" : `${Number(notaActividadTema).toFixed(1)}/5`}`}
-                                    </Tag>
-                                  </Space>
-                                </Space>
+                                <TemaMaterialActions
+                                  temaId={temaId}
+                                  temaNombre={tema?.nombre_curso || "Tema"}
+                                  recursoPrincipalTema={recursoPrincipalTema}
+                                  tituloRecursoPrincipal={tituloRecursoPrincipal}
+                                  quizTema={quizTema}
+                                  recursosTema={recursosTema}
+                                  notaQuizTema={notaQuizTema}
+                                  notaActividadTema={notaActividadTema}
+                                  materialIcon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FilePdfOutlined />}
+                                  onWarnAction={(warnMessage) => message.warning(warnMessage)}
+                                  onOpenMaterialAction={abrirMaterialDidactico}
+                                  onDownloadMaterialAction={descargarMaterialDidactico}
+                                  onOpenQuizAction={abrirQuiz}
+                                />
                               ) : insumosTema.length ? (
                                 <Collapse
                                   ghost
@@ -2412,233 +2046,23 @@ export default function PortalEstudiante() {
         }}
       >
         {quizResultado && quizResultado.aprobado ? (
-          /* ——— PANTALLA DE LOGRO (aprobado) ——— */
-          <div style={{ color: "#fff" }}>
-
-            {/* Contenido capturable para imagen compartible */}
-            <div ref={logrocardRef} style={{ paddingBottom: 20 }}>
-
-            {/* Estrellas decorativas superiores */}
-            <div style={{
-              position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-              pointerEvents: "none", overflow: "hidden", borderRadius: 16,
-            }}>
-              {[...Array(12)].map((_, i) => (
-                <StarFilled
-                  key={i}
-                  style={{
-                    position: "absolute",
-                    color: `rgba(255,215,0,${0.12 + (i % 4) * 0.07})`,
-                    fontSize: 10 + (i % 5) * 6,
-                    top: `${(i * 37) % 90}%`,
-                    left: `${(i * 53 + 5) % 95}%`,
-                    transform: `rotate(${i * 25}deg)`,
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Cabecera con logo */}
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center",
-              paddingTop: 28, paddingBottom: 12, position: "relative",
-            }}>
-              {logoAcademia ? (
-                <img
-                  src={logoAcademia}
-                  alt="Academia"
-                  style={{ height: 52, maxWidth: 180, objectFit: "contain", marginBottom: 6, filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.4))" }}
-                />
-              ) : (
-                <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, letterSpacing: 2, marginBottom: 6 }}>ACADEMIA CRYSTAL DIAMANTE</Text>
-              )}
-              <div style={{ width: 48, height: 2, background: "linear-gradient(90deg, transparent, #ffd700, transparent)" }} />
-            </div>
-
-            {/* Trofeo + nota */}
-            <div style={{ textAlign: "center", padding: "8px 24px 0" }}>
-              <div style={{ fontSize: 56, lineHeight: 1, marginBottom: 4 }}>🏆</div>
-              <div style={{
-                display: "inline-flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center",
-                width: 110, height: 110, borderRadius: "50%",
-                background: "linear-gradient(135deg, #ffd700 0%, #ff9500 100%)",
-                boxShadow: "0 0 40px rgba(255,215,0,0.55), 0 4px 20px rgba(0,0,0,0.4)",
-                margin: "4px auto 10px",
-              }}>
-                <span style={{ color: "#1a0533", fontSize: 38, fontWeight: 900, lineHeight: 1 }}>
-                  {quizResultado.calificacion.toFixed(1)}
-                </span>
-                <span style={{ color: "rgba(26,5,51,0.75)", fontSize: 12, fontWeight: 600 }}>/5.0</span>
-              </div>
-
-              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, marginBottom: 4, lineHeight: 1.2 }}>
-                ¡Lo lograste{estudiante?.nombre_completo ? `, ${estudiante.nombre_completo.split(" ")[0]}` : ""}! 🎉
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 14, marginBottom: 2 }}>
-                {quizResultado.tituloQuiz && (
-                  <span>📚 <em>{quizResultado.tituloQuiz}</em></span>
-                )}
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
-                {quizResultado.correctas} de {quizResultado.totalPreguntas} correctas · {quizResultado.porcentaje}%
-              </div>
-            </div>
-
-            {/* Tarjeta compartible */}
-            <div style={{
-              margin: "16px 20px 0",
-              padding: "14px 16px",
-              borderRadius: 12,
-              background: "rgba(255,255,255,0.09)",
-              border: "1px solid rgba(255,215,0,0.25)",
-              backdropFilter: "blur(4px)",
-            }}>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>
-                ✨ Presume tu logro
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, lineHeight: 1.6 }}>
-                {`🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`}
-              </div>
-            </div>
-
-            </div>{/* fin contenido capturable */}
-
-            {/* Botones de compartir */}
-            <div style={{ padding: "14px 20px 8px" }}>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 10, textAlign: "center", textTransform: "uppercase", letterSpacing: 1 }}>
-                Comparte en
-              </div>
-              <Row gutter={[8, 8]} justify="center">
-                {/* WhatsApp */}
-                <Col xs={24} sm={8}>
-                  <Button
-                    block
-                    icon={<WhatsAppOutlined />}
-                    size="large"
-                    style={{
-                      background: "#25D366", color: "#fff",
-                      border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13,
-                      height: 44,
-                      boxShadow: "0 3px 12px rgba(37,211,102,0.4)",
-                    }}
-                    onClick={() => compartirLogro("whatsapp")}
-                  >
-                    WhatsApp
-                  </Button>
-                </Col>
-                {/* Facebook */}
-                <Col xs={24} sm={8}>
-                  <Button
-                    block
-                    size="large"
-                    style={{
-                      background: "#1877F2", color: "#fff",
-                      border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13,
-                      height: 44,
-                      boxShadow: "0 3px 12px rgba(24,119,242,0.4)",
-                    }}
-                    onClick={() => compartirLogro("facebook")}
-                  >
-                    📘 Facebook
-                  </Button>
-                </Col>
-                {/* Instagram — copia el texto y abre Instagram */}
-                <Col xs={24} sm={8}>
-                  <Button
-                    block
-                    size="large"
-                    style={{
-                      background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
-                      color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13,
-                      height: 44,
-                      boxShadow: "0 3px 12px rgba(220,39,67,0.4)",
-                    }}
-                    onClick={() => compartirLogro("instagram")}
-                  >
-                    📸 Instagram
-                  </Button>
-                </Col>
-              </Row>
-            </div>
-
-            {/* Botón cerrar */}
-            <div style={{ padding: "12px 16px 24px", textAlign: "center" }}>
-              <Button
-                block
-                type="primary"
-                size="large"
-                style={{
-                  background: "linear-gradient(90deg, #ffd700, #ff9500)",
-                  border: "none", color: "#1a0533", fontWeight: 800,
-                  borderRadius: 10, fontSize: 14, height: 44,
-                  boxShadow: "0 4px 16px rgba(255,215,0,0.4)",
-                }}
-                onClick={() => setQuizResultadoVisible(false)}
-              >
-                🌟 ¡Ya presumí mi logro! Cerrar
-              </Button>
-            </div>
-          </div>
+          <QuizApprovedResult
+            isMobile={isMobile}
+            quizResultado={quizResultado}
+            estudianteNombre={estudiante?.nombre_completo}
+            logoAcademia={logoAcademia}
+            logrocardRef={logrocardRef}
+            onShareAction={compartirLogro}
+            onCloseAction={() => setQuizResultadoVisible(false)}
+          />
         ) : quizResultado && !quizResultado.aprobado ? (
-          /* ——— PANTALLA DE REPROBADO ——— */
-          <div style={{ padding: isMobile ? 16 : 28 }}>
-            <Space direction="vertical" size={20} style={{ width: "100%", textAlign: "center" }}>
-              <div
-                style={{
-                  width: 130, height: 130, borderRadius: "50%",
-                  background: "linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%)",
-                  display: "flex", flexDirection: "column",
-                  alignItems: "center", justifyContent: "center",
-                  margin: "0 auto",
-                  boxShadow: "0 8px 32px rgba(255,77,79,0.4)",
-                }}
-              >
-                <span style={{ color: "#fff", fontSize: 40, fontWeight: 800, lineHeight: 1 }}>
-                  {quizResultado.calificacion.toFixed(1)}
-                </span>
-                <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 14 }}>/5.0</span>
-              </div>
-              <div>
-                <Text style={{ fontSize: 22, fontWeight: 700, display: "block" }}>
-                  Sigue intentando 💪
-                </Text>
-                <Text type="secondary" style={{ fontSize: 15 }}>
-                  {`${quizResultado.correctas} de ${quizResultado.totalPreguntas} correctas · ${quizResultado.porcentaje}%`}
-                </Text>
-                <br />
-                <Text type="danger" style={{ fontSize: 13 }}>
-                  {`Necesitas mínimo ${UMBRAL_APROBACION_QUIZ_NOTA}/5 (${UMBRAL_APROBACION_QUIZ_PORCENTAJE}%) para aprobar y desbloquear la siguiente clase.`}
-                </Text>
-              </div>
-              {quizResultado.respuestasErradas.length > 0 && (
-                <div style={{ textAlign: "left", width: "100%" }}>
-                  <Text strong style={{ fontSize: 14 }}>
-                    {`Preguntas por mejorar (${quizResultado.respuestasErradas.length}):`}
-                  </Text>
-                  <List
-                    size="small"
-                    bordered
-                    style={{ marginTop: 8, maxHeight: 260, overflowY: "auto" }}
-                    dataSource={quizResultado.respuestasErradas}
-                    renderItem={(item: any) => (
-                      <List.Item>
-                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                          <Text strong style={{ fontSize: 12 }}>{`Pregunta ${item.orden || "-"}`}</Text>
-                          <Text style={{ fontSize: 13 }}>{item.pregunta}</Text>
-                          <Text type="danger" style={{ fontSize: 12 }}>{`✗ Tu respuesta: ${item.respuestaMarcada}`}</Text>
-                          <Text type="success" style={{ fontSize: 12 }}>{`✓ Correcta: ${item.respuestaCorrecta}`}</Text>
-                        </Space>
-                      </List.Item>
-                    )}
-                  />
-                </div>
-              )}
-              <Button type="primary" danger onClick={() => setQuizResultadoVisible(false)}>
-                Entendido, volver a intentarlo
-              </Button>
-            </Space>
-          </div>
+          <QuizFailedResult
+            isMobile={isMobile}
+            quizResultado={quizResultado}
+            umbralNota={UMBRAL_APROBACION_QUIZ_NOTA}
+            umbralPorcentaje={UMBRAL_APROBACION_QUIZ_PORCENTAJE}
+            onCloseAction={() => setQuizResultadoVisible(false)}
+          />
         ) : null}
       </Modal>
 
@@ -2656,260 +2080,49 @@ export default function PortalEstudiante() {
         }}
         width={isMobile ? "96vw" : 820}
         styles={{ body: { maxHeight: isMobile ? "70vh" : "75vh", overflowY: "auto" } }}
-        footer={(() => {
-          const preguntasPorBloque = 5;
-          const totalPreguntas = quizPreguntas?.length || 0;
-          const esUltimaPregunta = quizPreguntaActual >= Math.max(0, totalPreguntas - 1);
-
-          return (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", gap: 8 }}>
-              <Button
-                onClick={() => setQuizPreguntaActual((prev) => Math.max(0, prev - 1))}
-                disabled={quizPreguntaActual <= 0 || quizSaving || quizAnimando}
-              >
-                Anterior
-              </Button>
-
-              {esUltimaPregunta ? (
-                <Button type="primary" onClick={enviarQuiz} loading={quizSaving}>
-                  Finalizar y enviar
-                </Button>
-              ) : (
-                <Text type="secondary" style={{ fontSize: isMobile ? 11 : 13 }}>
-                  {isMobile ? "Selecciona →" : "Selecciona una respuesta para continuar →"}
-                </Text>
-              )}
-            </div>
-          );
-        })()}
-      >
-        <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          {(() => {
-            const preguntasPorBloque = 5;
-            const totalPreguntas = quizPreguntas?.length || 0;
-            const totalBloques = Math.max(1, Math.ceil(totalPreguntas / preguntasPorBloque));
-            const quizBloqueActual = Math.floor(quizPreguntaActual / preguntasPorBloque) + 1;
-            const inicioBloque = (quizBloqueActual - 1) * preguntasPorBloque;
-            const finBloque = Math.min(inicioBloque + preguntasPorBloque, totalPreguntas);
-            const preguntaActual = quizPreguntas[quizPreguntaActual];
-            const respondidas = (quizPreguntas || []).filter((p: any) => Boolean(quizRespuestas[String(p.id)])).length;
-            const progreso = totalPreguntas > 0
-              ? Math.round((respondidas / totalPreguntas) * 100)
-              : 0;
-
-            return (
-              <>
-                <Card size="small">
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Row justify="space-between" align="middle">
-                      <Col>
-                        <Text strong>{`Bloque ${quizBloqueActual} de ${totalBloques}`}</Text>
-                      </Col>
-                      <Col>
-                        <Tag>{`${respondidas}/${totalPreguntas} respondidas`}</Tag>
-                      </Col>
-                    </Row>
-                    <Row justify="space-between" align="middle">
-                      <Col>
-                        <Text type="secondary">{`Pregunta ${quizPreguntaActual + 1} de ${totalPreguntas}`}</Text>
-                      </Col>
-                      <Col>
-                        <Text type="secondary">{`Rango bloque: ${inicioBloque + 1}-${finBloque}`}</Text>
-                      </Col>
-                    </Row>
-                    <Progress percent={progreso} size="small" />
-                  </Space>
-                </Card>
-
-                {preguntaActual ? (
-                  <Card
-                    key={String(preguntaActual.id)}
-                    className={`quiz-question-transition ${quizAnimando ? "is-leaving" : ""}`}
-                    size="small"
-                    title={`Pregunta ${quizPreguntaActual + 1}`}
-                    bodyStyle={{ paddingTop: 12 }}
-                  >
-                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                      {(() => {
-                        const indicador = getIndicadorVisualPreguntaQuiz(preguntaActual.pregunta);
-                        return <Tag color={indicador.color}>{`${indicador.emoji} ${indicador.etiqueta}`}</Tag>;
-                      })()}
-
-                      <Card
-                        size="small"
-                        title={<Text strong>Pregunta</Text>}
-                        bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
-                      >
-                        <Text strong style={{ fontSize: 15, lineHeight: 1.45 }}>
-                          {preguntaActual.pregunta}
-                        </Text>
-                      </Card>
-
-                      <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                        <Text strong>Opciones de respuesta</Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          Selecciona una opción para continuar.
-                        </Text>
-                      </Space>
-
-                      <Radio.Group
-                        value={quizRespuestas[String(preguntaActual.id)]}
-                        onChange={(event) => {
-                          const value = String(event?.target?.value || "");
-                          if (!value) return;
-
-                          setQuizRespuestas((prev) => ({
-                            ...prev,
-                            [String(preguntaActual.id)]: value,
-                          }));
-
-                          const totalPreguntasLocal = quizPreguntas?.length || 0;
-                          const esUltima = quizPreguntaActual >= Math.max(0, totalPreguntasLocal - 1);
-
-                          if (!esUltima && !quizAnimando) {
-                            setQuizAnimando(true);
-                            window.setTimeout(() => {
-                              setQuizPreguntaActual((prev) => Math.min(totalPreguntasLocal - 1, prev + 1));
-                              setQuizAnimando(false);
-                            }, 180);
-                          }
-                        }}
-                        style={{ width: "100%" }}
-                      >
-                        {(() => {
-                          const opcionSeleccionada = quizRespuestas[String(preguntaActual.id)] || "";
-                          const opciones = [
-                            { value: "A", label: `A) ${preguntaActual.opcion_a}` },
-                            { value: "B", label: `B) ${preguntaActual.opcion_b}` },
-                            { value: "C", label: `C) ${preguntaActual.opcion_c}` },
-                            { value: "D", label: `D) ${preguntaActual.opcion_d}` },
-                          ];
-
-                          return (
-                            <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                              {opciones.map((opcion) => {
-                                const activa = opcionSeleccionada === opcion.value;
-                                return (
-                                  <label
-                                    key={opcion.value}
-                                    className={`quiz-option-card ${activa ? "is-active" : ""}`}
-                                  >
-                                    <Radio value={opcion.value} style={{ whiteSpace: "normal", lineHeight: 1.35 }}>
-                                      {opcion.label}
-                                    </Radio>
-                                  </label>
-                                );
-                              })}
-                            </Space>
-                          );
-                        })()}
-                      </Radio.Group>
-                    </Space>
-                  </Card>
-                ) : null}
-              </>
-            );
-          })()}
-        </Space>
-      </Modal>
-
-      <Modal
-        title={null}
-        open={iframePreview.open}
-        onCancel={cerrarIframeAPensum}
-        footer={null}
-        width="100%"
-        centered
-        closable={false}
-        style={{ top: 0, padding: 0 }}
-        styles={{ 
-          body: { padding: 0, height: "100vh", overflow: "hidden" },
-          content: { padding: 0, borderRadius: 0, height: "100vh", overflow: "hidden" }
-        }}
-        destroyOnClose
-        className="gamma-fullscreen-modal"
-      >
-        <div className="gamma-iframe-topbar">
-          <button
-            type="button"
-            className="gamma-iframe-menu"
-            onClick={cerrarIframeAPensum}
-            aria-label="Cerrar y volver a pensum"
-          >
-            Cerrar
-          </button>
-
-          <div className="gamma-iframe-center-logo" aria-hidden="true">
-            {logoAcademia ? (
-              <img src={logoAcademia} alt="Logo academia" className="gamma-iframe-logo" />
-            ) : (
-              <div className="gamma-iframe-logo-fallback">CD</div>
-            )}
-          </div>
-
-          <div className="gamma-iframe-actions">
-            {!iframeTrackingSupported && !iframePromptVisible && (
-              <button
-                type="button"
-                className="gamma-iframe-finish"
-                onClick={() => setIframePromptVisible(true)}
-              >
-                Finalicé lectura
-              </button>
-            )}
-
-            <Dropdown
-              trigger={["click"]}
-              menu={{
-                items: whatsappSoporteItems,
-                onClick: ({ key }) => {
-                  const destino = key === "agente" ? "agente" : "academia";
-                  abrirWhatsappSoporte(
-                    destino,
-                    `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo con este material del portal.`
-                  );
-                },
-              }}
-            >
-              <button
-                type="button"
-                className="gamma-iframe-whatsapp"
-                aria-label="WhatsApp"
-              >
-                <WhatsAppOutlined />
-              </button>
-            </Dropdown>
-          </div>
-        </div>
-
-        {iframePromptVisible && (
-          <div className="gamma-iframe-quiz-cta">
-            <div className="gamma-iframe-quiz-text">
-              ¿Terminaste la lectura? Valida tu conocimiento con el quiz del tema.
-            </div>
-            <button
-              type="button"
-              className="gamma-iframe-quiz-btn"
-              onClick={() => {
-                irQuizDesdeIframe();
-              }}
-            >
-              {quizDirectoIframe ? "Ir directo al Quiz" : "Ir a Pensum"}
-            </button>
-          </div>
+        footer={(
+          <QuizFlowFooter
+            totalPreguntas={quizPreguntas?.length || 0}
+            quizPreguntaActual={quizPreguntaActual}
+            quizSaving={quizSaving}
+            quizAnimando={quizAnimando}
+            isMobile={isMobile}
+            onPreviousAction={() => setQuizPreguntaActual((prev) => Math.max(0, prev - 1))}
+            onSubmitAction={enviarQuiz}
+          />
         )}
-
-        <iframe
-          ref={iframeEmbedRef}
-          src={iframePreview.src}
-          title={iframePreview.title || "Presentación"}
-          onLoad={() => setIframePromptVisible(false)}
-          style={{ width: "100%", height: "calc(100vh - 56px)", border: 0, marginTop: "56px" }}
-          allow="fullscreen; clipboard-read; clipboard-write"
-          allowFullScreen
-          loading="lazy"
+      >
+        <QuizQuestionFlow
+          quizPreguntas={quizPreguntas}
+          quizRespuestas={quizRespuestas}
+          quizPreguntaActual={quizPreguntaActual}
+          quizAnimando={quizAnimando}
+          setQuizRespuestasAction={setQuizRespuestas}
+          setQuizPreguntaActualAction={setQuizPreguntaActual}
+          setQuizAnimandoAction={setQuizAnimando}
         />
       </Modal>
+
+      <IframeMaterialModal
+        iframePreview={iframePreview}
+        logoAcademia={logoAcademia}
+        iframePromptVisible={iframePromptVisible}
+        iframeTrackingSupported={iframeTrackingSupported}
+        quizDirectoIframe={quizDirectoIframe}
+        whatsappSoporteItems={whatsappSoporteItems}
+        iframeEmbedRef={iframeEmbedRef}
+        onCancelAction={cerrarIframeAPensum}
+        onShowPromptAction={() => setIframePromptVisible(true)}
+        onSupportMenuClickAction={(key) => {
+          const destino = key === "agente" ? "agente" : "academia";
+          abrirWhatsappSoporte(
+            destino,
+            `Hola, soy ${estudiante?.nombre_completo || "estudiante"}. Necesito apoyo con este material del portal.`
+          );
+        }}
+        onGoQuizAction={irQuizDesdeIframe}
+        onIframeLoadAction={() => setIframePromptVisible(false)}
+      />
       <style jsx global>{`
         /* ──────────────────────────────────────
            LOADING SPLASH (reemplaza skeleton)

@@ -21,7 +21,6 @@ import {
   Tooltip,
   Switch,
   Image,
-  Grid,
   Divider,
   Alert,
   Tabs,
@@ -45,6 +44,15 @@ import {
 import type { UploadFile, UploadProps } from "antd/es/upload/interface";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
+import { useFeatureFlag } from "@/hooks/useFeatureFlag";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import {
+  categoriaOptions,
+  DEFAULT_AGENT_SYSTEM_PROMPT,
+  estadoColors,
+  tipoAssetOptions,
+} from "@/modules/marketing-center/constants";
+import { usePromptEditor } from "@/modules/marketing-center/hooks/usePromptEditor";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -95,82 +103,13 @@ interface CursoProximo {
   programas?: { nombre: string }[] | null;
 }
 
-const tipoAssetOptions = [
-  { value: "flyer", label: "Flyer", icon: <FileImageOutlined /> },
-  { value: "pdf", label: "PDF", icon: <FilePdfOutlined /> },
-  { value: "imagen", label: "Imagen", icon: <FileImageOutlined /> },
-  { value: "video", label: "Video" },
-  { value: "documento", label: "Documento", icon: <FileOutlined /> },
-  { value: "otro", label: "Otro" },
-];
-
-const categoriaOptions = [
-  "promocional",
-  "informativo",
-  "legal",
-  "inscripción",
-  "horarios",
-  "precios",
-];
-
-const DEFAULT_AGENT_SYSTEM_PROMPT = `# System Prompt: Agente {{persona_name}} (v4.0 – Conversación Humana + Precisión)
-
-🧠 Identidad
-Eres {{persona_name}}, {{persona_bio}}.
-Tu objetivo es orientar con claridad y naturalidad para ayudar a la inscripción, sin sonar robótico.
-
-## 1) Prioridad de conversación (OBLIGATORIO)
-1. Responde la intención ACTUAL del usuario.
-2. No repitas el mismo bloque si la persona ya avanzó.
-3. Si el usuario corrige ("eso no es..."), corrige de inmediato y no insistas en el programa anterior.
-4. Si el usuario dice "sí/ok/sii", continúa el tema pendiente (no reinicies información general).
-5. Si el usuario dice "gracias", responde corto y humano; puedes compartir redes para más info.
-
-## 2) Estilo WhatsApp
-{{greeting_rule}}
-- Usa párrafos cortos y escaneables.
-- Usa negrita para datos clave (curso, precio, fecha, horario).
-- Mantén tono cercano y profesional.
-- Estilo preferido: {{speaking_style}}
-
-## 3) Reglas de negocio
-- No inventes datos. Si falta información, usa: "{{fallback_response}}".
-- Si piden precio: prioriza inscripción + mensualidad (no total salvo que lo pidan).
-- Si piden ubicación: responde dirección/referencia primero.
-- Si preguntan por un programa no disponible: dilo claro y ofrece alternativas reales.
-- Formato de hora en AM/PM.
-
-## 4) Flujo comercial natural (sin rigidez)
-- No uses un guion fijo de 3 pasos.
-- Avanza según lo que la persona pregunte: precio, horario, ubicación, pensum, materiales o inscripción.
-- Cierra con una sola pregunta de avance (máximo una).
-
-## 5) Redes y cierre humano
-- En respuestas de valor (precio, fechas, contenido, ubicación), puedes cerrar con redes:
-  "Si quieres más info, también te comparto nuestras redes".
-- No fuerces venta tras un "gracias".
-
-## 6) Contacto de admisiones
-📱 WhatsApp Admisiones: +57 301 203 8582
-Compártelo cuando haya intención clara de inscripción o cuando lo pidan.
-
-## 7) Reglas no negociables
-- Solo usa información explícita del contexto jerárquico.
-- Si un curso no aparece en contexto, di que no está disponible.
-- No inventes horarios, precios, fechas ni nombres.
-
-{{sales_protocol}}
-`;
-
-const estadoColors: Record<string, string> = {
-  activo: "green",
-  inactivo: "orange",
-  archivado: "default",
-};
-
 export default function MarketingCenterPage() {
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md;
+  const isMobile = useIsMobile("md");
+  const marketingMobileTablesV1 = useFeatureFlag("marketing_mobile_tables_v1", true);
+  const marketingPromptToolsV1 = useFeatureFlag("marketing_prompt_tools_v1", true);
+  const marketingAgentKnowledgeV1 = useFeatureFlag("marketing_agent_knowledge_v1", true);
+  const tablePageSizeCompact = isMobile && marketingMobileTablesV1 ? 5 : 8;
+  const assetsTablePageSize = isMobile && marketingMobileTablesV1 ? 5 : 10;
   const [assets, setAssets] = useState<MarketingAsset[]>([]);
   const [programas, setProgramas] = useState<Programa[]>([]);
   const [cursosMarketing, setCursosMarketing] = useState<MarketingCurso[]>([]);
@@ -208,72 +147,15 @@ export default function MarketingCenterPage() {
   const [activeTabKey, setActiveTabKey] = useState("agent");
   const [assetsLoaded, setAssetsLoaded] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-
-  const getAgentPromptTextArea = () => {
-    if (typeof document === "undefined") return null;
-    return document.getElementById("agent-system-prompt") as HTMLTextAreaElement | null;
-  };
-
-  const applyWhatsappFormatToPrompt = (prefix: string, suffix = prefix, placeholder = "texto") => {
-    const currentValue = (agentForm.getFieldValue("system_prompt") as string) || "";
-    const textArea = getAgentPromptTextArea();
-    const selectionStart = textArea?.selectionStart ?? currentValue.length;
-    const selectionEnd = textArea?.selectionEnd ?? currentValue.length;
-    const hasSelection = selectionEnd > selectionStart;
-    const selectedText = hasSelection ? currentValue.slice(selectionStart, selectionEnd) : placeholder;
-    const formattedText = `${prefix}${selectedText}${suffix}`;
-
-    const nextValue =
-      currentValue.slice(0, selectionStart) +
-      formattedText +
-      currentValue.slice(selectionEnd);
-
-    agentForm.setFieldsValue({ system_prompt: nextValue });
-
-    requestAnimationFrame(() => {
-      const nextTextArea = getAgentPromptTextArea();
-      if (!nextTextArea) return;
-      nextTextArea.focus();
-      const nextSelectionStart = selectionStart + prefix.length;
-      const nextSelectionEnd = nextSelectionStart + selectedText.length;
-      nextTextArea.setSelectionRange(nextSelectionStart, nextSelectionEnd);
-    });
-  };
-
-  const insertIntoPrompt = (text: string) => {
-    const currentValue = (agentForm.getFieldValue("system_prompt") as string) || "";
-    const textArea = getAgentPromptTextArea();
-    const selectionStart = textArea?.selectionStart ?? currentValue.length;
-    const selectionEnd = textArea?.selectionEnd ?? currentValue.length;
-
-    const nextValue =
-      currentValue.slice(0, selectionStart) +
-      text +
-      currentValue.slice(selectionEnd);
-
-    agentForm.setFieldsValue({ system_prompt: nextValue });
-
-    requestAnimationFrame(() => {
-      const nextTextArea = getAgentPromptTextArea();
-      if (!nextTextArea) return;
-      const nextCursorPosition = selectionStart + text.length;
-      nextTextArea.focus();
-      nextTextArea.setSelectionRange(nextCursorPosition, nextCursorPosition);
-    });
-  };
-
-  const restaurarPromptPorDefecto = () => {
-    Modal.confirm({
-      title: "¿Restaurar prompt por defecto?",
-      content: "Esto reemplazará el contenido actual del prompt en el formulario.",
-      okText: "Restaurar",
-      cancelText: "Cancelar",
-      onOk: () => {
-        agentForm.setFieldsValue({ system_prompt: DEFAULT_AGENT_SYSTEM_PROMPT });
-        message.success("Prompt por defecto cargado. Pulsa Guardar para aplicarlo.");
-      },
-    });
-  };
+  const {
+    applyWhatsappFormatToPrompt,
+    insertIntoPrompt,
+    restoreDefaultPrompt,
+  } = usePromptEditor({
+    form: agentForm,
+    defaultPrompt: DEFAULT_AGENT_SYSTEM_PROMPT,
+    textAreaId: "agent-system-prompt",
+  });
 
   useEffect(() => {
     cargarDatosIniciales();
@@ -1163,7 +1045,7 @@ export default function MarketingCenterPage() {
                           ],
                           onClick: ({ key }) => {
                             if (key === "restore-default-prompt") {
-                              restaurarPromptPorDefecto();
+                              restoreDefaultPrompt();
                             }
                           },
                         }}
@@ -1217,22 +1099,24 @@ export default function MarketingCenterPage() {
 
                     <Form.Item label="Prompt de sistema" required>
                       <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                        <Space wrap>
-                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("*")} disabled={loadingAgentPrompt}>Negrita</Button>
-                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("_")} disabled={loadingAgentPrompt}>Cursiva</Button>
-                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("~")} disabled={loadingAgentPrompt}>Tachado</Button>
-                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("`")} disabled={loadingAgentPrompt}>Monoespacio</Button>
-                          <Button size="small" onClick={() => applyWhatsappFormatToPrompt("```\n", "\n```", "código")}
-                            disabled={loadingAgentPrompt}
-                          >
-                            Bloque código
-                          </Button>
-                          <Button size="small" onClick={() => insertIntoPrompt("\n• ")} disabled={loadingAgentPrompt}>Viñeta</Button>
-                          <Button size="small" onClick={() => insertIntoPrompt("\n\n")} disabled={loadingAgentPrompt}>Párrafo</Button>
-                          <Button size="small" onClick={() => insertIntoPrompt("✨")} disabled={loadingAgentPrompt}>✨</Button>
-                          <Button size="small" onClick={() => insertIntoPrompt("📌")} disabled={loadingAgentPrompt}>📌</Button>
-                          <Button size="small" onClick={() => insertIntoPrompt("✅")} disabled={loadingAgentPrompt}>✅</Button>
-                        </Space>
+                        {marketingPromptToolsV1 ? (
+                          <Space wrap>
+                            <Button size="small" onClick={() => applyWhatsappFormatToPrompt("*")} disabled={loadingAgentPrompt}>Negrita</Button>
+                            <Button size="small" onClick={() => applyWhatsappFormatToPrompt("_")} disabled={loadingAgentPrompt}>Cursiva</Button>
+                            <Button size="small" onClick={() => applyWhatsappFormatToPrompt("~")} disabled={loadingAgentPrompt}>Tachado</Button>
+                            <Button size="small" onClick={() => applyWhatsappFormatToPrompt("`")} disabled={loadingAgentPrompt}>Monoespacio</Button>
+                            <Button size="small" onClick={() => applyWhatsappFormatToPrompt("```\n", "\n```", "código")}
+                              disabled={loadingAgentPrompt}
+                            >
+                              Bloque código
+                            </Button>
+                            <Button size="small" onClick={() => insertIntoPrompt("\n• ")} disabled={loadingAgentPrompt}>Viñeta</Button>
+                            <Button size="small" onClick={() => insertIntoPrompt("\n\n")} disabled={loadingAgentPrompt}>Párrafo</Button>
+                            <Button size="small" onClick={() => insertIntoPrompt("✨")} disabled={loadingAgentPrompt}>✨</Button>
+                            <Button size="small" onClick={() => insertIntoPrompt("📌")} disabled={loadingAgentPrompt}>📌</Button>
+                            <Button size="small" onClick={() => insertIntoPrompt("✅")} disabled={loadingAgentPrompt}>✅</Button>
+                          </Space>
+                        ) : null}
                         <Text type="secondary">Atajos WhatsApp: *negrita*  _cursiva_  ~tachado~  `monoespacio`</Text>
                         <Form.Item
                           name="system_prompt"
@@ -1263,6 +1147,7 @@ export default function MarketingCenterPage() {
                 </Card>
 
                 {/* Conocimiento del agente: PDFs/texto */}
+                {marketingAgentKnowledgeV1 ? (
                 <Card
                   title="Conocimiento del agente (PDF/texto)"
                   bodyStyle={{ padding: isMobile ? "12px" : "16px" }}
@@ -1307,7 +1192,7 @@ export default function MarketingCenterPage() {
                       dataSource={docs}
                       loading={loadingDocs}
                       rowKey="id"
-                      pagination={{ pageSize: isMobile ? 5 : 8 }}
+                      pagination={{ pageSize: tablePageSizeCompact }}
                       columns={[
                         {
                           title: "Título",
@@ -1362,6 +1247,7 @@ export default function MarketingCenterPage() {
                     />
                   </Space>
                 </Card>
+                ) : null}
 
                 {/* Contexto IA: Programas, Cursos y Materiales (oculto por defecto) */}
                 <Space direction="vertical" style={{ width: "100%" }}>
@@ -1454,7 +1340,7 @@ export default function MarketingCenterPage() {
                     rowKey="id"
                     loading={loadingCursosMarketing}
                     size={isMobile ? "small" : "middle"}
-                    pagination={{ pageSize: isMobile ? 5 : 8 }}
+                    pagination={{ pageSize: tablePageSizeCompact }}
                     scroll={{ x: 720 }}
                   />
                 </Card>
@@ -1526,7 +1412,7 @@ export default function MarketingCenterPage() {
                     loading={loading}
                     size={isMobile ? "small" : "middle"}
                     scroll={{ x: 960 }}
-                    pagination={{ pageSize: isMobile ? 5 : 10 }}
+                    pagination={{ pageSize: assetsTablePageSize }}
                   />
                 </Card>
               </Space>
