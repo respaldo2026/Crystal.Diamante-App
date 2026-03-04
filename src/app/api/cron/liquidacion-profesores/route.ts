@@ -36,14 +36,21 @@ function moneyCOP(value: number): string {
 }
 
 function parseBogotaDateParts(date = new Date()) {
-  const formatted = new Intl.DateTimeFormat("en-CA", {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: BOGOTA_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(date);
+  }).formatToParts(date);
 
-  const [year, month, day] = formatted.split("-").map((value) => Number(value));
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? NaN);
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? NaN);
+  const day = Number(parts.find((part) => part.type === "day")?.value ?? NaN);
+
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+    throw new Error("No se pudieron parsear las partes de fecha en zona horaria de Bogotá");
+  }
+
   return { year, month, day };
 }
 
@@ -61,7 +68,13 @@ function formatDateISO(year: number, month: number, day: number): string {
 
 function buildPeriodLabel(startISO: string, endISO: string): string {
   const format = (value: string) => {
-    const [year, month, day] = value.split("-").map((item) => Number(item));
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return value;
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+
     return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("es-CO", {
       day: "numeric",
       month: "long",
