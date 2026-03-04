@@ -193,6 +193,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       esCorrecta: boolean;
     }>;
   } | null>(null);
+  const [iframeMaterialPreview, setIframeMaterialPreview] = useState<{
+    open: boolean;
+    title: string;
+    src: string;
+    pdfSrc: string;
+  }>({ open: false, title: "", src: "", pdfSrc: "" });
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalSesionVisible, setModalSesionVisible] = useState(false);
@@ -256,6 +262,73 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       .replace(/[^a-z0-9\s]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+
+  const normalizeHttpUrl = (value?: string | null) => {
+    const raw = String(value || "").trim().replace(/&amp;/gi, "&");
+    if (!raw) return "";
+
+    try {
+      const parsed = new URL(raw);
+      if (!["http:", "https:"].includes(parsed.protocol)) return "";
+      parsed.hash = "";
+      return parsed.toString();
+    } catch {
+      return "";
+    }
+  };
+
+  const extractIframeSrc = (value?: string | null) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const match = raw.match(/<iframe[^>]*src=["']([^"']+)["'][^>]*>/i);
+    return normalizeHttpUrl(String(match?.[1] || raw).trim());
+  };
+
+  const hasMalformedEmbedTokens = (value?: string | null) => {
+    const raw = String(value || "");
+    return /%_ENCODED_%|\{\"|\{"/i.test(raw);
+  };
+
+  const isAllowedEmbedHost = (value?: string | null) => {
+    const normalized = normalizeHttpUrl(value);
+    if (!normalized) return false;
+    try {
+      const host = new URL(normalized).hostname.toLowerCase();
+      return host === "gamma.app" || host.endsWith(".gamma.app");
+    } catch {
+      return false;
+    }
+  };
+
+  const toGammaEmbedUrl = (value?: string | null) => {
+    const normalized = normalizeHttpUrl(value);
+    if (!normalized) return "";
+
+    try {
+      const parsed = new URL(normalized);
+      const host = parsed.hostname.toLowerCase();
+      if (!(host === "gamma.app" || host.endsWith(".gamma.app"))) {
+        return normalized;
+      }
+
+      const segments = parsed.pathname.split("/").filter(Boolean);
+      if (segments[0] === "embed") {
+        parsed.search = "";
+        parsed.hash = "";
+        return parsed.toString();
+      }
+
+      const documentId = segments[segments.length - 1];
+      if (!documentId) return normalized;
+
+      parsed.pathname = `/embed/${documentId}`;
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.toString();
+    } catch {
+      return normalized;
+    }
+  };
 
   const ciclosOrdenados = useMemo(() => {
     const list = Array.isArray(temas) ? temas.slice() : [];
@@ -423,6 +496,61 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     if (texto.match(/\.pdf$/) || texto.includes("pdf")) return <FileTextOutlined />;
     if (url.startsWith("http")) return <LinkOutlined />;
     return <FileOutlined />;
+  };
+
+  const isIframeMaterial = (material: any) => {
+    const mime = String(material?.mime_type || "").toLowerCase();
+    const tipo = String(material?.tipo_material || "").toLowerCase();
+    const url = String(material?.url_archivo || "").toLowerCase();
+    return mime === "iframe" || tipo === "iframe" || url.includes("<iframe") || url.includes("gamma.app");
+  };
+
+  const isPdfMaterial = (material: any) => {
+    const mime = String(material?.mime_type || "").toLowerCase();
+    const tipo = String(material?.tipo_material || "").toLowerCase();
+    const url = String(material?.url_archivo || "").toLowerCase();
+    const nombre = String(material?.nombre_archivo || "").toLowerCase();
+    const titulo = String(material?.titulo || "").toLowerCase();
+    const texto = `${mime} ${tipo} ${url} ${nombre} ${titulo}`;
+    return mime.includes("pdf") || tipo.includes("pdf") || nombre.endsWith(".pdf") || /\.pdf(?:$|\?|#)/i.test(url) || texto.includes(" pdf ");
+  };
+
+  const abrirMaterialTema = (material: any, titulo: string, recursosTema: any[] = []) => {
+    const src = extractIframeSrc(material?.url_archivo);
+    const pdfRespaldo = (isPdfMaterial(material) ? material : recursosTema.find((item: any) => isPdfMaterial(item))) || null;
+    const pdfSrc = extractIframeSrc(pdfRespaldo?.url_archivo);
+
+    if (isIframeMaterial(material)) {
+      if (!src || hasMalformedEmbedTokens(src) || !isAllowedEmbedHost(src)) {
+        if (pdfSrc) {
+          message.warning("No se pudo abrir el iframe de Gamma. Se abrirá el PDF de respaldo.");
+          window.open(pdfSrc, "_blank", "noopener,noreferrer");
+          return;
+        }
+        message.warning("Este tema no tiene un iframe de Gamma válido ni PDF de respaldo.");
+        return;
+      }
+
+      setIframeMaterialPreview({
+        open: true,
+        title: titulo || "Presentación",
+        src: toGammaEmbedUrl(src),
+        pdfSrc: pdfSrc || "",
+      });
+      return;
+    }
+
+    if (pdfSrc) {
+      window.open(pdfSrc, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    if (src) {
+      window.open(src, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    message.warning("Este material no tiene un enlace válido.");
   };
 
   const abrirMaterial = (material: any) => {
@@ -2079,7 +2207,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                             renderItem={(tema: any, temaIndex: number) => {
                               const temaId = String(tema?.id ?? `tema-${temaIndex}`);
                               const materialesTema = materialesDidacticosPorTema.get(temaId) ?? [];
-                              const recursoPrincipalTema = materialesTema[0] || null;
+                              const recursoPrincipalTema = materialesTema.find((item: any) => isIframeMaterial(item)) || materialesTema[0] || null;
                               return (
                                 <List.Item
                                   key={temaId}
@@ -2115,7 +2243,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                                       message.warning("Este tema aún no tiene material didáctico disponible.");
                                                       return;
                                                     }
-                                                    abrirMaterial(recursoPrincipalTema);
+                                                    abrirMaterialTema(recursoPrincipalTema, tema.nombre_curso || tema.titulo || "Tema", materialesTema);
                                                   }}
                                                   style={{ paddingInline: 0 }}
                                                 >
@@ -2860,6 +2988,31 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             </>
           )}
         </Space>
+      </Modal>
+
+      <Modal
+        title={iframeMaterialPreview.title || "Presentación"}
+        open={iframeMaterialPreview.open}
+        onCancel={() => setIframeMaterialPreview({ open: false, title: "", src: "", pdfSrc: "" })}
+        footer={
+          <Space>
+            {iframeMaterialPreview.pdfSrc ? (
+              <Button onClick={() => window.open(iframeMaterialPreview.pdfSrc, "_blank", "noopener,noreferrer")}>Ver PDF respaldo</Button>
+            ) : null}
+            <Button onClick={() => setIframeMaterialPreview({ open: false, title: "", src: "", pdfSrc: "" })}>Cerrar</Button>
+          </Space>
+        }
+        width={isMobile ? "96%" : 1200}
+        destroyOnClose
+      >
+        <iframe
+          src={iframeMaterialPreview.src}
+          title={iframeMaterialPreview.title || "Presentación"}
+          style={{ width: "100%", height: isMobile ? "65vh" : "75vh", border: 0 }}
+          allow="fullscreen; clipboard-read; clipboard-write"
+          allowFullScreen
+          loading="lazy"
+        />
       </Modal>
 
       <Modal

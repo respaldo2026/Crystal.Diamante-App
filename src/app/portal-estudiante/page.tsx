@@ -499,43 +499,6 @@ export default function PortalEstudiante() {
     window.open(src, "_blank", "noopener,noreferrer");
   };
 
-  const descargarMaterialDidactico = (material: any, titulo: string, recursosTema: any[] = []) => {
-    const materialDescarga = isPdfMaterial(material) ? material : obtenerPdfRelacionado(material, recursosTema);
-
-    if (!materialDescarga && isIframeMaterial(material)) {
-      message.warning("Este recurso usa Gamma y no tiene versión PDF asociada para descarga.");
-      return;
-    }
-
-    const objetivoDescarga = materialDescarga || material;
-    const src = extractIframeSrc(objetivoDescarga?.url_archivo);
-    if (!src) {
-      message.warning("Este material no tiene un enlace válido para descargar.");
-      return;
-    }
-
-    if (isIframeMaterial(objetivoDescarga)) {
-      message.info("Este material es interactivo. Se abrirá en una nueva pestaña para descarga/exportación desde origen.");
-      window.open(src, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    const nombreArchivo = String(objetivoDescarga?.nombre_archivo || "").trim();
-    const nombreBase = String(titulo || "material-didactico").trim() || "material-didactico";
-    const downloadName = nombreArchivo.toLowerCase().endsWith(".pdf")
-      ? nombreArchivo
-      : `${nombreBase}.pdf`;
-
-    const enlace = document.createElement("a");
-    enlace.href = src;
-    enlace.target = "_blank";
-    enlace.rel = "noopener noreferrer";
-    enlace.download = downloadName;
-    document.body.appendChild(enlace);
-    enlace.click();
-    document.body.removeChild(enlace);
-  };
-
   const obtenerSaludoBienvenida = (genero?: string | null) => {
     const generoNormalizado = String(genero || "")
       .trim()
@@ -1160,13 +1123,11 @@ export default function PortalEstudiante() {
                                   recursoPrincipalTema={recursoPrincipalTema}
                                   tituloRecursoPrincipal={tituloRecursoPrincipal}
                                   quizTema={quizTema}
-                                  recursosTema={recursosTema}
                                   notaQuizTema={notaQuizTema}
                                   notaActividadTema={notaActividadTema}
                                   materialIcon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FilePdfOutlined />}
                                   onWarnAction={(warnMessage) => message.warning(warnMessage)}
                                   onOpenMaterialAction={abrirMaterialDidactico}
-                                  onDownloadMaterialAction={descargarMaterialDidactico}
                                   onOpenQuizAction={abrirQuiz}
                                 />
                               ) : insumosTema.length ? (

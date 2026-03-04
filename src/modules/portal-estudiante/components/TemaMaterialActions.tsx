@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Button, Space, Tag } from "antd";
-import { DownloadOutlined, FilePdfOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import { FilePdfOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import { getActividadColor, quizAprobado } from "@/modules/portal-estudiante/utils";
 
 type TemaMaterialActionsProps = {
@@ -11,13 +11,11 @@ type TemaMaterialActionsProps = {
   recursoPrincipalTema: any;
   tituloRecursoPrincipal: string;
   quizTema: any;
-  recursosTema: any[];
   notaQuizTema: number | null;
   notaActividadTema: number | null;
   materialIcon?: React.ReactNode;
   onWarnAction: (message: string) => void;
   onOpenMaterialAction: (material: any, title: string, temaId: string) => void;
-  onDownloadMaterialAction: (material: any, title: string, recursosTema: any[]) => void;
   onOpenQuizAction: (quiz: any) => void;
 };
 
@@ -27,13 +25,11 @@ export const TemaMaterialActions = ({
   recursoPrincipalTema,
   tituloRecursoPrincipal,
   quizTema,
-  recursosTema,
   notaQuizTema,
   notaActividadTema,
   materialIcon,
   onWarnAction,
   onOpenMaterialAction,
-  onDownloadMaterialAction,
   onOpenQuizAction,
 }: TemaMaterialActionsProps) => {
   return (
@@ -61,19 +57,6 @@ export const TemaMaterialActions = ({
         </Button>
 
         <Space size={4} className="tema-acciones-row">
-          <Button
-            size="small"
-            type="default"
-            icon={<DownloadOutlined />}
-            onClick={() => {
-              if (!recursoPrincipalTema) {
-                onWarnAction("Este tema aún no tiene recurso para descargar.");
-                return;
-              }
-              onDownloadMaterialAction(recursoPrincipalTema, tituloRecursoPrincipal, recursosTema);
-            }}
-          />
-
           <Button
             size="small"
             type={quizTema ? "primary" : "default"}
