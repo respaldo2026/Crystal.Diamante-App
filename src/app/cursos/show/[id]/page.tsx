@@ -1568,10 +1568,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
         <Card style={{ borderRadius: 14 }}>
           <Space direction="vertical" size={14} style={{ width: "100%" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Spin size="small" />
-              <Text type="secondary">Cargando curso...</Text>
-            </div>
             <Skeleton active title={{ width: "42%" }} paragraph={{ rows: 1 }} />
             <Row gutter={[12, 12]}>
               {[1, 2, 3].map((item) => (

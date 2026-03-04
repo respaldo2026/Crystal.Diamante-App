@@ -533,10 +533,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
       <div style={{ minHeight: "60vh", maxWidth: 1200, margin: "0 auto", width: "100%", padding: 16 }}>
         <Card style={{ borderRadius: 16 }}>
           <Space direction="vertical" size={14} style={{ width: "100%" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Spin size="small" />
-              <Typography.Text type="secondary">Cargando panel del profesor...</Typography.Text>
-            </div>
             <Skeleton active title={{ width: "32%" }} paragraph={{ rows: 1 }} />
             <Row gutter={[12, 12]}>
               {[1, 2, 3, 4].map((item) => (
