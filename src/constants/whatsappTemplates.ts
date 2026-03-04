@@ -41,6 +41,13 @@ const definitions = {
         fallback:
             "Hola {{nombre}}, el pago de tu clase del {{fecha}} por {{monto}} ya fue registrado para {{curso}}. ¡Gracias!",
     },
+    liquidacion_horas_profesor: {
+        nombre: "liquidacion_horas_profesor",
+        descripcion: "Liquida horas dictadas por el profesor para corte quincenal (15 y fin de mes).",
+        variables: ["nombre", "periodo", "horas", "valor"],
+        fallback:
+            "Profesora {{nombre}}, esta es la liquidación del periodo {{periodo}}. Horas dictadas: {{horas}}. Valor total a pagar: {{valor}}.",
+    },
     bienvenida_portal_estudiante: {
         nombre: "bienvenida_portal_estudiante",
         descripcion: "Da la bienvenida al estudiante y comparte la información de ingreso al portal.",

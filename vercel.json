@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/liquidacion-profesores",
+      "schedule": "5 13 * * *"
+    }
+  ]
+}

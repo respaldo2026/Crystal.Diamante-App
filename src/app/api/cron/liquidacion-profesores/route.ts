@@ -1,0 +1,372 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { WhatsAppService } from "@/services/whatsapp-service";
+
+export const runtime = "nodejs";
+
+const DEFAULT_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_LIQUIDACION_PROFESOR || "liquidacion_horas_profesor_v1";
+const DEFAULT_TEMPLATE_LANG = process.env.WHATSAPP_TEMPLATE_LIQUIDACION_PROFESOR_LANG || "es_CO";
+const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALLOW_TEXT_FALLBACK || "true").toLowerCase() === "true";
+const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_MAX_BULK_PER_RUN || 60);
+const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_DELAY_BETWEEN_SENDS_MS || 1000);
+const BOGOTA_TIMEZONE = "America/Bogota";
+
+type ResumenProfesor = {
+  profesorId: string;
+  nombre: string;
+  telefono: string;
+  horas: number;
+  valor: number;
+};
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizePhone(telefono: string): string {
+  const digits = String(telefono || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 10 && digits.startsWith("3")) return `57${digits}`;
+  if (digits.startsWith("00") && digits.length > 2) return digits.slice(2);
+  return digits;
+}
+
+function moneyCOP(value: number): string {
+  return `$${Math.round(Number(value || 0)).toLocaleString("es-CO")}`;
+}
+
+function parseBogotaDateParts(date = new Date()) {
+  const formatted = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BOGOTA_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+
+  const [year, month, day] = formatted.split("-").map((value) => Number(value));
+  return { year, month, day };
+}
+
+function getLastDayOfMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function pad(num: number): string {
+  return String(num).padStart(2, "0");
+}
+
+function formatDateISO(year: number, month: number, day: number): string {
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+function buildPeriodLabel(startISO: string, endISO: string): string {
+  const format = (value: string) => {
+    const [year, month, day] = value.split("-").map((item) => Number(item));
+    return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("es-CO", {
+      day: "numeric",
+      month: "long",
+      timeZone: BOGOTA_TIMEZONE,
+    });
+  };
+
+  return `${format(startISO)} a ${format(endISO)}`;
+}
+
+function buildFallbackText(nombre: string, periodoTexto: string, horasTexto: string, valorTexto: string): string {
+  return [
+    `Profesora ${nombre}, esta es la liquidación del periodo ${periodoTexto}.`,
+    `Horas dictadas: ${horasTexto}.`,
+    `Valor total a pagar: ${valorTexto}.`,
+    "Academia Crystal Diamante.",
+  ].join("\n");
+}
+
+function isAuthorized(request: NextRequest): boolean {
+  const apiKeyHeader = request.headers.get("x-api-key");
+  const cronApiKey = process.env.CRON_API_KEY;
+  if (cronApiKey && apiKeyHeader && apiKeyHeader === cronApiKey) {
+    return true;
+  }
+
+  const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+    return true;
+  }
+
+  return false;
+}
+
+async function runLiquidacionJob() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Faltan variables de Supabase para ejecutar la liquidación automática");
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const { year, month, day } = parseBogotaDateParts();
+  const lastDay = getLastDayOfMonth(year, month);
+  const esQuincena = day === 15;
+  const esFinMes = day === lastDay;
+
+  if (!esQuincena && !esFinMes) {
+    return {
+      success: true,
+      skipped: true,
+      reason: "Hoy no es día de liquidación (15 o fin de mes)",
+      today: `${year}-${pad(month)}-${pad(day)}`,
+    };
+  }
+
+  const startDay = esQuincena ? 1 : 16;
+  const endDay = esQuincena ? 15 : lastDay;
+  const startISO = formatDateISO(year, month, startDay);
+  const endISO = formatDateISO(year, month, endDay);
+  const periodoTexto = buildPeriodLabel(startISO, endISO);
+
+  const { data: sesiones, error: sesionesError } = await supabase
+    .from("sesiones")
+    .select("id, curso_id, horas_dictadas, fecha")
+    .gte("fecha", startISO)
+    .lte("fecha", endISO);
+
+  if (sesionesError) {
+    throw new Error(`Error consultando sesiones: ${sesionesError.message}`);
+  }
+
+  if (!sesiones?.length) {
+    return {
+      success: true,
+      skipped: true,
+      reason: "No hay sesiones dictadas en el periodo",
+      periodo: { startISO, endISO, periodoTexto },
+    };
+  }
+
+  const cursosIds = Array.from(new Set(sesiones.map((item: any) => String(item.curso_id || "")).filter(Boolean)));
+
+  const { data: cursos, error: cursosError } = await supabase
+    .from("cursos")
+    .select("id, profesor_id, valor_hora")
+    .in("id", cursosIds);
+
+  if (cursosError) {
+    throw new Error(`Error consultando cursos: ${cursosError.message}`);
+  }
+
+  const cursoById = new Map<string, any>();
+  const profesoresIdsSet = new Set<string>();
+  (cursos || []).forEach((curso: any) => {
+    const courseId = String(curso?.id || "");
+    const profesorId = String(curso?.profesor_id || "");
+    if (!courseId || !profesorId) return;
+    cursoById.set(courseId, curso);
+    profesoresIdsSet.add(profesorId);
+  });
+
+  const profesoresIds = Array.from(profesoresIdsSet);
+
+  if (!profesoresIds.length) {
+    return {
+      success: true,
+      skipped: true,
+      reason: "No se encontraron profesores asociados a las sesiones del periodo",
+      periodo: { startISO, endISO, periodoTexto },
+    };
+  }
+
+  const { data: perfiles, error: perfilesError } = await supabase
+    .from("perfiles")
+    .select("id, nombre_completo, telefono, notif_whatsapp, valor_hora")
+    .in("id", profesoresIds);
+
+  if (perfilesError) {
+    throw new Error(`Error consultando perfiles de profesores: ${perfilesError.message}`);
+  }
+
+  const perfilById = new Map<string, any>();
+  (perfiles || []).forEach((perfil: any) => {
+    perfilById.set(String(perfil.id), perfil);
+  });
+
+  const resumenByProfesor = new Map<string, ResumenProfesor>();
+
+  (sesiones || []).forEach((sesion: any) => {
+    const curso = cursoById.get(String(sesion?.curso_id || ""));
+    if (!curso?.profesor_id) return;
+
+    const profesorId = String(curso.profesor_id);
+    const perfil = perfilById.get(profesorId);
+    if (!perfil) return;
+
+    const horas = Number(sesion?.horas_dictadas || 0);
+    if (!Number.isFinite(horas) || horas <= 0) return;
+
+    const valorHoraCurso = Number(curso?.valor_hora || 0);
+    const valorHoraPerfil = Number(perfil?.valor_hora || 0);
+    const valorHora = valorHoraCurso > 0 ? valorHoraCurso : valueOrZero(valorHoraPerfil);
+
+    const current = resumenByProfesor.get(profesorId) || {
+      profesorId,
+      nombre: String(perfil?.nombre_completo || "Profesor/a"),
+      telefono: String(perfil?.telefono || ""),
+      horas: 0,
+      valor: 0,
+    };
+
+    current.horas += horas;
+    current.valor += horas * valorHora;
+
+    resumenByProfesor.set(profesorId, current);
+  });
+
+  let enviados = 0;
+  let omitidos = 0;
+  let fallidos = 0;
+  const detalles: Array<Record<string, any>> = [];
+  const telefonosProcesados = new Set<string>();
+
+  for (const resumen of resumenByProfesor.values()) {
+    if (enviados >= MAX_SENDS_PER_RUN) break;
+
+    const perfil = perfilById.get(resumen.profesorId);
+    if (!perfil || perfil.notif_whatsapp === false) {
+      omitidos++;
+      detalles.push({ profesor: resumen.nombre, estado: "omitido", motivo: "notificaciones deshabilitadas" });
+      continue;
+    }
+
+    const telefonoNormalizado = normalizePhone(resumen.telefono);
+    if (!telefonoNormalizado) {
+      omitidos++;
+      detalles.push({ profesor: resumen.nombre, estado: "omitido", motivo: "sin teléfono válido" });
+      continue;
+    }
+
+    if (telefonosProcesados.has(telefonoNormalizado)) {
+      omitidos++;
+      detalles.push({ profesor: resumen.nombre, estado: "omitido", motivo: "teléfono duplicado" });
+      continue;
+    }
+
+    const primerNombre = resumen.nombre.trim().split(" ")[0] || "Profesor/a";
+    const horasTexto = `${Number(resumen.horas.toFixed(1)).toLocaleString("es-CO")} horas`;
+    const valorTexto = moneyCOP(resumen.valor);
+
+    try {
+      await WhatsAppService.sendTemplate(
+        telefonoNormalizado,
+        DEFAULT_TEMPLATE_NAME,
+        [primerNombre, periodoTexto, horasTexto, valorTexto],
+        DEFAULT_TEMPLATE_LANG,
+      );
+
+      enviados++;
+      telefonosProcesados.add(telefonoNormalizado);
+      detalles.push({ profesor: resumen.nombre, estado: "enviado", horas: resumen.horas, valor: Math.round(resumen.valor) });
+
+      if (DELAY_BETWEEN_SENDS_MS > 0) {
+        await sleep(DELAY_BETWEEN_SENDS_MS);
+      }
+    } catch (error) {
+      if (ALLOW_TEXT_FALLBACK) {
+        try {
+          await WhatsAppService.sendText(
+            telefonoNormalizado,
+            buildFallbackText(primerNombre, periodoTexto, horasTexto, valorTexto),
+          );
+
+          enviados++;
+          telefonosProcesados.add(telefonoNormalizado);
+          detalles.push({ profesor: resumen.nombre, estado: "enviado_fallback", horas: resumen.horas, valor: Math.round(resumen.valor) });
+
+          if (DELAY_BETWEEN_SENDS_MS > 0) {
+            await sleep(DELAY_BETWEEN_SENDS_MS);
+          }
+        } catch (fallbackError) {
+          fallidos++;
+          detalles.push({
+            profesor: resumen.nombre,
+            estado: "fallido",
+            error: fallbackError instanceof Error ? fallbackError.message : "Error desconocido",
+          });
+        }
+      } else {
+        fallidos++;
+        detalles.push({
+          profesor: resumen.nombre,
+          estado: "fallido",
+          error: error instanceof Error ? error.message : "Error desconocido",
+        });
+      }
+    }
+  }
+
+  return {
+    success: true,
+    skipped: false,
+    periodo: {
+      startISO,
+      endISO,
+      periodoTexto,
+      corte: esQuincena ? "quincena_1_15" : "quincena_16_fin",
+    },
+    totales: {
+      profesoresDetectados: resumenByProfesor.size,
+      enviados,
+      omitidos,
+      fallidos,
+      maxSendsPerRun: MAX_SENDS_PER_RUN,
+    },
+    template: {
+      name: DEFAULT_TEMPLATE_NAME,
+      language: DEFAULT_TEMPLATE_LANG,
+      fallbackTextEnabled: ALLOW_TEXT_FALLBACK,
+    },
+    detalles,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function valueOrZero(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+export async function POST(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const response = await runLiquidacionJob();
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error("[Cron Liquidacion Profesores] Error:", error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Error interno" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const response = await runLiquidacionJob();
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error("[Cron Liquidacion Profesores] Error:", error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Error interno" },
+      { status: 500 },
+    );
+  }
+}
