@@ -768,6 +768,33 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return Array.from(unicos.values());
   }, [resultadosQuiz]);
 
+  const promedioQuizPorTema = useMemo(() => {
+    const bucket = new Map<string, number[]>();
+
+    (resultadosQuizResumen || []).forEach((item: any) => {
+      const quizId = String(item?.quiz_id || "");
+      if (!quizId) return;
+
+      const quiz = (quizzesClase || []).find((q: any) => String(q?.id || "") === quizId);
+      const temaId = String(quiz?.pensum_curso_id || "");
+      const nota = Number(item?.calificacion ?? item?.nota);
+      if (!temaId || !Number.isFinite(nota)) return;
+
+      const current = bucket.get(temaId) ?? [];
+      current.push(nota);
+      bucket.set(temaId, current);
+    });
+
+    const promedioMap = new Map<string, number>();
+    bucket.forEach((notas, temaId) => {
+      if (!notas.length) return;
+      const promedio = notas.reduce((sum, value) => sum + value, 0) / notas.length;
+      promedioMap.set(temaId, Number(promedio.toFixed(1)));
+    });
+
+    return promedioMap;
+  }, [quizzesClase, resultadosQuizResumen]);
+
   const quizzesOrdenadosPorPensum = useMemo(() => {
     const list = Array.isArray(quizzesClase) ? [...quizzesClase] : [];
     return list.sort((a: any, b: any) => {
@@ -2052,6 +2079,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                             renderItem={(tema: any, temaIndex: number) => {
                               const temaId = String(tema?.id ?? `tema-${temaIndex}`);
                               const materialesTema = materialesDidacticosPorTema.get(temaId) ?? [];
+                              const recursoPrincipalTema = materialesTema[0] || null;
                               return (
                                 <List.Item
                                   key={temaId}
@@ -2063,36 +2091,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                     description={
                                       <Space direction="vertical" size={4}>
                                         {tema.descripcion ? <Text type="secondary">{tema.descripcion}</Text> : null}
-                                        {materialesTema.length ? (
-                                          <Space wrap size={isMobile ? 6 : 10} direction={isMobile ? "vertical" : "horizontal"}>
-                                            {materialesTema.map((item: any, itemIndex: number) => (
-                                              <Tag
-                                                key={`${temaId}-mat-${itemIndex}`}
-                                                icon={getMaterialIcon(item)}
-                                                onClick={() => abrirMaterial(item)}
-                                                onKeyDown={(event) => {
-                                                  if (event.key === "Enter" || event.key === " ") {
-                                                    event.preventDefault();
-                                                    abrirMaterial(item);
-                                                  }
-                                                }}
-                                                tabIndex={item?.url_archivo ? 0 : -1}
-                                                title={item.titulo || item.nombre_archivo || "Recurso"}
-                                                style={{
-                                                  cursor: item?.url_archivo ? "pointer" : "default",
-                                                  maxWidth: "100%",
-                                                  display: "inline-flex",
-                                                  alignItems: "center",
-                                                }}
-                                              >
-                                                {item.titulo || item.nombre_archivo || "Recurso"}
-                                              </Tag>
-                                            ))}
-                                          </Space>
-                                        ) : (
-                                          <Text type="secondary" style={{ fontSize: 12 }}>Sin material didactico</Text>
-                                        )}
-
                                         <Space wrap size={8}>
                                           {(() => {
                                             const quizTema = (quizzesClase || []).find(
@@ -2104,15 +2102,47 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                             const quizTemaDisponible = (quizzesClase || []).find(
                                               (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaId)
                                             );
+                                            const promedioQuiz = promedioQuizPorTema.get(String(temaId));
                                             const promedioActividad = promedioActividadPorTema.get(String(temaId));
                                             return (
                                               <>
-                                                <Tag color={quizTema ? "blue" : quizTemaDisponible ? "gold" : "default"}>
-                                                  {quizTema ? "Quiz habilitado" : quizTemaDisponible ? "Quiz no habilitado" : "Sin quiz"}
+                                                <Button
+                                                  size="small"
+                                                  type="link"
+                                                  icon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FileTextOutlined />}
+                                                  onClick={() => {
+                                                    if (!recursoPrincipalTema) {
+                                                      message.warning("Este tema aún no tiene material didáctico disponible.");
+                                                      return;
+                                                    }
+                                                    abrirMaterial(recursoPrincipalTema);
+                                                  }}
+                                                  style={{ paddingInline: 0 }}
+                                                >
+                                                  {tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}
+                                                </Button>
+                                                <Button
+                                                  size="small"
+                                                  type={quizTema ? "primary" : "default"}
+                                                  ghost
+                                                  icon={<FormOutlined />}
+                                                  disabled={!quizTema}
+                                                  onClick={() => {
+                                                    if (!quizTema) return;
+                                                    abrirQuizProfesor(quizTema);
+                                                  }}
+                                                >
+                                                  Quiz
+                                                </Button>
+                                                <Tag color={promedioQuiz == null ? "default" : promedioQuiz >= 4 ? "green" : promedioQuiz >= 3 ? "gold" : "red"}>
+                                                  {`Calificación quiz: ${promedioQuiz == null ? "-" : `${promedioQuiz}/5`}`}
                                                 </Tag>
                                                 <Tag color={getActividadColor(promedioActividad)}>
-                                                  {`Actividad: ${typeof promedioActividad === "number" ? `${promedioActividad.toFixed(1)}/5` : "Pendiente"}`}
+                                                  {`Calificación actividad: ${typeof promedioActividad === "number" ? `${promedioActividad.toFixed(1)}/5` : "-"}`}
                                                 </Tag>
+                                                {!quizTema && quizTemaDisponible ? (
+                                                  <Tag color="gold">Quiz no habilitado</Tag>
+                                                ) : null}
                                               </>
                                             );
                                           })()}
