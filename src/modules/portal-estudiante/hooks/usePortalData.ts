@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchPortalEstudianteData } from "@/modules/portal-estudiante/services/portal-data.service";
 
 type PortalPayload = {
@@ -38,6 +38,26 @@ export const usePortalData = ({
   const [loading, setLoading] = useState(true);
   const isFetchingRef = useRef(false);
   const hasFetchedOnceRef = useRef(false);
+  const onSuccessRef = useRef(onSuccessAction);
+  const onAuthErrorRef = useRef(onAuthErrorAction);
+  const onProfileErrorRef = useRef(onProfileErrorAction);
+  const onUnknownErrorRef = useRef(onUnknownErrorAction);
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccessAction;
+  }, [onSuccessAction]);
+
+  useEffect(() => {
+    onAuthErrorRef.current = onAuthErrorAction;
+  }, [onAuthErrorAction]);
+
+  useEffect(() => {
+    onProfileErrorRef.current = onProfileErrorAction;
+  }, [onProfileErrorAction]);
+
+  useEffect(() => {
+    onUnknownErrorRef.current = onUnknownErrorAction;
+  }, [onUnknownErrorAction]);
 
   const loadPortalData = useCallback(async () => {
     if (isFetchingRef.current) return;
@@ -52,27 +72,27 @@ export const usePortalData = ({
 
       if (!result.ok) {
         if (result.code === "NOT_AUTHENTICATED") {
-          onAuthErrorAction();
+          onAuthErrorRef.current();
           return;
         }
 
         if (result.code === "PROFILE_NOT_FOUND") {
-          onProfileErrorAction();
+          onProfileErrorRef.current();
           return;
         }
 
         throw result.error;
       }
 
-      onSuccessAction(result.payload);
+      onSuccessRef.current(result.payload);
     } catch (error) {
-      onUnknownErrorAction(error);
+      onUnknownErrorRef.current(error);
     } finally {
       hasFetchedOnceRef.current = true;
       isFetchingRef.current = false;
       setLoading(false);
     }
-  }, [onAuthErrorAction, onProfileErrorAction, onSuccessAction, onUnknownErrorAction]);
+  }, []);
 
   return {
     loading,
