@@ -165,6 +165,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [modalActividadVisible, setModalActividadVisible] = useState(false);
   const [modalRadarVisible, setModalRadarVisible] = useState(false);
   const [soloPendientesActividad, setSoloPendientesActividad] = useState(false);
+  const [estudianteFocoActividadId, setEstudianteFocoActividadId] = useState<string | null>(null);
   const [temas, setTemas] = useState<Tema[]>([]);
   const [materiales, setMateriales] = useState<any[]>([]);
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
@@ -598,6 +599,23 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   }, [params]);
   const [activeTab, setActiveTab] = useState("1");
 
+  useEffect(() => {
+    const section = String(searchParams?.get("section") || "").toLowerCase().trim();
+    if (!section) return;
+
+    const tabBySection: Record<string, string> = {
+      attendance: "3",
+      grades: "5",
+      materials: "2",
+      default: "1",
+    };
+
+    const targetTab = tabBySection[section];
+    if (targetTab) {
+      setActiveTab(targetTab);
+    }
+  }, [searchParams]);
+
   // Memoized columns to avoid re-creation on every render
   const columnasSesiones = useMemo(
     () => [
@@ -818,7 +836,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return { calificadas, pendientes, promedio };
   }, [calificacionesTema, estudiantes, temaSeleccionadoId]);
 
-  const abrirModalActividad = useCallback((soloPendientes: boolean = false) => {
+  const abrirModalActividad = useCallback((soloPendientes: boolean = false, estudianteId?: string | null) => {
     const primerTema = clasesPensum[0];
     if (!primerTema) {
       message.warning("No hay clases disponibles para calificar.");
@@ -829,14 +847,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       setTemaSeleccionadoId(String(primerTema.id));
     }
     setSoloPendientesActividad(soloPendientes);
+    setEstudianteFocoActividadId(estudianteId ? String(estudianteId) : null);
     setModalActividadVisible(true);
   }, [clasesPensum, message, temaSeleccionadoId]);
 
   const estudiantesModalActividad = useMemo(() => {
     if (!temaSeleccionadoId) return estudiantes;
-    if (!soloPendientesActividad) return estudiantes;
-    return pendientesActividad;
-  }, [estudiantes, pendientesActividad, soloPendientesActividad, temaSeleccionadoId]);
+    const base = soloPendientesActividad ? pendientesActividad : estudiantes;
+    if (!estudianteFocoActividadId) return base;
+    return base.filter((est) => String(est.id) === String(estudianteFocoActividadId));
+  }, [estudiantes, pendientesActividad, soloPendientesActividad, temaSeleccionadoId, estudianteFocoActividadId]);
 
   const abrirQuizProfesor = useCallback(
     async (quiz: any) => {
@@ -1558,6 +1578,195 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     })
     .slice(0, 6);
 
+  const libroCalificacionesUnificado = (() => {
+    const minAsistencia = Number(curso?.porcentaje_minimo || 80);
+
+    const ultimosIntentosPorEstudiante = new Map<string, any>();
+    (resultadosQuizResumen || []).forEach((intento: any) => {
+      const key = String(intento?.matricula_id || "");
+      const prev = ultimosIntentosPorEstudiante.get(key);
+      const fechaPrev = prev?.enviado_at ? new Date(prev.enviado_at).getTime() : 0;
+      const fechaActual = intento?.enviado_at ? new Date(intento.enviado_at).getTime() : 0;
+      if (!prev || fechaActual >= fechaPrev) {
+        ultimosIntentosPorEstudiante.set(key, intento);
+      }
+    });
+
+    return (estudiantes || []).map((est: Student) => {
+      const estudianteId = String(est.id);
+
+      const notasActividad = Object.values(calificacionesTema || {})
+        .map((temaMap: any) => temaMap?.[estudianteId])
+        .filter((nota): nota is number => typeof nota === "number" && !Number.isNaN(nota));
+
+      const actividadPromedio = notasActividad.length
+        ? Number((notasActividad.reduce((sum, nota) => sum + nota, 0) / notasActividad.length).toFixed(2))
+        : null;
+
+      const actividadClaseSeleccionada = temaSeleccionadoId
+        ? calificacionesTema[String(temaSeleccionadoId)]?.[estudianteId] ?? null
+        : null;
+
+      const intentoQuiz = quizProfesorSeleccionadoId
+        ? (resultadosQuizResumen || []).find(
+            (intento: any) =>
+              String(intento?.matricula_id || "") === estudianteId &&
+              String(intento?.quiz_id || "") === String(quizProfesorSeleccionadoId)
+          )
+        : ultimosIntentosPorEstudiante.get(estudianteId) || null;
+
+      const quizNota = intentoQuiz ? Number(intentoQuiz?.calificacion || 0) : null;
+
+      const riesgoAsistencia = Number(est.asistencia_porcentaje || 0) < minAsistencia;
+      const riesgoActividad = actividadPromedio !== null && actividadPromedio < 3.8;
+      const riesgoQuiz = quizNota !== null && quizNota < 3.8;
+      const scoreRiesgo = Number(riesgoAsistencia) + Number(riesgoActividad) + Number(riesgoQuiz);
+
+      return {
+        key: estudianteId,
+        estudiante: est.nombre_completo,
+        estado: est.estado,
+        asistencia: Number(est.asistencia_porcentaje || 0),
+        actividadPromedio,
+        actividadClaseSeleccionada,
+        quizNota,
+        scoreRiesgo,
+        riesgoAsistencia,
+        riesgoActividad,
+        riesgoQuiz,
+      };
+    });
+  })();
+
+  const resumenLibroRiesgo = (() => {
+    const total = libroCalificacionesUnificado.length;
+    const alto = libroCalificacionesUnificado.filter((item) => item.scoreRiesgo >= 2).length;
+    const medio = libroCalificacionesUnificado.filter((item) => item.scoreRiesgo === 1).length;
+    const bajo = Math.max(total - alto - medio, 0);
+    return { total, alto, medio, bajo };
+  })();
+
+  const columnasLibroUnificado = [
+      {
+        title: "Estudiante",
+        dataIndex: "estudiante",
+        key: "estudiante",
+        render: (value: string, record: any) => (
+          <Space direction="vertical" size={0}>
+            <Text strong>{value}</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {`Estado: ${String(record?.estado || "en curso").toUpperCase()}`}
+            </Text>
+          </Space>
+        ),
+      },
+      {
+        title: "Asistencia",
+        dataIndex: "asistencia",
+        key: "asistencia",
+        width: 120,
+        align: "center" as const,
+        render: (value: number) => {
+          const color = value < Number(curso?.porcentaje_minimo || 80) ? "error" : value < 85 ? "warning" : "success";
+          return <Tag color={color}>{`${value}%`}</Tag>;
+        },
+      },
+      {
+        title: temaSeleccionadoId ? "Actividad (clase)" : "Actividad (prom)",
+        key: "actividad",
+        width: 140,
+        align: "center" as const,
+        render: (_: any, record: any) => {
+          const value = temaSeleccionadoId ? record.actividadClaseSeleccionada : record.actividadPromedio;
+          if (value == null) return <Text type="secondary">Pendiente</Text>;
+          const color = Number(value) < 3 ? "error" : Number(value) < 3.8 ? "warning" : "green";
+          return <Tag color={color}>{`${Number(value).toFixed(1)}/5`}</Tag>;
+        },
+      },
+      {
+        title: quizProfesorSeleccionadoId ? "Quiz (selecc.)" : "Quiz (último)",
+        dataIndex: "quizNota",
+        key: "quizNota",
+        width: 130,
+        align: "center" as const,
+        render: (value: number | null) => {
+          if (value == null) return <Text type="secondary">Sin intento</Text>;
+          const color = Number(value) < 3 ? "error" : Number(value) < 3.8 ? "warning" : "green";
+          return <Tag color={color}>{`${Number(value).toFixed(1)}/5`}</Tag>;
+        },
+      },
+      {
+        title: "Riesgo",
+        key: "riesgo",
+        width: 170,
+        render: (_: any, record: any) => {
+          if (record.scoreRiesgo >= 2) return <Tag color="error">Alto</Tag>;
+          if (record.scoreRiesgo === 1) return <Tag color="warning">Medio</Tag>;
+          return <Tag color="success">Bajo</Tag>;
+        },
+      },
+      {
+        title: "Alertas",
+        key: "alertas",
+        render: (_: any, record: any) => {
+          const alerts: string[] = [];
+          if (record.riesgoAsistencia) alerts.push("Asistencia baja");
+          if (record.riesgoActividad) alerts.push("Actividad baja");
+          if (record.riesgoQuiz) alerts.push("Quiz bajo");
+          if (!alerts.length) return <Text type="secondary">Sin alertas</Text>;
+          return (
+            <Space wrap>
+              {alerts.map((alert) => (
+                <Tag key={`${record.key}-${alert}`} color="red">
+                  {alert}
+                </Tag>
+              ))}
+            </Space>
+          );
+        },
+      },
+      {
+        title: "Acciones",
+        key: "acciones",
+        width: 230,
+        render: (_: any, record: any) => (
+          <Space wrap>
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => {
+                if (!temaSeleccionadoId && clasesPensum.length > 0) {
+                  setTemaSeleccionadoId(String(clasesPensum[0]?.id || ""));
+                }
+                setActiveTab("5");
+                abrirModalActividad(true, String(record.key));
+              }}
+            >
+              Calificar
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                setActiveTab("4");
+              }}
+            >
+              Ver estudiante
+            </Button>
+            <Button
+              size="small"
+              onClick={() =>
+                router.push(
+                  `/asistencias/create?curso_id=${cursoId}&curso_nombre=${encodeURIComponent(construirNombreGrupo(curso))}`
+                )
+              }
+            >
+              Asistencia
+            </Button>
+          </Space>
+        ),
+      },
+    ];
+
   return (
     <div style={{ padding: 24 }}>
       {/* ENCABEZADO - OFICINA DEL PROFESOR */}
@@ -2128,6 +2337,28 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   style={{ padding: "8px 10px" }}
                 />
 
+                <Card
+                  title={<Text strong style={{ fontSize: 14 }}>Libro de calificaciones unificado</Text>}
+                  bodyStyle={{ padding: 10 }}
+                  headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
+                >
+                  <Space wrap size={8} style={{ marginBottom: 10 }}>
+                    <Tag color="error">{`Riesgo alto: ${resumenLibroRiesgo.alto}`}</Tag>
+                    <Tag color="warning">{`Riesgo medio: ${resumenLibroRiesgo.medio}`}</Tag>
+                    <Tag color="success">{`Riesgo bajo: ${resumenLibroRiesgo.bajo}`}</Tag>
+                    <Tag>{`Total: ${resumenLibroRiesgo.total}`}</Tag>
+                  </Space>
+
+                  <Table
+                    size="small"
+                    dataSource={libroCalificacionesUnificado}
+                    columns={columnasLibroUnificado as any}
+                    rowKey="key"
+                    pagination={{ pageSize: 8 }}
+                    scroll={{ x: "max-content" }}
+                  />
+                </Card>
+
                 <Card bodyStyle={{ padding: 10 }}>
                   <Row gutter={[8, 8]}>
                     <Col xs={12} md={6}>
@@ -2494,6 +2725,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         onCancel={() => {
           setModalActividadVisible(false);
           setSoloPendientesActividad(false);
+          setEstudianteFocoActividadId(null);
         }}
         footer={null}
         width={isMobile ? "95%" : 980}
@@ -2514,6 +2746,20 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             <Empty description="Selecciona una clase para calificar" />
           ) : (
             <>
+              {estudianteFocoActividadId ? (
+                <Space style={{ justifyContent: "space-between", width: "100%" }} wrap>
+                  <Tag color="blue">
+                    {`Foco en estudiante: ${
+                      estudiantes.find((est) => String(est.id) === String(estudianteFocoActividadId))?.nombre_completo ||
+                      estudianteFocoActividadId
+                    }`}
+                  </Tag>
+                  <Button size="small" onClick={() => setEstudianteFocoActividadId(null)}>
+                    Quitar foco
+                  </Button>
+                </Space>
+              ) : null}
+
               {soloPendientesActividad ? (
                 <Space style={{ justifyContent: "space-between", width: "100%" }} wrap>
                   <Tag color="gold">{`Mostrando solo pendientes (${estudiantesModalActividad.length})`}</Tag>
