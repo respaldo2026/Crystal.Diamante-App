@@ -91,9 +91,6 @@ export const TemaMaterialActions = ({
       </Space>
 
       <Space wrap size={8}>
-        <Tag color="geekblue">
-          {`Quiz: ${quizTema?.titulo || "Sin quiz"}`}
-        </Tag>
         <Tag color={notaQuizTema == null ? "default" : quizAprobado(notaQuizTema) ? "green" : "red"}>
           {`Calificación quiz: ${notaQuizTema == null ? "-" : `${notaQuizTema}/5`}`}
         </Tag>
