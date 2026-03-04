@@ -29,6 +29,7 @@ import {
   Modal,
   Progress,
   Row,
+  Skeleton,
   Table,
   Select,
   Space,
@@ -529,8 +530,26 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
 
   if (loading) {
     return (
-      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Spin size="large" />
+      <div style={{ minHeight: "60vh", maxWidth: 1200, margin: "0 auto", width: "100%", padding: 16 }}>
+        <Card style={{ borderRadius: 16 }}>
+          <Space direction="vertical" size={14} style={{ width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Spin size="small" />
+              <Typography.Text type="secondary">Cargando panel del profesor...</Typography.Text>
+            </div>
+            <Skeleton active title={{ width: "32%" }} paragraph={{ rows: 1 }} />
+            <Row gutter={[12, 12]}>
+              {[1, 2, 3, 4].map((item) => (
+                <Col key={item} xs={24} sm={12} lg={6}>
+                  <Card style={{ borderRadius: 12 }}>
+                    <Skeleton active paragraph={{ rows: 2 }} title={false} />
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+            <Skeleton active title={{ width: "26%" }} paragraph={{ rows: 6 }} />
+          </Space>
+        </Card>
       </div>
     );
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse, Grid, Radio, Popover } from "antd";
+import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Spin, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse, Grid, Radio, Popover, Skeleton } from "antd";
 import type { Breakpoint } from "antd/es/_util/responsiveObserver";
 import {
   UserOutlined,
@@ -1414,7 +1414,29 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   };
 
   if (loading) {
-    return <div style={{ padding: 50, textAlign: "center" }}><Spin size="large" /></div>;
+    return (
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
+        <Card style={{ borderRadius: 14 }}>
+          <Space direction="vertical" size={14} style={{ width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Spin size="small" />
+              <Text type="secondary">Cargando curso...</Text>
+            </div>
+            <Skeleton active title={{ width: "42%" }} paragraph={{ rows: 1 }} />
+            <Row gutter={[12, 12]}>
+              {[1, 2, 3].map((item) => (
+                <Col key={item} xs={24} sm={8}>
+                  <Card style={{ borderRadius: 10 }}>
+                    <Skeleton active title={false} paragraph={{ rows: 2 }} />
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+            <Skeleton active title={{ width: "30%" }} paragraph={{ rows: 7 }} />
+          </Space>
+        </Card>
+      </div>
+    );
   }
 
   if (!curso) {
