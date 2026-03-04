@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { PwaInstallPrompt } from "../PwaInstallPrompt";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
@@ -85,9 +86,12 @@ export function LoginLanding({ children }: { children: ReactNode }) {
           }}
         >
           {logoUrl ? (
-            <img
+            <Image
               src={logoUrl}
               alt={nombreAcademia}
+              width={isMobile ? 200 : 230}
+              height={isMobile ? 54 : 64}
+              unoptimized
               style={{
                 maxHeight: isMobile ? 54 : 64,
                 maxWidth: "100%",

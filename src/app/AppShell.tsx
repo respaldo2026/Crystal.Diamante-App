@@ -31,6 +31,7 @@ import {
   Dropdown,
 } from "antd";
 import type { MenuProps } from "antd";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   DashboardOutlined,
@@ -672,9 +673,12 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({
             pointerEvents: "none",
           }}
         >
-          <img
+          <Image
             src={displayLogo}
             alt="Academia Crystal Diamante"
+            width={isVerySmall ? 138 : 165}
+            height={isVerySmall ? 36 : 44}
+            unoptimized
             onError={() => setLogoLoadError(true)}
             style={{
               maxHeight: isVerySmall ? 36 : 44,
@@ -1090,9 +1094,12 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
                     text={brandingName}
                     icon={
                       brandingLogo ? (
-                        <img
+                        <Image
                           src={brandingLogo}
                           alt={brandingName}
+                          width={22}
+                          height={22}
+                          unoptimized
                           style={{
                             width: 22,
                             height: 22,

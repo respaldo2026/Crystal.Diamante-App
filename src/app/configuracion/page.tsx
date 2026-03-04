@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider, Upload, Space, Row, Col, Grid } from "antd";
 import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined, UploadOutlined, InstagramOutlined, FacebookOutlined, YoutubeOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
@@ -1042,7 +1043,14 @@ export default function ConfiguracionPage() {
                 <div style={{ width: "80mm", background: "#fff", padding: 12, border: "1px dashed #e5e7eb" }}>
                   <div style={{ textAlign: "center", marginBottom: 12 }}>
                     {ticketFields.logo && previewLogoUrl ? (
-                      <img src={previewLogoUrl} alt="Logo" style={{ maxHeight: 56, maxWidth: 160, objectFit: "contain" }} />
+                      <Image
+                        src={previewLogoUrl}
+                        alt="Logo"
+                        width={160}
+                        height={56}
+                        unoptimized
+                        style={{ maxHeight: 56, maxWidth: 160, objectFit: "contain" }}
+                      />
                     ) : null}
                     {ticketFields.nombreAcademia ? (
                       <div style={{ fontWeight: 700, fontSize: 16, marginTop: 6 }}>

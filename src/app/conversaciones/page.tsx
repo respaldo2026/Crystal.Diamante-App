@@ -35,6 +35,7 @@ import {
   PrinterOutlined,
   FileTextOutlined,
 } from "@ant-design/icons";
+import Image from "next/image";
 import { supabaseBrowserClient } from "@/utils/supabase/client";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -1197,11 +1198,17 @@ export default function ConversacionesPage() {
                       </div>
                       {item.imageUrl ? (
                         <div style={{ overflow: "hidden", borderRadius: 4 }}>
-                          <img
+                          <Image
                             src={item.imageUrl}
                             alt={item.imageCaption || "Imagen enviada"}
+                            width={420}
+                            height={220}
+                            unoptimized
                             style={{ width: "100%", display: "block", borderRadius: 4, maxHeight: 220, objectFit: "cover" }}
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            onError={(e) => {
+                              const target = e.currentTarget as HTMLImageElement;
+                              target.style.display = "none";
+                            }}
                           />
                           {item.imageCaption && (
                             <div style={{ fontSize: 13, color: "#111b21", padding: "4px 2px 2px" }}>{item.imageCaption}</div>

@@ -167,6 +167,7 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
     <Document>
       <Page size={[226.77, 520]} style={styles.page}>
         <View style={styles.header}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text */}
           {campos.logo && academia.logoUrl ? <Image style={styles.logo} src={academia.logoUrl} /> : null}
           {campos.nombreAcademia ? <Text style={styles.title}>{academia.nombre}</Text> : null}
           {campos.ruc && academia.ruc ? <Text style={styles.subtitle}>RUC/NIT: {academia.ruc}</Text> : null}
