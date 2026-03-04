@@ -306,7 +306,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const clasesPensum = useMemo(() => {
     const map = new Map<string, any>();
     ciclosOrdenados.forEach((ciclo: any) => {
-      const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+      const cicloId = String(ciclo?.id ?? "sin-ciclo");
+      const temasCiclo = temasPorCiclo.get(cicloId) ?? [];
       temasCiclo.forEach((tema: any) => {
         const temaId = String(tema?.id || "");
         if (!temaId || map.has(temaId)) return;
@@ -314,13 +315,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       });
     });
 
-    return Array.from(map.values()).sort((a: any, b: any) => {
-      const ordenA = Number(a?.orden ?? 0);
-      const ordenB = Number(b?.orden ?? 0);
-      if (ordenA !== ordenB) return ordenA - ordenB;
-      return String(a?.id || "").localeCompare(String(b?.id || ""));
-    });
-  }, [ciclosOrdenados]);
+    return Array.from(map.values());
+  }, [ciclosOrdenados, temasPorCiclo]);
 
   const ordenTemaPorId = useMemo(() => {
     const map = new Map<string, number>();
