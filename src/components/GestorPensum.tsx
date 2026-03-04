@@ -1380,6 +1380,19 @@ export default function GestorPensum({
     return `Tema: ${tema} — ${titulo}`;
   };
 
+  const getTemaNormalizadoDesdeMaterial = (material: Pick<MaterialDidactico, "titulo">) => {
+    const parsed = parseTemaFromTitulo(String(material?.titulo || ""));
+    return normalizarTema(parsed.tema || material?.titulo || "");
+  };
+
+  const isPdfMaterial = (material: Pick<MaterialDidactico, "mime_type" | "nombre_archivo" | "url_archivo" | "titulo">) => {
+    const mime = String(material?.mime_type || "").toLowerCase();
+    const nombre = String(material?.nombre_archivo || "").toLowerCase();
+    const url = String(material?.url_archivo || "").toLowerCase();
+    const titulo = String(material?.titulo || "").toLowerCase();
+    return mime.includes("pdf") || nombre.endsWith(".pdf") || /\.pdf(?:$|\?|#)/i.test(url) || titulo.includes("pdf");
+  };
+
   const abrirDrawerMaterialParaTema = (temaNombre?: string) => {
     if (!canManageMateriales) {
       message.warning("Solo administración y secretaría pueden gestionar materiales.");
@@ -1580,15 +1593,58 @@ export default function GestorPensum({
         tamanoBytes = 0;
         mimeType = "iframe";
       }
-                setTipoOrigen('archivo');
 
       // Guardar en base de datos
       const { data: authData } = await supabaseBrowserClient.auth.getUser();
       const authUser = authData?.user;
       if (!authUser) {
-               <Radio.Button value="iframe">Código iframe (Gamma)</Radio.Button>
         message.error("Debes iniciar sesión para subir material");
         return;
+      }
+
+      const temaNormalizado = normalizarTema(temaRelacionado || formValues.titulo || "");
+      const materialesMismoTema = (materialesCicloDidactico || []).filter((material) => {
+        if (editingMaterial && String(material.id) === String(editingMaterial.id)) return false;
+        return getTemaNormalizadoDesdeMaterial(material) === temaNormalizado;
+      });
+
+      const iframeExistenteTema = materialesMismoTema.find((material) => String(material.mime_type || "").toLowerCase() === "iframe");
+      const esPdfActual = mimeType.toLowerCase().includes("pdf") || nombreArchivo.toLowerCase().endsWith(".pdf");
+      const esIframeActual = mimeType === "iframe";
+
+      if (esIframeActual && iframeExistenteTema) {
+        throw new Error("Ya existe una presentación Gamma para este tema. Edita la existente o elimina la anterior antes de subir otra.");
+      }
+
+      const descripcionOriginal = String(formValues.descripcion || "").trim();
+      const prefijoRespaldo = "[PDF_RESPALDO_IFRAME]";
+      let descripcionFinal = descripcionOriginal;
+
+      if (esPdfActual && (iframeExistenteTema || esIframeActual)) {
+        const textoRespaldo = `${prefijoRespaldo} PDF de respaldo para el iframe del tema ${temaRelacionado || formValues.titulo || ""}`.trim();
+        descripcionFinal = descripcionOriginal
+          ? `${textoRespaldo} · ${descripcionOriginal}`
+          : textoRespaldo;
+      }
+
+      if (esIframeActual) {
+        const pdfsTema = materialesMismoTema.filter((material) => isPdfMaterial(material));
+        if (pdfsTema.length > 0) {
+          await Promise.all(
+            pdfsTema.map(async (pdf) => {
+              const descripcionPdf = String(pdf.descripcion || "");
+              if (descripcionPdf.includes(prefijoRespaldo)) return;
+              const nuevaDescripcion = descripcionPdf
+                ? `${prefijoRespaldo} PDF de respaldo para el iframe del tema ${temaRelacionado || formValues.titulo || ""} · ${descripcionPdf}`
+                : `${prefijoRespaldo} PDF de respaldo para el iframe del tema ${temaRelacionado || formValues.titulo || ""}`;
+
+              await supabaseBrowserClient
+                .from("material_didactico")
+                .update({ descripcion: nuevaDescripcion })
+                .eq("id", pdf.id);
+            })
+          );
+        }
       }
 
       const payload = {
@@ -1596,7 +1652,7 @@ export default function GestorPensum({
         pensum_id: selectedCicloId,
         subido_por: authUser.id,
         titulo: buildTituloConTema(formValues.titulo, temaRelacionado),
-        descripcion: formValues.descripcion,
+        descripcion: descripcionFinal,
         tipo_material: formValues.tipo_material || tipoOrigenSeleccionado,
         url_archivo: urlArchivo,
         nombre_archivo: nombreArchivo,
@@ -1628,6 +1684,10 @@ export default function GestorPensum({
       setTipoOrigen('archivo');
       setEditingMaterial(null);
       await cargarMateriales();
+
+      if (esPdfActual && iframeExistenteTema) {
+        message.success("PDF subido y marcado como respaldo del iframe de este tema.");
+      }
       
     } catch (error: any) {
       message.error("Error al subir material: " + error.message);
@@ -2114,6 +2174,15 @@ export default function GestorPensum({
                   const temaCursoNorm = normalizarTema(curso.nombre_curso);
                   return temaMaterialNorm === temaCursoNorm;
                 });
+                const materialesTemaOrdenados = [...materialesTema].sort((a, b) => {
+                  const prioridad = (material: MaterialDidactico) => {
+                    const mime = String(material?.mime_type || "").toLowerCase();
+                    if (mime === "iframe") return 0;
+                    if (isPdfMaterial(material)) return 1;
+                    return 2;
+                  };
+                  return prioridad(a) - prioridad(b);
+                });
                 const materialesNecesariosTema = materialesClaseCiclo.filter(
                   (material) => material.pensum_curso_id === curso.id,
                 );
@@ -2206,14 +2275,14 @@ export default function GestorPensum({
                     </div>
 
                     <Text strong style={{ fontSize: 13 }}>Material didáctico</Text>
-                    {materialesTema.length === 0 ? (
+                    {materialesTemaOrdenados.length === 0 ? (
                       <Text type="secondary" style={{ display: "block", marginTop: 6 }}>
                         Sin material asignado
                       </Text>
                     ) : (
                       <List
                         size="small"
-                        dataSource={materialesTema}
+                        dataSource={materialesTemaOrdenados}
                         style={{ marginTop: 8 }}
                         renderItem={(material: MaterialDidactico) => (
                           <List.Item
@@ -2259,7 +2328,18 @@ export default function GestorPensum({
                               }
                               title={(() => {
                                 const { tituloLimpio } = parseTemaFromTitulo(material.titulo);
-                                return <Text>{tituloLimpio}</Text>;
+                                const esIframe = String(material.mime_type || "").toLowerCase() === "iframe";
+                                const esPdf = isPdfMaterial(material);
+                                const descripcion = String(material.descripcion || "");
+                                const esPdfRespaldo = esPdf && (descripcion.includes("[PDF_RESPALDO_IFRAME]") || materialesTemaOrdenados.some((item) => String(item?.mime_type || "").toLowerCase() === "iframe"));
+
+                                return (
+                                  <Space size={6} wrap>
+                                    <Text>{tituloLimpio}</Text>
+                                    {esIframe ? <Tag color="blue">Gamma</Tag> : null}
+                                    {esPdfRespaldo ? <Tag color="purple">PDF respaldo</Tag> : null}
+                                  </Space>
+                                );
                               })()}
                               description={null}
                             />
