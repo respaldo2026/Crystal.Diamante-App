@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { Dropdown, Modal } from "antd";
 import { WhatsAppOutlined } from "@ant-design/icons";
 
@@ -68,7 +69,14 @@ export const IframeMaterialModal = ({
 
         <div className="gamma-iframe-center-logo" aria-hidden="true">
           {logoAcademia ? (
-            <img src={logoAcademia} alt="Logo academia" className="gamma-iframe-logo" />
+            <Image
+              src={logoAcademia}
+              alt="Logo academia"
+              className="gamma-iframe-logo"
+              width={116}
+              height={34}
+              unoptimized
+            />
           ) : (
             <div className="gamma-iframe-logo-fallback">CD</div>
           )}

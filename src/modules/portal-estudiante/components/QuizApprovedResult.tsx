@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { Button, Col, Row, Typography } from "antd";
 import { StarFilled, WhatsAppOutlined } from "@ant-design/icons";
 
@@ -60,9 +61,12 @@ export const QuizApprovedResult = ({
           paddingTop: 28, paddingBottom: 12, position: "relative",
         }}>
           {logoAcademia ? (
-            <img
+            <Image
               src={logoAcademia}
               alt="Academia"
+              width={180}
+              height={52}
+              unoptimized
               style={{ height: 52, maxWidth: 180, objectFit: "contain", marginBottom: 6, filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.4))" }}
             />
           ) : (

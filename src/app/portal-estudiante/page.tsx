@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "@utils/logger";
 import {
   Card,
@@ -55,13 +55,17 @@ import { descargarCertificado as descargarCertificadoPDF } from "@utils/certific
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { useDelayedLoader } from "@/modules/portal-estudiante/hooks/useDelayedLoader";
+import { usePortalData } from "@/modules/portal-estudiante/hooks/usePortalData";
+import { useQuizFlow } from "@/modules/portal-estudiante/hooks/useQuizFlow";
+import { useChecklistInsumos } from "@/modules/portal-estudiante/hooks/useChecklistInsumos";
+import { useCourseProgress } from "@/modules/portal-estudiante/hooks/useCourseProgress";
+import { useTemaMaterials } from "@/modules/portal-estudiante/hooks/useTemaMaterials";
 import { QuizApprovedResult } from "@/modules/portal-estudiante/components/QuizApprovedResult";
 import { QuizFailedResult } from "@/modules/portal-estudiante/components/QuizFailedResult";
 import { TemaMaterialActions } from "@/modules/portal-estudiante/components/TemaMaterialActions";
 import { QuizQuestionFlow } from "@/modules/portal-estudiante/components/QuizQuestionFlow";
 import { QuizFlowFooter } from "@/modules/portal-estudiante/components/QuizFlowFooter";
 import { IframeMaterialModal } from "@/modules/portal-estudiante/components/IframeMaterialModal";
-import { fetchPortalEstudianteData } from "@/modules/portal-estudiante/services/portal-data.service";
 import {
   extractClassNumber,
   getActividadColor,
@@ -85,7 +89,6 @@ export default function PortalEstudiante() {
   const isMobileDetected = useIsMobile("md");
   const isMobile = portalMobileUiV1 ? isMobileDetected : false;
   const [activeTab, setActiveTab] = useState("1");
-  const [loading, setLoading] = useState(true);
   const [estudiante, setEstudiante] = useState<any>(null);
   const [asistencias, setAsistencias] = useState<any[]>([]);
   const [avancePorCurso, setAvancePorCurso] = useState<any[]>([]);
@@ -98,23 +101,6 @@ export default function PortalEstudiante() {
   const [quizzesClase, setQuizzesClase] = useState<any[]>([]);
   const [quizIntentos, setQuizIntentos] = useState<any[]>([]);
   const [calificacionesActividad, setCalificacionesActividad] = useState<any[]>([]);
-  const [quizPreguntas, setQuizPreguntas] = useState<any[]>([]);
-  const [quizModalOpen, setQuizModalOpen] = useState(false);
-  const [quizActivo, setQuizActivo] = useState<any | null>(null);
-  const [quizSaving, setQuizSaving] = useState(false);
-  const [quizRespuestas, setQuizRespuestas] = useState<Record<string, string>>({});
-  const [quizPreguntaActual, setQuizPreguntaActual] = useState(0);
-  const [quizAnimando, setQuizAnimando] = useState(false);
-  const [quizResultado, setQuizResultado] = useState<{
-    calificacion: number;
-    porcentaje: number;
-    aprobado: boolean;
-    respuestasErradas: any[];
-    totalPreguntas: number;
-    correctas: number;
-    tituloQuiz?: string;
-  } | null>(null);
-  const [quizResultadoVisible, setQuizResultadoVisible] = useState(false);
   const logrocardRef = useRef<HTMLDivElement>(null);
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
@@ -123,7 +109,6 @@ export default function PortalEstudiante() {
   const [matriculaRutaId, setMatriculaRutaId] = useState<string | null>(null);
   const [cicloRutaId, setCicloRutaId] = useState<string | null>(null);
   const [temaRutaId, setTemaRutaId] = useState<string | null>(null);
-  const [checklistInsumos, setChecklistInsumos] = useState<Record<string, boolean>>({});
   const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string; temaId: string }>({
     open: false,
     title: "",
@@ -133,8 +118,55 @@ export default function PortalEstudiante() {
   const [iframePromptVisible, setIframePromptVisible] = useState(false);
   const [iframeTrackingSupported, setIframeTrackingSupported] = useState(true);
   const iframeEmbedRef = useRef<HTMLIFrameElement>(null);
-  const isFetchingRef = useRef(false);
-  const hasFetchedOnceRef = useRef(false);
+
+  const applyPortalPayload = useCallback((payload: any) => {
+    setEstudiante(payload.estudiante);
+    setWhatsappAgente(payload.whatsappAgente);
+    setWhatsappAdmisiones(payload.whatsappAdmisiones);
+    setLogoAcademia(payload.logoAcademia);
+
+    setMatriculas(payload.matriculas);
+    setPagos(payload.pagos);
+    setAsistencias(payload.asistencias);
+    setQuizIntentos(payload.quizIntentos);
+    setCalificacionesActividad(payload.calificacionesActividad);
+    setPensum(payload.pensum);
+    setMateriales(payload.materiales);
+    setMaterialesCiclo(payload.materialesCiclo);
+    setMaterialesClase(payload.materialesClase);
+    setQuizzesClase(payload.quizzesClase);
+    setAvancePorCurso(payload.avancePorCurso);
+    setCertificados(payload.certificados);
+  }, []);
+
+  const { loading, loadPortalData } = usePortalData({
+    onSuccessAction: applyPortalPayload,
+    onAuthErrorAction: () => {
+      message.error("No autenticado");
+    },
+    onProfileErrorAction: () => {
+      message.error("Perfil no encontrado. Contacta a la administración.");
+    },
+    onUnknownErrorAction: (error) => {
+      logger.error("Error:", error);
+      message.error("Error cargando información del portal");
+    },
+  });
+
+  const {
+    buildChecklistKey,
+    isChecklistItemChecked,
+    setChecklistItemChecked,
+  } = useChecklistInsumos({
+    estudianteId: estudiante?.id || null,
+    onLoadErrorAction: (error) => {
+      logger.error("No se pudo cargar checklist de insumos", error);
+    },
+    onSaveErrorAction: (error) => {
+      logger.error("No se pudo guardar checklist de insumos", error);
+    },
+  });
+
   const showLoadingUi = useDelayedLoader(loading, portalDelayedLoaderV1 ? 180 : 0);
 
   const actividadPorTemaMatricula = React.useMemo(() => {
@@ -164,6 +196,28 @@ export default function PortalEstudiante() {
     }
     return resultado;
   };
+
+  const {
+    matriculasActivas,
+    matriculaSeleccionada,
+    ciclosPrograma,
+    obtenerTemasCiclo,
+    obtenerRecursosTema,
+    obtenerInsumosTema,
+    obtenerMaterialesCiclo,
+  } = useTemaMaterials({
+    matriculas,
+    matriculaRutaId,
+    pensum,
+    materiales,
+    materialesClase,
+    materialesCiclo,
+    deduplicarListaAction: deduplicarLista,
+    normalizarTextoAction: normalizarTexto,
+    normalizarTemaComparacionAction: normalizarTemaComparacion,
+    parseTemaTituloMaterialAction: parseTemaTituloMaterial,
+    getMaterialCanonicalKeyAction: getMaterialCanonicalKey,
+  });
 
   const obtenerMatriculaDeQuiz = (quiz: any) => {
     const temaId = String(quiz?.pensum_curso_id || "");
@@ -254,6 +308,44 @@ export default function PortalEstudiante() {
 
     return contiene?.key || "";
   };
+
+  const {
+    quizPreguntas,
+    quizModalOpen,
+    quizActivo,
+    quizSaving,
+    quizRespuestas,
+    quizPreguntaActual,
+    quizAnimando,
+    quizResultado,
+    quizResultadoVisible,
+    setQuizRespuestas,
+    setQuizPreguntaActual,
+    setQuizAnimando,
+    setQuizResultadoVisible,
+    openQuiz: abrirQuiz,
+    submitQuiz: enviarQuiz,
+    resetQuizModalState,
+  } = useQuizFlow({
+    estudianteId: estudiante?.id || null,
+    setQuizIntentosAction: setQuizIntentos,
+    getMatriculaDeQuizAction: obtenerMatriculaDeQuiz,
+    resolveClaveOpcionAction: resolverClaveOpcionQuiz,
+    getTextoOpcionAction: obtenerTextoOpcionQuiz,
+    onRefreshPortalAction: loadPortalData,
+  });
+
+  const {
+    getQuizByTemaId,
+    getNotaByTemaId,
+    isTemaCompletadoByTemaId,
+    getPrimerTemaPendienteIndex,
+    getPrimerCicloIncompletoIndex,
+  } = useCourseProgress({
+    quizzesClase,
+    quizIntentos,
+    isQuizApprovedAction: quizAprobado,
+  });
 
   const normalizeHttpUrl = (value?: string | null) => {
     const raw = String(value || "").trim().replace(/&amp;/gi, "&");
@@ -484,35 +576,8 @@ export default function PortalEstudiante() {
   );
 
   useEffect(() => {
-    if (hasFetchedOnceRef.current || isFetchingRef.current) return;
-    cargarDatos();
-  }, []);
-
-  useEffect(() => {
-    if (!estudiante?.id) return;
-    try {
-      const key = `portal-checklist-insumos:${estudiante.id}`;
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") {
-          setChecklistInsumos(parsed);
-        }
-      }
-    } catch (error) {
-      logger.error("No se pudo cargar checklist de insumos", error);
-    }
-  }, [estudiante?.id]);
-
-  useEffect(() => {
-    if (!estudiante?.id) return;
-    try {
-      const key = `portal-checklist-insumos:${estudiante.id}`;
-      localStorage.setItem(key, JSON.stringify(checklistInsumos));
-    } catch (error) {
-      logger.error("No se pudo guardar checklist de insumos", error);
-    }
-  }, [checklistInsumos, estudiante?.id]);
+    loadPortalData();
+  }, [loadPortalData]);
 
   useEffect(() => {
     if (!matriculas.length) {
@@ -652,59 +717,6 @@ export default function PortalEstudiante() {
     }
   };
 
-  const cargarDatos = async () => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
-
-    try {
-      if (!hasFetchedOnceRef.current) {
-        setLoading(true);
-      }
-      const result = await fetchPortalEstudianteData();
-
-      if (!result.ok) {
-        if (result.code === "NOT_AUTHENTICATED") {
-          message.error("No autenticado");
-          return;
-        }
-
-        if (result.code === "PROFILE_NOT_FOUND") {
-          message.error("Perfil no encontrado. Contacta a la administración.");
-          return;
-        }
-
-        throw result.error;
-      }
-
-      const { payload } = result;
-
-      setEstudiante(payload.estudiante);
-      setWhatsappAgente(payload.whatsappAgente);
-      setWhatsappAdmisiones(payload.whatsappAdmisiones);
-      setLogoAcademia(payload.logoAcademia);
-
-      setMatriculas(payload.matriculas);
-      setPagos(payload.pagos);
-      setAsistencias(payload.asistencias);
-      setQuizIntentos(payload.quizIntentos);
-      setCalificacionesActividad(payload.calificacionesActividad);
-      setPensum(payload.pensum);
-      setMateriales(payload.materiales);
-      setMaterialesCiclo(payload.materialesCiclo);
-      setMaterialesClase(payload.materialesClase);
-      setQuizzesClase(payload.quizzesClase);
-      setAvancePorCurso(payload.avancePorCurso);
-      setCertificados(payload.certificados);
-    } catch (error) {
-      logger.error("Error:", error);
-      message.error("Error cargando información del portal");
-    } finally {
-      hasFetchedOnceRef.current = true;
-      isFetchingRef.current = false;
-      setLoading(false);
-    }
-  };
-
   const descargarCertificado = async (matricula: any) => {
     try {
       await descargarCertificadoPDF({
@@ -717,199 +729,6 @@ export default function PortalEstudiante() {
     } catch (err: any) {
       logger.error(err);
       message.error("No se pudo descargar el certificado");
-    }
-  };
-
-  const abrirQuiz = async (quiz: any) => {
-    try {
-      const { data: preguntasData, error } = await supabaseBrowserClient
-        .from("quiz_preguntas_clase")
-        .select("id, orden, pregunta, opcion_a, opcion_b, opcion_c, opcion_d")
-        .eq("quiz_id", quiz.id)
-        .eq("activo", true)
-        .order("orden", { ascending: true });
-
-      if (error) throw error;
-
-      if (!preguntasData || preguntasData.length === 0) {
-        message.warning("Este quiz aún no tiene preguntas cargadas.");
-        return;
-      }
-
-      setQuizActivo(quiz);
-      setQuizPreguntas(preguntasData);
-      setQuizRespuestas({});
-      setQuizPreguntaActual(0);
-      setQuizAnimando(false);
-      setQuizModalOpen(true);
-    } catch (error) {
-      logger.error("Error al abrir quiz", error);
-      message.error("No se pudo abrir el quiz");
-    }
-  };
-
-  const enviarQuiz = async () => {
-    if (!quizActivo) return;
-
-    const respuestas = quizPreguntas.map((pregunta: any) => {
-      const respuesta = quizRespuestas[String(pregunta.id)] || "";
-      return {
-        pregunta_id: pregunta.id,
-        respuesta,
-      };
-    });
-
-    const sinResponder = respuestas.filter((r) => !r.respuesta).length;
-    if (sinResponder > 0) {
-      message.warning(`Debes responder todas las preguntas. Faltan ${sinResponder}.`);
-      return;
-    }
-
-    try {
-      setQuizSaving(true);
-
-      const { data: preguntasConRespuesta, error: errorCorrectas } = await supabaseBrowserClient
-        .from("quiz_preguntas_clase")
-        .select("id, respuesta_correcta")
-        .eq("quiz_id", quizActivo.id)
-        .eq("activo", true);
-
-      if (errorCorrectas) throw errorCorrectas;
-
-      const preguntaPorId = new Map<string, any>();
-      (quizPreguntas || []).forEach((pregunta: any) => {
-        preguntaPorId.set(String(pregunta.id), pregunta);
-      });
-
-      const correctaPorPregunta = new Map<string, string>();
-      (preguntasConRespuesta || []).forEach((pregunta: any) => {
-        const preguntaBase = preguntaPorId.get(String(pregunta.id));
-        correctaPorPregunta.set(String(pregunta.id), resolverClaveOpcionQuiz(preguntaBase, pregunta.respuesta_correcta));
-      });
-
-      let correctas = 0;
-      respuestas.forEach((respuesta) => {
-        const preguntaBase = preguntaPorId.get(String(respuesta.pregunta_id));
-        const correcta = correctaPorPregunta.get(String(respuesta.pregunta_id)) || "";
-        const marcada = resolverClaveOpcionQuiz(preguntaBase, respuesta.respuesta);
-        if (correcta && correcta === marcada) {
-          correctas += 1;
-        }
-      });
-
-      const respuestasErradas = respuestas
-        .map((respuesta) => {
-          const pregunta = preguntaPorId.get(String(respuesta.pregunta_id));
-          const correcta = resolverClaveOpcionQuiz(pregunta, correctaPorPregunta.get(String(respuesta.pregunta_id)) || "");
-          const marcada = resolverClaveOpcionQuiz(pregunta, respuesta.respuesta);
-          if (!correcta || marcada === correcta) return null;
-
-          return {
-            preguntaId: String(respuesta.pregunta_id || ""),
-            orden: Number(pregunta?.orden || 0),
-            pregunta: String(pregunta?.pregunta || "Pregunta"),
-            respuestaMarcada: obtenerTextoOpcionQuiz(pregunta, marcada),
-            respuestaCorrecta: obtenerTextoOpcionQuiz(pregunta, correcta),
-          };
-        })
-        .filter(Boolean)
-        .sort((a: any, b: any) => a.orden - b.orden);
-
-      const total = respuestas.length || 1;
-      const porcentaje = Number(((correctas / total) * 100).toFixed(2));
-      const calificacion = Number(((correctas / total) * 5).toFixed(2));
-      const matriculaQuiz = obtenerMatriculaDeQuiz(quizActivo);
-      if (!matriculaQuiz?.id) {
-        message.error("No se encontró matrícula para registrar el resultado del quiz.");
-        return;
-      }
-
-      const aprobado = quizAprobado(calificacion);
-
-      const payload = {
-        quiz_id: quizActivo.id,
-        matricula_id: Number(matriculaQuiz.id),
-        estudiante_id: estudiante?.id || null,
-        respuestas,
-        respuestas_correctas: correctas,
-        total_preguntas: total,
-        calificacion,
-      };
-
-      const { data: intentosExistentes, error: errorBuscarIntento } = await supabaseBrowserClient
-        .from("quiz_intentos_clase")
-        .select("id")
-        .eq("quiz_id", quizActivo.id)
-        .eq("matricula_id", Number(matriculaQuiz.id));
-
-      if (errorBuscarIntento) throw errorBuscarIntento;
-
-      if ((intentosExistentes || []).length > 0) {
-        const { error: errorActualizarIntento } = await supabaseBrowserClient
-          .from("quiz_intentos_clase")
-          .update(payload)
-          .eq("quiz_id", quizActivo.id)
-          .eq("matricula_id", Number(matriculaQuiz.id));
-
-        if (errorActualizarIntento) throw errorActualizarIntento;
-      } else {
-        const { error: errorCrearIntento } = await supabaseBrowserClient
-          .from("quiz_intentos_clase")
-          .insert(payload);
-
-        if (errorCrearIntento) throw errorCrearIntento;
-      }
-
-      const intentoLocal = {
-        id: String(intentosExistentes?.[0]?.id || `${quizActivo.id}-${matriculaQuiz.id}`),
-        ...payload,
-        enviado_at: new Date().toISOString(),
-      };
-
-      setQuizIntentos((prev) => {
-        const base = Array.isArray(prev) ? prev : [];
-        const restantes = base.filter(
-          (intento: any) =>
-            !(
-              String(intento?.quiz_id || "") === String(payload.quiz_id || "") &&
-              String(intento?.matricula_id || "") === String(payload.matricula_id || "")
-            )
-        );
-        return [intentoLocal, ...restantes];
-      });
-
-      // Cerrar el quiz siempre
-      setQuizModalOpen(false);
-      setQuizActivo(null);
-      setQuizPreguntas([]);
-      setQuizRespuestas({});
-      setQuizPreguntaActual(0);
-      setQuizAnimando(false);
-
-      // Mostrar popup de resultado (grande, con nota y preguntas erradas)
-      setQuizResultado({
-        calificacion,
-        porcentaje,
-        aprobado,
-        respuestasErradas: respuestasErradas as any[],
-        totalPreguntas: total,
-        correctas,
-        tituloQuiz: quizActivo?.titulo || "",
-      });
-      setQuizResultadoVisible(true);
-
-      // Auto-ocultar: si reprobó, 12s si hay errores o 8s; si aprobó no auto-cerrar
-      if (!aprobado) {
-        const autoCloseDelay = (respuestasErradas as any[]).length > 0 ? 12000 : 8000;
-        setTimeout(() => setQuizResultadoVisible(false), autoCloseDelay);
-      }
-
-      await cargarDatos();
-    } catch (error) {
-      logger.error("Error enviando quiz", error);
-      message.error("No se pudo enviar el quiz");
-    } finally {
-      setQuizSaving(false);
     }
   };
 
@@ -1108,15 +927,6 @@ export default function PortalEstudiante() {
   const renderRutaAcademica = (vista: "plan" | "kits" | "ciclo") => {
     if (!matriculas.length) return <Empty description="No tienes cursos activos" />;
 
-    const matriculasActivas = deduplicarLista(
-      matriculas.filter((m: any) => m.estado !== "cancelado"),
-      (m: any) => String(m?.id)
-    );
-
-    const matriculaSeleccionada =
-      matriculasActivas.find((m: any) => String(m.id) === String(matriculaRutaId)) ||
-      matriculasActivas[0];
-
     const tituloPrincipal = vista === "plan"
       ? "Contenido del Curso - Pensum"
       : vista === "ciclo"
@@ -1155,18 +965,6 @@ export default function PortalEstudiante() {
       );
     }
 
-    const programaIdSeleccionado = matriculaSeleccionada?.cursos?.programa_id;
-
-    const ciclosPrograma = deduplicarLista(
-      pensum.filter((p: any) => p.programa_id === programaIdSeleccionado),
-      (ciclo: any) => String(ciclo?.id || `${ciclo?.programa_id || ''}-${ciclo?.nombre_ciclo || ''}-${ciclo?.numero_ciclo || ''}`)
-    ).sort((a: any, b: any) => {
-      const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 0);
-      const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 0);
-      if (ordenA !== ordenB) return ordenA - ordenB;
-      return Number(a?.id || 0) - Number(b?.id || 0);
-    });
-
     const cicloActivo =
       cicloRutaId && ciclosPrograma.some((c: any) => String(c.id) === String(cicloRutaId))
         ? String(cicloRutaId)
@@ -1183,96 +981,8 @@ export default function PortalEstudiante() {
       );
     }
 
-    const materialesPrograma = deduplicarLista(
-      materiales.filter((m: any) => String(m?.programa_id) === String(programaIdSeleccionado)),
-      (m: any) => getMaterialCanonicalKey(m)
-    );
-
-    const materialesClasePrograma = deduplicarLista(
-      materialesClase.filter((m: any) => String(m?.programa_id) === String(programaIdSeleccionado)),
-      (m: any) => String(`${m?.pensum_id || ''}-${m?.pensum_curso_id || ''}-${normalizarTexto(m?.materiales_ciclo?.nombre || m?.nombre_material || '')}-${m?.materiales_ciclo?.cantidad || m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`)
-    );
-
-    const materialesCicloPrograma = deduplicarLista(
-      materialesCiclo.filter((m: any) => String(m?.programa_id) === String(programaIdSeleccionado)),
-      (m: any) => String(m?.id || `${normalizarTexto(m?.nombre || "")}-${m?.cantidad || ""}-${m?.pensum_id || ""}`),
-    );
-
-    const obtenerTemasCiclo = (ciclo: any) =>
-      deduplicarLista(
-        ciclo?.pensum_cursos || [],
-        (tema: any) => String(tema?.id || normalizarTexto(tema?.nombre_curso || ""))
-      ).sort((a: any, b: any) => {
-        const ordenA = Number(a?.orden ?? 0);
-        const ordenB = Number(b?.orden ?? 0);
-        if (ordenA !== ordenB) return ordenA - ordenB;
-        return Number(a?.id || 0) - Number(b?.id || 0);
-      });
-
-    const obtenerRecursosTema = (tema: any, cicloId?: string) =>
-      deduplicarLista(
-        materialesPrograma.filter((material: any) => {
-          if (!tema) return false;
-          if (cicloId && String(material?.pensum_id || "") !== String(cicloId)) return false;
-
-          const parsed = parseTemaTituloMaterial(material.titulo);
-          const temaMaterial = normalizarTemaComparacion(parsed.tema);
-          const temaObjetivo = normalizarTemaComparacion(tema.nombre_curso);
-          const tituloLimpio = normalizarTexto(parsed.tituloLimpio);
-          const descripcion = normalizarTexto(material.descripcion || "");
-
-          if (!temaObjetivo) return true;
-          if (temaMaterial) return temaMaterial === temaObjetivo;
-          return tituloLimpio.includes(temaObjetivo) || descripcion.includes(temaObjetivo);
-        }),
-        (m: any) => getMaterialCanonicalKey(m, tema?.nombre_curso)
-      );
-
-    const obtenerInsumosTema = (tema: any, cicloId?: string) =>
-      deduplicarLista(
-        materialesClasePrograma.filter((item: any) => {
-          if (!tema) return false;
-          if (cicloId && item.pensum_id && String(item.pensum_id) !== String(cicloId)) return false;
-          return String(item.pensum_curso_id) === String(tema.id);
-        }),
-        (m: any) => `${normalizarTexto(m?.materiales_ciclo?.nombre || m?.nombre_material || '')}-${m?.materiales_ciclo?.cantidad || m?.cantidad || ''}-${normalizarTexto(m?.unidad || '')}`
-      );
-
-    const obtenerMaterialesCiclo = (cicloId?: string) =>
-      deduplicarLista(
-        materialesCicloPrograma.filter((item: any) => (cicloId ? String(item?.pensum_id) === String(cicloId) : false)),
-        (m: any) => String(m?.id || `${normalizarTexto(m?.nombre || "")}-${m?.cantidad || ""}`),
-      );
-
-    const temaObjetivo = (() => {
-      if (!temaRutaId) return null;
-      for (const ciclo of ciclosPrograma) {
-        const tema = (obtenerTemasCiclo(ciclo) || []).find((t: any) => String(t?.id) === String(temaRutaId));
-        if (tema) return tema;
-      }
-      return null;
-    })();
-
     // ── Cascade: calcular el primer ciclo incompleto (todos los posteriores quedan bloqueados) ──
-    const isCicloCompleto = (ciclo: any): boolean => {
-      const temas = obtenerTemasCiclo(ciclo);
-      for (const t of temas) {
-        const quiz = (quizzesClase || []).find(
-          (q: any) => String(q?.pensum_curso_id || "") === String(t?.id || "")
-        );
-        if (!quiz) continue; // sin quiz = auto-aprobado
-        const intento = (quizIntentos || []).find(
-          (it: any) => String(it?.quiz_id || "") === String(quiz?.id || "")
-        );
-        const nota = intento ? Number(intento?.calificacion || 0) : null;
-        if (nota == null || !quizAprobado(nota)) return false;
-      }
-      return true;
-    };
-    let primerCicloIncompletoIndex = ciclosPrograma.length;
-    for (let ci = 0; ci < ciclosPrograma.length; ci++) {
-      if (!isCicloCompleto(ciclosPrograma[ci])) { primerCicloIncompletoIndex = ci; break; }
-    }
+    const primerCicloIncompletoIndex = getPrimerCicloIncompletoIndex(ciclosPrograma, obtenerTemasCiclo);
 
     return (
       <Card
@@ -1321,20 +1031,7 @@ export default function PortalEstudiante() {
             // Estado en cascada de este ciclo: bloqueado si hay un ciclo previo incompleto
             const cicloBloqueado = index > primerCicloIncompletoIndex;
             // Índice de la primera clase no completada (= clase "actual"); todas las posteriores bloqueadas
-            const primerIndexActual = cicloBloqueado ? 0 : (() => {
-              for (let ti = 0; ti < temasCiclo.length; ti++) {
-                const quiz = (quizzesClase || []).find(
-                  (q: any) => String(q?.pensum_curso_id || "") === String(temasCiclo[ti]?.id || "")
-                );
-                if (!quiz) continue;
-                const intento = (quizIntentos || []).find(
-                  (it: any) => String(it?.quiz_id || "") === String(quiz?.id || "")
-                );
-                const nota = intento ? Number(intento?.calificacion || 0) : null;
-                if (nota == null || !quizAprobado(nota)) return ti;
-              }
-              return temasCiclo.length; // todas completadas
-            })();
+            const primerIndexActual = cicloBloqueado ? 0 : getPrimerTemaPendienteIndex(temasCiclo);
 
             return {
               key: cicloId,
@@ -1411,23 +1108,18 @@ export default function PortalEstudiante() {
                     const temaBloqueado = vista === "plan"
                       ? (cicloBloqueado || temaIndex > primerIndexActual)
                       : cicloBloqueado;
-                    const quizTema = (quizzesClase || []).find(
-                      (quiz: any) => String(quiz?.pensum_curso_id || "") === String(tema?.id || "")
-                    );
-                    // quizIntentos ya está filtrado por los IDs del estudiante, no hace falta filtrar por matricula_id
-                    const intentoQuizTema = quizTema
-                      ? (quizIntentos || []).find(
-                          (intento: any) =>
-                            String(intento?.quiz_id || "") === String(quizTema?.id || "")
-                        )
-                      : null;
-                    const notaQuizTema = intentoQuizTema ? Number(intentoQuizTema?.calificacion || 0) : null;
+                    const quizTema = getQuizByTemaId(temaId);
+                    const notaQuizTema = getNotaByTemaId(temaId);
                     const notaActividadTema = actividadPorTemaMatricula.get(`${matriculaSeleccionada?.id || ""}-${temaId}`) ?? null;
-                    const temaCompletado = notaQuizTema != null && quizAprobado(notaQuizTema);
+                    const temaCompletado = isTemaCompletadoByTemaId(temaId);
                     const colorAvatarTema = temaBloqueado ? "#bfbfbf" : temaCompletado ? "#16a34a" : colorNumeroTema;
                     const insumosMarcados = insumosTema.filter((insumo: any) => {
-                      const key = `${matriculaSeleccionada.id}|${temaId}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
-                      return Boolean(checklistInsumos[key]);
+                      const key = buildChecklistKey(
+                        String(matriculaSeleccionada.id),
+                        temaId,
+                        String(insumo.id || normalizarTexto(insumo.nombre_material))
+                      );
+                      return isChecklistItemChecked(key);
                     }).length;
                     const recursoPdfTema = obtenerPdfRelacionado({ titulo: tema?.nombre_curso }, recursosTema);
                     const recursoPrincipalTema = recursosTema.find((recurso: any) => !isPdfMaterial(recurso)) || recursoPdfTema || recursosTema[0] || null;
@@ -1489,7 +1181,11 @@ export default function PortalEstudiante() {
                                     children: (
                                       <Space direction="vertical" size={4} style={{ width: "100%", paddingLeft: 4 }}>
                                         {insumosTema.map((insumo: any, itemIndex: number) => {
-                                          const key = `${matriculaSeleccionada.id}|${temaId}|${insumo.id || normalizarTexto(insumo.nombre_material)}`;
+                                          const key = buildChecklistKey(
+                                            String(matriculaSeleccionada.id),
+                                            temaId,
+                                            String(insumo.id || normalizarTexto(insumo.nombre_material))
+                                          );
                                           const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
                                           const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
                                           return (
@@ -1500,12 +1196,9 @@ export default function PortalEstudiante() {
                                                 <ClockCircleOutlined style={{ color: "#f59e0b" }} />
                                               )}
                                               <Checkbox
-                                                checked={Boolean(checklistInsumos[key])}
+                                                checked={isChecklistItemChecked(key)}
                                                 onChange={(event) => {
-                                                  setChecklistInsumos((prev) => ({
-                                                    ...prev,
-                                                    [key]: event.target.checked,
-                                                  }));
+                                                  setChecklistItemChecked(key, event.target.checked);
                                                   setTemaRutaId(temaId);
                                                   setCicloRutaId(cicloId);
                                                 }}
@@ -2070,14 +1763,7 @@ export default function PortalEstudiante() {
         title={quizActivo?.titulo || "Responder quiz"}
         open={quizModalOpen}
         confirmLoading={quizSaving}
-        onCancel={() => {
-          setQuizModalOpen(false);
-          setQuizActivo(null);
-          setQuizPreguntas([]);
-          setQuizRespuestas({});
-          setQuizPreguntaActual(0);
-          setQuizAnimando(false);
-        }}
+        onCancel={resetQuizModalState}
         width={isMobile ? "96vw" : 820}
         styles={{ body: { maxHeight: isMobile ? "70vh" : "75vh", overflowY: "auto" } }}
         footer={(
