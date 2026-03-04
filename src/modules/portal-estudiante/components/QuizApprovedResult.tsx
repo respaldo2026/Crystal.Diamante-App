@@ -33,10 +33,23 @@ export const QuizApprovedResult = ({
   onCloseAction,
 }: QuizApprovedResultProps) => {
   const firstName = estudianteNombre ? estudianteNombre.split(" ")[0] : "";
+  const mensajeLogro = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`;
 
   return (
     <div style={{ color: "#fff" }}>
-      <div ref={logrocardRef} style={{ paddingBottom: 20 }}>
+      <div
+        ref={logrocardRef}
+        style={{
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: 16,
+          margin: "0 10px",
+          paddingBottom: 20,
+          background: "linear-gradient(160deg, rgba(32,7,64,0.96) 0%, rgba(49,12,98,0.96) 42%, rgba(11,39,102,0.96) 100%)",
+          boxShadow: "0 12px 36px rgba(0,0,0,0.35)",
+          border: "1px solid rgba(255,255,255,0.10)",
+        }}
+      >
         <div style={{
           position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
           pointerEvents: "none", overflow: "hidden", borderRadius: 16,
@@ -75,7 +88,7 @@ export const QuizApprovedResult = ({
           <div style={{ width: 48, height: 2, background: "linear-gradient(90deg, transparent, #ffd700, transparent)" }} />
         </div>
 
-        <div style={{ textAlign: "center", padding: "8px 24px 0" }}>
+        <div style={{ textAlign: "center", padding: "8px 20px 0" }}>
           <div style={{ fontSize: 56, lineHeight: 1, marginBottom: 4 }}>🏆</div>
           <div style={{
             display: "inline-flex", flexDirection: "column",
@@ -94,29 +107,34 @@ export const QuizApprovedResult = ({
           <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, marginBottom: 4, lineHeight: 1.2 }}>
             {`¡Lo lograste${firstName ? `, ${firstName}` : ""}! 🎉`}
           </div>
-          <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 14, marginBottom: 2 }}>
+          <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 14, marginBottom: 6, lineHeight: 1.45, wordBreak: "break-word", overflowWrap: "anywhere", padding: "0 4px" }}>
             {quizResultado.tituloQuiz && (
               <span>📚 <em>{quizResultado.tituloQuiz}</em></span>
             )}
           </div>
-          <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
+          <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, lineHeight: 1.45 }}>
             {quizResultado.correctas} de {quizResultado.totalPreguntas} correctas · {quizResultado.porcentaje}%
+          </div>
+
+          <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+            <span style={{ fontSize: 11, color: "#1b073a", background: "#ffd700", borderRadius: 999, padding: "4px 10px", fontWeight: 800 }}>APROBADO</span>
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.95)", background: "rgba(255,255,255,0.16)", borderRadius: 999, padding: "4px 10px", fontWeight: 700 }}>Meta cumplida</span>
           </div>
         </div>
 
         <div style={{
-          margin: "16px 20px 0",
-          padding: "14px 16px",
+          margin: "16px 18px 0",
+          padding: "14px 14px",
           borderRadius: 12,
-          background: "rgba(255,255,255,0.09)",
-          border: "1px solid rgba(255,215,0,0.25)",
+          background: "linear-gradient(145deg, rgba(255,255,255,0.13), rgba(255,255,255,0.06))",
+          border: "1px solid rgba(255,215,0,0.30)",
           backdropFilter: "blur(4px)",
         }}>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>
             ✨ Presume tu logro
           </div>
-          <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, lineHeight: 1.6 }}>
-            {`🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`}
+          <div style={{ color: "rgba(255,255,255,0.96)", fontSize: 13, lineHeight: 1.62, whiteSpace: "normal", wordBreak: "break-word", overflowWrap: "anywhere" }}>
+            {mensajeLogro}
           </div>
         </div>
       </div>
