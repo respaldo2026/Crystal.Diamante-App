@@ -139,18 +139,32 @@ export default function PortalEstudiante() {
     setCertificados(payload.certificados);
   }, []);
 
+  const handlePortalAuthError = useCallback(() => {
+    message.error("No autenticado");
+  }, []);
+
+  const handlePortalProfileError = useCallback(() => {
+    message.error("Perfil no encontrado. Contacta a la administración.");
+  }, []);
+
+  const handlePortalUnknownError = useCallback((error: unknown) => {
+    logger.error("Error:", error);
+    message.error("Error cargando información del portal");
+  }, []);
+
+  const handleChecklistLoadError = useCallback((error: unknown) => {
+    logger.error("No se pudo cargar checklist de insumos", error);
+  }, []);
+
+  const handleChecklistSaveError = useCallback((error: unknown) => {
+    logger.error("No se pudo guardar checklist de insumos", error);
+  }, []);
+
   const { loading, loadPortalData } = usePortalData({
     onSuccessAction: applyPortalPayload,
-    onAuthErrorAction: () => {
-      message.error("No autenticado");
-    },
-    onProfileErrorAction: () => {
-      message.error("Perfil no encontrado. Contacta a la administración.");
-    },
-    onUnknownErrorAction: (error) => {
-      logger.error("Error:", error);
-      message.error("Error cargando información del portal");
-    },
+    onAuthErrorAction: handlePortalAuthError,
+    onProfileErrorAction: handlePortalProfileError,
+    onUnknownErrorAction: handlePortalUnknownError,
   });
 
   const {
@@ -159,12 +173,8 @@ export default function PortalEstudiante() {
     setChecklistItemChecked,
   } = useChecklistInsumos({
     estudianteId: estudiante?.id || null,
-    onLoadErrorAction: (error) => {
-      logger.error("No se pudo cargar checklist de insumos", error);
-    },
-    onSaveErrorAction: (error) => {
-      logger.error("No se pudo guardar checklist de insumos", error);
-    },
+    onLoadErrorAction: handleChecklistLoadError,
+    onSaveErrorAction: handleChecklistSaveError,
   });
 
   const showLoadingUi = useDelayedLoader(loading, portalDelayedLoaderV1 ? 180 : 0);

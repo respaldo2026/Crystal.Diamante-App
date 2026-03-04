@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type UseChecklistInsumosParams = {
   estudianteId?: string | null;
@@ -14,6 +14,16 @@ export const useChecklistInsumos = ({
   onSaveErrorAction,
 }: UseChecklistInsumosParams) => {
   const [checklistInsumos, setChecklistInsumos] = useState<Record<string, boolean>>({});
+  const onLoadErrorRef = useRef(onLoadErrorAction);
+  const onSaveErrorRef = useRef(onSaveErrorAction);
+
+  useEffect(() => {
+    onLoadErrorRef.current = onLoadErrorAction;
+  }, [onLoadErrorAction]);
+
+  useEffect(() => {
+    onSaveErrorRef.current = onSaveErrorAction;
+  }, [onSaveErrorAction]);
 
   useEffect(() => {
     if (!estudianteId) return;
@@ -26,9 +36,9 @@ export const useChecklistInsumos = ({
         setChecklistInsumos(parsed);
       }
     } catch (error) {
-      onLoadErrorAction?.(error);
+      onLoadErrorRef.current?.(error);
     }
-  }, [estudianteId, onLoadErrorAction]);
+  }, [estudianteId]);
 
   useEffect(() => {
     if (!estudianteId) return;
@@ -36,9 +46,9 @@ export const useChecklistInsumos = ({
       const key = `portal-checklist-insumos:${estudianteId}`;
       localStorage.setItem(key, JSON.stringify(checklistInsumos));
     } catch (error) {
-      onSaveErrorAction?.(error);
+      onSaveErrorRef.current?.(error);
     }
-  }, [checklistInsumos, estudianteId, onSaveErrorAction]);
+  }, [checklistInsumos, estudianteId]);
 
   const buildChecklistKey = useCallback(
     (matriculaId: string | number, temaId: string | number, insumoIdOrFallback: string) =>
