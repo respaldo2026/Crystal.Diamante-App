@@ -113,6 +113,12 @@ export const useTemaMaterials = ({
           if (!tema) return false;
           if (cicloId && String(material?.pensum_id || "") !== String(cicloId)) return false;
 
+          const temaIdMaterial = String(material?.pensum_curso_id || material?.pensum_cursos?.id || "");
+          const temaIdObjetivo = String(tema?.id || "");
+          if (temaIdMaterial && temaIdObjetivo) {
+            return temaIdMaterial === temaIdObjetivo;
+          }
+
           const parsed = parseTemaTituloMaterialAction(material.titulo);
           const temaMaterial = normalizarTemaComparacionAction(parsed.tema);
           const temaObjetivo = normalizarTemaComparacionAction(tema.nombre_curso);
