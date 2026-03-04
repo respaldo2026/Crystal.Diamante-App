@@ -34,6 +34,8 @@ export const TemaMaterialActions = ({
   onOpenMaterialAction,
   onOpenQuizAction,
 }: TemaMaterialActionsProps) => {
+  const mostrarEnlacePrincipal = presentacionesTema.length <= 1;
+
   return (
     <Space direction="vertical" size={6} style={{ width: "100%" }}>
       <Space
@@ -42,21 +44,25 @@ export const TemaMaterialActions = ({
         className="tema-material-row"
         style={{ justifyContent: "space-between" }}
       >
-        <Button
-          type="link"
-          size="small"
-          icon={materialIcon || <FilePdfOutlined />}
-          onClick={() => {
-            if (!recursoPrincipalTema) {
-              onWarnAction("Este tema aún no tiene material didáctico disponible.");
-              return;
-            }
-            onOpenMaterialAction(recursoPrincipalTema, tituloRecursoPrincipal, temaId);
-          }}
-          style={{ paddingInline: 0 }}
-        >
-          {temaNombre || "Tema"}
-        </Button>
+        {mostrarEnlacePrincipal ? (
+          <Button
+            type="link"
+            size="small"
+            icon={materialIcon || <FilePdfOutlined />}
+            onClick={() => {
+              if (!recursoPrincipalTema) {
+                onWarnAction("Este tema aún no tiene material didáctico disponible.");
+                return;
+              }
+              onOpenMaterialAction(recursoPrincipalTema, tituloRecursoPrincipal, temaId);
+            }}
+            style={{ paddingInline: 0 }}
+          >
+            {temaNombre || "Tema"}
+          </Button>
+        ) : (
+          <span />
+        )}
 
         <Space size={4} className="tema-acciones-row">
           <Button
@@ -86,7 +92,7 @@ export const TemaMaterialActions = ({
                 style={{ paddingInline: 0 }}
                 onClick={() => onOpenMaterialAction(presentacion.material, presentacion.titulo, temaId)}
               >
-                {presentacion.titulo || `Presentación ${index + 1}`}
+                {String(presentacion?.material?.titulo || presentacion.titulo || presentacion?.material?.nombre_archivo || temaNombre || "Material")}
               </Button>
             ))}
           </Space>

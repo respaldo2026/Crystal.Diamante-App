@@ -1078,7 +1078,7 @@ export default function PortalEstudiante() {
                       .filter((recurso: any) => isIframeMaterial(recurso))
                       .map((recurso: any, index: number) => ({
                         id: String(recurso?.id || `gamma-${index}`),
-                        titulo: getMaterialCanonicalTitle(recurso, tema?.nombre_curso) || `Presentación ${index + 1}`,
+                        titulo: String(recurso?.titulo || recurso?.nombre_archivo || getMaterialCanonicalTitle(recurso, tema?.nombre_curso) || tema?.nombre_curso || "Material"),
                         material: recurso,
                       }));
                     const insumosTema = obtenerInsumosTema(tema, cicloId);

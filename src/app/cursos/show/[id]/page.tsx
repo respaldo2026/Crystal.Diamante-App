@@ -2208,6 +2208,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                               const temaId = String(tema?.id ?? `tema-${temaIndex}`);
                               const materialesTema = materialesDidacticosPorTema.get(temaId) ?? [];
                               const presentacionesTema = materialesTema.filter((item: any) => isIframeMaterial(item));
+                              const mostrarEnlacePrincipal = presentacionesTema.length <= 1;
                               const recursoPrincipalTema = materialesTema.find((item: any) => isIframeMaterial(item)) || materialesTema[0] || null;
                               return (
                                 <List.Item
@@ -2235,21 +2236,23 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                             const promedioActividad = promedioActividadPorTema.get(String(temaId));
                                             return (
                                               <>
-                                                <Button
-                                                  size="small"
-                                                  type="link"
-                                                  icon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FileTextOutlined />}
-                                                  onClick={() => {
-                                                    if (!recursoPrincipalTema) {
-                                                      message.warning("Este tema aún no tiene material didáctico disponible.");
-                                                      return;
-                                                    }
-                                                    abrirMaterialTema(recursoPrincipalTema, tema.nombre_curso || tema.titulo || "Tema", materialesTema);
-                                                  }}
-                                                  style={{ paddingInline: 0 }}
-                                                >
-                                                  {tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}
-                                                </Button>
+                                                {mostrarEnlacePrincipal ? (
+                                                  <Button
+                                                    size="small"
+                                                    type="link"
+                                                    icon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FileTextOutlined />}
+                                                    onClick={() => {
+                                                      if (!recursoPrincipalTema) {
+                                                        message.warning("Este tema aún no tiene material didáctico disponible.");
+                                                        return;
+                                                      }
+                                                      abrirMaterialTema(recursoPrincipalTema, tema.nombre_curso || tema.titulo || "Tema", materialesTema);
+                                                    }}
+                                                    style={{ paddingInline: 0 }}
+                                                  >
+                                                    {tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}
+                                                  </Button>
+                                                ) : null}
                                                 {presentacionesTema.length > 1 ? (
                                                   <Space size={4} wrap>
                                                     {presentacionesTema.map((presentacion: any, indexPresentacion: number) => (
@@ -2261,12 +2264,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                                         onClick={() =>
                                                           abrirMaterialTema(
                                                             presentacion,
-                                                            presentacion?.titulo || `${tema.nombre_curso || tema.titulo || "Tema"} · Presentación ${indexPresentacion + 1}`,
+                                                            String(presentacion?.titulo || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material"),
                                                             materialesTema
                                                           )
                                                         }
                                                       >
-                                                        {`Presentación ${indexPresentacion + 1}`}
+                                                        {String(presentacion?.titulo || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material")}
                                                       </Button>
                                                     ))}
                                                   </Space>
