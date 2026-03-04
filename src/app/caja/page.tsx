@@ -692,7 +692,18 @@ export default function CajaPage() {
     } finally {
       setProcesando(false);
     }
-  }, [cuotasSeleccionadas, cuotas, form, messageApi, estudianteSeleccionado, totalAPagar, configuracion]);
+  }, [
+    cuotasSeleccionadas,
+    cuotas,
+    form,
+    messageApi,
+    estudianteSeleccionado,
+    totalAPagar,
+    configuracion,
+    matriculas,
+    valorEntregado,
+    cambio,
+  ]);
 
   const abrirCajonRegistrador = () => {
     try {

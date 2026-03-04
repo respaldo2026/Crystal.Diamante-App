@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { 
     List, 
@@ -118,15 +118,15 @@ export default function EstudiantesList() {
     const activoEstados = useMemo(() => ["activo", "en curso", "pendiente", "inscrito", "preinscrito", "matriculado"], []);
     const graduadoEstados = useMemo(() => ["aprobado", "certificado", "finalizado"], []);
 
-    const normalizarEstado = (value: any) => String(value || "").toLowerCase().trim();
-    const esEstadoInactivo = (estado: string) => ["cancelado", "cancelada", "retirado", "retirada", "anulado", "anulada"].includes(estado);
-    const esEstadoGraduado = (estado: string) => graduadoEstados.includes(estado);
+    const normalizarEstado = useCallback((value: any) => String(value || "").toLowerCase().trim(), []);
+    const esEstadoInactivo = useCallback((estado: string) => ["cancelado", "cancelada", "retirado", "retirada", "anulado", "anulada"].includes(estado), []);
+    const esEstadoGraduado = useCallback((estado: string) => graduadoEstados.includes(estado), [graduadoEstados]);
     const esPagoInscripcion = (pago: any) => {
         const numero = Number(pago?.numero_cuota);
         const periodo = String(pago?.periodo_pagado || "").toLowerCase();
         return numero === 0 || periodo.includes("inscrip") || periodo.includes("matric");
     };
-    const obtenerMatriculasVigentes = (record: any) => {
+    const obtenerMatriculasVigentes = useCallback((record: any) => {
         const matriculas = (record?.matriculas || []).slice();
         const filtradas = matriculas.filter((m: any) => {
             const estado = normalizarEstado(m?.estado);
@@ -138,7 +138,7 @@ export default function EstudiantesList() {
             const fechaB = dayjs(b?.fecha_inicio || b?.created_at || 0).valueOf();
             return fechaB - fechaA;
         });
-    };
+    }, [esEstadoGraduado, esEstadoInactivo, normalizarEstado]);
     const obtenerEstadoPago = (record: any) => {
         const mats = obtenerMatriculasVigentes(record);
         if (mats.length === 0) return { label: 'Sin pagos', color: 'default' as const };
@@ -324,7 +324,7 @@ export default function EstudiantesList() {
             if (!estado) return true;
             return activoEstados.includes(estado) || (!esEstadoInactivo(estado) && !esEstadoGraduado(estado));
         });
-    }), [dataSource, activoEstados]);
+    }), [dataSource, activoEstados, esEstadoGraduado, esEstadoInactivo, normalizarEstado, obtenerMatriculasVigentes]);
     const graduados = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => graduadoEstados.includes(String(m.estado || '').toLowerCase()))), [dataSource, graduadoEstados]);
     const desertores = useMemo(() => dataSource.filter(s => (s.matriculas || []).some((m: any) => {
         const st = asistStats[m.id];

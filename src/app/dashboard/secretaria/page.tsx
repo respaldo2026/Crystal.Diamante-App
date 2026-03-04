@@ -232,42 +232,6 @@ export default function SecretariaDashboard() {
     [token.colorBgContainer, token.colorBgElevated, token.colorBorder],
   );
 
-  const cargarPanel = useCallback(async () => {
-    setLoading(true);
-    try {
-      // Cargar también la configuración
-      await cargarConfiguracion();
-      
-      const [programasRes, cursosRes, leadsRes, pagosRes] = await Promise.all([
-        getProgramasResumen(),
-        getCursosSecretaria(),
-        getLeadsPendientes(),
-        getPagosPendientes(),
-      ]);
-
-      if (programasRes.error) messageApi.error("No se pudieron cargar los programas");
-      if (cursosRes.error) messageApi.error("No se pudieron cargar los cursos");
-      if (leadsRes.error) messageApi.error("No se pudieron cargar los leads");
-      if (pagosRes.error) messageApi.error("No se pudieron cargar los pagos pendientes");
-
-      setProgramas(programasRes.data || []);
-      const cursosData = (cursosRes.data || []) as any[];
-      setCursosActivos(cursosData.filter((curso) => (curso.estado || "").toLowerCase() === "activo"));
-      setCursosProximos(cursosData.filter((curso) => (curso.estado || "").toLowerCase() === "proximo"));
-      setLeads(leadsRes.data || []);
-      setPagosPendientes(pagosRes.data || []);
-    } catch (error) {
-      console.error("Error cargando panel secretaría", error);
-      messageApi.error("Ocurrió un error cargando la información");
-    } finally {
-      setLoading(false);
-    }
-  }, [messageApi]);
-
-  useEffect(() => {
-    cargarPanel();
-  }, [cargarPanel]);
-
   const resumenCards = useMemo(
     () => [
       { key: "programas", label: "Programas activos", value: programas.length },
@@ -619,6 +583,41 @@ Formamos profesionales en belleza y estética.
       console.error("Error cargando la configuración de la academia", error);
     }
   }, []);
+
+  const cargarPanel = useCallback(async () => {
+    setLoading(true);
+    try {
+      await cargarConfiguracion();
+
+      const [programasRes, cursosRes, leadsRes, pagosRes] = await Promise.all([
+        getProgramasResumen(),
+        getCursosSecretaria(),
+        getLeadsPendientes(),
+        getPagosPendientes(),
+      ]);
+
+      if (programasRes.error) messageApi.error("No se pudieron cargar los programas");
+      if (cursosRes.error) messageApi.error("No se pudieron cargar los cursos");
+      if (leadsRes.error) messageApi.error("No se pudieron cargar los leads");
+      if (pagosRes.error) messageApi.error("No se pudieron cargar los pagos pendientes");
+
+      setProgramas(programasRes.data || []);
+      const cursosData = (cursosRes.data || []) as any[];
+      setCursosActivos(cursosData.filter((curso) => (curso.estado || "").toLowerCase() === "activo"));
+      setCursosProximos(cursosData.filter((curso) => (curso.estado || "").toLowerCase() === "proximo"));
+      setLeads(leadsRes.data || []);
+      setPagosPendientes(pagosRes.data || []);
+    } catch (error) {
+      console.error("Error cargando panel secretaría", error);
+      messageApi.error("Ocurrió un error cargando la información");
+    } finally {
+      setLoading(false);
+    }
+  }, [cargarConfiguracion, messageApi]);
+
+  useEffect(() => {
+    cargarPanel();
+  }, [cargarPanel]);
 
   const cargarCuotasPendientes = useCallback(
     async (matriculaId: string, options?: { preselectCuotaId?: string }) => {

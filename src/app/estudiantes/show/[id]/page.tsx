@@ -168,13 +168,13 @@ export default function StudentDetailView() {
     return texto.includes("matric") || Number(pago?.numero_cuota) === 0;
   };
 
-  const obtenerDuracionMeses = (matricula: any) =>
+  const obtenerDuracionMeses = useCallback((matricula: any) =>
     parseDuracionMeses(
       matricula?.cursos?.programas?.duracion ??
       matricula?.cursos?.duracion ??
       matricula?.cursos?.numero_cuotas ??
       matricula?.numero_cuotas
-    );
+    ), []);
 
   const obtenerMensualidad = (matricula: any) =>
     Number(
@@ -444,7 +444,7 @@ export default function StudentDetailView() {
     } finally {
       setLoading(false);
     }
-  }, [idEstudiante]);
+  }, [idEstudiante, obtenerDuracionMeses]);
 
   const eliminarAsistencia = async (asistenciaId: string) => {
     try {
@@ -813,7 +813,7 @@ export default function StudentDetailView() {
 
       return String(a?.id || "").localeCompare(String(b?.id || ""));
     });
-  }, [pagosHistorial, matriculas]);
+  }, [pagosHistorial, matriculas, obtenerDuracionMeses]);
 
   const columnasPagos = useMemo(
     () => [
@@ -954,7 +954,7 @@ export default function StudentDetailView() {
         ),
       },
     ],
-    [contactoPerfil, handleRegenerarTicket]
+    [contactoPerfil, handleRegenerarTicket, obtenerDuracionMeses]
   );
 
   const renderCuotasPorMatricula = (record: any) => {
