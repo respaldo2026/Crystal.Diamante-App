@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Card,
   Table,
@@ -157,24 +157,6 @@ export default function MarketingCenterPage() {
     textAreaId: "agent-system-prompt",
   });
 
-  useEffect(() => {
-    cargarDatosIniciales();
-  }, []);
-
-  const cargarDatosIniciales = async () => {
-    try {
-      await Promise.all([
-        cargarProgramas(),
-        cargarCursosProximos(),
-        cargarMarketingCursos(),
-        cargarAgentPrompt(),
-        cargarDocs(),
-      ]);
-    } finally {
-      setInitialLoading(false);
-    }
-  };
-
   const handleTabChange = (key: string) => {
     setActiveTabKey(key);
     if (key === "assets" && !assetsLoaded) {
@@ -203,7 +185,7 @@ export default function MarketingCenterPage() {
     ]);
   };
 
-  const cargarAssets = async () => {
+  const cargarAssets = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabaseBrowserClient
@@ -220,9 +202,9 @@ export default function MarketingCenterPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const cargarProgramas = async () => {
+  const cargarProgramas = useCallback(async () => {
     try {
       const { data, error } = await supabaseBrowserClient
         .from("programas")
@@ -235,9 +217,9 @@ export default function MarketingCenterPage() {
     } catch (error) {
       console.error("Error cargando programas:", error);
     }
-  };
+  }, []);
 
-  const cargarCursosProximos = async () => {
+  const cargarCursosProximos = useCallback(async () => {
     try {
       const hoy = dayjs().format("YYYY-MM-DD");
       const { data, error } = await supabaseBrowserClient
@@ -259,7 +241,7 @@ export default function MarketingCenterPage() {
       console.error("Error cargando cursos próximos:", error);
       message.error("No se pudieron cargar los cursos próximos");
     }
-  };
+  }, []);
 
   const handleUpload = async (values: any) => {
     console.log("[MARKETING] Iniciando subida con valores:", values);
@@ -467,7 +449,7 @@ export default function MarketingCenterPage() {
     flyers: assets.filter((a) => a.tipo_asset === "flyer").length,
   };
 
-  const cargarMarketingCursos = async () => {
+  const cargarMarketingCursos = useCallback(async () => {
     try {
       setLoadingCursosMarketing(true);
       const { data, error } = await supabaseBrowserClient
@@ -489,9 +471,9 @@ export default function MarketingCenterPage() {
     } finally {
       setLoadingCursosMarketing(false);
     }
-  };
+  }, []);
 
-  const cargarAgentPrompt = async () => {
+  const cargarAgentPrompt = useCallback(async () => {
     try {
       setLoadingAgentPrompt(true);
       const { data, error } = await supabaseBrowserClient
@@ -515,7 +497,7 @@ export default function MarketingCenterPage() {
     } finally {
       setLoadingAgentPrompt(false);
     }
-  };
+  }, [agentForm]);
 
   const guardarAgentPrompt = async () => {
     try {
@@ -545,7 +527,7 @@ export default function MarketingCenterPage() {
     }
   };
 
-  const cargarDocs = async () => {
+  const cargarDocs = useCallback(async () => {
     try {
       setLoadingDocs(true);
       const { data, error } = await supabaseBrowserClient
@@ -561,7 +543,39 @@ export default function MarketingCenterPage() {
     } finally {
       setLoadingDocs(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const cargarDatosIniciales = async () => {
+      try {
+        await Promise.all([
+          cargarProgramas(),
+          cargarCursosProximos(),
+          cargarMarketingCursos(),
+          cargarAgentPrompt(),
+          cargarDocs(),
+        ]);
+      } finally {
+        if (!cancelled) {
+          setInitialLoading(false);
+        }
+      }
+    };
+
+    cargarDatosIniciales();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    cargarProgramas,
+    cargarCursosProximos,
+    cargarMarketingCursos,
+    cargarAgentPrompt,
+    cargarDocs,
+  ]);
 
   const crearDocAgente = async (values: any) => {
     try {

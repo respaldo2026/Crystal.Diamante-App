@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Card,
   Table,
@@ -305,7 +305,7 @@ export default function ConversacionesPage() {
     return value || "Sin número (Make/Webhook)";
   };
 
-  const normalizePhoneForMatch = (value?: string | null) => {
+  const normalizePhoneForMatch = useCallback((value?: string | null) => {
     const digits = (value || "").replace(/\D/g, "");
     if (!digits) return "";
     if (digits.length === 10 && digits.startsWith("3")) {
@@ -315,13 +315,13 @@ export default function ConversacionesPage() {
       return digits.slice(2);
     }
     return digits;
-  };
+  }, []);
 
   const matchesAny = (text: string, patterns: RegExp[]) =>
     patterns.some((pattern) => pattern.test(text));
 
   // Cargar conversaciones
-  const cargarConversaciones = async () => {
+  const cargarConversaciones = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabaseBrowserClient
@@ -380,11 +380,11 @@ export default function ConversacionesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [normalizePhoneForMatch]);
 
   useEffect(() => {
     cargarConversaciones();
-  }, []);
+  }, [cargarConversaciones]);
 
   const threads = useMemo<ConversationThread[]>(() => {
     const grouped = new Map<string, Conversation[]>();
@@ -480,7 +480,7 @@ export default function ConversacionesPage() {
     return result.sort(
       (a, b) => new Date(b.last_date).getTime() - new Date(a.last_date).getTime()
     );
-  }, [conversations, contactNames]);
+  }, [conversations, contactNames, normalizePhoneForMatch]);
 
   // Filtrar conversaciones por hilo
   const conversationsFiltradas = useMemo(() => {
