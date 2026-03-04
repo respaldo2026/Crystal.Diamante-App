@@ -323,8 +323,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     clasesPensum.forEach((tema: any, index: number) => {
       const temaId = String(tema?.id || "");
       if (!temaId) return;
-      const orden = Number(tema?.orden ?? index + 1);
-      map.set(temaId, Number.isFinite(orden) && orden > 0 ? orden : index + 1);
+      map.set(temaId, index + 1);
     });
     return map;
   }, [clasesPensum]);
@@ -2508,9 +2507,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                   dataSource={pendientesActividad}
                                   renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
                                 />
-                                <Button size="small" type="primary" onClick={() => abrirModalActividad(true)}>
-                                  Calificar pendientes
-                                </Button>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  Usa Calificar Tareas para registrar estas pendientes.
+                                </Text>
                               </>
                             ) : (
                               <Text type="secondary">Todos presentaron actividad en esta clase.</Text>
@@ -2546,9 +2545,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                           }))}
                           onChange={(value) => setTemaSeleccionadoId(String(value))}
                         />
-                        <Button type="primary" icon={<FormOutlined />} onClick={() => abrirModalActividad()}>
-                          Calificar en modal
-                        </Button>
                       </Space>
 
                       <Space wrap size={8}>
