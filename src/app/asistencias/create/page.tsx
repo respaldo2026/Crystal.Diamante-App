@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Grid, Select } from "antd";
+import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Grid, Select, theme } from "antd";
 import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -33,6 +33,7 @@ export default function TomarAsistencia() {
   const [guardando, setGuardando] = useState(false);
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+  const { token } = theme.useToken();
   const cursoIdParam = searchParams.get("curso_id") || searchParams.get("cursoId");
   const returnTo = useMemo(
     () => searchParams.get("return") || (cursoIdParam ? `/cursos/show/${cursoIdParam}` : "/cursos"),
@@ -574,21 +575,30 @@ export default function TomarAsistencia() {
                 showIcon
                 message="Paso obligatorio para habilitar el llamado de lista"
               />
-              <Select
-                size="large"
-                status={!claseSeleccionadaValida ? "error" : undefined}
-                style={{ width: "100%" }}
-                value={numeroClase ?? undefined}
-                options={opcionesClase}
-                onChange={(value) => {
-                  setNumeroClase(Number(value));
-                  const clase = clasesDisponibles.find((item) => Number(item.numero) === Number(value));
-                  setTemaVisto(clase?.nombre || "");
+              <div
+                style={{
+                  border: `1px solid ${claseSeleccionadaValida ? token.colorPrimaryBorder : token.colorError}`,
+                  borderRadius: token.borderRadiusLG,
+                  padding: 10,
+                  background: token.colorInfoBg,
                 }}
-                placeholder="Selecciona el número de la clase"
-                showSearch
-                optionFilterProp="label"
-              />
+              >
+                <Select
+                  size="large"
+                  status={!claseSeleccionadaValida ? "error" : undefined}
+                  style={{ width: "100%" }}
+                  value={numeroClase ?? undefined}
+                  options={opcionesClase}
+                  onChange={(value) => {
+                    setNumeroClase(Number(value));
+                    const clase = clasesDisponibles.find((item) => Number(item.numero) === Number(value));
+                    setTemaVisto(clase?.nombre || "");
+                  }}
+                  placeholder="Selecciona el número de la clase"
+                  showSearch
+                  optionFilterProp="label"
+                />
+              </div>
               {temaVisto.trim() ? (
                 <Text type="secondary" style={{ display: "block", marginTop: 8 }}>
                   {`Tema de la clase: ${temaVisto}`}
