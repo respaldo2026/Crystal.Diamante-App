@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Input, Grid, Select } from "antd";
+import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Grid, Select } from "antd";
 import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -567,38 +567,36 @@ export default function TomarAsistencia() {
           </Col>
           <Col xs={24} md={12}>
             <div>
-              <Text strong>Número de clase:</Text>
+              <Text strong>Número de clase (obligatorio):</Text>
+              <Alert
+                style={{ marginTop: 8, marginBottom: 8 }}
+                type="info"
+                showIcon
+                message="Paso obligatorio para habilitar el llamado de lista"
+              />
               <Select
-                style={{ width: "100%", marginTop: 8 }}
+                size="large"
+                status={!claseSeleccionadaValida ? "error" : undefined}
+                style={{ width: "100%" }}
                 value={numeroClase ?? undefined}
                 options={opcionesClase}
                 onChange={(value) => {
                   setNumeroClase(Number(value));
                   const clase = clasesDisponibles.find((item) => Number(item.numero) === Number(value));
-                  if (clase?.nombre && !temaVisto.trim()) {
-                    setTemaVisto(clase.nombre);
-                  }
+                  setTemaVisto(clase?.nombre || "");
                 }}
                 placeholder="Selecciona el número de la clase"
                 showSearch
                 optionFilterProp="label"
               />
+              {temaVisto.trim() ? (
+                <Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+                  {`Tema de la clase: ${temaVisto}`}
+                </Text>
+              ) : null}
               {!claseSeleccionadaValida && (
                 <Text type="danger">Selecciona el número de clase para continuar con el llamado de lista.</Text>
               )}
-            </div>
-          </Col>
-          <Col xs={24}>
-            <div>
-              <Text strong>Nombre de la clase (editable):</Text>
-              <Input
-                style={{ marginTop: 8 }}
-                value={temaVisto}
-                onChange={(e) => setTemaVisto(e.target.value)}
-                placeholder="Ej: Técnica de limado, preparación de uña y aplicación de gel"
-                maxLength={180}
-              />
-              <Text type="secondary">El número de clase es el dato fijo; el nombre puede ajustarse cuando sea necesario.</Text>
             </div>
           </Col>
         </Row>
