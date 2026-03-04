@@ -81,7 +81,19 @@ export default function TesoreriaPage() {
     const [filtroConciliado, setFiltroConciliado] = useState<string | null>(null);
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [registrando, setRegistrando] = useState(false);
+    const [ejecutandoLiquidacion, setEjecutandoLiquidacion] = useState(false);
     const [form] = Form.useForm();
+
+    const role = (user?.rol || "").toLowerCase();
+    const puedeEjecutarLiquidacion =
+        role === "admin" ||
+        role === "director" ||
+        role === "administrador" ||
+        role === "tesoreria" ||
+        role === "tesorero" ||
+        role === "contador" ||
+        role === "finanzas" ||
+        role.includes("admin");
 
     const generarTicketsFaltantes = useCallback(async () => {
         const { data: configAcademia } = await supabaseBrowserClient
@@ -469,6 +481,47 @@ export default function TesoreriaPage() {
         );
     };
 
+    const ejecutarLiquidacionProfesoresAhora = async () => {
+        if (!puedeEjecutarLiquidacion) {
+            message.warning("No tienes permisos para ejecutar la liquidación de profesores");
+            return;
+        }
+
+        try {
+            setEjecutandoLiquidacion(true);
+
+            const response = await fetch("/api/tesoreria/ejecutar-liquidacion-profesores", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || result?.success === false) {
+                throw new Error(result?.error || "No se pudo ejecutar la liquidación");
+            }
+
+            if (result?.skipped) {
+                message.info(result?.reason || "Liquidación omitida para la fecha actual");
+                return;
+            }
+
+            const enviados = Number(result?.totales?.enviados || 0);
+            const omitidos = Number(result?.totales?.omitidos || 0);
+            const fallidos = Number(result?.totales?.fallidos || 0);
+            const periodo = String(result?.periodo?.periodoTexto || "periodo actual");
+
+            message.success(`Liquidación ${periodo}: enviados ${enviados}, omitidos ${omitidos}, fallidos ${fallidos}`);
+        } catch (error: any) {
+            console.error("Error ejecutando liquidación manual:", error);
+            message.error(error?.message || "No se pudo ejecutar la liquidación ahora");
+        } finally {
+            setEjecutandoLiquidacion(false);
+        }
+    };
+
     const handleEnviarComprobanteWhatsapp = (record: MovimientoFinanciero) => {
         if (!record.ticket_url) {
             message.warning("Este movimiento no tiene comprobante");
@@ -619,6 +672,16 @@ export default function TesoreriaPage() {
                         block={isMobile}
                     >
                         {isMobile ? "Actualizar" : "Actualizar"}
+                    </Button>
+                    <Button
+                        icon={<CalendarOutlined />}
+                        onClick={() => void ejecutarLiquidacionProfesoresAhora()}
+                        loading={ejecutandoLiquidacion}
+                        disabled={!puedeEjecutarLiquidacion}
+                        size={isMobile ? "middle" : "large"}
+                        block={isMobile}
+                    >
+                        {isMobile ? "Liquidar ahora" : "Ejecutar liquidación ahora"}
                     </Button>
                     <Button
                         type="primary"
