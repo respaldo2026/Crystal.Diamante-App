@@ -1465,7 +1465,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const temasSinActividad = Math.max(totalTemas - temasConActividad, 0);
   const quizzesActivosPublicados = (quizzesClase || []).filter((quiz: any) => quiz?.activo === true && quiz?.publicado === true).length;
   const quizzesNoDisponibles = Math.max((quizzesClase || []).length - quizzesActivosPublicados, 0);
-  const ultimaSesionRegistrada = sesiones.length > 0 ? sesiones[0] : null;
   const hoy = dayjs();
   const sesionesMesActual = (sesiones || []).filter((sesion: any) => {
     if (!sesion?.fecha) return false;
@@ -1488,14 +1487,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const primeraQuincenaActiva = hoy.date() <= 15;
   const horasQuincenaActual = primeraQuincenaActiva ? horasPrimeraQuincena : horasSegundaQuincena;
   const etiquetaQuincenaActual = primeraQuincenaActiva ? "Horas 1-15" : "Horas 16-fin";
-  const valorHoraProfesor = Number(curso?.perfiles?.valor_hora ?? curso?.valor_hora ?? 0);
-  const tieneValorHora = Number.isFinite(valorHoraProfesor) && valorHoraProfesor > 0;
-  const pagoQuincenaActual = Number((horasQuincenaActual * (tieneValorHora ? valorHoraProfesor : 0)).toFixed(0));
-  const pagoPrimeraQuincena = Number((horasPrimeraQuincena * (tieneValorHora ? valorHoraProfesor : 0)).toFixed(0));
-  const pagoSegundaQuincena = Number((horasSegundaQuincena * (tieneValorHora ? valorHoraProfesor : 0)).toFixed(0));
-  const pagoMesActual = Number((horasMesActual * (tieneValorHora ? valorHoraProfesor : 0)).toFixed(0));
-  const formatoCOP = (valor: number) => `$${Number(valor || 0).toLocaleString("es-CO")}`;
-
   const estudiantesEvaluables = estudiantes.filter((est) => est.estado !== "pendiente_pago");
   const totalEstudiantesEvaluables = estudiantesEvaluables.length;
 
@@ -1987,49 +1978,19 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       </Row>
 
       <Card size="small" style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col xs={24} md={16}>
-            <Space size={[8, 8]} wrap>
-              <Tag color={temasSinActividad > 0 ? "gold" : "green"}>
-                {`Temas sin actividad calificada: ${temasSinActividad}`}
-              </Tag>
-              <Tag color={quizzesNoDisponibles > 0 ? "gold" : "blue"}>
-                {`Quizzes no habilitados: ${quizzesNoDisponibles}`}
-              </Tag>
-              <Tag color={estudiantesEnMora > 0 ? "red" : "green"}>
-                {`Estudiantes en mora: ${estudiantesEnMora}`}
-              </Tag>
-              <Tag color={ultimaSesionRegistrada ? "cyan" : "default"}>
-                {`Última sesión: ${ultimaSesionRegistrada?.fecha ? dayjs(ultimaSesionRegistrada.fecha).format("DD/MM/YYYY") : "Sin registrar"}`}
-              </Tag>
-              <Tag color="blue">{`Horas 1-15: ${horasPrimeraQuincena}h`}</Tag>
-              <Tag color="purple">{`Horas 16-fin: ${horasSegundaQuincena}h`}</Tag>
-              {tieneValorHora ? (
-                <>
-                  <Tag color="green">{`Pago quincena actual: ${formatoCOP(pagoQuincenaActual)}`}</Tag>
-                  <Tag color="geekblue">{`Pago 1-15: ${formatoCOP(pagoPrimeraQuincena)}`}</Tag>
-                  <Tag color="magenta">{`Pago 16-fin: ${formatoCOP(pagoSegundaQuincena)}`}</Tag>
-                  <Tag color="success">{`Pago mes estimado: ${formatoCOP(pagoMesActual)}`}</Tag>
-                </>
-              ) : (
-                <Tag color="warning">Define valor/hora del profesor para estimar pago</Tag>
-              )}
-            </Space>
-          </Col>
-          <Col xs={24} md={8}>
-            <Space wrap style={{ justifyContent: isMobile ? "flex-start" : "flex-end", width: "100%" }}>
-              <Button size="small" icon={<ClockCircleOutlined />} onClick={() => setActiveTab("3")}>
-                Registrar sesión
-              </Button>
-              <Button size="small" type="primary" icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
-                Calificar clase
-              </Button>
-              <Button size="small" icon={<BarChartOutlined />} onClick={() => setModalRadarVisible(true)}>
-                Ver radar pedagógico
-              </Button>
-            </Space>
-          </Col>
-        </Row>
+        <div style={{ display: "flex", justifyContent: isMobile ? "flex-start" : "flex-end" }}>
+          <Space wrap>
+            <Button size="small" icon={<ClockCircleOutlined />} onClick={() => setActiveTab("3")}>
+              Registrar sesión
+            </Button>
+            <Button size="small" type="primary" icon={<FormOutlined />} onClick={() => setActiveTab("5")}>
+              Calificar clase
+            </Button>
+            <Button size="small" icon={<BarChartOutlined />} onClick={() => setModalRadarVisible(true)}>
+              Ver radar pedagógico
+            </Button>
+          </Space>
+        </div>
       </Card>
 
       {/* TABS - OFICINA COMPLETA DEL PROFESOR */}
