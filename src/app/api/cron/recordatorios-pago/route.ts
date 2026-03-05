@@ -80,8 +80,10 @@ export async function POST(request: NextRequest) {
     console.log('[Recordatorio] Intento no autorizado');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  return runRecordatoriosJob();
+}
 
-  try {
+async function runRecordatoriosJob(): Promise<NextResponse> {
     const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -222,6 +224,5 @@ export async function GET(request: NextRequest) {
   if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // Reutiliza la misma lógica del POST delegando internamente
-  return POST(request);
+  return runRecordatoriosJob();
 }
