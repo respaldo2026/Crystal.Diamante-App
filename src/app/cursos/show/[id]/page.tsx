@@ -1217,50 +1217,71 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         .eq("curso_id", parseInt(id));
 
       if (matriculasData) {
-        const estudiantesConAsistencia = await Promise.all(
-          matriculasData.map(async (matricula: any) => {
-            // Obtener datos del estudiante
-            const { data: estudiante } = await supabaseBrowserClient
-              .from("perfiles")
-              .select("nombre_completo, email, identificacion")
-              .eq("id", matricula.estudiante_id)
-              .single();
+        const matriculaIdsTemp = matriculasData.map((m: any) => Number(m.id)).filter((value: number) => Number.isFinite(value));
+        const estudianteIds = matriculasData
+          .map((m: any) => String(m.estudiante_id || ""))
+          .filter((value: string) => Boolean(value));
 
-            // Obtener asistencia
-            const { data: asistencias } = await supabaseBrowserClient
-              .from("asistencias")
-              .select("estado, fecha, observaciones")
-              .eq("matricula_id", matricula.id);
+        const [perfilesRes, asistenciasRes] = await Promise.all([
+          estudianteIds.length > 0
+            ? supabaseBrowserClient
+                .from("perfiles")
+                .select("id, nombre_completo, email, identificacion")
+                .in("id", estudianteIds)
+            : Promise.resolve({ data: [], error: null } as any),
+          matriculaIdsTemp.length > 0
+            ? supabaseBrowserClient
+                .from("asistencias")
+                .select("matricula_id, estado, fecha, observaciones")
+                .in("matricula_id", matriculaIdsTemp)
+            : Promise.resolve({ data: [], error: null } as any),
+        ]);
 
-            const totalClases = asistencias?.length || 0;
-            const presentes = asistencias?.filter(a => a.estado === "presente").length || 0;
-            const porcentaje = totalClases > 0 ? (presentes / totalClases) * 100 : 0;
-            const faltasDetalle = (asistencias || [])
-              .filter((a: any) => esEstadoFalta(a?.estado))
-              .map((a: any) => {
-                const fecha = a?.fecha ? String(a.fecha) : null;
-                const temaSesion = fecha ? String(temaPorFecha.get(fecha) || "").trim() : "";
-                const tema = temaSesion || String(a?.observaciones || "").trim() || "Clase sin tema";
-                return { fecha, tema };
-              });
+        const perfilesMap = new Map<string, any>();
+        (perfilesRes.data || []).forEach((perfil: any) => {
+          perfilesMap.set(String(perfil.id), perfil);
+        });
 
-            return {
-              id: matricula.id,
-              nombre_completo: estudiante?.nombre_completo || "Sin nombre",
-              email: estudiante?.email || "-",
-              identificacion: estudiante?.identificacion || "-",
-              estado: matricula.estado,
-              nota_final: matricula.nota_final,
-              asistencia_porcentaje: Math.round(porcentaje),
-              totalClases,
-              presentes,
-              totalFaltas: faltasDetalle.length,
-              faltasDetalle,
-            };
-          })
-        );
+        const asistenciasPorMatricula = new Map<number, any[]>();
+        (asistenciasRes.data || []).forEach((asistencia: any) => {
+          const matriculaId = Number(asistencia?.matricula_id);
+          if (!Number.isFinite(matriculaId)) return;
+          const current = asistenciasPorMatricula.get(matriculaId) || [];
+          current.push(asistencia);
+          asistenciasPorMatricula.set(matriculaId, current);
+        });
+
+        const estudiantesConAsistencia = matriculasData.map((matricula: any) => {
+          const estudiante = perfilesMap.get(String(matricula.estudiante_id || ""));
+          const asistencias = asistenciasPorMatricula.get(Number(matricula.id)) || [];
+
+          const totalClases = asistencias.length;
+          const presentes = asistencias.filter((a: any) => a.estado === "presente").length;
+          const porcentaje = totalClases > 0 ? (presentes / totalClases) * 100 : 0;
+          const faltasDetalle = asistencias
+            .filter((a: any) => esEstadoFalta(a?.estado))
+            .map((a: any) => {
+              const fecha = a?.fecha ? String(a.fecha) : null;
+              const temaSesion = fecha ? String(temaPorFecha.get(fecha) || "").trim() : "";
+              const tema = temaSesion || String(a?.observaciones || "").trim() || "Clase sin tema";
+              return { fecha, tema };
+            });
+
+          return {
+            id: matricula.id,
+            nombre_completo: estudiante?.nombre_completo || "Sin nombre",
+            email: estudiante?.email || "-",
+            identificacion: estudiante?.identificacion || "-",
+            estado: matricula.estado,
+            nota_final: matricula.nota_final,
+            asistencia_porcentaje: Math.round(porcentaje),
+            totalClases,
+            presentes,
+            totalFaltas: faltasDetalle.length,
+            faltasDetalle,
+          };
+        });
         // Cargar pagos pendientes vencidos para detectar mora
-        const matriculaIdsTemp = estudiantesConAsistencia.map((e) => e.id);
         let moraSet = new Set<number>();
         if (matriculaIdsTemp.length > 0) {
           const hoy: string = new Date().toISOString().slice(0, 10);

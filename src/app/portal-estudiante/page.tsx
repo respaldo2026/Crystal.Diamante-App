@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { logger } from "@utils/logger";
 import {
   Card,
@@ -60,12 +61,7 @@ import { useQuizFlow } from "@/modules/portal-estudiante/hooks/useQuizFlow";
 import { useChecklistInsumos } from "@/modules/portal-estudiante/hooks/useChecklistInsumos";
 import { useCourseProgress } from "@/modules/portal-estudiante/hooks/useCourseProgress";
 import { useTemaMaterials } from "@/modules/portal-estudiante/hooks/useTemaMaterials";
-import { QuizApprovedResult } from "@/modules/portal-estudiante/components/QuizApprovedResult";
-import { QuizFailedResult } from "@/modules/portal-estudiante/components/QuizFailedResult";
 import { TemaMaterialActions } from "@/modules/portal-estudiante/components/TemaMaterialActions";
-import { QuizQuestionFlow } from "@/modules/portal-estudiante/components/QuizQuestionFlow";
-import { QuizFlowFooter } from "@/modules/portal-estudiante/components/QuizFlowFooter";
-import { IframeMaterialModal } from "@/modules/portal-estudiante/components/IframeMaterialModal";
 import {
   extractClassNumber,
   getActividadColor,
@@ -78,6 +74,31 @@ import {
   UMBRAL_APROBACION_QUIZ_NOTA,
   UMBRAL_APROBACION_QUIZ_PORCENTAJE,
 } from "@/modules/portal-estudiante/utils";
+
+const QuizApprovedResult = dynamic(
+  () => import("@/modules/portal-estudiante/components/QuizApprovedResult").then((m) => m.QuizApprovedResult),
+  { ssr: false },
+);
+
+const QuizFailedResult = dynamic(
+  () => import("@/modules/portal-estudiante/components/QuizFailedResult").then((m) => m.QuizFailedResult),
+  { ssr: false },
+);
+
+const QuizQuestionFlow = dynamic(
+  () => import("@/modules/portal-estudiante/components/QuizQuestionFlow").then((m) => m.QuizQuestionFlow),
+  { ssr: false },
+);
+
+const QuizFlowFooter = dynamic(
+  () => import("@/modules/portal-estudiante/components/QuizFlowFooter").then((m) => m.QuizFlowFooter),
+  { ssr: false },
+);
+
+const IframeMaterialModal = dynamic(
+  () => import("@/modules/portal-estudiante/components/IframeMaterialModal").then((m) => m.IframeMaterialModal),
+  { ssr: false },
+);
 
 dayjs.locale("es");
 

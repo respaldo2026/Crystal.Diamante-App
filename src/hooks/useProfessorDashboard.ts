@@ -747,6 +747,7 @@ export const fetchProfessorDashboardData = async (
 
 export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardData => {
   const { user: currentUser, loading: userLoading } = useCurrentUser();
+  const currentUserId = currentUser?.id;
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ProfesorDashboardStats>(emptyStats);
   const [cursos, setCursos] = useState<ProfesorDashboardCurso[]>([]);
@@ -758,7 +759,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
   useEffect(() => {
     const fetchDashboard = async () => {
       // 1. Determinar ID: o viene por prop (admin viendo) o es el usuario actual
-      const targetId = profesorId || currentUser?.id;
+      const targetId = profesorId || currentUserId;
 
       // Si no hay ID y el usuario ya terminó de cargar (o no hay sesión), terminamos
       if (!targetId) {
@@ -789,7 +790,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
     };
 
     fetchDashboard();
-  }, [profesorId, currentUser, userLoading]);
+  }, [profesorId, currentUserId, userLoading]);
   
   return {
     loading,
