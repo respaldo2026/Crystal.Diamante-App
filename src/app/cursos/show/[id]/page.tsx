@@ -2506,12 +2506,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   bodyStyle={{ padding: 10 }}
                   headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
                 >
-                  <Space wrap size={8} style={{ marginBottom: 10 }}>
-                    <Tag color="error">{`Riesgo alto: ${resumenLibroRiesgo.alto}`}</Tag>
-                    <Tag color="warning">{`Riesgo medio: ${resumenLibroRiesgo.medio}`}</Tag>
-                    <Tag color="success">{`Riesgo bajo: ${resumenLibroRiesgo.bajo}`}</Tag>
-                    <Tag>{`Total: ${resumenLibroRiesgo.total}`}</Tag>
-                  </Space>
+                  <Text type="secondary" style={{ display: "block", marginBottom: 10 }}>
+                    {`Riesgo alto: ${resumenLibroRiesgo.alto} • Riesgo medio: ${resumenLibroRiesgo.medio} • Riesgo bajo: ${resumenLibroRiesgo.bajo} • Total: ${resumenLibroRiesgo.total}`}
+                  </Text>
 
                   <Table
                     size="small"
@@ -2654,9 +2651,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     <Row gutter={[12, 12]}>
                       <Col xs={24} md={12}>
                         <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                          <Tag color={pendientesQuiz.length > 0 ? "gold" : "green"}>
-                            {`Quiz pendiente (${pendientesQuiz.length})`}
-                          </Tag>
+                          <Text strong>{`Quiz pendiente: ${pendientesQuiz.length}`}</Text>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             {quizSeleccionado
                               ? `Clase: ${nombreTemaPorId.get(String(quizSeleccionado.pensum_curso_id || "")) || quizSeleccionado.titulo || "Quiz"}`
@@ -2677,9 +2672,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       </Col>
                       <Col xs={24} md={12}>
                         <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                          <Tag color={pendientesActividad.length > 0 ? "gold" : "green"}>
-                            {`Actividad pendiente (${pendientesActividad.length})`}
-                          </Tag>
+                          <Text strong>{`Actividad pendiente: ${pendientesActividad.length}`}</Text>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             {temaSeleccionado
                               ? `Clase: ${temaSeleccionado?.nombre_curso || temaSeleccionado?.titulo || "Clase"}`
@@ -2694,7 +2687,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                   renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
                                 />
                                 <Text type="secondary" style={{ fontSize: 12 }}>
-                                  Usa Calificar Tareas para registrar estas pendientes.
+                                  Usa Calificar clase para registrar estas pendientes.
                                 </Text>
                               </>
                             ) : (
@@ -2733,11 +2726,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                         />
                       </Space>
 
-                      <Space wrap size={8}>
-                        <Tag color="blue">{`Calificadas: ${resumenCalificacionTema.calificadas}/${estudiantes.length}`}</Tag>
-                        <Tag color={resumenCalificacionTema.pendientes > 0 ? "gold" : "green"}>{`Pendientes: ${resumenCalificacionTema.pendientes}`}</Tag>
-                        <Tag color={getActividadColor(resumenCalificacionTema.promedio)}>{`Promedio clase: ${resumenCalificacionTema.promedio.toFixed(1)}/5`}</Tag>
-                      </Space>
+                      <Text type="secondary">
+                        {`Calificadas: ${resumenCalificacionTema.calificadas}/${estudiantes.length} • Pendientes: ${resumenCalificacionTema.pendientes} • Promedio clase: ${resumenCalificacionTema.promedio.toFixed(1)}/5`}
+                      </Text>
 
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         Esta calificación de actividad queda visible también en el panel del estudiante.
