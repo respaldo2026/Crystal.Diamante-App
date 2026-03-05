@@ -25,6 +25,7 @@ import {
   ClockCircleOutlined,
   CheckOutlined,
   FormOutlined,
+  FullscreenOutlined,
 } from "@ant-design/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -199,6 +200,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     src: string;
     pdfSrc: string;
   }>({ open: false, title: "", src: "", pdfSrc: "" });
+  const iframeMaterialContainerRef = React.useRef<HTMLDivElement | null>(null);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalSesionVisible, setModalSesionVisible] = useState(false);
@@ -560,6 +562,21 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       return;
     }
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const abrirIframeEnPantallaCompleta = async () => {
+    const container = iframeMaterialContainerRef.current;
+    if (!container) return;
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+      await container.requestFullscreen();
+    } catch (error) {
+      console.error(error);
+      message.error("No se pudo abrir en pantalla completa. Verifica permisos del navegador.");
+    }
   };
 
   const guardarNota = useCallback(
@@ -3018,20 +3035,27 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             {iframeMaterialPreview.pdfSrc ? (
               <Button onClick={() => window.open(iframeMaterialPreview.pdfSrc, "_blank", "noopener,noreferrer")}>Ver PDF respaldo</Button>
             ) : null}
+            {!isAdminView ? (
+              <Button icon={<FullscreenOutlined />} onClick={abrirIframeEnPantallaCompleta}>
+                Pantalla completa
+              </Button>
+            ) : null}
             <Button onClick={() => setIframeMaterialPreview({ open: false, title: "", src: "", pdfSrc: "" })}>Cerrar</Button>
           </Space>
         }
         width={isMobile ? "96%" : 1200}
         destroyOnClose
       >
-        <iframe
-          src={iframeMaterialPreview.src}
-          title={iframeMaterialPreview.title || "Presentación"}
-          style={{ width: "100%", height: isMobile ? "65vh" : "75vh", border: 0 }}
-          allow="fullscreen; clipboard-read; clipboard-write"
-          allowFullScreen
-          loading="lazy"
-        />
+        <div ref={iframeMaterialContainerRef} style={{ width: "100%", background: "#000" }}>
+          <iframe
+            src={iframeMaterialPreview.src}
+            title={iframeMaterialPreview.title || "Presentación"}
+            style={{ width: "100%", height: isMobile ? "65vh" : "75vh", border: 0 }}
+            allow="fullscreen; clipboard-read; clipboard-write"
+            allowFullScreen
+            loading="lazy"
+          />
+        </div>
       </Modal>
 
       <Modal
