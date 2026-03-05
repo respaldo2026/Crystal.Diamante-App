@@ -24,17 +24,25 @@ export const normalizarTexto = (valor?: string | null) =>
 
 export const parseTemaTituloMaterial = (titulo?: string | null) => {
   const raw = String(titulo || "").trim();
-  const match = raw.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
-  if (!match) {
+  const patrones = [
+    /^\s*tema\s*[:\-]\s*(.+?)\s+[—–]\s+(.+)$/i,
+    /^\s*\[\s*tema\s*[:\-]\s*(.+?)\s*\]\s*[—–]\s*(.+)$/i,
+    /^\s*tema\s*[:\-]\s*(.+?)\s+-\s+(.+)$/i,
+    /^\s*\[\s*tema\s*[:\-]\s*(.+?)\s*\]\s*:\s*(.+)$/i,
+  ];
+
+  for (const patron of patrones) {
+    const match = raw.match(patron);
+    if (!match) continue;
     return {
-      tema: "",
-      tituloLimpio: raw,
+      tema: String(match[1] || "").trim(),
+      tituloLimpio: String(match[2] || raw).trim(),
     };
   }
 
   return {
-    tema: String(match[1] || "").trim(),
-    tituloLimpio: String(match[2] || raw).trim(),
+    tema: "",
+    tituloLimpio: raw,
   };
 };
 
