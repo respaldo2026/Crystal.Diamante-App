@@ -1896,6 +1896,40 @@ export default function PortalEstudiante() {
           background: #f7f7f8;
           min-height: 100vh;
         }
+        .portal-estudiante,
+        .portal-estudiante * {
+          box-sizing: border-box;
+        }
+        .portal-estudiante .ant-row > .ant-col,
+        .portal-estudiante .ant-space,
+        .portal-estudiante .ant-space-item,
+        .portal-estudiante .ant-collapse-header,
+        .portal-estudiante .ant-collapse-header-text,
+        .portal-estudiante .ant-list-item-meta,
+        .portal-estudiante .ant-list-item-meta-content {
+          min-width: 0;
+        }
+        .portal-estudiante .ant-typography,
+        .portal-estudiante .ant-alert-message,
+        .portal-estudiante .ant-alert-description,
+        .portal-estudiante .ant-collapse-header-text,
+        .portal-estudiante .ant-table-cell {
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+        .portal-estudiante .ant-btn {
+          max-width: 100%;
+        }
+        .portal-estudiante .ant-btn > span {
+          white-space: normal;
+          overflow-wrap: anywhere;
+          text-align: center;
+        }
+        .portal-estudiante .ant-statistic-content,
+        .portal-estudiante .ant-statistic-title {
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
         @media (min-width: 576px) {
           .portal-section-wrap {
             padding: 0 4px 24px;
@@ -2107,6 +2141,11 @@ export default function PortalEstudiante() {
           }
           .portal-estudiante .ant-card-body {
             padding: 10px !important;
+          }
+          .portal-estudiante .ant-btn {
+            height: auto;
+            min-height: 34px;
+            padding: 6px 10px;
           }
           .portal-estudiante .course-card .ant-card-body {
             display: flex;

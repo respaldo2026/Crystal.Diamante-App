@@ -78,7 +78,7 @@ export const QuizFailedResult = ({
             />
           </div>
         )}
-        <Button type="primary" danger onClick={onCloseAction}>
+        <Button type="primary" danger block onClick={onCloseAction} style={{ whiteSpace: "normal", height: "auto" }}>
           Entendido, volver a intentarlo
         </Button>
       </Space>
