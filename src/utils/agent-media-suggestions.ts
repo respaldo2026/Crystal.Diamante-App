@@ -107,6 +107,8 @@ function buildTrustCaption(asset: MarketingAssetCandidate): string {
 const GREETING_BLOCK_PATTERN = /^(hola|hi|hey|buenos?\s*d[ií]as?|buenas?\s*(tardes?|noches?)|hello|holi|saludos?|qu[eé]\s+tal|c[oó]mo\s+est[aá]s?)[\s!.]*$/i;
 const SHORT_AFFIRMATIVE_BLOCK_PATTERN = /^(si|sí|s+i+p*|ok|okay|okey|dale|listo|claro|perfecto|de\s+una|bien|ya|sip|okok|entendido|genial|excelente|por\s+supuesto|claro\s+que\s+si|aha|mhm|mhmm)[\s!.?]*$/i;
 const GENERIC_INFO_BLOCK_PATTERN = /^(informaci[oó]n|m[aá]s\s+info|info|quiero\s+(saber|m[aá]s)|quiero\s+informaci[oó]n)[\s!.?]*$/i;
+// Correcciones de datos personales nunca deben disparar imagen comercial
+const PERSONAL_DATA_CORRECTION_BLOCK_PATTERN = /\b(se\s+escribe|mi\s+(nombre|apellido|c[eé]dula|numero|n[uú]mero|tel[eé]fono)|correg[ia]|corrijan|corrija|cambien\s+(mi\s+)?nombre|cambia\s+(mi\s+)?nombre|cambiar\s+(mi\s+)?nombre|actualiz[ae]n?\s+(mi\s+)?(nombre|apellido|datos|perfil)|porfa\s+(cambi|corrij|actualiz)|as[ií]\s+se\s+escribe|as[ií]\s+es\s+mi|el\s+apellido\s+es|mi\s+apellido\s+correcto)\b/i;
 
 export async function getAgentImageSuggestion(
   supabase: any,
@@ -122,12 +124,14 @@ export async function getAgentImageSuggestion(
     const normalizedMessage = normalizeText(params.message || "");
     if (!normalizedMessage) return null;
 
-    // Bloquear imágenes en saludos, afirmaciones cortas y solicitudes genéricas de info
+    // Bloquear imágenes en saludos, afirmaciones cortas, solicitudes genéricas de info
+    // y correcciones de datos personales (nombre, apellido, cédula, etc.)
     const rawMessage = (params.message || "").trim();
     if (
       GREETING_BLOCK_PATTERN.test(rawMessage) ||
       SHORT_AFFIRMATIVE_BLOCK_PATTERN.test(rawMessage) ||
-      GENERIC_INFO_BLOCK_PATTERN.test(rawMessage)
+      GENERIC_INFO_BLOCK_PATTERN.test(rawMessage) ||
+      PERSONAL_DATA_CORRECTION_BLOCK_PATTERN.test(rawMessage)
     ) {
       return null;
     }

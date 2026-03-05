@@ -1780,6 +1780,15 @@ function isFastTrackQuestion(message: string): boolean {
   return /\b(mas rapido|más rapido|rapido|rápido|perfeccionamiento|intensivo|avanzado|express|acelerado)\b/i.test(text);
 }
 
+/**
+ * Detectar si el usuario está corrigiendo o solicitando cambio de sus datos personales
+ * (nombre, apellido, cédula, teléfono, etc.)
+ */
+function isPersonalDataCorrectionMessage(message: string): boolean {
+  const text = String(message || "");
+  return /\b(se\s+escribe|mi\s+(nombre|apellido|c[eé]dula|numero|n[uú]mero|tel[eé]fono)|correg[ia]|corrijan|corrija|cambien\s+(mi\s+)?nombre|cambia\s+(mi\s+)?nombre|cambiar\s+(mi\s+)?nombre|actualiz[ae]n?\s+(mi\s+)?(nombre|apellido|datos|perfil)|porfa\s+(cambi|corrij|actualiz)|as[ií]\s+se\s+escribe|as[ií]\s+es\s+mi|el\s+apellido\s+es|mi\s+apellido\s+correcto)\b/i.test(text);
+}
+
 function isLocationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   if (/\b(como llego|como puedo llegar|como llegar|mandame la ubicacion|enviame la ubicacion|pasame la ubicacion|comparteme la ubicacion|mandame ubicacion|enviame ubicacion|pasame ubicacion|comparteme ubicacion|mapa|google maps|maps app|ubicacion exacta|link de ubicacion|enlace de ubicacion|referencia para llegar)\b/i.test(text)) {
@@ -3905,7 +3914,15 @@ function buildContextualDirective(
     'Si hay objeción, estructura la respuesta en: 1) Empatía breve, 2) Dato concreto del curso, 3) Propuesta clara, 4) CTA corta.',
     'Prohibido responder con: "¿En qué curso estás interesado?" cuando el usuario ya mencionó un curso o tema específico.',
     roleSupportRule,
-    noRepeatRule
+    noRepeatRule,
+    isPersonalDataCorrectionMessage(userMessage)
+      ? `MODO CORRECCIÓN DE DATOS PERSONALES ACTIVADO:
+- El usuario está corrigiendo un dato personal (nombre, apellido, cédula u otro).
+- Responde de forma NATURAL y DIRECTA en máximo 2 líneas: confirma que recibiste la corrección y que la trasladarás al equipo para actualizarla.
+- NO menciones cursos, precios, horarios ni inicies discurso comercial.
+- Tono correcto: "Anotado ✏️ [dato corregido]. Le paso la corrección al equipo para actualizarlo. ¿Algo más en que te pueda ayudar? 😊"
+- PROHIBIDO decir "validar con el Director si es posible" — solo confirma que se pasará al equipo.`
+      : ""
   ].filter(Boolean).join('\n');
 }
 
@@ -4144,6 +4161,10 @@ export async function POST(req: NextRequest) {
         mediaSuggestion = null;
       }
       if (isClosureAckInput) {
+        mediaSuggestion = null;
+      }
+      // Nunca enviar imagen cuando el usuario está corrigiendo sus datos personales
+      if (isPersonalDataCorrectionMessage(message)) {
         mediaSuggestion = null;
       }
     }
