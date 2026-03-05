@@ -1596,37 +1596,70 @@ export default function GestorPensum({
         }
       } else if (tipoOrigenSeleccionado === 'enlace') {
         // Es un enlace externo
-        urlArchivo = normalizeHttpUrl(formValues.url_externa);
-        if (!isHttpUrl(urlArchivo)) {
-          throw new Error("La URL del enlace debe iniciar con http:// o https://");
+        const urlNueva = normalizeHttpUrl(formValues.url_externa);
+        if (editingMaterial && !urlNueva) {
+          // Edición sin cambiar la URL — conservar la existente
+          urlArchivo = editingMaterial.url_archivo;
+          nombreArchivo = editingMaterial.nombre_archivo;
+          tamanoBytes = editingMaterial.tamano_bytes;
+          mimeType = editingMaterial.mime_type;
+        } else {
+          urlArchivo = urlNueva;
+          if (!isHttpUrl(urlArchivo)) {
+            throw new Error("La URL del enlace debe iniciar con http:// o https://");
+          }
+          nombreArchivo = "Enlace Externo";
+          tamanoBytes = 0;
+          mimeType = "link";
         }
-        nombreArchivo = "Enlace Externo";
-        tamanoBytes = 0;
-        mimeType = "link";
       } else if (tipoOrigenSeleccionado === 'iframe') {
         const iframeCode = String(formValues.iframe_code || "").trim();
         const iframeSrc = extractIframeSrc(iframeCode);
 
-        if (!iframeCode) {
-          throw new Error("Pega el código iframe de Gamma.");
-        }
+        if (editingMaterial) {
+          // Modo edición: si el iframe_code no cambió o es el mismo origen, usar valores existentes
+          const srcExistente = String(editingMaterial.url_archivo || "");
+          const srcNuevo = normalizeHttpUrl(iframeSrc);
+          const cambioSrc = srcNuevo && srcNuevo !== normalizeHttpUrl(srcExistente);
 
-        if (!isHttpUrl(iframeSrc)) {
-          throw new Error("No se pudo detectar una URL válida dentro del iframe.");
+          if (cambioSrc) {
+            // El usuario cambió el iframe — validar el nuevo
+            if (!isHttpUrl(iframeSrc)) {
+              throw new Error("No se pudo detectar una URL válida dentro del iframe.");
+            }
+            if (hasMalformedEmbedTokens(iframeSrc)) {
+              throw new Error("El iframe contiene parámetros inválidos. Vuelve a copiar el código de Gamma.");
+            }
+            if (!isAllowedEmbedHost(iframeSrc)) {
+              throw new Error("Solo se permiten iframes de Gamma (gamma.app).");
+            }
+            urlArchivo = iframeSrc;
+          } else {
+            // Solo cambió el título/descripción — conservar los datos existentes
+            urlArchivo = editingMaterial.url_archivo;
+          }
+          nombreArchivo = editingMaterial.nombre_archivo;
+          tamanoBytes = editingMaterial.tamano_bytes;
+          mimeType = editingMaterial.mime_type;
+        } else {
+          // Modo creación: validar el iframe completo
+          if (!iframeCode) {
+            throw new Error("Pega el código iframe de Gamma.");
+          }
+          if (!isHttpUrl(iframeSrc)) {
+            throw new Error("No se pudo detectar una URL válida dentro del iframe.");
+          }
+          if (hasMalformedEmbedTokens(iframeSrc)) {
+            throw new Error("El iframe contiene parámetros inválidos. Vuelve a copiar el código de Gamma.");
+          }
+          if (!isAllowedEmbedHost(iframeSrc)) {
+            throw new Error("Solo se permiten iframes de Gamma (gamma.app).");
+          }
+          urlArchivo = iframeSrc;
+          nombreArchivo = "Presentación embebida";
+          tamanoBytes = 0;
+          mimeType = "iframe";
         }
-
-        if (hasMalformedEmbedTokens(iframeSrc)) {
-          throw new Error("El iframe contiene parámetros inválidos. Vuelve a copiar el código de Gamma.");
-        }
-
-        if (!isAllowedEmbedHost(iframeSrc)) {
-          throw new Error("Solo se permiten iframes de Gamma (gamma.app).");
-        }
-
-        urlArchivo = iframeSrc;
-        nombreArchivo = "Presentación embebida";
-        tamanoBytes = 0;
-        mimeType = "iframe";
       }
 
       // Guardar en base de datos
@@ -2850,6 +2883,7 @@ export default function GestorPensum({
             name="titulo"
             label="Título del Material"
             rules={[{ required: true, message: "El título es requerido" }]}
+            help={editingMaterial ? "Escribe solo el nombre corto (sin el prefijo del tema). El prefijo se agrega automáticamente." : undefined}
           >
             <Input placeholder="Ej: Guía de Práctica 1" />
           </Form.Item>
