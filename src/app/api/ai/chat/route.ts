@@ -3454,6 +3454,15 @@ function hasRecentLinkSupportContext(history: Array<{ user: string; agent: strin
   });
 }
 
+function wasAppAccessIdRequestedRecently(history: Array<{ user: string; agent: string }>): boolean {
+  const recent = history.slice(-3);
+  return recent.some((turn) => {
+    const agentText = normalizeForMatch(turn?.agent || "");
+    return /\b(comparteme|comparteme|enviame|confirmame|confirma)\b.*\b(cedula|identificacion|documento)\b/i.test(agentText)
+      && /\b(link|app|portal|usuario|ingreso|acceso)\b/i.test(agentText);
+  });
+}
+
 function extractIdentificationLoose(message: string): string | null {
   const raw = String(message || "").trim();
   if (!raw) return null;
@@ -3474,9 +3483,10 @@ async function buildLinkAccessDirectResponse(
   const appUrl = "https://app.crystaldiamante.com";
   const isLinkIntent = hasLinkOrAppAccessIntent(userMessage);
   const hasLinkContext = hasRecentLinkSupportContext(history);
+  const idRequestedForAccess = wasAppAccessIdRequestedRecently(history);
 
   const directId = extractIdentificationFromText(userMessage) || extractIdentificationLoose(userMessage);
-  const shouldTryIdentification = Boolean(directId && (isLinkIntent || hasLinkContext));
+  const shouldTryIdentification = Boolean(directId && (isLinkIntent || (hasLinkContext && idRequestedForAccess)));
 
   if (shouldTryIdentification && directId) {
     const { data: profile, error } = await supabase
@@ -3793,6 +3803,28 @@ function buildContextualDirective(
   const noRepeatRule = coveredTopics.length > 0
     ? `REGLA ANTI-REPETICIÓN: Los siguientes temas ya fueron cubiertos en esta conversación — NO los ofrezcas de nuevo ni hagas preguntas sobre ellos: ${coveredTopics.join(", ")}. Ofrece el siguiente paso lógico que aún NO se haya cubierto.`
     : "";
+
+  const normalizedUser = normalizeForMatch(userMessage);
+  const normalizedRecentHistory = normalizeForMatch(
+    (Array.isArray(history) ? history : []).slice(-8).map((h) => `${h?.user || ""} ${h?.agent || ""}`).join(" ")
+  );
+  const isTeacherSupport = /\b(profesora|profesor|docente|maestra|soy\s+profesor|soy\s+profe|mis\s+clases|mi\s+pago\s+quincena|quincena)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
+  const isStudentSupport = /\b(estudiante|alumna|alumno|estoy\s+estudiando|tengo\s+clase\s+hoy|hay\s+clase\s+hoy|kit|materiales\s+de\s+la\s+clase|mis\s+cursos|proxima\s+clase|proximo\s+pago)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
+
+  const roleSupportRule = isTeacherSupport
+    ? `MODO SOPORTE DOCENTE ACTIVADO:
+- Responde PRIMERO la duda puntual de la profesora (sin embudo comercial).
+- Si pregunta por clase programada: confirma hoy/próxima clase con fecha, horario y curso cuando exista en contexto.
+- Si pregunta por pago de próxima quincena: responde con el valor o estado disponible; si falta dato, dilo directo y pide SOLO el dato mínimo para consultar (ej: cédula o nombre completo).
+- Puedes incluir info útil para enseñanza (tema del día, materiales, observaciones) solo si aporta a su pregunta.
+- Prohibido desviar a ventas o inscripción.`
+    : isStudentSupport
+    ? `MODO SOPORTE ESTUDIANTE ACTIVADO:
+- Responde primero la pregunta exacta del estudiante de forma natural y concreta.
+- No pidas cédula ni des credenciales de acceso a menos que el usuario pida explícitamente link/app/ingreso/usuario.
+- Si pregunta por kit/materiales de clase, responde directamente qué debe llevar (o indica que validarás el ciclo/tema exacto).
+- Evita respuestas genéricas o cambio de tema.`
+    : "";
   const programName = detectedProgram?.nombre || null;
 
   const intentInstructionMap: Record<string, string> = {
@@ -3872,6 +3904,7 @@ function buildContextualDirective(
     'REGLA DE FOCO: no hagas preguntas de "¿qué curso te interesa?" si ya está claro por contexto.',
     'Si hay objeción, estructura la respuesta en: 1) Empatía breve, 2) Dato concreto del curso, 3) Propuesta clara, 4) CTA corta.',
     'Prohibido responder con: "¿En qué curso estás interesado?" cuando el usuario ya mencionó un curso o tema específico.',
+    roleSupportRule,
     noRepeatRule
   ].filter(Boolean).join('\n');
 }
