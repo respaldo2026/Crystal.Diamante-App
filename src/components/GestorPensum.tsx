@@ -1451,9 +1451,10 @@ export default function GestorPensum({
     setFileList([]);
     setTipoOrigen(esIframe ? 'iframe' : esEnlace ? 'enlace' : 'archivo');
     const iframeSrc = extractIframeSrc(material.url_archivo);
+    const { tituloLimpio } = parseTemaFromTitulo(material.titulo);
     formMaterial.setFieldsValue({
       tema_relacionado: temaNombre,
-      titulo: material.titulo,
+      titulo: tituloLimpio || material.titulo,
       descripcion: material.descripcion,
       tipo_material: material.tipo_material,
       url_externa: esEnlace ? material.url_archivo : undefined,
