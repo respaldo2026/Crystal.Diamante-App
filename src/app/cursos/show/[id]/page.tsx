@@ -610,8 +610,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       const temaActual = clasesPensum.find((t) => String(t.id) === String(temaId));
       const conceptoTema = `Actividad: ${temaActual?.nombre_curso || temaActual?.titulo || String(temaId)}`;
-      const temaIdTexto = String(temaId || "").trim();
-      const temaIdEsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(temaIdTexto);
       const key = `${temaId}-${matriculaId}`;
       setSavingCalificacionId(key);
       try {
@@ -623,22 +621,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           tipo_evaluacion: "actividad",
           fecha_evaluacion: dayjs().format("YYYY-MM-DD"),
         };
-        if (temaIdEsUuid) {
-          payload.tema_id = temaIdTexto;
-        }
 
         let queryExistente = supabaseBrowserClient
           .from("calificaciones")
           .select("id")
-          .eq("matricula_id", matriculaIdNumerico);
-
-        if (temaIdEsUuid) {
-          queryExistente = queryExistente.eq("tema_id", temaIdTexto);
-        } else {
-          queryExistente = queryExistente
-            .in("tipo_evaluacion", ["actividad", "tema"])
-            .eq("concepto", conceptoTema);
-        }
+          .eq("matricula_id", matriculaIdNumerico)
+          .in("tipo_evaluacion", ["actividad", "tema"])
+          .eq("concepto", conceptoTema);
 
         const { data: existentes, error: errExistente } = await queryExistente
           .order("fecha_evaluacion", { ascending: false })
