@@ -316,8 +316,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       const segments = parsed.pathname.split("/").filter(Boolean);
       if (segments[0] === "embed") {
-        parsed.search = "";
-        parsed.hash = "";
+        parsed.searchParams.set("mode", "present");
         return parsed.toString();
       }
 
@@ -326,7 +325,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       parsed.pathname = `/embed/${documentId}`;
       parsed.search = "";
-      parsed.hash = "";
+      parsed.searchParams.set("mode", "present");
       return parsed.toString();
     } catch {
       return normalized;
