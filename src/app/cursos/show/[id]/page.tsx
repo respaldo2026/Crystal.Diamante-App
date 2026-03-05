@@ -2256,24 +2256,26 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                                   </Button>
                                                 ) : null}
                                                 {presentacionesTema.length > 1 ? (
-                                                  <Space size={4} wrap>
-                                                    {presentacionesTema.map((presentacion: any, indexPresentacion: number) => (
-                                                      <Button
-                                                        key={String(presentacion?.id || `${temaId}-gamma-${indexPresentacion}`)}
-                                                        size="small"
-                                                        type="link"
-                                                        style={{ paddingInline: 0 }}
-                                                        onClick={() =>
-                                                          abrirMaterialTema(
-                                                            presentacion,
-                                                            String(parseTemaFromTitulo(presentacion?.titulo || "").tituloLimpio || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material"),
-                                                            materialesTema
-                                                          )
-                                                        }
-                                                      >
-                                                        {String(parseTemaFromTitulo(presentacion?.titulo || "").tituloLimpio || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material")}
-                                                      </Button>
-                                                    ))}
+                                                  <Space size={6} wrap>
+                                                    {presentacionesTema.map((presentacion: any, indexPresentacion: number) => {
+                                                      const tituloBtn = String(parseTemaFromTitulo(presentacion?.titulo || "").tituloLimpio || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material");
+                                                      return (
+                                                        <React.Fragment key={String(presentacion?.id || `${temaId}-gamma-${indexPresentacion}`)}>
+                                                          {indexPresentacion > 0 && (
+                                                            <span style={{ color: "#d9d9d9", userSelect: "none" }}>|</span>
+                                                          )}
+                                                          <Button
+                                                            size="small"
+                                                            type="link"
+                                                            icon={<PlayCircleOutlined />}
+                                                            style={{ paddingInline: 0 }}
+                                                            onClick={() => abrirMaterialTema(presentacion, tituloBtn, materialesTema)}
+                                                          >
+                                                            {tituloBtn}
+                                                          </Button>
+                                                        </React.Fragment>
+                                                      );
+                                                    })}
                                                   </Space>
                                                 ) : null}
                                                 <Button
