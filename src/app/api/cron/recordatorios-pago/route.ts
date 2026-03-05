@@ -90,28 +90,34 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
 
     const { data: cuotas, error } = await supabase
       .from('pagos')
-      .select(
-        `
-        id,
-        monto,
-        fecha_vencimiento,
-        numero_cuota,
-        estudiante_id,
-        matricula_id,
-        perfiles!pagos_estudiante_id_fkey(nombre_completo, telefono, notif_whatsapp),
-        matriculas!matricula_id(cursos(nombre))
-      `
-      )
+      .select('id, monto, fecha_vencimiento, numero_cuota, estudiante_id, matricula_id')
       .eq('estado', 'pendiente')
       .gte('fecha_vencimiento', hoy)
       .lte('fecha_vencimiento', en3Dias);
 
     if (error) {
-      console.error('[Recordatorio] Error en query:', error);
+      console.error('[Recordatorio] Error en query pagos:', error);
       throw error;
     }
 
-    console.log(`[Recordatorio] Encontradas ${cuotas?.length || 0} cuotas pendientes`);
+    if (!cuotas || cuotas.length === 0) {
+      console.log('[Recordatorio] No hay cuotas próximas a vencer');
+      return NextResponse.json({ success: true, mensaje: '0 recordatorios enviados, 0 fallidos, 0 omitidos', timestamp: new Date().toISOString() });
+    }
+
+    // Consultas separadas para evitar ambigüedad de FK en PostgREST
+    const estudianteIds = [...new Set(cuotas.map((c: any) => c.estudiante_id).filter(Boolean))];
+    const matriculaIds = [...new Set(cuotas.map((c: any) => c.matricula_id).filter(Boolean))];
+
+    const [{ data: perfilesData }, { data: matriculasData }] = await Promise.all([
+      supabase.from('perfiles').select('id, nombre_completo, telefono, notif_whatsapp').in('id', estudianteIds),
+      supabase.from('matriculas').select('id, cursos(nombre)').in('id', matriculaIds),
+    ]);
+
+    const perfilesMap: Record<string, any> = Object.fromEntries((perfilesData || []).map((p: any) => [p.id, p]));
+    const matriculasMap: Record<string, any> = Object.fromEntries((matriculasData || []).map((m: any) => [m.id, m]));
+
+    console.log(`[Recordatorio] Encontradas ${cuotas.length} cuotas pendientes`);
 
     let enviados = 0;
     let fallidos = 0;
@@ -119,8 +125,8 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
     const telefonosProcesados = new Set<string>();
 
     for (const cuota of cuotas || []) {
-      const perfil = cuota.perfiles as any;
-      const matricula = cuota.matriculas as any;
+      const perfil = perfilesMap[cuota.estudiante_id];
+      const matricula = matriculasMap[cuota.matricula_id];
 
       if (enviados >= MAX_SENDS_PER_RUN) {
         console.log(`[Recordatorio] Límite por corrida alcanzado (${MAX_SENDS_PER_RUN})`);
