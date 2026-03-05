@@ -640,14 +640,18 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             .eq("concepto", conceptoTema);
         }
 
-        const { data: existente, error: errExistente } = await queryExistente.maybeSingle();
+        const { data: existentes, error: errExistente } = await queryExistente
+          .order("fecha_evaluacion", { ascending: false })
+          .limit(1);
 
         if (errExistente) {
           message.error("Error validando nota de tema: " + errExistente.message);
           return;
         }
 
-        if (existente?.id) {
+        const existenteId = Array.isArray(existentes) && existentes.length > 0 ? existentes[0]?.id : null;
+
+        if (existenteId) {
           const { error: errUpdate } = await supabaseBrowserClient
             .from("calificaciones")
             .update({
@@ -657,7 +661,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               tipo_evaluacion: "actividad",
               fecha_evaluacion: dayjs().format("YYYY-MM-DD"),
             })
-            .eq("id", existente.id);
+            .eq("id", existenteId);
 
           if (errUpdate) {
             message.error("Error actualizando nota de tema: " + errUpdate.message);
@@ -1130,6 +1134,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     setLoading(true);
     try {
       let matriculaIdsCurso: number[] = [];
+      let califDataCurso: any[] = [];
       const cursoIdNumerico = parseInt(id);
 
       // Curso
@@ -1261,24 +1266,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         if (matriculaIds.length > 0) {
           const { data: califData } = await supabaseBrowserClient
             .from("calificaciones")
-            .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
+            .select("matricula_id, tema_id, concepto, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
             .in("matricula_id", matriculaIds)
             .in("tipo_evaluacion", ["actividad", "tema"])
             .order("fecha_evaluacion", { ascending: false });
-
-          const mapa: Record<string, Record<string, number | null>> = {};
-          (califData || []).forEach((c: any) => {
-            const tipo = String(c?.tipo_evaluacion || "").toLowerCase();
-            if (tipo && tipo !== "actividad" && tipo !== "tema") return;
-            const temaKey = String(c.tema_id);
-            const matKey = String(c.matricula_id);
-            const valor = c.calificacion ?? c.nota ?? null;
-            if (!temaKey || temaKey === "undefined" || temaKey === "null") return;
-            if (!mapa[temaKey]) mapa[temaKey] = {};
-            if (typeof mapa[temaKey][matKey] === "number") return;
-            mapa[temaKey][matKey] = valor;
-          });
-          setCalificacionesTema(mapa);
+          califDataCurso = califData || [];
         }
       }
 
@@ -1291,6 +1283,34 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           obtenerMaterialesPorProgramas(programaIds),
           obtenerMaterialesClasePorProgramas(programaIds),
         ]);
+
+        const temasPorNombreLocal = new Map<string, string>();
+        (temasData || []).forEach((ciclo: any) => {
+          const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+          temasCiclo.forEach((tema: any) => {
+            const nombre = tema?.nombre_curso || tema?.titulo || "";
+            const key = normalizarTema(nombre);
+            if (key) temasPorNombreLocal.set(key, String(tema.id));
+          });
+        });
+
+        const mapa: Record<string, Record<string, number | null>> = {};
+        (califDataCurso || []).forEach((c: any) => {
+          const tipo = String(c?.tipo_evaluacion || "").toLowerCase();
+          if (tipo && tipo !== "actividad" && tipo !== "tema") return;
+          const temaIdDirecto = String(c?.tema_id || "").trim();
+          const concepto = String(c?.concepto || "").trim();
+          const nombreDesdeConcepto = concepto.replace(/^actividad\s*:\s*/i, "").trim();
+          const temaIdPorNombre = temasPorNombreLocal.get(normalizarTema(nombreDesdeConcepto));
+          const temaKey = temaIdDirecto || String(temaIdPorNombre || "").trim();
+          const matKey = String(c.matricula_id);
+          const valor = c.calificacion ?? c.nota ?? null;
+          if (!temaKey || temaKey === "undefined" || temaKey === "null") return;
+          if (!mapa[temaKey]) mapa[temaKey] = {};
+          if (typeof mapa[temaKey][matKey] === "number") return;
+          mapa[temaKey][matKey] = valor;
+        });
+        setCalificacionesTema(mapa);
 
         setTemas(temasData || []);
         setMateriales(materialesData || []);
@@ -1318,6 +1338,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           setResultadosQuiz([]);
         }
       } else {
+        setCalificacionesTema({});
         setTemas([]);
         setMateriales([]);
         setMaterialesClase([]);
@@ -1965,9 +1986,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 style={{ fontWeight: 600 }}
               >
                 Llamar Lista
-              </Button>
-              <Button icon={<FormOutlined />} onClick={() => setActiveTab("5")} style={{ fontWeight: 600 }}>
-                Calificar Tareas
               </Button>
               {isAdminView && (
                 <>
