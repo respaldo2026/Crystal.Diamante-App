@@ -1732,12 +1732,12 @@ export default function PortalEstudiante() {
         open={quizResultadoVisible}
         onCancel={() => setQuizResultadoVisible(false)}
         footer={null}
-        width={quizResultado?.aprobado ? (isMobile ? "96vw" : 620) : (isMobile ? "94vw" : 560)}
+        width={quizResultado?.aprobado ? (isMobile ? "96vw" : 480) : (isMobile ? "94vw" : 560)}
         centered
         title={null}
         closable
         styles={{
-          body: { padding: 0 },
+          body: { padding: 0, maxHeight: "92vh", overflowY: "auto" },
           content: quizResultado?.aprobado
             ? { background: "linear-gradient(160deg, #1a0533 0%, #2d0a5c 40%, #0d2a6e 100%)", borderRadius: 16, overflow: "hidden" }
             : { borderRadius: 16, overflow: "hidden" },
