@@ -97,8 +97,9 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
         fecha_vencimiento,
         numero_cuota,
         estudiante_id,
-        perfiles(nombre_completo, telefono, notif_whatsapp),
-        matriculas(cursos(nombre))
+        matricula_id,
+        perfiles!pagos_estudiante_id_fkey(nombre_completo, telefono, notif_whatsapp),
+        matriculas!matricula_id(cursos(nombre))
       `
       )
       .eq('estado', 'pendiente')
