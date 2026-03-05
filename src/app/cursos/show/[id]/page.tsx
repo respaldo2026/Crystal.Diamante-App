@@ -201,6 +201,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     pdfSrc: string;
   }>({ open: false, title: "", src: "", pdfSrc: "" });
   const iframeMaterialContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const [iframeFullscreen, setIframeFullscreen] = useState(false);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalSesionVisible, setModalSesionVisible] = useState(false);
@@ -578,6 +579,30 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       message.error("No se pudo abrir en pantalla completa. Verifica permisos del navegador.");
     }
   };
+
+  const cerrarModalIframeMaterial = async () => {
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // noop
+      }
+    }
+
+    setIframeMaterialPreview({ open: false, title: "", src: "", pdfSrc: "" });
+  };
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const container = iframeMaterialContainerRef.current;
+      setIframeFullscreen(Boolean(container && document.fullscreenElement === container));
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, []);
 
   const guardarNota = useCallback(
     async (matriculaId: string | number, nota: number | null, estado: string) => {
@@ -3029,7 +3054,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       <Modal
         title={iframeMaterialPreview.title || "Presentación"}
         open={iframeMaterialPreview.open}
-        onCancel={() => setIframeMaterialPreview({ open: false, title: "", src: "", pdfSrc: "" })}
+        onCancel={cerrarModalIframeMaterial}
         footer={
           <Space>
             {iframeMaterialPreview.pdfSrc ? (
@@ -3040,7 +3065,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 Pantalla completa
               </Button>
             ) : null}
-            <Button onClick={() => setIframeMaterialPreview({ open: false, title: "", src: "", pdfSrc: "" })}>Cerrar</Button>
+            <Button onClick={cerrarModalIframeMaterial}>Cerrar</Button>
           </Space>
         }
         width={isMobile ? "96%" : 1200}
@@ -3050,7 +3075,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           <iframe
             src={iframeMaterialPreview.src}
             title={iframeMaterialPreview.title || "Presentación"}
-            style={{ width: "100%", height: isMobile ? "65vh" : "75vh", border: 0 }}
+            style={{ width: "100%", height: iframeFullscreen ? "100vh" : isMobile ? "65vh" : "75vh", border: 0 }}
             allow="fullscreen; clipboard-read; clipboard-write"
             allowFullScreen
             loading="lazy"
