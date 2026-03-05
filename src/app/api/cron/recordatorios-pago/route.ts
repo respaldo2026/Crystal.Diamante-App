@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 import { WhatsAppService } from '@/services/whatsapp-service';
 
 export const runtime = 'nodejs';
@@ -64,15 +63,6 @@ _Academia Crystal_`;
   }
 }
 
-type CookieOptions = {
-  path?: string;
-  maxAge?: number;
-  expires?: Date;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: 'lax' | 'strict' | 'none';
-};
-
 export async function POST(request: NextRequest) {
   // Verificar x-api-key para evitar ejecuciones no autorizadas
   const apiKey = request.headers.get('x-api-key');
@@ -85,22 +75,14 @@ export async function POST(request: NextRequest) {
 
 async function runRecordatoriosJob(): Promise<NextResponse> {
   try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get: (name: string) => cookieStore.get(name)?.value,
-          set: (_name: string, _value: string, _options?: CookieOptions) => {
-            // No-op en cron: no se requieren cookies de sesión
-          },
-          remove: (_name: string, _options?: CookieOptions) => {
-            // No-op en cron: no se requieren cookies de sesión
-          },
-        },
-      }
-    );
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Faltan variables de Supabase para ejecutar recordatorios');
+    }
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     // Obtener cuotas pendientes que vencen en los próximos 3 días
     const hoy = new Date().toISOString().split('T')[0];
