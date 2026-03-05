@@ -1083,7 +1083,7 @@ export default function PortalEstudiante() {
                     )
                       .map((recurso: any, index: number) => ({
                         id: String(recurso?.id || `gamma-${index}`),
-                        titulo: String(recurso?.titulo || recurso?.nombre_archivo || getMaterialCanonicalTitle(recurso, tema?.nombre_curso) || tema?.nombre_curso || "Material"),
+                        titulo: getMaterialCanonicalTitle(recurso, tema?.nombre_curso) || tema?.nombre_curso || "Material",
                         material: recurso,
                       }));
                     const insumosTema = obtenerInsumosTema(tema, cicloId);

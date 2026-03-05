@@ -2266,12 +2266,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                                         onClick={() =>
                                                           abrirMaterialTema(
                                                             presentacion,
-                                                            String(presentacion?.titulo || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material"),
+                                                            String(parseTemaFromTitulo(presentacion?.titulo || "").tituloLimpio || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material"),
                                                             materialesTema
                                                           )
                                                         }
                                                       >
-                                                        {String(presentacion?.titulo || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material")}
+                                                        {String(parseTemaFromTitulo(presentacion?.titulo || "").tituloLimpio || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material")}
                                                       </Button>
                                                     ))}
                                                   </Space>
