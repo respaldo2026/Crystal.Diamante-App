@@ -92,7 +92,7 @@ export const TemaMaterialActions = ({
                 style={{ paddingInline: 0 }}
                 onClick={() => onOpenMaterialAction(presentacion.material, presentacion.titulo, temaId)}
               >
-                {String(presentacion?.material?.titulo || presentacion.titulo || presentacion?.material?.nombre_archivo || temaNombre || "Material")}
+                {String(presentacion.titulo || presentacion?.material?.nombre_archivo || temaNombre || "Material")}
               </Button>
             ))}
           </Space>
