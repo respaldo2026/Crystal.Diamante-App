@@ -3058,7 +3058,14 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         footer={
           <Space>
             {iframeMaterialPreview.pdfSrc ? (
-              <Button onClick={() => window.open(iframeMaterialPreview.pdfSrc, "_blank", "noopener,noreferrer")}>Ver PDF respaldo</Button>
+              <Button
+                type="text"
+                size="small"
+                icon={<FileTextOutlined />}
+                title="Abrir PDF respaldo"
+                aria-label="Abrir PDF respaldo"
+                onClick={() => window.open(iframeMaterialPreview.pdfSrc, "_blank", "noopener,noreferrer")}
+              />
             ) : null}
             {!isAdminView ? (
               <Button icon={<FullscreenOutlined />} onClick={abrirIframeEnPantallaCompleta}>
