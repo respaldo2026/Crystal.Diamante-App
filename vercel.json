@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/liquidacion-profesores",
       "schedule": "5 13 * * *"
+    },
+    {
+      "path": "/api/cron/recordatorios-pago",
+      "schedule": "0 13 * * *"
     }
   ]
 }

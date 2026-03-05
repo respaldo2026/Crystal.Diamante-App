@@ -212,3 +212,16 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * GET /api/cron/recordatorios-pago
+ * Invocado automáticamente por Vercel Cron con header Authorization: Bearer CRON_SECRET
+ */
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  // Reutiliza la misma lógica del POST delegando internamente
+  return POST(request);
+}
