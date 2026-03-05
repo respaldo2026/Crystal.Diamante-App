@@ -2241,8 +2241,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                             const quizTemaDisponible = (quizzesClase || []).find(
                                               (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaId)
                                             );
-                                            const promedioQuiz = promedioQuizPorTema.get(String(temaId));
-                                            const promedioActividad = promedioActividadPorTema.get(String(temaId));
                                             return (
                                               <>
                                                 {mostrarEnlacePrincipal ? (
@@ -2298,12 +2296,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                                 >
                                                   Quiz
                                                 </Button>
-                                                <Tag color={promedioQuiz == null ? "default" : promedioQuiz >= 4 ? "green" : promedioQuiz >= 3 ? "gold" : "red"}>
-                                                  {`Calificación quiz: ${promedioQuiz == null ? "-" : `${promedioQuiz}/5`}`}
-                                                </Tag>
-                                                <Tag color={getActividadColor(promedioActividad)}>
-                                                  {`Calificación actividad: ${typeof promedioActividad === "number" ? `${promedioActividad.toFixed(1)}/5` : "-"}`}
-                                                </Tag>
                                                 {!quizTema && quizTemaDisponible ? (
                                                   <Tag color="gold">Quiz no habilitado</Tag>
                                                 ) : null}
