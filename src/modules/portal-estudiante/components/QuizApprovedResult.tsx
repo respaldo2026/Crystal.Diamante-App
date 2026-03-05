@@ -124,11 +124,6 @@ export const QuizApprovedResult = ({
         </div>
       </div>
 
-      {/* ── Indicador de formato ── */}
-      <div style={{ textAlign: "center", margin: "8px 0 2px", fontSize: 10.5, color: "rgba(255,255,255,0.30)", letterSpacing: 0.3 }}>
-        📐 Formato 9:16 · ideal para WhatsApp Estado e Instagram Stories
-      </div>
-
       {/* ── Botones compartir ── */}
       <div style={{ padding: "10px 16px 6px" }}>
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", marginBottom: 8, textAlign: "center", textTransform: "uppercase", letterSpacing: 1.2 }}>
