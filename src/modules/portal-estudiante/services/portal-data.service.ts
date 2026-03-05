@@ -82,41 +82,49 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
       return { ok: false, code: "NOT_AUTHENTICATED", error: authError };
     }
 
-    const { data: perfil, error: errPerfil } = await supabaseBrowserClient
-      .from("perfiles")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle();
+    const [perfilRes, configRes, matriculasRes] = await Promise.all([
+      supabaseBrowserClient
+        .from("perfiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabaseBrowserClient
+        .from("configuracion")
+        .select("*")
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseBrowserClient
+        .from("matriculas")
+        .select(`
+            *,
+            cursos (
+              *,
+              programas (*)
+            )
+          `)
+        .eq("estudiante_id", user.id)
+        .neq("estado", "cancelado"),
+    ]);
+
+    const perfil = perfilRes.data;
+    const errPerfil = perfilRes.error;
+    const config = configRes.data;
 
     if (errPerfil || !perfil) {
       return { ok: false, code: "PROFILE_NOT_FOUND", error: errPerfil };
     }
 
-    const { data: config } = await supabaseBrowserClient
-      .from("configuracion")
-      .select("*")
-      .order("updated_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
-
     const whatsappAgente = normalizarTelefonoWhatsapp((config as any)?.whatsapp_agente || (config as any)?.whatsapp || null);
     const whatsappAdmisiones = normalizarTelefonoWhatsapp((config as any)?.whatsapp_admisiones || (config as any)?.telefono || (config as any)?.whatsapp || null);
     const logoAcademia = (config as any)?.logo_url || null;
 
-    const { data: dataMatriculas } = await supabaseBrowserClient
-      .from("matriculas")
-      .select(`
-          *,
-          cursos (
-            *,
-            programas (*)
-          )
-        `)
-      .eq("estudiante_id", user.id)
-      .neq("estado", "cancelado");
+    if (matriculasRes.error) {
+      logger.error("Error cargando matrículas del estudiante:", matriculasRes.error);
+    }
 
-    const matriculas = dataMatriculas || [];
+    const matriculas = matriculasRes.data || [];
     const matriculaIds = matriculas.map((m: any) => m.id);
     const programaIds = matriculas.map((m: any) => m.cursos?.programa_id).filter(Boolean);
     const cursoIds = matriculas
@@ -152,13 +160,29 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
     let calificacionesActividad: any[] = [];
 
     if (matriculaIds.length > 0) {
-      const { data: dataAsistencias } = await supabaseBrowserClient
-        .from("asistencias")
-        .select("*, matriculas(id, curso_id, cursos(nombre))")
-        .in("matricula_id", matriculaIds)
-        .order("fecha", { ascending: false });
+      const [asistenciasRes, intentosQuizRes, calificacionesActividadRes] = await Promise.all([
+        supabaseBrowserClient
+          .from("asistencias")
+          .select("*, matriculas(id, curso_id, cursos(nombre))")
+          .in("matricula_id", matriculaIds)
+          .order("fecha", { ascending: false }),
+        supabaseBrowserClient
+          .from("quiz_intentos_clase")
+          .select("*")
+          .in("matricula_id", matriculaIds)
+          .order("enviado_at", { ascending: false }),
+        supabaseBrowserClient
+          .from("calificaciones")
+          .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
+          .in("matricula_id", matriculaIds)
+          .in("tipo_evaluacion", ["actividad", "tema"])
+          .order("fecha_evaluacion", { ascending: false }),
+      ]);
 
-      asistencias = dataAsistencias || [];
+      const dataAsistencias = asistenciasRes.data || [];
+      asistencias = dataAsistencias;
+      quizIntentos = intentosQuizRes.data || [];
+      calificacionesActividad = calificacionesActividadRes.data || [];
 
       if ((dataAsistencias || []).length > 0 && cursoIds.length > 0) {
         const fechas = (dataAsistencias || [])
@@ -203,23 +227,6 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
           };
         });
       }
-
-      const { data: intentosQuizData } = await supabaseBrowserClient
-        .from("quiz_intentos_clase")
-        .select("*")
-        .in("matricula_id", matriculaIds)
-        .order("enviado_at", { ascending: false });
-
-      quizIntentos = intentosQuizData || [];
-
-      const { data: calificacionesActividadData } = await supabaseBrowserClient
-        .from("calificaciones")
-        .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
-        .in("matricula_id", matriculaIds)
-        .in("tipo_evaluacion", ["actividad", "tema"])
-        .order("fecha_evaluacion", { ascending: false });
-
-      calificacionesActividad = calificacionesActividadData || [];
     }
 
     let pensum: any[] = [];

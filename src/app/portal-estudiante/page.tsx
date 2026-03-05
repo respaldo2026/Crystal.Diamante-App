@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { logger } from "@utils/logger";
 import {
   Card,
@@ -60,12 +61,7 @@ import { useQuizFlow } from "@/modules/portal-estudiante/hooks/useQuizFlow";
 import { useChecklistInsumos } from "@/modules/portal-estudiante/hooks/useChecklistInsumos";
 import { useCourseProgress } from "@/modules/portal-estudiante/hooks/useCourseProgress";
 import { useTemaMaterials } from "@/modules/portal-estudiante/hooks/useTemaMaterials";
-import { QuizApprovedResult } from "@/modules/portal-estudiante/components/QuizApprovedResult";
-import { QuizFailedResult } from "@/modules/portal-estudiante/components/QuizFailedResult";
 import { TemaMaterialActions } from "@/modules/portal-estudiante/components/TemaMaterialActions";
-import { QuizQuestionFlow } from "@/modules/portal-estudiante/components/QuizQuestionFlow";
-import { QuizFlowFooter } from "@/modules/portal-estudiante/components/QuizFlowFooter";
-import { IframeMaterialModal } from "@/modules/portal-estudiante/components/IframeMaterialModal";
 import {
   extractClassNumber,
   getActividadColor,
@@ -78,6 +74,31 @@ import {
   UMBRAL_APROBACION_QUIZ_NOTA,
   UMBRAL_APROBACION_QUIZ_PORCENTAJE,
 } from "@/modules/portal-estudiante/utils";
+
+const QuizApprovedResult = dynamic(
+  () => import("@/modules/portal-estudiante/components/QuizApprovedResult").then((m) => m.QuizApprovedResult),
+  { ssr: false },
+);
+
+const QuizFailedResult = dynamic(
+  () => import("@/modules/portal-estudiante/components/QuizFailedResult").then((m) => m.QuizFailedResult),
+  { ssr: false },
+);
+
+const QuizQuestionFlow = dynamic(
+  () => import("@/modules/portal-estudiante/components/QuizQuestionFlow").then((m) => m.QuizQuestionFlow),
+  { ssr: false },
+);
+
+const QuizFlowFooter = dynamic(
+  () => import("@/modules/portal-estudiante/components/QuizFlowFooter").then((m) => m.QuizFlowFooter),
+  { ssr: false },
+);
+
+const IframeMaterialModal = dynamic(
+  () => import("@/modules/portal-estudiante/components/IframeMaterialModal").then((m) => m.IframeMaterialModal),
+  { ssr: false },
+);
 
 dayjs.locale("es");
 
@@ -1896,6 +1917,40 @@ export default function PortalEstudiante() {
           background: #f7f7f8;
           min-height: 100vh;
         }
+        .portal-estudiante,
+        .portal-estudiante * {
+          box-sizing: border-box;
+        }
+        .portal-estudiante .ant-row > .ant-col,
+        .portal-estudiante .ant-space,
+        .portal-estudiante .ant-space-item,
+        .portal-estudiante .ant-collapse-header,
+        .portal-estudiante .ant-collapse-header-text,
+        .portal-estudiante .ant-list-item-meta,
+        .portal-estudiante .ant-list-item-meta-content {
+          min-width: 0;
+        }
+        .portal-estudiante .ant-typography,
+        .portal-estudiante .ant-alert-message,
+        .portal-estudiante .ant-alert-description,
+        .portal-estudiante .ant-collapse-header-text,
+        .portal-estudiante .ant-table-cell {
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+        .portal-estudiante .ant-btn {
+          max-width: 100%;
+        }
+        .portal-estudiante .ant-btn > span {
+          white-space: normal;
+          overflow-wrap: anywhere;
+          text-align: center;
+        }
+        .portal-estudiante .ant-statistic-content,
+        .portal-estudiante .ant-statistic-title {
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
         @media (min-width: 576px) {
           .portal-section-wrap {
             padding: 0 4px 24px;
@@ -2107,6 +2162,11 @@ export default function PortalEstudiante() {
           }
           .portal-estudiante .ant-card-body {
             padding: 10px !important;
+          }
+          .portal-estudiante .ant-btn {
+            height: auto;
+            min-height: 34px;
+            padding: 6px 10px;
           }
           .portal-estudiante .course-card .ant-card-body {
             display: flex;

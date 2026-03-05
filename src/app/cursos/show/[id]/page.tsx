@@ -25,6 +25,7 @@ import {
   ClockCircleOutlined,
   CheckOutlined,
   FormOutlined,
+  FullscreenOutlined,
 } from "@ant-design/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -199,6 +200,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     src: string;
     pdfSrc: string;
   }>({ open: false, title: "", src: "", pdfSrc: "" });
+  const iframeMaterialContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const [iframeFullscreen, setIframeFullscreen] = useState(false);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalSesionVisible, setModalSesionVisible] = useState(false);
@@ -313,8 +316,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       const segments = parsed.pathname.split("/").filter(Boolean);
       if (segments[0] === "embed") {
-        parsed.search = "";
-        parsed.hash = "";
+        parsed.searchParams.set("mode", "present");
         return parsed.toString();
       }
 
@@ -323,7 +325,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       parsed.pathname = `/embed/${documentId}`;
       parsed.search = "";
-      parsed.hash = "";
+      parsed.searchParams.set("mode", "present");
       return parsed.toString();
     } catch {
       return normalized;
@@ -562,6 +564,45 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  const abrirIframeEnPantallaCompleta = async () => {
+    const container = iframeMaterialContainerRef.current;
+    if (!container) return;
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+      await container.requestFullscreen();
+    } catch (error) {
+      console.error(error);
+      message.error("No se pudo abrir en pantalla completa. Verifica permisos del navegador.");
+    }
+  };
+
+  const cerrarModalIframeMaterial = async () => {
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // noop
+      }
+    }
+
+    setIframeMaterialPreview({ open: false, title: "", src: "", pdfSrc: "" });
+  };
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const container = iframeMaterialContainerRef.current;
+      setIframeFullscreen(Boolean(container && document.fullscreenElement === container));
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, []);
+
   const guardarNota = useCallback(
     async (matriculaId: string | number, nota: number | null, estado: string) => {
       if (nota == null || Number.isNaN(nota)) {
@@ -610,8 +651,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       const temaActual = clasesPensum.find((t) => String(t.id) === String(temaId));
       const conceptoTema = `Actividad: ${temaActual?.nombre_curso || temaActual?.titulo || String(temaId)}`;
-      const temaIdTexto = String(temaId || "").trim();
-      const temaIdEsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(temaIdTexto);
       const key = `${temaId}-${matriculaId}`;
       setSavingCalificacionId(key);
       try {
@@ -623,31 +662,26 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           tipo_evaluacion: "actividad",
           fecha_evaluacion: dayjs().format("YYYY-MM-DD"),
         };
-        if (temaIdEsUuid) {
-          payload.tema_id = temaIdTexto;
-        }
 
         let queryExistente = supabaseBrowserClient
           .from("calificaciones")
           .select("id")
-          .eq("matricula_id", matriculaIdNumerico);
+          .eq("matricula_id", matriculaIdNumerico)
+          .in("tipo_evaluacion", ["actividad", "tema"])
+          .eq("concepto", conceptoTema);
 
-        if (temaIdEsUuid) {
-          queryExistente = queryExistente.eq("tema_id", temaIdTexto);
-        } else {
-          queryExistente = queryExistente
-            .in("tipo_evaluacion", ["actividad", "tema"])
-            .eq("concepto", conceptoTema);
-        }
-
-        const { data: existente, error: errExistente } = await queryExistente.maybeSingle();
+        const { data: existentes, error: errExistente } = await queryExistente
+          .order("fecha_evaluacion", { ascending: false })
+          .limit(1);
 
         if (errExistente) {
           message.error("Error validando nota de tema: " + errExistente.message);
           return;
         }
 
-        if (existente?.id) {
+        const existenteId = Array.isArray(existentes) && existentes.length > 0 ? existentes[0]?.id : null;
+
+        if (existenteId) {
           const { error: errUpdate } = await supabaseBrowserClient
             .from("calificaciones")
             .update({
@@ -657,7 +691,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               tipo_evaluacion: "actividad",
               fecha_evaluacion: dayjs().format("YYYY-MM-DD"),
             })
-            .eq("id", existente.id);
+            .eq("id", existenteId);
 
           if (errUpdate) {
             message.error("Error actualizando nota de tema: " + errUpdate.message);
@@ -1130,6 +1164,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     setLoading(true);
     try {
       let matriculaIdsCurso: number[] = [];
+      let califDataCurso: any[] = [];
       const cursoIdNumerico = parseInt(id);
 
       // Curso
@@ -1182,50 +1217,71 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         .eq("curso_id", parseInt(id));
 
       if (matriculasData) {
-        const estudiantesConAsistencia = await Promise.all(
-          matriculasData.map(async (matricula: any) => {
-            // Obtener datos del estudiante
-            const { data: estudiante } = await supabaseBrowserClient
-              .from("perfiles")
-              .select("nombre_completo, email, identificacion")
-              .eq("id", matricula.estudiante_id)
-              .single();
+        const matriculaIdsTemp = matriculasData.map((m: any) => Number(m.id)).filter((value: number) => Number.isFinite(value));
+        const estudianteIds = matriculasData
+          .map((m: any) => String(m.estudiante_id || ""))
+          .filter((value: string) => Boolean(value));
 
-            // Obtener asistencia
-            const { data: asistencias } = await supabaseBrowserClient
-              .from("asistencias")
-              .select("estado, fecha, observaciones")
-              .eq("matricula_id", matricula.id);
+        const [perfilesRes, asistenciasRes] = await Promise.all([
+          estudianteIds.length > 0
+            ? supabaseBrowserClient
+                .from("perfiles")
+                .select("id, nombre_completo, email, identificacion")
+                .in("id", estudianteIds)
+            : Promise.resolve({ data: [], error: null } as any),
+          matriculaIdsTemp.length > 0
+            ? supabaseBrowserClient
+                .from("asistencias")
+                .select("matricula_id, estado, fecha, observaciones")
+                .in("matricula_id", matriculaIdsTemp)
+            : Promise.resolve({ data: [], error: null } as any),
+        ]);
 
-            const totalClases = asistencias?.length || 0;
-            const presentes = asistencias?.filter(a => a.estado === "presente").length || 0;
-            const porcentaje = totalClases > 0 ? (presentes / totalClases) * 100 : 0;
-            const faltasDetalle = (asistencias || [])
-              .filter((a: any) => esEstadoFalta(a?.estado))
-              .map((a: any) => {
-                const fecha = a?.fecha ? String(a.fecha) : null;
-                const temaSesion = fecha ? String(temaPorFecha.get(fecha) || "").trim() : "";
-                const tema = temaSesion || String(a?.observaciones || "").trim() || "Clase sin tema";
-                return { fecha, tema };
-              });
+        const perfilesMap = new Map<string, any>();
+        (perfilesRes.data || []).forEach((perfil: any) => {
+          perfilesMap.set(String(perfil.id), perfil);
+        });
 
-            return {
-              id: matricula.id,
-              nombre_completo: estudiante?.nombre_completo || "Sin nombre",
-              email: estudiante?.email || "-",
-              identificacion: estudiante?.identificacion || "-",
-              estado: matricula.estado,
-              nota_final: matricula.nota_final,
-              asistencia_porcentaje: Math.round(porcentaje),
-              totalClases,
-              presentes,
-              totalFaltas: faltasDetalle.length,
-              faltasDetalle,
-            };
-          })
-        );
+        const asistenciasPorMatricula = new Map<number, any[]>();
+        (asistenciasRes.data || []).forEach((asistencia: any) => {
+          const matriculaId = Number(asistencia?.matricula_id);
+          if (!Number.isFinite(matriculaId)) return;
+          const current = asistenciasPorMatricula.get(matriculaId) || [];
+          current.push(asistencia);
+          asistenciasPorMatricula.set(matriculaId, current);
+        });
+
+        const estudiantesConAsistencia = matriculasData.map((matricula: any) => {
+          const estudiante = perfilesMap.get(String(matricula.estudiante_id || ""));
+          const asistencias = asistenciasPorMatricula.get(Number(matricula.id)) || [];
+
+          const totalClases = asistencias.length;
+          const presentes = asistencias.filter((a: any) => a.estado === "presente").length;
+          const porcentaje = totalClases > 0 ? (presentes / totalClases) * 100 : 0;
+          const faltasDetalle = asistencias
+            .filter((a: any) => esEstadoFalta(a?.estado))
+            .map((a: any) => {
+              const fecha = a?.fecha ? String(a.fecha) : null;
+              const temaSesion = fecha ? String(temaPorFecha.get(fecha) || "").trim() : "";
+              const tema = temaSesion || String(a?.observaciones || "").trim() || "Clase sin tema";
+              return { fecha, tema };
+            });
+
+          return {
+            id: matricula.id,
+            nombre_completo: estudiante?.nombre_completo || "Sin nombre",
+            email: estudiante?.email || "-",
+            identificacion: estudiante?.identificacion || "-",
+            estado: matricula.estado,
+            nota_final: matricula.nota_final,
+            asistencia_porcentaje: Math.round(porcentaje),
+            totalClases,
+            presentes,
+            totalFaltas: faltasDetalle.length,
+            faltasDetalle,
+          };
+        });
         // Cargar pagos pendientes vencidos para detectar mora
-        const matriculaIdsTemp = estudiantesConAsistencia.map((e) => e.id);
         let moraSet = new Set<number>();
         if (matriculaIdsTemp.length > 0) {
           const hoy: string = new Date().toISOString().slice(0, 10);
@@ -1261,24 +1317,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         if (matriculaIds.length > 0) {
           const { data: califData } = await supabaseBrowserClient
             .from("calificaciones")
-            .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
+            .select("matricula_id, tema_id, concepto, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
             .in("matricula_id", matriculaIds)
             .in("tipo_evaluacion", ["actividad", "tema"])
             .order("fecha_evaluacion", { ascending: false });
-
-          const mapa: Record<string, Record<string, number | null>> = {};
-          (califData || []).forEach((c: any) => {
-            const tipo = String(c?.tipo_evaluacion || "").toLowerCase();
-            if (tipo && tipo !== "actividad" && tipo !== "tema") return;
-            const temaKey = String(c.tema_id);
-            const matKey = String(c.matricula_id);
-            const valor = c.calificacion ?? c.nota ?? null;
-            if (!temaKey || temaKey === "undefined" || temaKey === "null") return;
-            if (!mapa[temaKey]) mapa[temaKey] = {};
-            if (typeof mapa[temaKey][matKey] === "number") return;
-            mapa[temaKey][matKey] = valor;
-          });
-          setCalificacionesTema(mapa);
+          califDataCurso = califData || [];
         }
       }
 
@@ -1291,6 +1334,34 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           obtenerMaterialesPorProgramas(programaIds),
           obtenerMaterialesClasePorProgramas(programaIds),
         ]);
+
+        const temasPorNombreLocal = new Map<string, string>();
+        (temasData || []).forEach((ciclo: any) => {
+          const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+          temasCiclo.forEach((tema: any) => {
+            const nombre = tema?.nombre_curso || tema?.titulo || "";
+            const key = normalizarTema(nombre);
+            if (key) temasPorNombreLocal.set(key, String(tema.id));
+          });
+        });
+
+        const mapa: Record<string, Record<string, number | null>> = {};
+        (califDataCurso || []).forEach((c: any) => {
+          const tipo = String(c?.tipo_evaluacion || "").toLowerCase();
+          if (tipo && tipo !== "actividad" && tipo !== "tema") return;
+          const temaIdDirecto = String(c?.tema_id || "").trim();
+          const concepto = String(c?.concepto || "").trim();
+          const nombreDesdeConcepto = concepto.replace(/^actividad\s*:\s*/i, "").trim();
+          const temaIdPorNombre = temasPorNombreLocal.get(normalizarTema(nombreDesdeConcepto));
+          const temaKey = temaIdDirecto || String(temaIdPorNombre || "").trim();
+          const matKey = String(c.matricula_id);
+          const valor = c.calificacion ?? c.nota ?? null;
+          if (!temaKey || temaKey === "undefined" || temaKey === "null") return;
+          if (!mapa[temaKey]) mapa[temaKey] = {};
+          if (typeof mapa[temaKey][matKey] === "number") return;
+          mapa[temaKey][matKey] = valor;
+        });
+        setCalificacionesTema(mapa);
 
         setTemas(temasData || []);
         setMateriales(materialesData || []);
@@ -1318,6 +1389,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           setResultadosQuiz([]);
         }
       } else {
+        setCalificacionesTema({});
         setTemas([]);
         setMateriales([]);
         setMaterialesClase([]);
@@ -1966,9 +2038,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               >
                 Llamar Lista
               </Button>
-              <Button icon={<FormOutlined />} onClick={() => setActiveTab("5")} style={{ fontWeight: 600 }}>
-                Calificar Tareas
-              </Button>
               {isAdminView && (
                 <>
                   <Button icon={<EditOutlined />} onClick={() => router.push(`/cursos/edit/${cursoId}`)}>
@@ -2234,8 +2303,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                             const quizTemaDisponible = (quizzesClase || []).find(
                                               (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaId)
                                             );
-                                            const promedioQuiz = promedioQuizPorTema.get(String(temaId));
-                                            const promedioActividad = promedioActividadPorTema.get(String(temaId));
                                             return (
                                               <>
                                                 {mostrarEnlacePrincipal ? (
@@ -2291,12 +2358,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                                 >
                                                   Quiz
                                                 </Button>
-                                                <Tag color={promedioQuiz == null ? "default" : promedioQuiz >= 4 ? "green" : promedioQuiz >= 3 ? "gold" : "red"}>
-                                                  {`Calificación quiz: ${promedioQuiz == null ? "-" : `${promedioQuiz}/5`}`}
-                                                </Tag>
-                                                <Tag color={getActividadColor(promedioActividad)}>
-                                                  {`Calificación actividad: ${typeof promedioActividad === "number" ? `${promedioActividad.toFixed(1)}/5` : "-"}`}
-                                                </Tag>
                                                 {!quizTema && quizTemaDisponible ? (
                                                   <Tag color="gold">Quiz no habilitado</Tag>
                                                 ) : null}
@@ -2507,12 +2568,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   bodyStyle={{ padding: 10 }}
                   headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
                 >
-                  <Space wrap size={8} style={{ marginBottom: 10 }}>
-                    <Tag color="error">{`Riesgo alto: ${resumenLibroRiesgo.alto}`}</Tag>
-                    <Tag color="warning">{`Riesgo medio: ${resumenLibroRiesgo.medio}`}</Tag>
-                    <Tag color="success">{`Riesgo bajo: ${resumenLibroRiesgo.bajo}`}</Tag>
-                    <Tag>{`Total: ${resumenLibroRiesgo.total}`}</Tag>
-                  </Space>
+                  <Text type="secondary" style={{ display: "block", marginBottom: 10 }}>
+                    {`Riesgo alto: ${resumenLibroRiesgo.alto} • Riesgo medio: ${resumenLibroRiesgo.medio} • Riesgo bajo: ${resumenLibroRiesgo.bajo} • Total: ${resumenLibroRiesgo.total}`}
+                  </Text>
 
                   <Table
                     size="small"
@@ -2655,9 +2713,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     <Row gutter={[12, 12]}>
                       <Col xs={24} md={12}>
                         <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                          <Tag color={pendientesQuiz.length > 0 ? "gold" : "green"}>
-                            {`Quiz pendiente (${pendientesQuiz.length})`}
-                          </Tag>
+                          <Text strong>{`Quiz pendiente: ${pendientesQuiz.length}`}</Text>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             {quizSeleccionado
                               ? `Clase: ${nombreTemaPorId.get(String(quizSeleccionado.pensum_curso_id || "")) || quizSeleccionado.titulo || "Quiz"}`
@@ -2678,9 +2734,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       </Col>
                       <Col xs={24} md={12}>
                         <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                          <Tag color={pendientesActividad.length > 0 ? "gold" : "green"}>
-                            {`Actividad pendiente (${pendientesActividad.length})`}
-                          </Tag>
+                          <Text strong>{`Actividad pendiente: ${pendientesActividad.length}`}</Text>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             {temaSeleccionado
                               ? `Clase: ${temaSeleccionado?.nombre_curso || temaSeleccionado?.titulo || "Clase"}`
@@ -2695,7 +2749,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                   renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
                                 />
                                 <Text type="secondary" style={{ fontSize: 12 }}>
-                                  Usa Calificar Tareas para registrar estas pendientes.
+                                  Usa Calificar clase para registrar estas pendientes.
                                 </Text>
                               </>
                             ) : (
@@ -2734,11 +2788,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                         />
                       </Space>
 
-                      <Space wrap size={8}>
-                        <Tag color="blue">{`Calificadas: ${resumenCalificacionTema.calificadas}/${estudiantes.length}`}</Tag>
-                        <Tag color={resumenCalificacionTema.pendientes > 0 ? "gold" : "green"}>{`Pendientes: ${resumenCalificacionTema.pendientes}`}</Tag>
-                        <Tag color={getActividadColor(resumenCalificacionTema.promedio)}>{`Promedio clase: ${resumenCalificacionTema.promedio.toFixed(1)}/5`}</Tag>
-                      </Space>
+                      <Text type="secondary">
+                        {`Calificadas: ${resumenCalificacionTema.calificadas}/${estudiantes.length} • Pendientes: ${resumenCalificacionTema.pendientes} • Promedio clase: ${resumenCalificacionTema.promedio.toFixed(1)}/5`}
+                      </Text>
 
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         Esta calificación de actividad queda visible también en el panel del estudiante.
@@ -3022,26 +3074,40 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       <Modal
         title={iframeMaterialPreview.title || "Presentación"}
         open={iframeMaterialPreview.open}
-        onCancel={() => setIframeMaterialPreview({ open: false, title: "", src: "", pdfSrc: "" })}
+        onCancel={cerrarModalIframeMaterial}
         footer={
           <Space>
             {iframeMaterialPreview.pdfSrc ? (
-              <Button onClick={() => window.open(iframeMaterialPreview.pdfSrc, "_blank", "noopener,noreferrer")}>Ver PDF respaldo</Button>
+              <Button
+                type="text"
+                size="small"
+                icon={<FileTextOutlined />}
+                title="Abrir PDF respaldo"
+                aria-label="Abrir PDF respaldo"
+                onClick={() => window.open(iframeMaterialPreview.pdfSrc, "_blank", "noopener,noreferrer")}
+              />
             ) : null}
-            <Button onClick={() => setIframeMaterialPreview({ open: false, title: "", src: "", pdfSrc: "" })}>Cerrar</Button>
+            {!isAdminView ? (
+              <Button icon={<FullscreenOutlined />} onClick={abrirIframeEnPantallaCompleta}>
+                Pantalla completa
+              </Button>
+            ) : null}
+            <Button onClick={cerrarModalIframeMaterial}>Cerrar</Button>
           </Space>
         }
         width={isMobile ? "96%" : 1200}
         destroyOnClose
       >
-        <iframe
-          src={iframeMaterialPreview.src}
-          title={iframeMaterialPreview.title || "Presentación"}
-          style={{ width: "100%", height: isMobile ? "65vh" : "75vh", border: 0 }}
-          allow="fullscreen; clipboard-read; clipboard-write"
-          allowFullScreen
-          loading="lazy"
-        />
+        <div ref={iframeMaterialContainerRef} style={{ width: "100%", background: "#000" }}>
+          <iframe
+            src={iframeMaterialPreview.src}
+            title={iframeMaterialPreview.title || "Presentación"}
+            style={{ width: "100%", height: iframeFullscreen ? "100vh" : isMobile ? "65vh" : "75vh", border: 0 }}
+            allow="fullscreen; clipboard-read; clipboard-write"
+            allowFullScreen
+            loading="lazy"
+          />
+        </div>
       </Modal>
 
       <Modal
