@@ -5,8 +5,11 @@ import { Edit, useForm } from "@refinedev/antd";
 import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, Button, Modal, Space, TimePicker, Typography, Tag } from "antd";
 import { DeleteOutlined, ArrowLeftOutlined, BookOutlined } from "@ant-design/icons";
 import { useRouter, useParams } from "next/navigation";
-import dayjs from "dayjs";
+import dayjs, { Dayjs } from "dayjs";
+import "dayjs/locale/es";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+
+dayjs.locale("es");
 
 export default function CursoEdit() {
     const { formProps, saveButtonProps } = useForm({
@@ -18,17 +21,49 @@ export default function CursoEdit() {
     const [modal, modalContextHolder] = Modal.useModal();
     const [estadoActual, setEstadoActual] = useState<string | undefined>(undefined);
     const [activosCount, setActivosCount] = useState<number>(0);
+    const [programas, setProgramas] = useState<any[]>([]);
+    const [clasesPrograma, setClasesPrograma] = useState<number | null>(null);
+    const [fechaInicio, setFechaInicio] = useState<Dayjs | null>(null);
+    const [diasSeleccionados, setDiasSeleccionados] = useState<string[]>([]);
     const rawCursoId = params?.id as string;
     const cursoId = rawCursoId ? Number(rawCursoId) : undefined;
+        useEffect(() => {
+            const cargarDatos = async () => {
+                const [programasRes, profesoresRes] = await Promise.all([
+                    supabaseBrowserClient.from("programas").select("id, nombre, total_clases").eq("activo", true).order("nombre"),
+                    supabaseBrowserClient.from("perfiles").select("id, nombre_completo").eq("rol", "profesor").order("nombre_completo"),
+                ]);
+                if (programasRes.data) setProgramas(programasRes.data);
+                if (profesoresRes.data) setProfesores(profesoresRes.data);
+            };
+            cargarDatos();
+        }, []);
+
+        // Recalcular fecha_fin cuando cambian fecha_inicio, días o programa
+        useEffect(() => {
+            if (!fechaInicio || !diasSeleccionados.length || !clasesPrograma) return;
+            const fechaCalculada = calcularFechaFin(fechaInicio, diasSeleccionados, clasesPrograma);
+            if (fechaCalculada) {
+                formProps.form?.setFieldValue("fecha_fin", fechaCalculada);
+            }
+        }, [fechaInicio, diasSeleccionados, clasesPrograma]);
+
         useEffect(() => {
             const cargarEstado = async () => {
                 if (!cursoId || Number.isNaN(cursoId)) return;
                 const { data } = await supabaseBrowserClient
                     .from("cursos")
-                    .select("estado")
+                    .select("estado, programa_id, dias_semana")
                     .eq("id", cursoId)
                     .single();
                 setEstadoActual(data?.estado);
+                // Inicializar días del grupo para el cálculo
+                if (data?.dias_semana) {
+                    const dias = typeof data.dias_semana === 'string'
+                        ? data.dias_semana.split(',').map((d: string) => d.trim())
+                        : data.dias_semana;
+                    setDiasSeleccionados(dias);
+                }
 
                 const { data: matriculas } = await supabaseBrowserClient
                     .from("matriculas")
@@ -129,35 +164,24 @@ export default function CursoEdit() {
         };
     
 
-    const [programas, setProgramas] = useState<any[]>([]);
     const [profesores, setProfesores] = useState<any[]>([]);
-    
-    useEffect(() => {
-        const cargarDatos = async () => {
-            // Cargar programas
-            const { data: dataProgramas, error: errorProgramas } = await supabaseBrowserClient
-                .from("programas")
-                .select("id, nombre")
-                .eq("activo", true)
-                .order("nombre");
-            
-            if (!errorProgramas && dataProgramas) {
-                setProgramas(dataProgramas);
-            }
 
-            // Cargar profesores
-            const { data: dataProfesores, error: errorProfesores } = await supabaseBrowserClient
-                .from("perfiles")
-                .select("id, nombre_completo, email")
-                .eq("rol", "profesor")
-                .order("nombre_completo");
-            
-            if (!errorProfesores && dataProfesores) {
-                setProfesores(dataProfesores);
+    const calcularFechaFin = (fechaInicioValue: Dayjs | null, dias: string[], totalClases?: number | null) => {
+        if (!fechaInicioValue || !dias.length || !totalClases || totalClases <= 0) return null;
+        const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        const diasValidos = dias.map((d) => normalize(d));
+        let sesionesPendientes = totalClases;
+        let cursor = fechaInicioValue;
+        while (sesionesPendientes > 0) {
+            const nombreDia = normalize(cursor.locale("es").format("dddd"));
+            if (diasValidos.includes(nombreDia)) {
+                sesionesPendientes -= 1;
+                if (sesionesPendientes === 0) break;
             }
-        };
-        cargarDatos();
-    }, []);
+            cursor = cursor.add(1, "day");
+        }
+        return cursor;
+    };
 
     const seSolapanHoras = (inicioA: string | null, finA: string | null, inicioB: string | null, finB: string | null) => {
         const startA = inicioA ? dayjs(inicioA, "HH:mm:ss") : null;
@@ -457,6 +481,10 @@ export default function CursoEdit() {
                                     label: p.nombre, 
                                     value: p.id 
                                 }))}
+                                onChange={(value) => {
+                                    const prog = programas.find((p: any) => p.id === value);
+                                    setClasesPrograma(prog?.total_clases ?? null);
+                                }}
                             />
                         </Form.Item>
                     </Col>
@@ -540,7 +568,11 @@ export default function CursoEdit() {
                                 value: value ? dayjs(value) : null,
                             })}
                          >
-                            <DatePicker style={{width: '100%'}} format="YYYY-MM-DD" />
+                            <DatePicker
+                                style={{width: '100%'}}
+                                format="YYYY-MM-DD"
+                                onChange={(value) => setFechaInicio(value)}
+                            />
                          </Form.Item>
                     </Col>
                     <Col span={8}>
@@ -571,6 +603,7 @@ export default function CursoEdit() {
                             <Select 
                                 mode="multiple"
                                 placeholder="Selecciona días..."
+                                onChange={(value) => setDiasSeleccionados(value)}
                                 options={[
                                     { label: 'Lunes', value: 'Lunes' },
                                     { label: 'Martes', value: 'Martes' },
