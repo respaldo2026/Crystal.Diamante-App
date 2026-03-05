@@ -1074,8 +1074,13 @@ export default function PortalEstudiante() {
                   renderItem={(tema: any, temaIndex: number) => {
                     const temaId = String(tema?.id || `tema-${temaIndex}`);
                     const recursosTema = obtenerRecursosTema(tema, cicloId);
-                    const presentacionesTema = recursosTema
-                      .filter((recurso: any) => isIframeMaterial(recurso))
+                    const presentacionesTema = deduplicarLista(
+                      recursosTema.filter((recurso: any) => isIframeMaterial(recurso)),
+                      (recurso: any) =>
+                        String(
+                          `${String(recurso?.pensum_id || "")}-${String(recurso?.pensum_curso_id || "")}-${extractIframeSrc(recurso?.url_archivo) || String(recurso?.id || recurso?.titulo || "")}`
+                        ).toLowerCase()
+                    )
                       .map((recurso: any, index: number) => ({
                         id: String(recurso?.id || `gamma-${index}`),
                         titulo: String(recurso?.titulo || recurso?.nombre_archivo || getMaterialCanonicalTitle(recurso, tema?.nombre_curso) || tema?.nombre_curso || "Material"),

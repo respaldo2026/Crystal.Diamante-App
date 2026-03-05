@@ -2203,7 +2203,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                             renderItem={(tema: any, temaIndex: number) => {
                               const temaId = String(tema?.id ?? `tema-${temaIndex}`);
                               const materialesTema = materialesDidacticosPorTema.get(temaId) ?? [];
-                              const presentacionesTema = materialesTema.filter((item: any) => isIframeMaterial(item));
+                              const presentacionesTema = dedupeByKey(
+                                materialesTema.filter((item: any) => isIframeMaterial(item)),
+                                (item: any) =>
+                                  String(
+                                    `${String(item?.pensum_id || "")}-${String(item?.pensum_curso_id || "")}-${extractIframeSrc(item?.url_archivo) || String(item?.id || item?.titulo || "")}`
+                                  ).toLowerCase()
+                              );
                               const mostrarEnlacePrincipal = presentacionesTema.length <= 1;
                               const recursoPrincipalTema = materialesTema.find((item: any) => isIframeMaterial(item)) || materialesTema[0] || null;
                               return (
