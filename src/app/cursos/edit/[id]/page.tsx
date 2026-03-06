@@ -53,16 +53,34 @@ export default function CursoEdit() {
                 if (!cursoId || Number.isNaN(cursoId)) return;
                 const { data } = await supabaseBrowserClient
                     .from("cursos")
-                    .select("estado, programa_id, dias_semana")
+                    .select("estado, programa_id, dias_semana, fecha_inicio")
                     .eq("id", cursoId)
                     .single();
                 setEstadoActual(data?.estado);
+
+                // Inicializar fecha_inicio para el cálculo
+                if (data?.fecha_inicio) {
+                    setFechaInicio(dayjs(data.fecha_inicio));
+                }
+
                 // Inicializar días del grupo para el cálculo
                 if (data?.dias_semana) {
                     const dias = typeof data.dias_semana === 'string'
                         ? data.dias_semana.split(',').map((d: string) => d.trim())
                         : data.dias_semana;
                     setDiasSeleccionados(dias);
+                }
+
+                // Cargar total_clases del programa para el cálculo
+                if (data?.programa_id) {
+                    const { data: progData } = await supabaseBrowserClient
+                        .from("programas")
+                        .select("total_clases")
+                        .eq("id", data.programa_id)
+                        .single();
+                    if (progData?.total_clases) {
+                        setClasesPrograma(progData.total_clases);
+                    }
                 }
 
                 const { data: matriculas } = await supabaseBrowserClient
