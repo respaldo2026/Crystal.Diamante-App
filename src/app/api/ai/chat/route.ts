@@ -2147,10 +2147,16 @@ function isThanksOnlyMessage(message: string): boolean {
   return words.length <= 6;
 }
 
+function isRepeatedInfoComplaint(message: string): boolean {
+  const text = normalizeForMatch(message);
+  return /\b(ya\s+me\s+respondiste\s+eso|eso\s+ya\s+me\s+lo\s+dijiste|ya\s+me\s+habias\s+respondido|eso\s+ya\s+lo\s+respondiste|ya\s+me\s+dijiste\s+eso|me\s+estas\s+repitiendo|me\s+repites\s+lo\s+mismo)\b/i.test(text);
+}
+
 function shouldAttachMediaSuggestion(userMessage: string, responseText: string): boolean {
   if (isThanksOnlyMessage(userMessage)) return false;
   if (isNeutralAcknowledgement(userMessage)) return false;
   if (isShortAffirmativeReply(userMessage) && !/[?¿]/.test(userMessage)) return false;
+  if (isRepeatedInfoComplaint(userMessage)) return false;
 
   const normalizedResponse = normalizeForMatch(responseText || "");
   if (/\b(prefieres\s+que\s+empecemos|te\s+refieres\s+a|en\s+que\s+te\s+puedo\s+ayudar)\b/i.test(normalizedResponse)) {
@@ -2994,10 +3000,29 @@ function buildIntentFocusedDirectResponse(
     const greeting = getTimeSlotGreeting(hour);
     const alreadyGreeted = history.length > 0;
     if (alreadyGreeted) {
-      return `${greeting} 😊 ¿En qué te puedo ayudar?`;
+      return `${greeting} 😊 ¿Qué te gustaría saber: *horarios*, *precios* o *inscripción*?`;
     }
     const academyName = academy?.nombre || "Academia Crystal Diamante";
-    return `${greeting}, bienvenid@ a *${academyName}* 💎\n\n¿En qué te puedo ayudar hoy? Puedo contarte sobre nuestros cursos, fechas de inicio, precios e inscripciones 🙌`;
+    return `${greeting} 😊 Bienvenid@ a *${academyName}* 💎\n\nSi quieres, te cuento *horarios*, *precios* o *inscripción* del curso que te interese.`;
+  }
+
+  if (isRepeatedInfoComplaint(message)) {
+    const programLabel = detectedProgram?.nombre ? ` de *${detectedProgram.nombre}*` : "";
+    const pendingTopic = inferPendingTopicFromHistory(history);
+
+    if (/temario|clase\s+por\s+clase|contenido/.test(normalizeForMatch(pendingTopic))) {
+      return `Tienes razón, eso ya te lo había dicho 😊\n\nTe respondo más puntual${programLabel}: ¿quieres que te comparta el *temario* general o el *detalle clase por clase*?`;
+    }
+
+    if (/horario|dias|fecha|inicio|grupo/.test(normalizeForMatch(pendingTopic))) {
+      return `Tienes razón, eso ya te lo había dicho 😊\n\nTe respondo más puntual${programLabel}: ¿quieres que te confirme *horarios*, *fecha de inicio* o *cupos disponibles*?`;
+    }
+
+    if (/inversion|precio|mensualidad|inscripcion/.test(normalizeForMatch(pendingTopic))) {
+      return `Tienes razón, eso ya te lo había dicho 😊\n\nTe respondo más puntual${programLabel}: ¿quieres que te diga la *inversión*, la *inscripción* o las *formas de pago*?`;
+    }
+
+    return `Tienes razón, eso ya te lo había dicho 😊\n\nTe respondo más puntual${programLabel}: ¿quieres que te cuente el *temario*, los *horarios* o los *precios*?`;
   }
 
   // Detectar tristeza/decepción por falta de cupo o programa no disponible
