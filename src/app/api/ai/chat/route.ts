@@ -2318,6 +2318,55 @@ function buildAvailableProgramsPrompt(programs: any[], limit: number = 3): strin
   return `Por ahora te puedo orientar en: *${names.join("*, *")}*.`;
 }
 
+/**
+ * Detecta cuando el usuario pregunta por el CATÁLOGO de cursos ("qué más enseñan",
+ * "qué otros cursos tienen", etc.) en lugar de contenido de un curso específico.
+ */
+function isAskingAboutCatalog(message: string): boolean {
+  const t = normalizeForMatch(message);
+  // Señales de catálogo: "más" + verbo de oferta, "otros cursos", "programas", etc.
+  return (
+    /\b(que|cuales?)\s+(mas|otros?|mas\s+cursos?|programas?|carreras?)\s+(ensen[aá]n?|tienen?|ofrecen?|dictan?|hay|manejan?|imparten?|trabajan?)\b/i.test(t)
+    || /\b(que|cuales?)\s+mas\s+(ensen[aá]n?|tienen?|ofrecen?|dictan?|hay|manejan?)\b/i.test(t)
+    || /\b(otros?|mas)\s+(cursos?|programas?|carreras?)\s+(tienen?|hay|ofrecen?|dictan?|manejan?|imparten?)\b/i.test(t)
+    || /\b(tienen?|hay|ofrecen?|dictan?|manejan?)\s+(otros?|mas)\s+(cursos?|programas?|carreras?)\b/i.test(t)
+    || /\b(que|cuales?|cuantos?)\s+(cursos?|programas?|carreras?)\s+(tienen?|hay|ofrecen?|dictan?|manejan?|imparten?)\b/i.test(t)
+    || /\b(que\s+mas\s+se\s+ensen[aá]|que\s+mas\s+aprend)\b/i.test(t)
+    || /\b(y\s+que\s+mas|que\s+mas\s+tienen?|que\s+mas\s+hay|que\s+mas\s+ofrecen?)\b/i.test(t)
+    || /\b(tienen?\s+mas\s+cursos?|mas\s+cursos?\s+tienen?)\b/i.test(t)
+    || /\b(que\s+otros?\s+(cursos?|programas?)\s+(tienen?|hay|ofrecen?))\b/i.test(t)
+  );
+}
+
+/**
+ * Construye una respuesta tipo catálogo con todos los programas disponibles.
+ * Si se pasa currentProgramName, resalta que ya hablaron de ese y lista los demás.
+ */
+function buildCatalogReply(programs: any[], currentProgramName?: string | null): string {
+  const all = (programs || []).filter((p) => String(p?.nombre || "").trim());
+  if (!all.length) {
+    return "¡Claro! 😊 Cuéntame qué área de la estética te interesa más y te oriento con el programa ideal.";
+  }
+
+  const others = currentProgramName
+    ? all.filter((p) => normalizeForMatch(p.nombre) !== normalizeForMatch(currentProgramName))
+    : all;
+
+  const lines = (others.length ? others : all).map((p) => {
+    const nombre = String(p.nombre || "").trim();
+    const meses = p.duracion_meses ? `${p.duracion_meses} mes${Number(p.duracion_meses) === 1 ? "" : "es"}` : null;
+    const clases = p.total_clases ? `${p.total_clases} clases` : null;
+    const durLabel = [meses, clases].filter(Boolean).join(" · ");
+    return durLabel ? `💅 *${nombre}* (${durLabel})` : `💅 *${nombre}*`;
+  });
+
+  const intro = currentProgramName
+    ? `Además de *${currentProgramName}*, también enseñamos:\n\n${lines.join("\n")}`
+    : `Estos son los programas que tenemos:\n\n${lines.join("\n")}`;
+
+  return `${intro}\n\n¿Cuál de estos te llama más la atención? Te cuento horarios, precios o inscripción de cualquiera 😊`;
+}
+
 function extractTemarioHighlights(rawTemario: string, maxItems?: number): string[] {
   const text = String(rawTemario || "").trim();
   if (!text) return [];
@@ -3376,6 +3425,13 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   const rawTemario = detectedProgram?.contenido || "";
+
+  // ── Catálogo: "qué más enseñan" / "qué otros cursos tienen" ────────────────
+  // Se evalúa ANTES de asksCompleteTemario para que "qué más enseñan" muestre
+  // el listado de programas y no el temario del curso ya detectado.
+  if (isAskingAboutCatalog(message) && programs.length > 0) {
+    return buildCatalogReply(programs, detectedProgram?.nombre || null);
+  }
 
   if (asksCompleteTemario) {
     const completeReply = buildTemarioCompleteReply(detectedProgram, rawTemario);
