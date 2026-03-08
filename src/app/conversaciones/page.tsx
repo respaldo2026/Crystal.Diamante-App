@@ -79,6 +79,7 @@ interface Conversation {
 interface ConversationThread {
   thread_key: string;
   phone_number: string;
+  channel: "instagram" | "whatsapp" | "unknown";
   contact_name?: string;
   messages: Conversation[];
   total: number;
@@ -301,6 +302,13 @@ export default function ConversacionesPage() {
     return !normalized || normalized === "unknown" || normalized === "desconocido";
   };
 
+  const getConversationChannel = (value?: string | null): "instagram" | "whatsapp" | "unknown" => {
+    const raw = (value || "").trim().toLowerCase();
+    if (!raw || raw === "unknown" || raw === "desconocido") return "unknown";
+    if (raw.startsWith("ig:")) return "instagram";
+    return "whatsapp";
+  };
+
   const getPhoneLabel = (value?: string | null) => {
     if (isUnknownPhone(value)) return "Sin número (Make/Webhook)";
     if ((value || "").toLowerCase().startsWith("ig:")) {
@@ -310,6 +318,9 @@ export default function ConversacionesPage() {
   };
 
   const normalizePhoneForMatch = useCallback((value?: string | null) => {
+    const raw = (value || "").trim().toLowerCase();
+    if (raw.startsWith("ig:")) return raw;
+
     const digits = (value || "").replace(/\D/g, "");
     if (!digits) return "";
     if (digits.length === 10 && digits.startsWith("3")) {
@@ -394,9 +405,12 @@ export default function ConversacionesPage() {
     const grouped = new Map<string, Conversation[]>();
 
     for (const conv of conversations) {
+      const channel = getConversationChannel(conv.phone_number);
       const normalizedPhone = normalizePhoneForMatch(conv.phone_number);
       const threadKey = isUnknownPhone(conv.phone_number)
         ? `unknown:${conv.id}`
+        : channel === "instagram"
+        ? (String(conv.phone_number || "").toLowerCase() || normalizedPhone || conv.phone_number)
         : normalizedPhone || conv.phone_number;
 
       if (!grouped.has(threadKey)) {
@@ -415,6 +429,7 @@ export default function ConversacionesPage() {
         sorted.find((item) => !isUnknownPhone(item.phone_number))?.phone_number ||
         sorted[0]?.phone_number ||
         "unknown";
+      const channel = getConversationChannel(displayPhone);
       const contactName = contactNames[normalizePhoneForMatch(displayPhone)];
       const combined = sorted
         .map((item) => `${item.user_message} ${item.agent_response}`)
@@ -469,6 +484,7 @@ export default function ConversacionesPage() {
       result.push({
         thread_key: threadKey,
         phone_number: displayPhone,
+        channel,
         contact_name: contactName,
         messages: sorted,
         total: sorted.length,
@@ -493,6 +509,8 @@ export default function ConversacionesPage() {
       if (activeTab === "high" && !thread.is_high_intent) return false;
       if (activeTab === "contact" && !thread.asked_contact) return false;
       if (activeTab === "payment" && !thread.asked_payment) return false;
+      if (activeTab === "instagram" && thread.channel !== "instagram") return false;
+      if (activeTab === "whatsapp" && thread.channel !== "whatsapp") return false;
 
       const matchPhone = !selectedPhone || thread.phone_number === selectedPhone;
       if (!matchPhone) return false;
@@ -523,6 +541,8 @@ export default function ConversacionesPage() {
   const tabCounts = useMemo(() => {
     return {
       all: threads.length,
+      whatsapp: threads.filter((t) => t.channel === "whatsapp").length,
+      instagram: threads.filter((t) => t.channel === "instagram").length,
       high: threads.filter((t) => t.is_high_intent).length,
       contact: threads.filter((t) => t.asked_contact).length,
       payment: threads.filter((t) => t.asked_payment).length,
@@ -708,6 +728,16 @@ export default function ConversacionesPage() {
             <span style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.2 }}>
               {getPhoneLabel(phone)}
             </span>
+            {record.channel === "instagram" && (
+              <Tag color="magenta" style={{ marginInlineEnd: 0 }}>
+                Instagram
+              </Tag>
+            )}
+            {record.channel === "whatsapp" && (
+              <Tag color="green" style={{ marginInlineEnd: 0 }}>
+                WhatsApp
+              </Tag>
+            )}
             {isUnknownPhone(phone) && (
               <Tag color="orange" style={{ marginInlineEnd: 0, whiteSpace: "normal" }}>
                 Pendiente identificar
@@ -937,6 +967,8 @@ export default function ConversacionesPage() {
           onChange={setActiveTab}
           items={[
             { key: "todos", label: `Todos (${tabCounts.all})` },
+            { key: "whatsapp", label: `WhatsApp (${tabCounts.whatsapp})` },
+            { key: "instagram", label: `Instagram (${tabCounts.instagram})` },
             { key: "high", label: `Alta intencion (${tabCounts.high})` },
             { key: "contact", label: `Pidio contacto (${tabCounts.contact})` },
             { key: "payment", label: `Medios de pago (${tabCounts.payment})` },
