@@ -744,6 +744,34 @@ function detectInboundChannel(body: any): "whatsapp" | "instagram" | "unknown" {
   return "unknown";
 }
 
+function isSelfOriginatedInstagramEvent(body: any): boolean {
+  if (detectInboundChannel(body) !== "instagram") return false;
+
+  const senderId = String(
+    body?.entry?.[0]?.messaging?.[0]?.sender?.id ||
+      body?.entry?.[0]?.changes?.[0]?.value?.sender?.id ||
+      body?.sender?.id ||
+      body?.from ||
+      ""
+  ).trim();
+
+  if (!senderId) return false;
+
+  const ownIds = new Set(
+    [
+      body?.entry?.[0]?.id,
+      body?.entry?.[0]?.messaging?.[0]?.recipient?.id,
+      process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
+      process.env.INSTAGRAM_ACCOUNT_ID,
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+
+  const isEcho = body?.entry?.[0]?.messaging?.[0]?.message?.is_echo === true;
+  return isEcho || ownIds.has(senderId);
+}
+
 function findPhoneCandidateDeep(candidates: string[]): string {
   for (const value of candidates) {
     if (!value) continue;
@@ -4192,6 +4220,21 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await readRequestBody(req);
+
+    if (isSelfOriginatedInstagramEvent(body)) {
+      console.log("[chat] Evento saliente de Instagram ignorado", {
+        senderId: body?.entry?.[0]?.messaging?.[0]?.sender?.id || body?.entry?.[0]?.changes?.[0]?.value?.sender?.id || null,
+        recipientId: body?.entry?.[0]?.messaging?.[0]?.recipient?.id || null,
+        entryId: body?.entry?.[0]?.id || null,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        ignored: true,
+        reason: "instagram_self_event",
+      });
+    }
+
     const { message, phone, channel, profileName } = extractMessageAndPhone(body || {});
 
     console.log("[chat] Input extraído:", {
