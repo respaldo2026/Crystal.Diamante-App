@@ -842,8 +842,39 @@ function extractPhoneCandidatesByKey(input: any, maxDepth = 6): string[] {
   return result;
 }
 
-function extractMessageAndPhone(body: any): { message: string; phone: string } {
+function normalizeProfileName(value: string | null | undefined): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const compact = raw.replace(/\s+/g, " ").trim();
+  if (!compact) return "";
+  if (/^[0-9_\-.]{6,}$/.test(compact)) return "";
+  return compact.slice(0, 120);
+}
+
+function extractProfileName(body: any): string {
+  const name = pickFirstNonEmptyString(
+    body?.profile_name,
+    body?.nombre_perfil,
+    body?.instagram_profile_name,
+    body?.instagram_username,
+    body?.username,
+    body?.sender?.username,
+    body?.sender?.name,
+    body?.entry?.[0]?.messaging?.[0]?.sender?.username,
+    body?.entry?.[0]?.messaging?.[0]?.sender?.name,
+    body?.entry?.[0]?.changes?.[0]?.value?.sender?.username,
+    body?.entry?.[0]?.changes?.[0]?.value?.sender?.name,
+    body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.profile?.name,
+    body?.contact?.profile?.name,
+    body?.contact_name,
+  );
+
+  return normalizeProfileName(name);
+}
+
+function extractMessageAndPhone(body: any): { message: string; phone: string; channel: "instagram" | "whatsapp" | "unknown"; profileName: string } {
   const channel = detectInboundChannel(body);
+  const profileName = extractProfileName(body);
   const webhookMessage = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
   const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
   const webhookContactPhone = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.wa_id;
@@ -965,7 +996,7 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
   // Instagram no usa teléfono del usuario final en la mayoría de webhooks.
   // Guardamos un identificador estable con prefijo para evitar confundirlo con teléfono.
   if ((channel === "instagram" || body?.object === "instagram") && normalizedPhone !== "unknown") {
-    return { message, phone: `ig:${normalizedPhone}` };
+    return { message, phone: `ig:${normalizedPhone}`, channel: "instagram", profileName };
   }
 
   if (normalizedPhone === "unknown") {
@@ -976,7 +1007,16 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     });
   }
 
-  return { message, phone: normalizedPhone };
+  const resolvedChannel: "instagram" | "whatsapp" | "unknown" =
+    channel !== "unknown"
+      ? channel
+      : String(normalizedPhone || "").startsWith("ig:")
+      ? "instagram"
+      : normalizedPhone !== "unknown"
+      ? "whatsapp"
+      : "unknown";
+
+  return { message, phone: normalizedPhone, channel: resolvedChannel, profileName };
 }
 
 async function getConversationHistory(
@@ -1014,17 +1054,38 @@ async function saveConversation(
   phone: string,
   userMessage: string,
   agentResponse: string,
-  transcription?: string
+  transcription?: string,
+  channel?: "instagram" | "whatsapp" | "unknown",
+  profileName?: string
 ): Promise<void> {
   try {
-    const { error } = await supabase
+    const payloadWithChannel = {
+      phone_number: phone,
+      user_message: userMessage,
+      agent_response: agentResponse,
+      transcription: transcription || null,
+      channel: channel || (String(phone || "").startsWith("ig:") ? "instagram" : "whatsapp"),
+      profile_name: normalizeProfileName(profileName),
+    };
+
+    let { error } = await supabase
       .from("agent_conversations")
-      .insert({
+      .insert(payloadWithChannel);
+
+    // Compatibilidad temporal si la migración aún no fue aplicada
+    if (error && /column .* does not exist/i.test(String(error.message || ""))) {
+      const fallbackPayload = {
         phone_number: phone,
         user_message: userMessage,
         agent_response: agentResponse,
         transcription: transcription || null,
-      });
+      };
+
+      const retry = await supabase
+        .from("agent_conversations")
+        .insert(fallbackPayload);
+      error = retry.error;
+    }
 
     if (error) {
       console.warn("[saveConversation] Error:", error);
@@ -1718,10 +1779,20 @@ function resolvePreferredStudentName(
   return null;
 }
 
-function buildNameSafetyDirective(preferredName: string | null): string {
-  return preferredName
-    ? `NOMBRE VALIDADO DEL USUARIO: "${preferredName}". Si lo mencionas, usa SOLO ese nombre exacto.`
-    : 'No hay nombre validado del usuario. NO inventes ni asumas nombres propios; responde sin llamar por nombre.';
+function buildNameSafetyDirective(
+  preferredName: string | null,
+  profileName: string | null,
+  channel: "instagram" | "whatsapp" | "unknown"
+): string {
+  if (preferredName) {
+    return `NOMBRE VALIDADO DEL USUARIO: "${preferredName}". Si lo mencionas, usa SOLO ese nombre exacto.`;
+  }
+
+  if (channel === "instagram" && profileName) {
+    return `PERFIL DE INSTAGRAM DEL USUARIO: "${profileName}". Si saludas o personalizas, usa ese nombre de forma natural y breve.`;
+  }
+
+  return 'No hay nombre validado del usuario. NO inventes ni asumas nombres propios; responde sin llamar por nombre.';
 }
 
 function buildUpcomingStartDirective(detectedProgram: any | null, courses: any[]): string {
@@ -4024,10 +4095,12 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await readRequestBody(req);
-    const { message, phone } = extractMessageAndPhone(body || {});
+    const { message, phone, channel, profileName } = extractMessageAndPhone(body || {});
 
     console.log("[chat] Input extraído:", {
       phone,
+      channel,
+      profileName,
       messagePreview: message?.slice(0, 80) || "",
       bodyMessage: body?.message,
       bodyText: body?.text,
@@ -4074,6 +4147,21 @@ export async function POST(req: NextRequest) {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    const persistConversation = async (
+      userMessageValue: string,
+      agentResponseValue: string,
+      transcriptionValue?: string
+    ) =>
+      saveConversation(
+        supabase,
+        phone || "unknown",
+        userMessageValue,
+        agentResponseValue,
+        transcriptionValue,
+        channel,
+        profileName
+      );
+
     // Obtener configuración del agente
     const { data: settings } = await supabase
       .from("agent_settings")
@@ -4104,7 +4192,7 @@ export async function POST(req: NextRequest) {
       const fallbackResponse = settings?.fallback_response || "Déjame confirmarlo y te respondo en breve.";
       const cleanedResponse = sanitizeAgentVisibleResponse(linkAccessResponse, fallbackResponse);
       const truncatedResponse = truncateResponse(cleanedResponse, 1000);
-      await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+      await persistConversation(message, truncatedResponse);
 
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
@@ -4133,7 +4221,7 @@ export async function POST(req: NextRequest) {
     if (studentIdentification && !studentContext && hasStudentAccountIntent(effectiveMessage)) {
       const notFoundResponse = `No encontré una estudiante con identificación ${studentIdentification}. Verifica el número de cédula y me lo vuelves a enviar.`;
       const truncatedNotFound = truncateResponse(notFoundResponse, 1000);
-      await saveConversation(supabase, phone || "unknown", message, truncatedNotFound);
+      await persistConversation(message, truncatedNotFound);
 
       const sanitizedResponse = sanitizeForJSON(truncatedNotFound);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
@@ -4214,7 +4302,7 @@ export async function POST(req: NextRequest) {
     if (directStudentResponse) {
       const truncatedResponse = truncateResponse(directStudentResponse, 1000);
 
-      await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+      await persistConversation(message, truncatedResponse);
 
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
@@ -4237,7 +4325,7 @@ export async function POST(req: NextRequest) {
       const directResponse = buildTodayClassDirectResponse(detectedProgram, courses, new Date());
       const truncatedResponse = truncateResponse(directResponse, 1000);
 
-      await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+      await persistConversation(message, truncatedResponse);
 
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
@@ -4260,7 +4348,7 @@ export async function POST(req: NextRequest) {
       const directResponse = buildNextGroupDirectResponse(detectedProgram, courses, new Date());
       const truncatedResponse = truncateResponse(directResponse, 1000);
 
-      await saveConversation(supabase, phone || "unknown", message, truncatedResponse);
+      await persistConversation(message, truncatedResponse);
 
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
@@ -4338,7 +4426,7 @@ export async function POST(req: NextRequest) {
         ? `[📷 ${activeMedia.mediaUrl}|${activeMedia.caption}]\n${truncatedResponse}`
         : truncatedResponse;
 
-      await saveConversation(supabase, phone || "unknown", message, responseToSave);
+      await persistConversation(message, responseToSave);
 
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
@@ -4383,7 +4471,7 @@ export async function POST(req: NextRequest) {
       : '';
     const contextualDirective = [
       buildContextualDirective(effectiveMessage, detectedProgram, courses, history),
-      buildNameSafetyDirective(preferredStudentName),
+      buildNameSafetyDirective(preferredStudentName, profileName || null, channel),
       buildUpcomingStartDirective(detectedProgram, courses),
       studentDirective,
     ]
@@ -4432,7 +4520,7 @@ export async function POST(req: NextRequest) {
     const responseToSaveFinal = activeMediaFinal
       ? `[📷 ${activeMediaFinal.mediaUrl}|${activeMediaFinal.caption}]\n${truncatedResponse}`
       : truncatedResponse;
-    await saveConversation(supabase, phone || "unknown", message, responseToSaveFinal);
+    await persistConversation(message, responseToSaveFinal);
 
     // Sanitizar respuesta para JSON válido
     const sanitizedResponse = sanitizeForJSON(truncatedResponse);

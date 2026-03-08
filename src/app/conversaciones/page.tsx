@@ -69,6 +69,8 @@ const formatAgentResponse = (text: string) => {
 interface Conversation {
   id: string;
   phone_number: string;
+  channel?: string | null;
+  profile_name?: string | null;
   user_message: string;
   agent_response: string;
   transcription?: string;
@@ -302,7 +304,12 @@ export default function ConversacionesPage() {
     return !normalized || normalized === "unknown" || normalized === "desconocido";
   };
 
-  const getConversationChannel = (value?: string | null): "instagram" | "whatsapp" | "unknown" => {
+  const getConversationChannel = (value?: string | null, explicitChannel?: string | null): "instagram" | "whatsapp" | "unknown" => {
+    const explicit = String(explicitChannel || "").toLowerCase().trim();
+    if (explicit === "instagram" || explicit === "whatsapp") {
+      return explicit;
+    }
+
     const raw = (value || "").trim().toLowerCase();
     if (!raw || raw === "unknown" || raw === "desconocido") return "unknown";
     if (raw.startsWith("ig:")) return "instagram";
@@ -405,7 +412,7 @@ export default function ConversacionesPage() {
     const grouped = new Map<string, Conversation[]>();
 
     for (const conv of conversations) {
-      const channel = getConversationChannel(conv.phone_number);
+      const channel = getConversationChannel(conv.phone_number, conv.channel);
       const normalizedPhone = normalizePhoneForMatch(conv.phone_number);
       const threadKey = isUnknownPhone(conv.phone_number)
         ? `unknown:${conv.id}`
@@ -429,7 +436,12 @@ export default function ConversacionesPage() {
         sorted.find((item) => !isUnknownPhone(item.phone_number))?.phone_number ||
         sorted[0]?.phone_number ||
         "unknown";
-      const channel = getConversationChannel(displayPhone);
+      const channel = getConversationChannel(displayPhone, sorted[sorted.length - 1]?.channel);
+      const profileName = sorted
+        .slice()
+        .reverse()
+        .map((item) => String(item.profile_name || "").trim())
+        .find(Boolean);
       const contactName = contactNames[normalizePhoneForMatch(displayPhone)];
       const combined = sorted
         .map((item) => `${item.user_message} ${item.agent_response}`)
@@ -485,7 +497,7 @@ export default function ConversacionesPage() {
         thread_key: threadKey,
         phone_number: displayPhone,
         channel,
-        contact_name: contactName,
+        contact_name: contactName || profileName,
         messages: sorted,
         total: sorted.length,
         last_date: last?.created_at || "",
