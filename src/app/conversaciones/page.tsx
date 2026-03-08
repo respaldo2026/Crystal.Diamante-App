@@ -414,11 +414,12 @@ export default function ConversacionesPage() {
     for (const conv of conversations) {
       const channel = getConversationChannel(conv.phone_number, conv.channel);
       const normalizedPhone = normalizePhoneForMatch(conv.phone_number);
+      const baseIdentity = String(conv.phone_number || "").toLowerCase().startsWith("ig:")
+        ? String(conv.phone_number || "").toLowerCase()
+        : normalizedPhone || String(conv.phone_number || "").toLowerCase();
       const threadKey = isUnknownPhone(conv.phone_number)
         ? `unknown:${conv.id}`
-        : channel === "instagram"
-        ? (String(conv.phone_number || "").toLowerCase() || normalizedPhone || conv.phone_number)
-        : normalizedPhone || conv.phone_number;
+        : `${channel}:${baseIdentity}`;
 
       if (!grouped.has(threadKey)) {
         grouped.set(threadKey, []);
@@ -740,16 +741,6 @@ export default function ConversacionesPage() {
             <span style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.2 }}>
               {getPhoneLabel(phone)}
             </span>
-            {record.channel === "instagram" && (
-              <Tag color="magenta" style={{ marginInlineEnd: 0 }}>
-                Instagram
-              </Tag>
-            )}
-            {record.channel === "whatsapp" && (
-              <Tag color="green" style={{ marginInlineEnd: 0 }}>
-                WhatsApp
-              </Tag>
-            )}
             {isUnknownPhone(phone) && (
               <Tag color="orange" style={{ marginInlineEnd: 0, whiteSpace: "normal" }}>
                 Pendiente identificar
