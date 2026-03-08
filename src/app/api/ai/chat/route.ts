@@ -733,6 +733,14 @@ function detectInboundChannel(body: any): "whatsapp" | "instagram" | "unknown" {
   if (channelHint.includes("instagram")) return "instagram";
   if (channelHint.includes("whatsapp")) return "whatsapp";
 
+  // Fallback para payloads simplificados que llegan desde Make:
+  // si el remitente tiene 16+ dígitos es muy probable que sea IG sender id
+  // (wa_id telefónico normalmente es máximo 15 dígitos).
+  const senderDigits = String(
+    body?.p_whatsapp_id || body?.telefono_whatsapp || body?.from || body?.wa_id || ""
+  ).replace(/\D/g, "");
+  if (senderDigits.length >= 16) return "instagram";
+
   return "unknown";
 }
 
