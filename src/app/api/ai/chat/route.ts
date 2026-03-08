@@ -851,22 +851,93 @@ function normalizeProfileName(value: string | null | undefined): string {
   return compact.slice(0, 120);
 }
 
+function extractProfileCandidatesByKey(input: any, maxDepth = 5): string[] {
+  const result: string[] = [];
+  const visited = new Set<any>();
+  const keyPattern = /(profile[_-]?name|contact[_-]?name|sender[_-]?name|display[_-]?name|username|nombre|name)$/i;
+
+  const pushCandidate = (value: any) => {
+    const normalized = normalizeProfileName(typeof value === "string" ? value : "");
+    if (!normalized) return;
+    if (!result.includes(normalized)) {
+      result.push(normalized);
+    }
+  };
+
+  const walk = (value: any, depth: number) => {
+    if (depth < 0 || value == null) return;
+    if (typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, depth - 1);
+      return;
+    }
+
+    for (const [key, nestedValue] of Object.entries(value)) {
+      if (keyPattern.test(key)) {
+        pushCandidate(nestedValue);
+      }
+      walk(nestedValue, depth - 1);
+    }
+  };
+
+  walk(input, maxDepth);
+  return result;
+}
+
 function extractProfileName(body: any): string {
+  const keyedCandidates = extractProfileCandidatesByKey({
+    body,
+    payload: body?.payload,
+    data: body?.data,
+    sender: body?.sender,
+    contact: body?.contact,
+    contacts: body?.contacts,
+    entry: body?.entry,
+  });
+
   const name = pickFirstNonEmptyString(
     body?.profile_name,
     body?.nombre_perfil,
+    body?.contact_name,
+    body?.nombre_contacto,
+    body?.sender_name,
+    body?.from_name,
+    body?.full_name,
+    body?.display_name,
+    body?.customer_name,
+    body?.lead_name,
     body?.instagram_profile_name,
     body?.instagram_username,
     body?.username,
+    body?.sender?.display_name,
     body?.sender?.username,
     body?.sender?.name,
+    body?.contact?.name,
+    body?.contact?.full_name,
     body?.entry?.[0]?.messaging?.[0]?.sender?.username,
     body?.entry?.[0]?.messaging?.[0]?.sender?.name,
+    body?.entry?.[0]?.changes?.[0]?.value?.from?.username,
+    body?.entry?.[0]?.changes?.[0]?.value?.from?.name,
     body?.entry?.[0]?.changes?.[0]?.value?.sender?.username,
     body?.entry?.[0]?.changes?.[0]?.value?.sender?.name,
     body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.profile?.name,
+    body?.payload?.profile_name,
+    body?.payload?.contact_name,
+    body?.payload?.sender_name,
+    body?.payload?.from_name,
+    body?.payload?.instagram_username,
+    body?.payload?.username,
+    body?.data?.profile_name,
+    body?.data?.contact_name,
+    body?.data?.sender_name,
+    body?.data?.from_name,
+    body?.data?.instagram_username,
+    body?.data?.username,
     body?.contact?.profile?.name,
-    body?.contact_name,
+    ...keyedCandidates,
   );
 
   return normalizeProfileName(name);
@@ -1074,6 +1145,7 @@ async function saveConversation(
 
     // Compatibilidad temporal si la migración aún no fue aplicada
     if (error && /column .* does not exist/i.test(String(error.message || ""))) {
+      console.warn("[saveConversation] Columnas channel/profile_name no existen. Guardando sin metadatos de canal/perfil.");
       const fallbackPayload = {
         phone_number: phone,
         user_message: userMessage,
@@ -4106,6 +4178,20 @@ export async function POST(req: NextRequest) {
       bodyText: body?.text,
       nestedMessage: body?.messages?.[0]?.text?.body,
     });
+
+    if (channel === "instagram" && !profileName) {
+      console.warn("[chat] Instagram sin profileName en payload", {
+        knownNameFields: {
+          profile_name: body?.profile_name,
+          contact_name: body?.contact_name,
+          sender_name: body?.sender_name,
+          from_name: body?.from_name,
+          instagram_username: body?.instagram_username,
+          senderUsername: body?.sender?.username,
+          senderName: body?.sender?.name,
+        },
+      });
+    }
 
     // Validar entrada del usuario
     const inputValidation = validateUserInput(message, 2000);
