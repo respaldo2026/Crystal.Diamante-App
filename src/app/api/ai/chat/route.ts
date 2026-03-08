@@ -1475,7 +1475,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const text = normalizeForMatch(message);
   const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
-  const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
+  const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta|abono|abonar|pago parcial|cuota inicial)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
   const hasScheduleIntent = /\b(horarios?|horas?|dias?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|todos\s+los\s+dias|cuantos\s+dias|que\s+dias)\b/i.test(text);
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horarios?|horas?)\b/i.test(text);
@@ -1543,7 +1543,7 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   if (isShortAffirmativeReply(message)) return false;
 
   // Excluir si contiene palabras de intención real (plurales incluidos)
-  const hasIntentKeyword = /\b(?:precio|horarios?|horas?|materiales?|temarios?|inscrip\w*|matricul\w*|pagos?|cuantos?|cuando|donde|ubicaci[oó]n|ubicados?|direcci[oó]n|cali|s[aá]bados?|fin\s+de\s+semana|trabajo|lunes|viernes|personal|presencial|dias?|todos?|ir\s+a|puedo\s+ir|aparte|ademas|ademas?|mas\s+all[aá]|cobr[a-z]+|reservar|cupo|separar)\b/i.test(text);
+  const hasIntentKeyword = /\b(?:precio|horarios?|horas?|materiales?|temarios?|inscrip\w*|matricul\w*|pagos?|cuantos?|cuando|donde|ubicaci[oó]n|ubicados?|direcci[oó]n|cali|s[aá]bados?|fin\s+de\s+semana|trabajo|lunes|viernes|personal|presencial|dias?|todos?|ir\s+a|puedo\s+ir|aparte|ademas|ademas?|mas\s+all[aá]|cobr[a-z]+|reservar|cupo|separar|abono|abonar|pago\s+parcial|cuota\s+inicial)\b/i.test(text);
   if (hasIntentKeyword) return false;
 
   return true;
@@ -3562,8 +3562,10 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
     const asksTotalToPay = /\b(por\s+todo|total|todo\s+junto|de\s+una\s+vez|de\s+una|completo|todo\s+el\s+curso)\b/i.test(normalizedMessage)
       && /\b(cuanto|cuanto\s+es|pagar|pago|se\s+paga|vale|valor|costo)\b/i.test(normalizedMessage);
-    const asksPartialPayment = /\b(abono|abonar|pago parcial|cuota inicial|fraccionar|financiar|totalidad|pagar todo|pagar completo|de una)\b/i.test(normalizedMessage)
-      && /\b(inscripcion|inscrip|curso|total)\b/i.test(normalizedMessage);
+    // Se detecta abono/pago parcial incluso si no menciona "inscripcion" explícitamente,
+    // porque el contexto (el agente ya habló de cupo/precio) lo hace evidente.
+    const asksPartialPayment = /\b(abono|abonar|pago parcial|cuota inicial|fraccionar|financiar)\b/i.test(normalizedMessage)
+      || (/\b(totalidad|pagar todo|pagar completo|de una)\b/i.test(normalizedMessage) && /\b(inscripcion|inscrip|curso|total)\b/i.test(normalizedMessage));
     const asksWhatIsIncluded = /\b(que incluye|incluye|trae|viene con)\b/i.test(normalizedMessage);
 
     if (asksWhatIsIncluded) {
