@@ -839,6 +839,9 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
   const webhookMessage = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
   const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
   const webhookContactPhone = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.wa_id;
+  const instagramMessagingMessage = body?.entry?.[0]?.messaging?.[0]?.message?.text;
+  const instagramMessagingSenderId = body?.entry?.[0]?.messaging?.[0]?.sender?.id;
+  const instagramChangeSenderId = body?.entry?.[0]?.changes?.[0]?.value?.sender?.id;
 
   const nestedMessage = body?.messages?.[0]?.text?.body;
   const nestedPhone = body?.messages?.[0]?.from;
@@ -866,6 +869,7 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     body?.text?.text,
     body?.text,
     body?.prompt,
+    instagramMessagingMessage,
     nestedMessage,
     webhookMessage,
     ...deepCandidates
@@ -937,6 +941,8 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     body?.from,
     body?.wa_id,
     body?.contact,
+    instagramMessagingSenderId,
+    instagramChangeSenderId,
     nestedPhone,
     webhookPhone,
     webhookContactPhone,
