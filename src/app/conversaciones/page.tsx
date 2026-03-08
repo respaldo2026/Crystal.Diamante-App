@@ -303,6 +303,9 @@ export default function ConversacionesPage() {
 
   const getPhoneLabel = (value?: string | null) => {
     if (isUnknownPhone(value)) return "Sin número (Make/Webhook)";
+    if ((value || "").toLowerCase().startsWith("ig:")) {
+      return `Instagram (${value?.slice(3) || "sin id"})`;
+    }
     return value || "Sin número (Make/Webhook)";
   };
 

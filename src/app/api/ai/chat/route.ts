@@ -712,6 +712,30 @@ function normalizePhoneIdentifier(raw: string): string {
   return digits;
 }
 
+function detectInboundChannel(body: any): "whatsapp" | "instagram" | "unknown" {
+  const rootObject = String(body?.object || "").toLowerCase();
+  if (rootObject === "instagram") return "instagram";
+  if (rootObject === "whatsapp_business_account") return "whatsapp";
+
+  const messagingProduct = String(
+    body?.entry?.[0]?.changes?.[0]?.value?.messaging_product ||
+      body?.messaging_product ||
+      body?.metadata?.messaging_product ||
+      ""
+  ).toLowerCase();
+
+  if (messagingProduct === "instagram") return "instagram";
+  if (messagingProduct === "whatsapp") return "whatsapp";
+
+  const channelHint = String(
+    body?.channel || body?.source || body?.platform || body?.provider || ""
+  ).toLowerCase();
+  if (channelHint.includes("instagram")) return "instagram";
+  if (channelHint.includes("whatsapp")) return "whatsapp";
+
+  return "unknown";
+}
+
 function findPhoneCandidateDeep(candidates: string[]): string {
   for (const value of candidates) {
     if (!value) continue;
@@ -773,7 +797,9 @@ function extractStringsDeep(input: any, maxDepth = 4): string[] {
 function extractPhoneCandidatesByKey(input: any, maxDepth = 6): string[] {
   const result: string[] = [];
   const visited = new Set<any>();
-  const keyPattern = /(phone|telefono|whatsapp|wa_?id|from|sender|contact|chat|jid|author|participant|customer|cliente|remotejid)/i;
+  // Solo claves que suelen traer identificador del cliente real.
+  // Evita chat/conversation/session IDs técnicos que contaminarían phone_number.
+  const keyPattern = /(phone|telefono|wa_?id|from|contact|jid|author|participant|customer|cliente|remotejid)/i;
 
   const pushCandidate = (value: any) => {
     if (typeof value === "string" && value.trim()) {
@@ -809,6 +835,7 @@ function extractPhoneCandidatesByKey(input: any, maxDepth = 6): string[] {
 }
 
 function extractMessageAndPhone(body: any): { message: string; phone: string } {
+  const channel = detectInboundChannel(body);
   const webhookMessage = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
   const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
   const webhookContactPhone = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.wa_id;
@@ -857,7 +884,7 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
       )
     : rawMessage;
 
-  const phone = pickFirstNonEmptyString(
+  const explicitPhone = pickFirstNonEmptyString(
     body?.phone,
     body?.phone_number,
     body?.phoneNumber,
@@ -878,18 +905,12 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     body?.cliente?.telefono,
     body?.conversation?.phone_number,
     body?.conversation?.wa_id,
-    body?.chat?.id,
-    body?.chatId,
-    body?.session_id,
-    body?.sessionId,
-    body?.chat_id,
+    body?.session_phone,
     body?.chat?.jid,
     body?.chat?.remoteJid,
-    body?.conversationId,
     body?.whatsapp?.from,
     body?.whatsapp?.wa_id,
     body?.whatsapp?.messages?.[0]?.from,
-    body?.whatsapp?.messages?.[0]?.id,
     body?.metadata?.phone,
     body?.metadata?.wa_id,
     body?.metadata?.remote_jid,
@@ -897,18 +918,14 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     body?.metadata?.participant,
     body?.contact?.phone,
     body?.contact?.wa_id,
-    body?.contact?.id,
     body?.data?.from,
     body?.data?.wa_id,
     body?.data?.phone,
-    body?.data?.chat?.id,
     body?.data?.key?.remoteJid,
     body?.data?.key?.participant,
     body?.payload?.from,
     body?.payload?.phone,
     body?.payload?.wa_id,
-    body?.payload?.chatId,
-    body?.payload?.chat?.id,
     body?.payload?.telefono_whatsapp,
     body?.payload?.p_telefono,
     body?.payload?.p_whatsapp_id,
@@ -927,11 +944,21 @@ function extractMessageAndPhone(body: any): { message: string; phone: string } {
     "unknown"
   );
 
+  const phone = pickFirstNonEmptyString(explicitPhone, deepPhoneCandidate, "unknown");
+
   const normalizedPhone = normalizePhoneIdentifier(phone);
+
+  // Instagram no usa teléfono del usuario final en la mayoría de webhooks.
+  // Guardamos un identificador estable con prefijo para evitar confundirlo con teléfono.
+  if ((channel === "instagram" || body?.object === "instagram") && normalizedPhone !== "unknown") {
+    return { message, phone: `ig:${normalizedPhone}` };
+  }
+
   if (normalizedPhone === "unknown") {
     console.warn("[extractMessageAndPhone] No se pudo extraer teléfono", {
       directPhone: body?.phone || body?.phone_number || body?.telefono || body?.from || body?.wa_id,
       deepKeyCandidates: deepKeyCandidates.slice(0, 10),
+      channel,
     });
   }
 
