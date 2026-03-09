@@ -313,6 +313,8 @@ export default function ConversacionesPage() {
     const raw = (value || "").trim().toLowerCase();
     if (!raw || raw === "unknown" || raw === "desconocido") return "unknown";
     if (raw.startsWith("ig:")) return "instagram";
+    // Salvaguarda: IDs de 16+ dígitos son PSIDs de Instagram (wa_id telefónico max 15 dígitos)
+    if (/^\d{16,}$/.test(raw)) return "instagram";
     return "whatsapp";
   };
 

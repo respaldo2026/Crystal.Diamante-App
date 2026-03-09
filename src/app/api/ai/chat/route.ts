@@ -737,7 +737,11 @@ function detectInboundChannel(body: any): "whatsapp" | "instagram" | "unknown" {
   // si el remitente tiene 16+ dígitos es muy probable que sea IG sender id
   // (wa_id telefónico normalmente es máximo 15 dígitos).
   const senderDigits = String(
-    body?.p_whatsapp_id || body?.telefono_whatsapp || body?.from || body?.wa_id || ""
+    body?.p_whatsapp_id || body?.telefono_whatsapp || body?.from || body?.wa_id ||
+    body?.entry?.[0]?.messaging?.[0]?.sender?.id ||
+    body?.entry?.[0]?.changes?.[0]?.value?.sender?.id ||
+    body?.sender?.id ||
+    ""
   ).replace(/\D/g, "");
   if (senderDigits.length >= 16) return "instagram";
 
@@ -1095,6 +1099,12 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
   // Instagram no usa teléfono del usuario final en la mayoría de webhooks.
   // Guardamos un identificador estable con prefijo para evitar confundirlo con teléfono.
   if ((channel === "instagram" || body?.object === "instagram") && normalizedPhone !== "unknown") {
+    return { message, phone: `ig:${normalizedPhone}`, channel: "instagram", profileName };
+  }
+
+  // Fallback: si el normalizedPhone tiene 16+ dígitos es un Instagram sender ID (PSID).
+  // Ocurre cuando Make reenvía el payload antes de que detectInboundChannel lo identifique.
+  if (normalizedPhone.length >= 16 && !normalizedPhone.startsWith("ig:")) {
     return { message, phone: `ig:${normalizedPhone}`, channel: "instagram", profileName };
   }
 
