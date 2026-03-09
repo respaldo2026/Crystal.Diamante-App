@@ -204,6 +204,57 @@ function formatFinalWhatsAppResponse(text: string): string {
 }
 
 /**
+ * Formato para respuestas a comentarios de Instagram.
+ * Instagram no soporta markdown de WhatsApp (*bold*, _italic_) en comentarios públicos.
+ * Se eliminan los marcadores y se mantiene el texto limpio y natural.
+ */
+function formatInstagramCommentResponse(text: string): string {
+  let output = String(text || "");
+  // Eliminar marcadores WhatsApp (* _ ~ `)
+  output = output.replace(/\*([^*]+)\*/g, "$1");
+  output = output.replace(/_([^_]+)_/g, "$1");
+  output = output.replace(/~([^~]+)~/g, "$1");
+  output = output.replace(/`([^`]+)`/g, "$1");
+  // Limpiar emojis duplicados y saltos excesivos
+  output = output.replace(/\n{3,}/g, "\n\n");
+  output = formatPrices(output);
+  output = removeCOPCurrency(output);
+  // Mantener respuesta corta para comentarios (max 1 parrafo + CTA)
+  const lines = output.split("\n\n").filter((l) => l.trim());
+  if (lines.length > 3) {
+    // Para comentarios públicos, usar solo 1–2 párrafos
+    output = lines.slice(0, 2).join("\n\n");
+  }
+  return output.trim();
+}
+
+/**
+ * Enriquece cualquier payload de respuesta con metadatos del evento de comentario.
+ * Si no hay commentEvent, devuelve el payload sin cambios.
+ * Para comentarios:
+ *  - Reformatea `response` sin markdown WhatsApp (* _ ~ `)
+ *  - Añade: reply_type, comment_id, media_id, media_type
+ *  - Elimina: media_suggestion y media_send_order (no aplican en comentarios)
+ */
+function addCommentMeta(
+  payload: Record<string, any>,
+  commentEvent: ReturnType<typeof extractInstagramCommentEvent>
+): Record<string, any> {
+  if (!commentEvent) return payload;
+  const cleanResponse = payload.response
+    ? formatInstagramCommentResponse(String(payload.response))
+    : payload.response;
+  const result = { ...payload, response: cleanResponse };
+  delete result.media_suggestion;
+  delete result.media_send_order;
+  result.reply_type = "instagram_comment";
+  result.comment_id = commentEvent.commentId;
+  if (commentEvent.mediaId) result.media_id = commentEvent.mediaId;
+  if (commentEvent.mediaType) result.media_type = commentEvent.mediaType;
+  return result;
+}
+
+/**
  * Validar entrada del usuario antes de procesar
  */
 function validateUserInput(message: string, maxLength: number = 2000): { valid: boolean; error?: string; message?: string } {
@@ -717,6 +768,10 @@ function detectInboundChannel(body: any): "whatsapp" | "instagram" | "unknown" {
   if (rootObject === "instagram") return "instagram";
   if (rootObject === "whatsapp_business_account") return "whatsapp";
 
+  // Comentarios / menciones de Instagram (changes.field = "comments" | "mentions")
+  const changesField = String(body?.entry?.[0]?.changes?.[0]?.field || "").toLowerCase();
+  if (changesField === "comments" || changesField === "mentions") return "instagram";
+
   const messagingProduct = String(
     body?.entry?.[0]?.changes?.[0]?.value?.messaging_product ||
       body?.messaging_product ||
@@ -740,6 +795,7 @@ function detectInboundChannel(body: any): "whatsapp" | "instagram" | "unknown" {
     body?.p_whatsapp_id || body?.telefono_whatsapp || body?.from || body?.wa_id ||
     body?.entry?.[0]?.messaging?.[0]?.sender?.id ||
     body?.entry?.[0]?.changes?.[0]?.value?.sender?.id ||
+    body?.entry?.[0]?.changes?.[0]?.value?.from?.id ||
     body?.sender?.id ||
     ""
   ).replace(/\D/g, "");
@@ -748,12 +804,46 @@ function detectInboundChannel(body: any): "whatsapp" | "instagram" | "unknown" {
   return "unknown";
 }
 
+/**
+ * Extrae datos de un evento de comentario de Instagram.
+ * Retorna null si el payload NO es un comentario.
+ */
+function extractInstagramCommentEvent(body: any): {
+  commentId: string;
+  mediaId: string;
+  mediaType: string;
+  senderId: string;
+  senderUsername: string;
+  text: string;
+  parentId: string | null;
+} | null {
+  const field = String(body?.entry?.[0]?.changes?.[0]?.field || "").toLowerCase();
+  if (field !== "comments") return null;
+
+  const value = body?.entry?.[0]?.changes?.[0]?.value;
+  if (!value) return null;
+
+  const commentId = String(value?.id || "").trim();
+  const text = String(value?.text || "").trim();
+  const senderId = String(value?.from?.id || "").trim();
+  const senderUsername = String(value?.from?.username || "").trim();
+  const mediaId = String(value?.media?.id || "").trim();
+  const mediaType = String(value?.media?.media_product_type || "").toLowerCase(); // post | reel | story
+  const parentId = value?.parent_id ? String(value.parent_id) : null;
+
+  // Un comentario válido necesita al menos id + texto + sender
+  if (!commentId || !text || !senderId) return null;
+
+  return { commentId, mediaId, mediaType, senderId, senderUsername, text, parentId };
+}
+
 function isSelfOriginatedInstagramEvent(body: any): boolean {
   if (detectInboundChannel(body) !== "instagram") return false;
 
   const senderId = String(
     body?.entry?.[0]?.messaging?.[0]?.sender?.id ||
       body?.entry?.[0]?.changes?.[0]?.value?.sender?.id ||
+      body?.entry?.[0]?.changes?.[0]?.value?.from?.id || // comentarios
       body?.sender?.id ||
       body?.from ||
       ""
@@ -984,6 +1074,13 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
   const instagramMessagingMessage = body?.entry?.[0]?.messaging?.[0]?.message?.text;
   const instagramMessagingSenderId = body?.entry?.[0]?.messaging?.[0]?.sender?.id;
   const instagramChangeSenderId = body?.entry?.[0]?.changes?.[0]?.value?.sender?.id;
+  // Comentarios de Instagram (changes.field = "comments")
+  const instagramCommentText = body?.entry?.[0]?.changes?.[0]?.field === "comments"
+    ? String(body?.entry?.[0]?.changes?.[0]?.value?.text || "").trim()
+    : undefined;
+  const instagramCommentSenderId = body?.entry?.[0]?.changes?.[0]?.field === "comments"
+    ? String(body?.entry?.[0]?.changes?.[0]?.value?.from?.id || "").trim()
+    : undefined;
 
   const nestedMessage = body?.messages?.[0]?.text?.body;
   const nestedPhone = body?.messages?.[0]?.from;
@@ -1011,6 +1108,7 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
     body?.text?.text,
     body?.text,
     body?.prompt,
+    instagramCommentText,      // comentarios de IG (priority antes de deep)
     instagramMessagingMessage,
     nestedMessage,
     webhookMessage,
@@ -1085,6 +1183,7 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
     body?.contact,
     instagramMessagingSenderId,
     instagramChangeSenderId,
+    instagramCommentSenderId,  // sender de comentario IG
     nestedPhone,
     webhookPhone,
     webhookContactPhone,
@@ -4305,6 +4404,9 @@ export async function POST(req: NextRequest) {
 
     const { message, phone, channel, profileName } = extractMessageAndPhone(body || {});
 
+    // Extraer datos del comentario si es un evento de comentario de Instagram
+    const commentEvent = extractInstagramCommentEvent(body || {});
+
     console.log("[chat] Input extraído:", {
       phone,
       channel,
@@ -4420,7 +4522,7 @@ export async function POST(req: NextRequest) {
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
-      return NextResponse.json(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -4428,7 +4530,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     // INFORMACIÓN JERÁRQUICA
@@ -4448,7 +4550,7 @@ export async function POST(req: NextRequest) {
       const sanitizedResponse = sanitizeForJSON(truncatedNotFound);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
-      return NextResponse.json(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
@@ -4456,7 +4558,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
@@ -4532,7 +4634,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -4540,7 +4642,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     if (shouldUseTodayClassDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -4555,7 +4657,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -4563,7 +4665,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     if (shouldUseNextGroupDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -4578,7 +4680,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -4586,7 +4688,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
     
     // 3. Obtener información de la academia (dirección, redes, contacto)
@@ -4653,7 +4755,7 @@ export async function POST(req: NextRequest) {
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
-      return NextResponse.json(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
@@ -4661,7 +4763,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, activeMedia));
+      }, commentEvent ? null : activeMedia), commentEvent));
     }
     
     // 4. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
@@ -4753,7 +4855,7 @@ export async function POST(req: NextRequest) {
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
     const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-    return NextResponse.json(withMediaSuggestion({
+    return NextResponse.json(addCommentMeta(withMediaSuggestion({
       ok: true,
       response: whatsappResponse || "",
       agent: sanitizedAgent || "Dany",
@@ -4761,7 +4863,7 @@ export async function POST(req: NextRequest) {
       historyLength: Number(history.length) || 0,
       programDetected: sanitizedProgram || null,
       rateLimitRemaining: Number(rateLimit.remaining) || 0,
-    }, activeMediaFinal));
+    }, commentEvent ? null : activeMediaFinal), commentEvent));
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);
     const errorMessage = error?.message || "Error generando respuesta";
