@@ -244,7 +244,7 @@ function addCommentMeta(
   const cleanResponse = payload.response
     ? formatInstagramCommentResponse(String(payload.response))
     : payload.response;
-  const result = { ...payload, response: cleanResponse };
+  const result: Record<string, any> = { ...payload, response: cleanResponse };
   delete result.media_suggestion;
   delete result.media_send_order;
   result.reply_type = "instagram_comment";
