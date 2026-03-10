@@ -4451,6 +4451,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Detectar adjunto sin texto (ej: imagen de Instagram) — responder amigablemente en lugar de 400
+    const hasAttachment = !!(
+      body?.entry?.[0]?.messaging?.[0]?.message?.attachments?.length ||
+      body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type === "image" ||
+      body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type === "sticker" ||
+      body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type === "video" ||
+      body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type === "audio" ||
+      body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type === "document"
+    );
+
+    if (!message && hasAttachment) {
+      const attachmentType = String(
+        body?.entry?.[0]?.messaging?.[0]?.message?.attachments?.[0]?.type ||
+        body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type ||
+        "imagen"
+      );
+      const isAudio = attachmentType === "audio";
+      const friendlyReply = isAudio
+        ? "¡Hola! Por el momento no puedo escuchar audios, pero con mucho gusto te atiendo por texto 😊 ¿En qué te puedo ayudar?"
+        : "¡Hola! Por el momento no puedo ver imágenes, pero con mucho gusto te atiendo por texto 😊 ¿En qué te puedo ayudar?";
+      return NextResponse.json({ ok: true, response: friendlyReply });
+    }
+
     // Validar entrada del usuario
     const inputValidation = validateUserInput(message, 2000);
     if (!inputValidation.valid) {
