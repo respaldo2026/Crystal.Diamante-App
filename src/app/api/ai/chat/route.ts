@@ -1089,7 +1089,7 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
     text: body?.text,
     message: body?.message,
     messages: body?.messages,
-    entry: body?.entry,
+    // No incluir body.entry en deep scan cuando viene de Make (evita que el JSON crudo sea tomado como mensaje)
     data: body?.data,
     payload: body?.payload,
   });
@@ -1097,6 +1097,12 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
   const deepKeyCandidates = extractPhoneCandidatesByKey(body);
 
   const deepPhoneCandidate = findPhoneCandidateDeep([...deepKeyCandidates, ...deepCandidates]);
+
+  // Si Make envía el entry completo, extraer texto de historia/DM directamente
+  const entryMessagingText = body?.entry?.[0]?.messaging?.[0]?.message?.text;
+  const entryStoryReplyText = body?.entry?.[0]?.messaging?.[0]?.message?.reply_to?.story?.id
+    ? (body?.entry?.[0]?.messaging?.[0]?.message?.text || "")
+    : undefined;
 
   const rawMessage = pickFirstNonEmptyString(
     body?.message,
@@ -1109,6 +1115,8 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
     body?.text,
     body?.prompt,
     instagramCommentText,      // comentarios de IG (priority antes de deep)
+    entryMessagingText,        // texto extraído del entry completo enviado por Make
+    entryStoryReplyText,       // respuesta a historia
     instagramMessagingMessage,
     nestedMessage,
     webhookMessage,
@@ -4400,6 +4408,18 @@ export async function POST(req: NextRequest) {
         ignored: true,
         reason: "instagram_self_event",
       });
+    }
+
+    // Ignorar read receipts, delivery receipts y eventos sin mensaje real
+    const messagingEvent = body?.entry?.[0]?.messaging?.[0];
+    if (messagingEvent) {
+      if (messagingEvent.read !== undefined || messagingEvent.delivery !== undefined) {
+        return NextResponse.json({ ok: true, ignored: true, reason: "read_or_delivery_receipt" });
+      }
+      // Ignorar si no hay mensaje de texto ni adjunto ni story reply
+      if (!messagingEvent.message && !messagingEvent.postback) {
+        return NextResponse.json({ ok: true, ignored: true, reason: "no_message_content" });
+      }
     }
 
     const { message, phone, channel, profileName } = extractMessageAndPhone(body || {});
