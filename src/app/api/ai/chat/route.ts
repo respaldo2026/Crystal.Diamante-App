@@ -838,6 +838,15 @@ function extractInstagramCommentEvent(body: any): {
 }
 
 function isSelfOriginatedInstagramEvent(body: any): boolean {
+  // Verificar is_echo PRIMERO, antes de cualquier detección de canal.
+  // Cuando Instagram refleja el mensaje del bot, is_echo=true independientemente
+  // de cómo Make envíe el payload.
+  const isEcho =
+    body?.entry?.[0]?.messaging?.[0]?.message?.is_echo === true ||
+    body?.is_echo === true ||
+    body?.message?.is_echo === true;
+  if (isEcho) return true;
+
   if (detectInboundChannel(body) !== "instagram") return false;
 
   const senderId = String(
@@ -862,8 +871,7 @@ function isSelfOriginatedInstagramEvent(body: any): boolean {
       .filter(Boolean)
   );
 
-  const isEcho = body?.entry?.[0]?.messaging?.[0]?.message?.is_echo === true;
-  return isEcho || ownIds.has(senderId);
+  return ownIds.has(senderId);
 }
 
 function findPhoneCandidateDeep(candidates: string[]): string {
@@ -4397,7 +4405,8 @@ export async function POST(req: NextRequest) {
     const body = await readRequestBody(req);
 
     if (isSelfOriginatedInstagramEvent(body)) {
-      console.log("[chat] Evento saliente de Instagram ignorado", {
+      console.log("[chat] Evento echo/saliente de Instagram ignorado", {
+        isEcho: body?.entry?.[0]?.messaging?.[0]?.message?.is_echo,
         senderId: body?.entry?.[0]?.messaging?.[0]?.sender?.id || body?.entry?.[0]?.changes?.[0]?.value?.sender?.id || null,
         recipientId: body?.entry?.[0]?.messaging?.[0]?.recipient?.id || null,
         entryId: body?.entry?.[0]?.id || null,
@@ -4415,6 +4424,10 @@ export async function POST(req: NextRequest) {
     if (messagingEvent) {
       if (messagingEvent.read !== undefined || messagingEvent.delivery !== undefined) {
         return NextResponse.json({ ok: true, ignored: true, reason: "read_or_delivery_receipt" });
+      }
+      // Ignorar echoes (mensajes enviados por el propio bot reflejados por Instagram)
+      if (messagingEvent.message?.is_echo === true) {
+        return NextResponse.json({ ok: true, ignored: true, reason: "instagram_echo" });
       }
       // Ignorar si no hay mensaje de texto ni adjunto ni story reply
       if (!messagingEvent.message && !messagingEvent.postback) {
