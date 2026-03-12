@@ -149,7 +149,7 @@ export default function MatriculaCreate() {
                     monto: precioMensualidad,
                     estado: "pendiente",
                     metodo_pago: null,
-                    fecha_vencimiento: fechaBase.add(i, "month").format("YYYY-MM-DD"),
+                    fecha_vencimiento: fechaBase.add(i - 1, "month").format("YYYY-MM-DD"),
                     observaciones: `Cuota mensual ${i} de ${numeroCuotas}`,
                 });
             }

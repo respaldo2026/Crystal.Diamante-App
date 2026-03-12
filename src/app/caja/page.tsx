@@ -93,7 +93,8 @@ const calcularFechaVencimientoCuota = (fechaInicio: string | null | undefined, n
   if (!fechaInicio || !numeroCuota || numeroCuota < 1) return "";
   const base = dayjs(fechaInicio);
   if (!base.isValid()) return "";
-  return base.add(numeroCuota, "month").format("YYYY-MM-DD");
+  // Cuota 1 vence el mismo día de inicio, cuota 2 un mes después, etc.
+  return base.add(numeroCuota - 1, "month").format("YYYY-MM-DD");
 };
 
 // Función para generar número de factura secuencial (1000-9999)

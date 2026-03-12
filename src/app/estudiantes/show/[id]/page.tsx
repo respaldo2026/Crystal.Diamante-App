@@ -189,7 +189,8 @@ export default function StudentDetailView() {
       ? dayjs(matricula.fecha_inicio)
       : null;
     if (!fechaBase || !fechaBase.isValid()) return null;
-    return fechaBase.add(numeroCuota, "month").format("YYYY-MM-DD");
+    // Cuota 1 vence el mismo día de inicio, cuota 2 un mes después, etc.
+    return fechaBase.add(numeroCuota - 1, "month").format("YYYY-MM-DD");
   };
 
   const cargarDatosCompletos = useCallback(async () => {
