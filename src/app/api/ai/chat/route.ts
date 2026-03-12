@@ -281,6 +281,12 @@ function validateUserInput(message: string, maxLength: number = 2000): { valid: 
  */
 const requestLimits = new Map<string, number[]>();
 
+/**
+ * Deduplicación de webhooks: guarda los message_id recientes para evitar
+ * procesar el mismo mensaje dos veces cuando Instagram/WhatsApp reenvía el webhook.
+ */
+const processedMessageIds = new Map<string, number>();
+
 function checkRateLimit(phone: string, maxRequests: number = 20, windowMs: number = 60000): { allowed: boolean; remaining: number } {
   const now = Date.now();
   const key = phone || "unknown";
@@ -4486,7 +4492,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Ignorar read receipts, delivery receipts y eventos sin mensaje real
+// Ignorar read receipts, delivery receipts y eventos sin mensaje real
     const messagingEvent = body?.entry?.[0]?.messaging?.[0];
     if (messagingEvent) {
       if (messagingEvent.read !== undefined || messagingEvent.delivery !== undefined) {
@@ -4500,6 +4506,32 @@ export async function POST(req: NextRequest) {
       if (!messagingEvent.message && !messagingEvent.postback) {
         return NextResponse.json({ ok: true, ignored: true, reason: "no_message_content" });
       }
+
+      // ── Deduplicación por message_id ──────────────────────────────────────
+      // Instagram (y WhatsApp) a veces entrega el mismo webhook 2-3 veces en
+      // milisegundos. Guardamos los IDs procesados por 30 segundos para evitar
+      // procesar (y responder) el mismo mensaje más de una vez.
+      const incomingMid: string | undefined =
+        messagingEvent.message?.mid ||
+        messagingEvent.message?.id ||
+        body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.id;
+      if (incomingMid) {
+        const now = Date.now();
+        const DEDUP_WINDOW_MS = 30_000; // 30 s
+        const existing = processedMessageIds.get(incomingMid);
+        if (existing && now - existing < DEDUP_WINDOW_MS) {
+          console.log(`[chat] Webhook duplicado ignorado mid=${incomingMid}`);
+          return NextResponse.json({ ok: true, ignored: true, reason: "duplicate_message_id" });
+        }
+        processedMessageIds.set(incomingMid, now);
+        // Limpiar IDs viejos ocasionalmente para no crecer indefinidamente
+        if (processedMessageIds.size > 500) {
+          for (const [k, ts] of processedMessageIds.entries()) {
+            if (now - ts > DEDUP_WINDOW_MS) processedMessageIds.delete(k);
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
     }
 
     const { message, phone, channel, profileName } = extractMessageAndPhone(body || {});
