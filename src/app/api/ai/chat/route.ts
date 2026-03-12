@@ -600,6 +600,7 @@ Sigue siempre este orden:
 ⚠️ Preguntas de sí/no (ej: "¿Solo es un día a la semana?", "¿Es presencial?", "¿Hay cupos?") → responde PRIMERO sí o no de forma directa y breve, luego agrega el detalle relevante.
 ⚠️ Si el cliente explica que no puede en el horario actual (ej: trabajo lunes-viernes, necesita sábados) → NO le ofrezcas el grupo que ya sabe que no le sirve. Valida su situación, confirma que aún no hay ese horario y pregunta si quiere quedar en lista de espera o si alguna otra opción le funcionaría.
 ⚠️ "Aparte los [número]" / "Aparte de la inscripción" / "¿Y aparte de eso?" → el usuario está en una conversación de precios y pregunta por costos adicionales. Explica directamente: mensualidad $260.000/mes (incluye kit). NO muestres el menú inicial.
+⚠️ "Si que trae" / "sí que trae" / "que trae" / "qué trae" / "qué incluye" / "qué viene en el kit" → el usuario confirma que quiere saber el contenido del kit mensual. Responde SIEMPRE sobre el kit (contiene ~70% de los productos que se usan ese mes) y pregunta de qué ciclo o mes quiere el detalle. NUNCA muestres el bloque de horarios/curso/inscripción como respuesta a esta pregunta.
 ⚠️ "Puedo ir personal" / "¿Puedo ir en persona?" → confirma que SÍ pueden atenderte en la academia y pide que indique cuándo puede ir. NO muestres el menú de horarios/inversión/inscripción.
 ⚠️ Si el usuario muestra frustración ("cuando atienda una persona de verdad", "no me entiendes", "siempre lo mismo") → pide disculpas brevemente, reconoce la limitación y da el número de Admisiones directamente.
 ⚠️ Si el usuario ya dijo "Horarios" y recibió el menú en respuesta — y lo repite — es porque el sistema no respondió su pregunta. Responde INMEDIATAMENTE con los horarios, sin preguntar de nuevo qué tema prefiere.
@@ -615,12 +616,12 @@ Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
 - Horarios (cuando ya se identificó el programa): da directamente la información de días y horarios del programa en cuestión. NO preguntes de nuevo qué quiere saber.
 - Sábados (cuando hay grupo en sábado): confirma el horario disponible y pregunta si le queda bien.
 - Sábados (cuando NO hay grupo en sábado): di claramente que por ahora no hay grupo los sábados. Valida que es una situación entendible si trabajan entre semana. Pregunta si quieren quedar en lista de espera para cuando se abra un grupo en ese horario. NO ofrezcas el grupo de martes ni ningún otro día como alternativa sin que te lo pidan.
-- Uniforme / kit primer día: el uniforme (camiseta) se entrega al momento de la inscripción. El kit de materiales se entrega al inicio de cada mes junto con el pago de mensualidad. El primer día puedes venir con ropa cómoda, no necesitas llevar nada.
+- Uniforme / kit primer día: el uniforme (camiseta) se entrega al momento de la inscripción. El kit de materiales se entrega al inicio de cada mes junto con el pago de mensualidad; contiene aproximadamente el 70% de los productos que se usan durante ese mes de clases. El primer día puedes venir con ropa cómoda, no necesitas llevar nada.
 - "¿Cuántas clases cubre la mensualidad?": cada mensualidad cubre 4 clases aproximadamente (el programa es de 20 clases en 5 meses). Ofrece detallar el contenido de algún mes específico.
 - "¿No le rebajan a la mensualidad?" / negociación de precio: la mensualidad tiene un precio fijo de $260.000. Sin embargo, Sistecredito permite financiar en cuotas. ¿Quieres que te explique cómo funciona esa opción?
 - Fotos del kit: di que puedes conseguirlas, pide confirmar programa/ciclo para enviar las correctas.
-- ¿Qué trae el kit?: explica que varía por ciclo; pregunta si quiere el detalle del primer mes o de un ciclo específico.
-- ¿Es kit básico?: confirma que es básico para práctica; aclara que hay materiales específicos por ciclo y ofrece detallar el primer ciclo.
+- ¿Qué trae el kit?: explica que el kit incluye aproximadamente el 70% de los productos que se usan durante ese mes de clases (varía por ciclo). Pregunta si quiere el detalle del primer mes o de un ciclo específico.
+- ¿Es kit básico?: confirma que el kit cubre aproximadamente el 70% de los productos que se usan ese mes (lo esencial para practicar); aclara que los materiales específicos varían por ciclo y ofrece detallar el primer ciclo.
 - ¿Qué enseñan?: responde con enfoque del programa (cejas/pestañas, práctico desde cero) y pregunta qué le interesa más.
 - ¿Puedo ir personal?: confirma atención personal y pide día y hora para agendar.
 - ¿Hay sede más cerca?: valida la inquietud, indica sede disponible y pide zona/barrio para sugerir la opción más conveniente.
@@ -3143,7 +3144,7 @@ function buildPaymentMethodsAndDatesReply(mediosPago: any[] = []): string {
     ? `💳 *Medios de pago disponibles:*\n${methods.join("\n")}`
     : "💳 *Medios de pago:* te los confirma Admisiones según el canal que prefieras.";
 
-  return `¡Claro! Te explico 🙌\n\n${methodsBlock}\n\n✅ La *matrícula* se paga anticipada; así separas tu cupo.\n✅ La *mensualidad* tiene plazo hasta la *segunda clase*.\n✅ Con la mensualidad recibes *kit de materiales mensual* para prácticas.\n\nSi quieres, te digo cuál opción te conviene más según cómo prefieras pagar.`;
+  return `¡Claro! Te explico 🙌\n\n${methodsBlock}\n\n✅ La *matrícula* se paga anticipada; así separas tu cupo.\n✅ La *mensualidad* tiene plazo hasta la *segunda clase*.\n✅ Con la mensualidad recibes *kit de materiales mensual* (incluye ~70% de los productos que usas ese mes).\n\nSi quieres, te digo cuál opción te conviene más según cómo prefieras pagar.`;
 }
 
 function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
@@ -3744,7 +3745,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
 
     const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
-    const monthlyIncludes = "Incluye: Cada mes te damos kit de productos";
+    const monthlyIncludes = "Incluye: Cada mes te damos kit de productos (~70% de lo que usas ese mes)";
 
     const normalizedMessage = normalizeForMatch(message);
     const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
@@ -3761,7 +3762,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     }
 
     if (asksMonthlyConfirmation) {
-      return `✅ Sí, la *mensualidad* es ${menText}.\n🧴 *Cada mes te damos kit de productos.*\n\n¿Quieres que te comparta también los *medios de pago* y las *fechas de pago*?`;
+      return `✅ Sí, la *mensualidad* es ${menText}.\n🧴 *Cada mes te damos kit de productos* (~70% de los materiales que usas ese mes).\n\n¿Quieres que te comparta también los *medios de pago* y las *fechas de pago*?`;
     }
 
     if (asksTotalToPay) {
@@ -3769,11 +3770,11 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
         ? formatCurrencyCOP(inscripcion + mensualidad)
         : "Por confirmar";
 
-      return `💸 Si pagas para iniciar con todo listo, sería:\n• *Inscripción:* ${insText}\n• *Mensualidad:* ${menText}\n• *Total inicial (inscripción + mensualidad):* ${totalInicio}\n\n✅ *Lo ideal* es pagar inscripción y mensualidad de una, porque con la mensualidad te entregamos el *kit de productos* para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase*, que es cuando se empiezan a usar los productos.`;
+      return `💸 Si pagas para iniciar con todo listo, sería:\n• *Inscripción:* ${insText}\n• *Mensualidad:* ${menText}\n• *Total inicial (inscripción + mensualidad):* ${totalInicio}\n\n✅ *Lo ideal* es pagar inscripción y mensualidad de una, porque con la mensualidad te entregamos el *kit de productos* (~70% de lo que usas ese mes) para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase*, que es cuando se empiezan a usar los productos.`;
     }
 
     if (asksPartialPayment) {
-      return `Buena pregunta 👌\n\n✅ *Lo ideal* es pagar *inscripción y mensualidad de una*, porque con la mensualidad te entregamos el *kit de productos* para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase* (ahí se empiezan a usar los productos).\n\nPara iniciar hoy, se maneja:\n💰 *Inscripción:* ${insText}\n💰 *Mensualidad:* ${menText}`;
+      return `Buena pregunta 👌\n\n✅ *Lo ideal* es pagar *inscripción y mensualidad de una*, porque con la mensualidad te entregamos el *kit de productos* (~70% de lo que usas ese mes) para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase* (ahí se empiezan a usar los productos).\n\nPara iniciar hoy, se maneja:\n💰 *Inscripción:* ${insText}\n💰 *Mensualidad:* ${menText}`;
     }
 
     const recentConversationText = (Array.isArray(history) ? history : [])
