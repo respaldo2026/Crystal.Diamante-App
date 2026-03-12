@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 const DEFAULT_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_LIQUIDACION_PROFESOR || "liquidacion_horas_profesor_v1";
 const DEFAULT_TEMPLATE_LANG = process.env.WHATSAPP_TEMPLATE_LIQUIDACION_PROFESOR_LANG || "es_CO";
+const DIRECTOR_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_RESUMEN_DIRECTOR || "resumen_liquidacion_director";
 const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALLOW_TEXT_FALLBACK || "true").toLowerCase() === "true";
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_MAX_BULK_PER_RUN || 60);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_DELAY_BETWEEN_SENDS_MS || 1000);
@@ -124,19 +125,22 @@ async function runLiquidacionJob() {
 
   const { year, month, day } = parseBogotaDateParts();
   const lastDay = getLastDayOfMonth(year, month);
-  const esQuincena = day === 15;
-  const esFinMes = day === lastDay;
+  // Se envía 1 día ANTES del pago: día 14 anticipa el pago del 15,
+  // y el penúltimo día anticipa el pago del último día del mes.
+  const esQuincena = day === 14;
+  const esFinMes = day === lastDay - 1;
 
   if (!esQuincena && !esFinMes) {
     return {
       success: true,
       skipped: true,
-      reason: "Hoy no es día de liquidación (15 o fin de mes)",
+      reason: "Hoy no es día previo a liquidación (14 o penúltimo día del mes)",
       today: `${year}-${pad(month)}-${pad(day)}`,
     };
   }
 
   const startDay = esQuincena ? 1 : 16;
+  // El período completo es hasta el 15 o fin de mes, aunque se envíe un día antes.
   const endDay = esQuincena ? 15 : lastDay;
   const startISO = formatDateISO(year, month, startDay);
   const endISO = formatDateISO(year, month, endDay);
@@ -320,6 +324,52 @@ async function runLiquidacionJob() {
     }
   }
 
+  // ── Notificación al director ─────────────────────────────────────────
+  const fechaPago = new Date(
+    Date.UTC(year, month - 1, endDay),
+  ).toLocaleDateString("es-CO", { day: "numeric", month: "long", timeZone: BOGOTA_TIMEZONE });
+
+  let directorNotificado = false;
+  let directorError: string | undefined;
+
+  try {
+    // Teléfono y nombre: variable de entorno > perfil con rol 'director' en BD
+    let directorTelefono = normalizePhone(process.env.WHATSAPP_DIRECTOR_PHONE || "");
+    let directorNombre = "Director";
+
+    const { data: directorPerfil } = await supabase
+      .from("perfiles")
+      .select("telefono, nombre_completo")
+      .eq("rol", "director")
+      .limit(1)
+      .maybeSingle();
+
+    if (directorPerfil?.nombre_completo) {
+      directorNombre = directorPerfil.nombre_completo.trim().split(" ")[0];
+    }
+    if (!directorTelefono && directorPerfil?.telefono) {
+      directorTelefono = normalizePhone(directorPerfil.telefono);
+    }
+
+    if (directorTelefono) {
+      const totalProfesoras = `${resumenByProfesor.size} profesor${resumenByProfesor.size === 1 ? "a" : "as"}`;
+      await WhatsAppService.sendTemplate(
+        directorTelefono,
+        DIRECTOR_TEMPLATE_NAME,
+        [directorNombre, fechaPago, periodoTexto, totalProfesoras],
+        DEFAULT_TEMPLATE_LANG,
+      );
+      directorNotificado = true;
+      console.log(`[Cron Liquidacion] Resumen enviado al director (${directorTelefono})`);
+    } else {
+      console.warn("[Cron Liquidacion] No se encontró teléfono del director");
+    }
+  } catch (directorErr) {
+    directorError = directorErr instanceof Error ? directorErr.message : "Error desconocido";
+    console.error("[Cron Liquidacion] Error notificando al director:", directorErr);
+  }
+  // ─────────────────────────────────────────────────────────────────────
+
   return {
     success: true,
     skipped: false,
@@ -327,6 +377,7 @@ async function runLiquidacionJob() {
       startISO,
       endISO,
       periodoTexto,
+      fechaPago,
       corte: esQuincena ? "quincena_1_15" : "quincena_16_fin",
     },
     totales: {
@@ -341,6 +392,7 @@ async function runLiquidacionJob() {
       language: DEFAULT_TEMPLATE_LANG,
       fallbackTextEnabled: ALLOW_TEXT_FALLBACK,
     },
+    director: { notificado: directorNotificado, error: directorError },
     detalles,
     timestamp: new Date().toISOString(),
   };
@@ -348,6 +400,27 @@ async function runLiquidacionJob() {
 
 function valueOrZero(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function buildDirectorResumen(
+  periodoTexto: string,
+  resumen: Map<string, ResumenProfesor>,
+  enviados: number,
+  fechaPago: string,
+): string {
+  const lineas = Array.from(resumen.values()).map(
+    (r) => `• ${r.nombre.split(" ")[0]}: ${r.horas.toFixed(1)}h → ${moneyCOP(r.valor)}`,
+  );
+  return [
+    `📊 *Liquidación Profesores*`,
+    `Periodo: ${periodoTexto}`,
+    `Fecha de pago: ${fechaPago}`,
+    ``,
+    lineas.join("\n"),
+    ``,
+    `✅ Recordatorios enviados: ${enviados} de ${resumen.size}`,
+    `_Academia Crystal Diamante_`,
+  ].join("\n");
 }
 
 export async function POST(request: NextRequest) {
