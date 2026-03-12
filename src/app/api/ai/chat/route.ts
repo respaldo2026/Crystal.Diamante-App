@@ -1560,9 +1560,37 @@ Ayuda al usuario a conocer:
   }
 
   if (conversationHistory.length > 0) {
+    // Calcular si hay brecha de tiempo significativa desde el último mensaje
+    const lastMsg = conversationHistory[conversationHistory.length - 1];
+    const lastMsgDate = lastMsg?.created_at ? new Date(lastMsg.created_at) : null;
+    const nowMs = Date.now();
+    const gapMs = lastMsgDate ? nowMs - lastMsgDate.getTime() : 0;
+    const gapHours = gapMs / (1000 * 60 * 60);
+    const isStaleHistory = gapHours > 4;
+    const isDaysOld = gapHours > 24;
+
+    // Detectar si el agente dejó una promesa pendiente sin resolver
+    const lastAgentText = String(lastMsg?.agent || "").toLowerCase();
+    const hasPendingPromise =
+      isDaysOld &&
+      /confirmo\s+enseguida|te\s+confirmo|voy\s+a\s+validar|voy\s+a\s+consultar|voy\s+a\s+verificar|te\s+aviso|te\s+digo|te\s+cuento\s+en|me\s+comprometo/.test(lastAgentText);
+
+    if (isDaysOld) {
+      const daysAgo = Math.round(gapHours / 24);
+      prompt += `\n# ⚠️ ALERTA DE SESIÓN: El historial tiene ${daysAgo} día(s) de antigüedad. ESTA ES UNA CONVERSACIÓN NUEVA — NO asumas que el tema anterior sigue activo. Saluda fresca y naturalmente, pregunta en qué puedes ayudar HOY. NO uses "Perfecto" ni transiciones que impliquen continuidad inmediata.\n`;
+      if (hasPendingPromise) {
+        prompt += `# 🔴 PROMESA PENDIENTE DETECTADA: En el historial, el agente prometió confirmar algo que quedó sin respuesta. Si el usuario no pregunta explícitamente, NO menciones esa promesa. Si la situación surge naturalmente, discúlpate brevemente y ofrece retomar.\n`;
+      }
+    } else if (isStaleHistory) {
+      prompt += `\n# ℹ️ NOTA: El historial tiene más de 4 horas de antigüedad. Trata esta sesión como semi-nueva: saluda con calidez si el usuario saluda, y verifica el tema antes de asumir continuidad.\n`;
+    }
+
     prompt += `\n# Historial de conversación reciente:\n`;
     conversationHistory.forEach((msg) => {
-      prompt += `\nUsuario: ${msg.user}\n${persona}: ${msg.agent}\n`;
+      const dateLabel = msg.created_at
+        ? ` [${new Date(msg.created_at).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit" })}]`
+        : "";
+      prompt += `\nUsuario${dateLabel}: ${msg.user}\n${persona}: ${msg.agent}\n`;
     });
   }
 
@@ -1864,10 +1892,23 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
   return "";
 }
 
+function isPureGreeting(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  // Solo saludos solos, sin contenido adicional
+  return /^(hola|hola\s+de\s+nuevo|hola\s+buenas?|buenas?\s*(d[ií]as?|tardes?|noches?)?|buen\s*d[ií]a|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|saludos|qué\s+tal|que\s+tal)$/.test(text.trim());
+}
+
 function enrichMessageWithFollowUpContext(
   userMessage: string,
   history: Array<{ user: string; agent: string }>
 ): string {
+  // Nunca enriquecer un saludo puro — el usuario está iniciando nueva sesión,
+  // no confirmando un tema anterior.
+  if (isPureGreeting(userMessage)) {
+    return userMessage;
+  }
+
   if (!isShortAffirmativeReply(userMessage)) {
     return userMessage;
   }
