@@ -271,7 +271,12 @@ SELECT
   m.id                                                              AS matricula_id,
   s.cuota                                                           AS numero_cuota,
   'Ciclo mensual ' || s.cuota || ' de ' || c.numero_cuotas         AS periodo_pagado,
-  COALESCE(c.precio_mensualidad, p.precio_mensualidad)             AS monto,
+  -- Buscar precio mensualidad con todos los fallbacks posibles
+  COALESCE(
+    NULLIF(c.precio_mensualidad, 0),
+    NULLIF(p.precio_mensualidad, 0),
+    NULLIF(p.precio, 0)
+  )                                                                 AS monto,
   'pendiente'                                                       AS estado,
   NULL                                                              AS metodo_pago,
   (c.fecha_inicio + ((s.cuota - 1) || ' month')::INTERVAL)::DATE   AS fecha_vencimiento,
@@ -282,11 +287,28 @@ JOIN   public.programas  p ON p.id = c.programa_id
 CROSS  JOIN LATERAL generate_series(1, c.numero_cuotas) AS s(cuota)
 WHERE  c.fecha_inicio   IS NOT NULL
   AND  c.numero_cuotas  > 0
+  -- Garantizar que el monto sea positivo (el trigger lo exige)
+  AND  COALESCE(NULLIF(c.precio_mensualidad, 0), NULLIF(p.precio_mensualidad, 0), NULLIF(p.precio, 0)) > 0
+  -- Solo inserta si la cuota no existe aún
   AND  NOT EXISTS (
          SELECT 1 FROM public.pagos px
          WHERE  px.matricula_id = m.id
            AND  px.numero_cuota = s.cuota
        );
+
+-- Diagnóstico: mostrar matrículas donde no se pudo calcular el monto
+-- (si aparecen aquí, hay que revisar precios en programas/cursos)
+SELECT
+  m.id               AS matricula_id,
+  c.nombre           AS curso,
+  c.precio_mensualidad AS "precio_mensualidad (cursos)",
+  p.precio_mensualidad AS "precio_mensualidad (programas)",
+  p.precio             AS "precio (programas)"
+FROM   public.matriculas m
+JOIN   public.cursos     c ON c.id = m.curso_id
+JOIN   public.programas  p ON p.id = c.programa_id
+WHERE  COALESCE(NULLIF(c.precio_mensualidad, 0), NULLIF(p.precio_mensualidad, 0), NULLIF(p.precio, 0)) IS NULL
+ORDER  BY m.id;
 
 -- ============================================================
 -- PASO 7: Actualizar labels "Cuota X de 4" → "Ciclo mensual X de 5"
