@@ -58,11 +58,9 @@ BEGIN
   );
 
   -- Número de cuotas mensuales (NUNCA incluye la inscripción).
-  -- Prioridad: numero_cuotas del curso → numero_cuotas del programa
-  --            → número extraído de duracion → 5 por defecto.
+  -- Prioridad: numero_cuotas del curso → número extraído de duracion del programa → 5 por defecto.
   v_num_cuotas := COALESCE(
     NULLIF(NULLIF(v_curso.data->>'numero_cuotas', '')::INTEGER, 0),
-    NULLIF(NULLIF(v_programa.data->>'numero_cuotas', '')::INTEGER, 0),
     NULLIF(
       REGEXP_REPLACE(COALESCE(v_programa.data->>'duracion', ''), '[^0-9]', '', 'g'),
       ''
@@ -241,29 +239,21 @@ GROUP  BY p.numero_cuota, c.fecha_inicio, p.fecha_vencimiento, p.estado
 ORDER  BY c.fecha_inicio, p.numero_cuota;
 
 -- ============================================================
--- PASO 5: Sincronizar numero_cuotas en programas y cursos
---         a partir del campo duracion (ej: "5 meses" → 5)
+-- PASO 5: Sincronizar numero_cuotas en cursos
+--         a partir del campo duracion del programa (ej: "5 meses" → 5)
 --
 -- La inscripción es un cobro aparte (cuota 0).
 -- numero_cuotas = número de MENSUALIDADES, nunca incluye inscripción.
 -- ============================================================
 
-UPDATE public.programas
-SET    numero_cuotas = REGEXP_REPLACE(duracion, '[^0-9]', '', 'g')::INTEGER
-WHERE  duracion ~ '\d+'
-  AND  (numero_cuotas IS NULL
-        OR numero_cuotas = 0
-        OR numero_cuotas != REGEXP_REPLACE(duracion, '[^0-9]', '', 'g')::INTEGER);
-
 UPDATE public.cursos c
-SET    numero_cuotas = p.numero_cuotas
+SET    numero_cuotas = REGEXP_REPLACE(p.duracion, '[^0-9]', '', 'g')::INTEGER
 FROM   public.programas p
-WHERE  c.programa_id = p.id
-  AND  p.numero_cuotas IS NOT NULL
-  AND  p.numero_cuotas > 0
+WHERE  c.programa_id  = p.id
+  AND  p.duracion    ~ '\d+'
   AND  (c.numero_cuotas IS NULL
         OR c.numero_cuotas = 0
-        OR c.numero_cuotas != p.numero_cuotas);
+        OR c.numero_cuotas != REGEXP_REPLACE(p.duracion, '[^0-9]', '', 'g')::INTEGER);
 
 -- ============================================================
 -- PASO 6: Insertar cuotas faltantes para estudiantes existentes
@@ -280,20 +270,18 @@ SELECT
   m.estudiante_id,
   m.id                                                              AS matricula_id,
   s.cuota                                                           AS numero_cuota,
-  'Ciclo mensual ' || s.cuota || ' de ' || p.numero_cuotas         AS periodo_pagado,
+  'Ciclo mensual ' || s.cuota || ' de ' || c.numero_cuotas         AS periodo_pagado,
   COALESCE(c.precio_mensualidad, p.precio_mensualidad)             AS monto,
   'pendiente'                                                       AS estado,
   NULL                                                              AS metodo_pago,
   (c.fecha_inicio + ((s.cuota - 1) || ' month')::INTERVAL)::DATE   AS fecha_vencimiento,
-  'Cuota mensual ' || s.cuota || ' de ' || p.numero_cuotas         AS observaciones
+  'Cuota mensual ' || s.cuota || ' de ' || c.numero_cuotas         AS observaciones
 FROM   public.matriculas m
 JOIN   public.cursos     c ON c.id = m.curso_id
 JOIN   public.programas  p ON p.id = c.programa_id
--- Genera los números de cuota esperados (1 .. numero_cuotas)
-CROSS  JOIN LATERAL generate_series(1, p.numero_cuotas) AS s(cuota)
-WHERE  c.fecha_inicio IS NOT NULL
-  AND  p.numero_cuotas > 0
-  -- Solo inserta si la cuota no existe aún
+CROSS  JOIN LATERAL generate_series(1, c.numero_cuotas) AS s(cuota)
+WHERE  c.fecha_inicio   IS NOT NULL
+  AND  c.numero_cuotas  > 0
   AND  NOT EXISTS (
          SELECT 1 FROM public.pagos px
          WHERE  px.matricula_id = m.id
