@@ -170,3 +170,63 @@ JOIN   public.matriculas m ON m.id = p.matricula_id
 WHERE  p.numero_cuota >= 1
 GROUP  BY p.numero_cuota, m.fecha_inicio, p.fecha_vencimiento, p.estado
 ORDER  BY m.fecha_inicio, p.numero_cuota;
+
+-- ============================================================
+-- PASO 3: Corregir fecha_inicio en matriculas que no coinciden
+--         con la fecha de inicio real del curso
+--
+-- PROBLEMA: Al crear una matrícula el formulario guardaba la
+-- fecha actual en lugar de la fecha del curso. Ej: un estudiante
+-- inscrito el 24-feb en el curso del 18-feb tenía fecha_inicio
+-- = 24-feb, provocando vencimientos desfasados.
+-- ============================================================
+
+UPDATE public.matriculas m
+SET    fecha_inicio = c.fecha_inicio
+FROM   public.cursos c
+WHERE  m.curso_id     = c.id
+  AND  c.fecha_inicio IS NOT NULL
+  AND  m.fecha_inicio IS DISTINCT FROM c.fecha_inicio;
+
+-- Verificar resultado: todas las matrículas deben tener la misma
+-- fecha_inicio que su curso
+SELECT
+  c.nombre                AS curso,
+  c.fecha_inicio          AS "Inicio del curso",
+  m.fecha_inicio          AS "Inicio en matrícula",
+  CASE WHEN m.fecha_inicio = c.fecha_inicio THEN '✅ OK' ELSE '❌ Desfasado' END AS estado
+FROM   public.matriculas m
+JOIN   public.cursos c ON c.id = m.curso_id
+ORDER  BY c.fecha_inicio, m.fecha_inicio;
+
+-- ============================================================
+-- PASO 4: Recalcular las fechas de vencimiento de pagos
+--         que quedaron desfasados por el fecha_inicio incorrecto
+--
+-- Aplica la fórmula correcta: vencimiento = fecha_inicio_curso + (cuota-1) meses
+-- Solo actualiza si la fecha_vencimiento actual NO coincide con la esperada.
+-- ============================================================
+
+UPDATE public.pagos p
+SET    fecha_vencimiento = (c.fecha_inicio + ((p.numero_cuota - 1) || ' month')::INTERVAL)::DATE
+FROM   public.matriculas m
+JOIN   public.cursos c ON c.id = m.curso_id
+WHERE  p.matricula_id    = m.id
+  AND  p.numero_cuota   >= 1
+  AND  c.fecha_inicio   IS NOT NULL
+  AND  p.fecha_vencimiento IS DISTINCT FROM
+       (c.fecha_inicio + ((p.numero_cuota - 1) || ' month')::INTERVAL)::DATE;
+
+-- Verificación final
+SELECT
+  p.numero_cuota,
+  c.fecha_inicio                AS "Inicio curso",
+  p.fecha_vencimiento           AS "Vencimiento final",
+  p.estado,
+  COUNT(*) AS registros
+FROM   public.pagos p
+JOIN   public.matriculas m ON m.id = p.matricula_id
+JOIN   public.cursos c ON c.id = m.curso_id
+WHERE  p.numero_cuota >= 1
+GROUP  BY p.numero_cuota, c.fecha_inicio, p.fecha_vencimiento, p.estado
+ORDER  BY c.fecha_inicio, p.numero_cuota;

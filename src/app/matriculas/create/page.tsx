@@ -401,7 +401,7 @@ export default function MatriculaCreate() {
         try {
             const { data: curso, error: errCurso } = await supabaseBrowserClient
                 .from("cursos")
-                .select("cupos, nombre, programa_id")
+                .select("cupos, nombre, programa_id, fecha_inicio")
                 .eq("id", cursoIdNumber)
                 .single();
 
@@ -410,6 +410,11 @@ export default function MatriculaCreate() {
             if (curso?.programa_id) {
                 setProgramaSeleccionado(String(curso.programa_id));
                 formProps.form?.setFieldValue("programa_id", curso.programa_id);
+            }
+
+            // Autocompletar fecha_inicio desde el curso — nunca debe ser la fecha de hoy
+            if (curso?.fecha_inicio) {
+                formProps.form?.setFieldValue("fecha_inicio", dayjs(curso.fecha_inicio));
             }
 
             const { count, error: errCount } = await supabaseBrowserClient
