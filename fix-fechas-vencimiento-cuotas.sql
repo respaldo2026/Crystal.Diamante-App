@@ -24,7 +24,7 @@ DECLARE
   v_programa RECORD;
   v_precio_inscripcion NUMERIC := 0;
   v_precio_mensualidad NUMERIC := 0;
-  v_num_cuotas INTEGER := 4;
+  v_num_cuotas INTEGER := 5;
   v_fecha_base DATE;
   v_has_periodo_pagado BOOLEAN := FALSE;
   v_i INTEGER;
@@ -57,14 +57,21 @@ BEGIN
     0
   );
 
+  -- Número de cuotas mensuales (NUNCA incluye la inscripción).
+  -- Prioridad: numero_cuotas del curso → numero_cuotas del programa
+  --            → número extraído de duracion → 5 por defecto.
   v_num_cuotas := COALESCE(
-    NULLIF(v_curso.data->>'numero_cuotas', '')::INTEGER,
-    NULLIF(v_programa.data->>'numero_cuotas', '')::INTEGER,
-    4
+    NULLIF(NULLIF(v_curso.data->>'numero_cuotas', '')::INTEGER, 0),
+    NULLIF(NULLIF(v_programa.data->>'numero_cuotas', '')::INTEGER, 0),
+    NULLIF(
+      REGEXP_REPLACE(COALESCE(v_programa.data->>'duracion', ''), '[^0-9]', '', 'g'),
+      ''
+    )::INTEGER,
+    5
   );
 
   IF v_num_cuotas < 1 THEN
-    v_num_cuotas := 1;
+    v_num_cuotas := 5;
   END IF;
 
   v_fecha_base := COALESCE(NEW.fecha_inicio, v_curso.fecha_inicio, CURRENT_DATE);
@@ -77,7 +84,8 @@ BEGIN
       AND column_name  = 'periodo_pagado'
   ) INTO v_has_periodo_pagado;
 
-  -- 1) Pago de inscripción (cuota 0): vence el mismo día de inicio
+  -- 1) Pago de inscripción (cuota 0): vence el mismo día de inicio.
+  --    Es independiente de las cuotas mensuales; NO cuenta como mes.
   IF v_precio_inscripcion > 0 THEN
     IF v_has_periodo_pagado THEN
       INSERT INTO public.pagos (
@@ -100,8 +108,9 @@ BEGIN
     END IF;
   END IF;
 
-  -- 2) Cuotas mensuales:
-  --    Cuota 1 → fecha_base + 0 meses (mismo día de inicio)
+  -- 2) Cuotas mensuales (cuota 1 … v_num_cuotas).
+  --    La inscripción NO se cuenta aquí.
+  --    Cuota 1 → fecha_base + 0 meses (mismo día de inicio del curso)
   --    Cuota 2 → fecha_base + 1 mes
   --    Cuota N → fecha_base + (N-1) meses
   IF v_precio_mensualidad > 0 THEN
@@ -112,7 +121,7 @@ BEGIN
           monto, estado, metodo_pago, fecha_vencimiento, observaciones
         ) VALUES (
           NEW.estudiante_id, NEW.id, v_i,
-          'Cuota ' || v_i || ' de ' || v_num_cuotas,
+          'Ciclo mensual ' || v_i || ' de ' || v_num_cuotas,
           v_precio_mensualidad, 'pendiente', NULL,
           (v_fecha_base + ((v_i - 1) || ' month')::INTERVAL)::DATE,
           'Cuota mensual ' || v_i || ' de ' || v_num_cuotas
@@ -229,4 +238,96 @@ JOIN   public.matriculas m ON m.id = p.matricula_id
 JOIN   public.cursos c ON c.id = m.curso_id
 WHERE  p.numero_cuota >= 1
 GROUP  BY p.numero_cuota, c.fecha_inicio, p.fecha_vencimiento, p.estado
+ORDER  BY c.fecha_inicio, p.numero_cuota;
+
+-- ============================================================
+-- PASO 5: Sincronizar numero_cuotas en programas y cursos
+--         a partir del campo duracion (ej: "5 meses" → 5)
+--
+-- La inscripción es un cobro aparte (cuota 0).
+-- numero_cuotas = número de MENSUALIDADES, nunca incluye inscripción.
+-- ============================================================
+
+UPDATE public.programas
+SET    numero_cuotas = REGEXP_REPLACE(duracion, '[^0-9]', '', 'g')::INTEGER
+WHERE  duracion ~ '\d+'
+  AND  (numero_cuotas IS NULL
+        OR numero_cuotas = 0
+        OR numero_cuotas != REGEXP_REPLACE(duracion, '[^0-9]', '', 'g')::INTEGER);
+
+UPDATE public.cursos c
+SET    numero_cuotas = p.numero_cuotas
+FROM   public.programas p
+WHERE  c.programa_id = p.id
+  AND  p.numero_cuotas IS NOT NULL
+  AND  p.numero_cuotas > 0
+  AND  (c.numero_cuotas IS NULL
+        OR c.numero_cuotas = 0
+        OR c.numero_cuotas != p.numero_cuotas);
+
+-- ============================================================
+-- PASO 6: Insertar cuotas faltantes para estudiantes existentes
+--
+-- Para cada matrícula, detecta qué cuotas mensuales (1..N)
+-- no existen aún y las inserta con la fecha correcta.
+-- ============================================================
+
+INSERT INTO public.pagos (
+  estudiante_id, matricula_id, numero_cuota, periodo_pagado,
+  monto, estado, metodo_pago, fecha_vencimiento, observaciones
+)
+SELECT
+  m.estudiante_id,
+  m.id                                                              AS matricula_id,
+  s.cuota                                                           AS numero_cuota,
+  'Ciclo mensual ' || s.cuota || ' de ' || p.numero_cuotas         AS periodo_pagado,
+  COALESCE(c.precio_mensualidad, p.precio_mensualidad)             AS monto,
+  'pendiente'                                                       AS estado,
+  NULL                                                              AS metodo_pago,
+  (c.fecha_inicio + ((s.cuota - 1) || ' month')::INTERVAL)::DATE   AS fecha_vencimiento,
+  'Cuota mensual ' || s.cuota || ' de ' || p.numero_cuotas         AS observaciones
+FROM   public.matriculas m
+JOIN   public.cursos     c ON c.id = m.curso_id
+JOIN   public.programas  p ON p.id = c.programa_id
+-- Genera los números de cuota esperados (1 .. numero_cuotas)
+CROSS  JOIN LATERAL generate_series(1, p.numero_cuotas) AS s(cuota)
+WHERE  c.fecha_inicio IS NOT NULL
+  AND  p.numero_cuotas > 0
+  -- Solo inserta si la cuota no existe aún
+  AND  NOT EXISTS (
+         SELECT 1 FROM public.pagos px
+         WHERE  px.matricula_id = m.id
+           AND  px.numero_cuota = s.cuota
+       );
+
+-- ============================================================
+-- PASO 7: Actualizar labels "Cuota X de 4" → "Ciclo mensual X de 5"
+--         en pagos que tenían el total incorrecto
+-- ============================================================
+
+UPDATE public.pagos p
+SET    periodo_pagado = 'Ciclo mensual ' || p.numero_cuota || ' de ' || p2.total
+FROM (
+  SELECT matricula_id, MAX(numero_cuota) AS total
+  FROM   public.pagos
+  WHERE  numero_cuota >= 1
+  GROUP  BY matricula_id
+) p2
+WHERE  p.matricula_id  = p2.matricula_id
+  AND  p.numero_cuota >= 1
+  AND  p.periodo_pagado NOT LIKE 'Ciclo mensual ' || p.numero_cuota || ' de ' || p2.total;
+
+-- Verificación final completa
+SELECT
+  p.numero_cuota,
+  c.fecha_inicio                AS "Inicio curso",
+  p.fecha_vencimiento           AS "Vencimiento",
+  p.periodo_pagado              AS "Periodo",
+  p.estado,
+  COUNT(*) AS registros
+FROM   public.pagos p
+JOIN   public.matriculas m ON m.id = p.matricula_id
+JOIN   public.cursos c     ON c.id = m.curso_id
+WHERE  p.numero_cuota >= 1
+GROUP  BY p.numero_cuota, c.fecha_inicio, p.fecha_vencimiento, p.periodo_pagado, p.estado
 ORDER  BY c.fecha_inicio, p.numero_cuota;
