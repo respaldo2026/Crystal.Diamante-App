@@ -161,7 +161,8 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
 
       try {
         const telefono = telefonoNormalizado;
-        const fecha = new Date(cuota.fecha_vencimiento).toLocaleDateString('es-CO', { month: 'long' });
+        const fechaMes = new Date(cuota.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-CO', { month: 'long' });
+        const fecha = fechaMes.charAt(0).toUpperCase() + fechaMes.slice(1);
         const monto = `$${Number(cuota.monto).toLocaleString()}`;
         const curso = matricula?.cursos?.nombre || 'Curso';
 
