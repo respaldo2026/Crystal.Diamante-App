@@ -1085,6 +1085,28 @@ function extractProfileName(body: any): string {
   return normalizeProfileName(name);
 }
 
+/**
+ * Llama la Graph API de Meta para obtener el username/nombre de un usuario de Instagram DM.
+ * El webhook de Instagram solo envía el IGSID (ID numérico), no el username.
+ * Usa INSTAGRAM_PAGE_ACCESS_TOKEN si existe, si no intenta con WHATSAPP_ACCESS_TOKEN.
+ */
+async function fetchInstagramSenderUsername(igsid: string): Promise<string> {
+  if (!igsid || igsid === "unknown" || !/^\d{10,20}$/.test(igsid)) return "";
+  const token =
+    process.env.INSTAGRAM_PAGE_ACCESS_TOKEN ||
+    process.env.WHATSAPP_ACCESS_TOKEN;
+  if (!token) return "";
+  try {
+    const url = `https://graph.instagram.com/v21.0/${encodeURIComponent(igsid)}?fields=name,username&access_token=${encodeURIComponent(token)}`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!resp.ok) return "";
+    const data = await resp.json();
+    return normalizeProfileName(data?.username || data?.name || "");
+  } catch {
+    return "";
+  }
+}
+
 function extractMessageAndPhone(body: any): { message: string; phone: string; channel: "instagram" | "whatsapp" | "unknown"; profileName: string } {
   const channel = detectInboundChannel(body);
   const profileName = extractProfileName(body);
@@ -4534,7 +4556,16 @@ export async function POST(req: NextRequest) {
       // ─────────────────────────────────────────────────────────────────────
     }
 
-    const { message, phone, channel, profileName } = extractMessageAndPhone(body || {});
+    const { message, phone, channel, profileName: rawProfileName } = extractMessageAndPhone(body || {});
+
+    // Si es Instagram DM y el webhook no trajo nombre, intentar obtenerlo vía Graph API
+    let profileName = rawProfileName;
+    if (channel === "instagram" && !profileName && phone && phone !== "unknown") {
+      profileName = await fetchInstagramSenderUsername(phone);
+      if (profileName) {
+        console.log("[chat] Username Instagram obtenido via Graph API:", profileName);
+      }
+    }
 
     // Extraer datos del comentario si es un evento de comentario de Instagram
     const commentEvent = extractInstagramCommentEvent(body || {});
@@ -4550,7 +4581,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (channel === "instagram" && !profileName) {
-      console.warn("[chat] Instagram sin profileName en payload", {
+      console.warn("[chat] Instagram sin profileName en payload ni Graph API", {
         knownNameFields: {
           profile_name: body?.profile_name,
           contact_name: body?.contact_name,
