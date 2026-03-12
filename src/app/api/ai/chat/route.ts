@@ -2381,15 +2381,6 @@ function shouldAttachMediaSuggestion(userMessage: string, responseText: string):
   return true;
 }
 
-function isPureGreeting(message: string): boolean {
-  const text = normalizeForMatch(message);
-  if (!text) return false;
-  // Solo es saludo si el mensaje COMPLETO es un saludo (máx 5 palabras, sin preguntas de fondo)
-  const words = text.split(" ").filter(Boolean);
-  if (words.length > 5) return false;
-  return /^(hola|buenas|buenos dias|buenas tardes|buenas noches|hey|saludos|buen dia|buenas a todos|holi|holaa|holas|buenas!|hola!|que tal|buen dia)$/.test(text);
-}
-
 function isCourseInfoRequest(message: string): boolean {
   const text = normalizeForMatch(message);
   return /\b(informacion del curso|quiero informacion|quiero info|dame informacion|cuentame del curso|sobre el curso|curso de)\b/i.test(text);
