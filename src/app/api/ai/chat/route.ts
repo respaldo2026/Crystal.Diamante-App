@@ -592,6 +592,7 @@ Sigue siempre este orden:
 🔹 Manejo del contexto conversacional (MUY IMPORTANTE)
 ⚠️ NUNCA reinicies el embudo si el cliente ya identificó su programa o ya está en medio de una conversación activa.
 ⚠️ Si el cliente confirma algo con una sola palabra o frase corta (ej: "sí", "sí claro", "porfavor", "dale", "ok", "claro", "sí señor"), SIEMPRE interpreta esa respuesta como confirmación de la pregunta que acabas de hacer y responde en consecuencia. NUNCA vuelvas a preguntar "¿prefieres horarios, inversión o inscripción?" si ya se lo preguntaste antes.
+⚠️ EXCEPCIÓN — pregunta de DOBLE OPCIÓN (A o B): si tu mensaje anterior ofrecía DOS caminos distintos (ej: "¿te comparto horarios e inversión o prefieres ir directo a separar cupo?") y el usuario responde "sí"/"dale"/"ok" sin especificar cuál, NO asumas ninguna opción. Pide clarificación de forma breve y natural. Ejemplo: "😊 ¿Cuál prefieres: que te comparta *horarios e inversión* o vamos directo a *separar tu cupo*?" — máximo una línea, sin repetir información.
 ⚠️ Si el cliente dice "en curso" o "ya estoy estudiando", cambia a modo soporte: ayúdale con su duda puntual sin ofrecer inscripciones.
 ⚠️ "Por los horarios" / "los horarios" / "horario" / "horarios" SIEMPRE significa que quiere ver horarios — NUNCA lo confundas con "inversión" ni le muestres precios. Responde directamente con días y horas.
 ⚠️ "Son todos los días?" / "Todos los días hay?" / "¿Es todos los días?" → responde DIRECTAMENTE sí o no con el horario. NUNCA devuelvas el menú de horarios/inversión/inscripción.
@@ -1820,6 +1821,19 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
     return "";
   }
 
+  // Detectar pregunta de DOBLE OPCIÓN (A o B): cuando el agente ofreció dos caminos
+  // y el usuario responde "sí" sin especificar cuál, se necesita clarificación.
+  // Ejemplos: "¿horarios e inversión o separar cupo?", "¿te cuento el precio o avanzamos?"
+  if (normalizedQuestion) {
+    const hasScheduleOrPrice = /\b(horarios?|inversion|precio|mensualidad|informacion)\b/i.test(normalizedQuestion);
+    const hasEnrollment = /\b(separar\s+cupo|reservar|inscribir|avanzar|cupo|matricular)\b/i.test(normalizedQuestion);
+    const isOrQuestion = /\b(o\s+prefieres|o\s+vas|o\s+te|o\s+ir|o\s+avanzar|o\s+directo)\b/i.test(normalizedQuestion);
+    if (hasScheduleOrPrice && hasEnrollment && isOrQuestion) {
+      // Señal especial: el usuario dijo "sí" a una elección A o B → pedir que aclare
+      return "__clarificacion_opcion__";
+    }
+  }
+
   // Inferir por la última pregunta específica del agente
   if (normalizedQuestion) {
     if (/\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado)\b/i.test(normalizedQuestion)) return "quiero el temario clase por clase";
@@ -1861,6 +1875,13 @@ function enrichMessageWithFollowUpContext(
   const pendingTopic = inferPendingTopicFromHistory(history);
   if (!pendingTopic) {
     return userMessage;
+  }
+
+  // Cuando el agente hizo una pregunta de elección (A o B) y el usuario
+  // respondió ambiguamente, enriquecer con señal de clarificación para
+  // que Gemini pregunte cuál opción prefiere en lugar de asumir una.
+  if (pendingTopic === "__clarificacion_opcion__") {
+    return `${userMessage}. [El usuario respondió de forma ambigua a una pregunta con dos opciones. El agente DEBE pedir que aclare cuál de las dos opciones prefiere con un mensaje breve y natural, sin repetir toda la información.]`;
   }
 
   return `${userMessage}. ${pendingTopic}.`;
