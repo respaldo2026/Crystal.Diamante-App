@@ -301,6 +301,53 @@ function formatDateShort(value: string | null): string {
   return date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+/**
+ * Busca el perfil de una persona (estudiante, profesor, exalumno) por su número de teléfono.
+ * Retorna { nombre_completo, rol } o null si no se encuentra.
+ */
+export async function getProfileByPhone(rawPhone: string): Promise<{ nombre_completo: string; rol: string } | null> {
+  try {
+    if (!rawPhone || rawPhone === 'unknown') return null
+
+    const supabase = getSupabaseClient()
+
+    // Normalizar: quitar prefijo ig:, limpiar dígitos
+    const cleaned = rawPhone.replace(/^ig:/i, '').replace(/\D/g, '')
+    if (cleaned.length < 7) return null
+
+    // Intentar con el número completo y sin indicativo 57
+    const candidates: string[] = [cleaned]
+    if (cleaned.startsWith('57') && cleaned.length > 10) {
+      candidates.push(cleaned.slice(2))
+    } else if (!cleaned.startsWith('57') && cleaned.length === 10) {
+      candidates.push(`57${cleaned}`)
+    }
+
+    for (const candidate of candidates) {
+      // Buscar con ILIKE para tolerar variantes con/sin prefijo
+      const { data, error } = await supabase
+        .from('perfiles')
+        .select('nombre_completo, rol')
+        .or(candidates.map(c => `telefono.ilike.%${c}%`).join(','))
+        .limit(1)
+
+      if (!error && data && data.length > 0) {
+        const profile = data[0]
+        const nombre = String(profile?.nombre_completo || '').trim()
+        if (nombre) {
+          return { nombre_completo: nombre, rol: String(profile?.rol || '').toLowerCase() }
+        }
+      }
+      break // el OR ya cubre todos los candidatos en una sola query
+    }
+
+    return null
+  } catch (err) {
+    console.error('[getProfileByPhone] Error:', err)
+    return null
+  }
+}
+
 export async function getStudentContextByIdentification(rawIdentification: string): Promise<StudentAgentContext | null> {
   try {
     const supabase = getSupabaseClient()

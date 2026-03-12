@@ -18,7 +18,8 @@ import {
   buildHierarchicalContextWithPensum,
   getAcademyInfo,
   getMediosPago,
-  getStudentContextByIdentification
+  getStudentContextByIdentification,
+  getProfileByPhone
 } from "@/utils/supabase/agent-courses";
 
 export const dynamic = "force-dynamic";
@@ -2069,7 +2070,9 @@ function resolvePreferredStudentName(
 function buildNameSafetyDirective(
   preferredName: string | null,
   profileName: string | null,
-  channel: "instagram" | "whatsapp" | "unknown"
+  channel: "instagram" | "whatsapp" | "unknown",
+  phoneProfileName: string | null = null,
+  phoneProfileRol: string | null = null
 ): string {
   if (preferredName) {
     return `NOMBRE VALIDADO DEL USUARIO: "${preferredName}". Si lo mencionas, usa SOLO ese nombre exacto.`;
@@ -2077,6 +2080,13 @@ function buildNameSafetyDirective(
 
   if (channel === "instagram" && profileName) {
     return `PERFIL DE INSTAGRAM DEL USUARIO: "${profileName}". Si saludas o personalizas, usa ese nombre de forma natural y breve.`;
+  }
+
+  if (phoneProfileName) {
+    const rolLabel = phoneProfileRol === 'profesor' ? 'profesor/a'
+      : phoneProfileRol === 'estudiante' ? 'estudiante'
+      : 'persona registrada en la academia';
+    return `NOMBRE REGISTRADO EN NUESTRA BASE DE DATOS: "${phoneProfileName}" (${rolLabel}). Úsalo de forma natural y cálida al saludar o personalizar la respuesta. Si ya estudiaron o estudian con nosotros, puédeles decir algo como "¡Hola de nuevo, ${phoneProfileName}!" o "Qué gusto verte por acá, ${phoneProfileName}"  — sin forzarlo en cada oración.`;
   }
 
   return 'No hay nombre validado del usuario. NO inventes ni asumas nombres propios; responde sin llamar por nombre.';
@@ -4617,6 +4627,14 @@ export async function POST(req: NextRequest) {
     const history = await getConversationHistory(supabase, phone || "unknown", 5);
     const effectiveMessage = enrichMessageWithFollowUpContext(message, history);
     const preferredStudentName = resolvePreferredStudentName(message, history);
+
+    // Buscar nombre por teléfono en perfiles (estudiante, profesor, exalumno)
+    const phoneProfile = (!preferredStudentName && phone && phone !== "unknown")
+      ? await getProfileByPhone(phone)
+      : null;
+    const phoneProfileName = phoneProfile?.nombre_completo
+      ? phoneProfile.nombre_completo.split(' ')[0]  // solo primer nombre
+      : null;
     const detectedIntent = detectUserIntent(effectiveMessage);
     let mediaSuggestion: Awaited<ReturnType<typeof getAgentImageSuggestion>> = null;
 
@@ -4904,7 +4922,7 @@ export async function POST(req: NextRequest) {
       : '';
     const contextualDirective = [
       buildContextualDirective(effectiveMessage, detectedProgram, courses, history),
-      buildNameSafetyDirective(preferredStudentName, profileName || null, channel),
+      buildNameSafetyDirective(preferredStudentName, profileName || null, channel, phoneProfileName, phoneProfile?.rol || null),
       buildUpcomingStartDirective(detectedProgram, courses),
       studentDirective,
     ]
