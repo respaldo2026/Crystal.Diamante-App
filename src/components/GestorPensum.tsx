@@ -203,6 +203,8 @@ interface GestorPensumProps {
   onClose: () => void;
 }
 
+const HORAS_CLASE_FIJAS = 3;
+
 export default function GestorPensum({
   programaId,
   programaNombre,
@@ -269,6 +271,7 @@ export default function GestorPensum({
   const [mostrarTablaMaestraClases, setMostrarTablaMaestraClases] = useState(false);
   const [vistaCicloActiva, setVistaCicloActiva] = useState<"temas" | "material" | "necesarios" | "quiz">("temas");
   const [filtroTemas, setFiltroTemas] = useState<"todos" | "pendientes" | "completos">("todos");
+  const [horasNormalizadas, setHorasNormalizadas] = useState(false);
   const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
     open: false,
     title: "",
@@ -640,7 +643,6 @@ export default function GestorPensum({
       maxOrdenPorCiclo.set(key, maxOrden);
     });
 
-    const horasBase = Number(programaData?.horas_por_clase || 0);
     const inserts: Array<Record<string, any>> = [];
     const ciclosCount = ciclosOrdenados.length;
 
@@ -657,7 +659,7 @@ export default function GestorPensum({
         pensum_id: targetCiclo.id,
         nombre_curso: `Clase ${classNumber}`,
         descripcion: `Clase ${classNumber} del programa`,
-        horas: Number.isFinite(horasBase) ? horasBase : 0,
+        horas: HORAS_CLASE_FIJAS,
         creditos: 0,
         tipo_curso: "obligatorio",
         orden: ordenActual,
@@ -687,6 +689,7 @@ export default function GestorPensum({
 
       const payload = {
         ...values,
+        horas: HORAS_CLASE_FIJAS,
         pensum_id: selectedCicloId,
       };
 
@@ -1370,6 +1373,41 @@ export default function GestorPensum({
   }, [selectedCicloId]);
 
   useEffect(() => {
+    const normalizarHorasClases = async () => {
+      if (horasNormalizadas) return;
+      if (!pensums.length) return;
+
+      const pensumIds = pensums.map((p) => String(p.id)).filter(Boolean);
+      if (!pensumIds.length) return;
+
+      try {
+        const { error } = await supabaseBrowserClient
+          .from("pensum_cursos")
+          .update({ horas: HORAS_CLASE_FIJAS })
+          .in("pensum_id", pensumIds)
+          .neq("horas", HORAS_CLASE_FIJAS);
+
+        if (error) throw error;
+        setHorasNormalizadas(true);
+        await cargarCursosPrograma(pensums);
+        if (selectedCicloId) {
+          await cargarCursosPensum(selectedCicloId);
+        }
+      } catch (error) {
+        logger.error("No se pudieron normalizar las horas de clase", error);
+      }
+    };
+
+    normalizarHorasClases();
+  }, [
+    horasNormalizadas,
+    pensums,
+    cargarCursosPrograma,
+    cargarCursosPensum,
+    selectedCicloId,
+  ]);
+
+  useEffect(() => {
     cargarMateriales();
   }, [cargarMateriales]);
 
@@ -1833,7 +1871,7 @@ export default function GestorPensum({
         cicloNombre: cicloLabelById.get(cicloId) || "Sin ciclo",
         tema: curso?.nombre_curso || `Clase ${index + 1}`,
         descripcion: curso?.descripcion || "",
-        horas: Number(curso?.horas || 0),
+        horas: HORAS_CLASE_FIJAS,
         tipo: curso?.tipo_curso || "obligatorio",
         quiz: quizzesPorTemaId.get(String(curso?.id || "")) || null,
       };
@@ -1898,7 +1936,7 @@ export default function GestorPensum({
     }
 
     setEditingCurso(curso);
-    formCurso.setFieldsValue(curso);
+    formCurso.setFieldsValue({ ...curso, horas: HORAS_CLASE_FIJAS });
     setModalCursoVisible(true);
   }, [cursosPrograma, formCurso]);
 
@@ -1990,7 +2028,7 @@ export default function GestorPensum({
                     dataIndex: "horas",
                     width: 90,
                     align: "center",
-                    render: (v: number) => (v > 0 ? v : "-"),
+                    render: () => HORAS_CLASE_FIJAS,
                   },
                   {
                     title: "Tipo",
@@ -2128,6 +2166,7 @@ export default function GestorPensum({
                   onClick={() => {
                     setEditingCurso(null);
                     formCurso.resetFields();
+                    formCurso.setFieldsValue({ horas: HORAS_CLASE_FIJAS });
                     setModalCursoVisible(true);
                   }}
                 >
@@ -2371,7 +2410,7 @@ export default function GestorPensum({
                               icon: <EditOutlined />,
                               onClick: () => {
                                 setEditingCurso(curso);
-                                formCurso.setFieldsValue(curso);
+                                formCurso.setFieldsValue({ ...curso, horas: HORAS_CLASE_FIJAS });
                                 setModalCursoVisible(true);
                               },
                             },
@@ -2407,7 +2446,7 @@ export default function GestorPensum({
                     )}
                     <Divider style={{ margin: "10px 0" }} />
                     <div style={{ fontSize: 12, color: "#999", marginBottom: 14 }}>
-                      <div>⏱️ {curso.horas || 0} horas</div>
+                      <div>⏱️ {HORAS_CLASE_FIJAS} horas</div>
                       {curso.creditos && (
                         <div>⭐ {curso.creditos} créditos</div>
                       )}
@@ -2436,7 +2475,7 @@ export default function GestorPensum({
                           ghost
                           onClick={() => {
                             setEditingCurso(curso);
-                            formCurso.setFieldsValue(curso);
+                            formCurso.setFieldsValue({ ...curso, horas: HORAS_CLASE_FIJAS });
                             setModalCursoVisible(true);
                           }}
                         >
@@ -2689,7 +2728,7 @@ export default function GestorPensum({
           </Form.Item>
 
           <Form.Item name="horas" label="Horas">
-            <InputNumber min={0} placeholder="0" />
+            <InputNumber min={HORAS_CLASE_FIJAS} max={HORAS_CLASE_FIJAS} disabled style={{ width: "100%" }} />
           </Form.Item>
 
           <Form.Item name="creditos" label="Créditos">
