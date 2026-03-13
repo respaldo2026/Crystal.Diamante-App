@@ -871,27 +871,51 @@ function isSelfOriginatedInstagramEvent(body: any): boolean {
 
   if (detectInboundChannel(body) !== "instagram") return false;
 
+  const entryNode = Array.isArray(body?.entry) ? body?.entry?.[0] : body?.entry;
+
   const senderId = String(
     body?.entry?.[0]?.messaging?.[0]?.sender?.id ||
+      entryNode?.messaging?.[0]?.sender?.id ||
+      entryNode?.sender?.id ||
       body?.entry?.[0]?.changes?.[0]?.value?.sender?.id ||
+      entryNode?.changes?.[0]?.value?.sender?.id ||
       body?.entry?.[0]?.changes?.[0]?.value?.from?.id || // comentarios
+      entryNode?.changes?.[0]?.value?.from?.id ||
       body?.sender?.id ||
+      body?.telefono_whatsapp ||
+      body?.phone ||
       body?.from ||
       ""
   ).trim();
 
   if (!senderId) return false;
 
+  const recipientId = String(
+    body?.entry?.[0]?.messaging?.[0]?.recipient?.id ||
+      entryNode?.messaging?.[0]?.recipient?.id ||
+      entryNode?.recipient?.id ||
+      ""
+  ).trim();
+
   const ownIds = new Set(
     [
       body?.entry?.[0]?.id,
+      entryNode?.id,
       body?.entry?.[0]?.messaging?.[0]?.recipient?.id,
+      entryNode?.messaging?.[0]?.recipient?.id,
+      entryNode?.recipient?.id,
+      body?.p_whatsapp_id,
       process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
       process.env.INSTAGRAM_ACCOUNT_ID,
     ]
       .map((value) => String(value || "").trim())
       .filter(Boolean)
   );
+
+  // Caso típico en Make para ecos: sender == own_id y recipient == usuario
+  if (recipientId && ownIds.has(senderId) && senderId !== recipientId) {
+    return true;
+  }
 
   return ownIds.has(senderId);
 }
