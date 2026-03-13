@@ -1,6 +1,8 @@
 // Servicio de pensum y materiales: lógica de negocio para planes de estudio y recursos
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
+const MATERIAL_IMPRIMIBLE_PROFESOR_TAG = "MATERIAL_IMPRIMIBLE_PROFESOR";
+
 export async function obtenerPensumPorProgramas(programaIds: string[]) {
   const { data, error } = await supabaseBrowserClient
     .from("pensum")
@@ -12,13 +14,24 @@ export async function obtenerPensumPorProgramas(programaIds: string[]) {
   return data || [];
 }
 
-export async function obtenerMaterialesPorProgramas(programaIds: string[]) {
-  const { data, error } = await supabaseBrowserClient
+export async function obtenerMaterialesPorProgramas(
+  programaIds: string[],
+  options?: { includeMaterialImprimibleProfesor?: boolean }
+) {
+  let query = supabaseBrowserClient
     .from("material_didactico")
     .select("*")
     .in("programa_id", programaIds)
     .or("visible.is.null,visible.eq.true")
     .order("created_at", { ascending: false });
+
+  if (!options?.includeMaterialImprimibleProfesor) {
+    query = query.or(
+      `descripcion.is.null,descripcion.not.ilike.%${MATERIAL_IMPRIMIBLE_PROFESOR_TAG}%`
+    );
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }

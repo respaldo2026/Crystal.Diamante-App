@@ -10,6 +10,7 @@ import {
   ClockCircleOutlined,
   StarOutlined,
   UserAddOutlined,
+  PrinterOutlined,
   GiftOutlined,
   SafetyCertificateOutlined,
   CheckCircleOutlined,
@@ -186,6 +187,20 @@ const isIframeMaterial = (material: any) => {
   const tipo = String(material?.tipo_material || "").toLowerCase();
   const url = String(material?.url_archivo || "").toLowerCase();
   return mime === "iframe" || tipo === "iframe" || url.includes("<iframe") || url.includes("gamma.app");
+};
+
+const MATERIAL_IMPRIMIBLE_PROFESOR_TAG = "MATERIAL_IMPRIMIBLE_PROFESOR";
+
+const isMaterialImprimibleProfesor = (material: any) => {
+  const descripcion = String(material?.descripcion || "");
+  return descripcion.includes(MATERIAL_IMPRIMIBLE_PROFESOR_TAG);
+};
+
+const limpiarDescripcionImprimible = (descripcion?: string | null) => {
+  return String(descripcion || "")
+    .replace(new RegExp(`\\[?${MATERIAL_IMPRIMIBLE_PROFESOR_TAG}\\]?`, "gi"), "")
+    .replace(/\s+/g, " ")
+    .trim();
 };
 
 export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dashboard, onOpenCourse }) => {
@@ -446,6 +461,27 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     window.open(src, "_blank", "noopener,noreferrer");
   };
 
+  const imprimirMaterialDidactico = (material: any) => {
+    const src = extractIframeSrc(material?.url_archivo);
+    if (!src) return;
+
+    const popup = window.open(src, "_blank", "noopener,noreferrer");
+    if (!popup) return;
+
+    const lanzarImpresion = () => {
+      try {
+        popup.focus();
+        popup.print();
+      } catch {
+        // no-op
+      }
+    };
+
+    popup.onload = () => {
+      setTimeout(lanzarImpresion, 450);
+    };
+  };
+
   const handleOpenMaterials = (curso: any) => {
     setCursoMaterialSeleccionado(curso);
     setCicloSeleccionadoId(null);
@@ -463,7 +499,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           obtenerPensumPorProgramas([programaId]),
           obtenerMaterialesCicloPorProgramas([programaId]),
           obtenerMaterialesClasePorProgramas([programaId]),
-          obtenerMaterialesPorProgramas([programaId]),
+          obtenerMaterialesPorProgramas([programaId], { includeMaterialImprimibleProfesor: true }),
         ]);
         setMaterialesPensum(pensumData || []);
         setMaterialesCiclo(materialesCicloData || []);
@@ -1147,9 +1183,21 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                     renderItem={(item: any) => {
                       const parsed = parseTemaTituloMaterial(item?.titulo);
                       const titulo = parsed.tituloLimpio || item?.titulo || "Material";
+                      const esImprimibleProfesor = isMaterialImprimibleProfesor(item);
+                      const descripcionLimpia = limpiarDescripcionImprimible(item?.descripcion);
                       return (
                         <List.Item
                           actions={[
+                            esImprimibleProfesor ? (
+                              <Button
+                                key={`imprimir-material-${item.id}`}
+                                type="link"
+                                icon={<PrinterOutlined />}
+                                onClick={() => imprimirMaterialDidactico(item)}
+                              >
+                                Imprimir
+                              </Button>
+                            ) : null,
                             <Button
                               key={`ver-material-${item.id}`}
                               type="link"
@@ -1157,11 +1205,16 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                             >
                               Ver
                             </Button>,
-                          ]}
+                          ].filter(Boolean)}
                         >
                           <List.Item.Meta
-                            title={<Typography.Text strong>{titulo}</Typography.Text>}
-                            description={item?.descripcion || null}
+                            title={
+                              <Space size={6} wrap>
+                                <Typography.Text strong>{titulo}</Typography.Text>
+                                {esImprimibleProfesor ? <Tag color="orange">Material imprimible</Tag> : null}
+                              </Space>
+                            }
+                            description={descripcionLimpia || null}
                           />
                         </List.Item>
                       );

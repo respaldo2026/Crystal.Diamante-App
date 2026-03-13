@@ -204,6 +204,7 @@ interface GestorPensumProps {
 }
 
 const HORAS_CLASE_FIJAS = 3;
+const MATERIAL_IMPRIMIBLE_PROFESOR_TAG = "MATERIAL_IMPRIMIBLE_PROFESOR";
 
 export default function GestorPensum({
   programaId,
@@ -1465,6 +1466,18 @@ export default function GestorPensum({
     return normalizarTema(parsed.tema || material?.titulo || "");
   };
 
+  const isMaterialImprimibleProfesor = (material: Pick<MaterialDidactico, "descripcion" | "tipo_material">) => {
+    const descripcion = String(material?.descripcion || "");
+    return descripcion.includes(MATERIAL_IMPRIMIBLE_PROFESOR_TAG) || String(material?.tipo_material || "").toLowerCase() === "material_imprimible";
+  };
+
+  const limpiarDescripcionMaterial = (descripcion?: string | null) => {
+    return String(descripcion || "")
+      .replace(new RegExp(`\\[?${MATERIAL_IMPRIMIBLE_PROFESOR_TAG}\\]?`, "gi"), "")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
   const isPdfMaterial = (material: Pick<MaterialDidactico, "mime_type" | "nombre_archivo" | "url_archivo" | "titulo">) => {
     const mime = String(material?.mime_type || "").toLowerCase();
     const nombre = String(material?.nombre_archivo || "").toLowerCase();
@@ -1482,7 +1495,7 @@ export default function GestorPensum({
     formMaterial.resetFields();
     setFileList([]);
     setTipoOrigen('archivo');
-    formMaterial.setFieldsValue({ tema_relacionado: temaNombre });
+    formMaterial.setFieldsValue({ tema_relacionado: temaNombre, uso_material: "general" });
     setDrawerMaterialesVisible(true);
   };
 
@@ -1498,11 +1511,13 @@ export default function GestorPensum({
     setTipoOrigen(esIframe ? 'iframe' : esEnlace ? 'enlace' : 'archivo');
     const iframeSrc = extractIframeSrc(material.url_archivo);
     const { tituloLimpio } = parseTemaFromTitulo(material.titulo);
+    const esImprimibleProfesor = isMaterialImprimibleProfesor(material);
     formMaterial.setFieldsValue({
       tema_relacionado: temaNombre,
       titulo: tituloLimpio || material.titulo,
-      descripcion: material.descripcion,
+      descripcion: limpiarDescripcionMaterial(material.descripcion),
       tipo_material: material.tipo_material,
+      uso_material: esImprimibleProfesor ? "imprimible_profesor" : "general",
       url_externa: esEnlace ? material.url_archivo : undefined,
       iframe_code: esIframe && iframeSrc ? `<iframe src="${iframeSrc}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>` : undefined,
     });
@@ -1586,6 +1601,7 @@ export default function GestorPensum({
       // Obtener valores del formulario
       const formValues = formMaterial.getFieldsValue();
       const tipoOrigenSeleccionado = tipoOrigen;
+      const usoMaterial = String(formValues.uso_material || "general");
       const temaRelacionado = formValues.tema_relacionado as string | undefined;
       
       let urlArchivo = "";
@@ -1726,9 +1742,17 @@ export default function GestorPensum({
       const esPdfActual = mimeType.toLowerCase().includes("pdf") || nombreArchivo.toLowerCase().endsWith(".pdf");
       const esIframeActual = mimeType === "iframe";
 
-      const descripcionOriginal = String(formValues.descripcion || "").trim();
+      if (usoMaterial === "imprimible_profesor" && !esPdfActual) {
+        throw new Error("El material imprimible debe ser un archivo PDF.");
+      }
+
+      const descripcionOriginal = limpiarDescripcionMaterial(formValues.descripcion);
       const prefijoRespaldo = "[PDF_RESPALDO_IFRAME]";
       let descripcionFinal = descripcionOriginal;
+
+      if (usoMaterial === "imprimible_profesor") {
+        descripcionFinal = `[${MATERIAL_IMPRIMIBLE_PROFESOR_TAG}] ${descripcionFinal}`.trim();
+      }
 
       if (esPdfActual && (iframeExistenteTema || esIframeActual)) {
         const textoRespaldo = `${prefijoRespaldo} PDF de respaldo para el iframe del tema ${temaRelacionado || formValues.titulo || ""}`.trim();
@@ -1763,7 +1787,7 @@ export default function GestorPensum({
         subido_por: authUser.id,
         titulo: buildTituloConTema(formValues.titulo, temaRelacionado),
         descripcion: descripcionFinal,
-        tipo_material: formValues.tipo_material || tipoOrigenSeleccionado,
+        tipo_material: usoMaterial === "imprimible_profesor" ? "documento" : (formValues.tipo_material || tipoOrigenSeleccionado),
         url_archivo: urlArchivo,
         nombre_archivo: nombreArchivo,
         tamano_bytes: tamanoBytes,
@@ -2570,11 +2594,13 @@ export default function GestorPensum({
                                     const esIframe = String(material.mime_type || "").toLowerCase() === "iframe";
                                     const esPdf = isPdfMaterial(material);
                                     const descripcion = String(material.descripcion || "");
+                                    const esImprimibleProfesor = descripcion.includes(MATERIAL_IMPRIMIBLE_PROFESOR_TAG);
                                     const esPdfRespaldo = esPdf && (descripcion.includes("[PDF_RESPALDO_IFRAME]") || materialesTemaOrdenados.some((item) => String(item?.mime_type || "").toLowerCase() === "iframe"));
 
                                     return (
                                       <Space size={6} wrap>
                                         <Text>{tituloLimpio}</Text>
+                                        {esImprimibleProfesor ? <Tag color="orange">Imprimible profesor</Tag> : null}
                                         {esIframe ? <Tag color="blue">Gamma</Tag> : null}
                                         {esPdfRespaldo ? <Tag color="purple">PDF respaldo</Tag> : null}
                                       </Space>
@@ -3072,6 +3098,19 @@ export default function GestorPensum({
 
           <Form.Item name="descripcion" label="Descripción">
             <Input.TextArea rows={3} placeholder="Descripción breve del material" />
+          </Form.Item>
+
+          <Form.Item
+            name="uso_material"
+            label="Uso del material"
+            initialValue="general"
+          >
+            <Select
+              options={[
+                { label: "General (visible para alumnos y profesor)", value: "general" },
+                { label: "Material imprimible (solo profesor)", value: "imprimible_profesor" },
+              ]}
+            />
           </Form.Item>
 
           <Form.Item
