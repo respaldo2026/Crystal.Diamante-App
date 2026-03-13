@@ -1740,7 +1740,7 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   if (isShortAffirmativeReply(message)) return false;
 
   // Excluir si contiene palabras de intención real (plurales incluidos)
-  const hasIntentKeyword = /\b(?:precio|horarios?|horas?|materiales?|temarios?|inscrip\w*|matricul\w*|pagos?|cuantos?|cuando|donde|ubicaci[oó]n|ubicados?|direcci[oó]n|cali|s[aá]bados?|fin\s+de\s+semana|trabajo|lunes|viernes|personal|presencial|dias?|todos?|ir\s+a|puedo\s+ir|aparte|ademas|ademas?|mas\s+all[aá]|cobr[a-z]+|reservar|cupo|separar|abono|abonar|pago\s+parcial|cuota\s+inicial)\b/i.test(text);
+  const hasIntentKeyword = /\b(?:precio|horarios?|horas?|materiales?|temarios?|inscrip\w*|matricul\w*|pagos?|cuantos?|cuando|donde|ubicaci[oó]n|ubicados?|direcci[oó]n|cali|s[aá]bados?|fin\s+de\s+semana|trabajo|lunes|viernes|personal|presencial|dias?|todos?|ir\s+a|puedo\s+ir|aparte|ademas|ademas?|mas\s+all[aá]|cobr[a-z]+|reservar|cupo|separar|abono|abonar|pago\s+parcial|cuota\s+inicial|cual|sirve|conviene|mejor|redes|instagram|facebook|youtube|tiktok)\b/i.test(text);
   if (hasIntentKeyword) return false;
 
   return true;
@@ -1860,7 +1860,8 @@ function buildNaturalAckReply(
   }
 
   if (/instagram|redes|siguenos/.test(normalizedLast)) {
-    return "¡Súper! 😊 Si quieres, te paso el link directo para que veas trabajos y resultados reales.";
+    // El contexto de Instagram ya es manejado upstream en buildIntentFocusedDirectResponse
+    return null;
   }
 
   return "Perfecto 😊 ¿Quieres que te cuente los *horarios*, *la inversión* o los *pasos para inscribirte*?";
@@ -3000,6 +3001,7 @@ ${presencialBlock}
 function buildInstagramFollowup(academy: any | null): string {
   const ig = String(academy?.instagram || "").trim();
   const fb = String(academy?.facebook || "").trim();
+  const yt = String(academy?.youtube || "").trim();
 
   const links: string[] = [];
   if (ig) {
@@ -3007,6 +3009,9 @@ function buildInstagramFollowup(academy: any | null): string {
   }
   if (fb) {
     links.push(`👤 Facebook: ${/^https?:\/\//i.test(fb) ? fb : `https://${fb}`}`);
+  }
+  if (yt) {
+    links.push(`🎥 YouTube: ${/^https?:\/\//i.test(yt) ? yt : `https://${yt}`}`);
   }
 
   if (!links.length) return "";
@@ -3370,7 +3375,12 @@ function buildIntentFocusedDirectResponse(
     return saturdayReply;
   }
 
-  if (detectedProgram && isLikelyProgramOnlyReply(message) && !/[?¿]/.test(message) && detectUserIntent(message) === "general") {
+  // Evitar repetir la pregunta doble (horarios/inversión vs separar cupo) si ya se hizo recientemente
+  const alreadyAskedDoubleOption = history.slice(-4).some(h =>
+    /horarios.*inversion.*separar\s+cupo|separar\s+cupo.*horarios.*inversion|te\s+comparto.*horarios.*inversion/i.test(normalizeForMatch(h.agent || ""))
+  );
+
+  if (detectedProgram && isLikelyProgramOnlyReply(message) && !alreadyAskedDoubleOption && !/[?¿]/.test(message) && detectUserIntent(message) === "general") {
     const pendingTopic = inferPendingTopicFromHistory(history);
     if (/dias\s+y\s+horario|horario|inicio|fecha/.test(normalizeForMatch(pendingTopic))) {
       const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
@@ -3398,9 +3408,27 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (intent === "general") {
+    // Si el agente mencionó Instagram/redes en su último mensaje y el usuario confirma → dar link directamente
+    if (isNeutralAcknowledgement(message) || isShortAffirmativeReply(message)) {
+      const lastNorm = normalizeForMatch(lastAgentForFlow || "");
+      if (/\b(instagram|redes|siguenos|nuestro\s+instagram|nuestras\s+redes)\b/i.test(lastNorm)) {
+        return buildSocialMediaReply(academy, "instagram");
+      }
+    }
     const naturalAckReply = buildNaturalAckReply(message, lastAgentForFlow, detectedProgram);
     if (naturalAckReply) {
       return naturalAckReply;
+    }
+  }
+
+  // Si el agente preguntó en su última frase por Instagram/redes y el usuario afirma → dar link
+  if (isShortAffirmativeReply(message)) {
+    const agentParts = lastAgentForFlow.split("?");
+    const lastQuestion = normalizeForMatch(
+      agentParts.length >= 2 ? (agentParts[agentParts.length - 2] || "").split(/[\n\r]/).pop() || "" : ""
+    );
+    if (lastQuestion && /\b(instagram|redes|siguenos|nuestro\s+instagram|nuestras\s+redes)\b/i.test(lastQuestion)) {
+      return buildSocialMediaReply(academy, "instagram");
     }
   }
 
