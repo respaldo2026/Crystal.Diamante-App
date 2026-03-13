@@ -2450,9 +2450,6 @@ export default function GestorPensum({
                       {curso.creditos && (
                         <div>⭐ {curso.creditos} créditos</div>
                       )}
-                      <Tag style={{ marginTop: 8 }} color="blue">
-                        {curso.tipo_curso}
-                      </Tag>
                     </div>
 
                     <Space size={6} wrap style={{ marginBottom: 10 }}>
