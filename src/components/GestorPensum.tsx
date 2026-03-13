@@ -268,6 +268,7 @@ export default function GestorPensum({
   const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
   const [mostrarTablaMaestraClases, setMostrarTablaMaestraClases] = useState(false);
   const [vistaCicloActiva, setVistaCicloActiva] = useState<"temas" | "material" | "necesarios" | "quiz">("temas");
+  const [filtroTemas, setFiltroTemas] = useState<"todos" | "pendientes" | "completos">("todos");
   const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
     open: false,
     title: "",
@@ -1839,6 +1840,47 @@ export default function GestorPensum({
     });
   }, [cursosPrograma, pensums, quizzesPorTemaId]);
 
+  const cursosPensumFiltrados = useMemo(() => {
+    const lista = cursosPensum || [];
+
+    return lista.filter((curso) => {
+      const materialesTema = materialesCicloDidactico.filter((material) => {
+        const { tema: temaMaterial } = parseTemaFromTitulo(material.titulo);
+        const temaMaterialNorm = normalizarTema(temaMaterial || material.titulo);
+        const temaCursoNorm = normalizarTema(curso.nombre_curso);
+        return temaMaterialNorm === temaCursoNorm;
+      });
+
+      const materialesNecesariosTema = materialesClaseCiclo.filter(
+        (material) => material.pensum_curso_id === curso.id,
+      );
+
+      const tieneMaterialDidactico = materialesTema.length > 0;
+      const tieneMaterialNecesario = materialesNecesariosTema.length > 0;
+      const tieneQuiz = quizzesPorTemaId.has(String(curso.id));
+
+      const estaCompletoSegunVista =
+        vistaCicloActiva === "material"
+          ? tieneMaterialDidactico
+          : vistaCicloActiva === "necesarios"
+            ? tieneMaterialNecesario
+            : vistaCicloActiva === "quiz"
+              ? tieneQuiz
+              : tieneMaterialDidactico && tieneMaterialNecesario && tieneQuiz;
+
+      if (filtroTemas === "completos") return estaCompletoSegunVista;
+      if (filtroTemas === "pendientes") return !estaCompletoSegunVista;
+      return true;
+    });
+  }, [
+    cursosPensum,
+    materialesCicloDidactico,
+    materialesClaseCiclo,
+    quizzesPorTemaId,
+    vistaCicloActiva,
+    filtroTemas,
+  ]);
+
   const abrirClaseDesdeTabla = useCallback((record: any) => {
     const cicloId = String(record?.cicloId || "");
     if (cicloId) {
@@ -2218,17 +2260,42 @@ export default function GestorPensum({
             </Card>
           )}
 
+          {cursosPensum.length > 0 && (
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Space wrap>
+                <Text type="secondary">Mostrar:</Text>
+                <Radio.Group
+                  size="small"
+                  value={filtroTemas}
+                  onChange={(e) => setFiltroTemas(e.target.value)}
+                  optionType="button"
+                  buttonStyle="solid"
+                  options={[
+                    { label: "Todos", value: "todos" },
+                    { label: "Pendientes", value: "pendientes" },
+                    { label: "Completos", value: "completos" },
+                  ]}
+                />
+                <Text type="secondary">
+                  Mostrando {cursosPensumFiltrados.length} de {cursosPensum.length} temas
+                </Text>
+              </Space>
+            </Card>
+          )}
+
           {cursosPensum.length === 0 ? (
             <Empty description="Sin temas en este ciclo" />
+          ) : cursosPensumFiltrados.length === 0 ? (
+            <Empty description="No hay temas con ese filtro en esta vista" />
           ) : (
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
                 gap: 16,
               }}
             >
-              {cursosPensum.map((curso) => {
+              {cursosPensumFiltrados.map((curso) => {
                 const materialesTema = materialesCicloDidactico.filter((material) => {
                   const { tema: temaMaterial } = parseTemaFromTitulo(material.titulo);
                   const temaMaterialNorm = normalizarTema(temaMaterial || material.titulo);
@@ -2284,6 +2351,17 @@ export default function GestorPensum({
                                     icon: <CheckCircleOutlined />,
                                     onClick: () => abrirModalQuiz(curso, quizTema),
                                   },
+                                  ...(quizTema
+                                    ? [
+                                        {
+                                          key: `eliminar-quiz-${curso.id}`,
+                                          label: "Eliminar quiz",
+                                          icon: <DeleteOutlined />,
+                                          danger: true,
+                                          onClick: () => handleEliminarQuiz(quizTema.id),
+                                        },
+                                      ]
+                                    : []),
                                 ]
                               : []),
                             { type: "divider" as const },
@@ -2312,23 +2390,23 @@ export default function GestorPensum({
                     }
                   >
                     <div style={{ fontSize: 32, marginBottom: 8 }}>📝</div>
-                    <Text strong style={{ fontSize: 15, display: "block" }}>
+                    <Text strong style={{ fontSize: 16, lineHeight: 1.35, display: "block" }}>
                       {curso.nombre_curso}
                     </Text>
                     {curso.descripcion && (
                       <p
                         style={{
-                          fontSize: 13,
+                          fontSize: 14,
                           color: "#666",
-                          marginTop: 8,
-                          marginBottom: 8,
+                          marginTop: 10,
+                          marginBottom: 10,
                         }}
                       >
                         {curso.descripcion}
                       </p>
                     )}
-                    <Divider style={{ margin: "8px 0" }} />
-                    <div style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
+                    <Divider style={{ margin: "10px 0" }} />
+                    <div style={{ fontSize: 12, color: "#999", marginBottom: 14 }}>
                       <div>⏱️ {curso.horas || 0} horas</div>
                       {curso.creditos && (
                         <div>⭐ {curso.creditos} créditos</div>
@@ -2350,7 +2428,54 @@ export default function GestorPensum({
                       </Tag>
                     </Space>
 
-                    {(vistaCicloActiva === "temas" || vistaCicloActiva === "material") && (
+                    <div style={{ marginBottom: 10 }}>
+                      {vistaCicloActiva === "temas" && (
+                        <Button
+                          size="small"
+                          type="primary"
+                          ghost
+                          onClick={() => {
+                            setEditingCurso(curso);
+                            formCurso.setFieldsValue(curso);
+                            setModalCursoVisible(true);
+                          }}
+                        >
+                          Gestionar tema
+                        </Button>
+                      )}
+                      {vistaCicloActiva === "material" && (
+                        <Button
+                          size="small"
+                          type="primary"
+                          ghost
+                          onClick={() => abrirDrawerMaterialParaTema(curso.nombre_curso)}
+                        >
+                          Subir material
+                        </Button>
+                      )}
+                      {vistaCicloActiva === "necesarios" && (
+                        <Button
+                          size="small"
+                          type="primary"
+                          ghost
+                          onClick={() => abrirModalMaterialClase(curso.id)}
+                        >
+                          Agregar insumo
+                        </Button>
+                      )}
+                      {vistaCicloActiva === "quiz" && (
+                        <Button
+                          size="small"
+                          type="primary"
+                          ghost
+                          onClick={() => abrirModalQuiz(curso, quizTema || null)}
+                        >
+                          {quizTema ? "Gestionar quiz" : "Crear quiz"}
+                        </Button>
+                      )}
+                    </div>
+
+                    {vistaCicloActiva === "material" && (
                       <>
                         <Text strong style={{ fontSize: 13 }}>Material didáctico</Text>
                         {materialesTemaOrdenados.length === 0 ? (
@@ -2428,7 +2553,7 @@ export default function GestorPensum({
                       </>
                     )}
 
-                    {(vistaCicloActiva === "temas" || vistaCicloActiva === "quiz") && (
+                    {vistaCicloActiva === "quiz" && (
                       <>
                         <Divider style={{ margin: "10px 0" }} />
                         <Text strong style={{ fontSize: 13 }}>Quiz de clase</Text>
@@ -2443,9 +2568,6 @@ export default function GestorPensum({
                                 <>
                                   <Button size="small" onClick={() => abrirModalQuiz(curso, quizTema)}>
                                     Editar quiz
-                                  </Button>
-                                  <Button size="small" danger onClick={() => handleEliminarQuiz(quizTema.id)}>
-                                    Eliminar
                                   </Button>
                                 </>
                               ) : null}
@@ -2464,7 +2586,7 @@ export default function GestorPensum({
                       </>
                     )}
 
-                    {(vistaCicloActiva === "temas" || vistaCicloActiva === "necesarios") && (
+                    {vistaCicloActiva === "necesarios" && (
                       <>
                         <Divider style={{ margin: "10px 0" }} />
                         <Text strong style={{ fontSize: 13 }}>Materiales necesarios</Text>
