@@ -1754,6 +1754,9 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
 
+  const hasGreetingKeyword = /\b(hola|buenas?|buen\s+dia|buenos\s+dias|buenas\s+tardes|buenas\s+noches|saludos|hey|que\s+tal)\b/i.test(text);
+  if (hasGreetingKeyword) return false;
+
   const tokenCount = text.split(" ").filter(Boolean).length;
   if (tokenCount > 4) return false;
 
@@ -1964,7 +1967,7 @@ function isPureGreeting(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
   // Solo saludos solos, sin contenido adicional
-  return /^(hola|hola\s+de\s+nuevo|hola\s+buenas?|buenas?\s*(d[ií]as?|tardes?|noches?)?|buen\s*d[ií]a|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|saludos|qué\s+tal|que\s+tal)$/.test(text.trim());
+  return /^(hola|hola\s+de\s+nuevo|hola\s+buenas?|hola\s+buenas?\s*(d[ií]as?|tardes?|noches?)?|buenas?\s*(d[ií]as?|tardes?|noches?)?|buen\s*d[ií]a|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|saludos|qué\s+tal|que\s+tal)$/.test(text.trim());
 }
 
 function enrichMessageWithFollowUpContext(
