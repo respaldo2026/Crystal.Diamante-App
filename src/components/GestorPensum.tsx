@@ -2039,36 +2039,13 @@ export default function GestorPensum({
             </div>
           </div>
 
-          <Alert
-            type="info"
-            showIcon
-            message="Guía rápida"
-            description={
-              <Space direction="vertical" size={2}>
-                <Text>1) Crea los temas del ciclo.</Text>
-                <Text>2) En cada tema, sube su material didáctico.</Text>
-                <Text>3) Registra materiales necesarios para clase.</Text>
-              </Space>
-            }
-            style={{ marginBottom: 16 }}
-          />
-
-          <Card size="small" style={{ marginBottom: 16 }}>
-            <Space wrap size={12}>
-              <Tag color="blue">Temas: {totalTemas}</Tag>
-              <Tag color={faltantesPrograma > 0 ? "orange" : "green"}>
-                Programa: {totalTemasPrograma}{totalClasesEsperadasPrograma > 0 ? ` / ${totalClasesEsperadasPrograma}` : ""}
-              </Tag>
-              <Tag color="purple">Material didáctico: {totalMaterialDidactico}</Tag>
-              <Tag color="green">Material necesario: {totalMaterialNecesario}</Tag>
-              <Tag color="geekblue">Quizzes: {quizzesClase.length}</Tag>
-              {totalClasesEsperadasPrograma > 0 && (
-                <Button size="small" onClick={sincronizarListaClasesPrograma}>
-                  Sincronizar clases del programa
-                </Button>
-              )}
-            </Space>
-          </Card>
+          {totalClasesEsperadasPrograma > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <Button size="small" onClick={sincronizarListaClasesPrograma}>
+                Sincronizar clases del programa
+              </Button>
+            </div>
+          )}
 
           {!canManageMateriales && (
             <Alert
@@ -2135,7 +2112,7 @@ export default function GestorPensum({
                     width: 180,
                     render: (_: any, record: any) => {
                       const quiz = record?.quiz;
-                      if (!quiz) return <Tag>Sin quiz</Tag>;
+                      if (!quiz) return null;
                       return (
                         <Tag color={quiz.publicado ? "green" : "orange"}>
                           {quiz.publicado ? "Publicado" : "Borrador"}
