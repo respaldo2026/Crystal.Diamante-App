@@ -267,6 +267,7 @@ export default function GestorPensum({
   const [mostrarListaCompletaCiclo, setMostrarListaCompletaCiclo] = useState(false);
   const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
   const [mostrarTablaMaestraClases, setMostrarTablaMaestraClases] = useState(false);
+  const [vistaCicloActiva, setVistaCicloActiva] = useState<"temas" | "material" | "necesarios" | "quiz">("temas");
   const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
     open: false,
     title: "",
@@ -1362,6 +1363,12 @@ export default function GestorPensum({
   }, [selectedCicloId, pensums, cargarCursosPensum]);
 
   useEffect(() => {
+    if (selectedCicloId) {
+      setVistaCicloActiva("temas");
+    }
+  }, [selectedCicloId]);
+
+  useEffect(() => {
     cargarMateriales();
   }, [cargarMateriales]);
 
@@ -2057,146 +2064,159 @@ export default function GestorPensum({
             />
           )}
 
-          <Card
-            size="small"
-            title="Materiales del ciclo (lista general)"
-            style={{ marginBottom: 16 }}
-            extra={(
-              <Space wrap>
-                <Button
-                  onClick={() => setMostrarListaCompletaCiclo((prev) => !prev)}
-                >
-                  {mostrarListaCompletaCiclo ? "Ver resumida" : "Ver lista completa"}
-                </Button>
-                {canManageMateriales ? (
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => abrirModalMaterialCiclo()}
-                  >
-                    Agregar material del ciclo
-                  </Button>
-                ) : null}
-              </Space>
-            )}
-          >
-            {materialesCicloGeneralOrdenados.length === 0 ? (
-              <Text type="secondary">No hay materiales generales registrados en este ciclo.</Text>
-            ) : (
-              <Table
-                size="small"
-                loading={loadingMaterialesCiclo}
-                pagination={mostrarListaCompletaCiclo ? false : { pageSize: 8, hideOnSinglePage: true }}
-                rowKey={(record) => String(record?.id || record?.nombre)}
-                dataSource={materialesCicloGeneralOrdenados}
-                columns={[
-                  {
-                    title: "Producto",
-                    dataIndex: "nombre",
-                    render: (value) => <Text>{value}</Text>,
-                  },
-                  {
-                    title: "Cantidad",
-                    dataIndex: "cantidad",
-                    render: (value) => value || "Cantidad por definir",
-                  },
-                  {
-                    title: "Kit",
-                    dataIndex: "incluido_kit",
-                    align: "center",
-                    render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
-                  },
-                  {
-                    title: "Quiz",
-                    key: "quiz",
-                    width: 180,
-                    render: (_: any, record: any) => {
-                      const quiz = record?.quiz;
-                      if (!quiz) return null;
-                      return (
-                        <Tag color={quiz.publicado ? "green" : "orange"}>
-                          {quiz.publicado ? "Publicado" : "Borrador"}
-                        </Tag>
-                      );
-                    },
-                  },
-                  ...(canManageMateriales
-                    ? [
-                        {
-                          title: "Acciones",
-                          key: "acciones",
-                          align: "right" as const,
-                          render: (_: any, record: MaterialCiclo) => (
-                            <Space size={4}>
-                              <Button
-                                key={`editar-ciclo-${record.id}`}
-                                type="link"
-                                icon={<EditOutlined />}
-                                onClick={() => abrirModalMaterialCiclo(record)}
-                                style={{ padding: 0, height: "auto" }}
-                              />
-                              <Button
-                                key={`eliminar-ciclo-${record.id}`}
-                                type="link"
-                                danger
-                                icon={<DeleteOutlined />}
-                                onClick={() => handleEliminarMaterialCiclo(record.id)}
-                                style={{ padding: 0, height: "auto" }}
-                              />
-                            </Space>
-                          ),
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            )}
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Tabs
+              activeKey={vistaCicloActiva}
+              onChange={(key) => setVistaCicloActiva(key as "temas" | "material" | "necesarios" | "quiz")}
+              items={[
+                { key: "temas", label: `Temas (${totalTemas})` },
+                { key: "material", label: `Material didáctico (${totalMaterialDidactico})` },
+                { key: "necesarios", label: `Material necesario (${totalMaterialNecesario})` },
+                { key: "quiz", label: `Quiz (${quizzesClase.length})` },
+              ]}
+            />
           </Card>
 
           <div style={{ marginBottom: 16 }}>
             <Space wrap>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setEditingCurso(null);
-                  formCurso.resetFields();
-                  setModalCursoVisible(true);
-                }}
-              >
-                1. Agregar Tema
-              </Button>
-              <Button
-                icon={<UploadOutlined />}
-                onClick={() => {
-                  const primerTema = cursosPensum[0];
-                  if (!primerTema) {
-                    message.warning("Primero crea al menos un tema para subir material didáctico.");
-                    return;
-                  }
-                  abrirDrawerMaterialParaTema(primerTema.nombre_curso);
-                }}
-              >
-                2. Subir Material Didáctico
-              </Button>
-              <Button
-                icon={<GiftOutlined />}
-                onClick={() => {
-                  const primerTema = cursosPensum[0];
-                  if (!primerTema) {
-                    message.warning("Primero debes crear al menos un tema para asociar materiales.");
-                    return;
-                  }
-                  abrirModalMaterialClase(primerTema.id);
-                }}
-              >
-                3. Agregar Material Necesario
-              </Button>
-              <Button onClick={() => setMostrarListaCompletaNecesarios((prev) => !prev)}>
-                {mostrarListaCompletaNecesarios ? "Ver insumos resumidos" : "Ver lista completa de insumos"}
-              </Button>
+              {vistaCicloActiva === "temas" && (
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setEditingCurso(null);
+                    formCurso.resetFields();
+                    setModalCursoVisible(true);
+                  }}
+                >
+                  Agregar tema
+                </Button>
+              )}
+
+              {vistaCicloActiva === "material" && (
+                <Button
+                  type="primary"
+                  icon={<UploadOutlined />}
+                  onClick={() => {
+                    const primerTema = cursosPensum[0];
+                    if (!primerTema) {
+                      message.warning("Primero crea al menos un tema para subir material didáctico.");
+                      return;
+                    }
+                    abrirDrawerMaterialParaTema(primerTema.nombre_curso);
+                  }}
+                >
+                  Subir material didáctico
+                </Button>
+              )}
+
+              {vistaCicloActiva === "necesarios" && (
+                <>
+                  <Button
+                    type="primary"
+                    icon={<GiftOutlined />}
+                    onClick={() => {
+                      const primerTema = cursosPensum[0];
+                      if (!primerTema) {
+                        message.warning("Primero debes crear al menos un tema para asociar materiales.");
+                        return;
+                      }
+                      abrirModalMaterialClase(primerTema.id);
+                    }}
+                  >
+                    Agregar material necesario
+                  </Button>
+                  <Button onClick={() => setMostrarListaCompletaNecesarios((prev) => !prev)}>
+                    {mostrarListaCompletaNecesarios ? "Ver insumos resumidos" : "Ver lista completa de insumos"}
+                  </Button>
+                </>
+              )}
             </Space>
           </div>
+
+          {vistaCicloActiva === "necesarios" && (
+            <Card
+              size="small"
+              title="Materiales del ciclo (lista general)"
+              style={{ marginBottom: 16 }}
+              extra={(
+                <Space wrap>
+                  <Button
+                    onClick={() => setMostrarListaCompletaCiclo((prev) => !prev)}
+                  >
+                    {mostrarListaCompletaCiclo ? "Ver resumida" : "Ver lista completa"}
+                  </Button>
+                  {canManageMateriales ? (
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => abrirModalMaterialCiclo()}
+                    >
+                      Agregar material del ciclo
+                    </Button>
+                  ) : null}
+                </Space>
+              )}
+            >
+              {materialesCicloGeneralOrdenados.length === 0 ? (
+                <Text type="secondary">No hay materiales generales registrados en este ciclo.</Text>
+              ) : (
+                <Table
+                  size="small"
+                  loading={loadingMaterialesCiclo}
+                  pagination={mostrarListaCompletaCiclo ? false : { pageSize: 8, hideOnSinglePage: true }}
+                  rowKey={(record) => String(record?.id || record?.nombre)}
+                  dataSource={materialesCicloGeneralOrdenados}
+                  columns={[
+                    {
+                      title: "Producto",
+                      dataIndex: "nombre",
+                      render: (value) => <Text>{value}</Text>,
+                    },
+                    {
+                      title: "Cantidad",
+                      dataIndex: "cantidad",
+                      render: (value) => value || "Cantidad por definir",
+                    },
+                    {
+                      title: "Kit",
+                      dataIndex: "incluido_kit",
+                      align: "center",
+                      render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                    },
+                    ...(canManageMateriales
+                      ? [
+                          {
+                            title: "Acciones",
+                            key: "acciones",
+                            align: "right" as const,
+                            render: (_: any, record: MaterialCiclo) => (
+                              <Space size={4}>
+                                <Button
+                                  key={`editar-ciclo-${record.id}`}
+                                  type="link"
+                                  icon={<EditOutlined />}
+                                  onClick={() => abrirModalMaterialCiclo(record)}
+                                  style={{ padding: 0, height: "auto" }}
+                                />
+                                <Button
+                                  key={`eliminar-ciclo-${record.id}`}
+                                  type="link"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  onClick={() => handleEliminarMaterialCiclo(record.id)}
+                                  style={{ padding: 0, height: "auto" }}
+                                />
+                              </Space>
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              )}
+            </Card>
+          )}
 
           {cursosPensum.length === 0 ? (
             <Empty description="Sin temas en este ciclo" />
@@ -2228,6 +2248,9 @@ export default function GestorPensum({
                   (material) => material.pensum_curso_id === curso.id,
                 );
                 const quizTema = quizzesPorTemaId.get(String(curso.id));
+                const tieneMaterialDidactico = materialesTemaOrdenados.length > 0;
+                const tieneMaterialNecesario = materialesNecesariosTema.length > 0;
+                const tieneQuiz = Boolean(quizTema);
 
                 return (
                   <Card
@@ -2315,176 +2338,200 @@ export default function GestorPensum({
                       </Tag>
                     </div>
 
-                    <Text strong style={{ fontSize: 13 }}>Material didáctico</Text>
-                    {materialesTemaOrdenados.length === 0 ? (
-                      <Text type="secondary" style={{ display: "block", marginTop: 6 }}>
-                        Sin material asignado
-                      </Text>
-                    ) : (
-                      <List
-                        size="small"
-                        dataSource={materialesTemaOrdenados}
-                        style={{ marginTop: 8 }}
-                        renderItem={(material: MaterialDidactico) => (
-                          <List.Item
-                            actions={[
-                              <Button
-                                key={`ver-${material.id}`}
-                                type="link"
-                                onClick={() => handleAbrirMaterial(material.url_archivo, parseTemaFromTitulo(material.titulo).tituloLimpio || material.titulo)}
-                                icon={material.mime_type === 'link' ? <LinkOutlined /> : <EyeOutlined />}
-                                style={{ fontWeight: 500, padding: 0, height: 'auto' }}
-                              />,
+                    <Space size={6} wrap style={{ marginBottom: 10 }}>
+                      <Tag color={tieneMaterialDidactico ? "green" : "default"}>
+                        Material {tieneMaterialDidactico ? "listo" : "pendiente"}
+                      </Tag>
+                      <Tag color={tieneMaterialNecesario ? "green" : "default"}>
+                        Insumos {tieneMaterialNecesario ? "listos" : "pendientes"}
+                      </Tag>
+                      <Tag color={tieneQuiz ? "green" : "default"}>
+                        Quiz {tieneQuiz ? "listo" : "pendiente"}
+                      </Tag>
+                    </Space>
+
+                    {(vistaCicloActiva === "temas" || vistaCicloActiva === "material") && (
+                      <>
+                        <Text strong style={{ fontSize: 13 }}>Material didáctico</Text>
+                        {materialesTemaOrdenados.length === 0 ? (
+                          <Text type="secondary" style={{ display: "block", marginTop: 6 }}>
+                            Sin material asignado
+                          </Text>
+                        ) : (
+                          <List
+                            size="small"
+                            dataSource={materialesTemaOrdenados}
+                            style={{ marginTop: 8 }}
+                            renderItem={(material: MaterialDidactico) => (
+                              <List.Item
+                                actions={[
+                                  <Button
+                                    key={`ver-${material.id}`}
+                                    type="link"
+                                    onClick={() => handleAbrirMaterial(material.url_archivo, parseTemaFromTitulo(material.titulo).tituloLimpio || material.titulo)}
+                                    icon={material.mime_type === 'link' ? <LinkOutlined /> : <EyeOutlined />}
+                                    style={{ fontWeight: 500, padding: 0, height: 'auto' }}
+                                  />,
+                                  ...(canManageMateriales
+                                    ? [
+                                        <Button
+                                          key={`editar-${material.id}`}
+                                          type="link"
+                                          icon={<EditOutlined />}
+                                          onClick={() => editarMaterial(material, curso.nombre_curso)}
+                                          style={{ padding: 0, height: "auto" }}
+                                        />,
+                                        <Button
+                                          key={`eliminar-${material.id}`}
+                                          type="link"
+                                          danger
+                                          icon={<DeleteOutlined />}
+                                          onClick={() => handleEliminarMaterial(material.id)}
+                                          style={{ padding: 0, height: "auto" }}
+                                        />,
+                                      ]
+                                    : []),
+                                ]}
+                              >
+                                <List.Item.Meta
+                                  avatar={
+                                    <div style={{ fontSize: 18, width: 24, textAlign: "center" }}>
+                                      {material.tipo_material === "documento" && "📄"}
+                                      {material.tipo_material === "video" && "🎥"}
+                                      {material.tipo_material === "imagen" && "🖼️"}
+                                      {material.tipo_material === "presentacion" && "📊"}
+                                      {material.tipo_material === "recurso" && "🔧"}
+                                      {material.tipo_material === "otro" && "📎"}
+                                    </div>
+                                  }
+                                  title={(() => {
+                                    const { tituloLimpio } = parseTemaFromTitulo(material.titulo);
+                                    const esIframe = String(material.mime_type || "").toLowerCase() === "iframe";
+                                    const esPdf = isPdfMaterial(material);
+                                    const descripcion = String(material.descripcion || "");
+                                    const esPdfRespaldo = esPdf && (descripcion.includes("[PDF_RESPALDO_IFRAME]") || materialesTemaOrdenados.some((item) => String(item?.mime_type || "").toLowerCase() === "iframe"));
+
+                                    return (
+                                      <Space size={6} wrap>
+                                        <Text>{tituloLimpio}</Text>
+                                        {esIframe ? <Tag color="blue">Gamma</Tag> : null}
+                                        {esPdfRespaldo ? <Tag color="purple">PDF respaldo</Tag> : null}
+                                      </Space>
+                                    );
+                                  })()}
+                                  description={null}
+                                />
+                              </List.Item>
+                            )}
+                          />
+                        )}
+                      </>
+                    )}
+
+                    {(vistaCicloActiva === "temas" || vistaCicloActiva === "quiz") && (
+                      <>
+                        <Divider style={{ margin: "10px 0" }} />
+                        <Text strong style={{ fontSize: 13 }}>Quiz de clase</Text>
+                        <div style={{ marginTop: 6, marginBottom: 10 }}>
+                          {quizTema ? (
+                            <Space size={8} wrap>
+                              <Tag color={quizTema.publicado ? "green" : "orange"}>
+                                {quizTema.publicado ? "Publicado" : "Borrador"}
+                              </Tag>
+                              <Tag>{quizTema.total_preguntas || 25} preguntas</Tag>
+                              {canManageMateriales ? (
+                                <>
+                                  <Button size="small" onClick={() => abrirModalQuiz(curso, quizTema)}>
+                                    Editar quiz
+                                  </Button>
+                                  <Button size="small" danger onClick={() => handleEliminarQuiz(quizTema.id)}>
+                                    Eliminar
+                                  </Button>
+                                </>
+                              ) : null}
+                            </Space>
+                          ) : (
+                            <Space size={8} wrap>
+                              <Text type="secondary">Sin quiz configurado para esta clase.</Text>
+                              {canManageMateriales ? (
+                                <Button size="small" type="primary" ghost onClick={() => abrirModalQuiz(curso, null)}>
+                                  Crear quiz
+                                </Button>
+                              ) : null}
+                            </Space>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {(vistaCicloActiva === "temas" || vistaCicloActiva === "necesarios") && (
+                      <>
+                        <Divider style={{ margin: "10px 0" }} />
+                        <Text strong style={{ fontSize: 13 }}>Materiales necesarios</Text>
+                        {materialesNecesariosTema.length === 0 ? (
+                          <Text type="secondary" style={{ display: "block", marginTop: 6 }}>
+                            Sin materiales necesarios registrados
+                          </Text>
+                        ) : (
+                          <Table
+                            size="small"
+                            loading={loadingMaterialesClase}
+                            pagination={mostrarListaCompletaNecesarios ? false : { pageSize: 5, hideOnSinglePage: true }}
+                            rowKey={(record) => String(record?.id || record?.nombre_material)}
+                            dataSource={materialesNecesariosTema}
+                            style={{ marginTop: 8 }}
+                            columns={[
+                              {
+                                title: "Producto",
+                                dataIndex: "nombre_material",
+                                render: (_value, record) => <Text>{record.materiales_ciclo?.nombre || record.nombre_material}</Text>,
+                              },
+                              {
+                                title: "Cantidad",
+                                dataIndex: "cantidad",
+                                render: (_value, record) =>
+                                  [record.materiales_ciclo?.cantidad || record.cantidad, record.unidad]
+                                    .filter(Boolean)
+                                    .join(" ") || "Cantidad no especificada",
+                              },
+                              {
+                                title: "Kit",
+                                dataIndex: "materiales_ciclo",
+                                align: "center",
+                                render: (value) => (value?.incluido_kit ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                              },
                               ...(canManageMateriales
                                 ? [
-                                    <Button
-                                      key={`editar-${material.id}`}
-                                      type="link"
-                                      icon={<EditOutlined />}
-                                      onClick={() => editarMaterial(material, curso.nombre_curso)}
-                                      style={{ padding: 0, height: "auto" }}
-                                    />,
-                                    <Button
-                                      key={`eliminar-${material.id}`}
-                                      type="link"
-                                      danger
-                                      icon={<DeleteOutlined />}
-                                      onClick={() => handleEliminarMaterial(material.id)}
-                                      style={{ padding: 0, height: "auto" }}
-                                    />,
+                                    {
+                                      title: "Acciones",
+                                      key: "acciones",
+                                      align: "right" as const,
+                                      render: (_: any, record: MaterialClase) => (
+                                        <Space size={4}>
+                                          <Button
+                                            key={`editar-necesario-${record.id}`}
+                                            type="link"
+                                            icon={<EditOutlined />}
+                                            onClick={() => abrirModalMaterialClase(curso.id, record)}
+                                            style={{ padding: 0, height: "auto" }}
+                                          />
+                                          <Button
+                                            key={`eliminar-necesario-${record.id}`}
+                                            type="link"
+                                            danger
+                                            icon={<DeleteOutlined />}
+                                            onClick={() => handleEliminarMaterialClase(record.id)}
+                                            style={{ padding: 0, height: "auto" }}
+                                          />
+                                        </Space>
+                                      ),
+                                    },
                                   ]
                                 : []),
                             ]}
-                          >
-                            <List.Item.Meta
-                              avatar={
-                                <div style={{ fontSize: 18, width: 24, textAlign: "center" }}>
-                                  {material.tipo_material === "documento" && "📄"}
-                                  {material.tipo_material === "video" && "🎥"}
-                                  {material.tipo_material === "imagen" && "🖼️"}
-                                  {material.tipo_material === "presentacion" && "📊"}
-                                  {material.tipo_material === "recurso" && "🔧"}
-                                  {material.tipo_material === "otro" && "📎"}
-                                </div>
-                              }
-                              title={(() => {
-                                const { tituloLimpio } = parseTemaFromTitulo(material.titulo);
-                                const esIframe = String(material.mime_type || "").toLowerCase() === "iframe";
-                                const esPdf = isPdfMaterial(material);
-                                const descripcion = String(material.descripcion || "");
-                                const esPdfRespaldo = esPdf && (descripcion.includes("[PDF_RESPALDO_IFRAME]") || materialesTemaOrdenados.some((item) => String(item?.mime_type || "").toLowerCase() === "iframe"));
-
-                                return (
-                                  <Space size={6} wrap>
-                                    <Text>{tituloLimpio}</Text>
-                                    {esIframe ? <Tag color="blue">Gamma</Tag> : null}
-                                    {esPdfRespaldo ? <Tag color="purple">PDF respaldo</Tag> : null}
-                                  </Space>
-                                );
-                              })()}
-                              description={null}
-                            />
-                          </List.Item>
+                          />
                         )}
-                      />
-                    )}
-
-                    <Divider style={{ margin: "10px 0" }} />
-                    <Text strong style={{ fontSize: 13 }}>Quiz de clase</Text>
-                    <div style={{ marginTop: 6, marginBottom: 10 }}>
-                      {quizTema ? (
-                        <Space size={8} wrap>
-                          <Tag color={quizTema.publicado ? "green" : "orange"}>
-                            {quizTema.publicado ? "Publicado" : "Borrador"}
-                          </Tag>
-                          <Tag>{quizTema.total_preguntas || 25} preguntas</Tag>
-                          {canManageMateriales ? (
-                            <>
-                              <Button size="small" onClick={() => abrirModalQuiz(curso, quizTema)}>
-                                Editar quiz
-                              </Button>
-                              <Button size="small" danger onClick={() => handleEliminarQuiz(quizTema.id)}>
-                                Eliminar
-                              </Button>
-                            </>
-                          ) : null}
-                        </Space>
-                      ) : (
-                        <Space size={8} wrap>
-                          <Text type="secondary">Sin quiz configurado para esta clase.</Text>
-                          {canManageMateriales ? (
-                            <Button size="small" type="primary" ghost onClick={() => abrirModalQuiz(curso, null)}>
-                              Crear quiz
-                            </Button>
-                          ) : null}
-                        </Space>
-                      )}
-                    </div>
-
-                    <Divider style={{ margin: "10px 0" }} />
-                    <Text strong style={{ fontSize: 13 }}>Materiales necesarios</Text>
-                    {materialesNecesariosTema.length === 0 ? (
-                      <Text type="secondary" style={{ display: "block", marginTop: 6 }}>
-                        Sin materiales necesarios registrados
-                      </Text>
-                    ) : (
-                      <Table
-                        size="small"
-                        loading={loadingMaterialesClase}
-                        pagination={mostrarListaCompletaNecesarios ? false : { pageSize: 5, hideOnSinglePage: true }}
-                        rowKey={(record) => String(record?.id || record?.nombre_material)}
-                        dataSource={materialesNecesariosTema}
-                        style={{ marginTop: 8 }}
-                        columns={[
-                          {
-                            title: "Producto",
-                            dataIndex: "nombre_material",
-                            render: (_value, record) => <Text>{record.materiales_ciclo?.nombre || record.nombre_material}</Text>,
-                          },
-                          {
-                            title: "Cantidad",
-                            dataIndex: "cantidad",
-                            render: (_value, record) =>
-                              [record.materiales_ciclo?.cantidad || record.cantidad, record.unidad]
-                                .filter(Boolean)
-                                .join(" ") || "Cantidad no especificada",
-                          },
-                          {
-                            title: "Kit",
-                            dataIndex: "materiales_ciclo",
-                            align: "center",
-                            render: (value) => (value?.incluido_kit ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
-                          },
-                          ...(canManageMateriales
-                            ? [
-                                {
-                                  title: "Acciones",
-                                  key: "acciones",
-                                  align: "right" as const,
-                                  render: (_: any, record: MaterialClase) => (
-                                    <Space size={4}>
-                                      <Button
-                                        key={`editar-necesario-${record.id}`}
-                                        type="link"
-                                        icon={<EditOutlined />}
-                                        onClick={() => abrirModalMaterialClase(curso.id, record)}
-                                        style={{ padding: 0, height: "auto" }}
-                                      />
-                                      <Button
-                                        key={`eliminar-necesario-${record.id}`}
-                                        type="link"
-                                        danger
-                                        icon={<DeleteOutlined />}
-                                        onClick={() => handleEliminarMaterialClase(record.id)}
-                                        style={{ padding: 0, height: "auto" }}
-                                      />
-                                    </Space>
-                                  ),
-                                },
-                              ]
-                            : []),
-                        ]}
-                      />
+                      </>
                     )}
 
                   </Card>
