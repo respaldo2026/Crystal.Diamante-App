@@ -140,8 +140,37 @@ export default function CatalogoCursosPage() {
         notas: values.notas || `Interesado en ${selectedPrograma.nombre} (catálogo)`
       };
 
-      const { data: leadData, error } = await supabaseBrowserClient.from("leads").insert(payload).select('id').single();
-      if (error) throw error;
+      let leadId: string | null = null;
+
+      const { data: leadData, error } = await supabaseBrowserClient
+        .from("leads")
+        .insert(payload)
+        .select("id")
+        .single();
+
+      if (!error && leadData?.id) {
+        leadId = String(leadData.id);
+      }
+
+      // Si el lead ya existe (409 / unique violation), reutilizar el último por teléfono.
+      if (!leadId && (error as any)?.code === "23505") {
+        const { data: existingLead, error: existingError } = await supabaseBrowserClient
+          .from("leads")
+          .select("id")
+          .eq("telefono", telefono)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingError) throw existingError;
+        if (existingLead?.id) {
+          leadId = String(existingLead.id);
+        }
+      }
+
+      if (!leadId) {
+        throw error || new Error("No se pudo crear o recuperar el lead");
+      }
 
       // Cargar configuración de la academia
       const { data: configData } = await supabaseBrowserClient
@@ -173,7 +202,7 @@ export default function CatalogoCursosPage() {
 
       // Enviar plantilla v4 con datos del programa y botones
       const { enviarFormularioInteres } = await import('@/services/whatsapp-messages-module');
-      const resultado = await enviarFormularioInteres(telefono, leadData.id, {
+      const resultado = await enviarFormularioInteres(telefono, leadId, {
         nombre: values.nombre,
         cursoInteres: selectedPrograma.nombre,
         fechaInicio: proximoTexto || 'Fecha por confirmar',
