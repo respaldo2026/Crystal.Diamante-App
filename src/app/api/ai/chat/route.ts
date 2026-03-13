@@ -2473,6 +2473,22 @@ function isKitPurchaseQuestion(message: string): boolean {
   return mentionsMaterials && (asksBuying || asksIfProvided);
 }
 
+function isKitContentsQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const mentionsKit = /\b(kit|kits|material|materiales|insumo|insumos|implementos?)\b/i.test(text);
+  const asksContents = /\b(que\s+incluye|que\s+trae|que\s+viene|incluye\s+el\s+kit|trae\s+el\s+kit|viene\s+en\s+el\s+kit|contenido\s+del\s+kit)\b/i.test(text);
+
+  return mentionsKit && asksContents;
+}
+
+function buildKitContentsReply(detectedProgram: any | null): string {
+  const programLabel = detectedProgram?.nombre ? ` para *${detectedProgram.nombre}*` : "";
+
+  return `¡Claro! 🙌 Te cuento qué incluye el *kit mensual*${programLabel}:\n\n✅ Limas y buffer\n✅ Palitos de naranjo y/o herramientas básicas de preparación\n✅ Base, gel de construcción y top coat\n✅ Deshidratador/prep y primer\n✅ Tips o formas (según la clase)\n✅ Decoración básica del mes\n✅ Insumos de práctica para las técnicas del ciclo\n\n📌 El kit cubre aproximadamente el *70%* de lo que se usa en ese mes, y si te falta algo puntual en clase, la academia te lo presta.\n\nSi quieres, te detallo exactamente qué se usa en el *primer mes*.`;
+}
+
 function hasProgramCorrectionSignal(message: string): boolean {
   const text = normalizeForMatch(message);
   return /\b(no es|no era|no hablo de|no me refiero|no estoy preguntando por|eso no es|ese no es|esa no es)\b/i.test(text);
@@ -3590,8 +3606,13 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   const asksKitPurchase = isKitPurchaseQuestion(message);
+  const asksKitContents = isKitContentsQuestion(message);
   const asksMorningSchedule = /\b(manana|manana\s+temprano|por\s+la\s+manana|en\s+la\s+manana)\b/i.test(normalizedMessage)
     && /\b(horario|hora|grupo|noche|tarde|pm|solo|unico|4|7)\b/i.test(normalizedMessage);
+
+  if (asksKitContents) {
+    return buildKitContentsReply(detectedProgram);
+  }
 
   if (asksPrice && asksLocation) {
     const locationReference = "Estamos ubicados en el *oriente de Cali*, cerca a la *Panadería Pablos Pam*, en *La Cosmetikera (segundo piso)*.";
@@ -3612,8 +3633,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   if (asksKitPurchase) {
-    const programLabel = detectedProgram?.nombre ? ` para *${detectedProgram.nombre}*` : "";
-    return `¡Buena pregunta! 👌\n\n✅ Tienes que comprar *muy pocos productos*.\n\n✨ Te entregamos un *kit mensual* que cubre casi todos los materiales que necesitas para tus prácticas.\n\nY si algo te hace falta, ¡tranquila! La academia te lo presta para que no te varas en clase 😊\n\n¿Te gustaría ver qué incluye el kit?`;
+    return `¡Buena pregunta! 👌\n\n✅ Tienes que comprar *muy pocos productos*.\n\n✨ Te entregamos un *kit mensual* que cubre casi todos los materiales que necesitas para tus prácticas.\n\nY si algo te hace falta, ¡tranquila! La academia te lo presta para que no te varas en clase 😊\n\nSi quieres, te detallo exactamente qué incluye el kit del *primer mes*.`;
   }
 
   if (asksMorningSchedule) {
