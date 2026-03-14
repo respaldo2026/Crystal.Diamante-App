@@ -629,6 +629,7 @@ Sigue siempre este orden:
 Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
 
 - Precio: confirma inscripción + mensualidad, incluye 1-2 beneficios clave y pregunta si desea medios/fechas de pago.
+- Precio (formato obligatorio): muestra siempre *3 opciones de pago* en este orden y con negrilla: *Por Clase*, *Mensual Opción A*, *Mensual Opción B*. Debes aclarar beneficio de materiales en cada una: Por Clase = no incluye materiales; Opción A = incluye ~70% de materiales; Opción B = incluye 100% de materiales del mes.
 - "Efectivo" / confirmación de medio de pago: NO reinicies el embudo. Confirma que efectivo está disponible y da el siguiente paso: "¡Perfecto! Entonces puedes separar tu cupo pagando la inscripción en efectivo directamente en la academia. ¿Quieres que te diga los pasos para hacerlo?"
 - "Sí" / "sí porfavor" / "porfavor" después de preguntar si quiere medios y fechas de pago: da inmediatamente la lista de medios de pago y la fecha límite de mensualidad. NO preguntes de nuevo qué quiere saber.
 - Medios/fechas de pago: lista los medios disponibles (💵 Efectivo • 💜 Nequi: 3006402575 • 🟡 Bancolombia • 🟢 Sistecredito • 💳 Tarjeta), indica que la mensualidad tiene plazo hasta la segunda clase, y pregunta si quiere guía de inscripción.
@@ -2259,9 +2260,10 @@ function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) 
 function buildHumanPaymentModalitiesBlock(detectedProgram: any, primaryCourse: any): string {
   const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
   return [
-    `• *POR_CLASE:* ${options.porClaseText} por clase`,
-    `• *MENSUAL_70:* ${options.mensual70Text} al mes (kit aproximado del 70%)`,
-    `• *MENSUAL_100:* ${options.mensual100Text} al mes (kit completo del mes)`,
+    `✅ *Tenemos 3 opciones de pago:*`,
+    `• *Por Clase:* ${options.porClaseText} por clase — *no incluye materiales*`,
+    `• *Mensual Opción A:* ${options.mensual70Text} al mes — *incluye aproximadamente 70% de materiales*`,
+    `• *Mensual Opción B:* ${options.mensual100Text} al mes — *incluye 100% de materiales del mes*`,
   ].join("\n");
 }
 
@@ -3939,7 +3941,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     }
 
     if (asksMonthlyConfirmation) {
-      return `✅ Tenemos estas modalidades para que elijas la que más te convenga:\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n🧴 En mensualidad te entregamos kit de productos según el plan.\n\n¿Quieres que te recomiende cuál te conviene según tu presupuesto?`;
+      return `💳 Perfecto, para que no haya confusión te lo dejo súper claro:\n\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que te recomiende cuál te conviene más según tu presupuesto?`;
     }
 
     if (asksTotalToPay) {
@@ -3950,7 +3952,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
         ? formatCurrencyCOP(inscripcion + priceOptions.mensual100)
         : "Por confirmar";
 
-      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con MENSUAL_70:* ${totalInicio70}\n• *Inicio con MENSUAL_100:* ${totalInicio100}\n• *Inicio con POR_CLASE:* inscripción + ${porClaseText} por cada clase que asistas\n\n✅ Puedes pagar inscripción y escoger modalidad.\nSi te queda mejor, la mensualidad se puede completar hasta la segunda clase.`;
+      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con Mensual Opción A:* ${totalInicio70}\n• *Inicio con Mensual Opción B:* ${totalInicio100}\n• *Inicio con Por Clase:* inscripción + ${porClaseText} por cada clase que asistas\n\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n✅ Puedes pagar la inscripción y escoger la modalidad que prefieras.\nSi te queda mejor, la mensualidad se puede completar hasta la segunda clase.`;
     }
 
     if (asksPartialPayment) {
