@@ -153,7 +153,7 @@ export default function MatriculaCreate() {
             });
         }
 
-        if (plan.modalidad === "POR_CLASE") {
+        if (modalidadPago === "POR_CLASE") {
             await supabaseBrowserClient
                 .from("pagos")
                 .delete()
