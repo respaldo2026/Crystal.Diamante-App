@@ -255,6 +255,11 @@ export default function ProgramasPage() {
   const getPrecioPorClase = (programa: any): number =>
     Number(programa?.precio_por_clase ?? 0);
 
+  const getMesesPrograma = (programa: any): number => {
+    const duracionStr = String(programa?.duracion || "0 meses");
+    return parseInt(duracionStr.match(/\d+/)?.[0] || "0", 10);
+  };
+
   const calcularPrecioTotal = (programa: any): number => {
     const precio_mensualidad = getPrecioMensual70(programa);
     const precio_inscripcion = Number(programa.precio_inscripcion || 0);
@@ -264,6 +269,27 @@ export default function ProgramasPage() {
     const meses = parseInt(duracionStr.match(/\d+/)?.[0] || "0", 10);
     
     return (precio_mensualidad * meses) + precio_inscripcion;
+  };
+
+  const calcularTotalMensual70 = (programa: any): number => {
+    const precioMensual = getPrecioMensual70(programa);
+    const precioInscripcion = Number(programa?.precio_inscripcion || 0);
+    const meses = getMesesPrograma(programa);
+    return (precioMensual * meses) + precioInscripcion;
+  };
+
+  const calcularTotalMensual100 = (programa: any): number => {
+    const precioMensual = getPrecioMensual100(programa);
+    const precioInscripcion = Number(programa?.precio_inscripcion || 0);
+    const meses = getMesesPrograma(programa);
+    return (precioMensual * meses) + precioInscripcion;
+  };
+
+  const calcularTotalPorClase = (programa: any): number => {
+    const precioClase = getPrecioPorClase(programa);
+    const totalClases = Number(programa?.total_clases || 0);
+    const precioInscripcion = Number(programa?.precio_inscripcion || 0);
+    return (precioClase * totalClases) + precioInscripcion;
   };
 
   // Función para calcular el valor por clase: (meses * mensualidad) / total_clases
@@ -335,6 +361,9 @@ export default function ProgramasPage() {
 
     const totalHoras = calcularTotalHoras(programa);
     const valorTotal = calcularPrecioTotal(programa);
+    const totalMensual70 = calcularTotalMensual70(programa);
+    const totalMensual100 = calcularTotalMensual100(programa);
+    const totalPorClase = calcularTotalPorClase(programa);
     const valorClase = calcularValorPorClase(programa);
 
     return (
@@ -496,6 +525,33 @@ export default function ProgramasPage() {
                 <Text type="secondary" style={{ fontSize: 12 }}>Inversión total</Text>
                 <div style={{ fontSize: 24, fontWeight: 700, color: "#0050b3", marginTop: 4 }}>
                   ${Number(valorTotal).toLocaleString()}
+                </div>
+              </div>
+
+              {/* Totales por modalidad */}
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: 10,
+                  border: "1px dashed #d9d9d9",
+                  borderRadius: 8,
+                  background: "#fcfcfc",
+                }}
+              >
+                <Text strong style={{ display: "block", marginBottom: 8, fontSize: 12 }}>
+                  Totales por modalidad
+                </Text>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={{ fontSize: 12 }}>POR_CLASE</Text>
+                  <Text strong style={{ fontSize: 12 }}>${Number(totalPorClase).toLocaleString()}</Text>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={{ fontSize: 12 }}>MENSUAL_70</Text>
+                  <Text strong style={{ fontSize: 12 }}>${Number(totalMensual70).toLocaleString()}</Text>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <Text style={{ fontSize: 12 }}>MENSUAL_100</Text>
+                  <Text strong style={{ fontSize: 12 }}>${Number(totalMensual100).toLocaleString()}</Text>
                 </div>
               </div>
 
