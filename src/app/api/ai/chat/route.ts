@@ -3363,6 +3363,41 @@ function buildPaymentMethodsAndDatesReply(mediosPago: any[] = []): string {
   return `¡Claro! Te explico 🙌\n\n${methodsBlock}\n\n✅ La *matrícula* se paga anticipada; así separas tu cupo.\n✅ La *mensualidad* tiene plazo hasta la *segunda clase*.\n✅ Con la mensualidad recibes *kit de materiales mensual* (incluye ~70% de los productos que usas ese mes).\n\nSi quieres, te digo cuál opción te conviene más según cómo prefieras pagar.`;
 }
 
+function isMonthlyOrBiweeklyQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const asksMonthlyVsBiweekly = /\b(mensual\s+o\s+quincena|mensual\s+o\s+quincenal|mensual\s+o\s+quincenalmente|mensual\s+o\s+por\s+quincena)\b/i.test(text);
+  const mentionsBiweekly = /\b(quincena|quincenal|quincenalmente|cada\s+quincena)\b/i.test(text);
+  const mentionsMonthly = /\b(mensual|mensualidad|cada\s+mes|al\s+mes|mes\s+a\s+mes)\b/i.test(text);
+  const asksPayment = /\b(pago|pagar|se\s+paga|como\s+se\s+paga|hay\s+que\s+pagar|toc[ao]\s+pagar)\b/i.test(text);
+
+  return asksMonthlyVsBiweekly || (mentionsBiweekly && (mentionsMonthly || asksPayment));
+}
+
+function isVisitCommitmentMessage(message: string, lastAgentMessage: string): boolean {
+  const raw = String(message || "").trim();
+  if (!raw || /[?¿]/.test(raw)) return false;
+
+  const text = normalizeForMatch(raw);
+  const mentionsDay = /\b(hoy|manana|pasado\s+manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/i.test(text);
+  const mentionsTime = /\b(a\s+las\s+\d{1,2}|\d{1,2}(:\d{2})?\s*(am|pm)?|4\s*pm|7\s*pm|en\s+la\s+manana|en\s+la\s+tarde|en\s+la\s+noche)\b/i.test(text);
+  const hasVisitVerb = /\b(voy|ire|iremos|estare|llego|arrimo|paso|caigo|puedo\s+pasar|me\s+acerco)\b/i.test(text);
+
+  const normalizedLast = normalizeForMatch(lastAgentMessage || "");
+  const lastAskedVisitTime = /\b(cuando\s+puedes\s+venir|cuando\s+puede\s+venir|cuando\s+vienes|puedes\s+venir|puedes\s+pasar|coordinamos\s+para\s+que\s+te\s+atiendan|te\s+esperamos\s+el)\b/i.test(normalizedLast);
+
+  return (mentionsDay || mentionsTime) && (hasVisitVerb || lastAskedVisitTime);
+}
+
+function buildVisitCommitmentReply(academy: any | null): string {
+  const direccion = String(academy?.direccion || "Calle 53 #30a 101 - Barrio Comuneros 1").trim();
+  const mapsUrl = String(academy?.maps_url || "").trim();
+  const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
+
+  return `¡Perfecto! 🙌 Te esperamos ese día en la sede.\n\n📍 *${direccion}*${mapsLine}\n\nSi quieres, también te dejo una referencia rápida para llegar sin enredos 😊`;
+}
+
 function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
   if (!courses?.length) return null;
 
@@ -3615,6 +3650,8 @@ function buildIntentFocusedDirectResponse(
   const asksPaymentMethodsOrDates = isPaymentMethodsOrDatesQuestion(message);
   const asksStepOne = isStepOneSelection(message);
   const asksPrice = /\b(precio|cuanto|costo|valor|inscripcion|mensualidad|inversion)\b/i.test(normalizedMessage);
+  const asksMonthlyVsBiweekly = isMonthlyOrBiweeklyQuestion(message);
+  const confirmsVisitCommitment = isVisitCommitmentMessage(message, lastAgentForFlow);
   const requestedTemarioMonth = extractRequestedTemarioMonth(message);
   const inferredTemarioMonthFromFlow = inferTemarioMonthFromAgentPrompt(lastAgentForFlow);
   const asksTemarioByClass = /\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado|detalle\s+por\s+clase)\b/i.test(normalizedMessage);
@@ -3658,6 +3695,20 @@ function buildIntentFocusedDirectResponse(
   }
 
   const inferredPendingTopic = inferPendingTopicFromHistory(history);
+
+  if (confirmsVisitCommitment) {
+    return buildVisitCommitmentReply(academy);
+  }
+
+  if (asksMonthlyVsBiweekly) {
+    if (detectedProgram) {
+      const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+      return `¡Buena pregunta! 👌 No manejamos pago quincenal fijo.\n\nSe maneja así:\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\nSi quieres, te recomiendo en una línea cuál te conviene más según tu presupuesto.`;
+    }
+
+    return "¡Buena pregunta! 👌 No manejamos pago quincenal fijo. Trabajamos con *3 modalidades*: *Por Clase*, *Mensual Opción A* y *Mensual Opción B*. Si me dices el curso, te doy los valores exactos de cada una.";
+  }
+
   const asksScheduleRescue = isScheduleRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
   const asksPaymentRescue = isPaymentRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
   const confirmsPaymentInfo = isShortAffirmativeReply(message)
