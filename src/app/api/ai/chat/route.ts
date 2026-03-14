@@ -2224,6 +2224,46 @@ function formatCurrencyCOP(value: number): string {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) {
+  const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
+  const mensual70 = Number(
+    detectedProgram?.precio_mensual_70
+    ?? primaryCourse?.precio_mensual_70
+    ?? detectedProgram?.precio_mensualidad
+    ?? primaryCourse?.precio_mensualidad
+    ?? 0
+  );
+  const mensual100 = Number(
+    detectedProgram?.precio_mensual_100
+    ?? primaryCourse?.precio_mensual_100
+    ?? detectedProgram?.precio_mensualidad
+    ?? primaryCourse?.precio_mensualidad
+    ?? mensual70
+    ?? 0
+  );
+  const porClase = Number(detectedProgram?.precio_por_clase ?? primaryCourse?.precio_por_clase ?? 0);
+
+  return {
+    inscripcion,
+    mensual70,
+    mensual100,
+    porClase,
+    inscripcionText: inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar",
+    mensual70Text: mensual70 > 0 ? formatCurrencyCOP(mensual70) : "Por confirmar",
+    mensual100Text: mensual100 > 0 ? formatCurrencyCOP(mensual100) : "Por confirmar",
+    porClaseText: porClase > 0 ? formatCurrencyCOP(porClase) : "Por confirmar",
+  };
+}
+
+function buildHumanPaymentModalitiesBlock(detectedProgram: any, primaryCourse: any): string {
+  const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+  return [
+    `• *POR_CLASE:* ${options.porClaseText} por clase`,
+    `• *MENSUAL_70:* ${options.mensual70Text} al mes (kit aproximado del 70%)`,
+    `• *MENSUAL_100:* ${options.mensual100Text} al mes (kit completo del mes)`,
+  ].join("\n");
+}
+
 function isDurationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   return /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
@@ -3641,13 +3681,10 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   if (asksPrice && asksLocation) {
     const locationReference = "Estamos ubicados en el *oriente de Cali*, cerca a la *Panadería Pablos Pam*, en *La Cosmetikera (segundo piso)*.";
     const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
-    const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
-    const mensualidad = Number(detectedProgram?.precio_mensualidad ?? primaryCourse?.precio_mensualidad ?? 0);
-    const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
-    const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
+    const priceOptions = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
 
     const priceBlock = detectedProgram
-      ? `💸 *${detectedProgram.nombre}*\n• Inscripción: *${insText}*\n• Mensualidad: *${menText}*`
+      ? `💸 *${detectedProgram.nombre}*\n• *Inscripción:* ${priceOptions.inscripcionText}\n• *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}`
       : `💸 *Precio:* te confirmo inscripción y mensualidad exactas según el curso que elijas.`;
 
     const mapsBlock = academy?.maps_url ? `\n🗺️ Mapa: ${academy.maps_url}` : "";
@@ -3876,13 +3913,15 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   if (intent === "precio") {
-    const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
-    const mensualidad = Number(detectedProgram?.precio_mensualidad ?? primaryCourse?.precio_mensualidad ?? 0);
-    const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
-    const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
+    const priceOptions = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+    const inscripcion = priceOptions.inscripcion;
+    const insText = priceOptions.inscripcionText;
+    const men70Text = priceOptions.mensual70Text;
+    const men100Text = priceOptions.mensual100Text;
+    const porClaseText = priceOptions.porClaseText;
 
     const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
-    const monthlyIncludes = "Incluye: Cada mes te damos kit de productos (~70% de lo que usas ese mes)";
+    const monthlyIncludes = "Incluye: kit mensual según la modalidad que elijas";
 
     const normalizedMessage = normalizeForMatch(message);
     const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
@@ -3899,19 +3938,22 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     }
 
     if (asksMonthlyConfirmation) {
-      return `✅ Sí, la *mensualidad* es ${menText}.\n🧴 *Cada mes te damos kit de productos* (~70% de los materiales que usas ese mes).\n\n¿Quieres que te comparta también los *medios de pago* y las *fechas de pago*?`;
+      return `✅ Tenemos estas modalidades para que elijas la que más te convenga:\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n🧴 En mensualidad te entregamos kit de productos según el plan.\n\n¿Quieres que te recomiende cuál te conviene según tu presupuesto?`;
     }
 
     if (asksTotalToPay) {
-      const totalInicio = (inscripcion > 0 && mensualidad > 0)
-        ? formatCurrencyCOP(inscripcion + mensualidad)
+      const totalInicio70 = (inscripcion > 0 && priceOptions.mensual70 > 0)
+        ? formatCurrencyCOP(inscripcion + priceOptions.mensual70)
+        : "Por confirmar";
+      const totalInicio100 = (inscripcion > 0 && priceOptions.mensual100 > 0)
+        ? formatCurrencyCOP(inscripcion + priceOptions.mensual100)
         : "Por confirmar";
 
-      return `💸 Si pagas para iniciar con todo listo, sería:\n• *Inscripción:* ${insText}\n• *Mensualidad:* ${menText}\n• *Total inicial (inscripción + mensualidad):* ${totalInicio}\n\n✅ *Lo ideal* es pagar inscripción y mensualidad de una, porque con la mensualidad te entregamos el *kit de productos* (~70% de lo que usas ese mes) para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase*, que es cuando se empiezan a usar los productos.`;
+      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con MENSUAL_70:* ${totalInicio70}\n• *Inicio con MENSUAL_100:* ${totalInicio100}\n• *Inicio con POR_CLASE:* inscripción + ${porClaseText} por cada clase que asistas\n\n✅ Puedes pagar inscripción y escoger modalidad.\nSi te queda mejor, la mensualidad se puede completar hasta la segunda clase.`;
     }
 
     if (asksPartialPayment) {
-      return `Buena pregunta 👌\n\n✅ *Lo ideal* es pagar *inscripción y mensualidad de una*, porque con la mensualidad te entregamos el *kit de productos* (~70% de lo que usas ese mes) para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase* (ahí se empiezan a usar los productos).\n\nPara iniciar hoy, se maneja:\n💰 *Inscripción:* ${insText}\n💰 *Mensualidad:* ${menText}`;
+      return `Buena pregunta 👌\n\nPara iniciar hoy, se maneja:\n💰 *Inscripción:* ${insText}\n💳 Luego eliges modalidad:\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\nSi no te queda fácil pagar todo junto, te orientamos para arrancar y completar mensualidad hasta la segunda clase.`;
     }
 
     const recentConversationText = (Array.isArray(history) ? history : [])
@@ -3985,7 +4027,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
       }
     }
 
-    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💰 *Mensualidad:* ${menText}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
+    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
   }
 
   if (intent === "horario") {
