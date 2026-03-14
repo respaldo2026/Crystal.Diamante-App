@@ -916,6 +916,31 @@ function isSelfOriginatedInstagramEvent(body: any): boolean {
   return ownIds.has(senderId);
 }
 
+function isOwnInstagramConversationIdentifier(phone: string, body: any): boolean {
+  const normalizedPhone = String(phone || "").trim().toLowerCase();
+  if (!normalizedPhone.startsWith("ig:")) return false;
+
+  const senderId = normalizedPhone.replace(/^ig:/, "").trim();
+  if (!senderId) return false;
+
+  const entryNode = Array.isArray(body?.entry) ? body?.entry?.[0] : body?.entry;
+  const ownIds = new Set(
+    [
+      body?.entry?.[0]?.id,
+      entryNode?.id,
+      body?.entry?.[0]?.messaging?.[0]?.recipient?.id,
+      entryNode?.messaging?.[0]?.recipient?.id,
+      entryNode?.recipient?.id,
+      process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
+      process.env.INSTAGRAM_ACCOUNT_ID,
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+
+  return ownIds.has(senderId);
+}
+
 function findPhoneCandidateDeep(candidates: string[]): string {
   for (const value of candidates) {
     if (!value) continue;
@@ -4638,6 +4663,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { message, phone, channel, profileName: rawProfileName } = extractMessageAndPhone(body || {});
+
+    // Guardrail extra para payloads de Make: si llega como remitente el ID propio de la
+    // cuenta de Instagram, es eco/salida y no debe procesarse como mensaje entrante.
+    if (channel === "instagram" && isOwnInstagramConversationIdentifier(phone, body)) {
+      return NextResponse.json({ ok: true, ignored: true, reason: "instagram_own_sender_id" });
+    }
 
     // Si es Instagram DM y el webhook no trajo nombre, intentar obtenerlo vía Graph API
     let profileName = rawProfileName;
