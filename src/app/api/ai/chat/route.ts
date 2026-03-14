@@ -618,6 +618,7 @@ Sigue siempre este orden:
 ⚠️ "Que incluye" / "qué incluye" / "qué incluye el curso" cuando ya hay un programa identificado → responde directamente con lo que incluye EL CURSO: temario completo, kit mensual (~70% de productos), uniforme, certificado y ceremonia de grado. NUNCA devuelvas el menú de doble opción "¿horarios e inversión o separar cupo?".
 ⚠️ "Y cuántas horas son" / "cuántas horas" / "cuántas horas dura" / "cuántas horas tiene" → responde DIRECTAMENTE con las horas por sesión. Ejemplo: "Son 3 horas por clase (de 4:00 PM a 7:00 PM), una vez a la semana. En total son 20 clases en 5 meses." NUNCA repitas el bloque completo de inicio/horario/cupo como respuesta a esta pregunta.
 ⚠️ "desde cero" / "enseñan desde cero" / "aprenden desde cero" / "es desde cero" / "se aprende desde cero" → el usuario está preguntando si el curso es para PRINCIPIANTES (sin experiencia previa). NO es el nombre de un programa. SIEMPRE confirma: "¡Sí! No necesitas ninguna experiencia previa, el programa está diseñado desde cero." NUNCA respondas que "desde cero no está disponible como programa" ni listes otros cursos como alternativa.
+⚠️ "manicura", "pedicura", "manicuría", "pedi-spa" o errores de escritura similares (ej: "maniura") se refieren al programa de uñas. Interprétalo como *Artista Integral en Uñas* y responde con ese programa.
 ⚠️ "X favor" / "por favor" / "xfa" cuando el usuario acaba de pedir información específica que NO recibió completamente → el usuario INSISTE en recibir lo que ya pidió. Revisa el mensaje anterior del usuario, identifica qué información faltó, y dála directamente. NUNCA reinicies el embudo preguntando "¿te comparto horarios e inversión o separar cupo?".
 ⚠️ "Tienes otros horarios?" / "hay otros horarios?" / "otros horarios" → si solo hay un grupo activo en ese programa, di claramente: "Por ahora solo tenemos ese grupo los [día/horario]. ¿Quieres quedar en lista de espera si abrimos otro horario?" NUNCA repitas el bloque del mismo horario como si fuera nuevo.
 ⚠️ "Cuántos días se estudia" / "cuántos días son" / "cuántos días a la semana" / "es 1 vez a la semana" / "cuántas veces a la semana" / "es todos los días" → responde DIRECTAMENTE la frecuencia: "Es 1 vez a la semana (los [día]), de [hora] a [hora]." NUNCA respondas esta pregunta con Google Maps, proceso de inscripción ni datos de pago. Es una pregunta de frecuencia, no una señal de querer inscribirse.
@@ -4302,7 +4303,10 @@ function shouldUseNextGroupDirectResponse(
 ): boolean {
   if (isNextGroupQuestion(userMessage)) return true;
 
-  const mentionsProgram = Boolean(detectProgramFromMessage(userMessage, programs));
+  const mentionsProgram = Boolean(
+    detectProgramFromMessage(userMessage, programs)
+    || resolveProgramAliasFromMessage(userMessage, programs)
+  );
   if (mentionsProgram && detectedProgram && isLikelyProgramOnlyReply(userMessage) && hasRecentNextGroupContext(history)) {
     return true;
   }
@@ -4374,7 +4378,10 @@ function shouldUseTodayClassDirectResponse(
 ): boolean {
   if (isTodayClassQuestion(userMessage)) return true;
 
-  const mentionsProgram = Boolean(detectProgramFromMessage(userMessage, programs));
+  const mentionsProgram = Boolean(
+    detectProgramFromMessage(userMessage, programs)
+    || resolveProgramAliasFromMessage(userMessage, programs)
+  );
   if (mentionsProgram && detectedProgram && isLikelyProgramOnlyReply(userMessage) && hasRecentTodayClassContext(history)) {
     return true;
   }
@@ -4420,6 +4427,9 @@ function resolveProgramFromContext(
   programs: any[],
   conversationHistory: Array<{ user: string; agent: string }>
 ): any | null {
+  const aliasedProgram = resolveProgramAliasFromMessage(userMessage, programs);
+  if (aliasedProgram) return aliasedProgram;
+
   const directProgram = detectProgramFromMessage(userMessage, programs);
   if (directProgram) return directProgram;
 
@@ -4448,6 +4458,44 @@ function resolveProgramFromContext(
   }
 
   return null;
+}
+
+function findNailsProgram(programs: any[]): any | null {
+  const allPrograms = Array.isArray(programs) ? programs : [];
+  if (!allPrograms.length) return null;
+
+  const ranked = allPrograms
+    .map((program) => ({
+      program,
+      normalized: normalizeForMatch(program?.nombre || ""),
+    }))
+    .filter((entry) => entry.normalized);
+
+  const exact = ranked.find((entry) =>
+    /\bartista\s+integral\s+en\s+unas\b/.test(entry.normalized)
+  );
+  if (exact) return exact.program;
+
+  const hasUñas = ranked.find((entry) =>
+    /\bunas\b/.test(entry.normalized)
+  );
+  if (hasUñas) return hasUñas.program;
+
+  return null;
+}
+
+function resolveProgramAliasFromMessage(userMessage: string, programs: any[]): any | null {
+  const raw = String(userMessage || "").toLowerCase();
+  if (!raw) return null;
+
+  const normalized = normalizeForMatch(userMessage);
+  const asksNailProgram =
+    /\b(manicura|manicuria|maniura|manicure|pedicura|pedicure|pedi\s*spa|pedispa|nail|nails|unas\s+acrilicas|curso\s+de\s+unas)\b/i.test(normalized)
+    || /\buñ(?:as|s)\b/i.test(raw)
+    || /\buñas\b/i.test(raw);
+
+  if (!asksNailProgram) return null;
+  return findNailsProgram(programs);
 }
 
 function buildContextualDirective(
