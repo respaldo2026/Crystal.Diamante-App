@@ -882,9 +882,6 @@ function isSelfOriginatedInstagramEvent(body: any): boolean {
       body?.entry?.[0]?.changes?.[0]?.value?.from?.id || // comentarios
       entryNode?.changes?.[0]?.value?.from?.id ||
       body?.sender?.id ||
-      body?.telefono_whatsapp ||
-      body?.phone ||
-      body?.from ||
       ""
   ).trim();
 
@@ -904,7 +901,6 @@ function isSelfOriginatedInstagramEvent(body: any): boolean {
       body?.entry?.[0]?.messaging?.[0]?.recipient?.id,
       entryNode?.messaging?.[0]?.recipient?.id,
       entryNode?.recipient?.id,
-      body?.p_whatsapp_id,
       process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
       process.env.INSTAGRAM_ACCOUNT_ID,
     ]
