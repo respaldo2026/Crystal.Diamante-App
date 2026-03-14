@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
-import { Form, Input, Select, DatePicker, Card, Alert } from "antd";
+import { Form, Input, Select, DatePicker, Card, Alert, Typography } from "antd";
 import { 
     UserOutlined, 
     BookOutlined, 
@@ -12,10 +12,16 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
+
+const formatoCOP = (valor: number) =>
+    new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
 export default function MatriculaEdit() {
     const { formProps, saveButtonProps } = useForm();
     const [programaId, setProgramaId] = useState<string | undefined>(undefined);
+    const planSeleccionado = normalizeModalidadPago(Form.useWatch("modalidad_pago", formProps.form));
+    const infoPlanSeleccionado = getPaymentPlan(planSeleccionado);
 
     // Obtenemos datos de las tablas relacionadas para los selectores (aunque sean solo lectura)
     const { selectProps: studentSelectProps } = useSelect({
@@ -59,6 +65,11 @@ export default function MatriculaEdit() {
         }
     }, [formProps.form, supabaseFetchPrograma]);
 
+    useEffect(() => {
+        formProps.form?.setFieldValue("valor_mensual_plan", infoPlanSeleccionado.montoMensual);
+        formProps.form?.setFieldValue("porcentaje_productos", infoPlanSeleccionado.porcentajeProductos);
+    }, [formProps.form, infoPlanSeleccionado.montoMensual, infoPlanSeleccionado.porcentajeProductos]);
+
     return (
         <Edit saveButtonProps={saveButtonProps} title="Actualizar Matrícula">
             
@@ -72,6 +83,12 @@ export default function MatriculaEdit() {
             />
 
             <Form {...formProps} form={formProps.form} layout="vertical">
+                <Form.Item name="valor_mensual_plan" hidden>
+                    <Input />
+                </Form.Item>
+                <Form.Item name="porcentaje_productos" hidden>
+                    <Input />
+                </Form.Item>
                 
                 <Card title="Datos de la Matrícula" variant="borderless">
                     
@@ -88,6 +105,34 @@ export default function MatriculaEdit() {
                     {/* CURSO (Deshabilitado) */}
                     <Form.Item label="Curso" name="curso_id">
                         <Select {...courseSelectProps} disabled suffixIcon={<BookOutlined />} />
+                    </Form.Item>
+
+                    <Form.Item
+                        label="Modalidad de Pago"
+                        name="modalidad_pago"
+                        initialValue={MODALIDAD_PAGO_DEFAULT}
+                        rules={[{ required: true, message: "Selecciona una modalidad de pago" }]}
+                    >
+                        <Select
+                            options={Object.values(PLANES_PAGO).map((plan) => ({
+                                value: plan.modalidad,
+                                label: `${plan.label} · ${plan.descripcion}`,
+                            }))}
+                        />
+                    </Form.Item>
+
+                    <Form.Item label="Resumen del Plan">
+                        <Card size="small" styles={{ body: { padding: 12 } }}>
+                            {planSeleccionado === "POR_CLASE" ? (
+                                <Typography.Text>
+                                    Cobro por clase: <strong>{formatoCOP(infoPlanSeleccionado.montoPorClase)}</strong>
+                                </Typography.Text>
+                            ) : (
+                                <Typography.Text>
+                                    Mensualidad fija: <strong>{formatoCOP(infoPlanSeleccionado.montoMensual)}</strong> · Incluye <strong>{infoPlanSeleccionado.porcentajeProductos}%</strong> de productos.
+                                </Typography.Text>
+                            )}
+                        </Card>
                     </Form.Item>
 
                     {/* ESTADO - ¡AQUÍ ESTÁ LA MAGIA! ✨ */}
