@@ -2491,10 +2491,73 @@ function isKitPurchaseQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
 
   const mentionsMaterials = /\b(kit|kits|implemento|implementos|herramienta|herramientas|material|materiales|insumo|insumos)\b/i.test(text);
-  const asksBuying = /\b(comprar|compro|comprarlo|comprarlos|debo comprar|hay que comprar|toca comprar|necesito comprar|traer|poner)\b/i.test(text);
-  const asksIfProvided = /\b(lo dan|me lo dan|ustedes dan|ustedes lo dan|incluye|incluyen|proporcionan|les dan|se los dan)\b/i.test(text);
+  const asksBuying = /\b(comprar|compro|comprarlo|comprarlos|debo comprar|hay que comprar|toca comprar|me toca comprar|o lo tengo que comprar|o los tengo que comprar|necesito comprar|traer|poner)\b/i.test(text);
+  const asksIfProvided = /\b(lo dan|me lo dan|me los dan|me lo daban|me los daban|ustedes dan|ustedes lo dan|incluye|incluyen|proporcionan|les dan|se los dan|viene incluido|vienen incluidos)\b/i.test(text);
 
   return mentionsMaterials && (asksBuying || asksIfProvided);
+}
+
+function isKitRescueClarification(
+  message: string,
+  lastAgentMessage: string,
+  inferredPendingTopic: string
+): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const asksBuyOrProvided = /\b(me lo dan|me los dan|me lo daban|me los daban|los dan|viene incluido|vienen incluidos|o lo tengo que comprar|o los tengo que comprar|me toca comprar|debo comprar|hay que comprar|toca comprar)\b/i.test(text);
+  if (!asksBuyOrProvided) return false;
+
+  const normalizedLast = normalizeForMatch(lastAgentMessage || "");
+  const hasMaterialContext =
+    /\b(material|materiales|kit|insumo|insumos|herramienta|herramientas)\b/i.test(text)
+    || /\b(material|materiales|kit|insumo|insumos|herramienta|herramientas)\b/i.test(normalizedLast)
+    || /\bmateriales|kit\b/i.test(normalizeForMatch(inferredPendingTopic || ""));
+
+  return hasMaterialContext;
+}
+
+function hasRescueRephraseSignal(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(o sea|osea|es decir|entonces|mejor dicho|a ver|si pero|pero entonces|como asi|no entendi|no entiendo|explicame simple|explicame corto)\b/i.test(text);
+}
+
+function isScheduleRescueClarification(
+  message: string,
+  lastAgentMessage: string,
+  inferredPendingTopic: string
+): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const hasRephraseSignal = hasRescueRephraseSignal(message) || isRepeatedInfoComplaint(message);
+  if (!hasRephraseSignal) return false;
+
+  const scheduleKeywords = /\b(horario|horarios|hora|horas|dias|dia|fecha|inicio|cuando\s+inicia|cuando\s+empieza|cuantas\s+horas|semanal|vez\s+a\s+la\s+semana)\b/i;
+  const normalizedLast = normalizeForMatch(lastAgentMessage || "");
+  const normalizedPending = normalizeForMatch(inferredPendingTopic || "");
+
+  return scheduleKeywords.test(text) || scheduleKeywords.test(normalizedLast) || scheduleKeywords.test(normalizedPending);
+}
+
+function isPaymentRescueClarification(
+  message: string,
+  lastAgentMessage: string,
+  inferredPendingTopic: string
+): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const hasRephraseSignal = hasRescueRephraseSignal(message) || isRepeatedInfoComplaint(message);
+  if (!hasRephraseSignal) return false;
+
+  const paymentKeywords = /\b(pago|pagos|como\s+pago|formas\s+de\s+pago|medios\s+de\s+pago|metodo\s+de\s+pago|inscripcion|matricula|mensualidad|cuanto\s+pago|total|abono|cuota|cuotas)\b/i;
+  const normalizedLast = normalizeForMatch(lastAgentMessage || "");
+  const normalizedPending = normalizeForMatch(inferredPendingTopic || "");
+
+  return paymentKeywords.test(text) || paymentKeywords.test(normalizedLast) || paymentKeywords.test(normalizedPending);
 }
 
 function isKitContentsQuestion(message: string): boolean {
@@ -3552,8 +3615,35 @@ function buildIntentFocusedDirectResponse(
   }
 
   const inferredPendingTopic = inferPendingTopicFromHistory(history);
+  const asksScheduleRescue = isScheduleRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
+  const asksPaymentRescue = isPaymentRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
   const confirmsPaymentInfo = isShortAffirmativeReply(message)
     && /\b(medios\s+de\s+pago|formas\s+de\s+pago|fechas\s+de\s+pago|metodo\s+de\s+pago)\b/i.test(inferredPendingTopic);
+
+  if (asksScheduleRescue) {
+    if (!detectedProgram) {
+      return "¡Claro! 🙌 Para responderte corto y preciso: compárteme el curso y te doy horario exacto en una línea.";
+    }
+
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const nextStart = primaryCourse?.fecha_inicio ? (formatDateLong(primaryCourse.fecha_inicio) || formatDateShort(primaryCourse.fecha_inicio)) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+    return `¡Claro! 🙌 *${detectedProgram.nombre}* se ve *1 vez por semana* en este horario: *${schedule}* (inicio: ${nextStart}). ¿Te sirve ese grupo?`;
+  }
+
+  if (asksPaymentRescue) {
+    const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
+    const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
+    const mensualidad = Number(detectedProgram?.precio_mensualidad ?? primaryCourse?.precio_mensualidad ?? 0);
+    const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
+    const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
+
+    if (detectedProgram) {
+      return `¡Claro! 🙌 Resumen corto: *inscripción ${insText}* y *mensualidad ${menText}*. ¿Quieres que te pase los medios de pago ahora?`;
+    }
+
+    return "¡Claro! 🙌 Te respondo corto: el pago se divide en *inscripción* y *mensualidades*. Si me dices el curso, te doy los valores exactos en una sola línea.";
+  }
 
   if (asksPaymentMethodsOrDates || confirmsPaymentInfo) {
     return buildPaymentMethodsAndDatesReply(mediosPago);
@@ -3631,8 +3721,13 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
 
   const asksKitPurchase = isKitPurchaseQuestion(message);
   const asksKitContents = isKitContentsQuestion(message);
+  const asksKitRescue = isKitRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
   const asksMorningSchedule = /\b(manana|manana\s+temprano|por\s+la\s+manana|en\s+la\s+manana)\b/i.test(normalizedMessage)
     && /\b(horario|hora|grupo|noche|tarde|pm|solo|unico|4|7)\b/i.test(normalizedMessage);
+
+  if (asksKitRescue) {
+    return "¡Sí! 🙌 Los materiales principales te los damos aquí con el kit mensual, así que no necesitas comprar todo por fuera al inicio. ¿Quieres que te diga qué trae el kit del primer mes?";
+  }
 
   if (asksKitContents) {
     return buildKitContentsReply(detectedProgram);
