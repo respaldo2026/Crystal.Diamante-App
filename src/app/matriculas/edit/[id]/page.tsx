@@ -12,7 +12,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
+import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, getPaymentPlan, normalizeModalidadPago, resolvePaymentPlanAmounts, type ProgramaPaymentConfig } from "@/types/payment-plans";
 
 const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
@@ -20,8 +20,12 @@ const formatoCOP = (valor: number) =>
 export default function MatriculaEdit() {
     const { formProps, saveButtonProps } = useForm();
     const [programaId, setProgramaId] = useState<string | undefined>(undefined);
+    const [programaPricing, setProgramaPricing] = useState<ProgramaPaymentConfig | null>(null);
     const planSeleccionado = normalizeModalidadPago(Form.useWatch("modalidad_pago", formProps.form));
-    const infoPlanSeleccionado = getPaymentPlan(planSeleccionado);
+    const infoPlanSeleccionado = {
+        ...getPaymentPlan(planSeleccionado),
+        ...resolvePaymentPlanAmounts(planSeleccionado, programaPricing),
+    };
 
     // Obtenemos datos de las tablas relacionadas para los selectores (aunque sean solo lectura)
     const { selectProps: studentSelectProps } = useSelect({
@@ -64,6 +68,21 @@ export default function MatriculaEdit() {
             supabaseFetchPrograma(cursoId);
         }
     }, [formProps.form, supabaseFetchPrograma]);
+
+    useEffect(() => {
+        const cargarPricingPrograma = async () => {
+            if (!programaId) return;
+            const { data } = await supabaseBrowserClient
+                .from("programas")
+                .select("precio_por_clase, precio_mensual_70, precio_mensual_100, precio_mensualidad")
+                .eq("id", programaId)
+                .maybeSingle();
+
+            setProgramaPricing(data || null);
+        };
+
+        cargarPricingPrograma();
+    }, [programaId]);
 
     useEffect(() => {
         formProps.form?.setFieldValue("valor_mensual_plan", infoPlanSeleccionado.montoMensual);

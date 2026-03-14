@@ -13,7 +13,7 @@ import { useColorMode } from "@/contexts/color-mode";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
-import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, getPaymentPlan, normalizeModalidadPago, type ModalidadPago } from "@/types/payment-plans";
+import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, getPaymentPlan, normalizeModalidadPago, resolvePaymentPlanAmounts, type ModalidadPago, type ProgramaPaymentConfig } from "@/types/payment-plans";
 
 const { Title, Text } = Typography;
 
@@ -44,6 +44,7 @@ export default function MatriculaCreate() {
     const [createForm] = Form.useForm();
     const [cursoOptions, setCursoOptions] = useState<{ label: string; value: string | number }[]>([]);
     const [cursosLoading, setCursosLoading] = useState(false);
+    const [programaPricingCurso, setProgramaPricingCurso] = useState<ProgramaPaymentConfig | null>(null);
 
     // Estados para fase 2: inscripción creada, mostrando recibo y pago
     const [inscripcionCreada, setInscripcionCreada] = useState(false);
@@ -62,7 +63,10 @@ export default function MatriculaCreate() {
     }));
 
     const planSeleccionado = normalizeModalidadPago(Form.useWatch("modalidad_pago", formProps.form));
-    const infoPlanSeleccionado = getPaymentPlan(planSeleccionado);
+    const infoPlanSeleccionado = {
+        ...getPaymentPlan(planSeleccionado),
+        ...resolvePaymentPlanAmounts(planSeleccionado, programaPricingCurso),
+    };
 
     const asegurarPagosGenerados = async (
         matriculaId: string,
@@ -97,7 +101,7 @@ export default function MatriculaCreate() {
 
         const { data: cursoInfo, error: errCursoInfo } = await supabaseBrowserClient
             .from("cursos")
-            .select("id, fecha_inicio, precio_mensualidad, numero_cuotas, duracion, programas(precio_inscripcion, precio_mensualidad, precio_curso, numero_cuotas)")
+            .select("id, fecha_inicio, precio_mensualidad, numero_cuotas, duracion, programas(precio_inscripcion, precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase, precio_curso, numero_cuotas)")
             .eq("id", cursoId)
             .single();
 
@@ -113,18 +117,14 @@ export default function MatriculaCreate() {
             programa?.precio_inscripcion ?? 0
         ) || 0;
 
-        const plan = getPaymentPlan(modalidadPago);
+        const montosPlan = resolvePaymentPlanAmounts(modalidadPago, {
+            precio_por_clase: programa?.precio_por_clase,
+            precio_mensual_70: programa?.precio_mensual_70,
+            precio_mensual_100: programa?.precio_mensual_100,
+            precio_mensualidad: (cursoInfo as any)?.precio_mensualidad ?? programa?.precio_mensualidad ?? programa?.precio_curso,
+        });
 
-        const precioMensualidadBase = Number(
-            (cursoInfo as any)?.precio_mensualidad ??
-            programa?.precio_mensualidad ??
-            programa?.precio_curso ??
-            0
-        ) || 0;
-
-        const precioMensualidad = plan.modalidad === "POR_CLASE"
-            ? 0
-            : (plan.montoMensual || precioMensualidadBase);
+        const precioMensualidad = montosPlan.montoMensual;
 
         let numeroCuotas = Number(
             (cursoInfo as any)?.numero_cuotas ??
@@ -437,7 +437,7 @@ export default function MatriculaCreate() {
         try {
             const { data: curso, error: errCurso } = await supabaseBrowserClient
                 .from("cursos")
-                .select("cupos, nombre, programa_id, fecha_inicio")
+                .select("cupos, nombre, programa_id, fecha_inicio, precio_mensualidad, programas(precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase)")
                 .eq("id", cursoIdNumber)
                 .single();
 
@@ -447,6 +447,17 @@ export default function MatriculaCreate() {
                 setProgramaSeleccionado(String(curso.programa_id));
                 formProps.form?.setFieldValue("programa_id", curso.programa_id);
             }
+
+            const programaRaw: any = Array.isArray((curso as any)?.programas)
+                ? (curso as any).programas[0]
+                : (curso as any)?.programas;
+
+            setProgramaPricingCurso({
+                precio_por_clase: programaRaw?.precio_por_clase,
+                precio_mensual_70: programaRaw?.precio_mensual_70,
+                precio_mensual_100: programaRaw?.precio_mensual_100,
+                precio_mensualidad: (curso as any)?.precio_mensualidad ?? programaRaw?.precio_mensualidad,
+            });
 
             // Autocompletar fecha_inicio desde el curso — nunca debe ser la fecha de hoy
             if (curso?.fecha_inicio) {
@@ -476,7 +487,23 @@ export default function MatriculaCreate() {
         console.log("=== INICIANDO handleOnFinish ===", values);
         const { estudiante_id, curso_id, fecha_inicio, observaciones } = values || {};
         const modalidadPago = normalizeModalidadPago(values?.modalidad_pago);
-        const planPago = getPaymentPlan(modalidadPago);
+
+        const { data: cursoConfig } = await supabaseBrowserClient
+            .from("cursos")
+            .select("precio_mensualidad, programas(precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase)")
+            .eq("id", curso_id)
+            .maybeSingle();
+
+        const programaConfigRaw: any = Array.isArray((cursoConfig as any)?.programas)
+            ? (cursoConfig as any).programas[0]
+            : (cursoConfig as any)?.programas;
+
+        const planPago = resolvePaymentPlanAmounts(modalidadPago, {
+            precio_por_clase: programaConfigRaw?.precio_por_clase,
+            precio_mensual_70: programaConfigRaw?.precio_mensual_70,
+            precio_mensual_100: programaConfigRaw?.precio_mensual_100,
+            precio_mensualidad: (cursoConfig as any)?.precio_mensualidad ?? programaConfigRaw?.precio_mensualidad,
+        });
 
         console.log("Validando estudiante_id:", estudiante_id);
         if (!estudiante_id) {

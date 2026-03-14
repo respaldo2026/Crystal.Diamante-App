@@ -9,6 +9,13 @@ export type PaymentPlan = {
   porcentajeProductos: number;
 };
 
+export type ProgramaPaymentConfig = {
+  precio_por_clase?: number | null;
+  precio_mensual_70?: number | null;
+  precio_mensual_100?: number | null;
+  precio_mensualidad?: number | null;
+};
+
 export const PLANES_PAGO: Record<ModalidadPago, PaymentPlan> = {
   POR_CLASE: {
     modalidad: "POR_CLASE",
@@ -47,6 +54,41 @@ export function normalizeModalidadPago(value?: string | null): ModalidadPago {
 
 export function getPaymentPlan(value?: string | null): PaymentPlan {
   return PLANES_PAGO[normalizeModalidadPago(value)];
+}
+
+export function resolvePaymentPlanAmounts(
+  modalidadInput?: string | null,
+  programaConfig?: ProgramaPaymentConfig | null,
+): { montoMensual: number; montoPorClase: number; porcentajeProductos: number } {
+  const modalidad = normalizeModalidadPago(modalidadInput);
+  const fallback = getPaymentPlan(modalidad);
+  const cfg = programaConfig || {};
+
+  if (modalidad === "POR_CLASE") {
+    return {
+      montoMensual: 0,
+      montoPorClase: Number(cfg.precio_por_clase ?? fallback.montoPorClase ?? 0),
+      porcentajeProductos: 0,
+    };
+  }
+
+  if (modalidad === "MENSUAL_100") {
+    return {
+      montoMensual: Number(
+        cfg.precio_mensual_100 ?? cfg.precio_mensualidad ?? fallback.montoMensual ?? 0,
+      ),
+      montoPorClase: 0,
+      porcentajeProductos: 100,
+    };
+  }
+
+  return {
+    montoMensual: Number(
+      cfg.precio_mensual_70 ?? cfg.precio_mensualidad ?? fallback.montoMensual ?? 0,
+    ),
+    montoPorClase: 0,
+    porcentajeProductos: 70,
+  };
 }
 
 export function getMontoMensualByPlan(value?: string | null): number {

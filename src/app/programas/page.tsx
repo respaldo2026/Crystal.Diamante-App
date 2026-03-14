@@ -68,6 +68,7 @@ export default function ProgramasPage() {
       try {
         const values = await form.validateFields();
         let payload = { ...values };
+        payload.precio_mensualidad = Number(payload.precio_mensual_70 ?? payload.precio_mensualidad ?? 0);
         if (editingPrograma) {
           // Editar
           const { error } = await supabaseBrowserClient
@@ -245,8 +246,17 @@ export default function ProgramasPage() {
   };
 
   // Función para calcular el precio total: (mensualidad * meses) + inscripción
+  const getPrecioMensual70 = (programa: any): number =>
+    Number(programa?.precio_mensual_70 ?? programa?.precio_mensualidad ?? 0);
+
+  const getPrecioMensual100 = (programa: any): number =>
+    Number(programa?.precio_mensual_100 ?? programa?.precio_mensualidad ?? 0);
+
+  const getPrecioPorClase = (programa: any): number =>
+    Number(programa?.precio_por_clase ?? 0);
+
   const calcularPrecioTotal = (programa: any): number => {
-    const precio_mensualidad = Number(programa.precio_mensualidad || 0);
+    const precio_mensualidad = getPrecioMensual70(programa);
     const precio_inscripcion = Number(programa.precio_inscripcion || 0);
     
     // Extraer número de meses de la cadena "duracion" (ej: "4 meses" -> 4)
@@ -258,7 +268,10 @@ export default function ProgramasPage() {
 
   // Función para calcular el valor por clase: (meses * mensualidad) / total_clases
   const calcularValorPorClase = (programa: any): number | null => {
-    const mensualidad = Number(programa.precio_mensualidad || 0);
+    const precioPorClaseConfig = getPrecioPorClase(programa);
+    if (precioPorClaseConfig > 0) return Math.round(precioPorClaseConfig);
+
+    const mensualidad = getPrecioMensual70(programa);
     const totalClases = Number(programa.total_clases || 0);
     
     // Extraer número de meses de la duración (ej: "5 meses" -> 5)
@@ -602,9 +615,29 @@ export default function ProgramasPage() {
       render: (precio: number) => precio ? `$${Number(precio).toLocaleString()}` : "-",
     },
     {
-      title: "Mensualidad",
-      dataIndex: "precio_mensualidad",
-      key: "precio_mensualidad",
+      title: "Mensual 70%",
+      dataIndex: "precio_mensual_70",
+      key: "precio_mensual_70",
+      width: 120,
+      render: (_precio: number, record: any) => {
+        const precio = getPrecioMensual70(record);
+        return precio ? `$${Number(precio).toLocaleString()}` : "-";
+      },
+    },
+    {
+      title: "Mensual 100%",
+      dataIndex: "precio_mensual_100",
+      key: "precio_mensual_100",
+      width: 120,
+      render: (precio: number, record: any) => {
+        const resolved = Number(precio ?? getPrecioMensual100(record));
+        return resolved ? `$${Number(resolved).toLocaleString()}` : "-";
+      },
+    },
+    {
+      title: "Por Clase",
+      dataIndex: "precio_por_clase",
+      key: "precio_por_clase",
       width: 120,
       render: (precio: number) => precio ? `$${Number(precio).toLocaleString()}` : "-",
     },
@@ -1053,8 +1086,43 @@ export default function ProgramasPage() {
               </Col>
               <Col span={12}>
                 <Form.Item
-                  name="precio_mensualidad"
-                  label="Valor Mensualidad"
+                  name="precio_mensual_70"
+                  label="Mensualidad 70% productos"
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    size="large"
+                    min={0}
+                    placeholder="0"
+                    formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
+                    onChange={() => form.validateFields()}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="precio_mensual_100"
+                  label="Mensualidad 100% productos"
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    size="large"
+                    min={0}
+                    placeholder="0"
+                    formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
+                    onChange={() => form.validateFields()}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="precio_por_clase"
+                  label="Valor por clase"
                 >
                   <InputNumber
                     style={{ width: '100%' }}
