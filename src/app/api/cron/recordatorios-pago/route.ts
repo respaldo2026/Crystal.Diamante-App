@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { WhatsAppService } from '@/services/whatsapp-service';
+import { getPaymentPlan, normalizeModalidadPago } from '@/types/payment-plans';
 
 export const runtime = 'nodejs';
 
@@ -22,13 +23,19 @@ function normalizePhone(telefono: string): string {
 }
 
 // Función para enviar WhatsApp usando plantilla aprobada por Meta
-async function enviarWhatsAppDirecto(telefono: string, nombre: string, monto: string, fecha: string, curso: string) {
+async function enviarWhatsAppDirecto(telefono: string, nombre: string, monto: string, fecha: string, curso: string, modalidad: string) {
+  const mensajeModalidad = modalidad === 'POR_CLASE'
+    ? 'Este recordatorio corresponde a clases asistidas pendientes de pago.'
+    : 'Te recordamos que tu mensualidad está próxima a vencer.';
+
   const mensaje = `Hola ${nombre} 👋
 
-Te recordamos que tu cuota de ${fecha} está próxima a vencer.
+${mensajeModalidad}
 
 💰 *Monto:* ${monto}
 📖 *Curso:* ${curso}
+🧾 *Modalidad:* ${modalidad}
+📅 *Periodo:* ${fecha}
 
 Puedes pagar en línea o en nuestra oficina. ¡Gracias!
 
@@ -111,7 +118,7 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
 
     const [{ data: perfilesData }, { data: matriculasData }] = await Promise.all([
       supabase.from('perfiles').select('id, nombre_completo, telefono, notif_whatsapp').in('id', estudianteIds),
-      supabase.from('matriculas').select('id, cursos(nombre)').in('id', matriculaIds),
+      supabase.from('matriculas').select('id, modalidad_pago, valor_mensual_plan, cursos(nombre)').in('id', matriculaIds),
     ]);
 
     const perfilesMap: Record<string, any> = Object.fromEntries((perfilesData || []).map((p: any) => [p.id, p]));
@@ -161,9 +168,23 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
 
       try {
         const telefono = telefonoNormalizado;
-        const fechaMes = new Date(cuota.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-CO', { month: 'long' });
+        const modalidadPago = normalizeModalidadPago(matricula?.modalidad_pago);
+        const plan = getPaymentPlan(modalidadPago);
+
+        const fechaMes = cuota?.fecha_vencimiento
+          ? new Date(cuota.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-CO', { month: 'long' })
+          : 'Próximo corte';
         const fecha = fechaMes.charAt(0).toUpperCase() + fechaMes.slice(1);
-        const monto = `$${Number(cuota.monto).toLocaleString()}`;
+
+        let montoNumero = Number(cuota.monto || 0);
+        if (modalidadPago === 'MENSUAL_70' || modalidadPago === 'MENSUAL_100') {
+          montoNumero = Number(matricula?.valor_mensual_plan || plan.montoMensual || montoNumero || 0);
+        }
+        if (modalidadPago === 'POR_CLASE' && montoNumero <= 0) {
+          montoNumero = plan.montoPorClase;
+        }
+
+        const monto = `$${montoNumero.toLocaleString('es-CO')}`;
         const curso = matricula?.cursos?.nombre || 'Curso';
 
         await enviarWhatsAppDirecto(
@@ -171,7 +192,8 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
           perfil.nombre_completo,
           monto,
           fecha,
-          curso
+          curso,
+          modalidadPago
         );
 
         telefonosProcesados.add(telefonoNormalizado);

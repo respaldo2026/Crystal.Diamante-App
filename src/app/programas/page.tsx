@@ -68,6 +68,7 @@ export default function ProgramasPage() {
       try {
         const values = await form.validateFields();
         let payload = { ...values };
+        payload.precio_mensualidad = Number(payload.precio_mensual_70 ?? payload.precio_mensualidad ?? 0);
         if (editingPrograma) {
           // Editar
           const { error } = await supabaseBrowserClient
@@ -245,8 +246,22 @@ export default function ProgramasPage() {
   };
 
   // Función para calcular el precio total: (mensualidad * meses) + inscripción
+  const getPrecioMensual70 = (programa: any): number =>
+    Number(programa?.precio_mensual_70 ?? programa?.precio_mensualidad ?? 0);
+
+  const getPrecioMensual100 = (programa: any): number =>
+    Number(programa?.precio_mensual_100 ?? programa?.precio_mensualidad ?? 0);
+
+  const getPrecioPorClase = (programa: any): number =>
+    Number(programa?.precio_por_clase ?? 0);
+
+  const getMesesPrograma = (programa: any): number => {
+    const duracionStr = String(programa?.duracion || "0 meses");
+    return parseInt(duracionStr.match(/\d+/)?.[0] || "0", 10);
+  };
+
   const calcularPrecioTotal = (programa: any): number => {
-    const precio_mensualidad = Number(programa.precio_mensualidad || 0);
+    const precio_mensualidad = getPrecioMensual70(programa);
     const precio_inscripcion = Number(programa.precio_inscripcion || 0);
     
     // Extraer número de meses de la cadena "duracion" (ej: "4 meses" -> 4)
@@ -256,9 +271,33 @@ export default function ProgramasPage() {
     return (precio_mensualidad * meses) + precio_inscripcion;
   };
 
+  const calcularTotalMensual70 = (programa: any): number => {
+    const precioMensual = getPrecioMensual70(programa);
+    const precioInscripcion = Number(programa?.precio_inscripcion || 0);
+    const meses = getMesesPrograma(programa);
+    return (precioMensual * meses) + precioInscripcion;
+  };
+
+  const calcularTotalMensual100 = (programa: any): number => {
+    const precioMensual = getPrecioMensual100(programa);
+    const precioInscripcion = Number(programa?.precio_inscripcion || 0);
+    const meses = getMesesPrograma(programa);
+    return (precioMensual * meses) + precioInscripcion;
+  };
+
+  const calcularTotalPorClase = (programa: any): number => {
+    const precioClase = getPrecioPorClase(programa);
+    const totalClases = Number(programa?.total_clases || 0);
+    const precioInscripcion = Number(programa?.precio_inscripcion || 0);
+    return (precioClase * totalClases) + precioInscripcion;
+  };
+
   // Función para calcular el valor por clase: (meses * mensualidad) / total_clases
   const calcularValorPorClase = (programa: any): number | null => {
-    const mensualidad = Number(programa.precio_mensualidad || 0);
+    const precioPorClaseConfig = getPrecioPorClase(programa);
+    if (precioPorClaseConfig > 0) return Math.round(precioPorClaseConfig);
+
+    const mensualidad = getPrecioMensual70(programa);
     const totalClases = Number(programa.total_clases || 0);
     
     // Extraer número de meses de la duración (ej: "5 meses" -> 5)
@@ -322,6 +361,9 @@ export default function ProgramasPage() {
 
     const totalHoras = calcularTotalHoras(programa);
     const valorTotal = calcularPrecioTotal(programa);
+    const totalMensual70 = calcularTotalMensual70(programa);
+    const totalMensual100 = calcularTotalMensual100(programa);
+    const totalPorClase = calcularTotalPorClase(programa);
     const valorClase = calcularValorPorClase(programa);
 
     return (
@@ -486,6 +528,33 @@ export default function ProgramasPage() {
                 </div>
               </div>
 
+              {/* Totales por modalidad */}
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: 10,
+                  border: "1px dashed #d9d9d9",
+                  borderRadius: 8,
+                  background: "#fcfcfc",
+                }}
+              >
+                <Text strong style={{ display: "block", marginBottom: 8, fontSize: 12 }}>
+                  Totales por modalidad
+                </Text>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={{ fontSize: 12 }}>POR_CLASE</Text>
+                  <Text strong style={{ fontSize: 12 }}>${Number(totalPorClase).toLocaleString()}</Text>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={{ fontSize: 12 }}>MENSUAL_70</Text>
+                  <Text strong style={{ fontSize: 12 }}>${Number(totalMensual70).toLocaleString()}</Text>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <Text style={{ fontSize: 12 }}>MENSUAL_100</Text>
+                  <Text strong style={{ fontSize: 12 }}>${Number(totalMensual100).toLocaleString()}</Text>
+                </div>
+              </div>
+
               {/* Botones de acción */}
               <Space style={{ width: "100%", marginTop: 8 }} size={8}>
                 <Button
@@ -602,9 +671,29 @@ export default function ProgramasPage() {
       render: (precio: number) => precio ? `$${Number(precio).toLocaleString()}` : "-",
     },
     {
-      title: "Mensualidad",
-      dataIndex: "precio_mensualidad",
-      key: "precio_mensualidad",
+      title: "Mensual 70%",
+      dataIndex: "precio_mensual_70",
+      key: "precio_mensual_70",
+      width: 120,
+      render: (_precio: number, record: any) => {
+        const precio = getPrecioMensual70(record);
+        return precio ? `$${Number(precio).toLocaleString()}` : "-";
+      },
+    },
+    {
+      title: "Mensual 100%",
+      dataIndex: "precio_mensual_100",
+      key: "precio_mensual_100",
+      width: 120,
+      render: (precio: number, record: any) => {
+        const resolved = Number(precio ?? getPrecioMensual100(record));
+        return resolved ? `$${Number(resolved).toLocaleString()}` : "-";
+      },
+    },
+    {
+      title: "Por Clase",
+      dataIndex: "precio_por_clase",
+      key: "precio_por_clase",
       width: 120,
       render: (precio: number) => precio ? `$${Number(precio).toLocaleString()}` : "-",
     },
@@ -1053,8 +1142,43 @@ export default function ProgramasPage() {
               </Col>
               <Col span={12}>
                 <Form.Item
-                  name="precio_mensualidad"
-                  label="Valor Mensualidad"
+                  name="precio_mensual_70"
+                  label="Mensualidad 70% productos"
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    size="large"
+                    min={0}
+                    placeholder="0"
+                    formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
+                    onChange={() => form.validateFields()}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="precio_mensual_100"
+                  label="Mensualidad 100% productos"
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    size="large"
+                    min={0}
+                    placeholder="0"
+                    formatter={(value: any) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    parser={(value: any) => parseInt(value!.replace(/\$\s?|(,*)/g, "")) || 0}
+                    onChange={() => form.validateFields()}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="precio_por_clase"
+                  label="Valor por clase"
                 >
                   <InputNumber
                     style={{ width: '100%' }}

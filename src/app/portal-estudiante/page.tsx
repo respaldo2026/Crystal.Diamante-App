@@ -74,6 +74,7 @@ import {
   UMBRAL_APROBACION_QUIZ_NOTA,
   UMBRAL_APROBACION_QUIZ_PORCENTAJE,
 } from "@/modules/portal-estudiante/utils";
+import { getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
 
 const QuizApprovedResult = dynamic(
   () => import("@/modules/portal-estudiante/components/QuizApprovedResult").then((m) => m.QuizApprovedResult),
@@ -743,9 +744,11 @@ export default function PortalEstudiante() {
 
   const obtenerMensualidad = (matricula: any) =>
     Number(
-      matricula?.cursos?.precio_mensualidad ??
-      matricula?.cursos?.programas?.precio_mensualidad ??
-      matricula?.cursos?.precio ??
+      matricula?.valor_mensual_plan ||
+      getPaymentPlan(matricula?.modalidad_pago).montoMensual ||
+      matricula?.cursos?.precio_mensualidad ||
+      matricula?.cursos?.programas?.precio_mensualidad ||
+      matricula?.cursos?.precio ||
       0
     );
 
@@ -776,6 +779,9 @@ export default function PortalEstudiante() {
     });
 
     matriculas.forEach((matricula: any) => {
+      const modalidadPago = normalizeModalidadPago(matricula?.modalidad_pago);
+      if (modalidadPago === "POR_CLASE") return;
+
       const totalCuotas = parseDuracionMeses(
         matricula?.cursos?.duracion ??
         matricula?.cursos?.programas?.duracion ??
@@ -864,6 +870,14 @@ export default function PortalEstudiante() {
                       return <span style={style}>{t || `Cuota ${r.numero_cuota}`}</span>;
                     } 
                   },
+                  {
+                    title: 'Plan',
+                    render: (_, r: any) => {
+                      const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
+                      const plan = getPaymentPlan(matricula?.modalidad_pago);
+                      return <Tag>{plan.label}</Tag>;
+                    },
+                  },
                   { 
                     title: 'Vence', 
                     dataIndex: 'fecha_vencimiento', 
@@ -907,6 +921,14 @@ export default function PortalEstudiante() {
                scroll={{ x: 520 }}
                 columns={[
                   { title: 'Concepto', dataIndex: 'periodo_pagado', render: (t, r: any) => t || `Cuota ${r.numero_cuota}` },
+                  {
+                    title: 'Plan',
+                    render: (_, r: any) => {
+                      const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
+                      const plan = getPaymentPlan(matricula?.modalidad_pago);
+                      return <Tag>{plan.label}</Tag>;
+                    },
+                  },
                   { title: 'Fecha', dataIndex: 'fecha_pago', render: (d) => d ? dayjs(d).format("DD/MM/YYYY") : '-' },
                   { title: 'Monto', dataIndex: 'monto', render: (v) => `$ ${Number(v).toLocaleString()}` },
                   { title: 'Estado', render: () => <Tag color="green">PAGADO</Tag> }

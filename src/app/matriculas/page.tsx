@@ -21,6 +21,7 @@ import { obtenerStatsAsistenciasYPagos } from "@modules/academico/asistencias.se
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { formatDate } from "@utils/date";
 import { construirNombreGrupo } from "@utils/grupos";
+import { getPaymentPlan } from "@/types/payment-plans";
 
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
@@ -556,6 +557,19 @@ export default function MatriculasList() {
                         render={(val) => <Tag color="purple">{val || "Sin programa"}</Tag>}
                     />
                 )}
+
+                <Table.Column
+                    title="Plan de Pago"
+                    dataIndex="modalidad_pago"
+                    render={(val: string) => {
+                        const plan = getPaymentPlan(val);
+                        const color = plan.modalidad === "POR_CLASE" ? "orange" : plan.modalidad === "MENSUAL_100" ? "green" : "blue";
+                        const detalle = plan.modalidad === "POR_CLASE"
+                            ? `$${plan.montoPorClase.toLocaleString()} x clase`
+                            : `$${plan.montoMensual.toLocaleString()} / mes`;
+                        return <Tag color={color}>{`${plan.label} · ${detalle}`}</Tag>;
+                    }}
+                />
 
                 {/* COLUMNA 3: ASISTENCIA */}
                 {!isMobile && (

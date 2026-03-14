@@ -55,11 +55,15 @@ import { obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
+import { getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
 
 type Matricula = {
   id: number;
   fecha_inicio: string | null;
   estado: string | null;
+  modalidad_pago?: string | null;
+  valor_mensual_plan?: number | null;
+  porcentaje_productos?: number | null;
   monto_pagado: number | null;
   deuda_pendiente: number | null;
   nota_final: number | null;
@@ -178,6 +182,8 @@ export default function StudentDetailView() {
 
   const obtenerMensualidad = (matricula: any) =>
     Number(
+      matricula?.valor_mensual_plan ??
+      getPaymentPlan(matricula?.modalidad_pago).montoMensual ??
       matricula?.cursos?.precio_mensualidad ??
       matricula?.cursos?.programas?.precio_mensualidad ??
       0
@@ -219,7 +225,7 @@ export default function StudentDetailView() {
         .from("matriculas")
         .select(
           `
-            id, fecha_inicio, estado, monto_pagado, deuda_pendiente, nota_final, estado_academico,
+            *,
             cursos ( id, programa_id, nombre, descripcion, precio, precio_mensualidad, duracion, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad), perfiles(nombre_completo) )
           `
         )
@@ -358,7 +364,7 @@ export default function StudentDetailView() {
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
         .select(
-          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
         )
         .eq("estudiante_id", idEstudiante)
         .order("matricula_id", { ascending: true })
@@ -375,7 +381,7 @@ export default function StudentDetailView() {
         const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
           .from("pagos")
           .select(
-            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
           )
           .in("matricula_id", matriculaIds)
           .order("matricula_id", { ascending: true })
@@ -428,8 +434,9 @@ export default function StudentDetailView() {
       // Ciclos/meses: duración + 1 inscripción. Ej: 5 ciclos = 6 pagos (1 inscripción + 5 cuotas)
       const ciclosMap: Record<number, { total: number; pagados: number; faltantes: number; periodos: string[]; inscripcionPagada: boolean }> = {};
       listaMats.forEach((m: any) => {
+        const modalidadPago = normalizeModalidadPago(m?.modalidad_pago);
         const duracionMeses = obtenerDuracionMeses(m);
-        const totalPagosEsperados = duracionMeses + 1; // inscripción + cuotas mensuales
+        const totalPagosEsperados = modalidadPago === "POR_CLASE" ? 1 : duracionMeses + 1; // inscripción + cuotas mensuales
         const pagosMat = pagosList.filter((p) => p.matricula_id === m.id);
         const pagados = pagosMat.filter((p) => (p.estado || "").toLowerCase() === "pagado").length;
         const faltantes = totalPagosEsperados > 0 ? Math.max(totalPagosEsperados - pagados, 0) : 0;
@@ -669,6 +676,17 @@ export default function StudentDetailView() {
         },
       },
       {
+        title: "Plan de Pago",
+        key: "plan",
+        render: (_: any, record: any) => {
+          const plan = getPaymentPlan(record?.modalidad_pago);
+          if (plan.modalidad === "POR_CLASE") {
+            return <Tag color="orange">{`${plan.label} · $${plan.montoPorClase.toLocaleString()} c/u`}</Tag>;
+          }
+          return <Tag color="blue">{`${plan.label} · $${plan.montoMensual.toLocaleString()}/mes`}</Tag>;
+        },
+      },
+      {
         title: "Nota Final",
         dataIndex: "nota_final",
         key: "nota",
@@ -702,6 +720,17 @@ export default function StudentDetailView() {
         dataIndex: ["cursos", "precio"],
         key: "precio",
         render: (val: number | null) => `$${(val || 0).toLocaleString()}`,
+      },
+      {
+        title: "Modalidad",
+        key: "modalidad",
+        render: (_: any, record: any) => {
+          const plan = getPaymentPlan(record?.modalidad_pago);
+          if (plan.modalidad === "POR_CLASE") {
+            return <Tag color="orange">{`${plan.label} · $${plan.montoPorClase.toLocaleString()} c/u`}</Tag>;
+          }
+          return <Tag color="blue">{`${plan.label} · $${plan.montoMensual.toLocaleString()}/mes`}</Tag>;
+        },
       },
       {
         title: "Pagado",
@@ -746,6 +775,9 @@ export default function StudentDetailView() {
     const extras: Pago[] = [];
 
     matriculas.forEach((matricula: any) => {
+      const modalidadPago = normalizeModalidadPago(matricula?.modalidad_pago);
+      if (modalidadPago === "POR_CLASE") return;
+
       const totalCiclos = Math.max(obtenerDuracionMeses(matricula), 0);
       if (!totalCiclos) return;
 
@@ -850,6 +882,17 @@ export default function StudentDetailView() {
         dataIndex: ["matriculas", "cursos", "nombre"],
         key: "curso",
         render: (_: string, record: any) => construirNombreGrupo(record.matriculas?.cursos) || "Curso no asociado",
+      },
+      {
+        title: "Plan",
+        key: "plan",
+        render: (_: any, record: any) => {
+          const plan = getPaymentPlan(record?.matriculas?.modalidad_pago);
+          if (plan.modalidad === "POR_CLASE") {
+            return <Tag color="orange">{`${plan.label} · $${plan.montoPorClase.toLocaleString()} c/u`}</Tag>;
+          }
+          return <Tag color="blue">{`${plan.label} · $${plan.montoMensual.toLocaleString()}/mes`}</Tag>;
+        },
       },
       {
         title: "Monto",

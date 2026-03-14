@@ -618,6 +618,7 @@ Sigue siempre este orden:
 ⚠️ "Que incluye" / "qué incluye" / "qué incluye el curso" cuando ya hay un programa identificado → responde directamente con lo que incluye EL CURSO: temario completo, kit mensual (~70% de productos), uniforme, certificado y ceremonia de grado. NUNCA devuelvas el menú de doble opción "¿horarios e inversión o separar cupo?".
 ⚠️ "Y cuántas horas son" / "cuántas horas" / "cuántas horas dura" / "cuántas horas tiene" → responde DIRECTAMENTE con las horas por sesión. Ejemplo: "Son 3 horas por clase (de 4:00 PM a 7:00 PM), una vez a la semana. En total son 20 clases en 5 meses." NUNCA repitas el bloque completo de inicio/horario/cupo como respuesta a esta pregunta.
 ⚠️ "desde cero" / "enseñan desde cero" / "aprenden desde cero" / "es desde cero" / "se aprende desde cero" → el usuario está preguntando si el curso es para PRINCIPIANTES (sin experiencia previa). NO es el nombre de un programa. SIEMPRE confirma: "¡Sí! No necesitas ninguna experiencia previa, el programa está diseñado desde cero." NUNCA respondas que "desde cero no está disponible como programa" ni listes otros cursos como alternativa.
+⚠️ "manicura", "pedicura", "manicuría", "pedi-spa" o errores de escritura similares (ej: "maniura") se refieren al programa de uñas. Interprétalo como *Artista Integral en Uñas* y responde con ese programa.
 ⚠️ "X favor" / "por favor" / "xfa" cuando el usuario acaba de pedir información específica que NO recibió completamente → el usuario INSISTE en recibir lo que ya pidió. Revisa el mensaje anterior del usuario, identifica qué información faltó, y dála directamente. NUNCA reinicies el embudo preguntando "¿te comparto horarios e inversión o separar cupo?".
 ⚠️ "Tienes otros horarios?" / "hay otros horarios?" / "otros horarios" → si solo hay un grupo activo en ese programa, di claramente: "Por ahora solo tenemos ese grupo los [día/horario]. ¿Quieres quedar en lista de espera si abrimos otro horario?" NUNCA repitas el bloque del mismo horario como si fuera nuevo.
 ⚠️ "Cuántos días se estudia" / "cuántos días son" / "cuántos días a la semana" / "es 1 vez a la semana" / "cuántas veces a la semana" / "es todos los días" → responde DIRECTAMENTE la frecuencia: "Es 1 vez a la semana (los [día]), de [hora] a [hora]." NUNCA respondas esta pregunta con Google Maps, proceso de inscripción ni datos de pago. Es una pregunta de frecuencia, no una señal de querer inscribirse.
@@ -628,6 +629,7 @@ Sigue siempre este orden:
 Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
 
 - Precio: confirma inscripción + mensualidad, incluye 1-2 beneficios clave y pregunta si desea medios/fechas de pago.
+- Precio (formato obligatorio): muestra siempre *3 opciones de pago* en este orden y con negrilla: *Por Clase*, *Mensual Opción A*, *Mensual Opción B*. Hazlo en formato corto y comercial (sin texto técnico largo). Debes aclarar materiales en cada una: Por Clase = no incluye materiales; Opción A = incluye ~70% de materiales; Opción B = incluye 100% de materiales del mes.
 - "Efectivo" / confirmación de medio de pago: NO reinicies el embudo. Confirma que efectivo está disponible y da el siguiente paso: "¡Perfecto! Entonces puedes separar tu cupo pagando la inscripción en efectivo directamente en la academia. ¿Quieres que te diga los pasos para hacerlo?"
 - "Sí" / "sí porfavor" / "porfavor" después de preguntar si quiere medios y fechas de pago: da inmediatamente la lista de medios de pago y la fecha límite de mensualidad. NO preguntes de nuevo qué quiere saber.
 - Medios/fechas de pago: lista los medios disponibles (💵 Efectivo • 💜 Nequi: 3006402575 • 🟡 Bancolombia • 🟢 Sistecredito • 💳 Tarjeta), indica que la mensualidad tiene plazo hasta la segunda clase, y pregunta si quiere guía de inscripción.
@@ -2224,6 +2226,47 @@ function formatCurrencyCOP(value: number): string {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) {
+  const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
+  const mensual70 = Number(
+    detectedProgram?.precio_mensual_70
+    ?? primaryCourse?.precio_mensual_70
+    ?? detectedProgram?.precio_mensualidad
+    ?? primaryCourse?.precio_mensualidad
+    ?? 0
+  );
+  const mensual100 = Number(
+    detectedProgram?.precio_mensual_100
+    ?? primaryCourse?.precio_mensual_100
+    ?? detectedProgram?.precio_mensualidad
+    ?? primaryCourse?.precio_mensualidad
+    ?? mensual70
+    ?? 0
+  );
+  const porClase = Number(detectedProgram?.precio_por_clase ?? primaryCourse?.precio_por_clase ?? 0);
+
+  return {
+    inscripcion,
+    mensual70,
+    mensual100,
+    porClase,
+    inscripcionText: inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar",
+    mensual70Text: mensual70 > 0 ? formatCurrencyCOP(mensual70) : "Por confirmar",
+    mensual100Text: mensual100 > 0 ? formatCurrencyCOP(mensual100) : "Por confirmar",
+    porClaseText: porClase > 0 ? formatCurrencyCOP(porClase) : "Por confirmar",
+  };
+}
+
+function buildHumanPaymentModalitiesBlock(detectedProgram: any, primaryCourse: any): string {
+  const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+  return [
+    `✅ *Tenemos 3 opciones de pago:*`,
+    `• *Por Clase:* ${options.porClaseText} por clase — *pagas solo las clases que tomas* (*no incluye materiales*).`,
+    `• *Mensual Opción A:* ${options.mensual70Text} al mes — *más económica* (*incluye aproximadamente 70% de materiales*).`,
+    `• *Mensual Opción B:* ${options.mensual100Text} al mes — *más completa* (*incluye 100% de materiales del mes*).`,
+  ].join("\n");
+}
+
 function isDurationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   return /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
@@ -3736,13 +3779,10 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   if (asksPrice && asksLocation) {
     const locationReference = "Estamos ubicados en el *oriente de Cali*, cerca a la *Panadería Pablos Pam*, en *La Cosmetikera (segundo piso)*.";
     const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
-    const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
-    const mensualidad = Number(detectedProgram?.precio_mensualidad ?? primaryCourse?.precio_mensualidad ?? 0);
-    const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
-    const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
+    const priceOptions = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
 
     const priceBlock = detectedProgram
-      ? `💸 *${detectedProgram.nombre}*\n• Inscripción: *${insText}*\n• Mensualidad: *${menText}*`
+      ? `💸 *${detectedProgram.nombre}*\n• *Inscripción:* ${priceOptions.inscripcionText}\n• *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}`
       : `💸 *Precio:* te confirmo inscripción y mensualidad exactas según el curso que elijas.`;
 
     const mapsBlock = academy?.maps_url ? `\n🗺️ Mapa: ${academy.maps_url}` : "";
@@ -3971,13 +4011,15 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   if (intent === "precio") {
-    const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
-    const mensualidad = Number(detectedProgram?.precio_mensualidad ?? primaryCourse?.precio_mensualidad ?? 0);
-    const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
-    const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
+    const priceOptions = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+    const inscripcion = priceOptions.inscripcion;
+    const insText = priceOptions.inscripcionText;
+    const men70Text = priceOptions.mensual70Text;
+    const men100Text = priceOptions.mensual100Text;
+    const porClaseText = priceOptions.porClaseText;
 
     const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
-    const monthlyIncludes = "Incluye: Cada mes te damos kit de productos (~70% de lo que usas ese mes)";
+    const monthlyIncludes = "Incluye: kit mensual según la modalidad que elijas";
 
     const normalizedMessage = normalizeForMatch(message);
     const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
@@ -3994,19 +4036,22 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     }
 
     if (asksMonthlyConfirmation) {
-      return `✅ Sí, la *mensualidad* es ${menText}.\n🧴 *Cada mes te damos kit de productos* (~70% de los materiales que usas ese mes).\n\n¿Quieres que te comparta también los *medios de pago* y las *fechas de pago*?`;
+      return `💳 Perfecto, aquí lo tienes claro y rápido:\n\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\nSi quieres, te recomiendo en una línea cuál te conviene más según tu presupuesto.`;
     }
 
     if (asksTotalToPay) {
-      const totalInicio = (inscripcion > 0 && mensualidad > 0)
-        ? formatCurrencyCOP(inscripcion + mensualidad)
+      const totalInicio70 = (inscripcion > 0 && priceOptions.mensual70 > 0)
+        ? formatCurrencyCOP(inscripcion + priceOptions.mensual70)
+        : "Por confirmar";
+      const totalInicio100 = (inscripcion > 0 && priceOptions.mensual100 > 0)
+        ? formatCurrencyCOP(inscripcion + priceOptions.mensual100)
         : "Por confirmar";
 
-      return `💸 Si pagas para iniciar con todo listo, sería:\n• *Inscripción:* ${insText}\n• *Mensualidad:* ${menText}\n• *Total inicial (inscripción + mensualidad):* ${totalInicio}\n\n✅ *Lo ideal* es pagar inscripción y mensualidad de una, porque con la mensualidad te entregamos el *kit de productos* (~70% de lo que usas ese mes) para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase*, que es cuando se empiezan a usar los productos.`;
+      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con Mensual Opción A:* ${totalInicio70}\n• *Inicio con Mensual Opción B:* ${totalInicio100}\n• *Inicio con Por Clase:* inscripción + ${porClaseText} por cada clase que asistas\n\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n✅ Empiezas con inscripción y eliges la modalidad que mejor te funcione.\nSi lo necesitas, la mensualidad puede completarse hasta la segunda clase.`;
     }
 
     if (asksPartialPayment) {
-      return `Buena pregunta 👌\n\n✅ *Lo ideal* es pagar *inscripción y mensualidad de una*, porque con la mensualidad te entregamos el *kit de productos* (~70% de lo que usas ese mes) para usar en clases.\n\nSi no te queda fácil, puedes pagar la mensualidad *hasta la segunda clase* (ahí se empiezan a usar los productos).\n\nPara iniciar hoy, se maneja:\n💰 *Inscripción:* ${insText}\n💰 *Mensualidad:* ${menText}`;
+      return `Buena pregunta 👌\n\nPara iniciar hoy, se maneja:\n💰 *Inscripción:* ${insText}\n💳 Luego eliges modalidad:\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\nSi no te queda fácil pagar todo junto, te orientamos para arrancar y completar mensualidad hasta la segunda clase.`;
     }
 
     const recentConversationText = (Array.isArray(history) ? history : [])
@@ -4080,7 +4125,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
       }
     }
 
-    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💰 *Mensualidad:* ${menText}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
+    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
   }
 
   if (intent === "horario") {
@@ -4355,7 +4400,10 @@ function shouldUseNextGroupDirectResponse(
 ): boolean {
   if (isNextGroupQuestion(userMessage)) return true;
 
-  const mentionsProgram = Boolean(detectProgramFromMessage(userMessage, programs));
+  const mentionsProgram = Boolean(
+    detectProgramFromMessage(userMessage, programs)
+    || resolveProgramAliasFromMessage(userMessage, programs)
+  );
   if (mentionsProgram && detectedProgram && isLikelyProgramOnlyReply(userMessage) && hasRecentNextGroupContext(history)) {
     return true;
   }
@@ -4427,7 +4475,10 @@ function shouldUseTodayClassDirectResponse(
 ): boolean {
   if (isTodayClassQuestion(userMessage)) return true;
 
-  const mentionsProgram = Boolean(detectProgramFromMessage(userMessage, programs));
+  const mentionsProgram = Boolean(
+    detectProgramFromMessage(userMessage, programs)
+    || resolveProgramAliasFromMessage(userMessage, programs)
+  );
   if (mentionsProgram && detectedProgram && isLikelyProgramOnlyReply(userMessage) && hasRecentTodayClassContext(history)) {
     return true;
   }
@@ -4473,6 +4524,9 @@ function resolveProgramFromContext(
   programs: any[],
   conversationHistory: Array<{ user: string; agent: string }>
 ): any | null {
+  const aliasedProgram = resolveProgramAliasFromMessage(userMessage, programs);
+  if (aliasedProgram) return aliasedProgram;
+
   const directProgram = detectProgramFromMessage(userMessage, programs);
   if (directProgram) return directProgram;
 
@@ -4501,6 +4555,44 @@ function resolveProgramFromContext(
   }
 
   return null;
+}
+
+function findNailsProgram(programs: any[]): any | null {
+  const allPrograms = Array.isArray(programs) ? programs : [];
+  if (!allPrograms.length) return null;
+
+  const ranked = allPrograms
+    .map((program) => ({
+      program,
+      normalized: normalizeForMatch(program?.nombre || ""),
+    }))
+    .filter((entry) => entry.normalized);
+
+  const exact = ranked.find((entry) =>
+    /\bartista\s+integral\s+en\s+unas\b/.test(entry.normalized)
+  );
+  if (exact) return exact.program;
+
+  const hasUñas = ranked.find((entry) =>
+    /\bunas\b/.test(entry.normalized)
+  );
+  if (hasUñas) return hasUñas.program;
+
+  return null;
+}
+
+function resolveProgramAliasFromMessage(userMessage: string, programs: any[]): any | null {
+  const raw = String(userMessage || "").toLowerCase();
+  if (!raw) return null;
+
+  const normalized = normalizeForMatch(userMessage);
+  const asksNailProgram =
+    /\b(manicura|manicuria|maniura|manicure|pedicura|pedicure|pedi\s*spa|pedispa|nail|nails|unas\s+acrilicas|curso\s+de\s+unas)\b/i.test(normalized)
+    || /\buñ(?:as|s)\b/i.test(raw)
+    || /\buñas\b/i.test(raw);
+
+  if (!asksNailProgram) return null;
+  return findNailsProgram(programs);
 }
 
 function buildContextualDirective(

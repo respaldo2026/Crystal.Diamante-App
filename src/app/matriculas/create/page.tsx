@@ -13,6 +13,7 @@ import { useColorMode } from "@/contexts/color-mode";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
+import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, getPaymentPlan, normalizeModalidadPago, resolvePaymentPlanAmounts, type ModalidadPago, type ProgramaPaymentConfig } from "@/types/payment-plans";
 
 const { Title, Text } = Typography;
 
@@ -43,6 +44,7 @@ export default function MatriculaCreate() {
     const [createForm] = Form.useForm();
     const [cursoOptions, setCursoOptions] = useState<{ label: string; value: string | number }[]>([]);
     const [cursosLoading, setCursosLoading] = useState(false);
+    const [programaPricingCurso, setProgramaPricingCurso] = useState<ProgramaPaymentConfig | null>(null);
 
     // Estados para fase 2: inscripción creada, mostrando recibo y pago
     const [inscripcionCreada, setInscripcionCreada] = useState(false);
@@ -55,10 +57,22 @@ export default function MatriculaCreate() {
     const [pagoForm] = Form.useForm();
     const [mediosPago, setMediosPago] = useState<any[]>([]);
 
+    const opcionesPlanPago = Object.values(PLANES_PAGO).map((plan) => ({
+        value: plan.modalidad,
+        label: `${plan.label} · ${plan.descripcion}`,
+    }));
+
+    const planSeleccionado = normalizeModalidadPago(Form.useWatch("modalidad_pago", formProps.form));
+    const infoPlanSeleccionado = {
+        ...getPaymentPlan(planSeleccionado),
+        ...resolvePaymentPlanAmounts(planSeleccionado, programaPricingCurso),
+    };
+
     const asegurarPagosGenerados = async (
         matriculaId: string,
         estudianteId: string,
         cursoId: string | number,
+        modalidadPago: ModalidadPago,
         fechaInicio?: string | null,
     ) => {
         const { data: pagosExistentes, error: errPagosExistentes } = await supabaseBrowserClient
@@ -87,7 +101,7 @@ export default function MatriculaCreate() {
 
         const { data: cursoInfo, error: errCursoInfo } = await supabaseBrowserClient
             .from("cursos")
-            .select("id, fecha_inicio, precio_mensualidad, numero_cuotas, duracion, programas(precio_inscripcion, precio_mensualidad, precio_curso, numero_cuotas)")
+            .select("id, fecha_inicio, precio_mensualidad, numero_cuotas, duracion, programas(precio_inscripcion, precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase, precio_curso, numero_cuotas)")
             .eq("id", cursoId)
             .single();
 
@@ -103,12 +117,14 @@ export default function MatriculaCreate() {
             programa?.precio_inscripcion ?? 0
         ) || 0;
 
-        const precioMensualidad = Number(
-            (cursoInfo as any)?.precio_mensualidad ??
-            programa?.precio_mensualidad ??
-            programa?.precio_curso ??
-            0
-        ) || 0;
+        const montosPlan = resolvePaymentPlanAmounts(modalidadPago, {
+            precio_por_clase: programa?.precio_por_clase,
+            precio_mensual_70: programa?.precio_mensual_70,
+            precio_mensual_100: programa?.precio_mensual_100,
+            precio_mensualidad: (cursoInfo as any)?.precio_mensualidad ?? programa?.precio_mensualidad ?? programa?.precio_curso,
+        });
+
+        const precioMensualidad = montosPlan.montoMensual;
 
         let numeroCuotas = Number(
             (cursoInfo as any)?.numero_cuotas ??
@@ -137,7 +153,23 @@ export default function MatriculaCreate() {
             });
         }
 
+        if (modalidadPago === "POR_CLASE") {
+            await supabaseBrowserClient
+                .from("pagos")
+                .delete()
+                .eq("matricula_id", matriculaId)
+                .in("estado", ["pendiente", "vencido"])
+                .gt("numero_cuota", 0);
+        }
+
         if (precioMensualidad > 0) {
+            await supabaseBrowserClient
+                .from("pagos")
+                .update({ monto: precioMensualidad })
+                .eq("matricula_id", matriculaId)
+                .in("estado", ["pendiente", "vencido"])
+                .gt("numero_cuota", 0);
+
             for (let i = 1; i <= numeroCuotas; i += 1) {
                 if (cuotasExistentes.has(i)) continue;
 
@@ -174,6 +206,10 @@ export default function MatriculaCreate() {
     });
 
     // Cargar medios de pago
+    useEffect(() => {
+        formProps.form?.setFieldValue("modalidad_pago", MODALIDAD_PAGO_DEFAULT);
+    }, [formProps.form]);
+
     useEffect(() => {
         const cargarMediosPago = async () => {
             const { data } = await supabaseBrowserClient
@@ -401,7 +437,7 @@ export default function MatriculaCreate() {
         try {
             const { data: curso, error: errCurso } = await supabaseBrowserClient
                 .from("cursos")
-                .select("cupos, nombre, programa_id, fecha_inicio")
+                .select("cupos, nombre, programa_id, fecha_inicio, precio_mensualidad, programas(precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase)")
                 .eq("id", cursoIdNumber)
                 .single();
 
@@ -411,6 +447,17 @@ export default function MatriculaCreate() {
                 setProgramaSeleccionado(String(curso.programa_id));
                 formProps.form?.setFieldValue("programa_id", curso.programa_id);
             }
+
+            const programaRaw: any = Array.isArray((curso as any)?.programas)
+                ? (curso as any).programas[0]
+                : (curso as any)?.programas;
+
+            setProgramaPricingCurso({
+                precio_por_clase: programaRaw?.precio_por_clase,
+                precio_mensual_70: programaRaw?.precio_mensual_70,
+                precio_mensual_100: programaRaw?.precio_mensual_100,
+                precio_mensualidad: (curso as any)?.precio_mensualidad ?? programaRaw?.precio_mensualidad,
+            });
 
             // Autocompletar fecha_inicio desde el curso — nunca debe ser la fecha de hoy
             if (curso?.fecha_inicio) {
@@ -439,6 +486,24 @@ export default function MatriculaCreate() {
     const handleOnFinish = async (values: any) => {
         console.log("=== INICIANDO handleOnFinish ===", values);
         const { estudiante_id, curso_id, fecha_inicio, observaciones } = values || {};
+        const modalidadPago = normalizeModalidadPago(values?.modalidad_pago);
+
+        const { data: cursoConfig } = await supabaseBrowserClient
+            .from("cursos")
+            .select("precio_mensualidad, programas(precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase)")
+            .eq("id", curso_id)
+            .maybeSingle();
+
+        const programaConfigRaw: any = Array.isArray((cursoConfig as any)?.programas)
+            ? (cursoConfig as any).programas[0]
+            : (cursoConfig as any)?.programas;
+
+        const planPago = resolvePaymentPlanAmounts(modalidadPago, {
+            precio_por_clase: programaConfigRaw?.precio_por_clase,
+            precio_mensual_70: programaConfigRaw?.precio_mensual_70,
+            precio_mensual_100: programaConfigRaw?.precio_mensual_100,
+            precio_mensualidad: (cursoConfig as any)?.precio_mensualidad ?? programaConfigRaw?.precio_mensualidad,
+        });
 
         console.log("Validando estudiante_id:", estudiante_id);
         if (!estudiante_id) {
@@ -490,6 +555,21 @@ export default function MatriculaCreate() {
                 return;
             }
 
+            await supabaseBrowserClient
+                .from("matriculas")
+                .update({
+                    modalidad_pago: modalidadPago,
+                    valor_mensual_plan: planPago.montoMensual,
+                    porcentaje_productos: planPago.porcentajeProductos,
+                })
+                .eq("id", matriculaExistente.id);
+
+            try {
+                await asegurarPagosGenerados(matriculaExistente.id, estudiante_id, curso_id, modalidadPago, fecha_inicio);
+            } catch (errPago) {
+                console.warn("No se pudo sincronizar cuotas en matrícula existente", errPago);
+            }
+
             const { data: estudiante } = await supabaseBrowserClient
                 .from("perfiles")
                 .select("*")
@@ -518,7 +598,17 @@ export default function MatriculaCreate() {
             return;
         }
 
-        const payload = { estudiante_id, curso_id, fecha_inicio, estado: "pendiente", observaciones, tipo_pago: "cuotas" };
+        const payload = {
+            estudiante_id,
+            curso_id,
+            fecha_inicio,
+            estado: "pendiente",
+            observaciones,
+            tipo_pago: "cuotas",
+            modalidad_pago: modalidadPago,
+            valor_mensual_plan: planPago.montoMensual,
+            porcentaje_productos: planPago.porcentajeProductos,
+        };
         console.log("Payload matrícula:", payload);
 
         try {
@@ -551,7 +641,7 @@ export default function MatriculaCreate() {
             message.success("✅ Inscripción académica registrada");
 
             try {
-                await asegurarPagosGenerados(matriculaId, estudiante_id, curso_id, fecha_inicio);
+                await asegurarPagosGenerados(matriculaId, estudiante_id, curso_id, modalidadPago, fecha_inicio);
             } catch (errPago: any) {
                 console.error("Error asegurando pagos pendientes:", errPago);
                 message.warning("Se creó la matrícula, pero no se pudieron generar todas las cuotas automáticamente.");
@@ -898,6 +988,29 @@ export default function MatriculaCreate() {
 
                     <Card title="3. Detalles">
                         <Row gutter={16}>
+                            <Col xs={24} md={12}>
+                                <Form.Item
+                                    label="Plan de Pago"
+                                    name="modalidad_pago"
+                                    initialValue={MODALIDAD_PAGO_DEFAULT}
+                                    rules={[{ required: true, message: "Selecciona el plan de pago" }]}
+                                >
+                                    <Select
+                                        options={opcionesPlanPago}
+                                        placeholder="Selecciona el plan"
+                                    />
+                                </Form.Item>
+                                <Alert
+                                    type={planSeleccionado === "POR_CLASE" ? "warning" : "info"}
+                                    showIcon
+                                    style={{ marginBottom: 16 }}
+                                    message={
+                                        planSeleccionado === "POR_CLASE"
+                                            ? `Cobro por clase: ${formatoCOP(infoPlanSeleccionado.montoPorClase)} por asistencia registrada`
+                                            : `Mensualidad fija: ${formatoCOP(infoPlanSeleccionado.montoMensual)} · Incluye ${infoPlanSeleccionado.porcentajeProductos}% de productos`
+                                    }
+                                />
+                            </Col>
                             <Col xs={24} md={12}>
                                 <Form.Item
                                     label="Fecha de Inicio"
