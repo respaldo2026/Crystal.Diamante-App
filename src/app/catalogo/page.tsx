@@ -194,8 +194,18 @@ export default function CatalogoCursosPage() {
         })
         .join("\n");
 
-      const mensualidad = selectedPrograma.precio_mensualidad
-        ? `$${Number(selectedPrograma.precio_mensualidad).toLocaleString("es-CO")}`
+      const precioPorClaseValue = Number(selectedPrograma.precio_por_clase ?? 0);
+      const precioMensualOpcionAValue = Number(selectedPrograma.precio_mensual_70 ?? selectedPrograma.precio_mensualidad ?? 0);
+      const precioMensualOpcionBValue = Number(selectedPrograma.precio_mensual_100 ?? selectedPrograma.precio_mensualidad ?? 0);
+
+      const precioPorClase = precioPorClaseValue > 0
+        ? `$${precioPorClaseValue.toLocaleString("es-CO")}`
+        : "Consultar";
+      const mensualOpcionA = precioMensualOpcionAValue > 0
+        ? `$${precioMensualOpcionAValue.toLocaleString("es-CO")}`
+        : "Consultar";
+      const mensualOpcionB = precioMensualOpcionBValue > 0
+        ? `$${precioMensualOpcionBValue.toLocaleString("es-CO")}`
         : "Consultar";
       const inscripcion = selectedPrograma.precio_inscripcion
         ? `$${Number(selectedPrograma.precio_inscripcion).toLocaleString("es-CO")}`
@@ -212,7 +222,10 @@ export default function CatalogoCursosPage() {
         duracion,
         totalClases: selectedPrograma.total_clases ? `${selectedPrograma.total_clases} clases` : undefined,
         precioInscripcion: inscripcion,
-        precioMensualidad: mensualidad,
+        precioMensualidad: mensualOpcionA,
+        precioPorClase,
+        precioMensualOpcionA: mensualOpcionA,
+        precioMensualOpcionB: mensualOpcionB,
       });
 
       if (resultado?.exito) {

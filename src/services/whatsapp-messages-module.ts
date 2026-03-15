@@ -500,6 +500,9 @@ export async function enviarFormularioInteres(
     totalClases?: string | number;
     precioInscripcion?: string | number;
     precioMensualidad?: string | number;
+    precioPorClase?: string | number;
+    precioMensualOpcionA?: string | number;
+    precioMensualOpcionB?: string | number;
     horario?: string;
   }
 ): Promise<ResultadoEnvio> {
@@ -535,6 +538,38 @@ export async function enviarFormularioInteres(
       horario: datos.horario,
     }
   );
+
+  // Enviar un segundo mensaje con modalidades de pago usando plantilla de Meta
+  // para evitar riesgos de cumplimiento fuera de la ventana de 24h.
+  // Es best-effort: no tumba el flujo si este segundo envío falla.
+  if (resultado.exito) {
+    const porClase = String(datos.precioPorClase || 'Consultar');
+    const opcionA = String(datos.precioMensualOpcionA || datos.precioMensualidad || 'Consultar');
+    const opcionB = String(datos.precioMensualOpcionB || datos.precioMensualidad || 'Consultar');
+
+    const variablesModalidades: VariablesPlantilla = {
+      '1': datos.cursoInteres,
+      '2': porClase,
+      '3': opcionA,
+      '4': opcionB,
+    };
+
+    const followup = await enviarMensajeConPlantilla(
+      telefono,
+      'formulario_interes_v4_modalidades_pago',
+      variablesModalidades,
+      undefined,
+      {
+        tipo_evento: 'lead_interes_modalidades_pago',
+        lead_id: leadId,
+        curso: datos.cursoInteres,
+      }
+    );
+
+    if (!followup.exito) {
+      console.warn('[WhatsApp] No se pudo enviar plantilla de modalidades (no bloqueante):', followup.error);
+    }
+  }
 
   return resultado;
 }
