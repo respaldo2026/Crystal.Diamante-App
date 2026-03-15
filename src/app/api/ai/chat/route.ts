@@ -2260,11 +2260,42 @@ function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) 
 function buildHumanPaymentModalitiesBlock(detectedProgram: any, primaryCourse: any): string {
   const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
   return [
-    `✅ *Tenemos 3 opciones de pago:*`,
-    `• *Por Clase:* ${options.porClaseText} por clase — *pagas solo las clases que tomas* (*no incluye materiales*).`,
-    `• *Mensual Opción A:* ${options.mensual70Text} al mes — *más económica* (*incluye aproximadamente 70% de materiales*).`,
-    `• *Mensual Opción B:* ${options.mensual100Text} al mes — *más completa* (*incluye 100% de materiales del mes*).`,
+    `✅ *3 modalidades de pago:*`,
+    `• *Por Clase:* ${options.porClaseText} por clase (no incluye materiales).`,
+    `• *Mensual Opción A:* ${options.mensual70Text}/mes (incluye ~70% de materiales).`,
+    `• *Mensual Opción B:* ${options.mensual100Text}/mes (incluye 100% de materiales del mes).`,
   ].join("\n");
+}
+
+function hasScannablePaymentModalities(text: string): boolean {
+  const normalized = normalizeForMatch(text || "");
+  if (!normalized) return false;
+
+  return /por\s+clase/.test(normalized)
+    && /mensual\s+opcion\s+a/.test(normalized)
+    && /mensual\s+opcion\s+b/.test(normalized);
+}
+
+function ensurePaymentModalitiesInResponse(
+  responseText: string,
+  message: string,
+  intent: AgentIntent,
+  detectedProgram: any | null,
+  courses: any[]
+): string {
+  const base = String(responseText || "").trim();
+  if (!base || !detectedProgram) return base;
+
+  const normalizedMessage = normalizeForMatch(message || "");
+  const asksPriceOrPayment = intent === "precio"
+    || /\b(precio|cuanto|costo|valor|inversion|inscripcion|mensualidad|pago|pagos|modalidad|modalidades|quincena|quincenal)\b/i.test(normalizedMessage);
+
+  if (!asksPriceOrPayment) return base;
+  if (hasScannablePaymentModalities(base)) return base;
+
+  const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+  const block = buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse);
+  return `${base}\n\n💳 *Modalidades de pago:*\n${block}`;
 }
 
 function isDurationQuestion(message: string): boolean {
@@ -3728,15 +3759,13 @@ function buildIntentFocusedDirectResponse(
   if (asksPaymentRescue) {
     const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
     const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
-    const mensualidad = Number(detectedProgram?.precio_mensualidad ?? primaryCourse?.precio_mensualidad ?? 0);
     const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
-    const menText = mensualidad > 0 ? formatCurrencyCOP(mensualidad) : "Por confirmar";
 
     if (detectedProgram) {
-      return `¡Claro! 🙌 Resumen corto: *inscripción ${insText}* y *mensualidad ${menText}*. ¿Quieres que te pase los medios de pago ahora?`;
+      return `¡Claro! 🙌 Resumen corto para *${detectedProgram.nombre}*:\n\n💰 *Inscripción:* ${insText}\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que te pase los medios de pago ahora?`;
     }
 
-    return "¡Claro! 🙌 Te respondo corto: el pago se divide en *inscripción* y *mensualidades*. Si me dices el curso, te doy los valores exactos en una sola línea.";
+    return "¡Claro! 🙌 Te respondo corto: manejamos *3 modalidades* (*Por Clase*, *Mensual Opción A* y *Mensual Opción B*). Si me dices el curso, te doy los valores exactos de cada una.";
   }
 
   if (asksPaymentMethodsOrDates || confirmsPaymentInfo) {
@@ -5147,14 +5176,16 @@ export async function POST(req: NextRequest) {
       const isGreetingOrShortInput = /^(hola|hi|hey|buenos?\s*d[ií]as?|buenas?\s*(tardes?|noches?)|hello|holi|s[ií]p?|ok|okay|dale|listo|claro|perfecto|de\s+una|bien|ya|sip|genial|excelente|entendido|gracias|chao|bye)[\s!.?]*$/i.test(trimmedOriginal)
         || trimmedOriginal.split(/\s+/).filter(Boolean).length <= 1;
       const normalizedOriginal = normalizeForMatch(trimmedOriginal);
-      const isOperationalQuestion = /\b(pago|pagos|nequi|bancolombia|sistecredito|inscrip|inscripcion|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps|precio|valor|cuanto)\b/i.test(normalizedOriginal)
+      const isOperationalQuestion = /\b(nequi|bancolombia|sistecredito|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps)\b/i.test(normalizedOriginal)
         || /^(1|uno|paso\s*1)$/i.test(normalizedOriginal);
+      const isPriceOrPaymentQuestion = detectedIntent === "precio"
+        || /\b(precio|valor|cuanto|inversion|inscripcion|mensualidad|pago|pagos|modalidad|modalidades|quincena|quincenal)\b/i.test(normalizedOriginal);
       const lastAgentMessage = history[history.length - 1]?.agent || "";
       const isClosureAckInput = isClosureAcknowledgement(trimmedOriginal, lastAgentMessage);
       if (isFirstInteraction || isGreetingOrShortInput) {
         mediaSuggestion = null;
       }
-      if (isOperationalQuestion) {
+      if (isOperationalQuestion && !isPriceOrPaymentQuestion) {
         mediaSuggestion = null;
       }
       if (isClosureAckInput) {
@@ -5287,7 +5318,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (directIntentResponse) {
-      const truncatedResponse = truncateResponse(directIntentResponse, 1000);
+      const completedDirectResponse = ensurePaymentModalitiesInResponse(
+        directIntentResponse,
+        effectiveMessage,
+        detectedIntent,
+        detectedProgram,
+        courses
+      );
+      const truncatedResponse = truncateResponse(completedDirectResponse, 1000);
       const allowMediaSuggestion = shouldAttachMediaSuggestion(message, truncatedResponse);
       const activeMedia = detectedProgram && allowMediaSuggestion ? mediaSuggestion : null;
       const responseToSave = activeMedia
@@ -5378,9 +5416,16 @@ export async function POST(req: NextRequest) {
       sanitizeAgentVisibleResponse(response, fallbackResponse),
       hasGreetingInHistory(history)
     );
+    const completedAgentResponse = ensurePaymentModalitiesInResponse(
+      cleanedAgentResponse,
+      effectiveMessage,
+      detectedIntent,
+      detectedProgram,
+      courses
+    );
 
     // Truncar respuesta si es muy larga (máx 1000 caracteres para chat)
-    const truncatedResponse = truncateResponse(cleanedAgentResponse, 1000);
+    const truncatedResponse = truncateResponse(completedAgentResponse, 1000);
 
     // Guardar en historiales — incluir marcador de imagen si aplica
     const allowMediaSuggestionFinal = shouldAttachMediaSuggestion(message, truncatedResponse);
