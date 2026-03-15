@@ -54,6 +54,16 @@ interface ResultadoEnvio {
   logId?: string;
 }
 
+function sanitizeTemplateText(value: string | number | boolean | null | undefined, maxLength: number = 120): string {
+  const text = String(value ?? "")
+    .replace(/\r?\n+/g, " | ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!text) return "Por confirmar";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
 // ============================================
 // UTILIDADES
 // ============================================
@@ -510,12 +520,12 @@ export async function enviarFormularioInteres(
 
   // Variables v4 con información completa del programa y botones
   const variablesV4: VariablesPlantilla = {
-    '1': datos.nombre,                                    // {{1}} - Nombre
-    '2': datos.cursoInteres,                              // {{2}} - Curso
-    '3': datos.fechaInicio,                               // {{3}} - Fecha inicio
-    '4': datos.duracion || 'Por confirmar',               // {{4}} - Duración
-    '5': datos.totalClases || 'Por confirmar',            // {{5}} - Total de clases
-    '6': datos.precioInscripcion || 'Consultar',          // {{6}} - Precio inscripción
+    '1': sanitizeTemplateText(datos.nombre, 60),                    // {{1}} - Nombre
+    '2': sanitizeTemplateText(datos.cursoInteres, 80),              // {{2}} - Curso
+    '3': sanitizeTemplateText(datos.fechaInicio, 140),              // {{3}} - Fecha inicio
+    '4': sanitizeTemplateText(datos.duracion || 'Por confirmar', 50),
+    '5': sanitizeTemplateText(datos.totalClases || 'Por confirmar', 40),
+    '6': sanitizeTemplateText(datos.precioInscripcion || 'Consultar', 40),
   };
 
   console.log('[WhatsApp] Variables v4:', variablesV4);
@@ -543,12 +553,12 @@ export async function enviarFormularioInteres(
   // para evitar riesgos de cumplimiento fuera de la ventana de 24h.
   // Es best-effort: no tumba el flujo si este segundo envío falla.
   if (resultado.exito) {
-    const porClase = String(datos.precioPorClase || 'Consultar');
-    const opcionA = String(datos.precioMensualOpcionA || datos.precioMensualidad || 'Consultar');
-    const opcionB = String(datos.precioMensualOpcionB || datos.precioMensualidad || 'Consultar');
+    const porClase = sanitizeTemplateText(datos.precioPorClase || 'Consultar', 40);
+    const opcionA = sanitizeTemplateText(datos.precioMensualOpcionA || datos.precioMensualidad || 'Consultar', 40);
+    const opcionB = sanitizeTemplateText(datos.precioMensualOpcionB || datos.precioMensualidad || 'Consultar', 40);
 
     const variablesModalidades: VariablesPlantilla = {
-      '1': datos.cursoInteres,
+      '1': sanitizeTemplateText(datos.cursoInteres, 80),
       '2': porClase,
       '3': opcionA,
       '4': opcionB,

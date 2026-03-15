@@ -186,13 +186,16 @@ export default function CatalogoCursosPage() {
       console.log("[Catálogo] ===== CONFIG FRESCA PARA MENSAJE =====", configData);
 
       const proximos = proximosPorPrograma[selectedPrograma.id] || [];
-      const proximoTexto = proximos
+      const proximoTextoRaw = proximos
         .slice(0, 2)
         .map((g) => {
           const fecha = g.fecha_inicio ? dayjs(g.fecha_inicio).format("DD MMM") : "Próximamente";
           return `${g.nombre || "Grupo"} - ${fecha}`;
         })
-        .join("\n");
+        .join(" | ");
+      const proximoTexto = proximoTextoRaw.length > 140
+        ? `${proximoTextoRaw.slice(0, 139)}…`
+        : proximoTextoRaw;
 
       const precioPorClaseValue = Number(selectedPrograma.precio_por_clase ?? 0);
       const precioMensualOpcionAValue = Number(selectedPrograma.precio_mensual_70 ?? selectedPrograma.precio_mensualidad ?? 0);
