@@ -32,6 +32,9 @@ type Programa = {
   total_clases?: number | null;
   precio_inscripcion?: number | null;
   precio_mensualidad?: number | null;
+  precio_por_clase?: number | null;
+  precio_mensual_70?: number | null;
+  precio_mensual_100?: number | null;
   emoji?: string | null;
   activo?: boolean | null;
 };
@@ -80,7 +83,7 @@ export default function CatalogoCursosPage() {
         const [{ data: programasData }, { data: gruposData }] = await Promise.all([
           supabaseBrowserClient
             .from("programas")
-            .select("id, nombre, descripcion, duracion, total_clases, precio_inscripcion, precio_mensualidad, emoji, activo")
+            .select("id, nombre, descripcion, duracion, total_clases, precio_inscripcion, precio_mensualidad, precio_por_clase, precio_mensual_70, precio_mensual_100, emoji, activo")
             .eq("activo", true)
             .order("nombre", { ascending: true }),
           supabaseBrowserClient
@@ -266,8 +269,18 @@ export default function CatalogoCursosPage() {
             {programas.map((programa) => {
               const proximos = proximosPorPrograma[programa.id] || [];
               const emoji = (programa.emoji || "").trim() || "🎯";
-              const mensualidad = programa.precio_mensualidad
-                ? `$${Number(programa.precio_mensualidad).toLocaleString("es-CO")}`
+              const porClaseValue = Number(programa.precio_por_clase ?? 0);
+              const opcionAValue = Number(programa.precio_mensual_70 ?? programa.precio_mensualidad ?? 0);
+              const opcionBValue = Number(programa.precio_mensual_100 ?? programa.precio_mensualidad ?? 0);
+
+              const porClase = porClaseValue > 0
+                ? `$${porClaseValue.toLocaleString("es-CO")}`
+                : "Consultar";
+              const mensualOpcionA = opcionAValue > 0
+                ? `$${opcionAValue.toLocaleString("es-CO")}`
+                : "Consultar";
+              const mensualOpcionB = opcionBValue > 0
+                ? `$${opcionBValue.toLocaleString("es-CO")}`
                 : "Consultar";
               const inscripcion = programa.precio_inscripcion
                 ? `$${Number(programa.precio_inscripcion).toLocaleString("es-CO")}`
@@ -309,8 +322,20 @@ export default function CatalogoCursosPage() {
 
                     <Space size={8} wrap>
                       <Tag icon={<ClockCircleOutlined />} color="geekblue">{programa.total_clases ? `${programa.total_clases} clases` : "Ritmo flexible"}</Tag>
-                      <Tag icon={<DollarOutlined />} color="green">Mensualidad {mensualidad}</Tag>
                       <Tag icon={<BookOutlined />} color="purple">Inscripción {inscripcion}</Tag>
+                    </Space>
+
+                    <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                      <Text style={{ color: "#cbd5e1", fontWeight: 600 }}>Opciones de pago</Text>
+                      <Tag icon={<DollarOutlined />} color="blue" style={{ width: "fit-content" }}>
+                        Por Clase {porClase} · no incluye materiales
+                      </Tag>
+                      <Tag color="green" style={{ width: "fit-content" }}>
+                        Mensual Opción A {mensualOpcionA} · incluye ~70% de materiales
+                      </Tag>
+                      <Tag color="gold" style={{ width: "fit-content" }}>
+                        Mensual Opción B {mensualOpcionB} · incluye 100% de materiales
+                      </Tag>
                     </Space>
 
                     {proximos.length > 0 ? (
