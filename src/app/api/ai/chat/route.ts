@@ -1715,6 +1715,8 @@ NO inventes horarios, precios ni fechas que no estén en el contexto.
   return prompt;
 }
 
+type AgentIntent = "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "general";
+
 function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "general" {
   const text = normalizeForMatch(message);
   const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
