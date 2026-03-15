@@ -1849,6 +1849,31 @@ function buildNoiseFollowupFromHistory(history: Array<{ user: string; agent: str
   return "Te leí 👌 ¿Quieres que te cuente los *horarios*, *la inversión* o los *pasos para inscribirte*?";
 }
 
+function hasRecentPaymentReminderContext(history: Array<{ user: string; agent: string }>): boolean {
+  const recentAgentMessages = (Array.isArray(history) ? history : [])
+    .slice(-8)
+    .map((turn) => normalizeForMatch(turn?.agent || ""))
+    .filter(Boolean);
+
+  return recentAgentMessages.some((msg) => {
+    const hasPaymentTopic = /\b(mensualidad|cuota|cuotas|pago|pagos|saldo|vencimiento|vence|fecha\s+de\s+pago|recordatorio\s+de\s+pago|abono|deuda|pendiente)\b/i.test(msg);
+    const hasReminderTone = /\b(recordatorio|te\s+recordamos|recuerda|por\s+favor\s+realizar|pendiente\s+de\s+pago|vence\s+el|fecha\s+limite|fecha\s+l[ií]mite|evita\s+intereses?)\b/i.test(msg);
+    return hasPaymentTopic && hasReminderTone;
+  });
+}
+
+function isGenericAckAfterReminder(message: string): boolean {
+  return isThanksOnlyMessage(message)
+    || isPureGreeting(message)
+    || isNeutralAcknowledgement(message)
+    || isShortAffirmativeReply(message)
+    || isNoiseOnlyMessage(message);
+}
+
+function buildReminderFollowupReply(): string {
+  return "¡Gracias por responder! 🙌 Este chat quedó sobre tu recordatorio de pago del mes.\n\n¿Ya realizaste el pago o quieres que te comparta medios de pago y fecha límite?";
+}
+
 function isOnlyScheduleConfirmationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
@@ -2002,6 +2027,11 @@ function enrichMessageWithFollowUpContext(
   // Nunca enriquecer un saludo puro — el usuario está iniciando nueva sesión,
   // no confirmando un tema anterior.
   if (isPureGreeting(userMessage)) {
+    return userMessage;
+  }
+
+  // "Gracias" y similares no deben heredar tema pendiente del bot.
+  if (isThanksOnlyMessage(userMessage)) {
     return userMessage;
   }
 
@@ -3537,6 +3567,11 @@ function buildIntentFocusedDirectResponse(
   programs: any[] = [],
   mediosPago: any[] = []
 ): string | null {
+  const hasPaymentReminderContext = hasRecentPaymentReminderContext(history);
+  if (hasPaymentReminderContext && isGenericAckAfterReminder(message)) {
+    return buildReminderFollowupReply();
+  }
+
   if (isThanksOnlyMessage(message)) {
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
   }
