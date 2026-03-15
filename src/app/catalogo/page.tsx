@@ -19,7 +19,7 @@ import {
 } from "antd";
 import { WhatsAppOutlined, ShareAltOutlined, ClockCircleOutlined, BookOutlined, DollarOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { enviarWhatsapp } from "@utils/whatsapp";
+import { enviarFormularioInteres } from "@/services/whatsapp-messages-module";
 import dayjs from "dayjs";
 
 const { Title, Text, Paragraph } = Typography;
@@ -214,7 +214,6 @@ export default function CatalogoCursosPage() {
       const duracion = selectedPrograma.duracion || "Por confirmar";
 
       // Enviar plantilla v4 con datos del programa y botones
-      const { enviarFormularioInteres } = await import('@/services/whatsapp-messages-module');
       const resultado = await enviarFormularioInteres(telefono, leadId, {
         nombre: values.nombre,
         cursoInteres: selectedPrograma.nombre,
@@ -237,6 +236,14 @@ export default function CatalogoCursosPage() {
       }
     } catch (err: any) {
       console.error("[Catálogo] Error:", err);
+      const errorText = String(err?.message || "");
+      if (/ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module/i.test(errorText)) {
+        message.error("La app se actualizó. Recargando para sincronizar...");
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
+        return;
+      }
       message.error(err?.message || "No se pudo guardar el lead");
     }
   };
