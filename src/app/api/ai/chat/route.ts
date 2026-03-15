@@ -1168,9 +1168,11 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
   const channel = detectInboundChannel(body);
   const profileName = extractProfileName(body);
   const webhookMessage = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
+  const webhookMessageAlt = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text;
   const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
   const webhookContactPhone = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.wa_id;
   const instagramMessagingMessage = body?.entry?.[0]?.messaging?.[0]?.message?.text;
+  const instagramChangeMessageText = body?.entry?.[0]?.changes?.[0]?.value?.message?.text;
   const instagramMessagingSenderId = body?.entry?.[0]?.messaging?.[0]?.sender?.id;
   const instagramChangeSenderId = body?.entry?.[0]?.changes?.[0]?.value?.sender?.id;
   // Comentarios de Instagram (changes.field = "comments")
@@ -1217,8 +1219,10 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
     entryMessagingText,        // texto extraído del entry completo enviado por Make
     entryStoryReplyText,       // respuesta a historia
     instagramMessagingMessage,
+    instagramChangeMessageText,
     nestedMessage,
     webhookMessage,
+    webhookMessageAlt,
     ...deepCandidates
   );
 
@@ -5020,7 +5024,19 @@ export async function POST(req: NextRequest) {
       body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type === "document"
     );
 
-    if (!message && hasAttachment) {
+    const hasInlineText = !!pickFirstNonEmptyString(
+      messagingEvent?.message?.text,
+      messagingEvent?.message?.text?.body,
+      body?.entry?.[0]?.changes?.[0]?.value?.message?.text,
+      body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body,
+      body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text,
+      body?.message,
+      body?.text,
+      body?.text?.body,
+      body?.text?.text
+    );
+
+    if (!message && !hasInlineText && hasAttachment) {
       const attachmentType = String(
         body?.entry?.[0]?.messaging?.[0]?.message?.attachments?.[0]?.type ||
         body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type ||
