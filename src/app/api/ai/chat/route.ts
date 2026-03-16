@@ -255,6 +255,43 @@ function addCommentMeta(
   return result;
 }
 
+function addDeliveryMeta(
+  payload: Record<string, any>,
+  phone: string,
+  channel: "instagram" | "whatsapp" | "unknown",
+  profileName?: string
+): Record<string, any> {
+  const rawPhone = String(phone || "").trim();
+  const instagramSenderId = rawPhone.startsWith("ig:")
+    ? rawPhone.replace(/^ig:/, "")
+    : "";
+  const normalizedChannel: "instagram" | "whatsapp" | "unknown" =
+    channel !== "unknown"
+      ? channel
+      : instagramSenderId
+      ? "instagram"
+      : rawPhone && rawPhone !== "unknown"
+      ? "whatsapp"
+      : "unknown";
+
+  const recipientId =
+    normalizedChannel === "instagram"
+      ? (instagramSenderId || null)
+      : rawPhone && rawPhone !== "unknown"
+      ? rawPhone
+      : null;
+
+  return {
+    ...payload,
+    channel: normalizedChannel,
+    conversation_id: rawPhone || "unknown",
+    recipient_id: recipientId,
+    instagram_sender_id: instagramSenderId || null,
+    whatsapp_phone: normalizedChannel === "whatsapp" ? rawPhone : null,
+    profile_name: normalizeProfileName(profileName),
+  };
+}
+
 /**
  * Validar entrada del usuario antes de procesar
  */
@@ -5123,6 +5160,8 @@ export async function POST(req: NextRequest) {
 
     // Extraer datos del comentario si es un evento de comentario de Instagram
     const commentEvent = extractInstagramCommentEvent(body || {});
+    const withDeliveryMeta = (payload: Record<string, any>) =>
+      addDeliveryMeta(payload, phone, channel, profileName);
 
     console.log("[chat] Input extraído:", {
       phone,
@@ -5180,7 +5219,7 @@ export async function POST(req: NextRequest) {
       const friendlyReply = isAudio
         ? "¡Hola! Por el momento no puedo escuchar audios, pero con mucho gusto te atiendo por texto 😊 ¿En qué te puedo ayudar?"
         : "¡Hola! Por el momento no puedo ver imágenes, pero con mucho gusto te atiendo por texto 😊 ¿En qué te puedo ayudar?";
-      return NextResponse.json({ ok: true, response: friendlyReply });
+      return NextResponse.json(withDeliveryMeta({ ok: true, response: friendlyReply }));
     }
 
     // Validar entrada del usuario
@@ -5282,7 +5321,7 @@ export async function POST(req: NextRequest) {
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -5290,7 +5329,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     // INFORMACIÓN JERÁRQUICA
@@ -5310,7 +5349,7 @@ export async function POST(req: NextRequest) {
       const sanitizedResponse = sanitizeForJSON(truncatedNotFound);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
@@ -5318,7 +5357,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
@@ -5401,7 +5440,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -5409,7 +5448,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     if (shouldUseTodayClassDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -5424,7 +5463,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -5432,7 +5471,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     if (shouldUseNextGroupDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -5447,7 +5486,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -5455,7 +5494,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
     
     let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs, mediosPago);
@@ -5524,7 +5563,7 @@ export async function POST(req: NextRequest) {
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
@@ -5532,7 +5571,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, commentEvent ? null : activeMedia), commentEvent));
+      }, commentEvent ? null : activeMedia)), commentEvent));
     }
     
     // 4. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
@@ -5631,7 +5670,7 @@ export async function POST(req: NextRequest) {
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
     const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-    return NextResponse.json(addCommentMeta(withMediaSuggestion({
+    return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
       ok: true,
       response: whatsappResponse || "",
       agent: sanitizedAgent || "Dany",
@@ -5639,7 +5678,7 @@ export async function POST(req: NextRequest) {
       historyLength: Number(history.length) || 0,
       programDetected: sanitizedProgram || null,
       rateLimitRemaining: Number(rateLimit.remaining) || 0,
-    }, commentEvent ? null : activeMediaFinal), commentEvent));
+    }, commentEvent ? null : activeMediaFinal)), commentEvent));
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);
     const errorMessage = error?.message || "Error generando respuesta";
