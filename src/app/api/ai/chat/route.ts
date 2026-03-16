@@ -1803,6 +1803,11 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
 
+  // Mensajes de relleno/llamado no deben disparar embudo ni asumir programa.
+  if (/^(amigo|amiga|bro|hermano|mana|mija|oye|oe|epa|aj[aá]|aja|bueno|listo|dale)$/.test(text)) {
+    return false;
+  }
+
   const hasGreetingKeyword = /\b(hola|buenas?|buen\s+dia|buenos\s+dias|buenas\s+tardes|buenas\s+noches|saludos|hey|que\s+tal)\b/i.test(text);
   if (hasGreetingKeyword) return false;
 
@@ -1855,7 +1860,15 @@ function isNeutralAcknowledgement(message: string): boolean {
   return /^(ok|okay|okey|listo|perfecto|esta bien|ta bien|entendido|vale|de acuerdo|super|genial|claro)$/i.test(text);
 }
 
-function buildNoiseFollowupFromHistory(history: Array<{ user: string; agent: string }>): string {
+function buildNoiseFollowupFromHistory(
+  history: Array<{ user: string; agent: string }>,
+  message: string = ""
+): string {
+  const raw = String(message || "").trim();
+  if (/^[.?!,;:¡!¿?()\-_/]+$/.test(raw)) {
+    return "¡Perdona! 😊 Creo que no te entendí bien. ¿Me escribes en una frase qué necesitas: *precio*, *horario* o *ubicación*?";
+  }
+
   const pendingTopic = inferPendingTopicFromHistory(history);
 
   if (/medios\s+de\s+pago|formas\s+de\s+pago|metodo\s+de\s+pago/.test(normalizeForMatch(pendingTopic))) {
@@ -1870,7 +1883,7 @@ function buildNoiseFollowupFromHistory(history: Array<{ user: string; agent: str
     return "Te leí 👌 Si quieres, seguimos de una con los *pasos para separar tu cupo*.";
   }
 
-  return "Te leí 👌 ¿Quieres que te cuente los *horarios*, *la inversión* o los *pasos para inscribirte*?";
+  return "Te leí 👌 ¿Qué dato necesitas ahora mismo: *precio*, *horario* o *ubicación*?";
 }
 
 function hasRecentPaymentReminderContext(history: Array<{ user: string; agent: string }>): boolean {
@@ -2757,6 +2770,7 @@ function extractProgramInquiryTopic(message: string): string | null {
 
     const candidate = match[1]
       .replace(/\b(aqui|aca|en\s+cali|por\s+favor|me\s+podrias|me\s+puedes|si|no)\b/gi, " ")
+      .replace(/\b(quiero\s+saber|saber|inversion|precio|costo|valor|horario|horarios|informacion|info)\b.*$/i, " ")
       .replace(/\s+/g, " ")
       .trim();
 
@@ -3601,7 +3615,7 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (isNoiseOnlyMessage(message)) {
-    return buildNoiseFollowupFromHistory(history);
+    return buildNoiseFollowupFromHistory(history, message);
   }
 
   if (isPureGreeting(message)) {
@@ -3677,7 +3691,14 @@ function buildIntentFocusedDirectResponse(
     /horarios.*inversion.*separar\s+cupo|separar\s+cupo.*horarios.*inversion|te\s+comparto.*horarios.*inversion/i.test(normalizeForMatch(h.agent || ""))
   );
 
-  if (detectedProgram && isLikelyProgramOnlyReply(message) && !alreadyAskedDoubleOption && !/[?¿]/.test(message) && detectUserIntent(message) === "general") {
+  if (
+    detectedProgram
+    && isLikelyProgramOnlyReply(message)
+    && !alreadyAskedDoubleOption
+    && !/[?¿]/.test(message)
+    && detectUserIntent(message) === "general"
+    && isShortAffirmativeReply(message)
+  ) {
     const pendingTopic = inferPendingTopicFromHistory(history);
     if (/dias\s+y\s+horario|horario|inicio|fecha/.test(normalizeForMatch(pendingTopic))) {
       const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
@@ -5254,7 +5275,7 @@ export async function POST(req: NextRequest) {
       const isGreetingOrShortInput = /^(hola|hi|hey|buenos?\s*d[ií]as?|buenas?\s*(tardes?|noches?)|hello|holi|s[ií]p?|ok|okay|dale|listo|claro|perfecto|de\s+una|bien|ya|sip|genial|excelente|entendido|gracias|chao|bye)[\s!.?]*$/i.test(trimmedOriginal)
         || trimmedOriginal.split(/\s+/).filter(Boolean).length <= 1;
       const normalizedOriginal = normalizeForMatch(trimmedOriginal);
-      const isOperationalQuestion = /\b(nequi|bancolombia|sistecredito|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps)\b/i.test(normalizedOriginal)
+      const isOperationalQuestion = /\b(nequi|bancolombia|sistecredito|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps|semana|vez\s+a\s+la\s+semana|frecuencia)\b/i.test(normalizedOriginal)
         || /^(1|uno|paso\s*1)$/i.test(normalizedOriginal);
       const isPriceOrPaymentQuestion = detectedIntent === "precio"
         || /\b(precio|valor|cuanto|inversion|inscripcion|mensualidad|pago|pagos|modalidad|modalidades|quincena|quincenal)\b/i.test(normalizedOriginal);
