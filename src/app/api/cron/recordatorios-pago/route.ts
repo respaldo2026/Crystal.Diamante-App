@@ -22,6 +22,52 @@ function normalizePhone(telefono: string): string {
   return digits;
 }
 
+async function saveTemplateAuditConversation(
+  supabase: any,
+  input: {
+    phone: string;
+    profileName?: string;
+    templateName: string;
+    templateLanguage: string;
+    templateVariables: string[];
+    messageId?: string;
+  }
+): Promise<void> {
+  try {
+    const payload = {
+      phone_number: input.phone,
+      user_message: '[SISTEMA] Recordatorio por plantilla',
+      agent_response:
+        `📤 Plantilla enviada: ${input.templateName}\n` +
+        `Idioma: ${input.templateLanguage}\n` +
+        `Variables: ${input.templateVariables.length ? input.templateVariables.join(' | ') : '-'}\n` +
+        `Meta Message ID: ${input.messageId || 'sin ID'}`,
+      transcription: null,
+      channel: 'whatsapp',
+      profile_name: input.profileName || null,
+    };
+
+    let { error } = await supabase.from('agent_conversations').insert(payload);
+
+    if (error && /column .* does not exist/i.test(String(error.message || ''))) {
+      const fallbackPayload = {
+        phone_number: input.phone,
+        user_message: payload.user_message,
+        agent_response: payload.agent_response,
+        transcription: null,
+      };
+      const retry = await supabase.from('agent_conversations').insert(fallbackPayload);
+      error = retry.error;
+    }
+
+    if (error) {
+      console.warn('[Recordatorio] Error guardando auditoria de plantilla:', error);
+    }
+  } catch (error) {
+    console.warn('[Recordatorio] Excepcion guardando auditoria de plantilla:', error);
+  }
+}
+
 // Función para enviar WhatsApp usando plantilla aprobada por Meta
 async function enviarWhatsAppDirecto(telefono: string, nombre: string, monto: string, fecha: string, curso: string, modalidad: string) {
   const mensajeModalidad = modalidad === 'POR_CLASE'
@@ -57,12 +103,22 @@ _Academia Crystal_`;
     );
 
     console.log(`[Recordatorio] Enviado template a ${telefono}: ${response.messages?.[0]?.id || 'sin ID'}`);
-    return response;
+    return {
+      response,
+      usedTemplate: true,
+      templateVariables,
+      templateLanguage: 'es_CO',
+    };
   } catch (error) {
     if (ALLOW_TEXT_FALLBACK) {
       console.warn(`[Recordatorio] Falló template, usando fallback texto para ${telefono}`);
       const fallback = await WhatsAppService.sendText(telefono, mensaje);
-      return fallback;
+      return {
+        response: fallback,
+        usedTemplate: false,
+        templateVariables: [] as string[],
+        templateLanguage: 'es_CO',
+      };
     }
 
     console.error(`[Recordatorio] Error enviando a ${telefono}:`, error);
@@ -187,7 +243,7 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
         const monto = `$${montoNumero.toLocaleString('es-CO')}`;
         const curso = matricula?.cursos?.nombre || 'Curso';
 
-        await enviarWhatsAppDirecto(
+        const sendResult = await enviarWhatsAppDirecto(
           telefono,
           perfil.nombre_completo,
           monto,
@@ -195,6 +251,17 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
           curso,
           modalidadPago
         );
+
+        if (sendResult.usedTemplate) {
+          await saveTemplateAuditConversation(supabase, {
+            phone: telefono,
+            profileName: perfil.nombre_completo,
+            templateName: DEFAULT_TEMPLATE_NAME,
+            templateLanguage: sendResult.templateLanguage,
+            templateVariables: sendResult.templateVariables,
+            messageId: sendResult.response.messages?.[0]?.id,
+          });
+        }
 
         telefonosProcesados.add(telefonoNormalizado);
         enviados++;

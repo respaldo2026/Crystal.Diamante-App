@@ -95,6 +95,52 @@ function buildFallbackText(nombre: string, periodoTexto: string, horasTexto: str
   ].join("\n");
 }
 
+async function saveTemplateAuditConversation(
+  supabase: any,
+  input: {
+    phone: string;
+    profileName?: string;
+    templateName: string;
+    templateLanguage: string;
+    templateVariables: string[];
+    messageId?: string;
+  }
+): Promise<void> {
+  try {
+    const payload = {
+      phone_number: input.phone,
+      user_message: "[SISTEMA] Liquidacion por plantilla",
+      agent_response:
+        `📤 Plantilla enviada: ${input.templateName}\n` +
+        `Idioma: ${input.templateLanguage}\n` +
+        `Variables: ${input.templateVariables.length ? input.templateVariables.join(" | ") : "-"}\n` +
+        `Meta Message ID: ${input.messageId || "sin ID"}`,
+      transcription: null,
+      channel: "whatsapp",
+      profile_name: input.profileName || null,
+    };
+
+    let { error } = await supabase.from("agent_conversations").insert(payload);
+
+    if (error && /column .* does not exist/i.test(String(error.message || ""))) {
+      const fallbackPayload = {
+        phone_number: input.phone,
+        user_message: payload.user_message,
+        agent_response: payload.agent_response,
+        transcription: null,
+      };
+      const retry = await supabase.from("agent_conversations").insert(fallbackPayload);
+      error = retry.error;
+    }
+
+    if (error) {
+      console.warn("[Cron Liquidacion] Error guardando auditoria de plantilla:", error);
+    }
+  } catch (error) {
+    console.warn("[Cron Liquidacion] Excepcion guardando auditoria de plantilla:", error);
+  }
+}
+
 function isAuthorized(request: NextRequest): boolean {
   const apiKeyHeader = request.headers.get("x-api-key");
   const cronApiKey = process.env.CRON_API_KEY;
@@ -276,12 +322,22 @@ async function runLiquidacionJob() {
     const valorTexto = moneyCOP(resumen.valor);
 
     try {
-      await WhatsAppService.sendTemplate(
+      const templateVariables = [primerNombre, periodoTexto, horasTexto, valorTexto];
+      const response = await WhatsAppService.sendTemplate(
         telefonoNormalizado,
         DEFAULT_TEMPLATE_NAME,
-        [primerNombre, periodoTexto, horasTexto, valorTexto],
+        templateVariables,
         DEFAULT_TEMPLATE_LANG,
       );
+
+      await saveTemplateAuditConversation(supabase, {
+        phone: telefonoNormalizado,
+        profileName: resumen.nombre,
+        templateName: DEFAULT_TEMPLATE_NAME,
+        templateLanguage: DEFAULT_TEMPLATE_LANG,
+        templateVariables,
+        messageId: response.messages?.[0]?.id,
+      });
 
       enviados++;
       telefonosProcesados.add(telefonoNormalizado);
@@ -353,12 +409,21 @@ async function runLiquidacionJob() {
 
     if (directorTelefono) {
       const totalProfesoras = `${resumenByProfesor.size} profesor${resumenByProfesor.size === 1 ? "a" : "as"}`;
-      await WhatsAppService.sendTemplate(
+      const directorTemplateVariables = [directorNombre, fechaPago, periodoTexto, totalProfesoras];
+      const directorResponse = await WhatsAppService.sendTemplate(
         directorTelefono,
         DIRECTOR_TEMPLATE_NAME,
-        [directorNombre, fechaPago, periodoTexto, totalProfesoras],
+        directorTemplateVariables,
         DEFAULT_TEMPLATE_LANG,
       );
+      await saveTemplateAuditConversation(supabase, {
+        phone: directorTelefono,
+        profileName: directorNombre,
+        templateName: DIRECTOR_TEMPLATE_NAME,
+        templateLanguage: DEFAULT_TEMPLATE_LANG,
+        templateVariables: directorTemplateVariables,
+        messageId: directorResponse.messages?.[0]?.id,
+      });
       directorNotificado = true;
       console.log(`[Cron Liquidacion] Resumen enviado al director (${directorTelefono})`);
     } else {

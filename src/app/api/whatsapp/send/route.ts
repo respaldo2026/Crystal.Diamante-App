@@ -10,8 +10,72 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { WhatsAppService } from "@/services/whatsapp-service";
 import type { WhatsAppSendRequest, WhatsAppSendResponse } from "@/types/whatsapp";
+
+type TemplateAuditLogInput = {
+  phone: string;
+  templateName: string;
+  templateLanguage: string;
+  templateVariables: string[];
+  messageId?: string;
+};
+
+function getSupabaseServiceClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+async function saveTemplateAuditConversation(input: TemplateAuditLogInput) {
+  try {
+    const supabase = getSupabaseServiceClient();
+    if (!supabase) {
+      console.warn("[WhatsApp API] No se pudo guardar auditoria de plantilla: faltan variables de Supabase");
+      return;
+    }
+
+    const payload = {
+      phone_number: input.phone,
+      user_message: "[SISTEMA] Envio de plantilla WhatsApp",
+      agent_response:
+        `📤 Plantilla enviada: ${input.templateName}\n` +
+        `Idioma: ${input.templateLanguage}\n` +
+        `Variables: ${input.templateVariables.length ? input.templateVariables.join(" | ") : "-"}\n` +
+        `Meta Message ID: ${input.messageId || "sin ID"}`,
+      transcription: null,
+      channel: "whatsapp",
+      profile_name: null,
+    };
+
+    let { error } = await supabase.from("agent_conversations").insert(payload);
+
+    if (error && /column .* does not exist/i.test(String(error.message || ""))) {
+      const fallbackPayload = {
+        phone_number: input.phone,
+        user_message: payload.user_message,
+        agent_response: payload.agent_response,
+        transcription: null,
+      };
+      const retry = await supabase.from("agent_conversations").insert(fallbackPayload);
+      error = retry.error;
+    }
+
+    if (error) {
+      console.warn("[WhatsApp API] Error guardando auditoria de plantilla:", error);
+    }
+  } catch (error) {
+    console.warn("[WhatsApp API] Excepcion guardando auditoria de plantilla:", error);
+  }
+}
 
 /**
  * Valida que la solicitud venga de Make o del frontend autenticado
@@ -108,6 +172,13 @@ export async function POST(request: NextRequest) {
           body.templateVariables,
           body.templateLanguage || "es"
         );
+        await saveTemplateAuditConversation({
+          phone: body.phone,
+          templateName: body.template,
+          templateLanguage: body.templateLanguage || "es",
+          templateVariables: body.templateVariables,
+          messageId: response.messages?.[0]?.id,
+        });
         console.log(`[WhatsApp API] Respuesta template:`, response);
         break;
 
