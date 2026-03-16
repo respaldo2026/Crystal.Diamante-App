@@ -37,6 +37,7 @@ import {
 } from "@ant-design/icons";
 import Image from "next/image";
 import { supabaseBrowserClient } from "@/utils/supabase/client";
+import { WHATSAPP_TEMPLATES } from "@/constants/whatsappTemplates";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/es";
@@ -120,7 +121,69 @@ const getTemplateDisplayText = (agentText: string): string => {
   return `Mensaje de plantilla enviado (${templateName})`;
 };
 
-const normalizeTemplateKey = (value: string) => String(value || "").trim().toLowerCase();
+const normalizeTemplateKey = (value: string) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+const extractTemplateVariablesFromAudit = (agentText: string): string[] => {
+  const match = String(agentText || "").match(/Variables:\s*([^\n]+)/i);
+  if (!match?.[1]) return [];
+  const raw = match[1].trim();
+  if (!raw || raw === "-") return [];
+  return raw.split("|").map((item) => item.trim()).filter(Boolean);
+};
+
+const parseTemplateVariableNames = (raw: unknown): string[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+
+  const value = String(raw).trim();
+  if (!value) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+    }
+  } catch {
+    // Si no es JSON valido, intentar parseo por comas
+  }
+
+  return value
+    .replace(/[\[\]"]+/g, "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const interpolateTemplateText = (
+  templateText: string,
+  values: string[],
+  variableNames: string[] = []
+) => {
+  if (!templateText) return "";
+
+  let output = templateText;
+
+  values.forEach((value, index) => {
+    const placeholder = index + 1;
+    output = output.replace(new RegExp(`{{\\s*${placeholder}\\s*}}`, "g"), value);
+  });
+
+  variableNames.forEach((name, index) => {
+    const value = values[index];
+    if (!name || !value) return;
+    output = output.replace(new RegExp(`{{\\s*${escapeRegExp(name)}\\s*}}`, "gi"), value);
+  });
+
+  return output;
+};
 
 const escapeHtml = (value: string) =>
   (value || "")
@@ -312,7 +375,9 @@ export default function ConversacionesPage() {
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [activeTab, setActiveTab] = useState("todos");
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [templateTextsByName, setTemplateTextsByName] = useState<Record<string, string>>({});
+  const [templateCatalogByKey, setTemplateCatalogByKey] = useState<
+    Record<string, { text: string; variableNames: string[] }>
+  >({});
 
   const normalizeText = (value: string) =>
     value
@@ -401,22 +466,35 @@ export default function ConversacionesPage() {
 
       const { data: templatesData, error: templatesError } = await supabaseBrowserClient
         .from("plantillas_whatsapp")
-        .select("nombre, plantilla")
-        .eq("activa", true)
+        .select("nombre, plantilla, variables")
         .limit(500);
 
       if (templatesError) {
-        console.warn("No se pudieron cargar plantillas activas para previsualizacion:", templatesError.message);
-      } else {
-        const templateMap: Record<string, string> = {};
-        for (const tpl of (templatesData || []) as Array<{ nombre?: string | null; plantilla?: string | null }>) {
-          const key = normalizeTemplateKey(tpl.nombre || "");
-          const text = String(tpl.plantilla || "").trim();
-          if (!key || !text) continue;
-          templateMap[key] = text;
-        }
-        setTemplateTextsByName(templateMap);
+        console.warn("No se pudieron cargar plantillas para previsualizacion:", templatesError.message);
       }
+
+      const templateMap: Record<string, { text: string; variableNames: string[] }> = {};
+
+      for (const definition of Object.values(WHATSAPP_TEMPLATES)) {
+        const key = normalizeTemplateKey(definition.nombre);
+        if (!key) continue;
+        templateMap[key] = {
+          text: String(definition.fallback || "").trim(),
+          variableNames: Array.isArray(definition.variables) ? definition.variables : [],
+        };
+      }
+
+      for (const tpl of (templatesData || []) as Array<{ nombre?: string | null; plantilla?: string | null; variables?: unknown }>) {
+        const key = normalizeTemplateKey(tpl.nombre || "");
+        const text = String(tpl.plantilla || "").trim();
+        if (!key || !text) continue;
+        templateMap[key] = {
+          text,
+          variableNames: parseTemplateVariableNames(tpl.variables),
+        };
+      }
+
+      setTemplateCatalogByKey(templateMap);
 
       const namesByPhone: Record<string, string> = {};
 
@@ -643,9 +721,16 @@ export default function ConversacionesPage() {
       }
       const rawAgentText = (conv.agent_response || "").trim();
       const templateName = isTemplateAudit ? getTemplateNameFromAudit(rawAgentText) : "";
-      const templateBody = templateTextsByName[normalizeTemplateKey(templateName)] || "";
+      const templateDefinition = templateCatalogByKey[normalizeTemplateKey(templateName)];
+      const renderedTemplateText = templateDefinition
+        ? interpolateTemplateText(
+            templateDefinition.text,
+            extractTemplateVariablesFromAudit(rawAgentText),
+            templateDefinition.variableNames
+          )
+        : "";
       const agentText = isTemplateAudit
-        ? (templateBody || getTemplateDisplayText(rawAgentText))
+        ? (renderedTemplateText || getTemplateDisplayText(rawAgentText))
         : rawAgentText;
       if (agentText) {
         // Detectar marcador de imagen: [📷 URL|caption]\n
@@ -685,7 +770,7 @@ export default function ConversacionesPage() {
       }
       return items;
     });
-  }, [phoneConversations, templateTextsByName]);
+  }, [phoneConversations, templateCatalogByKey]);
 
   const previewLabel = selectedThread?.contact_name || getPhoneLabel(selectedThread?.phone_number);
 
@@ -1171,7 +1256,14 @@ export default function ConversacionesPage() {
               const items = [] as Array<{ key: string; dot: React.ReactNode; children: React.ReactNode }>;
               const isTemplateAudit = isSystemTemplateConversation(conv);
               const templateName = getTemplateNameFromAudit(conv.agent_response || "");
-              const templateBody = templateTextsByName[normalizeTemplateKey(templateName)] || "";
+              const templateDefinition = templateCatalogByKey[normalizeTemplateKey(templateName)];
+              const renderedTemplateText = templateDefinition
+                ? interpolateTemplateText(
+                    templateDefinition.text,
+                    extractTemplateVariablesFromAudit(conv.agent_response || ""),
+                    templateDefinition.variableNames
+                  )
+                : "";
 
               if (conv.user_message && !isTemplateAudit) {
                 items.push({
@@ -1251,7 +1343,7 @@ export default function ConversacionesPage() {
                           <p style={{ margin: 0 }}>
                             {formatAgentResponse(
                               isTemplateAudit
-                                ? (templateBody || `Mensaje de plantilla enviado (${templateName})`)
+                                ? (renderedTemplateText || `Mensaje de plantilla enviado (${templateName})`)
                                 : conv.agent_response
                             )}
                           </p>
