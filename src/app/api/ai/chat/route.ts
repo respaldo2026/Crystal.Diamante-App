@@ -1963,11 +1963,34 @@ function buildOnlyScheduleConfirmationReply(
 function buildNaturalAckReply(
   message: string,
   lastAgentMessage: string,
-  detectedProgram: any | null
+  detectedProgram: any | null,
+  history: Array<{ user: string; agent: string }> = []
 ): string | null {
   if (!isNeutralAcknowledgement(message)) return null;
 
   const normalizedLast = normalizeForMatch(lastAgentMessage || "");
+  const pendingTopic = inferPendingTopicFromHistory(history);
+  const normalizedPending = normalizeForMatch(pendingTopic || "");
+
+  if (normalizedPending) {
+    if (/medios\s+de\s+pago|formas\s+de\s+pago|metodo\s+de\s+pago/.test(normalizedPending)) {
+      return "Perfecto 🙌 Te comparto enseguida los *medios de pago* y *fechas de pago* para que lo tengas claro.";
+    }
+
+    if (/horario|dias|fecha|inicio|grupo/.test(normalizedPending)) {
+      const programName = detectedProgram?.nombre ? ` de *${detectedProgram.nombre}*` : "";
+      return `Súper 😊 Continuemos con eso${programName}: si quieres, te confirmo el *horario exacto* y te digo el siguiente paso para separar cupo.`;
+    }
+
+    if (/inscribirme|separar\s+cupo|pasos\s+de\s+inscripcion/.test(normalizedPending)) {
+      return "¡De una! 🚀 Te comparto los *pasos para separar tu cupo* y dejar tu inscripción iniciada.";
+    }
+
+    if (/referencia|llegar|ubicacion|direccion|maps/.test(normalizedPending)) {
+      return "Perfecto 🙌 Te dejo la *ubicación exacta* y el *mapa* para que llegues fácil.";
+    }
+  }
+
   if (!normalizedLast) return null;
 
   if (/medios\s+de\s+pago|formas\s+de\s+pago|fechas\s+de\s+pago|mensualidad|inscripcion/.test(normalizedLast)) {
@@ -1985,6 +2008,60 @@ function buildNaturalAckReply(
   }
 
   return "Perfecto 😊 ¿Quieres que te cuente los *horarios*, *la inversión* o los *pasos para inscribirte*?";
+}
+
+function buildShortAckContinuationReply(
+  message: string,
+  lastAgentMessage: string,
+  history: Array<{ user: string; agent: string }>,
+  detectedProgram: any | null,
+  courses: any[],
+  academy: any | null,
+  mediosPago: any[]
+): string | null {
+  if (!(isNeutralAcknowledgement(message) || isShortAffirmativeReply(message))) {
+    return null;
+  }
+
+  if (isClosureAcknowledgement(message, lastAgentMessage)) {
+    return null;
+  }
+
+  const pendingTopic = inferPendingTopicFromHistory(history);
+  const normalizedPending = normalizeForMatch(pendingTopic || "");
+  if (!normalizedPending) {
+    return null;
+  }
+
+  if (pendingTopic === "__clarificacion_opcion__") {
+    return "¡Súper! 😊 Para seguir, dime cuál prefieres: *horarios e inversión* o *separar cupo*.";
+  }
+
+  if (/medios\s+de\s+pago|formas\s+de\s+pago|metodo\s+de\s+pago/.test(normalizedPending)) {
+    return buildPaymentMethodsAndDatesReply(mediosPago);
+  }
+
+  if (/dias\s+y\s+horario|horario|inicio|fecha|grupo/.test(normalizedPending) && detectedProgram) {
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const nextStart = formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) || "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+    return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta los pasos para *separar tu cupo*?`;
+  }
+
+  if (/referencia|llegar|ubicacion|direccion|maps/.test(normalizedPending)) {
+    if (academy?.direccion) {
+      if (academy?.maps_url) {
+        return `¡Claro! 🙌\n\nDirección: *${academy.direccion}*.\n🗺️ Mapa: ${academy.maps_url}\n\nSi quieres, también te doy una referencia rápida para llegar sin enredos 😊`;
+      }
+      return `¡Claro! 🙌\n\nDirección: *${academy.direccion}*.\n\nSi quieres, también te doy una referencia rápida para llegar sin enredos 😊`;
+    }
+  }
+
+  if (/inscribirme|separar\s+cupo|pasos\s+de\s+inscripcion/.test(normalizedPending)) {
+    return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
+  }
+
+  return null;
 }
 
 function isClosureAcknowledgement(message: string, lastAgentMessage: string): boolean {
@@ -3727,6 +3804,19 @@ function buildIntentFocusedDirectResponse(
   const normalizedMessage = normalizeForMatch(message);
   const lastAgentForFlow = history[history.length - 1]?.agent || "";
 
+  const shortAckContinuationReply = buildShortAckContinuationReply(
+    message,
+    lastAgentForFlow,
+    history,
+    detectedProgram,
+    courses,
+    academy,
+    mediosPago
+  );
+  if (shortAckContinuationReply) {
+    return shortAckContinuationReply;
+  }
+
   if (isOnlyScheduleConfirmationQuestion(message)) {
     return buildOnlyScheduleConfirmationReply(detectedProgram, courses);
   }
@@ -3739,7 +3829,7 @@ function buildIntentFocusedDirectResponse(
         return buildSocialMediaReply(academy, "instagram");
       }
     }
-    const naturalAckReply = buildNaturalAckReply(message, lastAgentForFlow, detectedProgram);
+    const naturalAckReply = buildNaturalAckReply(message, lastAgentForFlow, detectedProgram, history);
     if (naturalAckReply) {
       return naturalAckReply;
     }
