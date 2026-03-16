@@ -1346,50 +1346,28 @@ async function getConversationHistory(
   try {
     const { data, error } = await supabase
       .from("agent_conversations")
-function buildStudentPaymentMethodsBlock(mediosPago: any[] = []): string {
-  const methods = Array.isArray(mediosPago)
-    ? mediosPago
-        .filter((medio) => medio?.activo !== false)
-        .slice(0, 8)
-        .map((medio) => {
-          const label = String(medio?.nombre || "").trim();
-          const description = String(medio?.descripcion || "").trim();
-          if (!label) return "";
-          return `• ${label}${description ? `: ${description}` : ""}`;
-        })
-        .filter(Boolean)
-    : [];
-
-  if (methods.length > 0) {
-    return `💳 *Medios de pago:*
-${methods.join("\n")}`;
-  }
-
-  return `💳 *Medios de pago:*
-• Efectivo
-• Nequi: 3006402575
-• Bancolombia
-• Sistecrédito
-• Tarjeta`;
-}
-
-function buildStudentDirectResponse(message: string, studentContext: any, mediosPago: any[] = []): string | null {
       .eq("phone_number", phone)
       .order("created_at", { ascending: false })
       .limit(limit);
 
     if (error) {
-  const asksTotalDebtExplicit = /\b(deuda total|saldo total|total pendiente|deuda acumulada)\b/i.test(text);
       console.error("[getConversationHistory] Error:", error);
       return [];
     }
-  if (asksDebt || asksNextPay || asksTotalDebtExplicit) {
+
+    return (data || []).map((row: any) => ({
       user: row.user_message,
+      agent: stripMediaMarkersForPrompt(row.agent_response || ""),
+      agent_raw: row.agent_response || "",
+      created_at: row.created_at || null,
+    }));
+  } catch (err) {
+    console.error("[getConversationHistory] Exception:", err);
+    return [];
+  }
 }
 
 async function saveConversation(
-    const methodsBlock = buildStudentPaymentMethodsBlock(mediosPago);
-    return `Tu pago del mes corresponde a la cuota ${next.numeroCuota ?? "?"}, vence el ${formatDateShort(next.fechaVencimiento)} y el valor es ${formatCurrencyCOP(Number(next.monto || 0))}.\n\n${methodsBlock}`;
   phone: string,
   userMessage: string,
   agentResponse: string,
@@ -1435,6 +1413,33 @@ async function saveConversation(
   } catch (err) {
     console.warn("[saveConversation] Error:", err);
   }
+}
+
+function buildStudentPaymentMethodsBlock(mediosPago: any[] = []): string {
+  const methods = Array.isArray(mediosPago)
+    ? mediosPago
+        .filter((medio) => medio?.activo !== false)
+        .slice(0, 8)
+        .map((medio) => {
+          const label = String(medio?.nombre || "").trim();
+          const description = String(medio?.descripcion || "").trim();
+          if (!label) return "";
+          return `• ${label}${description ? `: ${description}` : ""}`;
+        })
+        .filter(Boolean)
+    : [];
+
+  if (methods.length > 0) {
+    return `💳 *Medios de pago:*
+${methods.join("\n")}`;
+  }
+
+  return `💳 *Medios de pago:*
+• Efectivo
+• Nequi: 3006402575
+• Bancolombia
+• Sistecrédito
+• Tarjeta`;
 }
 
 function stripMediaMarkersForPrompt(value: string | null | undefined): string {
@@ -4451,30 +4456,23 @@ async function buildLinkAccessDirectResponse(
   return null;
 }
 
-function buildStudentDirectResponse(message: string, studentContext: any): string | null {
+function buildStudentDirectResponse(message: string, studentContext: any, mediosPago: any[] = []): string | null {
   if (!studentContext) return null;
 
   const text = normalizeForMatch(message);
   const asksDebt = /\b(cuanto debo|deuda|saldo pendiente|debo)\b/i.test(text);
   const asksNextPay = /\b(proxima mensualidad|proximo pago|cuando debo pagar|fecha de pago|vence|vencimiento)\b/i.test(text);
+  const asksTotalDebtExplicit = /\b(deuda total|saldo total|total pendiente|deuda acumulada)\b/i.test(text);
   const asksNextClass = /\b(proxima clase|siguiente clase|hoy hay clase|hoy tengo clase|clase hoy)\b/i.test(text);
   const asksEnrolledCourses = /\b(en que curso|que cursos|mis cursos|inscrita|inscrito)\b/i.test(text);
 
-  if (asksDebt) {
-    const deuda = Number(studentContext?.deudaTotal || 0);
-    const next = studentContext?.nextMonthlyPayment;
-    const extra = next
-      ? `\nPróxima mensualidad: Cuota ${next.numeroCuota ?? "?"} | vence ${formatDateShort(next.fechaVencimiento)} | valor ${formatCurrencyCOP(Number(next.monto || 0))}.`
-      : "\nNo tienes mensualidades pendientes registradas.";
-    return `Tu deuda total pendiente es ${formatCurrencyCOP(deuda)}.${extra}`;
-  }
-
-  if (asksNextPay) {
+  if (asksDebt || asksNextPay || asksTotalDebtExplicit) {
     const next = studentContext?.nextMonthlyPayment;
     if (!next) {
       return "No tienes una mensualidad pendiente registrada en este momento.";
     }
-    return `Tu próxima mensualidad es la cuota ${next.numeroCuota ?? "?"}, vence el ${formatDateShort(next.fechaVencimiento)} y el valor es ${formatCurrencyCOP(Number(next.monto || 0))}.`;
+    const methodsBlock = buildStudentPaymentMethodsBlock(mediosPago);
+    return `Tu pago del mes corresponde a la cuota ${next.numeroCuota ?? "?"}, vence el ${formatDateShort(next.fechaVencimiento)} y el valor es ${formatCurrencyCOP(Number(next.monto || 0))}.\n\n${methodsBlock}`;
   }
 
   if (asksNextClass) {
