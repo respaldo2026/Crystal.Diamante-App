@@ -101,6 +101,7 @@ interface ChatBubbleItem {
   imageUrl?: string;
   imageCaption?: string;
   isTemplate?: boolean;
+  templateName?: string;
 }
 
 const isSystemTemplateConversation = (conv: Pick<Conversation, "user_message" | "agent_response">) => {
@@ -118,6 +119,8 @@ const getTemplateDisplayText = (agentText: string): string => {
   const templateName = getTemplateNameFromAudit(agentText);
   return `Mensaje de plantilla enviado (${templateName})`;
 };
+
+const normalizeTemplateKey = (value: string) => String(value || "").trim().toLowerCase();
 
 const escapeHtml = (value: string) =>
   (value || "")
@@ -309,6 +312,7 @@ export default function ConversacionesPage() {
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [activeTab, setActiveTab] = useState("todos");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [templateTextsByName, setTemplateTextsByName] = useState<Record<string, string>>({});
 
   const normalizeText = (value: string) =>
     value
@@ -394,6 +398,25 @@ export default function ConversacionesPage() {
           .not("telefono", "is", null)
           .limit(2000),
       ]);
+
+      const { data: templatesData, error: templatesError } = await supabaseBrowserClient
+        .from("plantillas_whatsapp")
+        .select("nombre, plantilla")
+        .eq("activa", true)
+        .limit(500);
+
+      if (templatesError) {
+        console.warn("No se pudieron cargar plantillas activas para previsualizacion:", templatesError.message);
+      } else {
+        const templateMap: Record<string, string> = {};
+        for (const tpl of (templatesData || []) as Array<{ nombre?: string | null; plantilla?: string | null }>) {
+          const key = normalizeTemplateKey(tpl.nombre || "");
+          const text = String(tpl.plantilla || "").trim();
+          if (!key || !text) continue;
+          templateMap[key] = text;
+        }
+        setTemplateTextsByName(templateMap);
+      }
 
       const namesByPhone: Record<string, string> = {};
 
@@ -619,7 +642,11 @@ export default function ConversacionesPage() {
         });
       }
       const rawAgentText = (conv.agent_response || "").trim();
-      const agentText = isTemplateAudit ? getTemplateDisplayText(rawAgentText) : rawAgentText;
+      const templateName = isTemplateAudit ? getTemplateNameFromAudit(rawAgentText) : "";
+      const templateBody = templateTextsByName[normalizeTemplateKey(templateName)] || "";
+      const agentText = isTemplateAudit
+        ? (templateBody || getTemplateDisplayText(rawAgentText))
+        : rawAgentText;
       if (agentText) {
         // Detectar marcador de imagen: [📷 URL|caption]\n
         const imgMatch = agentText.match(/^\[📷 ([^\|\]]+)\|([^\]]*)\]\n?/);
@@ -632,6 +659,7 @@ export default function ConversacionesPage() {
             imageCaption: (imgMatch[2] ?? "").trim(),
             created_at: conv.created_at,
             isTemplate: isTemplateAudit,
+            templateName: templateName || undefined,
           });
           const textWithoutMarker = agentText.replace(/^\[📷 [^\]]+\]\n?/, "").trim();
           if (textWithoutMarker) {
@@ -641,6 +669,7 @@ export default function ConversacionesPage() {
               text: textWithoutMarker,
               created_at: conv.created_at,
               isTemplate: isTemplateAudit,
+              templateName: templateName || undefined,
             });
           }
         } else {
@@ -650,12 +679,13 @@ export default function ConversacionesPage() {
             text: agentText,
             created_at: conv.created_at,
             isTemplate: isTemplateAudit,
+            templateName: templateName || undefined,
           });
         }
       }
       return items;
     });
-  }, [phoneConversations]);
+  }, [phoneConversations, templateTextsByName]);
 
   const previewLabel = selectedThread?.contact_name || getPhoneLabel(selectedThread?.phone_number);
 
@@ -1141,6 +1171,7 @@ export default function ConversacionesPage() {
               const items = [] as Array<{ key: string; dot: React.ReactNode; children: React.ReactNode }>;
               const isTemplateAudit = isSystemTemplateConversation(conv);
               const templateName = getTemplateNameFromAudit(conv.agent_response || "");
+              const templateBody = templateTextsByName[normalizeTemplateKey(templateName)] || "";
 
               if (conv.user_message && !isTemplateAudit) {
                 items.push({
@@ -1220,7 +1251,7 @@ export default function ConversacionesPage() {
                           <p style={{ margin: 0 }}>
                             {formatAgentResponse(
                               isTemplateAudit
-                                ? `Mensaje de plantilla enviado (${templateName})`
+                                ? (templateBody || `Mensaje de plantilla enviado (${templateName})`)
                                 : conv.agent_response
                             )}
                           </p>
@@ -1278,7 +1309,7 @@ export default function ConversacionesPage() {
                       {item.isTemplate && (
                         <div style={{ marginBottom: 6 }}>
                           <Tag color="gold" style={{ marginInlineEnd: 0 }}>
-                            Plantilla
+                            {item.templateName ? `Plantilla: ${item.templateName}` : "Plantilla"}
                           </Tag>
                         </div>
                       )}
