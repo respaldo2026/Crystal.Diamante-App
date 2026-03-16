@@ -5,10 +5,29 @@ import { getPaymentPlan, normalizeModalidadPago } from '@/types/payment-plans';
 
 export const runtime = 'nodejs';
 
-const DEFAULT_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_RECORDATORIO_PAGO || 'recordatorio_pago_v3';
+const FALLBACK_REMINDER_TEMPLATE = 'recordatorio_pago_v3';
+const DEFAULT_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_RECORDATORIO_PAGO || FALLBACK_REMINDER_TEMPLATE;
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_MAX_BULK_PER_RUN || 30);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_DELAY_BETWEEN_SENDS_MS || 1200);
 const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALLOW_TEXT_FALLBACK || 'false').toLowerCase() === 'true';
+
+function resolveReminderTemplateName(): string {
+  const configured = String(DEFAULT_TEMPLATE_NAME || '').trim();
+  if (!configured) return FALLBACK_REMINDER_TEMPLATE;
+
+  const normalized = configured.toLowerCase();
+  const looksLikePaymentConfirmation = /pago[_-]?recibido|confirm(acion|ar)?[_-]?pago|payment[_-]?received/.test(normalized);
+
+  if (looksLikePaymentConfirmation) {
+    console.warn(
+      `[Recordatorio] Plantilla configurada parece de confirmacion de pago (${configured}). ` +
+      `Se fuerza fallback seguro: ${FALLBACK_REMINDER_TEMPLATE}.`
+    );
+    return FALLBACK_REMINDER_TEMPLATE;
+  }
+
+  return configured;
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -88,6 +107,7 @@ Puedes pagar en línea o en nuestra oficina. ¡Gracias!
 _Academia Crystal_`;
 
   try {
+    const reminderTemplateName = resolveReminderTemplateName();
     const templateVariables = [
       nombre,
       monto,
@@ -97,7 +117,7 @@ _Academia Crystal_`;
 
     const response = await WhatsAppService.sendTemplate(
       telefono,
-      DEFAULT_TEMPLATE_NAME,
+      reminderTemplateName,
       templateVariables,
       'es_CO'
     );
@@ -106,6 +126,7 @@ _Academia Crystal_`;
     return {
       response,
       usedTemplate: true,
+      templateName: reminderTemplateName,
       templateVariables,
       templateLanguage: 'es_CO',
     };
@@ -116,6 +137,7 @@ _Academia Crystal_`;
       return {
         response: fallback,
         usedTemplate: false,
+        templateName: '',
         templateVariables: [] as string[],
         templateLanguage: 'es_CO',
       };
@@ -256,7 +278,7 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
           await saveTemplateAuditConversation(supabase, {
             phone: telefono,
             profileName: perfil.nombre_completo,
-            templateName: DEFAULT_TEMPLATE_NAME,
+            templateName: sendResult.templateName,
             templateLanguage: sendResult.templateLanguage,
             templateVariables: sendResult.templateVariables,
             messageId: sendResult.response.messages?.[0]?.id,
@@ -279,7 +301,7 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
       success: true,
       mensaje: `${enviados} recordatorios enviados, ${fallidos} fallidos, ${omitidos} omitidos`,
       recomendaciones: {
-        template: DEFAULT_TEMPLATE_NAME,
+        template: resolveReminderTemplateName(),
         textFallback: ALLOW_TEXT_FALLBACK,
         maxSendsPerRun: MAX_SENDS_PER_RUN,
         delayBetweenSendsMs: DELAY_BETWEEN_SENDS_MS,
