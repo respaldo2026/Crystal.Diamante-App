@@ -1346,30 +1346,50 @@ async function getConversationHistory(
   try {
     const { data, error } = await supabase
       .from("agent_conversations")
-      .select("user_message, agent_response, created_at")
+function buildStudentPaymentMethodsBlock(mediosPago: any[] = []): string {
+  const methods = Array.isArray(mediosPago)
+    ? mediosPago
+        .filter((medio) => medio?.activo !== false)
+        .slice(0, 8)
+        .map((medio) => {
+          const label = String(medio?.nombre || "").trim();
+          const description = String(medio?.descripcion || "").trim();
+          if (!label) return "";
+          return `• ${label}${description ? `: ${description}` : ""}`;
+        })
+        .filter(Boolean)
+    : [];
+
+  if (methods.length > 0) {
+    return `💳 *Medios de pago:*
+${methods.join("\n")}`;
+  }
+
+  return `💳 *Medios de pago:*
+• Efectivo
+• Nequi: 3006402575
+• Bancolombia
+• Sistecrédito
+• Tarjeta`;
+}
+
+function buildStudentDirectResponse(message: string, studentContext: any, mediosPago: any[] = []): string | null {
       .eq("phone_number", phone)
       .order("created_at", { ascending: false })
       .limit(limit);
 
     if (error) {
+  const asksTotalDebtExplicit = /\b(deuda total|saldo total|total pendiente|deuda acumulada)\b/i.test(text);
       console.error("[getConversationHistory] Error:", error);
       return [];
     }
-
-    return (data || []).reverse().map((row: any) => ({
+  if (asksDebt || asksNextPay || asksTotalDebtExplicit) {
       user: row.user_message,
-      agent: stripMediaMarkersForPrompt(row.agent_response),
-      agent_raw: row.agent_response,
-      created_at: row.created_at,
-    }));
-  } catch (err) {
-    console.error("[getConversationHistory] Error:", err);
-    return [];
-  }
 }
 
 async function saveConversation(
-  supabase: any,
+    const methodsBlock = buildStudentPaymentMethodsBlock(mediosPago);
+    return `Tu pago del mes corresponde a la cuota ${next.numeroCuota ?? "?"}, vence el ${formatDateShort(next.fechaVencimiento)} y el valor es ${formatCurrencyCOP(Number(next.monto || 0))}.\n\n${methodsBlock}`;
   phone: string,
   userMessage: string,
   agentResponse: string,
@@ -5221,6 +5241,11 @@ export async function POST(req: NextRequest) {
       excludeUrls: extractSentImageUrlsFromHistory(history),
     });
 
+    // 3. Obtener información de la academia (dirección, redes, contacto)
+    const academy = await getAcademyInfo();
+    const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
+    const mediosPago = await getMediosPago();
+
     // Anular imagen si es el primer mensaje de la conversación (saludo inicial)
     // o si el mensaje original es un saludo / afirmación corta ("si", "ok", "dale", etc.)
     if (mediaSuggestion) {
@@ -5250,7 +5275,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext);
+    const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext, mediosPago);
     if (directStudentResponse) {
       const truncatedResponse = truncateResponse(directStudentResponse, 1000);
 
@@ -5319,11 +5344,6 @@ export async function POST(req: NextRequest) {
       }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
     
-    // 3. Obtener información de la academia (dirección, redes, contacto)
-    const academy = await getAcademyInfo();
-    const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
-    const mediosPago = await getMediosPago();
-
     let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs, mediosPago);
     if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage)) {
       const pendingTopic = inferPendingTopicFromHistory(history);
