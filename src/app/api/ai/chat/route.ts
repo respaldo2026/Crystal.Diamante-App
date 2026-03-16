@@ -1355,7 +1355,11 @@ async function getConversationHistory(
       return [];
     }
 
-    return (data || []).map((row: any) => ({
+    // El query viene descendente (mas nuevo primero), pero el flujo usa history[history.length - 1]
+    // como ultimo turno reciente. Reordenamos a cronologico ascendente.
+    const chronologicalRows = (data || []).slice().reverse();
+
+    return chronologicalRows.map((row: any) => ({
       user: row.user_message,
       agent: stripMediaMarkersForPrompt(row.agent_response || ""),
       agent_raw: row.agent_response || "",
@@ -1843,7 +1847,7 @@ function isShortAffirmativeReply(message: string): boolean {
   if (/^s+i+$/i.test(text)) return true;
   if (/^s+i+p+$/i.test(text)) return true;
 
-  return /^(si|dale|ok|okay|okey|claro|listo|perfecto|de una|por favor|si por favor|claro que si|esta bien|ta bien|todo bien|entendido|clase|ciclo|ambos|los dos)$/i.test(text);
+  return /^(si|dale|ok|okay|okey|claro|listo|perfecto|de una|por favor|porfavor|porfa|porfis|si por favor|si porfavor|claro que si|esta bien|ta bien|todo bien|entendido|clase|ciclo|ambos|los dos)$/i.test(text);
 }
 
 function isNoiseOnlyMessage(message: string): boolean {
