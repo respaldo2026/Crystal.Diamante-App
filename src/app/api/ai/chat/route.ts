@@ -1368,6 +1368,7 @@ async function getConversationHistory(
 }
 
 async function saveConversation(
+  supabase: any,
   phone: string,
   userMessage: string,
   agentResponse: string,
