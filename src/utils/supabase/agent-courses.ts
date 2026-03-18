@@ -348,6 +348,48 @@ export async function getProfileByPhone(rawPhone: string): Promise<{ nombre_comp
   }
 }
 
+/**
+ * Busca contexto completo de estudiante usando el teléfono como llave.
+ * Útil para activar modo soporte incluso cuando el usuario no comparte cédula.
+ */
+export async function getStudentContextByPhone(rawPhone: string): Promise<StudentAgentContext | null> {
+  try {
+    if (!rawPhone || rawPhone === 'unknown') return null
+
+    const supabase = getSupabaseClient()
+    const cleaned = rawPhone.replace(/^ig:/i, '').replace(/\D/g, '')
+    if (cleaned.length < 7) return null
+
+    const candidates: string[] = [cleaned]
+    if (cleaned.startsWith('57') && cleaned.length > 10) {
+      candidates.push(cleaned.slice(2))
+    } else if (!cleaned.startsWith('57') && cleaned.length === 10) {
+      candidates.push(`57${cleaned}`)
+    }
+
+    const { data, error } = await supabase
+      .from('perfiles')
+      .select('identificacion, rol, telefono')
+      .or(candidates.map(c => `telefono.ilike.%${c}%`).join(','))
+      .eq('rol', 'estudiante')
+      .limit(5)
+
+    if (error) {
+      console.error('[getStudentContextByPhone] Error perfiles:', error)
+      return null
+    }
+
+    const profile = (data || []).find((row: any) => String(row?.identificacion || '').trim()) || (data || [])[0]
+    const identification = String(profile?.identificacion || '').trim()
+    if (!identification) return null
+
+    return await getStudentContextByIdentification(identification)
+  } catch (err) {
+    console.error('[getStudentContextByPhone] Error:', err)
+    return null
+  }
+}
+
 export async function getStudentContextByIdentification(rawIdentification: string): Promise<StudentAgentContext | null> {
   try {
     const supabase = getSupabaseClient()

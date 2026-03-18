@@ -19,6 +19,7 @@ import {
   getAcademyInfo,
   getMediosPago,
   getStudentContextByIdentification,
+  getStudentContextByPhone,
   getProfileByPhone
 } from "@/utils/supabase/agent-courses";
 
@@ -1956,6 +1957,18 @@ function isGenericAckAfterReminder(message: string): boolean {
 
 function buildReminderFollowupReply(): string {
   return "¡Gracias por responder! 🙌 Este chat quedó sobre tu recordatorio de pago del mes.\n\n¿Ya realizaste el pago o quieres que te comparta medios de pago y fecha límite?";
+}
+
+function isShortNegativeReply(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  return /^(no|nop|nope|negativo|no\s+gracias|gracias\s+pero\s+no)$/i.test(text);
+}
+
+function buildKnownStudentSupportReply(name: string | null = null): string {
+  const safeName = String(name || '').trim();
+  const lead = safeName ? `¡Hola de nuevo, ${safeName}! 😊` : '¡Hola de nuevo! 😊';
+  return `${lead} Como ya eres estudiante, te ayudo en modo soporte.\n\n¿Necesitas revisar *pagos pendientes*, *próxima clase* o *estado de tus cursos*?`;
 }
 
 function isPaymentAlreadyDoneClaim(message: string): boolean {
@@ -5368,9 +5381,18 @@ export async function POST(req: NextRequest) {
     const programs = await getProgramsForAgent();
 
     const studentIdentification = resolveStudentIdentification(effectiveMessage, history);
-    const studentContext = studentIdentification
+    const studentContextById = studentIdentification
       ? await getStudentContextByIdentification(studentIdentification)
       : null;
+
+    const studentContextByPhone = !studentContextById
+      && phoneProfile?.rol === 'estudiante'
+      && phone
+      && phone !== 'unknown'
+      ? await getStudentContextByPhone(phone)
+      : null;
+
+    const studentContext = studentContextById || studentContextByPhone;
 
     if (studentIdentification && !studentContext && hasStudentAccountIntent(effectiveMessage)) {
       const notFoundResponse = `No encontré una estudiante con identificación ${studentIdentification}. Verifica el número de cédula y me lo vuelves a enviar.`;
@@ -5424,6 +5446,25 @@ export async function POST(req: NextRequest) {
       programId: detectedProgram?.id || null,
       excludeUrls: extractSentImageUrlsFromHistory(history),
     });
+
+    const knownStudentByPhone = Boolean(studentContext || phoneProfile?.rol === 'estudiante');
+    if (knownStudentByPhone && (isPureGreeting(message) || isShortNegativeReply(message))) {
+      const supportReply = buildKnownStudentSupportReply(phoneProfileName || studentContext?.estudianteNombre || null);
+      await persistConversation(message, supportReply);
+
+      const sanitizedResponse = sanitizeForJSON(supportReply);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
+
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      }, null)), commentEvent));
+    }
 
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
