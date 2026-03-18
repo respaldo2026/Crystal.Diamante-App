@@ -74,7 +74,7 @@ import {
   UMBRAL_APROBACION_QUIZ_NOTA,
   UMBRAL_APROBACION_QUIZ_PORCENTAJE,
 } from "@/modules/portal-estudiante/utils";
-import { getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
+import { getPaymentPlan, getPaymentPlanDisplay, normalizeModalidadPago } from "@/types/payment-plans";
 
 const QuizApprovedResult = dynamic(
   () => import("@/modules/portal-estudiante/components/QuizApprovedResult").then((m) => m.QuizApprovedResult),
@@ -874,8 +874,12 @@ export default function PortalEstudiante() {
                     title: 'Plan',
                     render: (_, r: any) => {
                       const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
-                      const plan = getPaymentPlan(matricula?.modalidad_pago);
-                      return <Tag>{plan.label}</Tag>;
+                      const plan = getPaymentPlanDisplay({
+                        modalidadPago: matricula?.modalidad_pago,
+                        valorMensualPlan: matricula?.valor_mensual_plan,
+                        porcentajeProductos: matricula?.porcentaje_productos,
+                      });
+                      return <Tag color={plan.color}>{plan.label}</Tag>;
                     },
                   },
                   { 
@@ -925,8 +929,12 @@ export default function PortalEstudiante() {
                     title: 'Plan',
                     render: (_, r: any) => {
                       const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
-                      const plan = getPaymentPlan(matricula?.modalidad_pago);
-                      return <Tag>{plan.label}</Tag>;
+                      const plan = getPaymentPlanDisplay({
+                        modalidadPago: matricula?.modalidad_pago,
+                        valorMensualPlan: matricula?.valor_mensual_plan,
+                        porcentajeProductos: matricula?.porcentaje_productos,
+                      });
+                      return <Tag color={plan.color}>{plan.label}</Tag>;
                     },
                   },
                   { title: 'Fecha', dataIndex: 'fecha_pago', render: (d) => d ? dayjs(d).format("DD/MM/YYYY") : '-' },

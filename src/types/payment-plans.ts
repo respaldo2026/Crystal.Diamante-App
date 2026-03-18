@@ -98,3 +98,80 @@ export function getMontoMensualByPlan(value?: string | null): number {
 export function getMontoPorClaseByPlan(value?: string | null): number {
   return getPaymentPlan(value).montoPorClase;
 }
+
+function isFinitePositiveNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function inferMensualModalidadByMonto(montoMensual: number): ModalidadPago | null {
+  if (!isFinitePositiveNumber(montoMensual)) return null;
+
+  const monto70 = PLANES_PAGO.MENSUAL_70.montoMensual;
+  const monto100 = PLANES_PAGO.MENSUAL_100.montoMensual;
+  const diff70 = Math.abs(montoMensual - monto70);
+  const diff100 = Math.abs(montoMensual - monto100);
+
+  if (diff70 === diff100) return null;
+  return diff70 < diff100 ? "MENSUAL_70" : "MENSUAL_100";
+}
+
+type PaymentPlanDisplayInput = {
+  modalidadPago?: string | null;
+  valorMensualPlan?: number | null;
+  montoPorClase?: number | null;
+  porcentajeProductos?: number | null;
+};
+
+type PaymentPlanDisplay = {
+  modalidad: ModalidadPago;
+  color: "orange" | "green" | "blue";
+  label: string;
+  detail: string;
+  montoMensual: number;
+  montoPorClase: number;
+};
+
+export function getPaymentPlanDisplay(input: PaymentPlanDisplayInput): PaymentPlanDisplay {
+  const modalidadBase = normalizeModalidadPago(input.modalidadPago);
+
+  if (modalidadBase === "POR_CLASE") {
+    const plan = PLANES_PAGO.POR_CLASE;
+    const montoPorClase = Number(input.montoPorClase ?? plan.montoPorClase ?? 0);
+    return {
+      modalidad: "POR_CLASE",
+      color: "orange",
+      label: plan.label,
+      detail: `$${montoPorClase.toLocaleString()} c/u`,
+      montoMensual: 0,
+      montoPorClase,
+    };
+  }
+
+  const montoMensualRaw = Number(input.valorMensualPlan ?? 0);
+  const montoMensual = isFinitePositiveNumber(montoMensualRaw)
+    ? montoMensualRaw
+    : getPaymentPlan(modalidadBase).montoMensual;
+
+  const porcentaje = Number(input.porcentajeProductos ?? 0);
+  let modalidadFinal: ModalidadPago = modalidadBase;
+
+  if (porcentaje === 100) modalidadFinal = "MENSUAL_100";
+  else if (porcentaje === 70) modalidadFinal = "MENSUAL_70";
+  else {
+    const modalidadInferida = inferMensualModalidadByMonto(montoMensual);
+    if (modalidadInferida && modalidadInferida !== "POR_CLASE") {
+      modalidadFinal = modalidadInferida;
+    }
+  }
+
+  const plan = getPaymentPlan(modalidadFinal);
+
+  return {
+    modalidad: modalidadFinal,
+    color: modalidadFinal === "MENSUAL_100" ? "green" : "blue",
+    label: plan.label,
+    detail: `$${montoMensual.toLocaleString()}/mes`,
+    montoMensual,
+    montoPorClase: 0,
+  };
+}

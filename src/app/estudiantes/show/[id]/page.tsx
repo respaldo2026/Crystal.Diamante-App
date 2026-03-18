@@ -55,7 +55,7 @@ import { obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
-import { getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
+import { getPaymentPlan, getPaymentPlanDisplay, normalizeModalidadPago } from "@/types/payment-plans";
 
 type Matricula = {
   id: number;
@@ -87,6 +87,9 @@ type Pago = {
   numero_cuota?: number | null;
   matricula_id: number | null;
   matriculas: {
+    modalidad_pago?: string | null;
+    valor_mensual_plan?: number | null;
+    porcentaje_productos?: number | null;
     cursos: {
       nombre: string | null;
     } | null;
@@ -364,7 +367,7 @@ export default function StudentDetailView() {
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
         .select(
-          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
         )
         .eq("estudiante_id", idEstudiante)
         .order("matricula_id", { ascending: true })
@@ -381,7 +384,7 @@ export default function StudentDetailView() {
         const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
           .from("pagos")
           .select(
-            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
           )
           .in("matricula_id", matriculaIds)
           .order("matricula_id", { ascending: true })
@@ -679,11 +682,12 @@ export default function StudentDetailView() {
         title: "Plan de Pago",
         key: "plan",
         render: (_: any, record: any) => {
-          const plan = getPaymentPlan(record?.modalidad_pago);
-          if (plan.modalidad === "POR_CLASE") {
-            return <Tag color="orange">{`${plan.label} · $${plan.montoPorClase.toLocaleString()} c/u`}</Tag>;
-          }
-          return <Tag color="blue">{`${plan.label} · $${plan.montoMensual.toLocaleString()}/mes`}</Tag>;
+          const plan = getPaymentPlanDisplay({
+            modalidadPago: record?.modalidad_pago,
+            valorMensualPlan: record?.valor_mensual_plan,
+            porcentajeProductos: record?.porcentaje_productos,
+          });
+          return <Tag color={plan.color}>{`${plan.label} · ${plan.detail}`}</Tag>;
         },
       },
       {
@@ -725,11 +729,12 @@ export default function StudentDetailView() {
         title: "Modalidad",
         key: "modalidad",
         render: (_: any, record: any) => {
-          const plan = getPaymentPlan(record?.modalidad_pago);
-          if (plan.modalidad === "POR_CLASE") {
-            return <Tag color="orange">{`${plan.label} · $${plan.montoPorClase.toLocaleString()} c/u`}</Tag>;
-          }
-          return <Tag color="blue">{`${plan.label} · $${plan.montoMensual.toLocaleString()}/mes`}</Tag>;
+          const plan = getPaymentPlanDisplay({
+            modalidadPago: record?.modalidad_pago,
+            valorMensualPlan: record?.valor_mensual_plan,
+            porcentajeProductos: record?.porcentaje_productos,
+          });
+          return <Tag color={plan.color}>{`${plan.label} · ${plan.detail}`}</Tag>;
         },
       },
       {
@@ -887,11 +892,12 @@ export default function StudentDetailView() {
         title: "Plan",
         key: "plan",
         render: (_: any, record: any) => {
-          const plan = getPaymentPlan(record?.matriculas?.modalidad_pago);
-          if (plan.modalidad === "POR_CLASE") {
-            return <Tag color="orange">{`${plan.label} · $${plan.montoPorClase.toLocaleString()} c/u`}</Tag>;
-          }
-          return <Tag color="blue">{`${plan.label} · $${plan.montoMensual.toLocaleString()}/mes`}</Tag>;
+          const plan = getPaymentPlanDisplay({
+            modalidadPago: record?.matriculas?.modalidad_pago,
+            valorMensualPlan: record?.matriculas?.valor_mensual_plan,
+            porcentajeProductos: record?.matriculas?.porcentaje_productos,
+          });
+          return <Tag color={plan.color}>{`${plan.label} · ${plan.detail}`}</Tag>;
         },
       },
       {
