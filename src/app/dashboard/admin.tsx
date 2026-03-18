@@ -28,8 +28,6 @@ import {
   BarChartOutlined,
   CalendarOutlined,
   CheckCircleOutlined,
-  ClockCircleOutlined,
-  CloseCircleOutlined,
   DollarCircleOutlined,
   RiseOutlined,
   SyncOutlined,
@@ -83,15 +81,15 @@ interface DashboardMetrics {
   tasaMora: number;
 }
 
-type EstadoPagoIntegrante = "al_dia" | "pendiente" | "vencido" | "sin_registro";
+type EstadoPagoIntegrante = "al_dia" | "debe";
 
 interface IntegrantePagoResumen {
   matriculaId: number | string;
   nombre: string;
   estadoPago: EstadoPagoIntegrante;
-  pendientes: number;
-  vencidos: number;
-  pagados: number;
+  cuotasEsperadas: number;
+  cuotasPagadas: number;
+  cuotasDebe: number;
   montoPendiente: number;
 }
 
@@ -100,9 +98,7 @@ interface GrupoPagoResumen {
   nombreGrupo: string;
   integrantes: IntegrantePagoResumen[];
   alDia: number;
-  pendiente: number;
-  vencido: number;
-  sinRegistro: number;
+  deben: number;
 }
 
 const formatCurrency = (value: number) => {
@@ -239,7 +235,7 @@ export default function AdminDashboard() {
           .limit(8),
         supabase
           .from("matriculas")
-          .select("id, curso_id, estudiante_id, estado, perfiles!matriculas_estudiante_id_fkey(nombre_completo), cursos(id, nombre, dias_semana, hora_inicio, hora_fin, programas(nombre))")
+          .select("id, curso_id, estudiante_id, estado, fecha_inicio, valor_mensual_plan, perfiles!matriculas_estudiante_id_fkey(nombre_completo), cursos(id, nombre, dias_semana, hora_inicio, hora_fin, programas(nombre))")
           .in("estado", ["activo", "en curso"])
       ]);
 
@@ -404,6 +400,25 @@ export default function AdminDashboard() {
         return periodo.includes("matric") || periodo.includes("inscrip");
       };
 
+      const extraerNumeroCuota = (pago: any): number | null => {
+        const numero = Number(pago?.numero_cuota);
+        if (Number.isFinite(numero) && numero > 0) return numero;
+        const texto = String(pago?.periodo_pagado || "");
+        const match = texto.match(/\d+/);
+        if (!match?.[0]) return null;
+        const parsed = Number(match[0]);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      };
+
+      const calcularCuotasEsperadas = (fechaInicio: string | null | undefined, hoyRef: dayjs.Dayjs): number => {
+        if (!fechaInicio) return 0;
+        const inicioDia = dayjs(fechaInicio).startOf("day");
+        if (!inicioDia.isValid()) return 0;
+        if (inicioDia.isAfter(hoyRef, "day")) return 0;
+        const mesesTranscurridos = Math.max(hoyRef.diff(inicioDia, "month"), 0);
+        return mesesTranscurridos + 1;
+      };
+
       matriculasActivasDetalle.forEach((matricula: any) => {
         const cursoId = String(matricula?.curso_id || matricula?.cursos?.id || "sin-curso");
         const nombreGrupo = construirNombreGrupo(matricula?.cursos) || "Grupo sin nombre";
@@ -415,68 +430,54 @@ export default function AdminDashboard() {
             nombreGrupo,
             integrantes: [],
             alDia: 0,
-            pendiente: 0,
-            vencido: 0,
-            sinRegistro: 0,
+            deben: 0,
           });
         }
 
         const pagosMat = (pagosPorMatricula.get(String(matricula.id)) || []).filter((pago: any) => !esPagoInscripcion(pago));
-        let pendientes = 0;
-        let vencidos = 0;
-        let pagados = 0;
-        let montoPendiente = 0;
+        const cuotasEsperadas = calcularCuotasEsperadas(matricula?.fecha_inicio, hoyInicioDia);
+
+        const cuotasPagadasSet = new Set<number>();
+        let pagosMensualesPagadosSinNumero = 0;
 
         pagosMat.forEach((pago: any) => {
           const estado = String(pago?.estado || "").toLowerCase();
-          const monto = Number(pago?.monto || 0);
-          const fechaVenc = pago?.fecha_vencimiento ? dayjs(pago.fecha_vencimiento) : null;
-          const esVencido = estado === "vencido" || ((estado === "pendiente" || estado === "en_revision") && !!fechaVenc && fechaVenc.isBefore(hoyInicioDia, "day"));
-
-          if (estado === "pagado") {
-            pagados += 1;
+          if (estado !== "pagado") return;
+          const numeroCuota = extraerNumeroCuota(pago);
+          if (numeroCuota) {
+            cuotasPagadasSet.add(numeroCuota);
             return;
           }
-
-          if (esVencido) {
-            vencidos += 1;
-            montoPendiente += monto;
-            return;
-          }
-
-          if (estado === "pendiente" || estado === "en_revision") {
-            pendientes += 1;
-            montoPendiente += monto;
-          }
+          pagosMensualesPagadosSinNumero += 1;
         });
 
-        let estadoPago: EstadoPagoIntegrante = "sin_registro";
-        if (vencidos > 0) estadoPago = "vencido";
-        else if (pendientes > 0) estadoPago = "pendiente";
-        else if (pagados > 0) estadoPago = "al_dia";
+        const cuotasPagadas = cuotasPagadasSet.size + pagosMensualesPagadosSinNumero;
+        const cuotasDebe = Math.max(cuotasEsperadas - cuotasPagadas, 0);
+
+        const montoMensual = Number(matricula?.valor_mensual_plan || 0);
+        const montoPendiente = Math.max(cuotasDebe, 0) * (Number.isFinite(montoMensual) ? montoMensual : 0);
+
+        const estadoPago: EstadoPagoIntegrante = cuotasDebe > 0 ? "debe" : "al_dia";
 
         const integrante: IntegrantePagoResumen = {
           matriculaId: matricula.id,
           nombre: nombreEstudiante,
           estadoPago,
-          pendientes,
-          vencidos,
-          pagados,
+          cuotasEsperadas,
+          cuotasPagadas,
+          cuotasDebe,
           montoPendiente,
         };
 
         const grupo = gruposMap.get(cursoId)!;
         grupo.integrantes.push(integrante);
         if (estadoPago === "al_dia") grupo.alDia += 1;
-        if (estadoPago === "pendiente") grupo.pendiente += 1;
-        if (estadoPago === "vencido") grupo.vencido += 1;
-        if (estadoPago === "sin_registro") grupo.sinRegistro += 1;
+        if (estadoPago === "debe") grupo.deben += 1;
       });
 
       const gruposResumen = Array.from(gruposMap.values())
         .sort((a, b) => {
-          if (b.vencido !== a.vencido) return b.vencido - a.vencido;
-          if (b.pendiente !== a.pendiente) return b.pendiente - a.pendiente;
+          if (b.deben !== a.deben) return b.deben - a.deben;
           return b.integrantes.length - a.integrantes.length;
         })
         .slice(0, 12);
@@ -867,36 +868,46 @@ export default function AdminDashboard() {
                     >
                       <Space wrap size={[6, 6]} style={{ marginBottom: 10 }}>
                         <Tag color="green">Al día: {grupo.alDia}</Tag>
-                        <Tag color="orange">Pendiente: {grupo.pendiente}</Tag>
-                        <Tag color="red">Vencido: {grupo.vencido}</Tag>
+                        <Tag color="red">Deben: {grupo.deben}</Tag>
                       </Space>
+
+                      <Text strong style={{ fontSize: 12, color: "#389e0d" }}>Al día</Text>
+                      <List
+                        size="small"
+                        dataSource={grupo.integrantes.filter((i) => i.estadoPago === "al_dia")}
+                        locale={{ emptyText: "Sin estudiantes al día" }}
+                        renderItem={(integrante) => (
+                          <List.Item key={`ok-${String(integrante.matriculaId)}`} style={{ paddingLeft: 0, paddingRight: 0 }}>
+                            <Space style={{ width: "100%", justifyContent: "space-between" }} align="start">
+                              <Text strong style={{ fontSize: 13 }}>{integrante.nombre}</Text>
+                              <Tag color="green" icon={<CheckCircleOutlined />}>Al día</Tag>
+                            </Space>
+                          </List.Item>
+                        )}
+                      />
+
+                      <Divider style={{ margin: "10px 0" }} />
+
+                      <Text strong style={{ fontSize: 12, color: "#cf1322" }}>Deben</Text>
 
                       <List
                         size="small"
-                        dataSource={grupo.integrantes}
-                        locale={{ emptyText: "Sin integrantes" }}
+                        dataSource={grupo.integrantes.filter((i) => i.estadoPago === "debe")}
+                        locale={{ emptyText: "Sin estudiantes con deuda" }}
                         renderItem={(integrante) => {
-                          const tagByEstado: Record<EstadoPagoIntegrante, { color: string; icon: React.ReactNode; text: string }> = {
-                            al_dia: { color: "green", icon: <CheckCircleOutlined />, text: "Al día" },
-                            pendiente: { color: "orange", icon: <ClockCircleOutlined />, text: "Pendiente" },
-                            vencido: { color: "red", icon: <CloseCircleOutlined />, text: "Vencido" },
-                            sin_registro: { color: "default", icon: <WarningOutlined />, text: "Sin registro" },
-                          };
-
-                          const visual = tagByEstado[integrante.estadoPago];
-
                           return (
-                            <List.Item key={String(integrante.matriculaId)} style={{ paddingLeft: 0, paddingRight: 0 }}>
+                            <List.Item key={`debe-${String(integrante.matriculaId)}`} style={{ paddingLeft: 0, paddingRight: 0 }}>
                               <Space style={{ width: "100%", justifyContent: "space-between" }} align="start">
                                 <Space direction="vertical" size={0}>
                                   <Text strong style={{ fontSize: 13 }}>{integrante.nombre}</Text>
-                                  {(integrante.pendientes > 0 || integrante.vencidos > 0) && (
-                                    <Text type="secondary" style={{ fontSize: 12 }}>
-                                      Pendiente: {formatCurrency(integrante.montoPendiente)}
-                                    </Text>
-                                  )}
+                                  <Text type="secondary" style={{ fontSize: 12 }}>
+                                    Debe {integrante.cuotasDebe} cuota(s) · Esperadas: {integrante.cuotasEsperadas} · Pagadas: {integrante.cuotasPagadas}
+                                  </Text>
+                                  <Text type="secondary" style={{ fontSize: 12 }}>
+                                    Pendiente: {formatCurrency(integrante.montoPendiente)}
+                                  </Text>
                                 </Space>
-                                <Tag color={visual.color} icon={visual.icon}>{visual.text}</Tag>
+                                <Tag color="red" icon={<WarningOutlined />}>Debe</Tag>
                               </Space>
                             </List.Item>
                           );
