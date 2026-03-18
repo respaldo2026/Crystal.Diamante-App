@@ -847,7 +847,7 @@ export default function AdminDashboard() {
         </Col>
       </Row>
 
-      {(rolActual === "admin" || rolActual === "director") && (
+      {rolActual !== "profesor" && (
         <Card
           style={{ marginTop: 24 }}
           title="Estado de pagos por grupo"
