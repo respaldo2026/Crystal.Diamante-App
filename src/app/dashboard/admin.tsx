@@ -386,7 +386,7 @@ export default function AdminDashboard() {
 
       const cursosOrdenados = ocupaciones.sort((a, b) => b.ocupacion - a.ocupacion).slice(0, 4);
 
-      const hoy = dayjs().startOf("day");
+      const hoyInicioDia = dayjs().startOf("day");
       const pagosPorMatricula = new Map<string, any[]>();
       pagosPorMatriculaData.forEach((p: any) => {
         const key = String(p?.matricula_id || "");
@@ -431,7 +431,7 @@ export default function AdminDashboard() {
           const estado = String(pago?.estado || "").toLowerCase();
           const monto = Number(pago?.monto || 0);
           const fechaVenc = pago?.fecha_vencimiento ? dayjs(pago.fecha_vencimiento) : null;
-          const esVencido = estado === "vencido" || ((estado === "pendiente" || estado === "en_revision") && !!fechaVenc && fechaVenc.isBefore(hoy, "day"));
+          const esVencido = estado === "vencido" || ((estado === "pendiente" || estado === "en_revision") && !!fechaVenc && fechaVenc.isBefore(hoyInicioDia, "day"));
 
           if (estado === "pagado") {
             pagados += 1;
