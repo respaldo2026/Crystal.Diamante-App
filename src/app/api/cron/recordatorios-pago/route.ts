@@ -236,7 +236,7 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
 
     const { data: cuotas, error } = await supabase
       .from('pagos')
-      .select('id, monto, fecha_vencimiento, numero_cuota, estudiante_id, matricula_id')
+      .select('id, estado, monto, fecha_vencimiento, numero_cuota, estudiante_id, matricula_id')
       .eq('estado', 'pendiente')
       .gte('fecha_vencimiento', hoy)
       .lte('fecha_vencimiento', en3Dias);
