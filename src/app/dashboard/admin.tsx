@@ -397,6 +397,13 @@ export default function AdminDashboard() {
 
       const gruposMap = new Map<string, GrupoPagoResumen>();
 
+      const esPagoInscripcion = (pago: any) => {
+        const numeroCuota = Number(pago?.numero_cuota);
+        if (Number.isFinite(numeroCuota) && numeroCuota === 0) return true;
+        const periodo = String(pago?.periodo_pagado || "").toLowerCase();
+        return periodo.includes("matric") || periodo.includes("inscrip");
+      };
+
       matriculasActivasDetalle.forEach((matricula: any) => {
         const cursoId = String(matricula?.curso_id || matricula?.cursos?.id || "sin-curso");
         const nombreGrupo = construirNombreGrupo(matricula?.cursos) || "Grupo sin nombre";
@@ -414,7 +421,7 @@ export default function AdminDashboard() {
           });
         }
 
-        const pagosMat = pagosPorMatricula.get(String(matricula.id)) || [];
+        const pagosMat = (pagosPorMatricula.get(String(matricula.id)) || []).filter((pago: any) => !esPagoInscripcion(pago));
         let pendientes = 0;
         let vencidos = 0;
         let pagados = 0;
