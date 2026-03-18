@@ -235,7 +235,7 @@ export default function AdminDashboard() {
           .limit(8),
         supabase
           .from("matriculas")
-          .select("id, curso_id, estudiante_id, estado, fecha_inicio, valor_mensual_plan, perfiles!matriculas_estudiante_id_fkey(nombre_completo), cursos(id, nombre, dias_semana, hora_inicio, hora_fin, programas(nombre))")
+          .select("id, curso_id, estudiante_id, estado, fecha_inicio, valor_mensual_plan, perfiles!matriculas_estudiante_id_fkey(nombre_completo), cursos(id, nombre, duracion, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion))")
           .in("estado", ["activo", "en curso"])
       ]);
 
@@ -400,6 +400,13 @@ export default function AdminDashboard() {
         return periodo.includes("matric") || periodo.includes("inscrip");
       };
 
+      const parseDuracionMeses = (value?: string | number | null): number => {
+        if (typeof value === "number" && Number.isFinite(value)) return Math.max(Math.trunc(value), 0);
+        const text = String(value || "");
+        const match = text.match(/\d+/);
+        return match ? Math.max(Number(match[0]), 0) : 0;
+      };
+
       const extraerNumeroCuota = (pago: any): number | null => {
         const numero = Number(pago?.numero_cuota);
         if (Number.isFinite(numero) && numero > 0) return numero;
@@ -410,13 +417,18 @@ export default function AdminDashboard() {
         return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
       };
 
-      const calcularCuotasEsperadas = (fechaInicio: string | null | undefined, hoyRef: dayjs.Dayjs): number => {
+      const calcularCuotasEsperadas = (
+        fechaInicio: string | null | undefined,
+        hoyRef: dayjs.Dayjs,
+        totalCuotasCurso: number
+      ): number => {
+        if (totalCuotasCurso <= 0) return 0;
         if (!fechaInicio) return 0;
         const inicioDia = dayjs(fechaInicio).startOf("day");
         if (!inicioDia.isValid()) return 0;
         if (inicioDia.isAfter(hoyRef, "day")) return 0;
         const mesesTranscurridos = Math.max(hoyRef.diff(inicioDia, "month"), 0);
-        return mesesTranscurridos + 1;
+        return Math.min(mesesTranscurridos + 1, totalCuotasCurso);
       };
 
       matriculasActivasDetalle.forEach((matricula: any) => {
@@ -435,7 +447,16 @@ export default function AdminDashboard() {
         }
 
         const pagosMat = (pagosPorMatricula.get(String(matricula.id)) || []).filter((pago: any) => !esPagoInscripcion(pago));
-        const cuotasEsperadas = calcularCuotasEsperadas(matricula?.fecha_inicio, hoyInicioDia);
+        const totalCuotasCurso = parseDuracionMeses(
+          matricula?.cursos?.programas?.duracion ??
+          matricula?.cursos?.duracion
+        );
+
+        const cuotasEsperadas = calcularCuotasEsperadas(
+          matricula?.fecha_inicio,
+          hoyInicioDia,
+          totalCuotasCurso
+        );
 
         const cuotasPagadasSet = new Set<number>();
         let pagosMensualesPagadosSinNumero = 0;
