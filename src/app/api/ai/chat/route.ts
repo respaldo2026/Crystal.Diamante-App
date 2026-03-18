@@ -1384,6 +1384,7 @@ async function getConversationHistory(
   try {
     const { data, error } = await supabase
       .from("agent_conversations")
+      .select("user_message, agent_response, created_at")
       .eq("phone_number", phone)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -2112,6 +2113,17 @@ function buildShortAckContinuationReply(
     const nextStart = formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) || "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
     return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta los pasos para *separar tu cupo*?`;
+  }
+
+  if (/inversion|precio|mensualidad|inscripcion/.test(normalizedPending)) {
+    if (!detectedProgram) {
+      return "¡Claro! 🙌 Te paso el precio exacto enseguida. Solo confírmame el curso y te comparto inscripción y mensualidad.";
+    }
+
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const priceOptions = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+
+    return `Perfecto 👌 Te comparto la inversión de *${detectedProgram.nombre}*:\n\n💰 *Inscripción:* ${priceOptions.inscripcionText}\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que te confirme también los *medios de pago* y *fechas de pago*?`;
   }
 
   if (/referencia|llegar|ubicacion|direccion|maps/.test(normalizedPending)) {
@@ -4287,6 +4299,15 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
 
   if (asksGeneralInfo) {
     // Solo mostrar ficha si fue una solicitud explícita de info general del curso
+    const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : "duración según plan académico");
+    const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+
+    return `✨ *${detectedProgram.nombre}*\n\n✅ Formación práctica desde cero\n⏳ *Duración:* ${duration}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres conocer el precio de la inscripción y mensualidad?`;
+  }
+
+  // Rescate para respuestas cortas tipo "uñas", "cejas", etc. cuando ya se detectó programa.
+  if (intent === "general" && isLikelyProgramOnlyReply(message)) {
     const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : "duración según plan académico");
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
