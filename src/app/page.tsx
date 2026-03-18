@@ -316,7 +316,6 @@ export default function DashboardPage() {
   useEffect(() => {
     if (userLoading) return;
     if (!isAdminRole) return;
-    if (normalizedRole === "secretaria") return;
 
     cargarDashboard();
 
@@ -329,7 +328,7 @@ export default function DashboardPage() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [cargarDashboard, normalizedRole, userLoading]);
+  }, [cargarDashboard, isAdminRole, userLoading]);
 
   if (user && !isAdminRole) {
     return null;
