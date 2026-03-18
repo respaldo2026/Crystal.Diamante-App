@@ -804,7 +804,12 @@ export default function StudentDetailView() {
           fecha_pago: null,
           numero_cuota: i,
           matricula_id: matricula.id,
-          matriculas: { cursos: matricula.cursos },
+          matriculas: {
+            modalidad_pago: matricula?.modalidad_pago ?? null,
+            valor_mensual_plan: matricula?.valor_mensual_plan ?? null,
+            porcentaje_productos: matricula?.porcentaje_productos ?? null,
+            cursos: matricula.cursos,
+          },
           monto: obtenerMensualidad(matricula),
           metodo_pago: null,
           referencia: null,
