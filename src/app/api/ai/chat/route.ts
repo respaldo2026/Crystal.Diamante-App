@@ -1948,6 +1948,21 @@ function hasRecentPaymentReminderContext(history: Array<{ user: string; agent: s
   });
 }
 
+function hasRecentPaymentConfirmedContext(history: Array<{ user: string; agent: string }>): boolean {
+  const recentTurns = (Array.isArray(history) ? history : []).slice(-8);
+
+  const recentText = normalizeForMatch(
+    recentTurns
+      .map((turn) => `${turn?.user || ""} ${turn?.agent || ""}`)
+      .join(" ")
+  );
+
+  if (!recentText) return false;
+
+  // Soporta distintos formatos guardados en historial/UI para la plantilla de pago confirmado.
+  return /\b(pago_recibido_v2|pagorecibidov2|confirmamos\s+que\s+hemos\s+recibido\s+correctamente\s+tu\s+pago|mensaje\s+de\s+plantilla\s+enviado\s*\(\s*pagorecibidov2\s*\)|plantilla\s*:\s*pago_recibido_v2)\b/i.test(recentText);
+}
+
 function isGenericAckAfterReminder(message: string): boolean {
   return isThanksOnlyMessage(message)
     || isPureGreeting(message)
@@ -1958,6 +1973,11 @@ function isGenericAckAfterReminder(message: string): boolean {
 
 function buildReminderFollowupReply(): string {
   return "¡Gracias por responder! 🙌 Este chat quedó sobre tu recordatorio de pago del mes.\n\n¿Ya realizaste el pago o quieres que te comparta medios de pago y fecha límite?";
+}
+
+function buildPostPaymentThanksReply(academy: any | null): string {
+  const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
+  return `¡Con gusto! 😊 Tu pago ya quedó confirmado en el chat.\n\nSi deseas, también te puedo compartir por aquí tus próximos vencimientos o cualquier soporte de tu curso.\n📱 Si necesitas ayuda administrativa adicional: *${admissionsContact}*`;
 }
 
 function isShortNegativeReply(message: string): boolean {
@@ -3766,11 +3786,17 @@ function buildIntentFocusedDirectResponse(
   programs: any[] = [],
   mediosPago: any[] = []
 ): string | null {
+  const hasPaymentConfirmedContext = hasRecentPaymentConfirmedContext(history);
   const hasPaymentReminderContext = hasRecentPaymentReminderContext(history);
+
+  if (hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
+    return buildPostPaymentThanksReply(academy);
+  }
+
   if (hasPaymentReminderContext && isPaymentAlreadyDoneClaim(message)) {
     return buildPaymentAlreadyDoneReply(academy);
   }
-  if (hasPaymentReminderContext && isGenericAckAfterReminder(message)) {
+  if (hasPaymentReminderContext && !hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
     return buildReminderFollowupReply();
   }
 
