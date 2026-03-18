@@ -193,10 +193,11 @@ async function runLiquidacionJob() {
   const periodoTexto = buildPeriodLabel(startISO, endISO);
 
   const { data: sesiones, error: sesionesError } = await supabase
-    .from("sesiones")
-    .select("id, curso_id, horas_dictadas, fecha")
+    .from("sesiones_clase")
+    .select("id, curso_id, profesor_id, horas_dictadas, fecha, estado_pago")
     .gte("fecha", startISO)
-    .lte("fecha", endISO);
+    .lte("fecha", endISO)
+    .eq("estado_pago", "pendiente");
 
   if (sesionesError) {
     throw new Error(`Error consultando sesiones: ${sesionesError.message}`);
@@ -211,24 +212,10 @@ async function runLiquidacionJob() {
     };
   }
 
-  const cursosIds = Array.from(new Set(sesiones.map((item: any) => String(item.curso_id || "")).filter(Boolean)));
-
-  const { data: cursos, error: cursosError } = await supabase
-    .from("cursos")
-    .select("id, profesor_id, valor_hora")
-    .in("id", cursosIds);
-
-  if (cursosError) {
-    throw new Error(`Error consultando cursos: ${cursosError.message}`);
-  }
-
-  const cursoById = new Map<string, any>();
   const profesoresIdsSet = new Set<string>();
-  (cursos || []).forEach((curso: any) => {
-    const courseId = String(curso?.id || "");
-    const profesorId = String(curso?.profesor_id || "");
-    if (!courseId || !profesorId) return;
-    cursoById.set(courseId, curso);
+  (sesiones || []).forEach((sesion: any) => {
+    const profesorId = String(sesion?.profesor_id || "");
+    if (!profesorId) return;
     profesoresIdsSet.add(profesorId);
   });
 
@@ -260,19 +247,17 @@ async function runLiquidacionJob() {
   const resumenByProfesor = new Map<string, ResumenProfesor>();
 
   (sesiones || []).forEach((sesion: any) => {
-    const curso = cursoById.get(String(sesion?.curso_id || ""));
-    if (!curso?.profesor_id) return;
+    const profesorId = String(sesion?.profesor_id || "");
+    if (!profesorId) return;
 
-    const profesorId = String(curso.profesor_id);
     const perfil = perfilById.get(profesorId);
     if (!perfil) return;
 
     const horas = Number(sesion?.horas_dictadas || 0);
     if (!Number.isFinite(horas) || horas <= 0) return;
 
-    const valorHoraCurso = Number(curso?.valor_hora || 0);
     const valorHoraPerfil = Number(perfil?.valor_hora || 0);
-    const valorHora = valorHoraCurso > 0 ? valorHoraCurso : valueOrZero(valorHoraPerfil);
+    const valorHora = valueOrZero(valorHoraPerfil);
 
     const current = resumenByProfesor.get(profesorId) || {
       profesorId,
