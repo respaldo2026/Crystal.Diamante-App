@@ -1958,6 +1958,18 @@ function buildReminderFollowupReply(): string {
   return "¡Gracias por responder! 🙌 Este chat quedó sobre tu recordatorio de pago del mes.\n\n¿Ya realizaste el pago o quieres que te comparta medios de pago y fecha límite?";
 }
 
+function isPaymentAlreadyDoneClaim(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(ya\s+pague|ya\s+pago|ya\s+esta\s+paga|ya\s+esta\s+pagado|ya\s+quedo\s+pagado|ya\s+cancele|ya\s+realice\s+el\s+pago|ya\s+hice\s+el\s+pago|pago\s+realizado|pago\s+hecho|ya\s+envi[eé]\s+el\s+comprobante|ya\s+mande\s+el\s+comprobante|ya\s+mand[eé]\s+lo\s+de\s+la\s+mensualidad)\b/i.test(text);
+}
+
+function buildPaymentAlreadyDoneReply(academy: any | null): string {
+  const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
+  return `¡Gracias por avisarme y disculpa la molestia! 🙏\n\nSi ya realizaste el pago, te ayudo a dejarlo validado: envía (o reenvía) el comprobante a *Admisiones* para actualizar tu estado cuanto antes.\n📱 *${admissionsContact}*\n\nSi ya lo enviaste, no te preocupes: en breve te confirman la aplicación del pago.`;
+}
+
 function isOnlyScheduleConfirmationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
@@ -3730,6 +3742,9 @@ function buildIntentFocusedDirectResponse(
   mediosPago: any[] = []
 ): string | null {
   const hasPaymentReminderContext = hasRecentPaymentReminderContext(history);
+  if (hasPaymentReminderContext && isPaymentAlreadyDoneClaim(message)) {
+    return buildPaymentAlreadyDoneReply(academy);
+  }
   if (hasPaymentReminderContext && isGenericAckAfterReminder(message)) {
     return buildReminderFollowupReply();
   }
