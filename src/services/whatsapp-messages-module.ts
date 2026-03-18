@@ -421,18 +421,45 @@ export async function enviarConfirmacionPago(
 ): Promise<ResultadoEnvio> {
   console.log(`[WhatsApp] Enviando confirmación pago a ${datos.nombre}`);
 
-  return enviarMensajeConPlantilla(
+  // Template aprobado en Meta: pago_recibido_v2 (es_CO)
+  // Texto: "Hola {{1}}, Te confirmamos que hemos recibido correctamente tu pago de {{2}}
+  //         correspondiente a {{3}}. Referencia: {{4}} Muchas gracias por tu confianza."
+  // Variables en orden exacto: {{1}}=nombre, {{2}}=monto, {{3}}=periodo, {{4}}=referencia
+  const TEMPLATE_NAME = 'pago_recibido_v2';
+  const montoFormateado = `$${Number(datos.monto).toLocaleString('es-CO')}`;
+  const periodo = datos.concepto || `Pago ${datos.nombreCurso}`;
+
+  const resultado = await enviarMensajeConPlantilla(
     datos.telefono,
-    'pago_recibido_v2',
+    TEMPLATE_NAME,
     {
-      nombre: datos.nombre,
-      monto: datos.monto,
-      nombreCurso: datos.nombreCurso,
-      referenciaPago: datos.referenciaPago,
+      nombre: datos.nombre,         // {{1}}
+      monto: montoFormateado,       // {{2}}
+      periodo,                       // {{3}}
+      referencia: datos.referenciaPago || datos.nombreCurso, // {{4}}
     },
     usuarioId,
     { tipo_evento: 'pago_recibido', monto: datos.monto }
   );
+
+  // Fallback de texto si el template falla (ej. calidad pendiente, número no en ventana 24h)
+  if (!resultado.exito) {
+    console.warn(`[WhatsApp] Template ${TEMPLATE_NAME} falló (${resultado.error}), usando fallback texto`);
+    const mensajeFallback =
+      `Hola ${datos.nombre}, te confirmamos que hemos recibido correctamente tu pago de ` +
+      `${montoFormateado} correspondiente a ${periodo}. ` +
+      `Referencia: ${datos.referenciaPago || datos.nombreCurso}. ` +
+      `Muchas gracias por tu confianza.`;
+    return enviarMensajeTexto(
+      datos.telefono,
+      `${TEMPLATE_NAME}_fallback`,
+      mensajeFallback,
+      usuarioId,
+      { tipo_evento: 'pago_recibido', monto: datos.monto, fallback: true }
+    );
+  }
+
+  return resultado;
 }
 
 /**
