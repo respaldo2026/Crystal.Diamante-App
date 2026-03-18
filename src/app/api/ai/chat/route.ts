@@ -4847,6 +4847,21 @@ function resolveProgramFromContext(
     );
 
   if (!isLikelyFollowUp || !conversationHistory.length) {
+    // Rescate de hilo: cuando el agente preguntó "¿en qué curso estás interesad@?"
+    // y el usuario responde corto (ej: "uñas y pies"), tratarlo como selección de curso.
+    const lastAgent = String(conversationHistory[conversationHistory.length - 1]?.agent || "");
+    const askedForCourse = /\b(en\s+cual\s+curso|que\s+curso|curso\s+te\s+interesa|cual\s+curso\s+te\s+interesa)\b/i.test(
+      normalizeForMatch(lastAgent)
+    );
+
+    if (askedForCourse) {
+      const aliasedFromShortReply = resolveProgramAliasFromMessage(userMessage, programs);
+      if (aliasedFromShortReply) return aliasedFromShortReply;
+
+      const fuzzyFromShortReply = findProgramMatchByTopic(userMessage, programs);
+      if (fuzzyFromShortReply) return fuzzyFromShortReply;
+    }
+
     return null;
   }
 
@@ -4894,9 +4909,10 @@ function resolveProgramAliasFromMessage(userMessage: string, programs: any[]): a
 
   const normalized = normalizeForMatch(userMessage);
   const asksNailProgram =
-    /\b(manicura|manicuria|maniura|manicure|pedicura|pedicure|pedi\s*spa|pedispa|nail|nails|unas\s+acrilicas|curso\s+de\s+unas)\b/i.test(normalized)
-    || /\buñ(?:as|s)\b/i.test(raw)
-    || /\buñas\b/i.test(raw);
+    /\b(manicura|manicuria|maniura|manicure|pedicura|pedicure|pedi\s*spa|pedispa|nail|nails|unas\s+acrilicas|curso\s+de\s+unas|unas|pies)\b/i.test(normalized)
+    || /(?:^|\s)uñ(?:as|s)(?:\s|$)/i.test(raw)
+    || /(?:^|\s)uñas(?:\s|$)/i.test(raw)
+    || /(?:^|\s)unas(?:\s+y\s+pies)?(?:\s|$)/i.test(normalized);
 
   if (!asksNailProgram) return null;
   return findNailsProgram(programs);
