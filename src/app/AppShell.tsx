@@ -1091,7 +1091,7 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
                 Title={({ collapsed }) => (
                   <ThemedTitle
                     collapsed={collapsed}
-                    text={brandingName}
+                    text=""
                     icon={
                       brandingLogo ? (
                         <Image
