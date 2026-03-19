@@ -1992,6 +1992,12 @@ function buildKnownStudentSupportReply(name: string | null = null): string {
   return `${lead} Como ya eres estudiante, te ayudo en modo soporte.\n\n¿Necesitas revisar *pagos pendientes*, *próxima clase* o *estado de tus cursos*?`;
 }
 
+function buildKnownTeacherSupportReply(name: string | null = null): string {
+  const safeName = String(name || '').trim();
+  const lead = safeName ? `¡Hola profe ${safeName}! 😊` : '¡Hola profe! 😊';
+  return `${lead} Ya te tengo identificada como docente y te atiendo en modo soporte.\n\n¿Te ayudo con *clase de hoy/próxima clase*, *liquidación/pago de quincena* o *novedades de tus grupos*?`;
+}
+
 function isPaymentAlreadyDoneClaim(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
@@ -4982,7 +4988,8 @@ function buildContextualDirective(
   userMessage: string,
   detectedProgram: any | null,
   courses: any[],
-  history: Array<{ user: string; agent: string }> = []
+  history: Array<{ user: string; agent: string }> = [],
+  phoneProfileRol: string | null = null
 ): string {
   const intent = detectUserIntent(userMessage);
   const materialsScope = intent === "materiales" ? detectMaterialsScope(userMessage) : "general";
@@ -5008,7 +5015,9 @@ function buildContextualDirective(
   const normalizedRecentHistory = normalizeForMatch(
     (Array.isArray(history) ? history : []).slice(-8).map((h) => `${h?.user || ""} ${h?.agent || ""}`).join(" ")
   );
-  const isTeacherSupport = /\b(profesora|profesor|docente|maestra|soy\s+profesor|soy\s+profe|mis\s+clases|mi\s+pago\s+quincena|quincena)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
+  const normalizedPhoneRole = normalizeForMatch(phoneProfileRol || "");
+  const teacherRoleByPhone = /^(profesor|profesora|docente|maestra)$/i.test(normalizedPhoneRole);
+  const isTeacherSupport = teacherRoleByPhone || /\b(profesora|profesor|docente|maestra|soy\s+profesor|soy\s+profe|mis\s+clases|mi\s+pago\s+quincena|quincena)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
   const isStudentSupport = /\b(estudiante|alumna|alumno|estoy\s+estudiando|tengo\s+clase\s+hoy|hay\s+clase\s+hoy|kit|materiales\s+de\s+la\s+clase|mis\s+cursos|proxima\s+clase|proximo\s+pago)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
 
   const roleSupportRule = isTeacherSupport
@@ -5513,6 +5522,32 @@ export async function POST(req: NextRequest) {
       }, null)), commentEvent));
     }
 
+    const knownTeacherByPhone = phoneProfile?.rol === 'profesor';
+    const teacherNeedsSupportReply = knownTeacherByPhone
+      && (isPureGreeting(message)
+        || isShortNegativeReply(message)
+        || isThanksOnlyMessage(message)
+        || isNeutralAcknowledgement(message)
+        || isNoiseOnlyMessage(message));
+
+    if (teacherNeedsSupportReply) {
+      const supportReply = buildKnownTeacherSupportReply(phoneProfileName);
+      await persistConversation(message, supportReply);
+
+      const sanitizedResponse = sanitizeForJSON(supportReply);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
+
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      }, null)), commentEvent));
+    }
+
     // 3. Obtener información de la academia (dirección, redes, contacto)
     const academy = await getAcademyInfo();
     const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
@@ -5721,7 +5756,7 @@ export async function POST(req: NextRequest) {
       ? 'Existe contexto de estudiante validado por identificación. Prioriza responder con sus cursos inscritos, su próxima clase y su estado real de pagos antes de información general.'
       : '';
     const contextualDirective = [
-      buildContextualDirective(effectiveMessage, detectedProgram, courses, history),
+      buildContextualDirective(effectiveMessage, detectedProgram, courses, history, phoneProfile?.rol || null),
       buildNameSafetyDirective(preferredStudentName, profileName || null, channel, phoneProfileName, phoneProfile?.rol || null),
       buildUpcomingStartDirective(detectedProgram, courses),
       studentDirective,
