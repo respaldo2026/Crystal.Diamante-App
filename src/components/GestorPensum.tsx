@@ -280,6 +280,7 @@ export default function GestorPensum({
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace' | 'iframe'>('archivo');
   const [mostrarListaCompletaCiclo, setMostrarListaCompletaCiclo] = useState(false);
   const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
+  const [filtroCoberturaMateriales, setFiltroCoberturaMateriales] = useState<"todos" | "NINGUNO" | "MENSUAL_70" | "MENSUAL_100">("todos");
   const [mostrarTablaMaestraClases, setMostrarTablaMaestraClases] = useState(false);
   const [vistaCicloActiva, setVistaCicloActiva] = useState<"temas" | "material" | "necesarios" | "quiz">("temas");
   const [filtroTemas, setFiltroTemas] = useState<"todos" | "pendientes" | "completos">("todos");
@@ -1546,6 +1547,13 @@ export default function GestorPensum({
       .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
   }, [materialesCicloGeneral, selectedCicloId]);
 
+  const materialesCicloFiltrados = useMemo(() => {
+    if (filtroCoberturaMateriales === "todos") return materialesCicloGeneralOrdenados;
+    return materialesCicloGeneralOrdenados.filter(
+      (material) => normalizeMaterialCoverage(material.cobertura_material, material.incluido_kit) === filtroCoberturaMateriales,
+    );
+  }, [filtroCoberturaMateriales, materialesCicloGeneralOrdenados]);
+
   const materialesClaseCiclo = useMemo(() => {
     return materialesClase.filter((material) => material.pensum_id === selectedCicloId);
   }, [materialesClase, selectedCicloId]);
@@ -2258,6 +2266,28 @@ export default function GestorPensum({
               style={{ marginBottom: 16 }}
               extra={(
                 <Space wrap>
+                  <Radio.Group
+                    size="small"
+                    value={filtroCoberturaMateriales}
+                    onChange={(e) => setFiltroCoberturaMateriales(e.target.value)}
+                    optionType="button"
+                    buttonStyle="solid"
+                    options={[
+                      { label: `Todos (${materialesCicloGeneralOrdenados.length})`, value: "todos" },
+                      {
+                        label: `Lo trae (${materialesCicloGeneralOrdenados.filter((item) => normalizeMaterialCoverage(item.cobertura_material, item.incluido_kit) === "NINGUNO").length})`,
+                        value: "NINGUNO",
+                      },
+                      {
+                        label: `Plan base (${materialesCicloGeneralOrdenados.filter((item) => normalizeMaterialCoverage(item.cobertura_material, item.incluido_kit) === "MENSUAL_70").length})`,
+                        value: "MENSUAL_70",
+                      },
+                      {
+                        label: `Plan 100 (${materialesCicloGeneralOrdenados.filter((item) => normalizeMaterialCoverage(item.cobertura_material, item.incluido_kit) === "MENSUAL_100").length})`,
+                        value: "MENSUAL_100",
+                      },
+                    ]}
+                  />
                   <Button
                     onClick={() => setMostrarListaCompletaCiclo((prev) => !prev)}
                   >
@@ -2275,7 +2305,7 @@ export default function GestorPensum({
                 </Space>
               )}
             >
-              {materialesCicloGeneralOrdenados.length === 0 ? (
+              {materialesCicloFiltrados.length === 0 ? (
                 <Text type="secondary">No hay materiales generales registrados en este ciclo.</Text>
               ) : (
                 <Table
@@ -2283,7 +2313,7 @@ export default function GestorPensum({
                   loading={loadingMaterialesCiclo}
                   pagination={mostrarListaCompletaCiclo ? false : { pageSize: 8, hideOnSinglePage: true }}
                   rowKey={(record) => String(record?.id || record?.nombre)}
-                  dataSource={materialesCicloGeneralOrdenados}
+                  dataSource={materialesCicloFiltrados}
                   columns={[
                     {
                       title: "Producto",

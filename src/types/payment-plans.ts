@@ -130,8 +130,8 @@ export function getMaterialCoverageRuleDisplay(
     return {
       coverage,
       color: "green",
-      label: "Solo incluido en Mensual 100",
-      shortLabel: "Solo Plan 100",
+      label: "Exclusivo de Mensual 100",
+      shortLabel: "Plan 100",
       description: "Este material solo se incluye en el plan Mensual 100.",
     };
   }
@@ -141,7 +141,7 @@ export function getMaterialCoverageRuleDisplay(
       coverage,
       color: "blue",
       label: "Incluido desde Mensual 70",
-      shortLabel: "Desde 70%",
+      shortLabel: "Plan base",
       description: "Este material se incluye en los planes Mensual 70 y Mensual 100.",
     };
   }
@@ -150,7 +150,7 @@ export function getMaterialCoverageRuleDisplay(
     coverage,
     color: "default",
     label: "No incluido en mensualidad",
-    shortLabel: "No incluido",
+    shortLabel: "Lo trae",
     description: "Este material no está incluido en ningún plan mensual.",
   };
 }
@@ -201,8 +201,8 @@ export function getMaterialCoverageDisplay(
       coverage,
       status: "not_included",
       color: "default",
-      label: "No incluido en tu plan",
-      shortLabel: "No incluido",
+      label: "Debes traerlo",
+      shortLabel: "Traer",
       description: "Debes traer este material por tu cuenta.",
       isIncluded: false,
     };
@@ -225,7 +225,7 @@ export function getMaterialCoverageDisplay(
       coverage,
       status: "upgrade_required",
       color: "gold",
-      label: "Disponible solo en Plan 100",
+      label: "Requiere Plan 100",
       shortLabel: "Solo Plan 100",
       description: "Para recibir este material debes tener el plan Mensual 100.",
       isIncluded: false,
@@ -236,8 +236,8 @@ export function getMaterialCoverageDisplay(
     coverage,
     status: "upgrade_required",
     color: "gold",
-    label: "Disponible desde Mensual 70",
-    shortLabel: "Desde 70%",
+    label: "Requiere plan mensual",
+    shortLabel: "Plan mensual",
     description: "Este material está incluido en los planes Mensual 70 y Mensual 100.",
     isIncluded: false,
   };

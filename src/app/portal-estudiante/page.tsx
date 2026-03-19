@@ -1008,10 +1008,10 @@ export default function PortalEstudiante() {
 
     const resumenPlanMateriales =
       modalidadMateriales === "POR_CLASE"
-        ? "Tu plan no incluye materiales. Verás qué insumos debes traer y cuáles estarían cubiertos por planes mensuales."
+        ? "Tu plan no incluye materiales. Aquí verás claramente cuáles debes traer y cuáles solo vienen en planes mensuales."
         : modalidadMateriales === "MENSUAL_100"
-          ? "Tu plan cubre todos los materiales marcados para Mensual 70 y los exclusivos de Mensual 100."
-          : "Tu plan cubre los materiales base marcados como incluidos. Los marcados como 'Solo Plan 100' requieren un plan superior.";
+          ? "Tu plan cubre los materiales base y también los materiales exclusivos del Plan 100."
+          : "Tu plan cubre los materiales base. Los marcados como 'Solo Plan 100' no están incluidos en tu mensualidad actual.";
 
     const renderCoverageTagForStudent = (materialRef: any, compact = false) => {
       const display = getMaterialCoverageDisplay({
@@ -1021,10 +1021,39 @@ export default function PortalEstudiante() {
         incluidoKit: materialRef?.incluido_kit ?? materialRef?.materiales_ciclo?.incluido_kit,
       });
 
+      const visualByStatus = {
+        included: {
+          background: "#ecfdf3",
+          borderColor: "#86efac",
+          color: "#166534",
+        },
+        upgrade_required: {
+          background: "#fffbeb",
+          borderColor: "#fcd34d",
+          color: "#92400e",
+        },
+        not_included: {
+          background: "#f8fafc",
+          borderColor: "#cbd5e1",
+          color: "#475569",
+        },
+      } as const;
+
+      const visual = visualByStatus[display.status];
+
       return (
         <Tag
           color={display.color}
-          style={compact ? { fontSize: 11, padding: "0 5px", marginInlineEnd: 0 } : undefined}
+          style={{
+            fontSize: compact ? 11 : 12,
+            padding: compact ? "0 5px" : "2px 8px",
+            marginInlineEnd: 0,
+            borderRadius: 999,
+            fontWeight: 600,
+            borderColor: visual.borderColor,
+            color: visual.color,
+            background: visual.background,
+          }}
         >
           {compact ? display.shortLabel : display.label}
         </Tag>
@@ -1075,18 +1104,35 @@ export default function PortalEstudiante() {
         </Space>
 
         {vista !== "plan" ? (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message={
-              <Space wrap>
-                <span>Tu cobertura de materiales</span>
-                <Tag color={planMateriales.color}>{planMateriales.label}</Tag>
-              </Space>
-            }
-            description={resumenPlanMateriales}
-          />
+          <div style={{ marginBottom: 16 }}>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 10 }}
+              message={
+                <Space wrap>
+                  <span>Tu cobertura de materiales</span>
+                  <Tag color={planMateriales.color}>{planMateriales.label}</Tag>
+                </Space>
+              }
+              description={resumenPlanMateriales}
+            />
+
+            <Space wrap size={[8, 8]}>
+              <Tag style={{ borderRadius: 999, padding: "2px 8px", fontWeight: 600, borderColor: "#86efac", color: "#166534", background: "#ecfdf3" }}>
+                Incluido
+              </Tag>
+              <Text type="secondary" style={{ fontSize: 12 }}>Lo recibes con tu plan actual</Text>
+              <Tag style={{ borderRadius: 999, padding: "2px 8px", fontWeight: 600, borderColor: "#fcd34d", color: "#92400e", background: "#fffbeb" }}>
+                Plan mensual / Solo Plan 100
+              </Tag>
+              <Text type="secondary" style={{ fontSize: 12 }}>Requiere una cobertura superior</Text>
+              <Tag style={{ borderRadius: 999, padding: "2px 8px", fontWeight: 600, borderColor: "#cbd5e1", color: "#475569", background: "#f8fafc" }}>
+                Traer
+              </Tag>
+              <Text type="secondary" style={{ fontSize: 12 }}>Debes llevarlo por tu cuenta</Text>
+            </Space>
+          </div>
         ) : null}
 
         <Collapse
