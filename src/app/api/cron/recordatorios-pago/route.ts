@@ -149,10 +149,15 @@ async function hasRecentReminderForPhone(supabase: any, phone: string, hours: nu
 }
 
 // Función para enviar WhatsApp usando plantilla aprobada por Meta
-async function enviarWhatsAppDirecto(telefono: string, nombre: string, monto: string, fecha: string, curso: string, modalidad: string) {
-  const mensajeModalidad = modalidad === 'POR_CLASE'
-    ? 'Este recordatorio corresponde a clases asistidas pendientes de pago.'
-    : 'Te recordamos que tu mensualidad está próxima a vencer.';
+async function enviarWhatsAppDirecto(telefono: string, nombre: string, monto: string, fecha: string, curso: string, modalidad: string, esVencido?: boolean) {
+  let mensajeModalidad: string;
+  if (modalidad === 'POR_CLASE') {
+    mensajeModalidad = esVencido
+      ? `Tienes una clase sin pagar que venció el ${fecha}. Por favor regulariza tu pago para continuar asistiendo.`
+      : `Este recordatorio corresponde a clases asistidas pendientes de pago (vence el ${fecha}).`;
+  } else {
+    mensajeModalidad = 'Te recordamos que tu mensualidad está próxima a vencer.';
+  }
 
   const mensaje = `Hola ${nombre} 👋
 
@@ -234,16 +239,34 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
     const hoy = new Date().toISOString().split('T')[0];
     const en3Dias = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const { data: cuotas, error } = await supabase
-      .from('pagos')
-      .select('id, estado, monto, fecha_vencimiento, numero_cuota, estudiante_id, matricula_id')
-      .eq('estado', 'pendiente')
-      .gte('fecha_vencimiento', hoy)
-      .lte('fecha_vencimiento', en3Dias);
+    const [{ data: cuotasProximas, error }, { data: cuotasPorClaseVencidas }] = await Promise.all([
+      // 1. Cuotas próximas a vencer (todos los planes)
+      supabase
+        .from('pagos')
+        .select('id, estado, monto, fecha_vencimiento, numero_cuota, estudiante_id, matricula_id')
+        .eq('estado', 'pendiente')
+        .gte('fecha_vencimiento', hoy)
+        .lte('fecha_vencimiento', en3Dias),
+      // 2. Cobros por clase ya vencidos (>7 días sin pagar)
+      supabase
+        .from('pagos')
+        .select('id, estado, monto, fecha_vencimiento, numero_cuota, estudiante_id, matricula_id')
+        .in('estado', ['pendiente', 'vencido'])
+        .eq('tipo_cuota', 'por_clase')
+        .lt('fecha_vencimiento', hoy),
+    ]);
 
     if (error) {
       console.error('[Recordatorio] Error en query pagos:', error);
       throw error;
+    }
+
+    // Deduplicar — priorizar cuotasProximas
+    const seenIds = new Set<string>();
+    const cuotas: any[] = [];
+    for (const c of (cuotasProximas || [])) { seenIds.add(String(c.id)); cuotas.push(c); }
+    for (const c of (cuotasPorClaseVencidas || [])) {
+      if (!seenIds.has(String(c.id))) { seenIds.add(String(c.id)); cuotas.push(c); }
     }
 
     if (!cuotas || cuotas.length === 0) {
@@ -373,6 +396,7 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
 
         const monto = `$${montoNumero.toLocaleString('es-CO')}`;
         const curso = matricula?.cursos?.nombre || 'Curso';
+        const esCuotaVencida = hoy && cuota?.fecha_vencimiento && cuota.fecha_vencimiento < hoy;
 
         const sendResult = await enviarWhatsAppDirecto(
           telefono,
@@ -380,7 +404,8 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
           monto,
           fecha,
           curso,
-          modalidadPago
+          modalidadPago,
+          Boolean(esCuotaVencida)
         );
 
         if (sendResult.usedTemplate) {

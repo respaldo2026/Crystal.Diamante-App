@@ -73,6 +73,7 @@ interface Cuota {
   estado: string;
   matricula_id?: string;
   es_virtual?: boolean;
+  tipo_cuota?: string | null;
 }
 
 const formatCurrency = (value?: number | null) => {
@@ -296,7 +297,7 @@ export default function CajaPage() {
 
           const { data: cuotasData, error: cuotasError } = await supabaseBrowserClient
             .from("pagos")
-            .select("id, monto, numero_cuota, fecha_vencimiento, periodo_pagado, estado, matricula_id")
+            .select("id, monto, numero_cuota, fecha_vencimiento, periodo_pagado, estado, matricula_id, tipo_cuota")
             .in("matricula_id", matriculaIds)
             .order("fecha_vencimiento");
 
@@ -744,13 +745,30 @@ export default function CajaPage() {
 
   const cuotasColumns = [
     {
-      title: "Cuota",
-      dataIndex: "numero_cuota",
-      key: "numero_cuota",
-      render: (val: number) => `#${val}`,
+      title: "Tipo",
+      dataIndex: "tipo_cuota",
+      key: "tipo_cuota",
+      width: 110,
+      render: (tipo: string | null, record: Cuota) => {
+        const t = tipo || (record.es_virtual ? "mensual" : "mensual");
+        if (t === "por_clase") return <Tag color="orange">Por Clase</Tag>;
+        if (t === "inscripcion") return <Tag color="purple">Inscripción</Tag>;
+        return <Tag color="blue">Mensual</Tag>;
+      },
     },
     {
-      title: "Período",
+      title: "Cuota / Clase",
+      dataIndex: "numero_cuota",
+      key: "numero_cuota",
+      render: (val: number, record: Cuota) => {
+        if (record.tipo_cuota === "por_clase") {
+          return <Text strong style={{ color: "#d46b08" }}>{`Clase #${val}`}</Text>;
+        }
+        return `#${val}`;
+      },
+    },
+    {
+      title: "Período / Descripción",
       dataIndex: "periodo_pagado",
       key: "periodo_pagado",
     },
@@ -764,7 +782,7 @@ export default function CajaPage() {
       title: "Vencimiento",
       dataIndex: "fecha_vencimiento",
       key: "fecha_vencimiento",
-      render: (val: string) => dayjs(val).format("DD/MM/YYYY"),
+      render: (val: string) => (val ? dayjs(val).format("DD/MM/YYYY") : "-"),
     },
     {
       title: "Estado",
@@ -851,6 +869,16 @@ export default function CajaPage() {
                     </div>
                   }
                   type="info"
+                  showIcon
+                  style={{ marginBottom: 8 }}
+                />
+              )}
+
+              {estudianteSeleccionado && matriculas.some((m) => m.modalidad_pago === "POR_CLASE") && (
+                <Alert
+                  message="Plan Por Clase activo"
+                  description="Los cobros por clase se generan automáticamente al registrar la asistencia desde el expediente del estudiante. Aquí aparecen las clases asistidas pendientes de pago."
+                  type="warning"
                   showIcon
                   style={{ marginBottom: 16 }}
                 />
