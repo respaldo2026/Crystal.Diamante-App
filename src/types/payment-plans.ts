@@ -149,9 +149,9 @@ export function getMaterialCoverageRuleDisplay(
   return {
     coverage,
     color: "default",
-    label: "No incluido en mensualidad",
-    shortLabel: "Lo trae",
-    description: "Este material no está incluido en ningún plan mensual.",
+    label: "Debes llevar el material",
+    shortLabel: "Por clase",
+    description: "Este material no está incluido en ningún plan y debes llevarlo por tu cuenta.",
   };
 }
 
@@ -201,9 +201,9 @@ export function getMaterialCoverageDisplay(
       coverage,
       status: "not_included",
       color: "default",
-      label: "Debes traerlo",
-      shortLabel: "Traer",
-      description: "Debes traer este material por tu cuenta.",
+      label: "Debes llevar el material",
+      shortLabel: "Por clase",
+      description: "Este material no está incluido en tu plan. Debes llevarlo por tu cuenta.",
       isIncluded: false,
     };
   }

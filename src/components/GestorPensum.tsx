@@ -2275,7 +2275,7 @@ export default function GestorPensum({
                     options={[
                       { label: `Todos (${materialesCicloGeneralOrdenados.length})`, value: "todos" },
                       {
-                        label: `Lo trae (${materialesCicloGeneralOrdenados.filter((item) => normalizeMaterialCoverage(item.cobertura_material, item.incluido_kit) === "NINGUNO").length})`,
+                        label: `Por clase (${materialesCicloGeneralOrdenados.filter((item) => normalizeMaterialCoverage(item.cobertura_material, item.incluido_kit) === "NINGUNO").length})`,
                         value: "NINGUNO",
                       },
                       {
