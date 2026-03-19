@@ -227,7 +227,42 @@ export default function GestorPensum({
 
   const renderCoverageRuleTag = (coverage?: string | null, includedKit?: boolean | null) => {
     const display = getMaterialCoverageRuleDisplay(coverage, includedKit);
-    return <Tag color={display.color}>{display.shortLabel}</Tag>;
+    
+    const colorMap: Record<string, { bg: string; border: string; color: string }> = {
+      blue: {
+        bg: "#e0f2fe",
+        border: "#0ea5e9",
+        color: "#0369a1",
+      },
+      green: {
+        bg: "#dcfce7",
+        border: "#22c55e",
+        color: "#15803d",
+      },
+      default: {
+        bg: "#f1f5f9",
+        border: "#cbd5e1",
+        color: "#475569",
+      },
+    };
+    
+    const style = colorMap[display.color] || colorMap.default;
+    
+    return (
+      <Tag 
+        style={{
+          borderRadius: 999,
+          padding: "4px 12px",
+          fontWeight: 600,
+          border: `1px solid ${style.border}`,
+          color: style.color,
+          background: style.bg,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {display.shortLabel}
+      </Tag>
+    );
   };
 
   // Estados para pensum
