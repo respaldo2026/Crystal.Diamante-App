@@ -197,14 +197,18 @@ export default function AdminDashboard() {
       ] = await Promise.all([
         supabase
           .from("pagos")
-          .select("monto, fecha_pago, metodo_pago")
+          .select("monto, fecha_pago, metodo_pago, estado")
           .eq("estado", "pagado")
+          .not("fecha_pago", "is", null)
+          .gt("monto", 0)
           .gte("fecha_pago", inicioActualStr)
           .lte("fecha_pago", finActualStr),
         supabase
           .from("pagos")
-          .select("monto")
+          .select("monto, fecha_pago, estado")
           .eq("estado", "pagado")
+          .not("fecha_pago", "is", null)
+          .gt("monto", 0)
           .gte("fecha_pago", inicioAnteriorStr)
           .lte("fecha_pago", finAnteriorStr),
         supabase
@@ -291,8 +295,21 @@ export default function AdminDashboard() {
 
       setErrorMessage(errors.length > 0 ? errors.join(" • ") : null);
 
-      const totalIngresosActual = pagosPeriodo.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
-      const totalIngresosAnterior = pagosAnterior.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
+      const esPagoRealDelPeriodo = (pago: any, inicioRef: dayjs.Dayjs, finRef: dayjs.Dayjs) => {
+        const estado = String(pago?.estado || "").toLowerCase();
+        const monto = Number(pago?.monto || 0);
+        const fechaPago = pago?.fecha_pago ? dayjs(pago.fecha_pago) : null;
+        if (estado !== "pagado") return false;
+        if (!Number.isFinite(monto) || monto <= 0) return false;
+        if (!fechaPago || !fechaPago.isValid()) return false;
+        return !fechaPago.isBefore(inicioRef, "day") && !fechaPago.isAfter(finRef, "day");
+      };
+
+      const pagosPeriodoReales = pagosPeriodo.filter((pago: any) => esPagoRealDelPeriodo(pago, inicio, fin));
+      const pagosAnteriorReales = pagosAnterior.filter((pago: any) => esPagoRealDelPeriodo(pago, inicioAnterior, finAnterior));
+
+      const totalIngresosActual = pagosPeriodoReales.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
+      const totalIngresosAnterior = pagosAnteriorReales.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
       const variacionIngresos = totalIngresosAnterior > 0
         ? ((totalIngresosActual - totalIngresosAnterior) / totalIngresosAnterior) * 100
         : null;
@@ -338,7 +355,7 @@ export default function AdminDashboard() {
             total: 0
           });
         }
-        pagosPeriodo.forEach((pago: any) => {
+        pagosPeriodoReales.forEach((pago: any) => {
           if (!pago.fecha_pago) return;
           const key = dayjs(pago.fecha_pago).format("YYYY-MM");
           const bucket = ingresosBuckets.find(b => b.key === key);
@@ -353,7 +370,7 @@ export default function AdminDashboard() {
             total: 0
           });
         }
-        pagosPeriodo.forEach((pago: any) => {
+        pagosPeriodoReales.forEach((pago: any) => {
           if (!pago.fecha_pago) return;
           const key = dayjs(pago.fecha_pago).format("YYYY-MM-DD");
           const bucket = ingresosBuckets.find(b => b.key === key);
@@ -367,7 +384,7 @@ export default function AdminDashboard() {
       }));
 
       const metodos = new Map<string, number>();
-      pagosPeriodo.forEach((pago: any) => {
+      pagosPeriodoReales.forEach((pago: any) => {
         const metodo = pago.metodo_pago || "Sin método";
         const valorActual = metodos.get(metodo) || 0;
         metodos.set(metodo, valorActual + Number(pago.monto || 0));
