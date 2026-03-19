@@ -297,9 +297,17 @@ export default function AdminDashboard() {
         ? ((totalIngresosActual - totalIngresosAnterior) / totalIngresosAnterior) * 100
         : null;
 
-      const totalPendiente = pendientesData.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
-      const carteraTotal = totalPendiente + totalIngresosActual;
-      const tasaMora = carteraTotal > 0 ? (totalPendiente / carteraTotal) * 100 : 0;
+      const hoyInicioDia = dayjs().startOf("day");
+      const pagosVencidosData = pendientesData.filter((pago) => {
+        if (!pago.fecha_vencimiento) return false;
+        const vencimiento = dayjs(pago.fecha_vencimiento);
+        if (!vencimiento.isValid()) return false;
+        return vencimiento.startOf("day").isBefore(hoyInicioDia, "day");
+      });
+
+      const totalVencido = pagosVencidosData.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
+      const carteraTotal = totalVencido + totalIngresosActual;
+      const tasaMora = carteraTotal > 0 ? (totalVencido / carteraTotal) * 100 : 0;
 
       const estudiantesActivos = new Set(
         matriculasActivas
@@ -380,7 +388,6 @@ export default function AdminDashboard() {
         value: Math.round(value * 100) / 100
       }));
 
-      const hoyInicioDia = dayjs().startOf("day");
       const limiteUrgencia = hoyInicioDia.add(7, "day").endOf("day");
       const pendientesUrgentes = pendientesData
         .filter((pago) => {
@@ -523,8 +530,8 @@ export default function AdminDashboard() {
       setMetrics({
         ingresosPeriodo: totalIngresosActual,
         variacionIngresos,
-        carteraVencida: totalPendiente,
-        pagosPendientes: pendientesData.length,
+        carteraVencida: totalVencido,
+        pagosPendientes: pagosVencidosData.length,
         estudiantesActivos,
         nuevosEstudiantes,
         leadsNuevos: leadsPeriodo.length,
@@ -611,7 +618,7 @@ export default function AdminDashboard() {
       value: metrics.carteraVencida,
       prefix: "$",
       icon: <WarningOutlined style={{ color: "#fa8c16" }} />,
-      extra: <Tag color="default">{metrics.pagosPendientes} pendientes</Tag>,
+      extra: <Tag color="default">{metrics.pagosPendientes} vencidos</Tag>,
       valueStyle: { color: "#fa541c", fontWeight: 600 }
     },
     {
