@@ -244,10 +244,9 @@ export default function GestorPensum({
         border: "#cbd5e1",
         color: "#475569",
       },
-    } as const;
+    };
     
-    const style = colorMap[display.color as keyof typeof colorMap] ?? colorMap.default;
-    
+    const style: typeof colorMap.default = colorMap[display.color as keyof typeof colorMap] ?? colorMap.default;
     return (
       <Tag 
         style={{

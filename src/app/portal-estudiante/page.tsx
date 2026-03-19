@@ -1008,7 +1008,7 @@ export default function PortalEstudiante() {
 
     const resumenPlanMateriales =
       modalidadMateriales === "POR_CLASE"
-        ? "Tu plan no incluye materiales. Aquí verás claramente cuáles debes traer y cuáles solo vienen en planes mensuales."
+        ? "Tu plan no incluye materiales. Aquí verás claramente cuáles son por clase y cuáles solo vienen en planes mensuales."
         : modalidadMateriales === "MENSUAL_100"
           ? "Tu plan cubre los materiales base y también los materiales exclusivos del Plan 100."
           : "Tu plan cubre los materiales base. Los marcados como 'Solo Plan 100' no están incluidos en tu mensualidad actual.";
