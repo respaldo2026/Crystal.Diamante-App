@@ -53,7 +53,7 @@ export async function obtenerMaterialesClasePorProgramas(programaIds: string[]) 
     .from("materiales_clase")
     .select(`
       *,
-      materiales_ciclo: material_ciclo_id (id, nombre, cantidad, incluido_kit),
+      materiales_ciclo: material_ciclo_id (*),
       pensum_cursos: pensum_curso_id (id, nombre_curso, orden),
       pensum: pensum_id (id, nombre_ciclo, numero_ciclo)
     `)

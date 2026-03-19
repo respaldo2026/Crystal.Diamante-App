@@ -41,6 +41,11 @@ import {
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { logger } from "@utils/logger";
+import {
+  getMaterialCoverageRuleDisplay,
+  normalizeMaterialCoverage,
+  type MaterialCoverage,
+} from "@/types/payment-plans";
 import type { UploadFile } from "antd";
 
 const { Title, Text } = require("antd").Typography;
@@ -178,6 +183,7 @@ interface MaterialCiclo {
   pensum_id: string;
   nombre: string;
   cantidad?: string | null;
+  cobertura_material?: MaterialCoverage | null;
   incluido_kit: boolean;
   orden: number;
   activo: boolean;
@@ -218,6 +224,11 @@ export default function GestorPensum({
   const [formMaterialClase] = Form.useForm();
   const [formMaterialCiclo] = Form.useForm();
   const [formQuiz] = Form.useForm();
+
+  const renderCoverageRuleTag = (coverage?: string | null, includedKit?: boolean | null) => {
+    const display = getMaterialCoverageRuleDisplay(coverage, includedKit);
+    return <Tag color={display.color}>{display.shortLabel}</Tag>;
+  };
 
   // Estados para pensum
   const [pensums, setPensums] = useState<Pensum[]>([]);
@@ -774,7 +785,7 @@ export default function GestorPensum({
     try {
       const { data, error } = await supabaseBrowserClient
         .from("materiales_ciclo")
-        .select("id, programa_id, pensum_id, nombre, cantidad, incluido_kit, orden, activo")
+        .select("*")
         .eq("programa_id", programaId)
         .eq("activo", true)
         .order("orden", { ascending: true })
@@ -795,7 +806,7 @@ export default function GestorPensum({
     try {
       const { data, error } = await supabaseBrowserClient
         .from("materiales_clase")
-        .select("id, programa_id, pensum_id, pensum_curso_id, material_ciclo_id, nombre_material, cantidad, unidad, observaciones, obligatorio, orden, activo, materiales_ciclo:material_ciclo_id (id, nombre, cantidad, incluido_kit)")
+        .select("*, materiales_ciclo:material_ciclo_id (*)")
         .eq("programa_id", programaId)
         .eq("activo", true)
         .order("orden", { ascending: true });
@@ -1252,7 +1263,7 @@ export default function GestorPensum({
     formMaterialCiclo.setFieldsValue({
       nombre: material?.nombre || "",
       cantidad: material?.cantidad || "",
-      incluido_kit: material?.incluido_kit ?? false,
+      cobertura_material: normalizeMaterialCoverage(material?.cobertura_material, material?.incluido_kit),
       orden: material?.orden ?? 1,
       activo: material?.activo ?? true,
     });
@@ -1276,7 +1287,8 @@ export default function GestorPensum({
         pensum_id: selectedCicloId,
         nombre: values.nombre,
         cantidad: values.cantidad || null,
-        incluido_kit: Boolean(values.incluido_kit),
+        cobertura_material: normalizeMaterialCoverage(values.cobertura_material),
+        incluido_kit: normalizeMaterialCoverage(values.cobertura_material) !== "NINGUNO",
         orden: values.orden || 1,
         activo: values.activo ?? true,
       };
@@ -2284,10 +2296,11 @@ export default function GestorPensum({
                       render: (value) => value || "Cantidad por definir",
                     },
                     {
-                      title: "Kit",
-                      dataIndex: "incluido_kit",
+                      title: "Cobertura",
+                      dataIndex: "cobertura_material",
                       align: "center",
-                      render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                      render: (_value, record: MaterialCiclo) =>
+                        renderCoverageRuleTag(record?.cobertura_material, record?.incluido_kit),
                     },
                     ...(canManageMateriales
                       ? [
@@ -2679,10 +2692,11 @@ export default function GestorPensum({
                                     .join(" ") || "Cantidad no especificada",
                               },
                               {
-                                title: "Kit",
+                                title: "Cobertura",
                                 dataIndex: "materiales_ciclo",
                                 align: "center",
-                                render: (value) => (value?.incluido_kit ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                                render: (value) =>
+                                  renderCoverageRuleTag(value?.cobertura_material, value?.incluido_kit),
                               },
                               ...(canManageMateriales
                                 ? [
@@ -2818,14 +2832,23 @@ export default function GestorPensum({
             <Input placeholder="Ej: 1 unidad, 2 ml" />
           </Form.Item>
 
-          <Form.Item name="incluido_kit" label="Incluido en kit" initialValue={false}>
+          <Form.Item name="cobertura_material" label="Cobertura del material" initialValue="NINGUNO">
             <Select
               options={[
-                { value: true, label: "Si, viene en el kit mensual" },
-                { value: false, label: "No, el estudiante debe traerlo" },
+                { value: "NINGUNO", label: "No incluido en mensualidad" },
+                { value: "MENSUAL_70", label: "Incluido desde Mensual 70" },
+                { value: "MENSUAL_100", label: "Solo incluido en Mensual 100" },
               ]}
             />
           </Form.Item>
+
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="Recomendación"
+            description="Usa 'Mensual 70' para materiales base compartidos y 'Mensual 100' para materiales premium o completos que solo recibe ese plan."
+          />
 
           <Form.Item name="orden" label="Orden" initialValue={1}>
             <InputNumber min={1} style={{ width: "100%" }} />
@@ -3004,9 +3027,7 @@ export default function GestorPensum({
               placeholder={editingMaterialClase ? "Selecciona un material del ciclo" : "Selecciona uno o varios materiales del ciclo"}
               options={materialesCicloGeneralOrdenados.map((material) => ({
                 value: material.id,
-                label: material.incluido_kit
-                  ? `${material.nombre} (Kit mensual)`
-                  : material.nombre,
+                label: `${material.nombre} (${getMaterialCoverageRuleDisplay(material.cobertura_material, material.incluido_kit).shortLabel})`,
               }))}
               onChange={(value) => {
                 const selectedIds = Array.isArray(value) ? value : [value].filter(Boolean);

@@ -75,6 +75,7 @@ interface MaterialCicloInfo {
   observaciones: string | null
   orden: number | null
   pensum_id: string | null
+  cobertura_material: string | null
   incluido_kit: boolean | null
   activo: boolean | null
 }
@@ -926,6 +927,7 @@ async function getMaterialsByPensum(
         observaciones: m.observaciones ?? null,
         orden: m.orden ?? null,
         pensum_id: m.pensum_id ?? null,
+        cobertura_material: (m as any).cobertura_material ?? null,
         incluido_kit: m.incluido_kit ?? null,
         activo: m.activo ?? null,
       }))
@@ -1036,7 +1038,12 @@ function buildMaterialsContext(
         .forEach((item) => {
         const nombre = item.nombre || 'Material'
         const qty = formatMaterialQuantity(item.cantidad, item.unidad)
-        const kit = item.incluido_kit ? ' (incluido en kit)' : ''
+        const cobertura = String(item.cobertura_material || '').trim().toUpperCase()
+        const kit = cobertura === 'MENSUAL_100'
+          ? ' (solo incluido en mensual 100)'
+          : cobertura === 'MENSUAL_70' || item.incluido_kit
+            ? ' (incluido desde mensual 70)'
+            : ''
         text += `      - ${qty} de ${nombre}${kit}\n`
       })
     }

@@ -45,7 +45,6 @@ import {
   VideoCameraOutlined,
   FilePdfOutlined,
   ClockCircleOutlined,
-  GiftOutlined,
   YoutubeOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -74,7 +73,12 @@ import {
   UMBRAL_APROBACION_QUIZ_NOTA,
   UMBRAL_APROBACION_QUIZ_PORCENTAJE,
 } from "@/modules/portal-estudiante/utils";
-import { getPaymentPlan, getPaymentPlanDisplay, normalizeModalidadPago } from "@/types/payment-plans";
+import {
+  getMaterialCoverageDisplay,
+  getPaymentPlan,
+  getPaymentPlanDisplay,
+  normalizeModalidadPago,
+} from "@/types/payment-plans";
 
 const QuizApprovedResult = dynamic(
   () => import("@/modules/portal-estudiante/components/QuizApprovedResult").then((m) => m.QuizApprovedResult),
@@ -994,6 +998,39 @@ export default function PortalEstudiante() {
         ? String(cicloRutaId)
         : String(ciclosPrograma[0]?.id || "");
 
+    const planMateriales = getPaymentPlanDisplay({
+      modalidadPago: matriculaSeleccionada?.modalidad_pago,
+      valorMensualPlan: matriculaSeleccionada?.valor_mensual_plan,
+      porcentajeProductos: matriculaSeleccionada?.porcentaje_productos,
+    });
+
+    const modalidadMateriales = normalizeModalidadPago(matriculaSeleccionada?.modalidad_pago);
+
+    const resumenPlanMateriales =
+      modalidadMateriales === "POR_CLASE"
+        ? "Tu plan no incluye materiales. Verás qué insumos debes traer y cuáles estarían cubiertos por planes mensuales."
+        : modalidadMateriales === "MENSUAL_100"
+          ? "Tu plan cubre todos los materiales marcados para Mensual 70 y los exclusivos de Mensual 100."
+          : "Tu plan cubre los materiales base marcados como incluidos. Los marcados como 'Solo Plan 100' requieren un plan superior.";
+
+    const renderCoverageTagForStudent = (materialRef: any, compact = false) => {
+      const display = getMaterialCoverageDisplay({
+        modalidadPago: matriculaSeleccionada?.modalidad_pago,
+        porcentajeProductos: matriculaSeleccionada?.porcentaje_productos,
+        coberturaMaterial: materialRef?.cobertura_material ?? materialRef?.materiales_ciclo?.cobertura_material,
+        incluidoKit: materialRef?.incluido_kit ?? materialRef?.materiales_ciclo?.incluido_kit,
+      });
+
+      return (
+        <Tag
+          color={display.color}
+          style={compact ? { fontSize: 11, padding: "0 5px", marginInlineEnd: 0 } : undefined}
+        >
+          {compact ? display.shortLabel : display.label}
+        </Tag>
+      );
+    };
+
     if (!ciclosPrograma.length) {
       return (
         <StepCard title={tituloPrincipal}>
@@ -1036,6 +1073,21 @@ export default function PortalEstudiante() {
             })}
           </Row>
         </Space>
+
+        {vista !== "plan" ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={
+              <Space wrap>
+                <span>Tu cobertura de materiales</span>
+                <Tag color={planMateriales.color}>{planMateriales.label}</Tag>
+              </Space>
+            }
+            description={resumenPlanMateriales}
+          />
+        ) : null}
 
         <Collapse
           accordion
@@ -1109,10 +1161,10 @@ export default function PortalEstudiante() {
                         render: (value) => value || "Cantidad por definir",
                       },
                       {
-                        title: "Kit",
-                        dataIndex: "incluido_kit",
+                        title: "Incluido en tu plan",
+                        dataIndex: "cobertura_material",
                         align: "center",
-                        render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                        render: (_value, record: any) => renderCoverageTagForStudent(record),
                       },
                     ]}
                   />
@@ -1243,9 +1295,7 @@ export default function PortalEstudiante() {
                                                     {nombreInsumo}
                                                     {cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}
                                                   </Text>
-                                                  {(insumo.materiales_ciclo?.incluido_kit || insumo.incluido_kit) && (
-                                                    <GiftOutlined style={{ color: "#d81b87", fontSize: 12 }} />
-                                                  )}
+                                                  {renderCoverageTagForStudent(insumo, true)}
                                                 </Space>
                                               </Checkbox>
                                             </Space>

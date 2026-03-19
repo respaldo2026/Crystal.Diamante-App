@@ -43,6 +43,7 @@ import dayjs from "dayjs";
 import { ProfessorDashboardData, ProfesorDashboardCalificacionUltimaClase, ProfesorDashboardCalificacionesGrupo } from "@hooks/useProfessorDashboard";
 import { construirNombreGrupo } from "@utils/grupos";
 import { obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas, obtenerMaterialesPorProgramas, obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
+import { getMaterialCoverageRuleDisplay } from "@/types/payment-plans";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 type CourseActionContext = "attendance" | "grades" | "materials" | "default";
@@ -1126,10 +1127,13 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                         render: (value) => value || "Cantidad por definir",
                       },
                       {
-                        title: "Kit",
-                        dataIndex: "incluido_kit",
+                        title: "Cobertura",
+                        dataIndex: "cobertura_material",
                         align: "center",
-                        render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                        render: (_value, record) => {
+                          const display = getMaterialCoverageRuleDisplay(record?.cobertura_material, record?.incluido_kit);
+                          return <Tag color={display.color}>{display.shortLabel}</Tag>;
+                        },
                       },
                     ]}
                   />
@@ -1164,10 +1168,13 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                         },
                       },
                       {
-                        title: "Kit",
+                        title: "Cobertura",
                         dataIndex: "materiales_ciclo",
                         align: "center",
-                        render: (value) => (value?.incluido_kit ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                        render: (value) => {
+                          const display = getMaterialCoverageRuleDisplay(value?.cobertura_material, value?.incluido_kit);
+                          return <Tag color={display.color}>{display.shortLabel}</Tag>;
+                        },
                       },
                     ]}
                   />
