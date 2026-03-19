@@ -273,22 +273,84 @@ export default function GestorPensum({
     };
   };
 
-  const renderPlanCheck = (included: boolean) => (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: 26,
-      }}
-    >
-      {included ? (
-        <CheckCircleOutlined style={{ color: "#16a34a", fontSize: 18 }} />
-      ) : (
-        <span style={{ color: "#94a3b8", fontSize: 18, lineHeight: 1 }}>-</span>
-      )}
-    </div>
-  );
+  const renderPlanCheck = (
+    included: boolean,
+    tone: "porClase" | "mensual70" | "mensual100",
+  ) => {
+    const cellStyles = {
+      porClase: {
+        includedBg: "#f8fafc",
+        idleBg: "#ffffff",
+        border: "#e2e8f0",
+      },
+      mensual70: {
+        includedBg: "#f0f9ff",
+        idleBg: "#f8fdff",
+        border: "#e0f2fe",
+      },
+      mensual100: {
+        includedBg: "#f0fdf4",
+        idleBg: "#f7fef9",
+        border: "#dcfce7",
+      },
+    };
+
+    const cell = cellStyles[tone];
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: 30,
+          borderRadius: 8,
+          background: included ? cell.includedBg : cell.idleBg,
+          border: `1px solid ${cell.border}`,
+          padding: "2px 4px",
+        }}
+      >
+        {included ? (
+          <CheckCircleOutlined style={{ color: "#16a34a", fontSize: 18 }} />
+        ) : (
+          <span style={{ color: "#94a3b8", fontSize: 18, lineHeight: 1 }}>-</span>
+        )}
+      </div>
+    );
+  };
+
+  const renderPlanHeader = (
+    label: string,
+    tone: "porClase" | "mensual70" | "mensual100",
+  ) => {
+    const styles = {
+      porClase: { bg: "#f1f5f9", border: "#cbd5e1", color: "#475569" },
+      mensual70: { bg: "#e0f2fe", border: "#7dd3fc", color: "#0369a1" },
+      mensual100: { bg: "#dcfce7", border: "#86efac", color: "#166534" },
+    };
+
+    const style = styles[tone];
+
+    return (
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <span
+          style={{
+            padding: "2px 10px",
+            borderRadius: 999,
+            border: `1px solid ${style.border}`,
+            background: style.bg,
+            color: style.color,
+            fontWeight: 700,
+            fontSize: 12,
+            lineHeight: "18px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {label}
+        </span>
+      </div>
+    );
+  };
 
   // Estados para pensum
   const [pensums, setPensums] = useState<Pensum[]>([]);
@@ -2389,33 +2451,33 @@ export default function GestorPensum({
                       width: 120,
                     },
                     {
-                      title: "Por clase",
+                      title: renderPlanHeader("Por clase", "porClase"),
                       key: "incluye_por_clase",
                       align: "center",
                       width: 120,
                       render: (_value, record: MaterialCiclo) => {
                         const matrix = resolveCoverageMatrix(record?.cobertura_material, record?.incluido_kit);
-                        return renderPlanCheck(matrix.porClase);
+                        return renderPlanCheck(matrix.porClase, "porClase");
                       },
                     },
                     {
-                      title: "Mensual 70",
+                      title: renderPlanHeader("Mensual 70", "mensual70"),
                       key: "incluye_mensual_70",
                       align: "center",
                       width: 120,
                       render: (_value, record: MaterialCiclo) => {
                         const matrix = resolveCoverageMatrix(record?.cobertura_material, record?.incluido_kit);
-                        return renderPlanCheck(matrix.mensual70);
+                        return renderPlanCheck(matrix.mensual70, "mensual70");
                       },
                     },
                     {
-                      title: "Mensual 100",
+                      title: renderPlanHeader("Mensual 100", "mensual100"),
                       key: "incluye_mensual_100",
                       align: "center",
                       width: 120,
                       render: (_value, record: MaterialCiclo) => {
                         const matrix = resolveCoverageMatrix(record?.cobertura_material, record?.incluido_kit);
-                        return renderPlanCheck(matrix.mensual100);
+                        return renderPlanCheck(matrix.mensual100, "mensual100");
                       },
                     },
                     ...(canManageMateriales
@@ -2812,7 +2874,7 @@ export default function GestorPensum({
                                 width: 120,
                               },
                               {
-                                title: "Por clase",
+                                title: renderPlanHeader("Por clase", "porClase"),
                                 key: "incluye_por_clase",
                                 align: "center",
                                 width: 120,
@@ -2821,11 +2883,11 @@ export default function GestorPensum({
                                     record.materiales_ciclo?.cobertura_material,
                                     record.materiales_ciclo?.incluido_kit,
                                   );
-                                  return renderPlanCheck(matrix.porClase);
+                                  return renderPlanCheck(matrix.porClase, "porClase");
                                 },
                               },
                               {
-                                title: "Mensual 70",
+                                title: renderPlanHeader("Mensual 70", "mensual70"),
                                 key: "incluye_mensual_70",
                                 align: "center",
                                 width: 120,
@@ -2834,11 +2896,11 @@ export default function GestorPensum({
                                     record.materiales_ciclo?.cobertura_material,
                                     record.materiales_ciclo?.incluido_kit,
                                   );
-                                  return renderPlanCheck(matrix.mensual70);
+                                  return renderPlanCheck(matrix.mensual70, "mensual70");
                                 },
                               },
                               {
-                                title: "Mensual 100",
+                                title: renderPlanHeader("Mensual 100", "mensual100"),
                                 key: "incluye_mensual_100",
                                 align: "center",
                                 width: 120,
@@ -2847,7 +2909,7 @@ export default function GestorPensum({
                                     record.materiales_ciclo?.cobertura_material,
                                     record.materiales_ciclo?.incluido_kit,
                                   );
-                                  return renderPlanCheck(matrix.mensual100);
+                                  return renderPlanCheck(matrix.mensual100, "mensual100");
                                 },
                               },
                               ...(canManageMateriales
