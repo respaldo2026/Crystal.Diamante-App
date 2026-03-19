@@ -59,6 +59,9 @@ interface Matricula {
   programa_duracion?: string | number | null;
   precio_mensualidad?: number | null;
   programa_precio_mensualidad?: number | null;
+  valor_mensual_plan?: number | null;
+  modalidad_pago?: string | null;
+  porcentaje_productos?: number | null;
 }
 
 interface Cuota {
@@ -226,7 +229,7 @@ export default function CajaPage() {
         // Cargar matrículas del estudiante
         const { data: matriculasData, error: matriculasError } = await supabaseBrowserClient
           .from("matriculas")
-          .select("id, fecha_inicio, cursos ( nombre, numero_cuotas, duracion, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
+          .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, numero_cuotas, duracion, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
           .eq("estudiante_id", estudianteId)
           .eq("estado", "activo");
 
@@ -241,6 +244,9 @@ export default function CajaPage() {
           programa_duracion: m.cursos?.programas?.duracion ?? null,
           precio_mensualidad: m.cursos?.precio_mensualidad ?? null,
           programa_precio_mensualidad: m.cursos?.programas?.precio_mensualidad ?? null,
+          valor_mensual_plan: m.valor_mensual_plan ?? null,
+          modalidad_pago: m.modalidad_pago ?? null,
+          porcentaje_productos: m.porcentaje_productos ?? null,
         }));
 
         setMatriculas(matriculasFormat);
@@ -395,6 +401,7 @@ export default function CajaPage() {
             const cuotasRegistradas = cuotasRegistradasPorMatricula.get(matricula.id) || new Set<number>();
             const cuotasPendientesSet = cuotasPendientesRegistradas.get(matricula.id) || new Set<number>();
             const montoBase =
+              Number(matricula.valor_mensual_plan || 0) ||
               Number(matricula.precio_mensualidad || 0) ||
               Number(matricula.programa_precio_mensualidad || 0) ||
               Number(
