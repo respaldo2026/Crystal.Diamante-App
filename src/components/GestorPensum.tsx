@@ -2397,7 +2397,7 @@ export default function GestorPensum({
                     options={[
                       { label: `Todos (${materialesCicloGeneralOrdenados.length})`, value: "todos" },
                       {
-                        label: `Por clase (${materialesCicloGeneralOrdenados.filter((item) => normalizeMaterialCoverage(item.cobertura_material, item.incluido_kit) === "NINGUNO").length})`,
+                        label: `No incluido (${materialesCicloGeneralOrdenados.filter((item) => normalizeMaterialCoverage(item.cobertura_material, item.incluido_kit) === "NINGUNO").length})`,
                         value: "NINGUNO",
                       },
                       {
@@ -2449,16 +2449,6 @@ export default function GestorPensum({
                       dataIndex: "cantidad",
                       render: (value) => value || "Cantidad por definir",
                       width: 120,
-                    },
-                    {
-                      title: renderPlanHeader("Por clase", "porClase"),
-                      key: "incluye_por_clase",
-                      align: "center",
-                      width: 120,
-                      render: (_value, record: MaterialCiclo) => {
-                        const matrix = resolveCoverageMatrix(record?.cobertura_material, record?.incluido_kit);
-                        return renderPlanCheck(matrix.porClase, "porClase");
-                      },
                     },
                     {
                       title: renderPlanHeader("Mensual 70", "mensual70"),
@@ -2872,19 +2862,6 @@ export default function GestorPensum({
                                     .filter(Boolean)
                                     .join(" ") || "Cantidad no especificada",
                                 width: 120,
-                              },
-                              {
-                                title: renderPlanHeader("Por clase", "porClase"),
-                                key: "incluye_por_clase",
-                                align: "center",
-                                width: 120,
-                                render: (_value, record: MaterialClase) => {
-                                  const matrix = resolveCoverageMatrix(
-                                    record.materiales_ciclo?.cobertura_material,
-                                    record.materiales_ciclo?.incluido_kit,
-                                  );
-                                  return renderPlanCheck(matrix.porClase, "porClase");
-                                },
                               },
                               {
                                 title: renderPlanHeader("Mensual 70", "mensual70"),
