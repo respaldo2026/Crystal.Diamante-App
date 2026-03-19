@@ -298,16 +298,6 @@ export default function AdminDashboard() {
         : null;
 
       const hoyInicioDia = dayjs().startOf("day");
-      const pagosVencidosData = pendientesData.filter((pago) => {
-        if (!pago.fecha_vencimiento) return false;
-        const vencimiento = dayjs(pago.fecha_vencimiento);
-        if (!vencimiento.isValid()) return false;
-        return vencimiento.startOf("day").isBefore(hoyInicioDia, "day");
-      });
-
-      const totalVencido = pagosVencidosData.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
-      const carteraTotal = totalVencido + totalIngresosActual;
-      const tasaMora = carteraTotal > 0 ? (totalVencido / carteraTotal) * 100 : 0;
 
       const estudiantesActivos = new Set(
         matriculasActivas
@@ -525,13 +515,21 @@ export default function AdminDashboard() {
         })
         .slice(0, 12);
 
+      const integrantesConDeuda = Array.from(gruposMap.values())
+        .flatMap((grupo) => grupo.integrantes)
+        .filter((integrante) => integrante.cuotasDebe > 0);
+
+      const totalVencido = integrantesConDeuda.reduce((acc, integrante) => acc + Number(integrante.montoPendiente || 0), 0);
+      const carteraTotal = totalVencido + totalIngresosActual;
+      const tasaMora = carteraTotal > 0 ? (totalVencido / carteraTotal) * 100 : 0;
+
       if (!isMountedRef.current) return;
 
       setMetrics({
         ingresosPeriodo: totalIngresosActual,
         variacionIngresos,
         carteraVencida: totalVencido,
-        pagosPendientes: pagosVencidosData.length,
+        pagosPendientes: integrantesConDeuda.length,
         estudiantesActivos,
         nuevosEstudiantes,
         leadsNuevos: leadsPeriodo.length,
@@ -618,7 +616,7 @@ export default function AdminDashboard() {
       value: metrics.carteraVencida,
       prefix: "$",
       icon: <WarningOutlined style={{ color: "#fa8c16" }} />,
-      extra: <Tag color="default">{metrics.pagosPendientes} vencidos</Tag>,
+      extra: <Tag color="default">{metrics.pagosPendientes} con deuda</Tag>,
       valueStyle: { color: "#fa541c", fontWeight: 600 }
     },
     {
