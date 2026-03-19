@@ -228,7 +228,7 @@ export default function GestorPensum({
   const renderCoverageRuleTag = (coverage?: string | null, includedKit?: boolean | null) => {
     const display = getMaterialCoverageRuleDisplay(coverage, includedKit);
     
-    const colorMap: Record<string, { bg: string; border: string; color: string }> = {
+    const colorMap = {
       blue: {
         bg: "#e0f2fe",
         border: "#0ea5e9",
@@ -244,9 +244,9 @@ export default function GestorPensum({
         border: "#cbd5e1",
         color: "#475569",
       },
-    };
+    } as const;
     
-    const style = colorMap[display.color] || colorMap.default;
+    const style = colorMap[display.color as keyof typeof colorMap] ?? colorMap.default;
     
     return (
       <Tag 
