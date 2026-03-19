@@ -380,9 +380,24 @@ export default function AdminDashboard() {
         value: Math.round(value * 100) / 100
       }));
 
+      const hoyInicioDia = dayjs().startOf("day");
+      const limiteUrgencia = hoyInicioDia.add(7, "day").endOf("day");
+      const pendientesUrgentes = pendientesData
+        .filter((pago) => {
+          if (!pago.fecha_vencimiento) return false;
+          const vencimiento = dayjs(pago.fecha_vencimiento);
+          if (!vencimiento.isValid()) return false;
+          return !vencimiento.startOf("day").isAfter(limiteUrgencia, "day");
+        })
+        .sort((a, b) => {
+          const aTime = a.fecha_vencimiento ? dayjs(a.fecha_vencimiento).valueOf() : Number.MAX_SAFE_INTEGER;
+          const bTime = b.fecha_vencimiento ? dayjs(b.fecha_vencimiento).valueOf() : Number.MAX_SAFE_INTEGER;
+          return aTime - bTime;
+        })
+        .slice(0, 8);
+
       const cursosOrdenados = ocupaciones.sort((a, b) => b.ocupacion - a.ocupacion).slice(0, 4);
 
-      const hoyInicioDia = dayjs().startOf("day");
       const pagosPorMatricula = new Map<string, any[]>();
       pagosPorMatriculaData.forEach((p: any) => {
         const key = String(p?.matricula_id || "");
@@ -518,7 +533,7 @@ export default function AdminDashboard() {
       });
       setIngresosSeries(ingresosData);
       setMetodosSeries(metodosData);
-      setPendientes(pendientesData);
+      setPendientes(pendientesUrgentes);
       setCursosCriticos(cursosOrdenados);
       setGruposPagoResumen(gruposResumen);
     } catch (error: any) {
@@ -811,12 +826,12 @@ export default function AdminDashboard() {
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={16}>
           <Card
-            title="Pagos más urgentes"
-            extra={<Tag color="red">Atención prioritaria</Tag>}
+            title="Pagos urgentes por fecha"
+            extra={<Tag color="red">Vencidos o próximos 7 días</Tag>}
           >
             <Spin spinning={initialLoading || (refreshing && !initialLoading)}>
               {pendientes.length === 0 ? (
-              <Empty description="No hay pagos pendientes" />
+              <Empty description="No hay pagos urgentes por fecha" />
             ) : (
               <List
                 dataSource={pendientes}
