@@ -264,6 +264,32 @@ export default function GestorPensum({
     );
   };
 
+  const resolveCoverageMatrix = (coverage?: string | null, includedKit?: boolean | null) => {
+    const normalizedCoverage = normalizeMaterialCoverage(coverage, includedKit);
+    return {
+      porClase: normalizedCoverage === "NINGUNO",
+      mensual70: normalizedCoverage === "MENSUAL_70",
+      mensual100: normalizedCoverage === "MENSUAL_70" || normalizedCoverage === "MENSUAL_100",
+    };
+  };
+
+  const renderPlanCheck = (included: boolean) => (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: 26,
+      }}
+    >
+      {included ? (
+        <CheckCircleOutlined style={{ color: "#16a34a", fontSize: 18 }} />
+      ) : (
+        <span style={{ color: "#94a3b8", fontSize: 18, lineHeight: 1 }}>-</span>
+      )}
+    </div>
+  );
+
   // Estados para pensum
   const [pensums, setPensums] = useState<Pensum[]>([]);
   const [loadingPensums, setLoadingPensums] = useState(false);
@@ -2346,6 +2372,7 @@ export default function GestorPensum({
                   size="small"
                   loading={loadingMaterialesCiclo}
                   pagination={mostrarListaCompletaCiclo ? false : { pageSize: 8, hideOnSinglePage: true }}
+                  scroll={{ x: 860 }}
                   rowKey={(record) => String(record?.id || record?.nombre)}
                   dataSource={materialesCicloFiltrados}
                   columns={[
@@ -2353,18 +2380,43 @@ export default function GestorPensum({
                       title: "Producto",
                       dataIndex: "nombre",
                       render: (value) => <Text>{value}</Text>,
+                      width: 260,
                     },
                     {
                       title: "Cantidad",
                       dataIndex: "cantidad",
                       render: (value) => value || "Cantidad por definir",
+                      width: 120,
                     },
                     {
-                      title: "Cobertura",
-                      dataIndex: "cobertura_material",
+                      title: "Por clase",
+                      key: "incluye_por_clase",
                       align: "center",
-                      render: (_value, record: MaterialCiclo) =>
-                        renderCoverageRuleTag(record?.cobertura_material, record?.incluido_kit),
+                      width: 120,
+                      render: (_value, record: MaterialCiclo) => {
+                        const matrix = resolveCoverageMatrix(record?.cobertura_material, record?.incluido_kit);
+                        return renderPlanCheck(matrix.porClase);
+                      },
+                    },
+                    {
+                      title: "Mensual 70",
+                      key: "incluye_mensual_70",
+                      align: "center",
+                      width: 120,
+                      render: (_value, record: MaterialCiclo) => {
+                        const matrix = resolveCoverageMatrix(record?.cobertura_material, record?.incluido_kit);
+                        return renderPlanCheck(matrix.mensual70);
+                      },
+                    },
+                    {
+                      title: "Mensual 100",
+                      key: "incluye_mensual_100",
+                      align: "center",
+                      width: 120,
+                      render: (_value, record: MaterialCiclo) => {
+                        const matrix = resolveCoverageMatrix(record?.cobertura_material, record?.incluido_kit);
+                        return renderPlanCheck(matrix.mensual100);
+                      },
                     },
                     ...(canManageMateriales
                       ? [
@@ -2372,6 +2424,7 @@ export default function GestorPensum({
                             title: "Acciones",
                             key: "acciones",
                             align: "right" as const,
+                            width: 120,
                             render: (_: any, record: MaterialCiclo) => (
                               <Space size={4}>
                                 <Button
@@ -2738,6 +2791,7 @@ export default function GestorPensum({
                             size="small"
                             loading={loadingMaterialesClase}
                             pagination={mostrarListaCompletaNecesarios ? false : { pageSize: 5, hideOnSinglePage: true }}
+                            scroll={{ x: 860 }}
                             rowKey={(record) => String(record?.id || record?.nombre_material)}
                             dataSource={materialesNecesariosTema}
                             style={{ marginTop: 8 }}
@@ -2746,6 +2800,7 @@ export default function GestorPensum({
                                 title: "Producto",
                                 dataIndex: "nombre_material",
                                 render: (_value, record) => <Text>{record.materiales_ciclo?.nombre || record.nombre_material}</Text>,
+                                width: 260,
                               },
                               {
                                 title: "Cantidad",
@@ -2754,13 +2809,46 @@ export default function GestorPensum({
                                   [record.materiales_ciclo?.cantidad || record.cantidad, record.unidad]
                                     .filter(Boolean)
                                     .join(" ") || "Cantidad no especificada",
+                                width: 120,
                               },
                               {
-                                title: "Cobertura",
-                                dataIndex: "materiales_ciclo",
+                                title: "Por clase",
+                                key: "incluye_por_clase",
                                 align: "center",
-                                render: (value) =>
-                                  renderCoverageRuleTag(value?.cobertura_material, value?.incluido_kit),
+                                width: 120,
+                                render: (_value, record: MaterialClase) => {
+                                  const matrix = resolveCoverageMatrix(
+                                    record.materiales_ciclo?.cobertura_material,
+                                    record.materiales_ciclo?.incluido_kit,
+                                  );
+                                  return renderPlanCheck(matrix.porClase);
+                                },
+                              },
+                              {
+                                title: "Mensual 70",
+                                key: "incluye_mensual_70",
+                                align: "center",
+                                width: 120,
+                                render: (_value, record: MaterialClase) => {
+                                  const matrix = resolveCoverageMatrix(
+                                    record.materiales_ciclo?.cobertura_material,
+                                    record.materiales_ciclo?.incluido_kit,
+                                  );
+                                  return renderPlanCheck(matrix.mensual70);
+                                },
+                              },
+                              {
+                                title: "Mensual 100",
+                                key: "incluye_mensual_100",
+                                align: "center",
+                                width: 120,
+                                render: (_value, record: MaterialClase) => {
+                                  const matrix = resolveCoverageMatrix(
+                                    record.materiales_ciclo?.cobertura_material,
+                                    record.materiales_ciclo?.incluido_kit,
+                                  );
+                                  return renderPlanCheck(matrix.mensual100);
+                                },
                               },
                               ...(canManageMateriales
                                 ? [
@@ -2768,6 +2856,7 @@ export default function GestorPensum({
                                       title: "Acciones",
                                       key: "acciones",
                                       align: "right" as const,
+                                      width: 120,
                                       render: (_: any, record: MaterialClase) => (
                                         <Space size={4}>
                                           <Button
