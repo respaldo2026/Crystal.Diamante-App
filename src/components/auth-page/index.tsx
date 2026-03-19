@@ -70,12 +70,6 @@ export const AuthPage = (props: AuthPageProps) => {
           boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)",
         }}
       >
-        <div style={{ marginBottom: isMobile ? 12 : 16 }}>
-          <h2 style={{ margin: "0 0 4px", fontSize: isMobile ? 20 : 22, lineHeight: 1.2, color: "#111827" }}>
-            Inicia sesión
-          </h2>
-        </div>
-
         <Form
           form={form}
           layout="vertical"

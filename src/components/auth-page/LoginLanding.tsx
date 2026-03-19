@@ -3,14 +3,12 @@
 import type { ReactNode } from "react";
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { PwaInstallPrompt } from "../PwaInstallPrompt";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 export function LoginLanding({ children }: { children: ReactNode }) {
   const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
   const [mounted, setMounted] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [nombreAcademia, setNombreAcademia] = useState<string>("Academia Crystal Diamante");
 
   useEffect(() => {
     setMounted(true);
@@ -23,14 +21,13 @@ export function LoginLanding({ children }: { children: ReactNode }) {
     const cargarBranding = async () => {
       const { data } = await supabaseBrowserClient
         .from("configuracion")
-        .select("nombre_academia, logo_url")
+        .select("logo_url")
         .order("updated_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
 
       if (data?.logo_url) setLogoUrl(data.logo_url);
-      if (data?.nombre_academia) setNombreAcademia(data.nombre_academia);
     };
 
     cargarBranding();
@@ -39,8 +36,6 @@ export function LoginLanding({ children }: { children: ReactNode }) {
   if (!mounted) return null;
 
   const isMobile = windowWidth < 768;
-  const isTablet = windowWidth < 1024;
-
   return (
     <div
       style={{
@@ -75,20 +70,21 @@ export function LoginLanding({ children }: { children: ReactNode }) {
           style={{
             width: "100%",
             borderRadius: 16,
-            padding: isMobile ? "16px" : "20px",
+            padding: isMobile ? "14px" : "18px",
             background: "#ffffff",
             border: "1px solid #e6eaf2",
             boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: 10,
+            justifyContent: "center",
+            minHeight: isMobile ? 94 : 108,
           }}
         >
           {logoUrl ? (
             <Image
               src={logoUrl}
-              alt={nombreAcademia}
+              alt="Logo Academia"
               width={isMobile ? 200 : 230}
               height={isMobile ? 54 : 64}
               unoptimized
@@ -99,18 +95,6 @@ export function LoginLanding({ children }: { children: ReactNode }) {
               }}
             />
           ) : null}
-
-          <h1
-            style={{
-              margin: 0,
-              fontSize: isMobile ? "1.15rem" : "1.3rem",
-              fontWeight: 700,
-              color: "#1f2937",
-              textAlign: "center",
-            }}
-          >
-            {nombreAcademia}
-          </h1>
         </div>
 
         <div
@@ -118,11 +102,10 @@ export function LoginLanding({ children }: { children: ReactNode }) {
             width: "100%",
             display: "flex",
             flexDirection: "column",
-            gap: 12,
+            gap: 0,
             justifyContent: "center",
           }}
         >
-          <PwaInstallPrompt inline={true} />
           {children}
         </div>
       </div>
