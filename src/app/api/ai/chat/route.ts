@@ -3973,6 +3973,7 @@ function buildIntentFocusedDirectResponse(
   const asksStepOne = isStepOneSelection(message);
   const asksPrice = /\b(precio|cuanto|costo|valor|inscripcion|mensualidad|inversion)\b/i.test(normalizedMessage);
   const asksMonthlyVsBiweekly = isMonthlyOrBiweeklyQuestion(message);
+  const asksPlanRecommendation = /\b(recomiend(a|ame|arme|as|an|acion)?|conviene|mejor\s+opci[oó]n|cu[aá]l\s+me\s+(sirve|recomiendas?)|que\s+opci[oó]n\s+me\s+recomiendas?)\b/i.test(normalizedMessage);
   const confirmsVisitCommitment = isVisitCommitmentMessage(message, lastAgentForFlow);
   const requestedTemarioMonth = extractRequestedTemarioMonth(message);
   const inferredTemarioMonthFromFlow = inferTemarioMonthFromAgentPrompt(lastAgentForFlow);
@@ -4017,6 +4018,8 @@ function buildIntentFocusedDirectResponse(
   }
 
   const inferredPendingTopic = inferPendingTopicFromHistory(history);
+  const hasRecentPricingContext = /\b(modalidades?|mensual\s+opcion|por\s+clase|inscripci[oó]n|mensualidad|presupuesto|inversion|precio)\b/i
+    .test(`${normalizeForMatch(lastAgentForFlow)} ${normalizeForMatch(inferredPendingTopic || "")}`);
 
   if (confirmsVisitCommitment) {
     return buildVisitCommitmentReply(academy);
@@ -4029,6 +4032,17 @@ function buildIntentFocusedDirectResponse(
     }
 
     return "¡Buena pregunta! 👌 No manejamos pago quincenal fijo. Trabajamos con *3 modalidades*: *Por Clase*, *Mensual Opción A* y *Mensual Opción B*. Si me dices el curso, te doy los valores exactos de cada una.";
+  }
+
+  if (asksPlanRecommendation && (asksPrice || hasRecentPricingContext || Boolean(detectedProgram))) {
+    if (!detectedProgram) {
+      return "¡Claro! 🙌 Te recomiendo la mejor opción según tu presupuesto, solo dime el curso y te doy una recomendación puntual en una línea.";
+    }
+
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+
+    return `Claro, te recomiendo la *Mensual Opción B* (${options.mensual100Text}/mes) porque incluye el 100% de materiales y estudias con todo completo desde el inicio.\n\nSi prefieres comenzar con menor inversión, la *Mensual Opción A* (${options.mensual70Text}/mes) también funciona muy bien y puedes complementar algunos materiales por tu cuenta.\n\n¿Quieres que te detalle exactamente qué incluye la inscripción (${options.inscripcionText})?`;
   }
 
   const asksScheduleRescue = isScheduleRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
