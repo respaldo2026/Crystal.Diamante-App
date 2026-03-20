@@ -959,7 +959,7 @@ export default function PortalEstudiante() {
       ? "Contenido del Curso - Pensum"
       : vista === "ciclo"
         ? "Materiales generales por ciclo"
-        : "Materiales necesarios por clase";
+        : "Materiales necesarios";
     const colorDiferenciadorCiclo = vista === "plan" ? "#2563eb" : "#16a34a";
     const colorNumeroTema = vista === "plan" ? "#2563eb" : "#16a34a";
 
@@ -1008,7 +1008,7 @@ export default function PortalEstudiante() {
 
     const resumenPlanMateriales =
       modalidadMateriales === "POR_CLASE"
-        ? "Tu plan no incluye materiales. Aquí verás claramente cuáles son por clase y cuáles solo vienen en planes mensuales."
+        ? "Tu plan no incluye materiales. Aquí verás claramente cuáles no están incluidos y cuáles solo vienen en planes mensuales."
         : modalidadMateriales === "MENSUAL_100"
           ? "Tu plan cubre los materiales base y también los materiales exclusivos del Plan 100."
           : "Tu plan cubre los materiales base. Los marcados como 'Solo Plan 100' no están incluidos en tu mensualidad actual.";
@@ -1142,10 +1142,10 @@ export default function PortalEstudiante() {
                 <Col xs={24} sm={8} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
                   <div style={{ padding: "8px 12px", borderRadius: 8, background: "#f8fafc", borderLeft: "3px solid #cbd5e1", marginBottom: 6 }}>
                     <Tag style={{ borderRadius: 999, padding: "4px 10px", fontWeight: 600, borderColor: "#cbd5e1", color: "#475569", background: "#f8fafc", margin: 0 }}>
-                      Por clase
+                      No incluido
                     </Tag>
                   </div>
-                  <Text type="secondary" style={{ fontSize: isMobile ? 11 : 12 }}>Llevas este material tu mismo</Text>
+                  <Text type="secondary" style={{ fontSize: isMobile ? 11 : 12 }}>Debes llevar este material por tu cuenta</Text>
                 </Col>
               </Row>
             </div>
@@ -1340,11 +1340,6 @@ export default function PortalEstudiante() {
                                           const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
                                           return (
                                             <Space key={`${temaId}-insumo-${itemIndex}`} size={6} wrap>
-                                              {insumo.obligatorio ? (
-                                                <CheckCircleOutlined style={{ color: "#16a34a" }} />
-                                              ) : (
-                                                <ClockCircleOutlined style={{ color: "#f59e0b" }} />
-                                              )}
                                               <Checkbox
                                                 checked={isChecklistItemChecked(key)}
                                                 onChange={(event) => {
