@@ -1338,8 +1338,9 @@ export default function PortalEstudiante() {
                                           );
                                           const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
                                           const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
+                                          const etiquetaInsumo = `${nombreInsumo}${cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}`;
                                           return (
-                                            <Space key={`${temaId}-insumo-${itemIndex}`} size={6} wrap>
+                                            <div key={`${temaId}-insumo-${itemIndex}`} style={{ width: "100%" }}>
                                               <Checkbox
                                                 checked={isChecklistItemChecked(key)}
                                                 onChange={(event) => {
@@ -1347,16 +1348,26 @@ export default function PortalEstudiante() {
                                                   setTemaRutaId(temaId);
                                                   setCicloRutaId(cicloId);
                                                 }}
+                                                style={{ width: "100%" }}
                                               >
-                                                <Space size={4}>
-                                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                                    {nombreInsumo}
-                                                    {cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}
+                                                <div
+                                                  style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "space-between",
+                                                    gap: 8,
+                                                    width: "100%",
+                                                  }}
+                                                >
+                                                  <Text type="secondary" style={{ fontSize: 12, flex: 1, minWidth: 0 }}>
+                                                    {etiquetaInsumo}
                                                   </Text>
-                                                  {renderCoverageTagForStudent(insumo, true)}
-                                                </Space>
+                                                  <span style={{ flexShrink: 0 }}>
+                                                    {renderCoverageTagForStudent(insumo, true)}
+                                                  </span>
+                                                </div>
                                               </Checkbox>
-                                            </Space>
+                                            </div>
                                           );
                                         })}
                                       </Space>
