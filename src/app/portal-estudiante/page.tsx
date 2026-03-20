@@ -1055,6 +1055,10 @@ export default function PortalEstudiante() {
             color: visual.color,
             background: visual.background,
             whiteSpace: "nowrap",
+            display: "inline-flex",
+            justifyContent: "center",
+            textAlign: "center",
+            minWidth: compact ? 104 : undefined,
           }}
         >
           {compact ? display.shortLabel : isMobile ? display.shortLabel : display.label}
@@ -1311,32 +1315,32 @@ export default function PortalEstudiante() {
                                           const etiquetaInsumo = `${nombreInsumo}${cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}`;
                                           return (
                                             <div key={`${temaId}-insumo-${itemIndex}`} style={{ width: "100%" }}>
-                                              <Checkbox
-                                                checked={isChecklistItemChecked(key)}
-                                                onChange={(event) => {
-                                                  setChecklistItemChecked(key, event.target.checked);
-                                                  setTemaRutaId(temaId);
-                                                  setCicloRutaId(cicloId);
+                                              <div
+                                                style={{
+                                                  display: "grid",
+                                                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                                                  alignItems: "center",
+                                                  gap: 8,
+                                                  width: "100%",
                                                 }}
-                                                style={{ width: "100%" }}
                                               >
-                                                <div
-                                                  style={{
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "space-between",
-                                                    gap: 8,
-                                                    width: "100%",
+                                                <Checkbox
+                                                  checked={isChecklistItemChecked(key)}
+                                                  onChange={(event) => {
+                                                    setChecklistItemChecked(key, event.target.checked);
+                                                    setTemaRutaId(temaId);
+                                                    setCicloRutaId(cicloId);
                                                   }}
+                                                  style={{ width: "100%" }}
                                                 >
-                                                  <Text type="secondary" style={{ fontSize: 12, flex: 1, minWidth: 0 }}>
+                                                  <Text type="secondary" style={{ fontSize: 12 }}>
                                                     {etiquetaInsumo}
                                                   </Text>
-                                                  <span style={{ flexShrink: 0 }}>
-                                                    {renderCoverageTagForStudent(insumo, true)}
-                                                  </span>
-                                                </div>
-                                              </Checkbox>
+                                                </Checkbox>
+                                                <span style={{ width: isMobile ? 108 : 120, display: "flex", justifyContent: "flex-end" }}>
+                                                  {renderCoverageTagForStudent(insumo, true)}
+                                                </span>
+                                              </div>
                                             </div>
                                           );
                                         })}
