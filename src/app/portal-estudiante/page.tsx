@@ -1119,36 +1119,6 @@ export default function PortalEstudiante() {
               }
               description={resumenPlanMateriales}
             />
-
-            <div style={{ marginTop: 12 }}>
-              <Text strong style={{ fontSize: 13, marginBottom: 8, display: "block", color: "#1f2937" }}>Leyenda de cobertura:</Text>
-              <Row gutter={[12, 12]}>
-                <Col xs={24} sm={8} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
-                  <div style={{ padding: "8px 12px", borderRadius: 8, background: "#ecfdf3", borderLeft: "3px solid #86efac", marginBottom: 6 }}>
-                    <Tag style={{ borderRadius: 999, padding: "4px 10px", fontWeight: 600, borderColor: "#86efac", color: "#166534", background: "#ecfdf3", margin: 0 }}>
-                      Incluido
-                    </Tag>
-                  </div>
-                  <Text type="secondary" style={{ fontSize: isMobile ? 11 : 12 }}>Lo recibes con tu plan actual</Text>
-                </Col>
-                <Col xs={24} sm={8} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
-                  <div style={{ padding: "8px 12px", borderRadius: 8, background: "#fffbeb", borderLeft: "3px solid #fcd34d", marginBottom: 6 }}>
-                    <Tag style={{ borderRadius: 999, padding: "4px 10px", fontWeight: 600, borderColor: "#fcd34d", color: "#92400e", background: "#fffbeb", margin: 0 }}>
-                      Plan Mensual
-                    </Tag>
-                  </div>
-                  <Text type="secondary" style={{ fontSize: isMobile ? 11 : 12 }}>Requiere un plan superior</Text>
-                </Col>
-                <Col xs={24} sm={8} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
-                  <div style={{ padding: "8px 12px", borderRadius: 8, background: "#f8fafc", borderLeft: "3px solid #cbd5e1", marginBottom: 6 }}>
-                    <Tag style={{ borderRadius: 999, padding: "4px 10px", fontWeight: 600, borderColor: "#cbd5e1", color: "#475569", background: "#f8fafc", margin: 0 }}>
-                      No incluido
-                    </Tag>
-                  </div>
-                  <Text type="secondary" style={{ fontSize: isMobile ? 11 : 12 }}>Debes llevar este material por tu cuenta</Text>
-                </Col>
-              </Row>
-            </div>
           </div>
         ) : null}
 
