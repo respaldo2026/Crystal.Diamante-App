@@ -2966,6 +2966,15 @@ function extractProgramInquiryTopic(message: string): string | null {
       continue;
     }
 
+    // Excluir referencias deícticas: "este curso", "ese programa", etc.
+    if (/^(este|esta|ese|esa|aquel|aquella)\s+(curso|programa|carrera)\b/i.test(candidate)) {
+      continue;
+    }
+
+    if (/^(este|esta|ese|esa|aquel|aquella)\b/i.test(candidate)) {
+      continue;
+    }
+
     // Excluir: "otros métodos", "otras técnicas", "otros cursos", etc. — no son nombres de programas
     if (/^(otros?|otras?)\b/i.test(candidate)) continue;
 
@@ -2985,11 +2994,26 @@ function findProgramMatchByTopic(topic: string, programs: any[]): any | null {
     const programName = normalizeForMatch(program?.nombre || "");
     if (!programName) continue;
 
+    const searchableProgramText = normalizeForMatch(
+      [program?.nombre, program?.descripcion, program?.contenido]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .join(" ")
+    );
+
     if (programName.includes(normalizedTopic) || normalizedTopic.includes(programName)) {
       return program;
     }
 
+    if (searchableProgramText && searchableProgramText.includes(normalizedTopic)) {
+      return program;
+    }
+
     if (topicWords.some((word) => programName.includes(word))) {
+      return program;
+    }
+
+    if (topicWords.some((word) => searchableProgramText.includes(word))) {
       return program;
     }
   }
@@ -4245,7 +4269,10 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   const requestedTopic = extractProgramInquiryTopic(message);
   if (requestedTopic) {
     const matchedProgram = findProgramMatchByTopic(requestedTopic, programs);
-    if (!matchedProgram) {
+    const normalizedRequestedTopic = normalizeForMatch(requestedTopic);
+    const isGenericReferenceTopic = /^(este|esta|ese|esa|aquel|aquella)(\s+(curso|programa|carrera))?$/.test(normalizedRequestedTopic);
+
+    if (!matchedProgram && !detectedProgram && !isGenericReferenceTopic) {
       const alternatives = buildAvailableProgramsPrompt(programs);
       return `¡Gracias por tu pregunta! 🙌\n\nEn este momento no tengo *${requestedTopic}* dentro de los programas activos.${alternatives ? `\n\n${alternatives}` : ""}\n\nSi quieres, te ayudo a elegir la opción más parecida a lo que buscas.`;
     }
