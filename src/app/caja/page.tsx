@@ -1258,6 +1258,7 @@ export default function CajaPage() {
                         size="large"
                         style={{ width: "100%" }}
                         min={0}
+                        disabled={Number(descuentoAplicado || 0) > 0}
                       />
                     </Form.Item>
 
