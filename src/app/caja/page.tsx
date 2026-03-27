@@ -267,6 +267,19 @@ export default function CajaPage() {
     });
   }, [cuotas, cuotasSeleccionadas, form]);
 
+  useEffect(() => {
+    if (cuotasSeleccionadas.length !== 1) return;
+
+    const cuota = cuotas.find((item) => item.id === cuotasSeleccionadas[0]);
+    if (!cuota) return;
+
+    const saldo = getSaldoPendiente(cuota);
+    const descuento = Number(descuentoAplicado || 0);
+    const sugerido = Math.max(saldo - descuento, 0);
+
+    form.setFieldValue("monto_a_registrar", sugerido);
+  }, [cuotas, cuotasSeleccionadas, descuentoAplicado, form]);
+
   const handleEstudianteChange = useCallback(
     async (estudianteId: string) => {
       setLoading(true);
@@ -1198,67 +1211,73 @@ export default function CajaPage() {
 
             <Divider style={{ margin: "12px 0" }} />
 
-            {cuotasSeleccionadas.length === 1 && (() => {
-              const cuotaSeleccionada = cuotas.find((item) => item.id === cuotasSeleccionadas[0]);
-              if (!cuotaSeleccionada) return null;
-
-              return (
-                <>
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    message={cuotaSeleccionada.periodo_pagado || `Cuota ${cuotaSeleccionada.numero_cuota}`}
-                    description={
-                      <div>
-                        <div>Valor programado: {formatCurrency(getMontoProgramado(cuotaSeleccionada))}</div>
-                        <div>Abonado acumulado: {formatCurrency(getTotalAbonado(cuotaSeleccionada))}</div>
-                        <div>Descuento acumulado: {formatCurrency(getDescuentoAplicado(cuotaSeleccionada))}</div>
-                        <div>Saldo actual: {formatCurrency(getSaldoPendiente(cuotaSeleccionada))}</div>
-                      </div>
-                    }
-                  />
-
-                  <Form.Item label="Monto a registrar" name="monto_a_registrar">
-                    <InputNumber<number>
-                      placeholder="$0"
-                      formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                      parser={(value) => Number(value?.replace(/\$/g, "").replace(/,/g, ""))}
-                      size="large"
-                      style={{ width: "100%" }}
-                      min={0}
-                    />
-                  </Form.Item>
-
-                  <Form.Item label="Descuento aplicado" name="descuento_aplicado">
-                    <InputNumber<number>
-                      placeholder="$0"
-                      formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                      parser={(value) => Number(value?.replace(/\$/g, "").replace(/,/g, ""))}
-                      size="large"
-                      style={{ width: "100%" }}
-                      min={0}
-                    />
-                  </Form.Item>
-
-                  <Form.Item name="motivo_descuento" label="Motivo del descuento">
-                    <Input placeholder="Obligatorio si aplicas descuento" size="large" />
-                  </Form.Item>
-                </>
-              );
-            })()}
-
-            {cuotasSeleccionadas.length > 1 && (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 16 }}
-                message="Pago múltiple"
-                description="Los abonos y descuentos solo se habilitan al seleccionar una sola cuota. Para varias cuotas se registra el saldo completo de cada una."
-              />
-            )}
-
             <Form form={form} layout="vertical">
+              {cuotasSeleccionadas.length === 1 && (() => {
+                const cuotaSeleccionada = cuotas.find((item) => item.id === cuotasSeleccionadas[0]);
+                if (!cuotaSeleccionada) return null;
+
+                const saldoActual = getSaldoPendiente(cuotaSeleccionada);
+                const descuentoActual = Number(descuentoAplicado || 0);
+                const netoAPagar = Math.max(saldoActual - descuentoActual, 0);
+
+                return (
+                  <>
+                    <Alert
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                      message={cuotaSeleccionada.periodo_pagado || `Cuota ${cuotaSeleccionada.numero_cuota}`}
+                      description={
+                        <div>
+                          <div>Valor programado: {formatCurrency(getMontoProgramado(cuotaSeleccionada))}</div>
+                          <div>Abonado acumulado: {formatCurrency(getTotalAbonado(cuotaSeleccionada))}</div>
+                          <div>Descuento acumulado: {formatCurrency(getDescuentoAplicado(cuotaSeleccionada))}</div>
+                          <div>Saldo actual: {formatCurrency(saldoActual)}</div>
+                          <div><strong>Nuevo valor a pagar: {formatCurrency(netoAPagar)}</strong></div>
+                        </div>
+                      }
+                    />
+
+                    <Form.Item label="Descuento aplicado" name="descuento_aplicado">
+                      <InputNumber<number>
+                        placeholder="$0"
+                        formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                        parser={(value) => Number(value?.replace(/\$/g, "").replace(/,/g, ""))}
+                        size="large"
+                        style={{ width: "100%" }}
+                        min={0}
+                        max={saldoActual}
+                      />
+                    </Form.Item>
+
+                    <Form.Item label="Valor a registrar (neto)" name="monto_a_registrar">
+                      <InputNumber<number>
+                        placeholder="$0"
+                        formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                        parser={(value) => Number(value?.replace(/\$/g, "").replace(/,/g, ""))}
+                        size="large"
+                        style={{ width: "100%" }}
+                        min={0}
+                      />
+                    </Form.Item>
+
+                    <Form.Item name="motivo_descuento" label="Motivo del descuento">
+                      <Input placeholder="Obligatorio si aplicas descuento" size="large" />
+                    </Form.Item>
+                  </>
+                );
+              })()}
+
+              {cuotasSeleccionadas.length > 1 && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message="Pago múltiple"
+                  description="Para varias cuotas se cobra saldo completo. Si necesitas descuento, selecciona una sola cuota."
+                />
+              )}
+
               {/* Valor entregado y cambio - Al inicio para fácil acceso */}
               <Form.Item label="Valor entregado por el cliente">
                 <InputNumber<number>
