@@ -2664,8 +2664,8 @@ async function textToSpeech(text: string): Promise<Buffer> {
   }
 
   try {
-    // Usar la voz default de Elevenlabs (Rachel)
-    const voiceId = "21m00Tcm4TlvDq8ikWAM"; // Rachel
+    // Voice ID personalizado de ElevenLabs configurado para el agente
+    const voiceId = "ECOET12tGKHdXyB0CfqU";
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
