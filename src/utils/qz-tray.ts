@@ -172,6 +172,16 @@ export const verificarQzTrayDisponible = async (): Promise<boolean> => {
   }
 };
 
+export const listarImpresorasQzTray = async (): Promise<string[]> => {
+  try {
+    const qz = await ensureQzConnection();
+    const details = await qz.printers.getDetails();
+    return details.filter((d) => d.name).map((d) => String(d.name));
+  } catch {
+    return [];
+  }
+};
+
 export const imprimirTicketConQzTray = async (data: TicketPagoData, preferredPrinter?: string): Promise<boolean> => {
   try {
     const qz = await ensureQzConnection();

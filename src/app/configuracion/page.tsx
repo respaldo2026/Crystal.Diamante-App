@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider, Upload, Space, Row, Col, Grid } from "antd";
-import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined, UploadOutlined, InstagramOutlined, FacebookOutlined, YoutubeOutlined, EnvironmentOutlined } from "@ant-design/icons";
+import { Tabs, Card, Spin, Form, Input, Button, message, Table, Switch, Select, Modal, Tag, Divider, Upload, Space, Row, Col, Grid, Alert } from "antd";
+import { SettingOutlined, TeamOutlined, SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CreditCardOutlined, WhatsAppOutlined, UploadOutlined, InstagramOutlined, FacebookOutlined, YoutubeOutlined, EnvironmentOutlined, PrinterOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
 import type { Breakpoint } from "antd/es/_util/responsiveObserver";
@@ -158,6 +158,12 @@ export default function ConfiguracionPage() {
   const [editingPlantilla, setEditingPlantilla] = useState<PlantillaWhatsApp | null>(null);
   const [submittingPlantilla, setSubmittingPlantilla] = useState(false);
 
+  // Estados para QZ Tray
+  const [qzEstado, setQzEstado] = useState<boolean | null>(null);
+  const [qzImpresoras, setQzImpresoras] = useState<string[]>([]);
+  const [testingQz, setTestingQz] = useState(false);
+  const [imprimiendoPrueba, setImprimiendoPrueba] = useState(false);
+
   const modulos: ModuleDefinition[] = MODULES.filter((modulo: ModuleDefinition) => modulo.key !== "portal-estudiante");
 
   const roleKeys = Object.keys(ROLES);
@@ -254,6 +260,80 @@ export default function ConfiguracionPage() {
     formAcademia.setFieldsValue({ logo_url: null });
     setLogoFileList([]);
     messageApi.info("Logo eliminado");
+  };
+
+  const probarConexionQz = async () => {
+    setTestingQz(true);
+    setQzImpresoras([]);
+    try {
+      const { verificarQzTrayDisponible, listarImpresorasQzTray } = await import("@utils/qz-tray");
+      const disponible = await verificarQzTrayDisponible();
+      setQzEstado(disponible);
+      if (disponible) {
+        const impresoras = await listarImpresorasQzTray();
+        setQzImpresoras(impresoras);
+        messageApi.success(`QZ Tray conectado. ${impresoras.length} impresora(s) encontrada(s).`);
+      } else {
+        messageApi.warning("QZ Tray no está disponible. Asegúrate de que esté instalado y ejecutándose.");
+      }
+    } catch {
+      setQzEstado(false);
+      messageApi.error("No se pudo conectar con QZ Tray.");
+    } finally {
+      setTestingQz(false);
+    }
+  };
+
+  const imprimirTicketPrueba = async () => {
+    setImprimiendoPrueba(true);
+    try {
+      const { imprimirTicketConQzTray } = await import("@utils/qz-tray");
+      const nombreImpresora = String(formAcademia.getFieldValue("impresora_pos") || "EPSON TM-T20II");
+      const configActual = formAcademia.getFieldsValue();
+      const ahora = new Date();
+      const fechaStr = ahora.toLocaleDateString("es-CO") + " " + ahora.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+
+      const ticketData = {
+        academia: {
+          nombre: String(configActual.nombre_academia || "Academia Crystal Diamante"),
+          ruc: configActual.ruc || undefined,
+          logoUrl: configActual.logo_url || undefined,
+          telefono: String(configActual.telefono || ""),
+          direccion: String(configActual.direccion || ""),
+          email: String(configActual.email || ""),
+          ticketTitulo: String(configActual.ticket_titulo || "RECIBO DE PAGO"),
+          ticketNota: String(configActual.ticket_nota || "** TICKET DE PRUEBA - NO VÁLIDO COMO COMPROBANTE **"),
+          ticketPie: String(configActual.ticket_pie || "Gracias por su pago"),
+          ticketCampos: ticketFields,
+        },
+        estudiante: {
+          nombre: "Estudiante de Prueba",
+          telefono: "3001234567",
+        },
+        pago: {
+          monto: 120000,
+          metodo: "Efectivo",
+          fecha: fechaStr,
+          referencia: "FAC-PRUEBA-001",
+          concepto: "Cuota 1 de 12 - Curso de Prueba",
+          numeroCuota: 1,
+          periodo: "Cuota 1 de 12",
+          valorEntregado: 150000,
+          cambio: 30000,
+        },
+      };
+
+      const impreso = await imprimirTicketConQzTray(ticketData, nombreImpresora);
+      if (impreso) {
+        messageApi.success("Ticket de prueba enviado a la impresora.");
+      } else {
+        messageApi.error("No se pudo imprimir. Verifica que QZ Tray esté conectado y la impresora esté disponible.");
+      }
+    } catch {
+      messageApi.error("Error al imprimir el ticket de prueba.");
+    } finally {
+      setImprimiendoPrueba(false);
+    }
   };
 
   const handleTabChange = (key: string) => {
@@ -1099,6 +1179,105 @@ export default function ConfiguracionPage() {
                   </div>
                 </div>
               </div>
+            </Card>
+          </Col>
+        </Row>
+
+        <Divider orientation="left"><PrinterOutlined /> Impresora Térmica / QZ Tray</Divider>
+        <Row gutter={[16, 8]}>
+          <Col xs={24} md={12}>
+            <Form.Item
+              label="Nombre de la impresora"
+              name="impresora_pos"
+              extra="Nombre exacto como aparece en Windows. Ej: EPSON TM-T20II. Haz clic en el nombre detectado para autocompletar."
+            >
+              <Input prefix={<PrinterOutlined />} placeholder="EPSON TM-T20II" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col span={24}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <PrinterOutlined />
+                  <span>Estado de conexión QZ Tray</span>
+                </Space>
+              }
+            >
+              <Space direction="vertical" style={{ width: "100%" }} size="middle">
+                {qzEstado === null && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="Sin verificar"
+                    description='Haz clic en "Probar conexión" para verificar si QZ Tray está activo.'
+                  />
+                )}
+                {qzEstado === true && (
+                  <Alert
+                    type="success"
+                    showIcon
+                    icon={<CheckCircleOutlined />}
+                    message="QZ Tray conectado correctamente"
+                    description="La impresora está disponible para impresión directa desde el módulo de Caja."
+                  />
+                )}
+                {qzEstado === false && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    icon={<CloseCircleOutlined />}
+                    message="QZ Tray no disponible"
+                    description="Asegúrate de que QZ Tray esté instalado y ejecutándose en la bandeja del sistema (ícono amarillo en esquina inferior derecha)."
+                  />
+                )}
+
+                {qzImpresoras.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 8, color: "#374151" }}>
+                      Impresoras detectadas ({qzImpresoras.length}) — haz clic para seleccionar:
+                    </div>
+                    <Space wrap>
+                      {qzImpresoras.map((imp) => (
+                        <Tag
+                          key={imp}
+                          color="blue"
+                          style={{ cursor: "pointer", padding: "4px 10px", fontSize: 13 }}
+                          onClick={() => {
+                            formAcademia.setFieldsValue({ impresora_pos: imp });
+                            messageApi.info(`Impresora seleccionada: ${imp}`);
+                          }}
+                        >
+                          <PrinterOutlined style={{ marginRight: 4 }} />
+                          {imp}
+                        </Tag>
+                      ))}
+                    </Space>
+                  </div>
+                )}
+
+                <Space wrap>
+                  <Button
+                    icon={<CheckCircleOutlined />}
+                    loading={testingQz}
+                    onClick={probarConexionQz}
+                  >
+                    Probar conexión
+                  </Button>
+                  <Button
+                    icon={<PrinterOutlined />}
+                    loading={imprimiendoPrueba}
+                    onClick={imprimirTicketPrueba}
+                    disabled={qzEstado !== true}
+                    type="dashed"
+                  >
+                    Imprimir ticket de prueba
+                  </Button>
+                </Space>
+              </Space>
             </Card>
           </Col>
         </Row>
