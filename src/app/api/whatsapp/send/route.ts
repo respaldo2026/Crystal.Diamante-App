@@ -199,6 +199,19 @@ export async function POST(request: NextRequest) {
         );
         break;
 
+      case "audio":
+        if (!body.mediaUrl) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "El tipo 'audio' requiere el campo 'mediaUrl'",
+            } as WhatsAppSendResponse,
+            { status: 400 }
+          );
+        }
+        response = await WhatsAppService.sendAudio(body.phone, body.mediaUrl);
+        break;
+
       case "pdf":
         if (!body.mediaUrl) {
           return NextResponse.json(
