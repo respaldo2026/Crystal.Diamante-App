@@ -570,6 +570,10 @@ export default function CajaPage() {
 
       if (cuotasAPagar.length === 1) {
         const cuota = cuotasAPagar[0];
+        if (!cuota) {
+          messageApi.warning("No se encontró la cuota seleccionada");
+          return;
+        }
         const saldoActual = getSaldoPendiente(cuota);
 
         if ((Number.isNaN(montoAbono) || montoAbono < 0) || (Number.isNaN(descuento) || descuento < 0)) {
