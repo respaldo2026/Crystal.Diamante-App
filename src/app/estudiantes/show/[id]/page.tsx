@@ -973,7 +973,6 @@ export default function StudentDetailView() {
           if (estado === "pagado") color = "success";
           else if (estado === "pendiente") color = "warning";
           else if (estado === "abono_parcial") color = "gold";
-          else if (estado === "en_revision") color = "processing";
           else if (estado === "vencido") color = "error";
           return <Tag color={color}>{estado === "abono_parcial" ? "abono parcial" : estado.replace("_", " ")}</Tag>;
         },

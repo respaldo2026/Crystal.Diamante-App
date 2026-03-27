@@ -15,6 +15,7 @@ export default function CursoEdit() {
     const { formProps, saveButtonProps } = useForm({
         redirect: "list"
     });
+    const formInstance = formProps.form;
     const router = useRouter();
     const params = useParams();
     const [deleting, setDeleting] = useState(false);
@@ -44,9 +45,9 @@ export default function CursoEdit() {
             if (!fechaInicio || !diasSeleccionados.length || !clasesPrograma) return;
             const fechaCalculada = calcularFechaFin(fechaInicio, diasSeleccionados, clasesPrograma);
             if (fechaCalculada) {
-                formProps.form?.setFieldValue("fecha_fin", fechaCalculada);
+                formInstance?.setFieldValue("fecha_fin", fechaCalculada);
             }
-        }, [fechaInicio, diasSeleccionados, clasesPrograma]);
+        }, [fechaInicio, diasSeleccionados, clasesPrograma, formInstance]);
 
         useEffect(() => {
             const cargarEstado = async () => {
