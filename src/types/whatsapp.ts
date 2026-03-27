@@ -7,7 +7,7 @@
 // TIPOS PARA ENVÍO DE MENSAJES
 // ============================================
 
-export type WhatsAppMessageType = "text" | "image" | "pdf" | "buttons" | "template";
+export type WhatsAppMessageType = "text" | "image" | "audio" | "pdf" | "buttons" | "template";
 
 /**
  * Payload genérico para solicitud de envío desde Make
@@ -61,6 +61,19 @@ export interface WhatsAppImageMessage {
   image: {
     link: string;
     caption?: string;
+  };
+}
+
+/**
+ * Payload para enviar audio por URL
+ */
+export interface WhatsAppAudioMessage {
+  messaging_product: "whatsapp";
+  recipient_type: "individual";
+  to: string;
+  type: "audio";
+  audio: {
+    link: string;
   };
 }
 

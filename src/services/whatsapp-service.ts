@@ -14,6 +14,7 @@
 import type {
   WhatsAppTextMessage,
   WhatsAppImageMessage,
+  WhatsAppAudioMessage,
   WhatsAppDocumentMessage,
   WhatsAppInteractiveMessage,
   WhatsAppAPIResponse,
@@ -60,7 +61,7 @@ function getMessagesEndpoint(): string {
  * Envía un payload a la API de WhatsApp
  */
 async function sendToWhatsAppAPI(
-  payload: WhatsAppTextMessage | WhatsAppImageMessage | WhatsAppDocumentMessage | WhatsAppInteractiveMessage
+  payload: WhatsAppTextMessage | WhatsAppImageMessage | WhatsAppAudioMessage | WhatsAppDocumentMessage | WhatsAppInteractiveMessage
 ): Promise<WhatsAppAPIResponse> {
   const { accessToken } = getWhatsAppCredentials();
   const endpoint = getMessagesEndpoint();
@@ -215,6 +216,29 @@ export const WhatsAppService = {
     console.log(`[WhatsApp] Enviando imagen a ${normalizedPhone}: ${imageUrl}`);
     const response = await sendToWhatsAppAPI(payload);
     console.log(`[WhatsApp] ✓ Imagen enviada. ID: ${response.messages?.[0]?.id}`);
+
+    return response;
+  },
+
+  /**
+   * Envía un audio por URL pública
+   */
+  async sendAudio(phone: string, audioUrl: string): Promise<WhatsAppAPIResponse> {
+    const normalizedPhone = normalizePhoneNumber(phone);
+
+    const payload: WhatsAppAudioMessage = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: normalizedPhone,
+      type: "audio",
+      audio: {
+        link: audioUrl,
+      },
+    };
+
+    console.log(`[WhatsApp] Enviando audio a ${normalizedPhone}: ${audioUrl}`);
+    const response = await sendToWhatsAppAPI(payload);
+    console.log(`[WhatsApp] ✓ Audio enviado. ID: ${response.messages?.[0]?.id}`);
 
     return response;
   },
