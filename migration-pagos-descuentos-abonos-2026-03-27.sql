@@ -259,10 +259,6 @@ SELECT
     p.periodo_pagado,
     p.numero_cuota,
     p.monto,
-    p.monto_programado,
-    p.descuento_aplicado,
-    p.total_abonado,
-    p.saldo_pendiente,
     p.fecha_vencimiento,
     p.fecha_pago,
     p.estado,
@@ -279,7 +275,11 @@ SELECT
         WHEN p.estado = 'pagado' THEN 0
         WHEN p.estado = 'vencido' OR p.fecha_vencimiento < CURRENT_DATE THEN CURRENT_DATE - p.fecha_vencimiento
         ELSE 0
-    END AS dias_vencido
+    END AS dias_vencido,
+    p.monto_programado,
+    p.descuento_aplicado,
+    p.total_abonado,
+    p.saldo_pendiente
 FROM public.pagos p
 LEFT JOIN public.perfiles perf ON p.estudiante_id = perf.id
 LEFT JOIN public.matriculas m ON p.matricula_id = m.id
