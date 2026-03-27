@@ -368,7 +368,7 @@ export default function PagoCreate() {
                         direccion: configTicket?.direccion ?? undefined,
                         email: configTicket?.email ?? undefined,
                         ticketTitulo: configTicket?.ticket_titulo ?? undefined,
-                        ticketNota: detalleOperacion || configTicket?.ticket_nota ?? undefined,
+                        ticketNota: (detalleOperacion || configTicket?.ticket_nota) ?? undefined,
                         ticketPie: configTicket?.ticket_pie ?? undefined,
                         ticketCampos: configTicket?.ticket_campos ?? undefined,
                     },
