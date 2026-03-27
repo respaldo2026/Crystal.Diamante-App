@@ -705,6 +705,8 @@ function buildAgentPrompt(
     prompt += `\n# DIRECTIVA CONTEXTUAL (PRIORIDAD ALTA):\n${contextualDirective}\n`;
   }
 
+  prompt += `\n# FORMATO OBLIGATORIO PARA AUDIO:\n- Escribe como si fueras a decirlo en voz alta, no como texto tecnico.\n- Si mencionas horas, evita formatos como 4:00 PM; prefiere expresiones como \"cuatro de la tarde\" o \"cuatro y treinta de la tarde\".\n- Si mencionas fechas, evita formatos numericos como 31/03/2026 o 2026-03-31; prefiere \"treinta y uno de marzo de dos mil veintiseis\".\n- Si mencionas valores, evita decir simbolos o formatos frios; prefiere \"ciento veinte mil pesos\" o \"ciento veinte mil\" segun suene mas natural.\n- Si mencionas telefonos o codigos, separalos en bloques cortos faciles de pronunciar.\n`;
+
   prompt += `\n# Mensaje del usuario:\n${userMessage}\n\n# Tu respuesta (como ${persona}):`;
 
   return prompt;
@@ -2853,6 +2855,43 @@ function normalizeCountPhrasesForSpeech(text: string): string {
   });
 }
 
+function normalizeDatesForSpeech(text: string): string {
+  if (!text) return '';
+
+  const monthNames = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+  ];
+
+  const buildSpokenDate = (yearRaw: string | undefined, monthRaw: string, dayRaw: string) => {
+    const day = Number(dayRaw);
+    const month = Number(monthRaw);
+    const year = yearRaw ? Number(yearRaw) : null;
+
+    if (!Number.isFinite(day) || !Number.isFinite(month) || day < 1 || day > 31 || month < 1 || month > 12) {
+      return null;
+    }
+
+    const dayText = numberToSpanish(day);
+    const monthText = monthNames[month - 1];
+    if (!monthText) return null;
+
+    if (year && Number.isFinite(year)) {
+      return `${dayText} de ${monthText} de ${numberToSpanish(year)}`;
+    }
+
+    return `${dayText} de ${monthText}`;
+  };
+
+  return text
+    .replace(/\b(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})\b/g, (match, year, month, day) => {
+      return buildSpokenDate(year, month, day) || match;
+    })
+    .replace(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](20\d{2}))?\b/g, (match, day, month, year) => {
+      return buildSpokenDate(year, month, day) || match;
+    });
+}
+
 /**
  * Limpiar texto para TTS y evitar pausas extra o caracteres raros
  */
@@ -2872,6 +2911,7 @@ function cleanForTTS(text: string): string {
 
   output = normalizeCurrencyForSpeech(output);
   output = normalizeTimesForSpeech(output);
+  output = normalizeDatesForSpeech(output);
   output = normalizeCountPhrasesForSpeech(output);
 
   // Unificar saltos y evitar pausas largas
