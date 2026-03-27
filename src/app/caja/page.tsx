@@ -34,6 +34,7 @@ import {
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { generarTicketPagoBlob, abrirTicketPagoDesdeBlob, imprimirTicketTermicoTM20II } from "@utils/pago-ticket";
+import { abrirCajonConQzTray, imprimirTicketConQzTray, verificarQzTrayDisponible } from "@utils/qz-tray";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 import { getDescuentoAplicado, getMontoProgramado, getSaldoPendiente, getTotalAbonado, getVisiblePaymentStatus } from "@utils/payment-balances";
@@ -163,6 +164,7 @@ export default function CajaPage() {
   const [configuracion, setConfiguracion] = useState<any>(null);
   const [valorEntregado, setValorEntregado] = useState<number | null>(null);
   const [mediosPago, setMediosPago] = useState<any[]>([]);
+  const [qzTrayDisponible, setQzTrayDisponible] = useState(false);
 
   const totalAPagar = useMemo(
     () => {
@@ -238,6 +240,23 @@ export default function CajaPage() {
     cargarConfiguracion();
     cargarMediosPago();
   }, [cargarEstudiantes, cargarConfiguracion, cargarMediosPago]);
+
+  useEffect(() => {
+    let activo = true;
+
+    const validarQzTray = async () => {
+      const disponible = await verificarQzTrayDisponible();
+      if (activo) {
+        setQzTrayDisponible(disponible);
+      }
+    };
+
+    void validarQzTray();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   // Generar número de factura cuando se selecciona una cuota
   useEffect(() => {
@@ -674,6 +693,7 @@ export default function CajaPage() {
         const configTicket = configActual || configuracion;
 
         if (montoAbono > 0) {
+          const printerName = String(configTicket?.impresora_pos || configTicket?.impresora_termica || "EPSON TM-T20II");
           const ticketData = {
             academia: {
               nombre: configTicket?.nombre_academia || "Academia Crystal Diamante",
@@ -704,16 +724,25 @@ export default function CajaPage() {
             },
           };
 
-          const placeholder = window.open("", "_blank");
-          if (placeholder) {
-            await imprimirTicketTermicoTM20II(ticketData, placeholder);
-          } else {
-            await imprimirTicketTermicoTM20II(ticketData);
+          const impresoPorQz = await imprimirTicketConQzTray(ticketData, printerName);
+
+          if (!impresoPorQz) {
+            const placeholder = window.open("", "_blank");
+            if (placeholder) {
+              await imprimirTicketTermicoTM20II(ticketData, placeholder);
+            } else {
+              await imprimirTicketTermicoTM20II(ticketData);
+            }
           }
 
           const blob = await generarTicketPagoBlob(ticketData);
 
-          abrirCajonRegistrador();
+          if (metodoPago === "efectivo") {
+            const cajonAbiertoPorQz = await abrirCajonConQzTray(printerName);
+            if (!cajonAbiertoPorQz) {
+              abrirCajonRegistrador();
+            }
+          }
 
           try {
             const { publicUrl } = await subirTicketPago({
@@ -889,19 +918,27 @@ export default function CajaPage() {
         },
       };
 
-      // Generar y abrir ticket
-      const placeholder = window.open("", "_blank");
+      const printerName = String(configTicket?.impresora_pos || configTicket?.impresora_termica || "EPSON TM-T20II");
+      const impresoPorQz = await imprimirTicketConQzTray(ticketData, printerName);
 
-      if (placeholder) {
-        await imprimirTicketTermicoTM20II(ticketData, placeholder);
-      } else {
-        await imprimirTicketTermicoTM20II(ticketData);
+      if (!impresoPorQz) {
+        const placeholder = window.open("", "_blank");
+
+        if (placeholder) {
+          await imprimirTicketTermicoTM20II(ticketData, placeholder);
+        } else {
+          await imprimirTicketTermicoTM20II(ticketData);
+        }
       }
 
       const blob = await generarTicketPagoBlob(ticketData);
 
-      // Abrir cajón automáticamente al imprimir/generar el tiquete de facturación
-      abrirCajonRegistrador();
+      if (metodoPago === "efectivo") {
+        const cajonAbiertoPorQz = await abrirCajonConQzTray(printerName);
+        if (!cajonAbiertoPorQz) {
+          abrirCajonRegistrador();
+        }
+      }
 
       // Subir ticket a storage y asociarlo a todos los pagos del lote
       if (pagosActualizados.length > 0) {
@@ -1156,16 +1193,6 @@ export default function CajaPage() {
                   style={{ marginBottom: 8 }}
                 />
               )}
-
-              {estudianteSeleccionado && matriculas.some((m) => m.modalidad_pago === "POR_CLASE") && (
-                <Alert
-                  message="Plan Por Clase activo"
-                  description="Los cobros por clase se generan automáticamente al registrar la asistencia desde el expediente del estudiante. Aquí aparecen las clases asistidas pendientes de pago."
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                />
-              )}
             </Form>
           </Card>
 
@@ -1210,6 +1237,18 @@ export default function CajaPage() {
             />
 
             <Divider style={{ margin: "12px 0" }} />
+
+            <Alert
+              type={qzTrayDisponible ? "success" : "warning"}
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={qzTrayDisponible ? "Impresion directa Epson disponible" : "Impresion local no detectada"}
+              description={
+                qzTrayDisponible
+                  ? "La caja intentara imprimir directo en la Epson TM-T20II y abrir el cajon en pagos en efectivo."
+                  : "Si QZ Tray no esta instalado o no detecta la impresora, se usara el dialogo normal del navegador."
+              }
+            />
 
             <Form form={form} layout="vertical">
               {cuotasSeleccionadas.length === 1 && (() => {
