@@ -36,6 +36,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { generarTicketPagoBlob, abrirTicketPagoDesdeBlob, imprimirTicketPagoDesdeBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
+import { getDescuentoAplicado, getMontoProgramado, getSaldoPendiente, getTotalAbonado, getVisiblePaymentStatus } from "@utils/payment-balances";
 
 const { Title, Text } = Typography;
 
@@ -67,6 +68,11 @@ interface Matricula {
 interface Cuota {
   id: string;
   monto: number;
+  monto_programado?: number | null;
+  descuento_aplicado?: number | null;
+  total_abonado?: number | null;
+  saldo_pendiente?: number | null;
+  motivo_descuento?: string | null;
   numero_cuota: number;
   fecha_vencimiento: string;
   periodo_pagado: string;
@@ -75,6 +81,20 @@ interface Cuota {
   es_virtual?: boolean;
   tipo_cuota?: string | null;
 }
+
+type PaymentAdjustmentRpcResult = {
+  abono_id: string;
+  pago_id: string;
+  monto_abono: number;
+  descuento_total: number;
+  total_abonado: number;
+  saldo_pendiente: number;
+  monto_programado: number;
+  monto_exigible: number;
+  estado: string;
+  matricula_id: string | null;
+  estudiante_id: string | null;
+};
 
 const formatCurrency = (value?: number | null) => {
   if (!value) return "$0";
@@ -130,6 +150,8 @@ const metodoPagoLabels: Record<MetodoPago, string> = {
 export default function CajaPage() {
   const { message: messageApi } = App.useApp();
   const [form] = Form.useForm();
+  const montoARegistrar = Form.useWatch("monto_a_registrar", form);
+  const descuentoAplicado = Form.useWatch("descuento_aplicado", form);
 
   const [loading, setLoading] = useState(false);
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
@@ -143,11 +165,16 @@ export default function CajaPage() {
   const [mediosPago, setMediosPago] = useState<any[]>([]);
 
   const totalAPagar = useMemo(
-    () =>
-      cuotas
+    () => {
+      if (cuotasSeleccionadas.length === 1) {
+        return Number(montoARegistrar || 0);
+      }
+
+      return cuotas
         .filter((c) => cuotasSeleccionadas.includes(c.id))
-        .reduce((acc, c) => acc + Number(c.monto), 0),
-    [cuotas, cuotasSeleccionadas]
+        .reduce((acc, c) => acc + getSaldoPendiente(c), 0);
+    },
+    [cuotas, cuotasSeleccionadas, montoARegistrar]
   );
 
   const cambio = useMemo(() => {
@@ -219,6 +246,26 @@ export default function CajaPage() {
       form.setFieldsValue({ referencia: `FAC-${numeroFactura}` });
     }
   }, [cuotasSeleccionadas, form]);
+
+  useEffect(() => {
+    if (cuotasSeleccionadas.length !== 1) {
+      form.setFieldsValue({
+        monto_a_registrar: undefined,
+        descuento_aplicado: 0,
+        motivo_descuento: undefined,
+      });
+      return;
+    }
+
+    const cuota = cuotas.find((item) => item.id === cuotasSeleccionadas[0]);
+    if (!cuota) return;
+
+    form.setFieldsValue({
+      monto_a_registrar: getSaldoPendiente(cuota),
+      descuento_aplicado: 0,
+      motivo_descuento: undefined,
+    });
+  }, [cuotas, cuotasSeleccionadas, form]);
 
   const handleEstudianteChange = useCallback(
     async (estudianteId: string) => {
@@ -297,7 +344,7 @@ export default function CajaPage() {
 
           const { data: cuotasData, error: cuotasError } = await supabaseBrowserClient
             .from("pagos")
-            .select("id, monto, numero_cuota, fecha_vencimiento, periodo_pagado, estado, matricula_id, tipo_cuota")
+            .select("id, monto, monto_programado, descuento_aplicado, total_abonado, saldo_pendiente, motivo_descuento, numero_cuota, fecha_vencimiento, periodo_pagado, estado, matricula_id, tipo_cuota")
             .in("matricula_id", matriculaIds)
             .order("fecha_vencimiento");
 
@@ -415,6 +462,11 @@ export default function CajaPage() {
               cuotasVirtuales.push({
                 id: `virtual-${matricula.id}-${i}`,
                 monto: montoBase,
+                monto_programado: montoBase,
+                descuento_aplicado: 0,
+                total_abonado: 0,
+                saldo_pendiente: montoBase,
+                motivo_descuento: null,
                 numero_cuota: i,
                 fecha_vencimiento: calcularFechaVencimientoCuota(matricula.fecha_inicio, i),
                 periodo_pagado: `Cuota ${i} de ${totalEsperado}`,
@@ -512,6 +564,214 @@ export default function CajaPage() {
       const pagosActualizados = [];
       const metodoPago = values.metodo_pago as MetodoPago;
       const referenciaPago = values.referencia || `FAC-${generarNumeroFactura()}`;
+      const montoAbono = Number(values.monto_a_registrar || 0);
+      const descuento = Number(values.descuento_aplicado || 0);
+      const motivoDescuento = String(values.motivo_descuento || "").trim() || null;
+
+      if (cuotasAPagar.length === 1) {
+        const cuota = cuotasAPagar[0];
+        const saldoActual = getSaldoPendiente(cuota);
+
+        if ((Number.isNaN(montoAbono) || montoAbono < 0) || (Number.isNaN(descuento) || descuento < 0)) {
+          messageApi.warning("El abono y el descuento deben ser valores válidos");
+          return;
+        }
+
+        if (montoAbono <= 0 && descuento <= 0) {
+          messageApi.warning("Debe registrar un abono o un descuento mayor a 0");
+          return;
+        }
+
+        if (montoAbono + descuento > saldoActual) {
+          messageApi.warning("La suma del abono y el descuento no puede superar el saldo actual");
+          return;
+        }
+
+        if (descuento > 0 && !motivoDescuento) {
+          messageApi.warning("Indique el motivo del descuento");
+          return;
+        }
+
+        let pagoBaseId = cuota.id;
+
+        if (cuota.es_virtual) {
+          const { data: pagoCreado, error: errorCrearPago } = await supabaseBrowserClient
+            .from("pagos")
+            .insert({
+              estado: "pendiente",
+              matricula_id: cuota.matricula_id || null,
+              estudiante_id: estudianteSeleccionado?.id || null,
+              monto: Number(cuota.monto || 0),
+              monto_programado: Number(cuota.monto_programado || cuota.monto || 0),
+              descuento_aplicado: 0,
+              total_abonado: 0,
+              saldo_pendiente: Number(cuota.monto || 0),
+              numero_cuota: Number(cuota.numero_cuota || 0),
+              fecha_vencimiento: cuota.fecha_vencimiento || null,
+              periodo_pagado: cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim(),
+              tipo_cuota: cuota.tipo_cuota || "mensual",
+            })
+            .select("id")
+            .single();
+
+          if (errorCrearPago) throw errorCrearPago;
+          pagoBaseId = pagoCreado.id;
+        }
+
+        const { data: ajusteData, error: ajusteError } = await supabaseBrowserClient.rpc("registrar_abono_pago", {
+          p_pago_id: pagoBaseId,
+          p_monto_abono: montoAbono,
+          p_descuento_aplicado: descuento,
+          p_metodo_pago: metodoPago,
+          p_referencia: referenciaPago,
+          p_observaciones: values.observaciones || null,
+          p_motivo_descuento: motivoDescuento,
+          p_fecha_pago: dayjs().toISOString(),
+          p_created_by: null,
+        });
+
+        if (ajusteError) throw ajusteError;
+
+        const ajuste = (Array.isArray(ajusteData) ? ajusteData[0] : ajusteData) as PaymentAdjustmentRpcResult | null;
+        if (!ajuste) {
+          throw new Error("No se pudo confirmar el abono en caja");
+        }
+
+        const matriculaCuota = matriculas.find((m) => String(m.id) === String(cuota.matricula_id));
+        const conceptoTicket = ajuste.saldo_pendiente > 0
+          ? `Abono a ${cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}`
+          : `${cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}`;
+        const detalleOperacion = [
+          descuento > 0 ? `Descuento aplicado: ${formatCurrency(descuento)}` : null,
+          ajuste.saldo_pendiente > 0 ? `Saldo pendiente: ${formatCurrency(ajuste.saldo_pendiente)}` : "Cuota saldada",
+        ].filter(Boolean).join(" · ");
+
+        const { data: configActual } = await supabaseBrowserClient
+          .from("configuracion")
+          .select("*")
+          .order("updated_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle();
+
+        const configTicket = configActual || configuracion;
+
+        if (montoAbono > 0) {
+          const ticketData = {
+            academia: {
+              nombre: configTicket?.nombre_academia || "Academia Crystal Diamante",
+              ruc: configTicket?.ruc || undefined,
+              logoUrl: configTicket?.logo_url || undefined,
+              telefono: configTicket?.telefono || "",
+              direccion: configTicket?.direccion || "",
+              email: configTicket?.email || "",
+              ticketTitulo: configTicket?.ticket_titulo || "RECIBO DE PAGO",
+              ticketNota: detalleOperacion || configTicket?.ticket_nota || "",
+              ticketPie: configTicket?.ticket_pie || "Gracias por su pago",
+              ticketCampos: configTicket?.ticket_campos || undefined,
+            },
+            estudiante: {
+              nombre: estudianteSeleccionado?.nombre_completo || "",
+              telefono: estudianteSeleccionado?.telefono || "",
+            },
+            pago: {
+              monto: montoAbono,
+              metodo: metodoPagoLabels[metodoPago],
+              fecha: dayjs().format("DD/MM/YYYY HH:mm"),
+              referencia: referenciaPago,
+              concepto: `${conceptoTicket} - ${matriculaCuota?.curso_nombre || "Curso"}`,
+              numeroCuota: cuota.numero_cuota,
+              periodo: detalleOperacion || cuota.periodo_pagado,
+              valorEntregado: valorEntregado || undefined,
+              cambio: cambio || undefined,
+            },
+          };
+
+          const blob = await generarTicketPagoBlob(ticketData);
+          const placeholder = window.open("", "_blank");
+
+          if (placeholder) {
+            await imprimirTicketPagoDesdeBlob(blob, placeholder);
+          } else {
+            abrirTicketPagoDesdeBlob(blob);
+          }
+
+          abrirCajonRegistrador();
+
+          try {
+            const { publicUrl } = await subirTicketPago({
+              blob,
+              pagoId: ajuste.pago_id,
+              estudianteId: estudianteSeleccionado?.id,
+            });
+
+            await supabaseBrowserClient
+              .from("pagos_abonos")
+              .update({ ticket_url: publicUrl } as any)
+              .eq("id", ajuste.abono_id);
+
+            if (ajuste.saldo_pendiente === 0) {
+              await supabaseBrowserClient
+                .from("pagos")
+                .update({ ticket_url: publicUrl } as any)
+                .eq("id", ajuste.pago_id);
+            }
+
+            await registrarIngresoDesdePago({
+              fecha: dayjs().format("YYYY-MM-DD"),
+              monto: montoAbono,
+              concepto: `${conceptoTicket} - ${matriculaCuota?.curso_nombre || "Curso"}`,
+              categoria: "inscripciones",
+              metodo_pago: metodoPago,
+              referencia: referenciaPago,
+              descripcion: detalleOperacion || values.observaciones || null,
+              estudiante_id: estudianteSeleccionado?.id || null,
+              ticket_url: publicUrl,
+              pago_id: ajuste.pago_id,
+              pago_abono_id: ajuste.abono_id,
+              created_by: null,
+            });
+          } catch (ticketError) {
+            console.error("Error generando ticket de abono en caja:", ticketError);
+          }
+        }
+
+        if (estudianteSeleccionado?.telefono && (estudianteSeleccionado?.notif_whatsapp ?? true) && montoAbono > 0) {
+          try {
+            const { enviarConfirmacionPago } = await import("@/services/whatsapp-messages-module");
+
+            await enviarConfirmacionPago(estudianteSeleccionado.id, {
+              nombre: estudianteSeleccionado.nombre_completo,
+              telefono: estudianteSeleccionado.telefono,
+              referenciaPago,
+              monto: montoAbono,
+              fechaPago: dayjs().format("DD/MM/YYYY"),
+              concepto: conceptoTicket,
+              nombreCurso: matriculaCuota?.curso_nombre || "Curso",
+              fechaVigencia: dayjs().add(1, "month").format("DD/MM/YYYY"),
+              fechaProximaClase: "Por confirmar",
+            });
+          } catch (whatsappError) {
+            console.error("Error enviando confirmación de pago por WhatsApp desde Caja:", whatsappError);
+          }
+        }
+
+        if (ajuste.saldo_pendiente === 0) {
+          messageApi.success("Pago registrado y cuota saldada correctamente");
+        } else if (montoAbono > 0) {
+          messageApi.success(`Abono registrado. Saldo pendiente: ${formatCurrency(ajuste.saldo_pendiente)}`);
+        } else {
+          messageApi.success(`Descuento aplicado. Nuevo saldo: ${formatCurrency(ajuste.saldo_pendiente)}`);
+        }
+
+        form.resetFields();
+        setCuotasSeleccionadas([]);
+        setEstudianteSeleccionado(null);
+        setMatriculas([]);
+        setCuotas([]);
+        setValorEntregado(null);
+        return;
+      }
 
       // Actualizar cada cuota seleccionada
       for (const cuota of cuotasAPagar) {
@@ -530,7 +790,11 @@ export default function CajaPage() {
               .insert({
                 ...payloadPago,
                 matricula_id: cuota.matricula_id || null,
-                monto: Number(cuota.monto || 0),
+                monto: getSaldoPendiente(cuota),
+                monto_programado: Number(cuota.monto_programado || cuota.monto || 0),
+                descuento_aplicado: Number(cuota.descuento_aplicado || 0),
+                total_abonado: getSaldoPendiente(cuota),
+                saldo_pendiente: 0,
                 numero_cuota: Number(cuota.numero_cuota || 0),
                 fecha_vencimiento: cuota.fecha_vencimiento || null,
                 periodo_pagado: cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim(),
@@ -776,7 +1040,7 @@ export default function CajaPage() {
       title: "Monto",
       dataIndex: "monto",
       key: "monto",
-      render: (val: number) => formatCurrency(val),
+      render: (_: number, record: Cuota) => formatCurrency(getSaldoPendiente(record)),
     },
     {
       title: "Vencimiento",
@@ -788,14 +1052,15 @@ export default function CajaPage() {
       title: "Estado",
       dataIndex: "estado",
       key: "estado",
-      render: (estado: string) => {
-        const estadoNormalizado = String(estado || "").trim().toLowerCase();
-        const esVencido = estadoNormalizado === "vencido";
-        const esPagado = estadoNormalizado === "pagado";
+      render: (_estado: string, record: Cuota) => {
+        const visibleStatus = getVisiblePaymentStatus(record);
+        const esVencido = visibleStatus === "vencido";
+        const esPagado = visibleStatus === "pagado";
+        const esAbonoParcial = visibleStatus === "abono_parcial";
 
         return (
-          <Tag color={esPagado ? "green" : esVencido ? "red" : "orange"}>
-            {esPagado ? "Pagado" : esVencido ? "Vencido" : "Pendiente"}
+          <Tag color={esPagado ? "green" : esVencido ? "red" : esAbonoParcial ? "gold" : "orange"}>
+            {esPagado ? "Pagado" : esVencido ? "Vencido" : esAbonoParcial ? "Abono parcial" : "Pendiente"}
           </Tag>
         );
       },
@@ -927,6 +1192,66 @@ export default function CajaPage() {
             />
 
             <Divider style={{ margin: "12px 0" }} />
+
+            {cuotasSeleccionadas.length === 1 && (() => {
+              const cuotaSeleccionada = cuotas.find((item) => item.id === cuotasSeleccionadas[0]);
+              if (!cuotaSeleccionada) return null;
+
+              return (
+                <>
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message={cuotaSeleccionada.periodo_pagado || `Cuota ${cuotaSeleccionada.numero_cuota}`}
+                    description={
+                      <div>
+                        <div>Valor programado: {formatCurrency(getMontoProgramado(cuotaSeleccionada))}</div>
+                        <div>Abonado acumulado: {formatCurrency(getTotalAbonado(cuotaSeleccionada))}</div>
+                        <div>Descuento acumulado: {formatCurrency(getDescuentoAplicado(cuotaSeleccionada))}</div>
+                        <div>Saldo actual: {formatCurrency(getSaldoPendiente(cuotaSeleccionada))}</div>
+                      </div>
+                    }
+                  />
+
+                  <Form.Item label="Monto a registrar" name="monto_a_registrar">
+                    <InputNumber
+                      placeholder="$0"
+                      formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                      parser={(value) => Number(value?.replace(/\$/g, "").replace(/,/g, ""))}
+                      size="large"
+                      style={{ width: "100%" }}
+                      min={0}
+                    />
+                  </Form.Item>
+
+                  <Form.Item label="Descuento aplicado" name="descuento_aplicado">
+                    <InputNumber
+                      placeholder="$0"
+                      formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                      parser={(value) => Number(value?.replace(/\$/g, "").replace(/,/g, ""))}
+                      size="large"
+                      style={{ width: "100%" }}
+                      min={0}
+                    />
+                  </Form.Item>
+
+                  <Form.Item name="motivo_descuento" label="Motivo del descuento">
+                    <Input placeholder="Obligatorio si aplicas descuento" size="large" />
+                  </Form.Item>
+                </>
+              );
+            })()}
+
+            {cuotasSeleccionadas.length > 1 && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message="Pago múltiple"
+                description="Los abonos y descuentos solo se habilitan al seleccionar una sola cuota. Para varias cuotas se registra el saldo completo de cada una."
+              />
+            )}
 
             <Form form={form} layout="vertical">
               {/* Valor entregado y cambio - Al inicio para fácil acceso */}

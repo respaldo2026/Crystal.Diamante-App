@@ -544,7 +544,7 @@ export default function TesoreriaPage() {
 
     const handleRegenerarComprobante = async (record: MovimientoFinanciero) => {
         try {
-            if (!record.pago_id) {
+            if (!record.pago_id && !record.pago_abono_id) {
                 message.warning("Solo se puede regenerar ticket en movimientos vinculados a un pago");
                 return;
             }
@@ -557,15 +557,36 @@ export default function TesoreriaPage() {
                 .limit(1)
                 .maybeSingle();
 
-            const { data: pago, error: pagoError } = await supabaseBrowserClient
-                .from("pagos")
-                .select("id, fecha_pago, monto, metodo_pago, referencia, periodo_pagado, numero_cuota, estudiante_id, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
-                .eq("id", record.pago_id)
-                .maybeSingle();
+            const { data: pagoData, error: pagoError } = record.pago_abono_id
+                ? await supabaseBrowserClient
+                    .from("pagos_abonos")
+                    .select("id, pago_id, fecha_pago, monto_abono, metodo_pago, referencia, observaciones, pagos(id, periodo_pagado, numero_cuota, estudiante_id, matriculas!pagos_matricula_id_fkey(cursos(nombre))))")
+                    .eq("id", record.pago_abono_id)
+                    .maybeSingle()
+                : await supabaseBrowserClient
+                    .from("pagos")
+                    .select("id, fecha_pago, monto, metodo_pago, referencia, periodo_pagado, numero_cuota, estudiante_id, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
+                    .eq("id", record.pago_id)
+                    .maybeSingle();
 
-            if (pagoError || !pago) {
+            if (pagoError || !pagoData) {
                 throw pagoError ?? new Error("No se encontró el pago asociado al movimiento");
             }
+
+            const pago = record.pago_abono_id
+                ? {
+                    id: (pagoData as any)?.pagos?.id,
+                    fecha_pago: (pagoData as any)?.fecha_pago,
+                    monto: Number((pagoData as any)?.monto_abono || 0),
+                    metodo_pago: (pagoData as any)?.metodo_pago,
+                    referencia: (pagoData as any)?.referencia,
+                    periodo_pagado: (pagoData as any)?.pagos?.periodo_pagado,
+                    numero_cuota: (pagoData as any)?.pagos?.numero_cuota,
+                    estudiante_id: (pagoData as any)?.pagos?.estudiante_id,
+                    matriculas: (pagoData as any)?.pagos?.matriculas,
+                    abono_id: (pagoData as any)?.id,
+                  }
+                : (pagoData as any);
 
             const estudianteId = String(pago?.estudiante_id || record?.estudiante_id || "");
             const { data: perfil } = estudianteId
@@ -579,6 +600,7 @@ export default function TesoreriaPage() {
             const cursoNombre = (pago as any)?.matriculas?.cursos?.nombre || "Curso";
             const periodoLegible = pago?.periodo_pagado || `Cuota ${pago?.numero_cuota ?? ""}`.trim();
             const fechaPagoLegible = pago?.fecha_pago ? dayjs(pago.fecha_pago).format("DD/MM/YYYY") : dayjs().format("DD/MM/YYYY");
+            const concepto = record.pago_abono_id ? `Abono a ${periodoLegible} - ${cursoNombre}` : `${periodoLegible} - ${cursoNombre}`;
 
             const ticketData = {
                 academia: {
@@ -599,12 +621,12 @@ export default function TesoreriaPage() {
                     telefono: perfil?.telefono || record?.perfiles?.telefono || undefined,
                 },
                 pago: {
-                    referencia: pago?.referencia || pago?.id,
+                    referencia: pago?.referencia || (pago as any)?.abono_id || pago?.id,
                     metodo: pago?.metodo_pago || "efectivo",
                     monto: Number(pago?.monto || 0),
                     fecha: fechaPagoLegible,
-                    concepto: `${periodoLegible} - ${cursoNombre}`,
-                    periodo: periodoLegible,
+                    concepto,
+                    periodo: record.descripcion || periodoLegible,
                     numeroCuota: typeof pago?.numero_cuota === "number" ? pago.numero_cuota : undefined,
                 },
                 curso: {
@@ -627,17 +649,21 @@ export default function TesoreriaPage() {
             });
 
             await supabaseBrowserClient
-                .from("pagos")
-                .update({ ticket_url: publicUrl })
-                .eq("id", pago.id);
+                .from(record.pago_abono_id ? "pagos_abonos" : "pagos")
+                .update({ ticket_url: publicUrl } as any)
+                .eq("id", record.pago_abono_id || pago.id);
 
             await supabaseBrowserClient
                 .from("movimientos_financieros")
                 .update({ ticket_url: publicUrl })
-                .eq("pago_id", pago.id);
+                .eq(record.pago_abono_id ? "pago_abono_id" : "pago_id", record.pago_abono_id || pago.id);
 
             setMovimientos((prev) => prev.map((mov) => {
-                if (String(mov.pago_id || "") === String(pago.id)) {
+                const coincide = record.pago_abono_id
+                    ? String(mov.pago_abono_id || "") === String(record.pago_abono_id)
+                    : String(mov.pago_id || "") === String(pago.id);
+
+                if (coincide) {
                     return { ...mov, ticket_url: publicUrl };
                 }
                 return mov;

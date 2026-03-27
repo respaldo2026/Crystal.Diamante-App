@@ -12,6 +12,7 @@ import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
+import { getDescuentoAplicado, getMontoProgramado, getSaldoPendiente, getTotalAbonado, isPartialPayment } from "@utils/payment-balances";
 
 type EstudianteDetalle = {
     id: string;
@@ -46,6 +47,20 @@ type ConfiguracionAcademia = {
         pie?: boolean;
         titulo?: boolean;
     } | null;
+};
+
+type PaymentAdjustmentRpcResult = {
+    abono_id: string;
+    pago_id: string;
+    monto_abono: number;
+    descuento_total: number;
+    total_abonado: number;
+    saldo_pendiente: number;
+    monto_programado: number;
+    monto_exigible: number;
+    estado: string;
+    matricula_id: number | null;
+    estudiante_id: string | null;
 };
 
 const formatoCOP = (valor: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
@@ -189,7 +204,9 @@ export default function PagoCreate() {
             if (data && data.length > 0) {
                 const cuotaInicial = data[0];
                 formProps.form?.setFieldValue("cuota_id", cuotaInicial.id);
-                formProps.form?.setFieldValue("monto", cuotaInicial.monto);
+                formProps.form?.setFieldValue("monto", getSaldoPendiente(cuotaInicial));
+                formProps.form?.setFieldValue("descuento_aplicado", 0);
+                formProps.form?.setFieldValue("motivo_descuento", undefined);
                 setCuotaSeleccionada(cuotaInicial);
             }
         }
@@ -217,7 +234,9 @@ export default function PagoCreate() {
         }
         const cuota = cuotasPendientes.find((c) => c.id === cuotaId);
         if (cuota) {
-            formProps.form?.setFieldValue("monto", cuota.monto);
+            formProps.form?.setFieldValue("monto", getSaldoPendiente(cuota));
+            formProps.form?.setFieldValue("descuento_aplicado", 0);
+            formProps.form?.setFieldValue("motivo_descuento", undefined);
             setCuotaSeleccionada(cuota);
         }
     };
@@ -251,7 +270,7 @@ export default function PagoCreate() {
     );
 
     const handleOnFinish = async (values: any) => {
-        const { cuota_id, monto, metodo_pago, fecha_pago, referencia } = values;
+        const { cuota_id, monto, metodo_pago, fecha_pago, referencia, descuento_aplicado, motivo_descuento } = values;
 
         if (!cuota_id) {
             message.error("Debes seleccionar una cuota a pagar");
@@ -266,8 +285,26 @@ export default function PagoCreate() {
         }
 
         const montoNumero = Number(monto || 0);
-        if (Number.isNaN(montoNumero) || montoNumero <= 0) {
-            message.error("El monto debe ser mayor a 0");
+        const descuentoNumero = Number(descuento_aplicado || 0);
+        const saldoActual = getSaldoPendiente(cuota);
+
+        if ((Number.isNaN(montoNumero) || montoNumero < 0) || (Number.isNaN(descuentoNumero) || descuentoNumero < 0)) {
+            message.error("El abono y el descuento deben ser valores válidos");
+            return;
+        }
+
+        if (montoNumero <= 0 && descuentoNumero <= 0) {
+            message.error("Debes registrar un abono o un descuento mayor a 0");
+            return;
+        }
+
+        if (montoNumero + descuentoNumero > saldoActual) {
+            message.error("La suma del abono y descuento no puede superar el saldo actual de la cuota");
+            return;
+        }
+
+        if (descuentoNumero > 0 && !String(motivo_descuento || "").trim()) {
+            message.error("Debes indicar el motivo del descuento");
             return;
         }
 
@@ -282,24 +319,34 @@ export default function PagoCreate() {
             const fechaPagoISO = fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
             const fechaPagoLegible = dayjs(fechaPagoISO).format("DD/MM/YYYY");
 
-            const { error } = await supabaseBrowserClient
-                .from("pagos")
-                .update({
-                    estado: "pagado",
-                    monto: montoNumero,
-                    metodo_pago,
-                    referencia: referencia || null,
-                    fecha_pago: fechaPagoISO,
-                    observaciones: `Pago registrado manualmente el ${dayjs().format("DD/MM/YYYY HH:mm")}`,
-                })
-                .eq("id", cuota.id);
+            const { data: ajusteData, error } = await supabaseBrowserClient.rpc("registrar_abono_pago", {
+                p_pago_id: cuota.id,
+                p_monto_abono: montoNumero,
+                p_descuento_aplicado: descuentoNumero,
+                p_metodo_pago: metodo_pago || null,
+                p_referencia: referencia || null,
+                p_observaciones: `Movimiento registrado manualmente el ${dayjs().format("DD/MM/YYYY HH:mm")}`,
+                p_motivo_descuento: motivo_descuento || null,
+                p_fecha_pago: dayjs(fechaPagoISO).toISOString(),
+                p_created_by: null,
+            });
 
-            if (error) {
-                throw error;
+            if (error) throw error;
+
+            const ajuste = (Array.isArray(ajusteData) ? ajusteData[0] : ajusteData) as PaymentAdjustmentRpcResult | null;
+            if (!ajuste) {
+                throw new Error("No se pudo confirmar el ajuste del pago");
             }
 
             const cursoRelacionado = cursosDelEstudiante.find((m) => String(m.id) === String(cuota.matricula_id));
             const periodoLegible = cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim();
+            const conceptoTicket = montoNumero > 0 && ajuste.saldo_pendiente > 0
+                ? `Abono a ${periodoLegible} - ${cursoRelacionado?.cursos?.nombre ?? "Curso"}`
+                : `${periodoLegible} - ${cursoRelacionado?.cursos?.nombre ?? "Curso"}`;
+            const detalleOperacion = [
+                descuentoNumero > 0 ? `Descuento aplicado: ${formatoCOP(descuentoNumero)}` : null,
+                ajuste.saldo_pendiente > 0 ? `Saldo pendiente: ${formatoCOP(ajuste.saldo_pendiente)}` : "Cuota saldada",
+            ].filter(Boolean).join(" · ");
 
             const { data: configActual } = await supabaseBrowserClient
                 .from("configuracion")
@@ -311,81 +358,90 @@ export default function PagoCreate() {
 
             const configTicket = configActual || configuracion;
 
-            const ticketData = {
-                academia: {
-                    nombre: configTicket?.nombre_academia ?? "Academia Crystal",
-                    ruc: configTicket?.ruc ?? undefined,
-                    logoUrl: configTicket?.logo_url ?? undefined,
-                    telefono: configTicket?.telefono ?? configTicket?.whatsapp ?? undefined,
-                    direccion: configTicket?.direccion ?? undefined,
-                    email: configTicket?.email ?? undefined,
-                    ticketTitulo: configTicket?.ticket_titulo ?? undefined,
-                    ticketNota: configTicket?.ticket_nota ?? undefined,
-                    ticketPie: configTicket?.ticket_pie ?? undefined,
-                    ticketCampos: configTicket?.ticket_campos ?? undefined,
-                },
-                estudiante: {
-                    nombre: estudianteSeleccionado?.nombre_completo ?? "Estudiante",
-                    identificacion: estudianteSeleccionado?.identificacion ?? undefined,
-                    telefono: estudianteSeleccionado?.telefono ?? undefined,
-                },
-                pago: {
-                    referencia: referencia || cuota.id,
-                    metodo: metodo_pago,
-                    monto: montoNumero,
-                    fecha: fechaPagoLegible,
-                    concepto: `${periodoLegible} - ${cursoRelacionado?.cursos?.nombre ?? "Curso"}`,
-                    periodo: periodoLegible,
-                    numeroCuota: cuota.numero_cuota ?? undefined,
-                },
-                curso: {
-                    nombre: cursoRelacionado?.cursos?.nombre ?? "Curso",
-                },
-            } as const;
+            if (montoNumero > 0) {
+                const ticketData = {
+                    academia: {
+                        nombre: configTicket?.nombre_academia ?? "Academia Crystal",
+                        ruc: configTicket?.ruc ?? undefined,
+                        logoUrl: configTicket?.logo_url ?? undefined,
+                        telefono: configTicket?.telefono ?? configTicket?.whatsapp ?? undefined,
+                        direccion: configTicket?.direccion ?? undefined,
+                        email: configTicket?.email ?? undefined,
+                        ticketTitulo: configTicket?.ticket_titulo ?? undefined,
+                        ticketNota: detalleOperacion || configTicket?.ticket_nota ?? undefined,
+                        ticketPie: configTicket?.ticket_pie ?? undefined,
+                        ticketCampos: configTicket?.ticket_campos ?? undefined,
+                    },
+                    estudiante: {
+                        nombre: estudianteSeleccionado?.nombre_completo ?? "Estudiante",
+                        identificacion: estudianteSeleccionado?.identificacion ?? undefined,
+                        telefono: estudianteSeleccionado?.telefono ?? undefined,
+                    },
+                    pago: {
+                        referencia: referencia || ajuste.abono_id,
+                        metodo: metodo_pago,
+                        monto: montoNumero,
+                        fecha: fechaPagoLegible,
+                        concepto: conceptoTicket,
+                        periodo: detalleOperacion || periodoLegible,
+                        numeroCuota: cuota.numero_cuota ?? undefined,
+                    },
+                    curso: {
+                        nombre: cursoRelacionado?.cursos?.nombre ?? "Curso",
+                    },
+                } as const;
 
-            const placeholder = window.open("", "_blank");
+                const placeholder = window.open("", "_blank");
 
-            try {
-                const blob = await generarTicketPagoBlob(ticketData);
+                try {
+                    const blob = await generarTicketPagoBlob(ticketData);
 
-                if (placeholder) {
-                    abrirTicketPagoDesdeBlob(blob, placeholder);
-                } else {
-                    abrirTicketPagoDesdeBlob(blob);
+                    if (placeholder) {
+                        abrirTicketPagoDesdeBlob(blob, placeholder);
+                    } else {
+                        abrirTicketPagoDesdeBlob(blob);
+                    }
+
+                    const { publicUrl } = await subirTicketPago({
+                        blob,
+                        pagoId: ajuste.pago_id,
+                        estudianteId: estudianteSeleccionado?.id ?? values.estudiante_id,
+                    });
+
+                    await supabaseBrowserClient
+                        .from("pagos_abonos")
+                        .update({ ticket_url: publicUrl } as any)
+                        .eq("id", ajuste.abono_id);
+
+                    if (ajuste.saldo_pendiente === 0) {
+                        await supabaseBrowserClient
+                            .from("pagos")
+                            .update({ ticket_url: publicUrl } as any)
+                            .eq("id", ajuste.pago_id);
+                    }
+
+                    await registrarIngresoDesdePago({
+                        fecha: fechaPagoISO,
+                        monto: montoNumero,
+                        concepto: conceptoTicket,
+                        categoria: "matriculas",
+                        metodo_pago,
+                        referencia: referencia || ajuste.abono_id,
+                        descripcion: detalleOperacion || null,
+                        estudiante_id: estudianteSeleccionado?.id ?? values.estudiante_id,
+                        ticket_url: publicUrl,
+                        pago_id: ajuste.pago_id,
+                        pago_abono_id: ajuste.abono_id,
+                    });
+                } catch (ticketError) {
+                    if (placeholder) {
+                        placeholder.close();
+                    }
+                    throw ticketError;
                 }
-
-                const { publicUrl } = await subirTicketPago({
-                    blob,
-                    pagoId: cuota.id,
-                    estudianteId: estudianteSeleccionado?.id ?? values.estudiante_id,
-                });
-
-                await supabaseBrowserClient
-                    .from("pagos")
-                    .update({ ticket_url: publicUrl } as any)
-                    .eq("id", cuota.id);
-
-                await registrarIngresoDesdePago({
-                    fecha: fechaPagoISO,
-                    monto: montoNumero,
-                    concepto: `${periodoLegible} - ${cursoRelacionado?.cursos?.nombre ?? "Curso"}`,
-                    categoria: "matriculas",
-                    metodo_pago,
-                    referencia: referencia || cuota.id,
-                    estudiante_id: estudianteSeleccionado?.id ?? values.estudiante_id,
-                    ticket_url: publicUrl,
-                    pago_id: cuota.id,
-                });
-
-                message.success("Pago registrado y ticket generado.");
-            } catch (ticketError) {
-                if (placeholder) {
-                    placeholder.close();
-                }
-                throw ticketError;
             }
 
-            if (estudianteSeleccionado?.telefono && (estudianteSeleccionado?.notif_whatsapp ?? true)) {
+            if (montoNumero > 0 && estudianteSeleccionado?.telefono && (estudianteSeleccionado?.notif_whatsapp ?? true)) {
                 try {
                   const { enviarConfirmacionPago } = await import('@/services/whatsapp-messages-module');
                   
@@ -395,7 +451,7 @@ export default function PagoCreate() {
                     referenciaPago: referencia || 'Pago registrado',
                     monto: montoNumero,
                     fechaPago: dayjs().format('DD/MM/YYYY'),
-                    concepto: cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`,
+                    concepto: conceptoTicket,
                     nombreCurso: cursoRelacionado?.cursos?.nombre ?? 'Curso',
                     fechaVigencia: dayjs().add(1, 'month').format('DD/MM/YYYY'),
                     fechaProximaClase: 'Por confirmar'
@@ -403,6 +459,14 @@ export default function PagoCreate() {
                 } catch (error) {
                   console.error('Error enviando confirmación de pago:', error);
                 }
+            }
+
+            if (ajuste.saldo_pendiente === 0) {
+                message.success('Pago completado correctamente.');
+            } else if (montoNumero > 0) {
+                message.success(`Abono registrado. Saldo restante: ${formatoCOP(ajuste.saldo_pendiente)}`);
+            } else {
+                message.success(`Descuento aplicado. Nuevo saldo: ${formatoCOP(ajuste.saldo_pendiente)}`);
             }
 
             await cargarCuotasPendientes(String(cuota.matricula_id));
@@ -483,6 +547,18 @@ export default function PagoCreate() {
                             />
                         </Form.Item>
                     </Col>
+                            <Col span={12}>
+                                <Form.Item label="Descuento aplicado" name="descuento_aplicado">
+                                    <InputNumber
+                                        min={0}
+                                        max={999999999}
+                                        style={{ width: "100%" }}
+                                        parser={montoParser}
+                                        prefix={<DollarCircleOutlined />}
+                                        placeholder="Opcional"
+                                    />
+                                </Form.Item>
+                            </Col>
                 </Row>
                 <Row gutter={24}>
                     <Col span={12}>
@@ -510,6 +586,11 @@ export default function PagoCreate() {
                             <Input placeholder="Referencia o número de comprobante" />
                         </Form.Item>
                     </Col>
+                    <Col span={12}>
+                        <Form.Item label="Motivo del descuento" name="motivo_descuento"> 
+                            <Input placeholder="Obligatorio si aplicas descuento" />
+                        </Form.Item>
+                    </Col>
                 </Row>
 
                 {cursosDelEstudiante.length === 0 && !buscandoCursos && (
@@ -527,7 +608,7 @@ export default function PagoCreate() {
                                 <strong>Período:</strong> {cuotaSeleccionada.periodo_pagado || "Sin período"}
                             </Col>
                             <Col xs={24} md={12}>
-                                <strong>Monto:</strong> ${cuotaSeleccionada.monto?.toLocaleString() || 0}
+                                <strong>Valor programado:</strong> {formatoCOP(getMontoProgramado(cuotaSeleccionada))}
                             </Col>
                             <Col xs={24} md={12}>
                                 <strong>Estado:</strong> {cuotaSeleccionada.estado === "vencido" ? "Vencida" : "Pendiente"}
@@ -535,7 +616,25 @@ export default function PagoCreate() {
                             <Col xs={24} md={12}>
                                 <strong>Vence:</strong> {cuotaSeleccionada.fecha_vencimiento ? formatDate(cuotaSeleccionada.fecha_vencimiento) : "Sin fecha"}
                             </Col>
+                            <Col xs={24} md={12}>
+                                <strong>Abonado acumulado:</strong> {formatoCOP(getTotalAbonado(cuotaSeleccionada))}
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <strong>Descuento acumulado:</strong> {formatoCOP(getDescuentoAplicado(cuotaSeleccionada))}
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <strong>Saldo actual:</strong> {formatoCOP(getSaldoPendiente(cuotaSeleccionada))}
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <strong>Tipo de cobro:</strong> {isPartialPayment(cuotaSeleccionada) ? "Con abonos previos" : "Normal"}
+                            </Col>
                         </Row>
+                        <Alert
+                            style={{ marginTop: 16 }}
+                            type="info"
+                            showIcon
+                            message="Puedes registrar un abono menor al saldo o aplicar un descuento. La cuota seguirá bloqueando mientras el saldo no llegue a cero."
+                        />
                     </Card>
                 )}
             </Form>

@@ -62,6 +62,7 @@ import { HistorialEntregas } from "@components/EntregaMaterialModal";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { getPaymentPlan, getPaymentPlanDisplay, normalizeModalidadPago } from "@/types/payment-plans";
+import { getDescuentoAplicado, getMontoProgramado, getSaldoPendiente, getTotalAbonado, getVisiblePaymentStatus } from "@utils/payment-balances";
 
 type Matricula = {
   id: number;
@@ -88,6 +89,7 @@ type Matricula = {
 
 type Pago = {
   id: string;
+  created_at?: string | null;
   fecha_pago: string | null;
   fecha_vencimiento?: string | null;
   numero_cuota?: number | null;
@@ -101,6 +103,11 @@ type Pago = {
     } | null;
   } | null;
   monto: number | null;
+  monto_programado?: number | null;
+  descuento_aplicado?: number | null;
+  total_abonado?: number | null;
+  saldo_pendiente?: number | null;
+  motivo_descuento?: string | null;
   metodo_pago: string | null;
   referencia: string | null;
   observaciones: string | null;
@@ -382,7 +389,7 @@ export default function StudentDetailView() {
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
         .select(
-          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, monto_programado, descuento_aplicado, total_abonado, saldo_pendiente, motivo_descuento, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
         )
         .eq("estudiante_id", idEstudiante)
         .order("matricula_id", { ascending: true })
@@ -399,7 +406,7 @@ export default function StudentDetailView() {
         const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
           .from("pagos")
           .select(
-            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, monto_programado, descuento_aplicado, total_abonado, saldo_pendiente, motivo_descuento, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
           )
           .in("matricula_id", matriculaIds)
           .order("matricula_id", { ascending: true })
@@ -422,8 +429,7 @@ export default function StudentDetailView() {
       setPagosHistorial(pagosList);
 
       const totalPagadoReal = pagosList
-        .filter((p) => (p.estado || "").toLowerCase() === "pagado")
-        .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+        .reduce((sum, p) => sum + getTotalAbonado(p), 0);
       console.log("💰 Total Pagado Real calculado:", totalPagadoReal);
       
       const totalMensualidadEsperada = listaMats.reduce((sum, m: any) => {
@@ -433,8 +439,8 @@ export default function StudentDetailView() {
       }, 0);
 
       const totalMensualidadPagada = pagosList
-        .filter((p) => (p.estado || "").toLowerCase() === "pagado" && !esInscripcion(p))
-        .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+        .filter((p) => !esInscripcion(p))
+        .reduce((sum, p) => sum + getTotalAbonado(p), 0);
 
       const deudaPendienteReal = Math.max(totalMensualidadEsperada - totalMensualidadPagada, 0);
       console.log("📊 Deuda Pendiente Real calculada:", deudaPendienteReal);
@@ -885,6 +891,7 @@ export default function StudentDetailView() {
         if (cuotasExistentes.has(i)) continue;
         extras.push({
           id: `pendiente-${matricula.id}-${i}`,
+          created_at: null,
           fecha_pago: null,
           numero_cuota: i,
           matricula_id: matricula.id,
@@ -895,6 +902,11 @@ export default function StudentDetailView() {
             cursos: matricula.cursos,
           },
           monto: obtenerMensualidad(matricula),
+          monto_programado: obtenerMensualidad(matricula),
+          descuento_aplicado: 0,
+          total_abonado: 0,
+          saldo_pendiente: obtenerMensualidad(matricula),
+          motivo_descuento: null,
           metodo_pago: null,
           referencia: null,
           observaciones: `Ciclo mensual ${i} de ${totalCiclos}`,
@@ -955,20 +967,15 @@ export default function StudentDetailView() {
         dataIndex: "estado",
         key: "estado",
         render: (val: string | null, record: Pago) => {
-          let estado = (val || "pendiente").toLowerCase();
-          const isPagado = estado === "pagado";
-          const isVencido = record.fecha_vencimiento && dayjs(record.fecha_vencimiento).isBefore(dayjs(), 'day') && !isPagado;
-
-          if (isVencido) {
-            estado = "vencido";
-          }
+          const estado = getVisiblePaymentStatus(record);
 
           let color: string = "default";
           if (estado === "pagado") color = "success";
           else if (estado === "pendiente") color = "warning";
+          else if (estado === "abono_parcial") color = "gold";
           else if (estado === "en_revision") color = "processing";
           else if (estado === "vencido") color = "error";
-          return <Tag color={color}>{estado.replace("_", " ")}</Tag>;
+          return <Tag color={color}>{estado === "abono_parcial" ? "abono parcial" : estado.replace("_", " ")}</Tag>;
         },
       },
       {
@@ -993,10 +1000,22 @@ export default function StudentDetailView() {
         title: "Monto",
         dataIndex: "monto",
         key: "monto",
-        render: (val: number | null) => (
-          <Text strong style={{ color: "#52c41a" }}>
-            ${(val || 0).toLocaleString()}
+        render: (_val: number | null, record: Pago) => (
+          <Text strong style={{ color: getVisiblePaymentStatus(record) === "pagado" ? "#52c41a" : "#1677ff" }}>
+            ${getSaldoPendiente(record).toLocaleString()}
           </Text>
+        ),
+      },
+      {
+        title: "Abonado",
+        key: "abonado",
+        render: (_: any, record: Pago) => <Text>${getTotalAbonado(record).toLocaleString()}</Text>,
+      },
+      {
+        title: "Descuento",
+        key: "descuento",
+        render: (_: any, record: Pago) => (
+          <Text>{getDescuentoAplicado(record) > 0 ? `$${getDescuentoAplicado(record).toLocaleString()}` : "-"}</Text>
         ),
       },
       {
@@ -1139,12 +1158,18 @@ export default function StudentDetailView() {
 
       pagosEsperados.push({
         id: `pendiente-${record.id}-${ciclo}`,
+        created_at: null,
         fecha_pago: null,
         fecha_vencimiento: ciclo === 0 ? null : calcularFechaVencimientoCuota(record, ciclo),
         numero_cuota: ciclo,
         matricula_id: record.id,
         matriculas: record.matriculas ?? null,
         monto: ciclo === 0 ? record?.cursos?.precio || null : obtenerMensualidad(record),
+        monto_programado: ciclo === 0 ? record?.cursos?.precio || null : obtenerMensualidad(record),
+        descuento_aplicado: 0,
+        total_abonado: 0,
+        saldo_pendiente: ciclo === 0 ? record?.cursos?.precio || 0 : obtenerMensualidad(record),
+        motivo_descuento: null,
         metodo_pago: null,
         referencia: null,
         observaciones: null,
@@ -1163,9 +1188,10 @@ export default function StudentDetailView() {
     return (
       <Space wrap size="small">
         {pagosEsperados.map((cuota) => {
-          const estado = (cuota.estado || 'pendiente').toLowerCase();
-          const isPagado = estado === 'pagado';
-          const isVencido = estado === 'vencido' || (cuota.fecha_vencimiento && dayjs(cuota.fecha_vencimiento).isBefore(dayjs(), 'day') && !isPagado);
+          const estadoVisible = getVisiblePaymentStatus(cuota);
+          const isPagado = estadoVisible === 'pagado';
+          const isVencido = estadoVisible === 'vencido';
+          const isAbonoParcial = estadoVisible === 'abono_parcial';
           const isPorVencer = cuota.fecha_vencimiento && dayjs(cuota.fecha_vencimiento).diff(dayjs(), 'day') <= 7 && !isPagado && !isVencido;
           
           let buttonType: "primary" | "default" | "dashed" = "default";
@@ -1177,6 +1203,10 @@ export default function StudentDetailView() {
             buttonType = "primary";
             statusText = "Pagado";
             statusColor = "#52c41a";
+          } else if (isAbonoParcial) {
+            buttonColor = "#d48806";
+            statusText = "Abono parcial";
+            statusColor = "#d48806";
           } else if (isVencido) {
             buttonColor = "#ff4d4f";
             statusText = "Vencido";
@@ -1200,7 +1230,10 @@ export default function StudentDetailView() {
               title={
                 <div>
                   <div><strong>{etiqueta}</strong></div>
-                  <div>Monto: ${(cuota.monto || 0).toLocaleString()}</div>
+                  <div>Valor programado: ${getMontoProgramado(cuota).toLocaleString()}</div>
+                  <div>Abonado: ${getTotalAbonado(cuota).toLocaleString()}</div>
+                  <div>Descuento: ${getDescuentoAplicado(cuota).toLocaleString()}</div>
+                  <div>Saldo: ${getSaldoPendiente(cuota).toLocaleString()}</div>
                   {cuota.fecha_vencimiento && (
                     <div>Vence: {formatDate(cuota.fecha_vencimiento)}</div>
                   )}
@@ -1230,7 +1263,9 @@ export default function StudentDetailView() {
                       title: `Registrar pago de ${etiqueta}`,
                       content: (
                         <div>
-                          <p>Monto: <strong>${(cuota.monto || 0).toLocaleString()}</strong></p>
+                          <p>Saldo actual: <strong>${getSaldoPendiente(cuota).toLocaleString()}</strong></p>
+                          {getDescuentoAplicado(cuota) > 0 && <p>Descuento acumulado: <strong>${getDescuentoAplicado(cuota).toLocaleString()}</strong></p>}
+                          {getTotalAbonado(cuota) > 0 && <p>Abonado acumulado: <strong>${getTotalAbonado(cuota).toLocaleString()}</strong></p>}
                           {cuota.fecha_vencimiento && (
                             <p>Vencimiento: {formatDate(cuota.fecha_vencimiento)}</p>
                           )}
@@ -1238,7 +1273,7 @@ export default function StudentDetailView() {
                         </div>
                       ),
                       onOk: () => {
-                        window.location.href = `/tesoreria/create?estudiante_id=${idEstudiante}&matricula_id=${record.id}&monto=${cuota.monto || 0}&periodo=${cuota.periodo_pagado || ''}`;
+                        window.location.href = `/tesoreria/create?estudiante_id=${idEstudiante}&matricula_id=${record.id}&monto=${getSaldoPendiente(cuota)}&periodo=${cuota.periodo_pagado || ''}`;
                       },
                     });
                   }

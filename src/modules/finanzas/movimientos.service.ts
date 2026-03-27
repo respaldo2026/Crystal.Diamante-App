@@ -15,6 +15,7 @@ export interface MovimientoFinanciero {
     proveedor_id?: string | null;
     ticket_url?: string | null;
     pago_id?: string | null;
+    pago_abono_id?: string | null;
     conciliado: boolean;
     conciliado_el?: string | null;
     conciliado_por?: string | null;
@@ -95,6 +96,7 @@ export async function crearMovimiento(payload: {
     proveedor_id?: string | null;
     ticket_url?: string | null;
     pago_id?: string | null;
+    pago_abono_id?: string | null;
     created_by?: string | null;
 }) {
     const { data, error } = await supabaseBrowserClient
@@ -146,6 +148,7 @@ export async function registrarIngresoDesdePago(payload: {
     estudiante_id?: string | null;
     ticket_url?: string | null;
     pago_id?: string | null;
+    pago_abono_id?: string | null;
     created_by?: string | null;
 }) {
     const record = {
@@ -153,21 +156,51 @@ export async function registrarIngresoDesdePago(payload: {
         tipo: "ingreso" as MovimientoTipo,
     };
 
-    if (payload.pago_id) {
-        const { data, error } = await supabaseBrowserClient
+    if (payload.pago_abono_id) {
+        const { data: existing, error: existingError } = await supabaseBrowserClient
             .from("movimientos_financieros")
-            .upsert(record, { onConflict: "pago_id" })
-            .select()
+            .select("id")
+            .eq("pago_abono_id", payload.pago_abono_id)
             .maybeSingle();
 
-        if (error) throw error;
-        return data as MovimientoFinanciero;
+        if (existingError) throw existingError;
+
+        if (existing?.id) {
+            return actualizarMovimiento(existing.id, record);
+        }
+
+        return crearMovimiento(record);
+    }
+
+    if (payload.pago_id) {
+        const { data: existing, error: existingError } = await supabaseBrowserClient
+            .from("movimientos_financieros")
+            .select("id")
+            .eq("pago_id", payload.pago_id)
+            .is("pago_abono_id", null)
+            .maybeSingle();
+
+        if (existingError) throw existingError;
+
+        if (existing?.id) {
+            return actualizarMovimiento(existing.id, record);
+        }
+
+        return crearMovimiento(record);
     }
 
     return crearMovimiento(record);
 }
 
 export async function sincronizarIngresosDesdePagos(createdBy?: string | null) {
+    const { data: pagosConAbonos, error: abonosError } = await supabaseBrowserClient
+        .from("pagos_abonos")
+        .select("pago_id");
+
+    if (abonosError) throw abonosError;
+
+    const pagosConAbonosSet = new Set((pagosConAbonos || []).map((row: any) => String(row?.pago_id || "")).filter(Boolean));
+
     const { data: pagosPagados, error: pagosError } = await supabaseBrowserClient
         .from("pagos")
         .select("id, fecha_pago, monto, metodo_pago, referencia, observaciones, estudiante_id, ticket_url, periodo_pagado, numero_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
@@ -181,6 +214,7 @@ export async function sincronizarIngresosDesdePagos(createdBy?: string | null) {
     }
 
     const registros = (pagosPagados as any[])
+        .filter((p) => !pagosConAbonosSet.has(String(p?.id || "")))
         .filter((p) => Number(p?.monto || 0) > 0)
         .map((p) => {
             const fecha = String(p.fecha_pago).slice(0, 10);
@@ -209,11 +243,9 @@ export async function sincronizarIngresosDesdePagos(createdBy?: string | null) {
         return { totalPagos: pagosPagados.length, sincronizados: 0 };
     }
 
-    const { error: upsertError } = await supabaseBrowserClient
-        .from("movimientos_financieros")
-        .upsert(registros, { onConflict: "pago_id" });
-
-    if (upsertError) throw upsertError;
+    for (const record of registros) {
+        await registrarIngresoDesdePago(record);
+    }
 
     return { totalPagos: pagosPagados.length, sincronizados: registros.length };
 }
