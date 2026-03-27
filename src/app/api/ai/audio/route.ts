@@ -2742,7 +2742,8 @@ function numberToSpanishUnder100(n: number): string {
 
   const tens = Math.floor(n / 10) * 10;
   const remainder = n % 10;
-  return remainder ? `${tensMap[tens]} y ${units[remainder]}` : tensMap[tens];
+  const tensText = tensMap[tens] || String(tens);
+  return remainder ? `${tensText} y ${units[remainder]}` : tensText;
 }
 
 function numberToSpanish(n: number): string {
@@ -2767,7 +2768,8 @@ function numberToSpanish(n: number): string {
 
     const hundreds = Math.floor(n / 100) * 100;
     const remainder = n % 100;
-    return remainder ? `${hundredsMap[hundreds]} ${numberToSpanish(remainder)}` : hundredsMap[hundreds];
+    const hundredsText = hundredsMap[hundreds] || String(hundreds);
+    return remainder ? `${hundredsText} ${numberToSpanish(remainder)}` : hundredsText;
   }
 
   if (n < 1000000) {
