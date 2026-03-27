@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { LoginLanding } from "@components/auth-page/LoginLanding";
 import { AuthPage as AuthPageComponent } from "@components/auth-page";
+import AdminDashboard from "./dashboard/admin";
 import dayjs from "dayjs";
 import isBetween from 'dayjs/plugin/isBetween';
 import { formatDate } from "@utils/date";
@@ -314,7 +315,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (userLoading) return;
-    if (normalizedRole === "secretaria") return;
+    if (!isAdminRole) return;
 
     cargarDashboard();
 
@@ -327,7 +328,7 @@ export default function DashboardPage() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [cargarDashboard, normalizedRole, userLoading]);
+  }, [cargarDashboard, isAdminRole, userLoading]);
 
   if (user && !isAdminRole) {
     return null;
@@ -392,6 +393,10 @@ export default function DashboardPage() {
         <AuthPageComponent type="login" />
       </LoginLanding>
     );
+  }
+
+  if (user && isAdminRole) {
+    return <AdminDashboard />;
   }
 
   // Texto del período seleccionado

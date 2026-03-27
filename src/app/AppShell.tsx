@@ -404,7 +404,7 @@ const CustomSider: React.FC<CustomSiderProps> = ({
         paddingTop: "8px",
         border: "none",
         overflow: "auto",
-        height: "calc(100% - 72px)",
+        height: "calc(100% - 80px)",
       }}
       onClick={onMenuClick}
     />
@@ -445,11 +445,11 @@ const CustomSider: React.FC<CustomSiderProps> = ({
             <div
               style={{
                 width: "200px",
-                padding: "0 16px",
+                padding: "12px 16px",
                 display: "flex",
-                justifyContent: "flex-start",
+                justifyContent: "center",
                 alignItems: "center",
-                height: "64px",
+                height: "80px",
                 backgroundColor: token.colorBgElevated,
               }}
             >
@@ -527,13 +527,14 @@ const CustomSider: React.FC<CustomSiderProps> = ({
         <div
           style={{
             width: siderCollapsed ? "80px" : "200px",
-            padding: siderCollapsed ? "0" : "0 16px",
+            padding: siderCollapsed ? "12px" : "12px 16px",
             display: "flex",
-            justifyContent: siderCollapsed ? "center" : "flex-start",
+            justifyContent: "center",
             alignItems: "center",
-            height: "64px",
+            height: "80px",
             backgroundColor: token.colorBgElevated,
             fontSize: "14px",
+            transition: "all 0.2s ease",
           }}
         >
           <RenderToTitle collapsed={siderCollapsed} />
@@ -1091,24 +1092,25 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
                 Title={({ collapsed }) => (
                   <ThemedTitle
                     collapsed={collapsed}
-                    text={brandingName}
+                    text=""
                     icon={
                       brandingLogo ? (
                         <Image
                           src={brandingLogo}
                           alt={brandingName}
-                          width={22}
-                          height={22}
+                          width={45}
+                          height={45}
                           unoptimized
                           style={{
-                            width: 22,
-                            height: 22,
+                            width: collapsed ? 36 : 45,
+                            height: collapsed ? 36 : 45,
                             objectFit: "contain",
                             borderRadius: 4,
+                            transition: "all 0.2s ease",
                           }}
                         />
                       ) : (
-                        <BookOutlined />
+                        <BookOutlined style={{ fontSize: collapsed ? 28 : 34 }} />
                       )
                     }
                   />

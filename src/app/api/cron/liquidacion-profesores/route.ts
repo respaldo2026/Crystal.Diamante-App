@@ -95,6 +95,52 @@ function buildFallbackText(nombre: string, periodoTexto: string, horasTexto: str
   ].join("\n");
 }
 
+async function saveTemplateAuditConversation(
+  supabase: any,
+  input: {
+    phone: string;
+    profileName?: string;
+    templateName: string;
+    templateLanguage: string;
+    templateVariables: string[];
+    messageId?: string;
+  }
+): Promise<void> {
+  try {
+    const payload = {
+      phone_number: input.phone,
+      user_message: "[SISTEMA] Liquidacion por plantilla",
+      agent_response:
+        `📤 Plantilla enviada: ${input.templateName}\n` +
+        `Idioma: ${input.templateLanguage}\n` +
+        `Variables: ${input.templateVariables.length ? input.templateVariables.join(" | ") : "-"}\n` +
+        `Meta Message ID: ${input.messageId || "sin ID"}`,
+      transcription: null,
+      channel: "whatsapp",
+      profile_name: input.profileName || null,
+    };
+
+    let { error } = await supabase.from("agent_conversations").insert(payload);
+
+    if (error && /column .* does not exist/i.test(String(error.message || ""))) {
+      const fallbackPayload = {
+        phone_number: input.phone,
+        user_message: payload.user_message,
+        agent_response: payload.agent_response,
+        transcription: null,
+      };
+      const retry = await supabase.from("agent_conversations").insert(fallbackPayload);
+      error = retry.error;
+    }
+
+    if (error) {
+      console.warn("[Cron Liquidacion] Error guardando auditoria de plantilla:", error);
+    }
+  } catch (error) {
+    console.warn("[Cron Liquidacion] Excepcion guardando auditoria de plantilla:", error);
+  }
+}
+
 function isAuthorized(request: NextRequest): boolean {
   const apiKeyHeader = request.headers.get("x-api-key");
   const cronApiKey = process.env.CRON_API_KEY;
@@ -147,10 +193,11 @@ async function runLiquidacionJob() {
   const periodoTexto = buildPeriodLabel(startISO, endISO);
 
   const { data: sesiones, error: sesionesError } = await supabase
-    .from("sesiones")
-    .select("id, curso_id, horas_dictadas, fecha")
+    .from("sesiones_clase")
+    .select("id, curso_id, profesor_id, horas_dictadas, fecha, estado_pago")
     .gte("fecha", startISO)
-    .lte("fecha", endISO);
+    .lte("fecha", endISO)
+    .eq("estado_pago", "pendiente");
 
   if (sesionesError) {
     throw new Error(`Error consultando sesiones: ${sesionesError.message}`);
@@ -165,24 +212,10 @@ async function runLiquidacionJob() {
     };
   }
 
-  const cursosIds = Array.from(new Set(sesiones.map((item: any) => String(item.curso_id || "")).filter(Boolean)));
-
-  const { data: cursos, error: cursosError } = await supabase
-    .from("cursos")
-    .select("id, profesor_id, valor_hora")
-    .in("id", cursosIds);
-
-  if (cursosError) {
-    throw new Error(`Error consultando cursos: ${cursosError.message}`);
-  }
-
-  const cursoById = new Map<string, any>();
   const profesoresIdsSet = new Set<string>();
-  (cursos || []).forEach((curso: any) => {
-    const courseId = String(curso?.id || "");
-    const profesorId = String(curso?.profesor_id || "");
-    if (!courseId || !profesorId) return;
-    cursoById.set(courseId, curso);
+  (sesiones || []).forEach((sesion: any) => {
+    const profesorId = String(sesion?.profesor_id || "");
+    if (!profesorId) return;
     profesoresIdsSet.add(profesorId);
   });
 
@@ -214,19 +247,17 @@ async function runLiquidacionJob() {
   const resumenByProfesor = new Map<string, ResumenProfesor>();
 
   (sesiones || []).forEach((sesion: any) => {
-    const curso = cursoById.get(String(sesion?.curso_id || ""));
-    if (!curso?.profesor_id) return;
+    const profesorId = String(sesion?.profesor_id || "");
+    if (!profesorId) return;
 
-    const profesorId = String(curso.profesor_id);
     const perfil = perfilById.get(profesorId);
     if (!perfil) return;
 
     const horas = Number(sesion?.horas_dictadas || 0);
     if (!Number.isFinite(horas) || horas <= 0) return;
 
-    const valorHoraCurso = Number(curso?.valor_hora || 0);
     const valorHoraPerfil = Number(perfil?.valor_hora || 0);
-    const valorHora = valorHoraCurso > 0 ? valorHoraCurso : valueOrZero(valorHoraPerfil);
+    const valorHora = valueOrZero(valorHoraPerfil);
 
     const current = resumenByProfesor.get(profesorId) || {
       profesorId,
@@ -276,12 +307,22 @@ async function runLiquidacionJob() {
     const valorTexto = moneyCOP(resumen.valor);
 
     try {
-      await WhatsAppService.sendTemplate(
+      const templateVariables = [primerNombre, periodoTexto, horasTexto, valorTexto];
+      const response = await WhatsAppService.sendTemplate(
         telefonoNormalizado,
         DEFAULT_TEMPLATE_NAME,
-        [primerNombre, periodoTexto, horasTexto, valorTexto],
+        templateVariables,
         DEFAULT_TEMPLATE_LANG,
       );
+
+      await saveTemplateAuditConversation(supabase, {
+        phone: telefonoNormalizado,
+        profileName: resumen.nombre,
+        templateName: DEFAULT_TEMPLATE_NAME,
+        templateLanguage: DEFAULT_TEMPLATE_LANG,
+        templateVariables,
+        messageId: response.messages?.[0]?.id,
+      });
 
       enviados++;
       telefonosProcesados.add(telefonoNormalizado);
@@ -353,12 +394,21 @@ async function runLiquidacionJob() {
 
     if (directorTelefono) {
       const totalProfesoras = `${resumenByProfesor.size} profesor${resumenByProfesor.size === 1 ? "a" : "as"}`;
-      await WhatsAppService.sendTemplate(
+      const directorTemplateVariables = [directorNombre, fechaPago, periodoTexto, totalProfesoras];
+      const directorResponse = await WhatsAppService.sendTemplate(
         directorTelefono,
         DIRECTOR_TEMPLATE_NAME,
-        [directorNombre, fechaPago, periodoTexto, totalProfesoras],
+        directorTemplateVariables,
         DEFAULT_TEMPLATE_LANG,
       );
+      await saveTemplateAuditConversation(supabase, {
+        phone: directorTelefono,
+        profileName: directorNombre,
+        templateName: DIRECTOR_TEMPLATE_NAME,
+        templateLanguage: DEFAULT_TEMPLATE_LANG,
+        templateVariables: directorTemplateVariables,
+        messageId: directorResponse.messages?.[0]?.id,
+      });
       directorNotificado = true;
       console.log(`[Cron Liquidacion] Resumen enviado al director (${directorTelefono})`);
     } else {

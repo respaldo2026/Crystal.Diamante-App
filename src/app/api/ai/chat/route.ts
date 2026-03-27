@@ -19,6 +19,7 @@ import {
   getAcademyInfo,
   getMediosPago,
   getStudentContextByIdentification,
+  getStudentContextByPhone,
   getProfileByPhone
 } from "@/utils/supabase/agent-courses";
 
@@ -253,6 +254,43 @@ function addCommentMeta(
   if (commentEvent.mediaId) result.media_id = commentEvent.mediaId;
   if (commentEvent.mediaType) result.media_type = commentEvent.mediaType;
   return result;
+}
+
+function addDeliveryMeta(
+  payload: Record<string, any>,
+  phone: string,
+  channel: "instagram" | "whatsapp" | "unknown",
+  profileName?: string
+): Record<string, any> {
+  const rawPhone = String(phone || "").trim();
+  const instagramSenderId = rawPhone.startsWith("ig:")
+    ? rawPhone.replace(/^ig:/, "")
+    : "";
+  const normalizedChannel: "instagram" | "whatsapp" | "unknown" =
+    channel !== "unknown"
+      ? channel
+      : instagramSenderId
+      ? "instagram"
+      : rawPhone && rawPhone !== "unknown"
+      ? "whatsapp"
+      : "unknown";
+
+  const recipientId =
+    normalizedChannel === "instagram"
+      ? (instagramSenderId || null)
+      : rawPhone && rawPhone !== "unknown"
+      ? rawPhone
+      : null;
+
+  return {
+    ...payload,
+    channel: normalizedChannel,
+    conversation_id: rawPhone || "unknown",
+    recipient_id: recipientId,
+    instagram_sender_id: instagramSenderId || null,
+    whatsapp_phone: normalizedChannel === "whatsapp" ? rawPhone : null,
+    profile_name: normalizeProfileName(profileName),
+  };
 }
 
 /**
@@ -1168,9 +1206,11 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
   const channel = detectInboundChannel(body);
   const profileName = extractProfileName(body);
   const webhookMessage = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
+  const webhookMessageAlt = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text;
   const webhookPhone = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
   const webhookContactPhone = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.wa_id;
   const instagramMessagingMessage = body?.entry?.[0]?.messaging?.[0]?.message?.text;
+  const instagramChangeMessageText = body?.entry?.[0]?.changes?.[0]?.value?.message?.text;
   const instagramMessagingSenderId = body?.entry?.[0]?.messaging?.[0]?.sender?.id;
   const instagramChangeSenderId = body?.entry?.[0]?.changes?.[0]?.value?.sender?.id;
   // Comentarios de Instagram (changes.field = "comments")
@@ -1217,8 +1257,10 @@ function extractMessageAndPhone(body: any): { message: string; phone: string; ch
     entryMessagingText,        // texto extraído del entry completo enviado por Make
     entryStoryReplyText,       // respuesta a historia
     instagramMessagingMessage,
+    instagramChangeMessageText,
     nestedMessage,
     webhookMessage,
+    webhookMessageAlt,
     ...deepCandidates
   );
 
@@ -1352,14 +1394,18 @@ async function getConversationHistory(
       return [];
     }
 
-    return (data || []).reverse().map((row: any) => ({
+    // El query viene descendente (mas nuevo primero), pero el flujo usa history[history.length - 1]
+    // como ultimo turno reciente. Reordenamos a cronologico ascendente.
+    const chronologicalRows = (data || []).slice().reverse();
+
+    return chronologicalRows.map((row: any) => ({
       user: row.user_message,
-      agent: stripMediaMarkersForPrompt(row.agent_response),
-      agent_raw: row.agent_response,
-      created_at: row.created_at,
+      agent: stripMediaMarkersForPrompt(row.agent_response || ""),
+      agent_raw: row.agent_response || "",
+      created_at: row.created_at || null,
     }));
   } catch (err) {
-    console.error("[getConversationHistory] Error:", err);
+    console.error("[getConversationHistory] Exception:", err);
     return [];
   }
 }
@@ -1411,6 +1457,33 @@ async function saveConversation(
   } catch (err) {
     console.warn("[saveConversation] Error:", err);
   }
+}
+
+function buildStudentPaymentMethodsBlock(mediosPago: any[] = []): string {
+  const methods = Array.isArray(mediosPago)
+    ? mediosPago
+        .filter((medio) => medio?.activo !== false)
+        .slice(0, 8)
+        .map((medio) => {
+          const label = String(medio?.nombre || "").trim();
+          const description = String(medio?.descripcion || "").trim();
+          if (!label) return "";
+          return `• ${label}${description ? `: ${description}` : ""}`;
+        })
+        .filter(Boolean)
+    : [];
+
+  if (methods.length > 0) {
+    return `💳 *Medios de pago:*
+${methods.join("\n")}`;
+  }
+
+  return `💳 *Medios de pago:*
+• Efectivo
+• Nequi: 3006402575
+• Bancolombia
+• Sistecrédito
+• Tarjeta`;
 }
 
 function stripMediaMarkersForPrompt(value: string | null | undefined): string {
@@ -1779,6 +1852,11 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
 
+  // Mensajes de relleno/llamado no deben disparar embudo ni asumir programa.
+  if (/^(amigo|amiga|bro|hermano|mana|mija|oye|oe|epa|aj[aá]|aja|bueno|listo|dale)$/.test(text)) {
+    return false;
+  }
+
   const hasGreetingKeyword = /\b(hola|buenas?|buen\s+dia|buenos\s+dias|buenas\s+tardes|buenas\s+noches|saludos|hey|que\s+tal)\b/i.test(text);
   if (hasGreetingKeyword) return false;
 
@@ -1808,7 +1886,7 @@ function isShortAffirmativeReply(message: string): boolean {
   if (/^s+i+$/i.test(text)) return true;
   if (/^s+i+p+$/i.test(text)) return true;
 
-  return /^(si|dale|ok|okay|okey|claro|listo|perfecto|de una|por favor|si por favor|claro que si|esta bien|ta bien|todo bien|entendido|clase|ciclo|ambos|los dos)$/i.test(text);
+  return /^(si|dale|ok|okay|okey|claro|listo|perfecto|de una|por favor|porfavor|porfa|porfis|si por favor|si porfavor|claro que si|esta bien|ta bien|todo bien|entendido|clase|ciclo|ambos|los dos)$/i.test(text);
 }
 
 function isNoiseOnlyMessage(message: string): boolean {
@@ -1831,7 +1909,15 @@ function isNeutralAcknowledgement(message: string): boolean {
   return /^(ok|okay|okey|listo|perfecto|esta bien|ta bien|entendido|vale|de acuerdo|super|genial|claro)$/i.test(text);
 }
 
-function buildNoiseFollowupFromHistory(history: Array<{ user: string; agent: string }>): string {
+function buildNoiseFollowupFromHistory(
+  history: Array<{ user: string; agent: string }>,
+  message: string = ""
+): string {
+  const raw = String(message || "").trim();
+  if (/^[.?!,;:¡!¿?()\-_/]+$/.test(raw)) {
+    return "¡Perdona! 😊 Creo que no te entendí bien. ¿Me escribes en una frase qué necesitas: *precio*, *horario* o *ubicación*?";
+  }
+
   const pendingTopic = inferPendingTopicFromHistory(history);
 
   if (/medios\s+de\s+pago|formas\s+de\s+pago|metodo\s+de\s+pago/.test(normalizeForMatch(pendingTopic))) {
@@ -1846,7 +1932,82 @@ function buildNoiseFollowupFromHistory(history: Array<{ user: string; agent: str
     return "Te leí 👌 Si quieres, seguimos de una con los *pasos para separar tu cupo*.";
   }
 
-  return "Te leí 👌 ¿Quieres que te cuente los *horarios*, *la inversión* o los *pasos para inscribirte*?";
+  return "Te leí 👌 ¿Qué dato necesitas ahora mismo: *precio*, *horario* o *ubicación*?";
+}
+
+function hasRecentPaymentReminderContext(history: Array<{ user: string; agent: string }>): boolean {
+  const recentAgentMessages = (Array.isArray(history) ? history : [])
+    .slice(-8)
+    .map((turn) => normalizeForMatch(turn?.agent || ""))
+    .filter(Boolean);
+
+  return recentAgentMessages.some((msg) => {
+    const hasPaymentTopic = /\b(mensualidad|cuota|cuotas|pago|pagos|saldo|vencimiento|vence|fecha\s+de\s+pago|recordatorio\s+de\s+pago|abono|deuda|pendiente)\b/i.test(msg);
+    const hasReminderTone = /\b(recordatorio|te\s+recordamos|recuerda|por\s+favor\s+realizar|pendiente\s+de\s+pago|vence\s+el|fecha\s+limite|fecha\s+l[ií]mite|evita\s+intereses?)\b/i.test(msg);
+    return hasPaymentTopic && hasReminderTone;
+  });
+}
+
+function hasRecentPaymentConfirmedContext(history: Array<{ user: string; agent: string }>): boolean {
+  const recentTurns = (Array.isArray(history) ? history : []).slice(-8);
+
+  const recentText = normalizeForMatch(
+    recentTurns
+      .map((turn) => `${turn?.user || ""} ${turn?.agent || ""}`)
+      .join(" ")
+  );
+
+  if (!recentText) return false;
+
+  // Soporta distintos formatos guardados en historial/UI para la plantilla de pago confirmado.
+  return /\b(pago_recibido_v2|pagorecibidov2|confirmamos\s+que\s+hemos\s+recibido\s+correctamente\s+tu\s+pago|mensaje\s+de\s+plantilla\s+enviado\s*\(\s*pagorecibidov2\s*\)|plantilla\s*:\s*pago_recibido_v2)\b/i.test(recentText);
+}
+
+function isGenericAckAfterReminder(message: string): boolean {
+  return isThanksOnlyMessage(message)
+    || isPureGreeting(message)
+    || isNeutralAcknowledgement(message)
+    || isShortAffirmativeReply(message)
+    || isNoiseOnlyMessage(message);
+}
+
+function buildReminderFollowupReply(): string {
+  return "¡Gracias por responder! 🙌 Este chat quedó sobre tu recordatorio de pago del mes.\n\n¿Ya realizaste el pago o quieres que te comparta medios de pago y fecha límite?";
+}
+
+function buildPostPaymentThanksReply(academy: any | null): string {
+  const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
+  return `¡Con gusto! 😊 Tu pago ya quedó confirmado en el chat.\n\nSi deseas, también te puedo compartir por aquí tus próximos vencimientos o cualquier soporte de tu curso.\n📱 Si necesitas ayuda administrativa adicional: *${admissionsContact}*`;
+}
+
+function isShortNegativeReply(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  return /^(no|nop|nope|negativo|no\s+gracias|gracias\s+pero\s+no)$/i.test(text);
+}
+
+function buildKnownStudentSupportReply(name: string | null = null): string {
+  const safeName = String(name || '').trim();
+  const lead = safeName ? `¡Hola de nuevo, ${safeName}! 😊` : '¡Hola de nuevo! 😊';
+  return `${lead} Como ya eres estudiante, te ayudo en modo soporte.\n\n¿Necesitas revisar *pagos pendientes*, *próxima clase* o *estado de tus cursos*?`;
+}
+
+function buildKnownTeacherSupportReply(name: string | null = null): string {
+  const safeName = String(name || '').trim();
+  const lead = safeName ? `¡Hola profe ${safeName}! 😊` : '¡Hola profe! 😊';
+  return `${lead} Ya te tengo identificada como docente y te atiendo en modo soporte.\n\n¿Te ayudo con *clase de hoy/próxima clase*, *liquidación/pago de quincena* o *novedades de tus grupos*?`;
+}
+
+function isPaymentAlreadyDoneClaim(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(ya\s+pague|ya\s+pago|ya\s+esta\s+paga|ya\s+esta\s+pagado|ya\s+quedo\s+pagado|ya\s+cancele|ya\s+realice\s+el\s+pago|ya\s+hice\s+el\s+pago|pago\s+realizado|pago\s+hecho|ya\s+envi[eé]\s+el\s+comprobante|ya\s+mande\s+el\s+comprobante|ya\s+mand[eé]\s+lo\s+de\s+la\s+mensualidad)\b/i.test(text);
+}
+
+function buildPaymentAlreadyDoneReply(academy: any | null): string {
+  const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
+  return `¡Gracias por avisarme y disculpa la molestia! 🙏\n\nSi ya realizaste el pago, te ayudo a dejarlo validado: envía (o reenvía) el comprobante a *Admisiones* para actualizar tu estado cuanto antes.\n📱 *${admissionsContact}*\n\nSi ya lo enviaste, no te preocupes: en breve te confirman la aplicación del pago.`;
 }
 
 function isOnlyScheduleConfirmationQuestion(message: string): boolean {
@@ -1895,11 +2056,34 @@ function buildOnlyScheduleConfirmationReply(
 function buildNaturalAckReply(
   message: string,
   lastAgentMessage: string,
-  detectedProgram: any | null
+  detectedProgram: any | null,
+  history: Array<{ user: string; agent: string }> = []
 ): string | null {
   if (!isNeutralAcknowledgement(message)) return null;
 
   const normalizedLast = normalizeForMatch(lastAgentMessage || "");
+  const pendingTopic = inferPendingTopicFromHistory(history);
+  const normalizedPending = normalizeForMatch(pendingTopic || "");
+
+  if (normalizedPending) {
+    if (/medios\s+de\s+pago|formas\s+de\s+pago|metodo\s+de\s+pago/.test(normalizedPending)) {
+      return "Perfecto 🙌 Te comparto enseguida los *medios de pago* y *fechas de pago* para que lo tengas claro.";
+    }
+
+    if (/horario|dias|fecha|inicio|grupo/.test(normalizedPending)) {
+      const programName = detectedProgram?.nombre ? ` de *${detectedProgram.nombre}*` : "";
+      return `Súper 😊 Continuemos con eso${programName}: si quieres, te confirmo el *horario exacto* y te digo el siguiente paso para separar cupo.`;
+    }
+
+    if (/inscribirme|separar\s+cupo|pasos\s+de\s+inscripcion/.test(normalizedPending)) {
+      return "¡De una! 🚀 Te comparto los *pasos para separar tu cupo* y dejar tu inscripción iniciada.";
+    }
+
+    if (/referencia|llegar|ubicacion|direccion|maps/.test(normalizedPending)) {
+      return "Perfecto 🙌 Te dejo la *ubicación exacta* y el *mapa* para que llegues fácil.";
+    }
+  }
+
   if (!normalizedLast) return null;
 
   if (/medios\s+de\s+pago|formas\s+de\s+pago|fechas\s+de\s+pago|mensualidad|inscripcion/.test(normalizedLast)) {
@@ -1917,6 +2101,71 @@ function buildNaturalAckReply(
   }
 
   return "Perfecto 😊 ¿Quieres que te cuente los *horarios*, *la inversión* o los *pasos para inscribirte*?";
+}
+
+function buildShortAckContinuationReply(
+  message: string,
+  lastAgentMessage: string,
+  history: Array<{ user: string; agent: string }>,
+  detectedProgram: any | null,
+  courses: any[],
+  academy: any | null,
+  mediosPago: any[]
+): string | null {
+  if (!(isNeutralAcknowledgement(message) || isShortAffirmativeReply(message))) {
+    return null;
+  }
+
+  if (isClosureAcknowledgement(message, lastAgentMessage)) {
+    return null;
+  }
+
+  const pendingTopic = inferPendingTopicFromHistory(history);
+  const normalizedPending = normalizeForMatch(pendingTopic || "");
+  if (!normalizedPending) {
+    return null;
+  }
+
+  if (pendingTopic === "__clarificacion_opcion__") {
+    return "¡Súper! 😊 Para seguir, dime cuál prefieres: *horarios e inversión* o *separar cupo*.";
+  }
+
+  if (/medios\s+de\s+pago|formas\s+de\s+pago|metodo\s+de\s+pago/.test(normalizedPending)) {
+    return buildPaymentMethodsAndDatesReply(mediosPago);
+  }
+
+  if (/dias\s+y\s+horario|horario|inicio|fecha|grupo/.test(normalizedPending) && detectedProgram) {
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const nextStart = formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) || "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+    return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta los pasos para *separar tu cupo*?`;
+  }
+
+  if (/inversion|precio|mensualidad|inscripcion/.test(normalizedPending)) {
+    if (!detectedProgram) {
+      return "¡Claro! 🙌 Te paso el precio exacto enseguida. Solo confírmame el curso y te comparto inscripción y mensualidad.";
+    }
+
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const priceOptions = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+
+    return `Perfecto 👌 Te comparto la inversión de *${detectedProgram.nombre}*:\n\n💰 *Inscripción:* ${priceOptions.inscripcionText}\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que te confirme también los *medios de pago* y *fechas de pago*?`;
+  }
+
+  if (/referencia|llegar|ubicacion|direccion|maps/.test(normalizedPending)) {
+    if (academy?.direccion) {
+      if (academy?.maps_url) {
+        return `¡Claro! 🙌\n\nDirección: *${academy.direccion}*.\n🗺️ Mapa: ${academy.maps_url}\n\nSi quieres, también te doy una referencia rápida para llegar sin enredos 😊`;
+      }
+      return `¡Claro! 🙌\n\nDirección: *${academy.direccion}*.\n\nSi quieres, también te doy una referencia rápida para llegar sin enredos 😊`;
+    }
+  }
+
+  if (/inscribirme|separar\s+cupo|pasos\s+de\s+inscripcion/.test(normalizedPending)) {
+    return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
+  }
+
+  return null;
 }
 
 function isClosureAcknowledgement(message: string, lastAgentMessage: string): boolean {
@@ -2002,6 +2251,11 @@ function enrichMessageWithFollowUpContext(
   // Nunca enriquecer un saludo puro — el usuario está iniciando nueva sesión,
   // no confirmando un tema anterior.
   if (isPureGreeting(userMessage)) {
+    return userMessage;
+  }
+
+  // "Gracias" y similares no deben heredar tema pendiente del bot.
+  if (isThanksOnlyMessage(userMessage)) {
     return userMessage;
   }
 
@@ -2703,11 +2957,21 @@ function extractProgramInquiryTopic(message: string): string | null {
 
     const candidate = match[1]
       .replace(/\b(aqui|aca|en\s+cali|por\s+favor|me\s+podrias|me\s+puedes|si|no)\b/gi, " ")
+      .replace(/\b(quiero\s+saber|saber|inversion|precio|costo|valor|horario|horarios|informacion|info)\b.*$/i, " ")
       .replace(/\s+/g, " ")
       .trim();
 
     // Excluir términos que no son nombres de programas
     if (/\b(uniforme|kit|inscripcion|mensualidad|precio|costo|valor|pago|pagar|cuota|horario|fecha|inicio|disponible|disponibles|dia|dias|lunes|martes|miercoles|jueves|viernes|sabado|domingo|hoy|manana|ayer|semana)\b/i.test(candidate)) {
+      continue;
+    }
+
+    // Excluir referencias deícticas: "este curso", "ese programa", etc.
+    if (/^(este|esta|ese|esa|aquel|aquella)\s+(curso|programa|carrera)\b/i.test(candidate)) {
+      continue;
+    }
+
+    if (/^(este|esta|ese|esa|aquel|aquella)\b/i.test(candidate)) {
       continue;
     }
 
@@ -2730,11 +2994,26 @@ function findProgramMatchByTopic(topic: string, programs: any[]): any | null {
     const programName = normalizeForMatch(program?.nombre || "");
     if (!programName) continue;
 
+    const searchableProgramText = normalizeForMatch(
+      [program?.nombre, program?.descripcion, program?.contenido]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .join(" ")
+    );
+
     if (programName.includes(normalizedTopic) || normalizedTopic.includes(programName)) {
       return program;
     }
 
+    if (searchableProgramText && searchableProgramText.includes(normalizedTopic)) {
+      return program;
+    }
+
     if (topicWords.some((word) => programName.includes(word))) {
+      return program;
+    }
+
+    if (topicWords.some((word) => searchableProgramText.includes(word))) {
       return program;
     }
   }
@@ -3537,12 +3816,26 @@ function buildIntentFocusedDirectResponse(
   programs: any[] = [],
   mediosPago: any[] = []
 ): string | null {
+  const hasPaymentConfirmedContext = hasRecentPaymentConfirmedContext(history);
+  const hasPaymentReminderContext = hasRecentPaymentReminderContext(history);
+
+  if (hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
+    return buildPostPaymentThanksReply(academy);
+  }
+
+  if (hasPaymentReminderContext && isPaymentAlreadyDoneClaim(message)) {
+    return buildPaymentAlreadyDoneReply(academy);
+  }
+  if (hasPaymentReminderContext && !hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
+    return buildReminderFollowupReply();
+  }
+
   if (isThanksOnlyMessage(message)) {
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
   }
 
   if (isNoiseOnlyMessage(message)) {
-    return buildNoiseFollowupFromHistory(history);
+    return buildNoiseFollowupFromHistory(history, message);
   }
 
   if (isPureGreeting(message)) {
@@ -3618,7 +3911,14 @@ function buildIntentFocusedDirectResponse(
     /horarios.*inversion.*separar\s+cupo|separar\s+cupo.*horarios.*inversion|te\s+comparto.*horarios.*inversion/i.test(normalizeForMatch(h.agent || ""))
   );
 
-  if (detectedProgram && isLikelyProgramOnlyReply(message) && !alreadyAskedDoubleOption && !/[?¿]/.test(message) && detectUserIntent(message) === "general") {
+  if (
+    detectedProgram
+    && isLikelyProgramOnlyReply(message)
+    && !alreadyAskedDoubleOption
+    && !/[?¿]/.test(message)
+    && detectUserIntent(message) === "general"
+    && isShortAffirmativeReply(message)
+  ) {
     const pendingTopic = inferPendingTopicFromHistory(history);
     if (/dias\s+y\s+horario|horario|inicio|fecha/.test(normalizeForMatch(pendingTopic))) {
       const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
@@ -3641,6 +3941,19 @@ function buildIntentFocusedDirectResponse(
   const normalizedMessage = normalizeForMatch(message);
   const lastAgentForFlow = history[history.length - 1]?.agent || "";
 
+  const shortAckContinuationReply = buildShortAckContinuationReply(
+    message,
+    lastAgentForFlow,
+    history,
+    detectedProgram,
+    courses,
+    academy,
+    mediosPago
+  );
+  if (shortAckContinuationReply) {
+    return shortAckContinuationReply;
+  }
+
   if (isOnlyScheduleConfirmationQuestion(message)) {
     return buildOnlyScheduleConfirmationReply(detectedProgram, courses);
   }
@@ -3653,7 +3966,7 @@ function buildIntentFocusedDirectResponse(
         return buildSocialMediaReply(academy, "instagram");
       }
     }
-    const naturalAckReply = buildNaturalAckReply(message, lastAgentForFlow, detectedProgram);
+    const naturalAckReply = buildNaturalAckReply(message, lastAgentForFlow, detectedProgram, history);
     if (naturalAckReply) {
       return naturalAckReply;
     }
@@ -3684,6 +3997,7 @@ function buildIntentFocusedDirectResponse(
   const asksStepOne = isStepOneSelection(message);
   const asksPrice = /\b(precio|cuanto|costo|valor|inscripcion|mensualidad|inversion)\b/i.test(normalizedMessage);
   const asksMonthlyVsBiweekly = isMonthlyOrBiweeklyQuestion(message);
+  const asksPlanRecommendation = /\b(recomiend(a|ame|arme|as|an|acion)?|conviene|mejor\s+opci[oó]n|cu[aá]l\s+me\s+(sirve|recomiendas?)|que\s+opci[oó]n\s+me\s+recomiendas?)\b/i.test(normalizedMessage);
   const confirmsVisitCommitment = isVisitCommitmentMessage(message, lastAgentForFlow);
   const requestedTemarioMonth = extractRequestedTemarioMonth(message);
   const inferredTemarioMonthFromFlow = inferTemarioMonthFromAgentPrompt(lastAgentForFlow);
@@ -3728,6 +4042,8 @@ function buildIntentFocusedDirectResponse(
   }
 
   const inferredPendingTopic = inferPendingTopicFromHistory(history);
+  const hasRecentPricingContext = /\b(modalidades?|mensual\s+opcion|por\s+clase|inscripci[oó]n|mensualidad|presupuesto|inversion|precio)\b/i
+    .test(`${normalizeForMatch(lastAgentForFlow)} ${normalizeForMatch(inferredPendingTopic || "")}`);
 
   if (confirmsVisitCommitment) {
     return buildVisitCommitmentReply(academy);
@@ -3740,6 +4056,17 @@ function buildIntentFocusedDirectResponse(
     }
 
     return "¡Buena pregunta! 👌 No manejamos pago quincenal fijo. Trabajamos con *3 modalidades*: *Por Clase*, *Mensual Opción A* y *Mensual Opción B*. Si me dices el curso, te doy los valores exactos de cada una.";
+  }
+
+  if (asksPlanRecommendation && (asksPrice || hasRecentPricingContext || Boolean(detectedProgram))) {
+    if (!detectedProgram) {
+      return "¡Claro! 🙌 Te recomiendo la mejor opción según tu presupuesto, solo dime el curso y te doy una recomendación puntual en una línea.";
+    }
+
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+
+    return `Claro, te recomiendo la *Mensual Opción B* (${options.mensual100Text}/mes) porque incluye el 100% de materiales y estudias con todo completo desde el inicio.\n\nSi prefieres comenzar con menor inversión, la *Mensual Opción A* (${options.mensual70Text}/mes) también funciona muy bien y puedes complementar algunos materiales por tu cuenta.\n\n¿Quieres que te detalle exactamente qué incluye la inscripción (${options.inscripcionText})?`;
   }
 
   const asksScheduleRescue = isScheduleRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
@@ -3942,7 +4269,10 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   const requestedTopic = extractProgramInquiryTopic(message);
   if (requestedTopic) {
     const matchedProgram = findProgramMatchByTopic(requestedTopic, programs);
-    if (!matchedProgram) {
+    const normalizedRequestedTopic = normalizeForMatch(requestedTopic);
+    const isGenericReferenceTopic = /^(este|esta|ese|esa|aquel|aquella)(\s+(curso|programa|carrera))?$/.test(normalizedRequestedTopic);
+
+    if (!matchedProgram && !detectedProgram && !isGenericReferenceTopic) {
       const alternatives = buildAvailableProgramsPrompt(programs);
       return `¡Gracias por tu pregunta! 🙌\n\nEn este momento no tengo *${requestedTopic}* dentro de los programas activos.${alternatives ? `\n\n${alternatives}` : ""}\n\nSi quieres, te ayudo a elegir la opción más parecida a lo que buscas.`;
     }
@@ -4042,6 +4372,15 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
 
   if (asksGeneralInfo) {
     // Solo mostrar ficha si fue una solicitud explícita de info general del curso
+    const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : "duración según plan académico");
+    const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+
+    return `✨ *${detectedProgram.nombre}*\n\n✅ Formación práctica desde cero\n⏳ *Duración:* ${duration}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres conocer el precio de la inscripción y mensualidad?`;
+  }
+
+  // Rescate para respuestas cortas tipo "uñas", "cejas", etc. cuando ya se detectó programa.
+  if (intent === "general" && isLikelyProgramOnlyReply(message)) {
     const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : "duración según plan académico");
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
@@ -4371,30 +4710,23 @@ async function buildLinkAccessDirectResponse(
   return null;
 }
 
-function buildStudentDirectResponse(message: string, studentContext: any): string | null {
+function buildStudentDirectResponse(message: string, studentContext: any, mediosPago: any[] = []): string | null {
   if (!studentContext) return null;
 
   const text = normalizeForMatch(message);
   const asksDebt = /\b(cuanto debo|deuda|saldo pendiente|debo)\b/i.test(text);
   const asksNextPay = /\b(proxima mensualidad|proximo pago|cuando debo pagar|fecha de pago|vence|vencimiento)\b/i.test(text);
+  const asksTotalDebtExplicit = /\b(deuda total|saldo total|total pendiente|deuda acumulada)\b/i.test(text);
   const asksNextClass = /\b(proxima clase|siguiente clase|hoy hay clase|hoy tengo clase|clase hoy)\b/i.test(text);
   const asksEnrolledCourses = /\b(en que curso|que cursos|mis cursos|inscrita|inscrito)\b/i.test(text);
 
-  if (asksDebt) {
-    const deuda = Number(studentContext?.deudaTotal || 0);
-    const next = studentContext?.nextMonthlyPayment;
-    const extra = next
-      ? `\nPróxima mensualidad: Cuota ${next.numeroCuota ?? "?"} | vence ${formatDateShort(next.fechaVencimiento)} | valor ${formatCurrencyCOP(Number(next.monto || 0))}.`
-      : "\nNo tienes mensualidades pendientes registradas.";
-    return `Tu deuda total pendiente es ${formatCurrencyCOP(deuda)}.${extra}`;
-  }
-
-  if (asksNextPay) {
+  if (asksDebt || asksNextPay || asksTotalDebtExplicit) {
     const next = studentContext?.nextMonthlyPayment;
     if (!next) {
       return "No tienes una mensualidad pendiente registrada en este momento.";
     }
-    return `Tu próxima mensualidad es la cuota ${next.numeroCuota ?? "?"}, vence el ${formatDateShort(next.fechaVencimiento)} y el valor es ${formatCurrencyCOP(Number(next.monto || 0))}.`;
+    const methodsBlock = buildStudentPaymentMethodsBlock(mediosPago);
+    return `Tu pago del mes corresponde a la cuota ${next.numeroCuota ?? "?"}, vence el ${formatDateShort(next.fechaVencimiento)} y el valor es ${formatCurrencyCOP(Number(next.monto || 0))}.\n\n${methodsBlock}`;
   }
 
   if (asksNextClass) {
@@ -4622,6 +4954,21 @@ function resolveProgramFromContext(
     );
 
   if (!isLikelyFollowUp || !conversationHistory.length) {
+    // Rescate de hilo: cuando el agente preguntó "¿en qué curso estás interesad@?"
+    // y el usuario responde corto (ej: "uñas y pies"), tratarlo como selección de curso.
+    const lastAgent = String(conversationHistory[conversationHistory.length - 1]?.agent || "");
+    const askedForCourse = /\b(en\s+cual\s+curso|que\s+curso|curso\s+te\s+interesa|cual\s+curso\s+te\s+interesa)\b/i.test(
+      normalizeForMatch(lastAgent)
+    );
+
+    if (askedForCourse) {
+      const aliasedFromShortReply = resolveProgramAliasFromMessage(userMessage, programs);
+      if (aliasedFromShortReply) return aliasedFromShortReply;
+
+      const fuzzyFromShortReply = findProgramMatchByTopic(userMessage, programs);
+      if (fuzzyFromShortReply) return fuzzyFromShortReply;
+    }
+
     return null;
   }
 
@@ -4669,9 +5016,10 @@ function resolveProgramAliasFromMessage(userMessage: string, programs: any[]): a
 
   const normalized = normalizeForMatch(userMessage);
   const asksNailProgram =
-    /\b(manicura|manicuria|maniura|manicure|pedicura|pedicure|pedi\s*spa|pedispa|nail|nails|unas\s+acrilicas|curso\s+de\s+unas)\b/i.test(normalized)
-    || /\buñ(?:as|s)\b/i.test(raw)
-    || /\buñas\b/i.test(raw);
+    /\b(manicura|manicuria|maniura|manicure|pedicura|pedicure|pedi\s*spa|pedispa|nail|nails|unas\s+acrilicas|curso\s+de\s+unas|unas|pies)\b/i.test(normalized)
+    || /(?:^|\s)uñ(?:as|s)(?:\s|$)/i.test(raw)
+    || /(?:^|\s)uñas(?:\s|$)/i.test(raw)
+    || /(?:^|\s)unas(?:\s+y\s+pies)?(?:\s|$)/i.test(normalized);
 
   if (!asksNailProgram) return null;
   return findNailsProgram(programs);
@@ -4681,7 +5029,8 @@ function buildContextualDirective(
   userMessage: string,
   detectedProgram: any | null,
   courses: any[],
-  history: Array<{ user: string; agent: string }> = []
+  history: Array<{ user: string; agent: string }> = [],
+  phoneProfileRol: string | null = null
 ): string {
   const intent = detectUserIntent(userMessage);
   const materialsScope = intent === "materiales" ? detectMaterialsScope(userMessage) : "general";
@@ -4707,7 +5056,9 @@ function buildContextualDirective(
   const normalizedRecentHistory = normalizeForMatch(
     (Array.isArray(history) ? history : []).slice(-8).map((h) => `${h?.user || ""} ${h?.agent || ""}`).join(" ")
   );
-  const isTeacherSupport = /\b(profesora|profesor|docente|maestra|soy\s+profesor|soy\s+profe|mis\s+clases|mi\s+pago\s+quincena|quincena)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
+  const normalizedPhoneRole = normalizeForMatch(phoneProfileRol || "");
+  const teacherRoleByPhone = /^(profesor|profesora|docente|maestra)$/i.test(normalizedPhoneRole);
+  const isTeacherSupport = teacherRoleByPhone || /\b(profesora|profesor|docente|maestra|soy\s+profesor|soy\s+profe|mis\s+clases|mi\s+pago\s+quincena|quincena)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
   const isStudentSupport = /\b(estudiante|alumna|alumno|estoy\s+estudiando|tengo\s+clase\s+hoy|hay\s+clase\s+hoy|kit|materiales\s+de\s+la\s+clase|mis\s+cursos|proxima\s+clase|proximo\s+pago)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
 
   const roleSupportRule = isTeacherSupport
@@ -4950,6 +5301,8 @@ export async function POST(req: NextRequest) {
 
     // Extraer datos del comentario si es un evento de comentario de Instagram
     const commentEvent = extractInstagramCommentEvent(body || {});
+    const withDeliveryMeta = (payload: Record<string, any>) =>
+      addDeliveryMeta(payload, phone, channel, profileName);
 
     console.log("[chat] Input extraído:", {
       phone,
@@ -4985,7 +5338,19 @@ export async function POST(req: NextRequest) {
       body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type === "document"
     );
 
-    if (!message && hasAttachment) {
+    const hasInlineText = !!pickFirstNonEmptyString(
+      messagingEvent?.message?.text,
+      messagingEvent?.message?.text?.body,
+      body?.entry?.[0]?.changes?.[0]?.value?.message?.text,
+      body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body,
+      body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text,
+      body?.message,
+      body?.text,
+      body?.text?.body,
+      body?.text?.text
+    );
+
+    if (!message && !hasInlineText && hasAttachment) {
       const attachmentType = String(
         body?.entry?.[0]?.messaging?.[0]?.message?.attachments?.[0]?.type ||
         body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type ||
@@ -4995,7 +5360,7 @@ export async function POST(req: NextRequest) {
       const friendlyReply = isAudio
         ? "¡Hola! Por el momento no puedo escuchar audios, pero con mucho gusto te atiendo por texto 😊 ¿En qué te puedo ayudar?"
         : "¡Hola! Por el momento no puedo ver imágenes, pero con mucho gusto te atiendo por texto 😊 ¿En qué te puedo ayudar?";
-      return NextResponse.json({ ok: true, response: friendlyReply });
+      return NextResponse.json(withDeliveryMeta({ ok: true, response: friendlyReply }));
     }
 
     // Validar entrada del usuario
@@ -5097,7 +5462,7 @@ export async function POST(req: NextRequest) {
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -5105,7 +5470,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     // INFORMACIÓN JERÁRQUICA
@@ -5113,9 +5478,18 @@ export async function POST(req: NextRequest) {
     const programs = await getProgramsForAgent();
 
     const studentIdentification = resolveStudentIdentification(effectiveMessage, history);
-    const studentContext = studentIdentification
+    const studentContextById = studentIdentification
       ? await getStudentContextByIdentification(studentIdentification)
       : null;
+
+    const studentContextByPhone = !studentContextById
+      && phoneProfile?.rol === 'estudiante'
+      && phone
+      && phone !== 'unknown'
+      ? await getStudentContextByPhone(phone)
+      : null;
+
+    const studentContext = studentContextById || studentContextByPhone;
 
     if (studentIdentification && !studentContext && hasStudentAccountIntent(effectiveMessage)) {
       const notFoundResponse = `No encontré una estudiante con identificación ${studentIdentification}. Verifica el número de cédula y me lo vuelves a enviar.`;
@@ -5125,7 +5499,7 @@ export async function POST(req: NextRequest) {
       const sanitizedResponse = sanitizeForJSON(truncatedNotFound);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
@@ -5133,7 +5507,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     // 2. Obtener cursos basado en lo que pregunta (si menciona programa)
@@ -5170,6 +5544,56 @@ export async function POST(req: NextRequest) {
       excludeUrls: extractSentImageUrlsFromHistory(history),
     });
 
+    const knownStudentByPhone = Boolean(studentContext || phoneProfile?.rol === 'estudiante');
+    if (knownStudentByPhone && (isPureGreeting(message) || isShortNegativeReply(message))) {
+      const supportReply = buildKnownStudentSupportReply(phoneProfileName || studentContext?.estudianteNombre || null);
+      await persistConversation(message, supportReply);
+
+      const sanitizedResponse = sanitizeForJSON(supportReply);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
+
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      }, null)), commentEvent));
+    }
+
+    const knownTeacherByPhone = phoneProfile?.rol === 'profesor';
+    const teacherNeedsSupportReply = knownTeacherByPhone
+      && (isPureGreeting(message)
+        || isShortNegativeReply(message)
+        || isThanksOnlyMessage(message)
+        || isNeutralAcknowledgement(message)
+        || isNoiseOnlyMessage(message));
+
+    if (teacherNeedsSupportReply) {
+      const supportReply = buildKnownTeacherSupportReply(phoneProfileName);
+      await persistConversation(message, supportReply);
+
+      const sanitizedResponse = sanitizeForJSON(supportReply);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
+
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      }, null)), commentEvent));
+    }
+
+    // 3. Obtener información de la academia (dirección, redes, contacto)
+    const academy = await getAcademyInfo();
+    const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
+    const mediosPago = await getMediosPago();
+
     // Anular imagen si es el primer mensaje de la conversación (saludo inicial)
     // o si el mensaje original es un saludo / afirmación corta ("si", "ok", "dale", etc.)
     if (mediaSuggestion) {
@@ -5178,7 +5602,7 @@ export async function POST(req: NextRequest) {
       const isGreetingOrShortInput = /^(hola|hi|hey|buenos?\s*d[ií]as?|buenas?\s*(tardes?|noches?)|hello|holi|s[ií]p?|ok|okay|dale|listo|claro|perfecto|de\s+una|bien|ya|sip|genial|excelente|entendido|gracias|chao|bye)[\s!.?]*$/i.test(trimmedOriginal)
         || trimmedOriginal.split(/\s+/).filter(Boolean).length <= 1;
       const normalizedOriginal = normalizeForMatch(trimmedOriginal);
-      const isOperationalQuestion = /\b(nequi|bancolombia|sistecredito|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps)\b/i.test(normalizedOriginal)
+      const isOperationalQuestion = /\b(nequi|bancolombia|sistecredito|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps|semana|vez\s+a\s+la\s+semana|frecuencia)\b/i.test(normalizedOriginal)
         || /^(1|uno|paso\s*1)$/i.test(normalizedOriginal);
       const isPriceOrPaymentQuestion = detectedIntent === "precio"
         || /\b(precio|valor|cuanto|inversion|inscripcion|mensualidad|pago|pagos|modalidad|modalidades|quincena|quincenal)\b/i.test(normalizedOriginal);
@@ -5199,7 +5623,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext);
+    const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext, mediosPago);
     if (directStudentResponse) {
       const truncatedResponse = truncateResponse(directStudentResponse, 1000);
 
@@ -5211,7 +5635,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -5219,7 +5643,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     if (shouldUseTodayClassDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -5234,7 +5658,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -5242,7 +5666,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
 
     if (shouldUseNextGroupDirectResponse(effectiveMessage, detectedProgram, programs, history)) {
@@ -5257,7 +5681,7 @@ export async function POST(req: NextRequest) {
       const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
       const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizedAgent || "Dany",
@@ -5265,14 +5689,9 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: sanitizedProgram || null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, null), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
+      }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
     
-    // 3. Obtener información de la academia (dirección, redes, contacto)
-    const academy = await getAcademyInfo();
-    const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
-    const mediosPago = await getMediosPago();
-
     let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs, mediosPago);
     if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage)) {
       const pendingTopic = inferPendingTopicFromHistory(history);
@@ -5339,7 +5758,7 @@ export async function POST(req: NextRequest) {
       const sanitizedResponse = sanitizeForJSON(truncatedResponse);
       const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
 
-      return NextResponse.json(addCommentMeta(withMediaSuggestion({
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
         ok: true,
         response: whatsappResponse || "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
@@ -5347,7 +5766,7 @@ export async function POST(req: NextRequest) {
         historyLength: Number(history.length) || 0,
         programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
         rateLimitRemaining: Number(rateLimit.remaining) || 0,
-      }, commentEvent ? null : activeMedia), commentEvent));
+      }, commentEvent ? null : activeMedia)), commentEvent));
     }
     
     // 4. Contexto jerárquico CON PENSUM: info academia + medios pago + programas + grupos + temario detallado
@@ -5378,7 +5797,7 @@ export async function POST(req: NextRequest) {
       ? 'Existe contexto de estudiante validado por identificación. Prioriza responder con sus cursos inscritos, su próxima clase y su estado real de pagos antes de información general.'
       : '';
     const contextualDirective = [
-      buildContextualDirective(effectiveMessage, detectedProgram, courses, history),
+      buildContextualDirective(effectiveMessage, detectedProgram, courses, history, phoneProfile?.rol || null),
       buildNameSafetyDirective(preferredStudentName, profileName || null, channel, phoneProfileName, phoneProfile?.rol || null),
       buildUpcomingStartDirective(detectedProgram, courses),
       studentDirective,
@@ -5446,7 +5865,7 @@ export async function POST(req: NextRequest) {
     const sanitizedAgent = sanitizeForJSON(settings?.persona_name || "Dany");
     const sanitizedProgram = detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : "";
 
-    return NextResponse.json(addCommentMeta(withMediaSuggestion({
+    return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
       ok: true,
       response: whatsappResponse || "",
       agent: sanitizedAgent || "Dany",
@@ -5454,7 +5873,7 @@ export async function POST(req: NextRequest) {
       historyLength: Number(history.length) || 0,
       programDetected: sanitizedProgram || null,
       rateLimitRemaining: Number(rateLimit.remaining) || 0,
-    }, commentEvent ? null : activeMediaFinal), commentEvent));
+    }, commentEvent ? null : activeMediaFinal)), commentEvent));
   } catch (error: any) {
     console.error("Error en /api/ai/chat:", error);
     const errorMessage = error?.message || "Error generando respuesta";

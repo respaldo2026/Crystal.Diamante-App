@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Card, Typography, Descriptions, Button, Space, message, Spin, Alert, Form, Select, Input, DatePicker, Divider, Row, Col, Result } from "antd";
+import { Card, Typography, Descriptions, Button, Space, message, Spin, Alert, Form, Select, Input, DatePicker, Divider, Row, Col, Result, Tag } from "antd";
 import { PrinterOutlined, DollarCircleOutlined, WhatsAppOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
@@ -33,8 +33,40 @@ export default function PagoInscripcionPage() {
     const [curso, setCurso] = useState<any>(null);
     const [pagoInscripcion, setPagoInscripcion] = useState<any>(null);
     const [procesandoPago, setProcesandoPago] = useState(false);
+    const [reenviandoAcceso, setReenviandoAcceso] = useState(false);
+    const [estadoAccesoPortal, setEstadoAccesoPortal] = useState<string | null>(null);
+    const [consultandoEstadoAcceso, setConsultandoEstadoAcceso] = useState(false);
 
     const [form] = Form.useForm();
+
+    const cargarEstadoAccesoPortal = useCallback(async (usuarioId?: string) => {
+        if (!usuarioId) {
+            setEstadoAccesoPortal(null);
+            return;
+        }
+
+        setConsultandoEstadoAcceso(true);
+        try {
+            const { data, error } = await supabaseBrowserClient
+                .from("whatsapp_mensajes")
+                .select("estado")
+                .eq("usuario_id", usuarioId)
+                .eq("tipo", "bienvenida_portal_estudiante")
+                .order("creado_en", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (error) {
+                console.warn("No se pudo consultar estado de acceso portal:", error);
+                setEstadoAccesoPortal(null);
+                return;
+            }
+
+            setEstadoAccesoPortal(data?.estado ? String(data.estado).toLowerCase() : null);
+        } finally {
+            setConsultandoEstadoAcceso(false);
+        }
+    }, []);
 
     const cargarDatos = useCallback(async () => {
         try {
@@ -63,6 +95,7 @@ export default function PagoInscripcionPage() {
 
             if (errEst || !est) throw new Error("No se encontró el estudiante");
             setEstudiante(est);
+            await cargarEstadoAccesoPortal(est.id);
 
             // Cargar pago de inscripción (cuota 0)
             const { data: pago, error: errPago } = await supabaseBrowserClient
@@ -89,7 +122,7 @@ export default function PagoInscripcionPage() {
         } finally {
             setLoading(false);
         }
-    }, [matriculaId]);
+    }, [matriculaId, cargarEstadoAccesoPortal]);
 
     useEffect(() => {
         if (matriculaId) {
@@ -326,6 +359,40 @@ export default function PagoInscripcionPage() {
         message.success("Recordatorio enviado por WhatsApp");
     };
 
+    const handleReenviarAccesoPortal = async () => {
+        if (!estudiante?.telefono) {
+            message.warning("El estudiante no tiene teléfono registrado");
+            return;
+        }
+
+        setReenviandoAcceso(true);
+        try {
+            const { enviarBienvenidaPortalEstudiante } = await import("@/services/whatsapp-messages-module");
+
+            const resultado = await enviarBienvenidaPortalEstudiante(estudiante.id, {
+                nombre: estudiante.nombre_completo,
+                telefono: estudiante.telefono,
+                nombreCurso: curso?.nombre ?? "Curso",
+                enlacePortal: PORTAL_ESTUDIANTE_URL,
+                usuario: (estudiante.email || estudiante.identificacion) || "tu usuario registrado",
+                genero: estudiante.genero ?? null,
+            });
+
+            if (resultado.exito) {
+                await cargarEstadoAccesoPortal(estudiante.id);
+                message.success("✅ Link de acceso reenviado por WhatsApp");
+                return;
+            }
+
+            message.error(`❌ No se pudo reenviar el acceso: ${resultado.error || "error desconocido"}`);
+        } catch (error: any) {
+            console.error("Error reenviando acceso portal:", error);
+            message.error("❌ Error al reenviar el acceso al portal");
+        } finally {
+            setReenviandoAcceso(false);
+        }
+    };
+
     if (loading) {
         return (
             <div style={{ textAlign: "center", padding: "100px" }}>
@@ -348,6 +415,14 @@ export default function PagoInscripcionPage() {
 
     const yaPagado = pagoInscripcion?.estado === "pagado";
     const montoInscripcion = pagoInscripcion?.monto || curso?.programas?.precio_inscripcion || 50000;
+    const estadoAccesoTexto = consultandoEstadoAcceso
+        ? "consultando"
+        : (estadoAccesoPortal || "sin registro");
+    const estadoAccesoColor =
+        estadoAccesoPortal === "leido" ? "success" :
+        estadoAccesoPortal === "entregado" ? "processing" :
+        estadoAccesoPortal === "enviado" ? "default" :
+        estadoAccesoPortal === "fallido" ? "error" : "warning";
 
     return (
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px" }}>
@@ -363,9 +438,15 @@ export default function PagoInscripcionPage() {
                     showIcon
                     style={{ marginBottom: 20 }}
                     action={
-                        <Button size="small" onClick={() => router.push(`/estudiantes/show/${estudiante.id}`)}>
-                            Ver Perfil
-                        </Button>
+                        <Space>
+                            <Tag color={estadoAccesoColor}>Acceso: {estadoAccesoTexto}</Tag>
+                            <Button size="small" onClick={handleReenviarAccesoPortal} loading={reenviandoAcceso}>
+                                Reenviar acceso app
+                            </Button>
+                            <Button size="small" onClick={() => router.push(`/estudiantes/show/${estudiante.id}`)}>
+                                Ver Perfil
+                            </Button>
+                        </Space>
                     }
                 />
             )}

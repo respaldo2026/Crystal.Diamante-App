@@ -23,6 +23,10 @@ import {
   Tooltip,
   Modal,
   Popconfirm,
+  Form,
+  Select,
+  DatePicker,
+  Input,
 } from "antd";
 import {
   UserOutlined,
@@ -42,6 +46,8 @@ import {
   ReloadOutlined,
   DeleteOutlined,
   FilePdfOutlined,
+  PlusOutlined,
+  CalendarOutlined,
 } from "@ant-design/icons";
 import { message, Upload } from "antd";
 import type { UploadFile } from "antd";
@@ -55,7 +61,7 @@ import { obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
-import { getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
+import { getPaymentPlan, getPaymentPlanDisplay, normalizeModalidadPago } from "@/types/payment-plans";
 
 type Matricula = {
   id: number;
@@ -87,6 +93,9 @@ type Pago = {
   numero_cuota?: number | null;
   matricula_id: number | null;
   matriculas: {
+    modalidad_pago?: string | null;
+    valor_mensual_plan?: number | null;
+    porcentaje_productos?: number | null;
     cursos: {
       nombre: string | null;
     } | null;
@@ -116,6 +125,9 @@ type AsistenciaEstudiante = {
   matricula_id: number | null;
   clase_numero?: number | null;
   tema_visto?: string | null;
+  pago_id?: number | null;
+  estado_pago?: string | null;
+  monto_pago?: number | null;
 };
 
 const { Title, Text } = Typography;
@@ -132,6 +144,9 @@ export default function StudentDetailView() {
   const [pagosHistorial, setPagosHistorial] = useState<Pago[]>([]);
   const [asistenciasHistorial, setAsistenciasHistorial] = useState<AsistenciaEstudiante[]>([]);
   const [deletingAsistenciaId, setDeletingAsistenciaId] = useState<string | null>(null);
+  const [modalRegistrarClase, setModalRegistrarClase] = useState(false);
+  const [registrandoClase, setRegistrandoClase] = useState(false);
+  const [formRegistrarClase] = Form.useForm();
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState("");
@@ -269,7 +284,7 @@ export default function StudentDetailView() {
       if (matriculaIds.length > 0) {
         const { data: dataAsistencias, error: errAsistencias } = await supabaseBrowserClient
           .from("asistencias")
-          .select("id, fecha, estado, observaciones, matricula_id")
+          .select("id, fecha, estado, observaciones, matricula_id, pago_id, pagos(id, estado, monto)")
           .in("matricula_id", matriculaIds)
           .order("fecha", { ascending: false });
 
@@ -339,6 +354,9 @@ export default function StudentDetailView() {
               matricula_id: asistencia.matricula_id || null,
               clase_numero: claseNumero,
               tema_visto: temaFinal,
+              pago_id: (asistencia as any).pago_id || null,
+              estado_pago: (asistencia as any)?.pagos?.estado || null,
+              monto_pago: (asistencia as any)?.pagos?.monto || null,
             };
           });
 
@@ -364,7 +382,7 @@ export default function StudentDetailView() {
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
         .select(
-          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
         )
         .eq("estudiante_id", idEstudiante)
         .order("matricula_id", { ascending: true })
@@ -381,7 +399,7 @@ export default function StudentDetailView() {
         const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
           .from("pagos")
           .select(
-            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
           )
           .in("matricula_id", matriculaIds)
           .order("matricula_id", { ascending: true })
@@ -453,6 +471,75 @@ export default function StudentDetailView() {
       setLoading(false);
     }
   }, [idEstudiante, obtenerDuracionMeses]);
+
+  // Matrículas con modalidad POR_CLASE (para mostrar el botón "Registrar Clase")
+  const matriculasPorClase = useMemo(
+    () => (matriculas as any[]).filter((m) => normalizeModalidadPago(m?.modalidad_pago) === "POR_CLASE"),
+    [matriculas]
+  );
+
+  const handleRegistrarAsistencia = useCallback(
+    async (values: any) => {
+      if (!idEstudiante) return;
+      setRegistrandoClase(true);
+      try {
+        const response = await fetch("/api/asistencias", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            matricula_id: values.matricula_id,
+            fecha: values.fecha.format("YYYY-MM-DD"),
+            estado: values.estado,
+            observaciones: values.observaciones || null,
+            tema: values.tema || null,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Error al registrar asistencia");
+
+        if (values.estado === "presente" && result.pagoCreado) {
+          const { monto, claseNumero, fechaVencimiento } = result.pagoCreado;
+          const vencFmt = dayjs(fechaVencimiento).format("DD/MM/YYYY");
+          message.success(
+            `Clase #${claseNumero} registrada. Cobro generado: $${Number(monto).toLocaleString("es-CO")} (vence ${vencFmt})`,
+            6
+          );
+
+          // Notificar al estudiante por WhatsApp
+          if (perfil?.telefono && perfil?.notif_whatsapp !== false) {
+            try {
+              const mat = (matriculas as any[]).find((m: any) => String(m.id) === String(values.matricula_id));
+              const cursoNombre = construirNombreGrupo(mat?.cursos) || "tu curso";
+              const fechaClaseFmt = values.fecha.format("DD/MM/YYYY");
+              const montoFmt = `$${Number(monto).toLocaleString("es-CO")}`;
+              const mensajeWA =
+                `Hola ${perfil.nombre_completo} 👋\n\n` +
+                `Se registró tu asistencia a clase del *${fechaClaseFmt}* en *${cursoNombre}*.\n\n` +
+                `💰 Cobro generado: *${montoFmt}*\n` +
+                `⏰ Vence: *${vencFmt}*\n\n` +
+                `Puedes pagar en nuestra oficina. ¡Gracias!\n\n_Academia Crystal_`;
+              await enviarWhatsapp(perfil.telefono, mensajeWA);
+            } catch (waErr) {
+              console.warn("Error enviando WhatsApp de asistencia:", waErr);
+            }
+          }
+        } else {
+          message.success("Asistencia registrada correctamente");
+        }
+
+        setModalRegistrarClase(false);
+        formRegistrarClase.resetFields();
+        await cargarDatosCompletos();
+      } catch (err: any) {
+        console.error("Error registrando asistencia:", err);
+        message.error(err.message || "No se pudo registrar la asistencia");
+      } finally {
+        setRegistrandoClase(false);
+      }
+    },
+    [idEstudiante, perfil, matriculas, cargarDatosCompletos, formRegistrarClase]
+  );
 
   const eliminarAsistencia = async (asistenciaId: string) => {
     try {
@@ -679,11 +766,12 @@ export default function StudentDetailView() {
         title: "Plan de Pago",
         key: "plan",
         render: (_: any, record: any) => {
-          const plan = getPaymentPlan(record?.modalidad_pago);
-          if (plan.modalidad === "POR_CLASE") {
-            return <Tag color="orange">{`${plan.label} · $${plan.montoPorClase.toLocaleString()} c/u`}</Tag>;
-          }
-          return <Tag color="blue">{`${plan.label} · $${plan.montoMensual.toLocaleString()}/mes`}</Tag>;
+          const plan = getPaymentPlanDisplay({
+            modalidadPago: record?.modalidad_pago,
+            valorMensualPlan: record?.valor_mensual_plan,
+            porcentajeProductos: record?.porcentaje_productos,
+          });
+          return <Tag color={plan.color}>{`${plan.label} · ${plan.detail}`}</Tag>;
         },
       },
       {
@@ -725,11 +813,12 @@ export default function StudentDetailView() {
         title: "Modalidad",
         key: "modalidad",
         render: (_: any, record: any) => {
-          const plan = getPaymentPlan(record?.modalidad_pago);
-          if (plan.modalidad === "POR_CLASE") {
-            return <Tag color="orange">{`${plan.label} · $${plan.montoPorClase.toLocaleString()} c/u`}</Tag>;
-          }
-          return <Tag color="blue">{`${plan.label} · $${plan.montoMensual.toLocaleString()}/mes`}</Tag>;
+          const plan = getPaymentPlanDisplay({
+            modalidadPago: record?.modalidad_pago,
+            valorMensualPlan: record?.valor_mensual_plan,
+            porcentajeProductos: record?.porcentaje_productos,
+          });
+          return <Tag color={plan.color}>{`${plan.label} · ${plan.detail}`}</Tag>;
         },
       },
       {
@@ -799,7 +888,12 @@ export default function StudentDetailView() {
           fecha_pago: null,
           numero_cuota: i,
           matricula_id: matricula.id,
-          matriculas: { cursos: matricula.cursos },
+          matriculas: {
+            modalidad_pago: matricula?.modalidad_pago ?? null,
+            valor_mensual_plan: matricula?.valor_mensual_plan ?? null,
+            porcentaje_productos: matricula?.porcentaje_productos ?? null,
+            cursos: matricula.cursos,
+          },
           monto: obtenerMensualidad(matricula),
           metodo_pago: null,
           referencia: null,
@@ -887,11 +981,12 @@ export default function StudentDetailView() {
         title: "Plan",
         key: "plan",
         render: (_: any, record: any) => {
-          const plan = getPaymentPlan(record?.matriculas?.modalidad_pago);
-          if (plan.modalidad === "POR_CLASE") {
-            return <Tag color="orange">{`${plan.label} · $${plan.montoPorClase.toLocaleString()} c/u`}</Tag>;
-          }
-          return <Tag color="blue">{`${plan.label} · $${plan.montoMensual.toLocaleString()}/mes`}</Tag>;
+          const plan = getPaymentPlanDisplay({
+            modalidadPago: record?.matriculas?.modalidad_pago,
+            valorMensualPlan: record?.matriculas?.valor_mensual_plan,
+            porcentajeProductos: record?.matriculas?.porcentaje_productos,
+          });
+          return <Tag color={plan.color}>{`${plan.label} · ${plan.detail}`}</Tag>;
         },
       },
       {
@@ -1527,65 +1622,120 @@ export default function StudentDetailView() {
                 </span>
               ),
               children: (
-                <Table
-                  dataSource={asistenciasHistorial}
-                  rowKey="id"
-                  pagination={{ pageSize: 10 }}
-                  locale={{ emptyText: "No hay asistencias registradas" }}
-                  columns={[
-                    {
-                      title: "Fecha",
-                      dataIndex: "fecha",
-                      width: 130,
-                      render: (val: string | null) => (val ? formatDate(val) : "-")
-                    },
-                    {
-                      title: "N° Clase",
-                      dataIndex: "clase_numero",
-                      width: 110,
-                      render: (val: number | null) => (val ? <Text strong>{val}</Text> : <Text type="secondary">-</Text>),
-                    },
-                    {
-                      title: "Tema visto",
-                      dataIndex: "tema_visto",
-                      render: (val: string | null) => val || <Text type="secondary">-</Text>,
-                    },
-                    {
-                      title: "Estado",
-                      dataIndex: "estado",
-                      width: 130,
-                      render: (estado: string | null) => (
-                        <Tag color={estado === "presente" ? "green" : "red"}>
-                          {String(estado || "-").toUpperCase()}
-                        </Tag>
-                      ),
-                    },
-                    {
-                      title: "Acciones",
-                      key: "acciones",
-                      width: 110,
-                      render: (_: any, record: AsistenciaEstudiante) => (
-                        <Popconfirm
-                          title="¿Eliminar asistencia?"
-                          description="Este cambio impacta panel profesor, panel estudiante y este perfil."
-                          okText="Eliminar"
-                          cancelText="Cancelar"
-                          okButtonProps={{ danger: true, loading: deletingAsistenciaId === String(record.id) }}
-                          onConfirm={() => eliminarAsistencia(String(record.id))}
-                        >
-                          <Button
-                            size="small"
-                            danger
-                            icon={<DeleteOutlined />}
-                            loading={deletingAsistenciaId === String(record.id)}
+                <>
+                  {matriculasPorClase.length > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <Alert
+                        message="Modalidad: Pago Por Clase"
+                        description="Cada vez que este estudiante asiste a clase, se genera automáticamente un cobro de $40.000 pendiente de pago en Caja. Registra aquí la asistencia."
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 12 }}
+                      />
+                      <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          formRegistrarClase.setFieldsValue({
+                            matricula_id: matriculasPorClase[0]?.id,
+                            fecha: dayjs(),
+                            estado: "presente",
+                          });
+                          setModalRegistrarClase(true);
+                        }}
+                      >
+                        Registrar Clase Asistida
+                      </Button>
+                    </div>
+                  )}
+                  <Table
+                    dataSource={asistenciasHistorial}
+                    rowKey="id"
+                    pagination={{ pageSize: 10 }}
+                    locale={{ emptyText: "No hay asistencias registradas" }}
+                    columns={[
+                      {
+                        title: "Fecha",
+                        dataIndex: "fecha",
+                        width: 130,
+                        render: (val: string | null) => (val ? formatDate(val) : "-"),
+                      },
+                      {
+                        title: "N° Clase",
+                        dataIndex: "clase_numero",
+                        width: 90,
+                        render: (val: number | null) =>
+                          val ? <Text strong>{val}</Text> : <Text type="secondary">-</Text>,
+                      },
+                      {
+                        title: "Tema visto",
+                        dataIndex: "tema_visto",
+                        render: (val: string | null) => val || <Text type="secondary">-</Text>,
+                      },
+                      {
+                        title: "Estado",
+                        dataIndex: "estado",
+                        width: 120,
+                        render: (estado: string | null) => (
+                          <Tag color={estado === "presente" ? "green" : estado === "tardanza" ? "orange" : "red"}>
+                            {String(estado || "-").toUpperCase()}
+                          </Tag>
+                        ),
+                      },
+                      {
+                        title: "Cobro Clase",
+                        key: "estado_pago",
+                        width: 150,
+                        render: (_: any, record: AsistenciaEstudiante) => {
+                          if (!record.pago_id) {
+                            return record.estado === "presente" ? (
+                              <Tag color="default">Sin cobro</Tag>
+                            ) : (
+                              <Text type="secondary">-</Text>
+                            );
+                          }
+                          const ep = String(record.estado_pago || "pendiente").toLowerCase();
+                          const color = ep === "pagado" ? "green" : ep === "vencido" ? "red" : "orange";
+                          const label = ep === "pagado" ? "✅ Pagado" : ep === "vencido" ? "⚠️ Vencido" : "⏳ Pendiente";
+                          return (
+                            <Space direction="vertical" size={2}>
+                              <Tag color={color}>{label}</Tag>
+                              {record.monto_pago ? (
+                                <Text style={{ fontSize: 12 }}>
+                                  ${Number(record.monto_pago).toLocaleString("es-CO")}
+                                </Text>
+                              ) : null}
+                            </Space>
+                          );
+                        },
+                      },
+                      {
+                        title: "Acciones",
+                        key: "acciones",
+                        width: 110,
+                        render: (_: any, record: AsistenciaEstudiante) => (
+                          <Popconfirm
+                            title="¿Eliminar asistencia?"
+                            description="Este cambio impacta panel profesor, panel estudiante y este perfil."
+                            okText="Eliminar"
+                            cancelText="Cancelar"
+                            okButtonProps={{ danger: true, loading: deletingAsistenciaId === String(record.id) }}
+                            onConfirm={() => eliminarAsistencia(String(record.id))}
                           >
-                            Borrar
-                          </Button>
-                        </Popconfirm>
-                      ),
-                    },
-                  ]}
-                />
+                            <Button
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                              loading={deletingAsistenciaId === String(record.id)}
+                            >
+                              Borrar
+                            </Button>
+                          </Popconfirm>
+                        ),
+                      },
+                    ]}
+                  />
+                </>
               ),
             },
             {
@@ -1614,6 +1764,97 @@ export default function StudentDetailView() {
           height={600}
           style={{ width: "100%", height: "auto" }}
         />
+      </Modal>
+
+      {/* ── Modal: Registrar Asistencia Por Clase ─────────────────── */}
+      <Modal
+        open={modalRegistrarClase}
+        title={
+          <Space>
+            <CalendarOutlined style={{ color: "#d46b08" }} />
+            <span>Registrar Clase Asistida</span>
+          </Space>
+        }
+        onCancel={() => {
+          setModalRegistrarClase(false);
+          formRegistrarClase.resetFields();
+        }}
+        onOk={() => formRegistrarClase.submit()}
+        okText="Registrar"
+        okButtonProps={{ loading: registrandoClase, type: "primary" }}
+        cancelText="Cancelar"
+        width={500}
+        destroyOnClose
+      >
+        <Alert
+          message="Una clase 'Presente' genera automáticamente un cobro pendiente de $40.000"
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Form
+          form={formRegistrarClase}
+          layout="vertical"
+          onFinish={handleRegistrarAsistencia}
+          initialValues={{ estado: "presente", fecha: dayjs() }}
+        >
+          {matriculasPorClase.length > 1 && (
+            <Form.Item
+              name="matricula_id"
+              label="Curso (Plan Por Clase)"
+              rules={[{ required: true, message: "Seleccione el curso" }]}
+            >
+              <Select
+                options={matriculasPorClase.map((m: any) => ({
+                  label: construirNombreGrupo(m.cursos) || `Matrícula #${m.id}`,
+                  value: m.id,
+                }))}
+                placeholder="Seleccionar curso"
+              />
+            </Form.Item>
+          )}
+          {matriculasPorClase.length === 1 && (
+            <Form.Item name="matricula_id" hidden>
+              <Input />
+            </Form.Item>
+          )}
+
+          <Form.Item
+            name="fecha"
+            label="Fecha de la clase"
+            rules={[{ required: true, message: "Ingrese la fecha" }]}
+          >
+            <DatePicker
+              style={{ width: "100%" }}
+              format="DD/MM/YYYY"
+              disabledDate={(d) => d.isAfter(dayjs(), "day")}
+              placeholder="Seleccionar fecha"
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="estado"
+            label="Estado de asistencia"
+            rules={[{ required: true, message: "Seleccione el estado" }]}
+          >
+            <Select
+              options={[
+                { label: "✅  Presente (genera cobro)", value: "presente" },
+                { label: "❌  Ausente", value: "ausente" },
+                { label: "⏰  Tardanza", value: "tardanza" },
+                { label: "📋  Justificado", value: "justificado" },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item name="tema" label="Tema de la clase (opcional)">
+            <Input placeholder="Ej: Estilismo de cejas, Keratina..." />
+          </Form.Item>
+
+          <Form.Item name="observaciones" label="Observaciones (opcional)">
+            <Input.TextArea rows={2} placeholder="Notas adicionales..." />
+          </Form.Item>
+        </Form>
       </Modal>
     </Show>
   );

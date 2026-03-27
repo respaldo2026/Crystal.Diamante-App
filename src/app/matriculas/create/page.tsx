@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { useForm, useSelect } from "@refinedev/antd";
-import { Form, Select, DatePicker, Input, Card, message, Alert, Button, Space, Divider, Modal, Col, Row, Descriptions, Result, Typography } from "antd";
+import { Form, Select, DatePicker, Input, Card, message, Alert, Button, Space, Divider, Modal, Col, Row, Descriptions, Result, Typography, Tag } from "antd";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { construirNombreGrupo } from "@utils/grupos";
 import { BookOutlined, SearchOutlined, PlusOutlined, PrinterOutlined, DollarCircleOutlined, CheckCircleOutlined } from "@ant-design/icons";
@@ -53,6 +53,9 @@ export default function MatriculaCreate() {
     const [cursoData, setCursoData] = useState<any>(null);
     const [pagoInscripcionData, setPagoInscripcionData] = useState<any>(null);
     const [procesandoPago, setProcesandoPago] = useState(false);
+    const [reenviandoAcceso, setReenviandoAcceso] = useState(false);
+    const [estadoAccesoPortal, setEstadoAccesoPortal] = useState<string | null>(null);
+    const [consultandoEstadoAcceso, setConsultandoEstadoAcceso] = useState(false);
     const [creatingMatricula, setCreatingMatricula] = useState(false);
     const [pagoForm] = Form.useForm();
     const [mediosPago, setMediosPago] = useState<any[]>([]);
@@ -222,6 +225,41 @@ export default function MatriculaCreate() {
         };
         cargarMediosPago();
     }, []);
+
+    const cargarEstadoAccesoPortal = async (usuarioId?: string) => {
+        if (!usuarioId) {
+            setEstadoAccesoPortal(null);
+            return;
+        }
+
+        setConsultandoEstadoAcceso(true);
+        try {
+            const { data, error } = await supabaseBrowserClient
+                .from("whatsapp_mensajes")
+                .select("estado")
+                .eq("usuario_id", usuarioId)
+                .eq("tipo", "bienvenida_portal_estudiante")
+                .order("creado_en", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (error) {
+                console.warn("No se pudo consultar estado de acceso portal:", error);
+                setEstadoAccesoPortal(null);
+                return;
+            }
+
+            setEstadoAccesoPortal(data?.estado ? String(data.estado).toLowerCase() : null);
+        } finally {
+            setConsultandoEstadoAcceso(false);
+        }
+    };
+
+    useEffect(() => {
+        if (inscripcionCreada && estudianteData?.id) {
+            void cargarEstadoAccesoPortal(estudianteData.id);
+        }
+    }, [inscripcionCreada, estudianteData?.id]);
 
     useEffect(() => {
         const loadCursos = async () => {
@@ -888,6 +926,40 @@ export default function MatriculaCreate() {
         }
     };
 
+    const handleReenviarAccesoPortal = async () => {
+        if (!estudianteData?.telefono) {
+            message.warning("El estudiante no tiene teléfono registrado");
+            return;
+        }
+
+        setReenviandoAcceso(true);
+        try {
+            const { enviarBienvenidaPortalEstudiante } = await import("@/services/whatsapp-messages-module");
+
+            const resultado = await enviarBienvenidaPortalEstudiante(estudianteData.id, {
+                nombre: estudianteData.nombre_completo,
+                telefono: estudianteData.telefono,
+                nombreCurso: cursoData?.nombre ?? "Curso",
+                enlacePortal: PORTAL_ESTUDIANTE_URL,
+                usuario: (estudianteData.email || estudianteData.identificacion) || "tu usuario registrado",
+                genero: estudianteData.genero ?? null,
+            });
+
+            if (resultado.exito) {
+                await cargarEstadoAccesoPortal(estudianteData.id);
+                message.success("✅ Link de acceso reenviado por WhatsApp");
+                return;
+            }
+
+            message.error(`❌ No se pudo reenviar el acceso: ${resultado.error || "error desconocido"}`);
+        } catch (error: any) {
+            console.error("Error reenviando acceso portal:", error);
+            message.error("❌ Error al reenviar el acceso al portal");
+        } finally {
+            setReenviandoAcceso(false);
+        }
+    };
+
     const isFull = cuposInfo ? cuposInfo.ocupados >= cuposInfo.total : false;
     const disponibilidad = cuposInfo ? cuposInfo.total - cuposInfo.ocupados : 0;
 
@@ -1164,6 +1236,14 @@ export default function MatriculaCreate() {
     // Fase 2: Recibo y pago
     const yaPagado = pagoInscripcionData?.estado === "pagado";
     const montoInscripcion = pagoInscripcionData?.monto || cursoData?.programas?.precio_inscripcion || 50000;
+    const estadoAccesoTexto = consultandoEstadoAcceso
+        ? "consultando"
+        : (estadoAccesoPortal || "sin registro");
+    const estadoAccesoColor =
+        estadoAccesoPortal === "leido" ? "success" :
+        estadoAccesoPortal === "entregado" ? "processing" :
+        estadoAccesoPortal === "enviado" ? "default" :
+        estadoAccesoPortal === "fallido" ? "error" : "warning";
 
     return (
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px" }}>
@@ -1303,6 +1383,10 @@ export default function MatriculaCreate() {
                             title="¡Matrícula Activada!"
                             subTitle="El pago ha sido registrado correctamente."
                             extra={[
+                                <Tag key="estado-acceso" color={estadoAccesoColor}>Acceso: {estadoAccesoTexto}</Tag>,
+                                <Button key="reenviar-acceso" onClick={handleReenviarAccesoPortal} loading={reenviandoAcceso}>
+                                    Reenviar acceso app
+                                </Button>,
                                 <Button key="perfil" type="primary" onClick={() => router.push(`/estudiantes/show/${estudianteData.id}`)}>
                                     Ver Perfil del Estudiante
                                 </Button>

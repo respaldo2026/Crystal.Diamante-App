@@ -45,7 +45,6 @@ import {
   VideoCameraOutlined,
   FilePdfOutlined,
   ClockCircleOutlined,
-  GiftOutlined,
   YoutubeOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -74,7 +73,12 @@ import {
   UMBRAL_APROBACION_QUIZ_NOTA,
   UMBRAL_APROBACION_QUIZ_PORCENTAJE,
 } from "@/modules/portal-estudiante/utils";
-import { getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
+import {
+  getMaterialCoverageDisplay,
+  getPaymentPlan,
+  getPaymentPlanDisplay,
+  normalizeModalidadPago,
+} from "@/types/payment-plans";
 
 const QuizApprovedResult = dynamic(
   () => import("@/modules/portal-estudiante/components/QuizApprovedResult").then((m) => m.QuizApprovedResult),
@@ -874,8 +878,12 @@ export default function PortalEstudiante() {
                     title: 'Plan',
                     render: (_, r: any) => {
                       const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
-                      const plan = getPaymentPlan(matricula?.modalidad_pago);
-                      return <Tag>{plan.label}</Tag>;
+                      const plan = getPaymentPlanDisplay({
+                        modalidadPago: matricula?.modalidad_pago,
+                        valorMensualPlan: matricula?.valor_mensual_plan,
+                        porcentajeProductos: matricula?.porcentaje_productos,
+                      });
+                      return <Tag color={plan.color}>{plan.label}</Tag>;
                     },
                   },
                   { 
@@ -925,8 +933,12 @@ export default function PortalEstudiante() {
                     title: 'Plan',
                     render: (_, r: any) => {
                       const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
-                      const plan = getPaymentPlan(matricula?.modalidad_pago);
-                      return <Tag>{plan.label}</Tag>;
+                      const plan = getPaymentPlanDisplay({
+                        modalidadPago: matricula?.modalidad_pago,
+                        valorMensualPlan: matricula?.valor_mensual_plan,
+                        porcentajeProductos: matricula?.porcentaje_productos,
+                      });
+                      return <Tag color={plan.color}>{plan.label}</Tag>;
                     },
                   },
                   { title: 'Fecha', dataIndex: 'fecha_pago', render: (d) => d ? dayjs(d).format("DD/MM/YYYY") : '-' },
@@ -947,7 +959,7 @@ export default function PortalEstudiante() {
       ? "Contenido del Curso - Pensum"
       : vista === "ciclo"
         ? "Materiales generales por ciclo"
-        : "Materiales necesarios por clase";
+        : "Materiales necesarios";
     const colorDiferenciadorCiclo = vista === "plan" ? "#2563eb" : "#16a34a";
     const colorNumeroTema = vista === "plan" ? "#2563eb" : "#16a34a";
 
@@ -985,6 +997,74 @@ export default function PortalEstudiante() {
       cicloRutaId && ciclosPrograma.some((c: any) => String(c.id) === String(cicloRutaId))
         ? String(cicloRutaId)
         : String(ciclosPrograma[0]?.id || "");
+
+    const planMateriales = getPaymentPlanDisplay({
+      modalidadPago: matriculaSeleccionada?.modalidad_pago,
+      valorMensualPlan: matriculaSeleccionada?.valor_mensual_plan,
+      porcentajeProductos: matriculaSeleccionada?.porcentaje_productos,
+    });
+
+    const modalidadMateriales = normalizeModalidadPago(matriculaSeleccionada?.modalidad_pago);
+
+    const resumenPlanMateriales =
+      modalidadMateriales === "POR_CLASE"
+        ? "Tu plan no incluye materiales. Aquí verás claramente cuáles no están incluidos y cuáles solo vienen en planes mensuales."
+        : modalidadMateriales === "MENSUAL_100"
+          ? "Tu plan cubre los materiales base y también los materiales exclusivos del Plan 100."
+          : "Tu plan cubre los materiales base. Los marcados como 'Solo Plan 100' no están incluidos en tu mensualidad actual.";
+
+    const renderCoverageTagForStudent = (materialRef: any, compact = false) => {
+      const display = getMaterialCoverageDisplay({
+        modalidadPago: matriculaSeleccionada?.modalidad_pago,
+        porcentajeProductos: matriculaSeleccionada?.porcentaje_productos,
+        coberturaMaterial: materialRef?.cobertura_material ?? materialRef?.materiales_ciclo?.cobertura_material,
+        incluidoKit: materialRef?.incluido_kit ?? materialRef?.materiales_ciclo?.incluido_kit,
+      });
+
+      const visualByStatus = {
+        included: {
+          background: "#ecfdf3",
+          borderColor: "#86efac",
+          color: "#166534",
+        },
+        upgrade_required: {
+          background: "#fffbeb",
+          borderColor: "#fcd34d",
+          color: "#92400e",
+        },
+        not_included: {
+          background: "#f8fafc",
+          borderColor: "#cbd5e1",
+          color: "#475569",
+        },
+      } as const;
+
+      const visual = visualByStatus[display.status];
+
+      return (
+        <Tag
+          color={display.color}
+          style={{
+            fontSize: compact ? 12 : isMobile ? 12 : 13,
+            padding: compact ? "2px 8px" : isMobile ? "4px 10px" : "4px 12px",
+            marginInlineEnd: 0,
+            borderRadius: 999,
+            fontWeight: 600,
+            border: `1px solid ${visual.borderColor}`,
+            borderColor: visual.borderColor,
+            color: visual.color,
+            background: visual.background,
+            whiteSpace: "nowrap",
+            display: "inline-flex",
+            justifyContent: "center",
+            textAlign: "center",
+            minWidth: compact ? 104 : undefined,
+          }}
+        >
+          {compact ? display.shortLabel : isMobile ? display.shortLabel : display.label}
+        </Tag>
+      );
+    };
 
     if (!ciclosPrograma.length) {
       return (
@@ -1028,6 +1108,23 @@ export default function PortalEstudiante() {
             })}
           </Row>
         </Space>
+
+        {vista !== "plan" ? (
+          <div style={{ marginBottom: 16 }}>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 10 }}
+              message={
+                <Space wrap>
+                  <span>Tu cobertura de materiales</span>
+                  <Tag color={planMateriales.color}>{planMateriales.label}</Tag>
+                </Space>
+              }
+              description={resumenPlanMateriales}
+            />
+          </div>
+        ) : null}
 
         <Collapse
           accordion
@@ -1101,10 +1198,10 @@ export default function PortalEstudiante() {
                         render: (value) => value || "Cantidad por definir",
                       },
                       {
-                        title: "Kit",
-                        dataIndex: "incluido_kit",
+                        title: "Incluido en tu plan",
+                        dataIndex: "cobertura_material",
                         align: "center",
-                        render: (value) => (value ? <GiftOutlined style={{ color: "#d81b87" }} /> : null),
+                        render: (_value, record: any) => renderCoverageTagForStudent(record),
                       },
                     ]}
                   />
@@ -1215,32 +1312,36 @@ export default function PortalEstudiante() {
                                           );
                                           const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
                                           const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
+                                          const etiquetaInsumo = `${nombreInsumo}${cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}`;
                                           return (
-                                            <Space key={`${temaId}-insumo-${itemIndex}`} size={6} wrap>
-                                              {insumo.obligatorio ? (
-                                                <CheckCircleOutlined style={{ color: "#16a34a" }} />
-                                              ) : (
-                                                <ClockCircleOutlined style={{ color: "#f59e0b" }} />
-                                              )}
-                                              <Checkbox
-                                                checked={isChecklistItemChecked(key)}
-                                                onChange={(event) => {
-                                                  setChecklistItemChecked(key, event.target.checked);
-                                                  setTemaRutaId(temaId);
-                                                  setCicloRutaId(cicloId);
+                                            <div key={`${temaId}-insumo-${itemIndex}`} style={{ width: "100%" }}>
+                                              <div
+                                                style={{
+                                                  display: "grid",
+                                                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                                                  alignItems: "center",
+                                                  gap: 8,
+                                                  width: "100%",
                                                 }}
                                               >
-                                                <Space size={4}>
+                                                <Checkbox
+                                                  checked={isChecklistItemChecked(key)}
+                                                  onChange={(event) => {
+                                                    setChecklistItemChecked(key, event.target.checked);
+                                                    setTemaRutaId(temaId);
+                                                    setCicloRutaId(cicloId);
+                                                  }}
+                                                  style={{ width: "100%" }}
+                                                >
                                                   <Text type="secondary" style={{ fontSize: 12 }}>
-                                                    {nombreInsumo}
-                                                    {cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}
+                                                    {etiquetaInsumo}
                                                   </Text>
-                                                  {(insumo.materiales_ciclo?.incluido_kit || insumo.incluido_kit) && (
-                                                    <GiftOutlined style={{ color: "#d81b87", fontSize: 12 }} />
-                                                  )}
-                                                </Space>
-                                              </Checkbox>
-                                            </Space>
+                                                </Checkbox>
+                                                <span style={{ width: isMobile ? 108 : 120, display: "flex", justifyContent: "flex-end" }}>
+                                                  {renderCoverageTagForStudent(insumo, true)}
+                                                </span>
+                                              </div>
+                                            </div>
                                           );
                                         })}
                                       </Space>

@@ -5,10 +5,31 @@ import { getPaymentPlan, normalizeModalidadPago } from '@/types/payment-plans';
 
 export const runtime = 'nodejs';
 
-const DEFAULT_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_RECORDATORIO_PAGO || 'recordatorio_pago_v3';
+const FALLBACK_REMINDER_TEMPLATE = 'recordatorio_pago_v3';
+const DEFAULT_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_RECORDATORIO_PAGO || FALLBACK_REMINDER_TEMPLATE;
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_MAX_BULK_PER_RUN || 30);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_DELAY_BETWEEN_SENDS_MS || 1200);
 const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALLOW_TEXT_FALLBACK || 'false').toLowerCase() === 'true';
+const MAX_REMINDERS_PER_PAYMENT = Number(process.env.WHATSAPP_MAX_REMINDERS_PER_PAYMENT || 2);
+const MIN_HOURS_BETWEEN_REMINDERS = Number(process.env.WHATSAPP_MIN_HOURS_BETWEEN_REMINDERS || 20);
+
+function resolveReminderTemplateName(): string {
+  const configured = String(DEFAULT_TEMPLATE_NAME || '').trim();
+  if (!configured) return FALLBACK_REMINDER_TEMPLATE;
+
+  const normalized = configured.toLowerCase();
+  const looksLikePaymentConfirmation = /pago[_-]?recibido|confirm(acion|ar)?[_-]?pago|payment[_-]?received/.test(normalized);
+
+  if (looksLikePaymentConfirmation) {
+    console.warn(
+      `[Recordatorio] Plantilla configurada parece de confirmacion de pago (${configured}). ` +
+      `Se fuerza fallback seguro: ${FALLBACK_REMINDER_TEMPLATE}.`
+    );
+    return FALLBACK_REMINDER_TEMPLATE;
+  }
+
+  return configured;
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,11 +43,121 @@ function normalizePhone(telefono: string): string {
   return digits;
 }
 
+async function saveTemplateAuditConversation(
+  supabase: any,
+  input: {
+    phone: string;
+    profileName?: string;
+    templateName: string;
+    templateLanguage: string;
+    templateVariables: string[];
+    messageId?: string;
+    paymentId?: string;
+    studentId?: string;
+    matriculaId?: string;
+  }
+): Promise<void> {
+  try {
+    const payload = {
+      phone_number: input.phone,
+      user_message: '[SISTEMA] Recordatorio por plantilla',
+      agent_response:
+        `📤 Plantilla enviada: ${input.templateName}\n` +
+        `Idioma: ${input.templateLanguage}\n` +
+        `Pago ID: ${input.paymentId || '-'}\n` +
+        `Estudiante ID: ${input.studentId || '-'}\n` +
+        `Matrícula ID: ${input.matriculaId || '-'}\n` +
+        `Variables: ${input.templateVariables.length ? input.templateVariables.join(' | ') : '-'}\n` +
+        `Meta Message ID: ${input.messageId || 'sin ID'}`,
+      transcription: null,
+      channel: 'whatsapp',
+      profile_name: input.profileName || null,
+    };
+
+    let { error } = await supabase.from('agent_conversations').insert(payload);
+
+    if (error && /column .* does not exist/i.test(String(error.message || ''))) {
+      const fallbackPayload = {
+        phone_number: input.phone,
+        user_message: payload.user_message,
+        agent_response: payload.agent_response,
+        transcription: null,
+      };
+      const retry = await supabase.from('agent_conversations').insert(fallbackPayload);
+      error = retry.error;
+    }
+
+    if (error) {
+      console.warn('[Recordatorio] Error guardando auditoria de plantilla:', error);
+    }
+  } catch (error) {
+    console.warn('[Recordatorio] Excepcion guardando auditoria de plantilla:', error);
+  }
+}
+
+async function getReminderStatsForPayment(supabase: any, paymentId: string): Promise<{ count: number; lastSentAt: Date | null }> {
+  try {
+    if (!paymentId) return { count: 0, lastSentAt: null };
+
+    const { data, error } = await supabase
+      .from('agent_conversations')
+      .select('created_at')
+      .eq('user_message', '[SISTEMA] Recordatorio por plantilla')
+      .ilike('agent_response', `%Pago ID: ${paymentId}%`)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.warn('[Recordatorio] Error consultando historial por pago:', error);
+      return { count: 0, lastSentAt: null };
+    }
+
+    const rows = data || [];
+    const count = rows.length;
+    const lastSentAt = rows[0]?.created_at ? new Date(rows[0].created_at) : null;
+    return { count, lastSentAt };
+  } catch (error) {
+    console.warn('[Recordatorio] Excepción consultando historial por pago:', error);
+    return { count: 0, lastSentAt: null };
+  }
+}
+
+async function hasRecentReminderForPhone(supabase: any, phone: string, hours: number): Promise<boolean> {
+  try {
+    if (!phone) return false;
+
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('agent_conversations')
+      .select('created_at')
+      .eq('user_message', '[SISTEMA] Recordatorio por plantilla')
+      .eq('phone_number', phone)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.warn('[Recordatorio] Error consultando historial por teléfono:', error);
+      return false;
+    }
+
+    return Boolean((data || []).length);
+  } catch (error) {
+    console.warn('[Recordatorio] Excepción consultando historial por teléfono:', error);
+    return false;
+  }
+}
+
 // Función para enviar WhatsApp usando plantilla aprobada por Meta
-async function enviarWhatsAppDirecto(telefono: string, nombre: string, monto: string, fecha: string, curso: string, modalidad: string) {
-  const mensajeModalidad = modalidad === 'POR_CLASE'
-    ? 'Este recordatorio corresponde a clases asistidas pendientes de pago.'
-    : 'Te recordamos que tu mensualidad está próxima a vencer.';
+async function enviarWhatsAppDirecto(telefono: string, nombre: string, monto: string, fecha: string, curso: string, modalidad: string, esVencido?: boolean) {
+  let mensajeModalidad: string;
+  if (modalidad === 'POR_CLASE') {
+    mensajeModalidad = esVencido
+      ? `Tienes una clase sin pagar que venció el ${fecha}. Por favor regulariza tu pago para continuar asistiendo.`
+      : `Este recordatorio corresponde a clases asistidas pendientes de pago (vence el ${fecha}).`;
+  } else {
+    mensajeModalidad = 'Te recordamos que tu mensualidad está próxima a vencer.';
+  }
 
   const mensaje = `Hola ${nombre} 👋
 
@@ -42,6 +173,7 @@ Puedes pagar en línea o en nuestra oficina. ¡Gracias!
 _Academia Crystal_`;
 
   try {
+    const reminderTemplateName = resolveReminderTemplateName();
     const templateVariables = [
       nombre,
       monto,
@@ -51,18 +183,30 @@ _Academia Crystal_`;
 
     const response = await WhatsAppService.sendTemplate(
       telefono,
-      DEFAULT_TEMPLATE_NAME,
+      reminderTemplateName,
       templateVariables,
       'es_CO'
     );
 
     console.log(`[Recordatorio] Enviado template a ${telefono}: ${response.messages?.[0]?.id || 'sin ID'}`);
-    return response;
+    return {
+      response,
+      usedTemplate: true,
+      templateName: reminderTemplateName,
+      templateVariables,
+      templateLanguage: 'es_CO',
+    };
   } catch (error) {
     if (ALLOW_TEXT_FALLBACK) {
       console.warn(`[Recordatorio] Falló template, usando fallback texto para ${telefono}`);
       const fallback = await WhatsAppService.sendText(telefono, mensaje);
-      return fallback;
+      return {
+        response: fallback,
+        usedTemplate: false,
+        templateName: '',
+        templateVariables: [] as string[],
+        templateLanguage: 'es_CO',
+      };
     }
 
     console.error(`[Recordatorio] Error enviando a ${telefono}:`, error);
@@ -95,16 +239,34 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
     const hoy = new Date().toISOString().split('T')[0];
     const en3Dias = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const { data: cuotas, error } = await supabase
-      .from('pagos')
-      .select('id, monto, fecha_vencimiento, numero_cuota, estudiante_id, matricula_id')
-      .eq('estado', 'pendiente')
-      .gte('fecha_vencimiento', hoy)
-      .lte('fecha_vencimiento', en3Dias);
+    const [{ data: cuotasProximas, error }, { data: cuotasPorClaseVencidas }] = await Promise.all([
+      // 1. Cuotas próximas a vencer (todos los planes)
+      supabase
+        .from('pagos')
+        .select('id, estado, monto, fecha_vencimiento, numero_cuota, estudiante_id, matricula_id')
+        .eq('estado', 'pendiente')
+        .gte('fecha_vencimiento', hoy)
+        .lte('fecha_vencimiento', en3Dias),
+      // 2. Cobros por clase ya vencidos (>7 días sin pagar)
+      supabase
+        .from('pagos')
+        .select('id, estado, monto, fecha_vencimiento, numero_cuota, estudiante_id, matricula_id')
+        .in('estado', ['pendiente', 'vencido'])
+        .eq('tipo_cuota', 'por_clase')
+        .lt('fecha_vencimiento', hoy),
+    ]);
 
     if (error) {
       console.error('[Recordatorio] Error en query pagos:', error);
       throw error;
+    }
+
+    // Deduplicar — priorizar cuotasProximas
+    const seenIds = new Set<string>();
+    const cuotas: any[] = [];
+    for (const c of (cuotasProximas || [])) { seenIds.add(String(c.id)); cuotas.push(c); }
+    for (const c of (cuotasPorClaseVencidas || [])) {
+      if (!seenIds.has(String(c.id))) { seenIds.add(String(c.id)); cuotas.push(c); }
     }
 
     if (!cuotas || cuotas.length === 0) {
@@ -167,7 +329,55 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
       }
 
       try {
+        const paymentId = String(cuota?.id || '');
+
+        // Revalidar estado justo antes de enviar: si ya pagó, no enviar.
+        if (paymentId) {
+          const { data: pagoActual, error: pagoError } = await supabase
+            .from('pagos')
+            .select('estado')
+            .eq('id', paymentId)
+            .maybeSingle();
+
+          if (pagoError) {
+            console.warn(`[Recordatorio] No se pudo revalidar estado del pago ${paymentId}:`, pagoError);
+          }
+
+          const estadoActual = String(pagoActual?.estado || cuota?.estado || '').toLowerCase();
+          if (estadoActual && estadoActual !== 'pendiente') {
+            console.log(`[Recordatorio] Pago ${paymentId} ya no está pendiente (${estadoActual}). Se omite.`);
+            omitidos++;
+            continue;
+          }
+        }
+
+        // Máximo 1-2 recordatorios por pago (configurable), con cooldown mínimo.
+        const stats = await getReminderStatsForPayment(supabase, paymentId);
+        if (stats.count >= MAX_REMINDERS_PER_PAYMENT) {
+          console.log(`[Recordatorio] Tope por pago alcanzado (${paymentId}): ${stats.count} envíos.`);
+          omitidos++;
+          continue;
+        }
+
+        if (stats.lastSentAt) {
+          const hoursSinceLast = (Date.now() - stats.lastSentAt.getTime()) / (1000 * 60 * 60);
+          if (hoursSinceLast < MIN_HOURS_BETWEEN_REMINDERS) {
+            console.log(`[Recordatorio] Cooldown activo para pago ${paymentId}: ${hoursSinceLast.toFixed(1)}h.`);
+            omitidos++;
+            continue;
+          }
+        }
+
         const telefono = telefonoNormalizado;
+
+        // Evitar spam por teléfono (por si hay múltiples cuotas cercanas del mismo estudiante).
+        const recentlyContacted = await hasRecentReminderForPhone(supabase, telefono, MIN_HOURS_BETWEEN_REMINDERS);
+        if (recentlyContacted) {
+          console.log(`[Recordatorio] Teléfono ${telefono} ya recibió recordatorio reciente. Se omite.`);
+          omitidos++;
+          continue;
+        }
+
         const modalidadPago = normalizeModalidadPago(matricula?.modalidad_pago);
         const plan = getPaymentPlan(modalidadPago);
 
@@ -186,15 +396,31 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
 
         const monto = `$${montoNumero.toLocaleString('es-CO')}`;
         const curso = matricula?.cursos?.nombre || 'Curso';
+        const esCuotaVencida = hoy && cuota?.fecha_vencimiento && cuota.fecha_vencimiento < hoy;
 
-        await enviarWhatsAppDirecto(
+        const sendResult = await enviarWhatsAppDirecto(
           telefono,
           perfil.nombre_completo,
           monto,
           fecha,
           curso,
-          modalidadPago
+          modalidadPago,
+          Boolean(esCuotaVencida)
         );
+
+        if (sendResult.usedTemplate) {
+          await saveTemplateAuditConversation(supabase, {
+            phone: telefono,
+            profileName: perfil.nombre_completo,
+            templateName: sendResult.templateName,
+            templateLanguage: sendResult.templateLanguage,
+            templateVariables: sendResult.templateVariables,
+            messageId: sendResult.response.messages?.[0]?.id,
+            paymentId,
+            studentId: String(cuota?.estudiante_id || ''),
+            matriculaId: String(cuota?.matricula_id || ''),
+          });
+        }
 
         telefonosProcesados.add(telefonoNormalizado);
         enviados++;
@@ -212,9 +438,11 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
       success: true,
       mensaje: `${enviados} recordatorios enviados, ${fallidos} fallidos, ${omitidos} omitidos`,
       recomendaciones: {
-        template: DEFAULT_TEMPLATE_NAME,
+        template: resolveReminderTemplateName(),
         textFallback: ALLOW_TEXT_FALLBACK,
         maxSendsPerRun: MAX_SENDS_PER_RUN,
+        maxRemindersPerPayment: MAX_REMINDERS_PER_PAYMENT,
+        minHoursBetweenReminders: MIN_HOURS_BETWEEN_REMINDERS,
         delayBetweenSendsMs: DELAY_BETWEEN_SENDS_MS,
       },
       timestamp: new Date().toISOString(),

@@ -342,7 +342,12 @@ export const WhatsAppService = {
     variables: string[] = [],
     languageCode: string = "es"
   ): Promise<WhatsAppAPIResponse> {
-    const normalizedPhone = phone.replace(/\D/g, "");
+    const validation = validatePhoneNumber(phone);
+    if (!validation.valid) {
+      throw new Error(`Número inválido: ${validation.error}`);
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phone);
 
     const payload: any = {
       messaging_product: "whatsapp",

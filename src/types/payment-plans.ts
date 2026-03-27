@@ -1,5 +1,7 @@
 export type ModalidadPago = "POR_CLASE" | "MENSUAL_70" | "MENSUAL_100";
 
+export type MaterialCoverage = "NINGUNO" | "MENSUAL_70" | "MENSUAL_100";
+
 export type PaymentPlan = {
   modalidad: ModalidadPago;
   label: string;
@@ -97,4 +99,223 @@ export function getMontoMensualByPlan(value?: string | null): number {
 
 export function getMontoPorClaseByPlan(value?: string | null): number {
   return getPaymentPlan(value).montoPorClase;
+}
+
+export function normalizeMaterialCoverage(
+  value?: string | null,
+  includedKit?: boolean | null,
+): MaterialCoverage {
+  const normalized = String(value || "").toUpperCase().trim();
+  if (normalized === "MENSUAL_100") return "MENSUAL_100";
+  if (normalized === "MENSUAL_70") return "MENSUAL_70";
+  if (normalized === "NINGUNO") return "NINGUNO";
+  return includedKit ? "MENSUAL_70" : "NINGUNO";
+}
+
+type MaterialCoverageRuleDisplay = {
+  coverage: MaterialCoverage;
+  color: "default" | "blue" | "green";
+  label: string;
+  shortLabel: string;
+  description: string;
+};
+
+export function getMaterialCoverageRuleDisplay(
+  value?: string | null,
+  includedKit?: boolean | null,
+): MaterialCoverageRuleDisplay {
+  const coverage = normalizeMaterialCoverage(value, includedKit);
+
+  if (coverage === "MENSUAL_100") {
+    return {
+      coverage,
+      color: "green",
+      label: "Exclusivo de Mensual 100",
+      shortLabel: "Plan 100",
+      description: "Este material solo se incluye en el plan Mensual 100.",
+    };
+  }
+
+  if (coverage === "MENSUAL_70") {
+    return {
+      coverage,
+      color: "blue",
+      label: "Incluido desde Mensual 70",
+      shortLabel: "Plan base",
+      description: "Este material se incluye en los planes Mensual 70 y Mensual 100.",
+    };
+  }
+
+  return {
+    coverage,
+    color: "default",
+    label: "No incluido",
+    shortLabel: "No incluido",
+    description: "Este material no está incluido en ningún plan y debes llevarlo por tu cuenta.",
+  };
+}
+
+type MaterialCoverageDisplayInput = {
+  modalidadPago?: string | null;
+  porcentajeProductos?: number | null;
+  coberturaMaterial?: string | null;
+  incluidoKit?: boolean | null;
+};
+
+type MaterialCoverageDisplay = {
+  coverage: MaterialCoverage;
+  status: "included" | "upgrade_required" | "not_included";
+  color: "green" | "gold" | "default";
+  label: string;
+  shortLabel: string;
+  description: string;
+  isIncluded: boolean;
+};
+
+function resolvePlanMaterialRank(modalidadPago?: string | null, porcentajeProductos?: number | null): 0 | 70 | 100 {
+  const porcentaje = Number(porcentajeProductos ?? 0);
+  if (porcentaje === 100) return 100;
+  if (porcentaje === 70) return 70;
+
+  const modalidad = normalizeModalidadPago(modalidadPago);
+  if (modalidad === "MENSUAL_100") return 100;
+  if (modalidad === "MENSUAL_70") return 70;
+  return 0;
+}
+
+function resolveCoverageRank(coverage: MaterialCoverage): 0 | 70 | 100 {
+  if (coverage === "MENSUAL_100") return 100;
+  if (coverage === "MENSUAL_70") return 70;
+  return 0;
+}
+
+export function getMaterialCoverageDisplay(
+  input: MaterialCoverageDisplayInput,
+): MaterialCoverageDisplay {
+  const coverage = normalizeMaterialCoverage(input.coberturaMaterial, input.incluidoKit);
+  const planRank = resolvePlanMaterialRank(input.modalidadPago, input.porcentajeProductos);
+  const coverageRank = resolveCoverageRank(coverage);
+
+  if (coverageRank === 0) {
+    return {
+      coverage,
+      status: "not_included",
+      color: "default",
+      label: "No incluido",
+      shortLabel: "No incluido",
+      description: "Este material no está incluido en tu plan. Debes llevarlo por tu cuenta.",
+      isIncluded: false,
+    };
+  }
+
+  if (planRank >= coverageRank) {
+    return {
+      coverage,
+      status: "included",
+      color: "green",
+      label: "Incluido en tu plan",
+      shortLabel: "Incluido",
+      description: "Este material está cubierto por tu plan actual.",
+      isIncluded: true,
+    };
+  }
+
+  if (coverage === "MENSUAL_100") {
+    return {
+      coverage,
+      status: "upgrade_required",
+      color: "gold",
+      label: "Requiere Plan 100",
+      shortLabel: "Solo Plan 100",
+      description: "Para recibir este material debes tener el plan Mensual 100.",
+      isIncluded: false,
+    };
+  }
+
+  return {
+    coverage,
+    status: "upgrade_required",
+    color: "gold",
+    label: "Requiere plan mensual",
+    shortLabel: "Plan mensual",
+    description: "Este material está incluido en los planes Mensual 70 y Mensual 100.",
+    isIncluded: false,
+  };
+}
+
+function isFinitePositiveNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function inferMensualModalidadByMonto(montoMensual: number): ModalidadPago | null {
+  if (!isFinitePositiveNumber(montoMensual)) return null;
+
+  const monto70 = PLANES_PAGO.MENSUAL_70.montoMensual;
+  const monto100 = PLANES_PAGO.MENSUAL_100.montoMensual;
+  const diff70 = Math.abs(montoMensual - monto70);
+  const diff100 = Math.abs(montoMensual - monto100);
+
+  if (diff70 === diff100) return null;
+  return diff70 < diff100 ? "MENSUAL_70" : "MENSUAL_100";
+}
+
+type PaymentPlanDisplayInput = {
+  modalidadPago?: string | null;
+  valorMensualPlan?: number | null;
+  montoPorClase?: number | null;
+  porcentajeProductos?: number | null;
+};
+
+type PaymentPlanDisplay = {
+  modalidad: ModalidadPago;
+  color: "orange" | "green" | "blue";
+  label: string;
+  detail: string;
+  montoMensual: number;
+  montoPorClase: number;
+};
+
+export function getPaymentPlanDisplay(input: PaymentPlanDisplayInput): PaymentPlanDisplay {
+  const modalidadBase = normalizeModalidadPago(input.modalidadPago);
+
+  if (modalidadBase === "POR_CLASE") {
+    const plan = PLANES_PAGO.POR_CLASE;
+    const montoPorClase = Number(input.montoPorClase ?? plan.montoPorClase ?? 0);
+    return {
+      modalidad: "POR_CLASE",
+      color: "orange",
+      label: plan.label,
+      detail: `$${montoPorClase.toLocaleString()} c/u`,
+      montoMensual: 0,
+      montoPorClase,
+    };
+  }
+
+  const montoMensualRaw = Number(input.valorMensualPlan ?? 0);
+  const montoMensual = isFinitePositiveNumber(montoMensualRaw)
+    ? montoMensualRaw
+    : getPaymentPlan(modalidadBase).montoMensual;
+
+  const porcentaje = Number(input.porcentajeProductos ?? 0);
+  let modalidadFinal: ModalidadPago = modalidadBase;
+
+  if (porcentaje === 100) modalidadFinal = "MENSUAL_100";
+  else if (porcentaje === 70) modalidadFinal = "MENSUAL_70";
+  else {
+    const modalidadInferida = inferMensualModalidadByMonto(montoMensual);
+    if (modalidadInferida && modalidadInferida !== "POR_CLASE") {
+      modalidadFinal = modalidadInferida;
+    }
+  }
+
+  const plan = getPaymentPlan(modalidadFinal);
+
+  return {
+    modalidad: modalidadFinal,
+    color: modalidadFinal === "MENSUAL_100" ? "green" : "blue",
+    label: plan.label,
+    detail: `$${montoMensual.toLocaleString()}/mes`,
+    montoMensual,
+    montoPorClase: 0,
+  };
 }

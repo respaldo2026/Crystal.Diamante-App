@@ -2,15 +2,56 @@
 
 import React from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Select, Divider, InputNumber } from "antd";
+import { Form, Input, Select, Divider, InputNumber, message } from "antd";
+import { useParams } from "next/navigation";
 
 export default function EditPerfil() {
+  const params = useParams();
+  const id = params?.id as string;
+
   // Conectamos el formulario manualmente
-  const { formProps, saveButtonProps, form } = useForm();
+  const { formProps, saveButtonProps, form, onFinish } = useForm();
+
+  const handleOnFinish = async (values: any) => {
+    const result = await onFinish(values);
+
+    const emailActualizado = String(values?.email || "").trim().toLowerCase();
+    if (id && emailActualizado) {
+      try {
+        const syncResponse = await fetch("/api/auth/sync-user-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: id,
+            email: emailActualizado,
+          }),
+        });
+
+        const syncResult = await syncResponse.json();
+        if (!syncResponse.ok) {
+          message.warning(
+            syncResult?.error ||
+            "El perfil se actualizó, pero no se pudo sincronizar el correo en Auth."
+          );
+        } else if (syncResult?.updated) {
+          message.success("Correo sincronizado en acceso (Auth).");
+        } else if (syncResult?.ok) {
+          message.info("El correo ya estaba sincronizado en acceso.");
+        }
+      } catch (syncError: any) {
+        message.warning(
+          syncError?.message ||
+          "El perfil se actualizó, pero falló la sincronización del correo en Auth."
+        );
+      }
+    }
+
+    return result;
+  };
 
   return (
     <Edit saveButtonProps={saveButtonProps} title="Editar Datos del Usuario">
-      <Form {...formProps} form={form} layout="vertical">
+      <Form {...formProps} form={form} layout="vertical" onFinish={handleOnFinish}>
         
         {/* --- DATOS PERSONALES --- */}
         <h3 style={{ marginTop: 0, color: '#722ed1' }}>Datos Personales</h3>

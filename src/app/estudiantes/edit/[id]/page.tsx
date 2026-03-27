@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select } from "antd";
+import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select, message } from "antd";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation";
 
@@ -62,6 +62,37 @@ export default function EditEstudiante() {
       const result = await onFinish(datosListos);
       console.log("✅ [FORM] onFinish retornó:", result);
       console.log("✅ [FORM] result?.data:", result?.data);
+
+            const emailActualizado = String(datosListos?.email || "").trim().toLowerCase();
+            if (emailActualizado) {
+                try {
+                    const syncResponse = await fetch("/api/auth/sync-user-email", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            userId: id,
+                            email: emailActualizado,
+                        }),
+                    });
+
+                    const syncResult = await syncResponse.json();
+                    if (!syncResponse.ok) {
+                        message.warning(
+                            syncResult?.error ||
+                                "El perfil se actualizó, pero no se pudo sincronizar el correo en Auth."
+                        );
+                    } else if (syncResult?.updated) {
+                        message.success("Correo sincronizado en acceso (Auth).");
+                    } else if (syncResult?.ok) {
+                        message.info("El correo ya estaba sincronizado en acceso.");
+                    }
+                } catch (syncError: any) {
+                    message.warning(
+                        syncError?.message ||
+                            "El perfil se actualizó, pero falló la sincronización del correo en Auth."
+                    );
+                }
+            }
       
       // Aunque Supabase no devuelva datos, el UPDATE probablemente se guardó
       // Refine redirigirá a la lista de todas formas porque onFinish se completó

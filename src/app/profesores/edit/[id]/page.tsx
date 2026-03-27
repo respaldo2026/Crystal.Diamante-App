@@ -84,6 +84,37 @@ export default function ProfesorEdit() {
             delete perfilData.tipo_contrato;
             delete perfilData.especialidad;
             await onFinish(perfilData);
+
+            const emailActualizado = String(perfilData?.email || "").trim().toLowerCase();
+            if (id && emailActualizado) {
+                try {
+                    const syncResponse = await fetch("/api/auth/sync-user-email", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            userId: id,
+                            email: emailActualizado,
+                        }),
+                    });
+
+                    const syncResult = await syncResponse.json();
+                    if (!syncResponse.ok) {
+                        message.warning(
+                            syncResult?.error ||
+                            "El perfil se actualizó, pero no se pudo sincronizar el correo en Auth."
+                        );
+                    } else if (syncResult?.updated) {
+                        message.success("Correo sincronizado en acceso (Auth).");
+                    } else if (syncResult?.ok) {
+                        message.info("El correo ya estaba sincronizado en acceso.");
+                    }
+                } catch (syncError: any) {
+                    message.warning(
+                        syncError?.message ||
+                        "El perfil se actualizó, pero falló la sincronización del correo en Auth."
+                    );
+                }
+            }
         } catch (err) {
             logger.error("Error guardando profesores_info/perfil", err);
             message.error("No se pudo guardar la información del profesor");
