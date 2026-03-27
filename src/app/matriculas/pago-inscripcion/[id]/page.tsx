@@ -21,6 +21,8 @@ const PORTAL_ESTUDIANTE_URL =
     process.env.NEXT_PUBLIC_APP_URL ||
     "https://app.academiacrystal.com";
 
+const POS_ROUTE = "/caja";
+
 export default function PagoInscripcionPage() {
     const params = useParams();
     const router = useRouter();
@@ -330,7 +332,7 @@ export default function PagoInscripcionPage() {
             await cargarDatos();
 
             setTimeout(() => {
-                router.push(`/estudiantes/show/${estudiante.id}`);
+                router.push(POS_ROUTE);
             }, 2000);
         } catch (error: any) {
             console.error("Error registrando pago:", error);
@@ -443,8 +445,8 @@ export default function PagoInscripcionPage() {
                             <Button size="small" onClick={handleReenviarAccesoPortal} loading={reenviandoAcceso}>
                                 Reenviar acceso app
                             </Button>
-                            <Button size="small" onClick={() => router.push(`/estudiantes/show/${estudiante.id}`)}>
-                                Ver Perfil
+                            <Button size="small" type="primary" onClick={() => router.push(POS_ROUTE)}>
+                                Ir a POS
                             </Button>
                         </Space>
                     }
@@ -653,11 +655,11 @@ export default function PagoInscripcionPage() {
                                 title="¡Pago Confirmado!"
                                 subTitle="La matrícula está activa y el estudiante puede comenzar el curso."
                                 extra={[
-                                    <Button key="perfil" type="primary" onClick={() => router.push(`/estudiantes/show/${estudiante.id}`)}>
-                                        Ver Perfil del Estudiante
+                                    <Button key="pos" type="primary" onClick={() => router.push(POS_ROUTE)}>
+                                        Volver a POS
                                     </Button>,
-                                    <Button key="lista" onClick={() => router.push("/matriculas")}>
-                                        Ver Matrículas
+                                    <Button key="perfil" onClick={() => router.push(`/estudiantes/show/${estudiante.id}`)}>
+                                        Ver Perfil del Estudiante
                                     </Button>
                                 ]}
                             />

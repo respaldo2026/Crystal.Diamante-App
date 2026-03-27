@@ -25,6 +25,8 @@ const PORTAL_ESTUDIANTE_URL =
     process.env.NEXT_PUBLIC_APP_URL ||
     "https://app.academiacrystal.com";
 
+const POS_ROUTE = "/caja";
+
 export default function MatriculaCreate() {
     const router = useRouter();
     const { formProps, saveButtonProps, onFinish } = useForm({ redirect: false });
@@ -891,7 +893,7 @@ export default function MatriculaCreate() {
             }
 
             setTimeout(() => {
-                router.push(`/estudiantes/show/${estudianteData.id}`);
+                router.push(POS_ROUTE);
             }, 2000);
         } catch (error: any) {
             console.error("Error registrando pago:", error);
@@ -1387,7 +1389,10 @@ export default function MatriculaCreate() {
                                 <Button key="reenviar-acceso" onClick={handleReenviarAccesoPortal} loading={reenviandoAcceso}>
                                     Reenviar acceso app
                                 </Button>,
-                                <Button key="perfil" type="primary" onClick={() => router.push(`/estudiantes/show/${estudianteData.id}`)}>
+                                <Button key="pos" type="primary" onClick={() => router.push(POS_ROUTE)}>
+                                    Volver a POS
+                                </Button>,
+                                <Button key="perfil" onClick={() => router.push(`/estudiantes/show/${estudianteData.id}`)}>
                                     Ver Perfil del Estudiante
                                 </Button>
                             ]}
