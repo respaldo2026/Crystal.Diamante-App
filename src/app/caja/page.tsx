@@ -1219,7 +1219,7 @@ export default function CajaPage() {
                   />
 
                   <Form.Item label="Monto a registrar" name="monto_a_registrar">
-                    <InputNumber
+                    <InputNumber<number>
                       placeholder="$0"
                       formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                       parser={(value) => Number(value?.replace(/\$/g, "").replace(/,/g, ""))}
@@ -1230,7 +1230,7 @@ export default function CajaPage() {
                   </Form.Item>
 
                   <Form.Item label="Descuento aplicado" name="descuento_aplicado">
-                    <InputNumber
+                    <InputNumber<number>
                       placeholder="$0"
                       formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                       parser={(value) => Number(value?.replace(/\$/g, "").replace(/,/g, ""))}
@@ -1260,7 +1260,7 @@ export default function CajaPage() {
             <Form form={form} layout="vertical">
               {/* Valor entregado y cambio - Al inicio para fácil acceso */}
               <Form.Item label="Valor entregado por el cliente">
-                <InputNumber
+                <InputNumber<number>
                   placeholder="$0"
                   formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                   parser={(value) => Number(value?.replace(/\$/g, "").replace(/,/g, ""))}
