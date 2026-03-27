@@ -2719,6 +2719,140 @@ function removeEmojis(text: string): string {
     .trim();
 }
 
+function numberToSpanishUnder100(n: number): string {
+  const units = [
+    'cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve',
+    'diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciseis', 'diecisiete', 'dieciocho', 'diecinueve',
+    'veinte', 'veintiuno', 'veintidos', 'veintitres', 'veinticuatro', 'veinticinco', 'veintiseis', 'veintisiete', 'veintiocho', 'veintinueve'
+  ];
+
+  if (n < 30) return units[n] || String(n);
+
+  const tensMap: Record<number, string> = {
+    30: 'treinta',
+    40: 'cuarenta',
+    50: 'cincuenta',
+    60: 'sesenta',
+    70: 'setenta',
+    80: 'ochenta',
+    90: 'noventa',
+  };
+
+  const tens = Math.floor(n / 10) * 10;
+  const remainder = n % 10;
+  return remainder ? `${tensMap[tens]} y ${units[remainder]}` : tensMap[tens];
+}
+
+function numberToSpanish(n: number): string {
+  if (!Number.isFinite(n)) return String(n);
+  if (n < 0) return `menos ${numberToSpanish(Math.abs(n))}`;
+  if (n < 100) return numberToSpanishUnder100(n);
+
+  if (n < 1000) {
+    if (n === 100) return 'cien';
+
+    const hundredsMap: Record<number, string> = {
+      100: 'ciento',
+      200: 'doscientos',
+      300: 'trescientos',
+      400: 'cuatrocientos',
+      500: 'quinientos',
+      600: 'seiscientos',
+      700: 'setecientos',
+      800: 'ochocientos',
+      900: 'novecientos',
+    };
+
+    const hundreds = Math.floor(n / 100) * 100;
+    const remainder = n % 100;
+    return remainder ? `${hundredsMap[hundreds]} ${numberToSpanish(remainder)}` : hundredsMap[hundreds];
+  }
+
+  if (n < 1000000) {
+    const thousands = Math.floor(n / 1000);
+    const remainder = n % 1000;
+    const thousandsText = thousands === 1 ? 'mil' : `${numberToSpanish(thousands)} mil`;
+    return remainder ? `${thousandsText} ${numberToSpanish(remainder)}` : thousandsText;
+  }
+
+  if (n < 1000000000) {
+    const millions = Math.floor(n / 1000000);
+    const remainder = n % 1000000;
+    const millionsText = millions === 1 ? 'un millon' : `${numberToSpanish(millions)} millones`;
+    return remainder ? `${millionsText} ${numberToSpanish(remainder)}` : millionsText;
+  }
+
+  return String(n);
+}
+
+function normalizeAmountToken(raw: string): string {
+  const digits = raw.replace(/[^\d]/g, '');
+  if (!digits) return raw;
+
+  const value = Number.parseInt(digits, 10);
+  if (!Number.isFinite(value)) return raw;
+
+  return numberToSpanish(value);
+}
+
+function normalizeCurrencyForSpeech(text: string): string {
+  if (!text) return '';
+
+  return text
+    .replace(/\$\s*([\d.,]+)/g, (_, amount: string) => `${normalizeAmountToken(amount)} pesos`)
+    .replace(/\b(?:cop|pesos?)\s*([\d.,]+)/gi, (_, amount: string) => `${normalizeAmountToken(amount)} pesos`)
+    .replace(/\b([\d.,]+)\s*pesos?\b/gi, (_, amount: string) => `${normalizeAmountToken(amount)} pesos`);
+}
+
+function periodForHour(hour24: number): string {
+  if (hour24 < 12) return 'de la manana';
+  if (hour24 < 19) return 'de la tarde';
+  return 'de la noche';
+}
+
+function formatHourForSpeech(hour: number, minute: number, meridiem?: string): string {
+  const normalizedMeridiem = (meridiem || '').toUpperCase().replace(/\./g, '');
+  const hour24 = normalizedMeridiem === 'PM' && hour < 12
+    ? hour + 12
+    : normalizedMeridiem === 'AM' && hour === 12
+      ? 0
+      : hour;
+  const spokenHour = normalizedMeridiem ? (hour % 12 || 12) : hour;
+  const period = normalizedMeridiem ? periodForHour(hour24) : '';
+
+  if (minute === 0) {
+    return period
+      ? `${numberToSpanish(spokenHour)} ${period}`
+      : numberToSpanish(spokenHour);
+  }
+
+  const minuteText = numberToSpanish(minute);
+  return period
+    ? `${numberToSpanish(spokenHour)} y ${minuteText} ${period}`
+    : `${numberToSpanish(spokenHour)} y ${minuteText}`;
+}
+
+function normalizeTimesForSpeech(text: string): string {
+  if (!text) return '';
+
+  return text
+    .replace(/(\d{1,2}:\d{2}\s*(?:a\.?m\.?|p\.?m\.?|am|pm))\s*[-–]\s*(\d{1,2}:\d{2}\s*(?:a\.?m\.?|p\.?m\.?|am|pm))/gi, '$1 a $2')
+    .replace(/\b(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?|am|pm)\b/gi, (_, hour: string, minute: string, meridiem: string) => {
+      return formatHourForSpeech(Number(hour), Number(minute), meridiem);
+    })
+    .replace(/\b(\d{1,2})\s*(a\.?m\.?|p\.?m\.?|am|pm)\b/gi, (_, hour: string, meridiem: string) => {
+      return formatHourForSpeech(Number(hour), 0, meridiem);
+    });
+}
+
+function normalizeCountPhrasesForSpeech(text: string): string {
+  if (!text) return '';
+
+  return text.replace(/\b(\d{1,3})\s*(horas?|dias?|semanas?|meses?|clases?|modulos?|niveles?)\b/gi, (_, amount: string, unit: string) => {
+    return `${numberToSpanish(Number(amount))} ${unit}`;
+  });
+}
+
 /**
  * Limpiar texto para TTS y evitar pausas extra o caracteres raros
  */
@@ -2735,6 +2869,10 @@ function cleanForTTS(text: string): string {
     .replace(/^\s*[•\-]\s+/gm, '')
     .replace(/\s*✅\s*/g, ' ')
     .replace(/\s*•\s*/g, ' ');
+
+  output = normalizeCurrencyForSpeech(output);
+  output = normalizeTimesForSpeech(output);
+  output = normalizeCountPhrasesForSpeech(output);
 
   // Unificar saltos y evitar pausas largas
   output = output
