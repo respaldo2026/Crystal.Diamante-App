@@ -33,7 +33,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { generarTicketPagoBlob, abrirTicketPagoDesdeBlob, imprimirTicketPagoDesdeBlob } from "@utils/pago-ticket";
+import { generarTicketPagoBlob, abrirTicketPagoDesdeBlob, imprimirTicketTermicoTM20II } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 import { getDescuentoAplicado, getMontoProgramado, getSaldoPendiente, getTotalAbonado, getVisiblePaymentStatus } from "@utils/payment-balances";
@@ -691,14 +691,14 @@ export default function CajaPage() {
             },
           };
 
-          const blob = await generarTicketPagoBlob(ticketData);
           const placeholder = window.open("", "_blank");
-
           if (placeholder) {
-            await imprimirTicketPagoDesdeBlob(blob, placeholder);
+            await imprimirTicketTermicoTM20II(ticketData, placeholder);
           } else {
-            abrirTicketPagoDesdeBlob(blob);
+            await imprimirTicketTermicoTM20II(ticketData);
           }
+
+          const blob = await generarTicketPagoBlob(ticketData);
 
           abrirCajonRegistrador();
 
@@ -877,14 +877,15 @@ export default function CajaPage() {
       };
 
       // Generar y abrir ticket
-      const blob = await generarTicketPagoBlob(ticketData);
       const placeholder = window.open("", "_blank");
-      
+
       if (placeholder) {
-        await imprimirTicketPagoDesdeBlob(blob, placeholder);
+        await imprimirTicketTermicoTM20II(ticketData, placeholder);
       } else {
-        abrirTicketPagoDesdeBlob(blob);
+        await imprimirTicketTermicoTM20II(ticketData);
       }
+
+      const blob = await generarTicketPagoBlob(ticketData);
 
       // Abrir cajón automáticamente al imprimir/generar el tiquete de facturación
       abrirCajonRegistrador();

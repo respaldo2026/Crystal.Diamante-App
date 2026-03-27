@@ -141,3 +141,91 @@ export const abrirTicketPago = async (data: TicketPagoData) => {
     throw error;
   }
 };
+
+const escapeHtml = (value: unknown): string =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const formatCop = (value?: number): string =>
+  new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(
+    Number(value || 0)
+  );
+
+export const imprimirTicketTermicoTM20II = async (data: TicketPagoData, placeholder?: Window | null) => {
+  const targetWindow = placeholder ?? window.open("", "_blank", "width=420,height=780");
+
+  if (!targetWindow) {
+    throw new Error("No se pudo abrir la ventana de impresion");
+  }
+
+  const lineasConcepto = String(data.pago.concepto || "Pago").split(",").map((item) => item.trim()).filter(Boolean);
+  const monto = Number(data.pago.monto || 0);
+  const valorEntregado = Number(data.pago.valorEntregado || 0);
+  const cambio = Number(data.pago.cambio || 0);
+
+  const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(data.academia.nombre || "Recibo")}</title>
+  <style>
+    @page { size: 80mm auto; margin: 3mm; }
+    html, body { width: 74mm; margin: 0; padding: 0; font-family: "Courier New", monospace; font-size: 12px; }
+    .center { text-align: center; }
+    .sep { border-top: 1px dashed #000; margin: 6px 0; }
+    .row { display: flex; justify-content: space-between; gap: 8px; }
+    .strong { font-weight: 700; }
+    .small { font-size: 11px; }
+    ul { margin: 4px 0 0 14px; padding: 0; }
+    li { margin: 0 0 2px 0; }
+  </style>
+</head>
+<body>
+  <div class="center strong">${escapeHtml(data.academia.nombre || "Academia")}</div>
+  ${data.academia.direccion ? `<div class="center small">${escapeHtml(data.academia.direccion)}</div>` : ""}
+  ${data.academia.telefono ? `<div class="center small">Tel: ${escapeHtml(data.academia.telefono)}</div>` : ""}
+  ${data.academia.ruc ? `<div class="center small">RUC: ${escapeHtml(data.academia.ruc)}</div>` : ""}
+  <div class="sep"></div>
+
+  <div class="row"><span>Fecha:</span><span>${escapeHtml(data.pago.fecha || "-")}</span></div>
+  <div class="row"><span>Ref:</span><span>${escapeHtml(data.pago.referencia || "-")}</span></div>
+  <div class="row"><span>Metodo:</span><span>${escapeHtml(data.pago.metodo || "-")}</span></div>
+  <div class="sep"></div>
+
+  <div class="small">Estudiante: <span class="strong">${escapeHtml(data.estudiante.nombre || "-")}</span></div>
+  ${data.estudiante.telefono ? `<div class="small">Tel: ${escapeHtml(data.estudiante.telefono)}</div>` : ""}
+  <div class="sep"></div>
+
+  <div class="strong">Detalle</div>
+  <ul>
+    ${lineasConcepto.map((line) => `<li>${escapeHtml(line)}</li>`).join("") || `<li>${escapeHtml(data.pago.periodo || "Pago")}</li>`}
+  </ul>
+  <div class="sep"></div>
+
+  <div class="row strong"><span>TOTAL:</span><span>${escapeHtml(formatCop(monto))}</span></div>
+  ${valorEntregado > 0 ? `<div class="row"><span>Recibido:</span><span>${escapeHtml(formatCop(valorEntregado))}</span></div>` : ""}
+  ${cambio > 0 ? `<div class="row"><span>Cambio:</span><span>${escapeHtml(formatCop(cambio))}</span></div>` : ""}
+
+  ${data.academia.ticketNota ? `<div class="sep"></div><div class="small">${escapeHtml(data.academia.ticketNota)}</div>` : ""}
+  <div class="sep"></div>
+  <div class="center small">${escapeHtml(data.academia.ticketPie || "Gracias por su pago")}</div>
+
+  <script>
+    window.onload = function () {
+      setTimeout(function () {
+        try { window.focus(); window.print(); } catch (e) {}
+      }, 120);
+    };
+  </script>
+</body>
+</html>`;
+
+  targetWindow.document.open();
+  targetWindow.document.write(html);
+  targetWindow.document.close();
+  targetWindow.focus();
+};
