@@ -282,6 +282,11 @@ function addDeliveryMeta(
       ? rawPhone
       : null;
 
+  const responsePlain =
+    typeof payload?.response === "string"
+      ? payload.response.replace(/\r?\n+/g, " ").replace(/\s{2,}/g, " ").trim()
+      : "";
+
   return {
     ...payload,
     channel: normalizedChannel,
@@ -290,6 +295,7 @@ function addDeliveryMeta(
     instagram_sender_id: instagramSenderId || null,
     whatsapp_phone: normalizedChannel === "whatsapp" ? rawPhone : null,
     profile_name: normalizeProfileName(profileName),
+    response_plain: responsePlain,
   };
 }
 
