@@ -79,6 +79,13 @@ import {
   getPaymentPlanDisplay,
   normalizeModalidadPago,
 } from "@/types/payment-plans";
+import {
+  getDescuentoAplicado,
+  getMontoProgramado,
+  getSaldoPendiente,
+  getTotalAbonado,
+  getVisiblePaymentStatus,
+} from "@/utils/payment-balances";
 
 const QuizApprovedResult = dynamic(
   () => import("@/modules/portal-estudiante/components/QuizApprovedResult").then((m) => m.QuizApprovedResult),
@@ -836,8 +843,12 @@ export default function PortalEstudiante() {
   }, [pagosConPendientes]);
 
   const renderFinanciero = () => {
+    const formatPagoCOP = (valor?: number | null) => `$ ${Number(valor || 0).toLocaleString()}`;
     const pendientes = pagosConPendientes
-      .filter(p => p.estado === 'pendiente')
+      .filter((p) => {
+        const visibleStatus = getVisiblePaymentStatus(p);
+        return visibleStatus === "pendiente" || visibleStatus === "abono_parcial" || visibleStatus === "vencido";
+      })
       .sort((a, b) => {
         const fechaA = a?.fecha_vencimiento ? dayjs(a.fecha_vencimiento) : null;
         const fechaB = b?.fecha_vencimiento ? dayjs(b.fecha_vencimiento) : null;
@@ -846,7 +857,7 @@ export default function PortalEstudiante() {
         if (fechaB) return 1;
         return (Number(a?.numero_cuota || 0) - Number(b?.numero_cuota || 0));
       });
-    const realizados = pagos.filter(p => p.estado === 'pagado');
+    const realizados = pagosConPendientes.filter((p) => getVisiblePaymentStatus(p) === "pagado");
 
     // Función auxiliar para determinar si está vencido (estrictamente anterior a hoy)
     const isVencido = (fecha: string) => {
@@ -901,14 +912,27 @@ export default function PortalEstudiante() {
                     render: (v, r: any) => {
                       const vencido = isVencido(r.fecha_vencimiento);
                       const style = !vencido ? { color: '#8c8c8c', fontSize: '13px' } : {};
-                      return <span style={style}>{`$ ${Number(v).toLocaleString()}`}</span>;
+                      return <span style={style}>{formatPagoCOP(getMontoProgramado(r) || v)}</span>;
                     }
+                  },
+                  {
+                    title: 'Abonado',
+                    render: (_, r: any) => formatPagoCOP(getTotalAbonado(r)),
+                  },
+                  {
+                    title: 'Descuento',
+                    render: (_, r: any) => formatPagoCOP(getDescuentoAplicado(r)),
+                  },
+                  {
+                    title: 'Saldo',
+                    render: (_, r: any) => formatPagoCOP(getSaldoPendiente(r)),
                   },
                   { 
                     title: 'Estado', 
                     render: (_, r: any) => {
-                      const vencido = isVencido(r.fecha_vencimiento);
-                      if (vencido) return <Tag color="red">VENCIDO</Tag>;
+                      const visibleStatus = getVisiblePaymentStatus(r);
+                      if (visibleStatus === "vencido") return <Tag color="red">VENCIDO</Tag>;
+                      if (visibleStatus === "abono_parcial") return <Tag color="gold">ABONO PARCIAL</Tag>;
                       return <Tag style={{ color: '#8c8c8c', borderColor: '#d9d9d9', fontSize: '11px' }}>PENDIENTE</Tag>;
                     } 
                   }
@@ -942,7 +966,10 @@ export default function PortalEstudiante() {
                     },
                   },
                   { title: 'Fecha', dataIndex: 'fecha_pago', render: (d) => d ? dayjs(d).format("DD/MM/YYYY") : '-' },
-                  { title: 'Monto', dataIndex: 'monto', render: (v) => `$ ${Number(v).toLocaleString()}` },
+                  { title: 'Programado', render: (_, r: any) => formatPagoCOP(getMontoProgramado(r)) },
+                  { title: 'Abonado', render: (_, r: any) => formatPagoCOP(getTotalAbonado(r)) },
+                  { title: 'Descuento', render: (_, r: any) => formatPagoCOP(getDescuentoAplicado(r)) },
+                  { title: 'Monto', dataIndex: 'monto', render: (v) => formatPagoCOP(v) },
                   { title: 'Estado', render: () => <Tag color="green">PAGADO</Tag> }
                 ]}
               />

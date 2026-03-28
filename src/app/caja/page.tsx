@@ -294,9 +294,12 @@ export default function CajaPage() {
 
     const saldo = getSaldoPendiente(cuota);
     const descuento = Number(descuentoAplicado || 0);
-    const sugerido = Math.max(saldo - descuento, 0);
+    const maxAbonoPermitido = Math.max(saldo - descuento, 0);
+    const montoActual = Number(form.getFieldValue("monto_a_registrar") || 0);
 
-    form.setFieldValue("monto_a_registrar", sugerido);
+    if (!Number.isFinite(montoActual) || montoActual > maxAbonoPermitido) {
+      form.setFieldValue("monto_a_registrar", maxAbonoPermitido);
+    }
   }, [cuotas, cuotasSeleccionadas, descuentoAplicado, form]);
 
   const handleEstudianteChange = useCallback(
@@ -618,8 +621,9 @@ export default function CajaPage() {
           return;
         }
 
-        if (montoAbono + descuento > saldoActual) {
-          messageApi.warning("La suma del abono y el descuento no puede superar el saldo actual");
+        const maxAbonoPermitido = Math.max(saldoActual - descuento, 0);
+        if (montoAbono > maxAbonoPermitido) {
+          messageApi.warning("El abono no puede superar el saldo disponible después del descuento");
           return;
         }
 
@@ -1272,6 +1276,7 @@ export default function CajaPage() {
                           <div>Abonado acumulado: {formatCurrency(getTotalAbonado(cuotaSeleccionada))}</div>
                           <div>Descuento acumulado: {formatCurrency(getDescuentoAplicado(cuotaSeleccionada))}</div>
                           <div>Saldo actual: {formatCurrency(saldoActual)}</div>
+                          <div>Máximo abono permitido: {formatCurrency(netoAPagar)}</div>
                           <div><strong>Nuevo valor a pagar: {formatCurrency(netoAPagar)}</strong></div>
                         </div>
                       }
@@ -1297,9 +1302,18 @@ export default function CajaPage() {
                         size="large"
                         style={{ width: "100%" }}
                         min={0}
-                        disabled={Number(descuentoAplicado || 0) > 0}
+                        max={netoAPagar}
                       />
                     </Form.Item>
+
+                    <Button
+                      type="link"
+                      size="small"
+                      style={{ paddingLeft: 0, marginTop: -8, marginBottom: 8 }}
+                      onClick={() => form.setFieldValue("monto_a_registrar", 0)}
+                    >
+                      Aplicar solo descuento (sin abono)
+                    </Button>
 
                     <Form.Item name="motivo_descuento" label="Motivo del descuento">
                       <Input placeholder="Obligatorio si aplicas descuento" size="large" />

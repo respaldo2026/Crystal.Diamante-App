@@ -155,6 +155,44 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
       }
     }
 
+    const pagoIds = (pagos || []).map((p: any) => String(p?.id || "")).filter(Boolean);
+    if (pagoIds.length > 0) {
+      const { data: abonosData, error: errAbonos } = await supabaseBrowserClient
+        .from("pagos_abonos")
+        .select("pago_id, monto_abono")
+        .in("pago_id", pagoIds);
+
+      if (errAbonos) {
+        logger.warn("No se pudieron cargar abonos para consolidar saldos en portal:", errAbonos);
+      } else {
+        const abonosPorPago = new Map<string, { total: number; count: number }>();
+        (abonosData || []).forEach((abono: any) => {
+          const pagoId = String(abono?.pago_id || "");
+          if (!pagoId) return;
+
+          const monto = Number(abono?.monto_abono || 0);
+          const actual = abonosPorPago.get(pagoId) || { total: 0, count: 0 };
+          actual.total += Number.isFinite(monto) ? monto : 0;
+          actual.count += 1;
+          abonosPorPago.set(pagoId, actual);
+        });
+
+        pagos = pagos.map((pago: any) => {
+          const pagoId = String(pago?.id || "");
+          const resumen = abonosPorPago.get(pagoId);
+          if (!resumen) return pago;
+
+          const totalActual = Number(pago?.total_abonado || 0);
+          const totalConsolidado = Math.max(totalActual, resumen.total);
+          return {
+            ...pago,
+            total_abonado: totalConsolidado,
+            abonos_count: resumen.count,
+          };
+        });
+      }
+    }
+
     let asistencias: any[] = [];
     let quizIntentos: any[] = [];
     let calificacionesActividad: any[] = [];

@@ -1015,8 +1015,12 @@ export default function TesoreriaPage() {
                         dataIndex="concepto"
                         render={(concepto: string, record: MovimientoFinanciero) => (
                             <Space direction="vertical" size={0}>
-                                <Text strong>{concepto}</Text>
+                                <Space size={8} wrap>
+                                    <Text strong>{concepto}</Text>
+                                    {record.pago_abono_id ? <Tag color="gold">ABONO</Tag> : null}
+                                </Space>
                                 {record.categoria ? <Text type="secondary">{record.categoria}</Text> : null}
+                                {record.descripcion ? <Text type="secondary">{record.descripcion}</Text> : null}
                             </Space>
                         )}
                     />
