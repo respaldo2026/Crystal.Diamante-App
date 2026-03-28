@@ -414,12 +414,40 @@ export default function TomarAsistencia() {
         }
       };
 
-      const registros = alumnos.map((alumno) => ({
-        matricula_id: alumno.id,
-        fecha: fechaSesion,
-        estado: asistenciasMap[alumno.id],
-        observaciones: detalleClase,
-      }));
+      const registros = alumnos
+        .map((alumno) => {
+          const estado = asistenciasMap[alumno.id];
+          if (estado !== "presente" && estado !== "ausente") return null;
+          return {
+            matricula_id: alumno.id,
+            fecha: fechaSesion,
+            estado,
+            observaciones: detalleClase,
+          };
+        })
+        .filter(Boolean) as Array<{
+        matricula_id: number;
+        fecha: string;
+        estado: "presente" | "ausente";
+        observaciones: string;
+      }>;
+
+      const actualizarAsistenciaExistente = async () => {
+        for (const registro of registros) {
+          const { error: updateError } = await supabaseBrowserClient
+            .from("asistencias")
+            .update({
+              estado: registro.estado,
+              observaciones: registro.observaciones,
+            })
+            .eq("matricula_id", registro.matricula_id)
+            .eq("fecha", registro.fecha);
+
+          if (updateError) {
+            throw updateError;
+          }
+        }
+      };
 
       const { error } = await supabaseBrowserClient
         .from("asistencias")
@@ -428,15 +456,16 @@ export default function TomarAsistencia() {
       if (error) {
         if (error.code === "23505" || error.message.includes("duplicate") || error.message.includes("unique")) {
           try {
+            await actualizarAsistenciaExistente();
             await guardarTemaSesion();
           } catch (sesionError: any) {
             console.error(sesionError);
-            message.warning("⚠️ La asistencia ya existía, pero no se pudo guardar el tema del día.");
+            message.warning("⚠️ La asistencia ya existía y no se pudo actualizar completamente.");
             return;
           }
-          message.warning(nombreClase
-            ? "⚠️ La asistencia ya existía para esta fecha. Se actualizó el tema del día."
-            : "⚠️ Ya se tomó asistencia para este curso en esta fecha.");
+          message.success(nombreClase
+            ? "✅ La asistencia de esta fecha ya existía y fue actualizada con la sección/clase seleccionada."
+            : "✅ La asistencia de esta fecha ya existía y fue actualizada.");
           return;
         }
         message.error("Error guardando: " + error.message);

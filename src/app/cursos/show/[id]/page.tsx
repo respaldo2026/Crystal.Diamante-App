@@ -1615,23 +1615,48 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   const onAddSesion = async (values: any) => {
     try {
+      const fechaSesion = values.fecha.format("YYYY-MM-DD");
+      const payloadSesion = {
+        curso_id: parseInt(cursoId),
+        profesor_id: curso.profesor_id,
+        fecha: fechaSesion,
+        horas_dictadas: values.horas_dictadas,
+        tema_visto: values.tema_visto,
+        observaciones: values.observaciones,
+      };
+
       const { error } = await supabaseBrowserClient
         .from("sesiones_clase")
-        .insert({
-          curso_id: parseInt(cursoId),
-          profesor_id: curso.profesor_id,
-          fecha: values.fecha.format("YYYY-MM-DD"),
-          horas_dictadas: values.horas_dictadas,
-          tema_visto: values.tema_visto,
-          observaciones: values.observaciones
-        });
+        .insert(payloadSesion);
+
+      if (error && error.code === "23505") {
+        const { error: updateError } = await supabaseBrowserClient
+          .from("sesiones_clase")
+          .update({
+            horas_dictadas: values.horas_dictadas,
+            tema_visto: values.tema_visto,
+            observaciones: values.observaciones,
+          })
+          .eq("curso_id", parseInt(cursoId))
+          .eq("fecha", fechaSesion);
+
+        if (updateError) throw updateError;
+
+        message.success("✅ La sesión de esa fecha ya existía y fue actualizada.");
+        formSesion.resetFields();
+        setModalSesionVisible(false);
+        await cargarDatos(cursoId);
+        return;
+      }
 
       if (error) throw error;
+      message.success("✅ Sesión registrada correctamente.");
       formSesion.resetFields();
       setModalSesionVisible(false);
       await cargarDatos(cursoId);
     } catch (error) {
       console.error("Error agregando sesión:", error);
+      message.error("No se pudo registrar/actualizar la sesión.");
     }
   };
 
