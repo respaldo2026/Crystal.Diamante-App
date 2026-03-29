@@ -2133,11 +2133,11 @@ function buildShortAckContinuationReply(
   }
 
   if (pendingTopic === "__clarificacion_opcion__") {
-    return "¡Súper! 😊 Para seguir, dime cuál prefieres: *horarios e inversión* o *separar cupo*.";
+    return "¡Súper! 😊 Para seguir, ¿qué prefieres que te cuente primero: *horarios*, *precios* o *inscripción*?";
   }
 
   if (/medios\s+de\s+pago|formas\s+de\s+pago|metodo\s+de\s+pago/.test(normalizedPending)) {
-    return buildPaymentMethodsAndDatesReply(mediosPago);
+    return buildPaymentMethodsAndDatesReply(mediosPago, detectedProgram, courses);
   }
 
   if (/dias\s+y\s+horario|horario|inicio|fecha|grupo/.test(normalizedPending) && detectedProgram) {
@@ -2198,6 +2198,21 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
 
   if (/\b(alguna otra duda|si necesitas algo|antes de iniciar|te guie con el proceso|te guie con inscripcion|quedo atenta|quedo atento|nos vemos|te esperamos)\b/i.test(normalizedQuestion)) {
     return "";
+  }
+
+  // Detectar oferta de múltiples caminos aunque no haya una pregunta explícita con "?"
+  // Ej: "Si quieres, te cuento horarios, precios o inscripción..."
+  const normalizedLastAgent = normalizeForMatch(lastAgent);
+  const hasChoiceConnector = /\b(si quieres|prefieres|elige|que prefieres|cual prefieres|te cuento)\b/i.test(normalizedLastAgent);
+  const hasHorario = /\b(horarios?)\b/i.test(normalizedLastAgent);
+  const hasPrecio = /\b(precios?|inversion|mensualidad)\b/i.test(normalizedLastAgent);
+  const hasInscripcion = /\b(inscripcion|inscribirme|separar\s+cupo|reservar|matricular)\b/i.test(normalizedLastAgent);
+  const hasOrConnector = /\b(o|u)\b/i.test(normalizedLastAgent);
+  if (hasChoiceConnector && hasOrConnector) {
+    const optionBuckets = Number(hasHorario || hasPrecio) + Number(hasInscripcion) + Number(hasHorario && hasPrecio);
+    if (optionBuckets >= 2) {
+      return "__clarificacion_opcion__";
+    }
   }
 
   // Detectar pregunta de DOBLE OPCIÓN (A o B): cuando el agente ofreció dos caminos
@@ -3660,7 +3675,11 @@ function isStepOneSelection(message: string): boolean {
   return /^(1|uno|paso\s*1|primer\s*paso)$/.test(text);
 }
 
-function buildPaymentMethodsAndDatesReply(mediosPago: any[] = []): string {
+function buildPaymentMethodsAndDatesReply(
+  mediosPago: any[] = [],
+  detectedProgram: any | null = null,
+  courses: any[] = []
+): string {
   const methods = Array.isArray(mediosPago)
     ? mediosPago
         .filter((medio) => medio?.activo !== false)
@@ -3678,7 +3697,12 @@ function buildPaymentMethodsAndDatesReply(mediosPago: any[] = []): string {
     ? `💳 *Medios de pago disponibles:*\n${methods.join("\n")}`
     : "💳 *Medios de pago:* te los confirma Admisiones según el canal que prefieras.";
 
-  return `¡Claro! Te explico 🙌\n\n${methodsBlock}\n\n✅ La *matrícula* se paga anticipada; así separas tu cupo.\n✅ La *mensualidad* tiene plazo hasta la *segunda clase*.\n✅ Con la mensualidad recibes *kit de materiales mensual* (incluye ~70% de los productos que usas ese mes).\n\nSi quieres, te digo cuál opción te conviene más según cómo prefieras pagar.`;
+  const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
+  const modalidadesBlock = detectedProgram
+    ? `\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}`
+    : "\n\n💳 *Modalidades de pago:*\n• *Por Clase:* no incluye materiales.\n• *Mensual Opción A:* incluye ~70% de materiales del mes.\n• *Mensual Opción B:* incluye 100% de materiales del mes.";
+
+  return `¡Claro! Te explico 🙌\n\n${methodsBlock}${modalidadesBlock}\n\n✅ La *matrícula* se paga anticipada; así separas tu cupo.\n✅ La *mensualidad* tiene plazo hasta la *segunda clase*.\n\nSi quieres, te digo cuál opción te conviene más según cómo prefieras pagar.`;
 }
 
 function isMonthlyOrBiweeklyQuestion(message: string): boolean {
@@ -4104,7 +4128,7 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (asksPaymentMethodsOrDates || confirmsPaymentInfo) {
-    return buildPaymentMethodsAndDatesReply(mediosPago);
+    return buildPaymentMethodsAndDatesReply(mediosPago, detectedProgram, courses);
   }
 
   if (intent === "requisitos") {
