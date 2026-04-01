@@ -3702,7 +3702,7 @@ function buildPaymentMethodsAndDatesReply(
     ? `\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}`
     : "\n\n💳 *Modalidades de pago:*\n• *Por Clase:* no incluye materiales.\n• *Mensual Opción A:* incluye ~70% de materiales del mes.\n• *Mensual Opción B:* incluye 100% de materiales del mes.";
 
-  return `¡Claro! Te explico 🙌\n\n${methodsBlock}${modalidadesBlock}\n\n✅ La *matrícula* se paga anticipada; así separas tu cupo.\n✅ La *mensualidad* tiene plazo hasta la *segunda clase*.\n\nSi quieres, te digo cuál opción te conviene más según cómo prefieras pagar.`;
+  return `¡Claro! Te respondo puntual 🙌\n\n${methodsBlock}${modalidadesBlock}\n\nLa *matrícula* se paga anticipada para separar cupo y la *mensualidad* se puede pagar hasta la segunda clase.\n\n¿Quieres que te recomiende la modalidad según tu presupuesto?`;
 }
 
 function isMonthlyOrBiweeklyQuestion(message: string): boolean {
@@ -3790,14 +3790,14 @@ function buildFastTrackHumanReply(
   const tone = pickHumanToneSeed(message, history);
 
   if (tone === 0) {
-    return `¡Claro! Buena pregunta 🙌\n\nEl programa *${detectedProgram.nombre}* que estás viendo dura *${duration}*.\n\nSi te interesa algo más rápido tipo *perfeccionamiento/intensivo*, te confirmo la opción activa para darte el dato exacto.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario actual: ${schedule}\n\n¿Quieres que te confirme ya la alternativa más corta disponible?`;
+    return `¡Buena pregunta! *${detectedProgram.nombre}* dura *${duration}*.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario: ${schedule}\n\nSi quieres, te reviso la alternativa más corta disponible.`;
   }
 
   if (tone === 1) {
-    return `Súper válido lo que preguntas 👌\n\nHoy en *${detectedProgram.nombre}* la duración es de *${duration}*.\n\nSi prefieres algo más ágil (perfeccionamiento/intensivo), te lo reviso al instante para darte una opción real y vigente.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario actual: ${schedule}\n\n¿Te comparto ahora mismo la opción más rápida?`;
+    return `Súper válida tu pregunta: en *${detectedProgram.nombre}* la duración es *${duration}*.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario: ${schedule}\n\n¿Te comparto ahora la opción más rápida?`;
   }
 
-  return `Perfecto, te entiendo 💯\n\nEl plan *${detectedProgram.nombre}* está en *${duration}*.\n\nPara una ruta más corta de *perfeccionamiento*, te confirmo la disponibilidad actual y así avanzamos sobre algo concreto.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario actual: ${schedule}\n\n¿Quieres que te pase de una la opción más corta?`;
+  return `Perfecto, en *${detectedProgram.nombre}* la duración es *${duration}*.\n\n📅 Inicio actual: ${nextStart}\n🕓 Horario: ${schedule}\n\n¿Quieres que te pase de una la opción más corta?`;
 }
 
 function buildScheduleHumanReply(
@@ -4121,7 +4121,7 @@ function buildIntentFocusedDirectResponse(
     const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
 
     if (detectedProgram) {
-      return `¡Claro! 🙌 Resumen corto para *${detectedProgram.nombre}*:\n\n💰 *Inscripción:* ${insText}\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que te pase los medios de pago ahora?`;
+      return `Claro, aquí va directo para *${detectedProgram.nombre}*:\n\n💰 *Inscripción:* ${insText}\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que te pase los medios de pago?`;
     }
 
     return "¡Claro! 🙌 Te respondo corto: manejamos *3 modalidades* (*Por Clase*, *Mensual Opción A* y *Mensual Opción B*). Si me dices el curso, te doy los valores exactos de cada una.";
@@ -4227,11 +4227,11 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     const mapsBlock = academy?.maps_url ? `\n🗺️ Mapa: ${academy.maps_url}` : "";
     const addressBlock = academy?.direccion ? `\nDirección: *${academy.direccion}*.` : "";
 
-    return `¡Claro! Te respondo ambas de una 🙌\n\n${priceBlock}\n\n📍 ${locationReference}${addressBlock}${mapsBlock}\n\nSi quieres, te ayudo a elegir el horario que mejor te quede.`;
+    return `¡Claro! Te respondo ambas de una 🙌\n\n${priceBlock}\n\n📍 ${locationReference}${addressBlock}${mapsBlock}\n\n¿Quieres que te confirme también el horario disponible?`;
   }
 
   if (asksKitPurchase) {
-    return `¡Buena pregunta! 👌\n\n✅ Tienes que comprar *muy pocos productos*.\n\n✨ Te entregamos un *kit mensual* que cubre casi todos los materiales que necesitas para tus prácticas.\n\nY si algo te hace falta, ¡tranquila! La academia te lo presta para que no te varas en clase 😊\n\nSi quieres, te detallo exactamente qué incluye el kit del *primer mes*.`;
+    return `¡Buena pregunta! 👌\n\nNo necesitas comprar todo por fuera: te entregamos un *kit mensual* que cubre la mayor parte de materiales.\n\nSi algo puntual te falta, la academia te apoya en clase.\n\n¿Quieres que te detalle qué trae el kit del primer mes?`;
   }
 
   if (asksMorningSchedule) {
