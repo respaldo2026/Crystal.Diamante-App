@@ -86,6 +86,7 @@ import {
   getTotalAbonado,
   getVisiblePaymentStatus,
 } from "@/utils/payment-balances";
+import { construirNombreGrupo } from "@utils/grupos";
 
 const QuizApprovedResult = dynamic(
   () => import("@/modules/portal-estudiante/components/QuizApprovedResult").then((m) => m.QuizApprovedResult),
@@ -727,7 +728,7 @@ export default function PortalEstudiante() {
     try {
       await descargarCertificadoPDF({
         estudianteName: estudiante?.nombre_completo || "Estudiante",
-        courseName: matricula?.cursos?.nombre || "Curso",
+        courseName: construirNombreGrupo(matricula?.cursos) || "Curso",
         fechaFinalizacion: matricula?.cursos?.fecha_fin || new Date().toISOString(),
         folio: String(matricula?.id || "FOLIO"),
       });
@@ -1011,7 +1012,7 @@ export default function PortalEstudiante() {
                     setTemaRutaId(null);
                   }}
                 >
-                  {mat?.cursos?.nombre || `Curso ${mat.id}`}
+                  {construirNombreGrupo(mat?.cursos) || `Curso ${mat.id}`}
                 </Button>
               </Col>
             ))}
@@ -1128,7 +1129,7 @@ export default function PortalEstudiante() {
                       setTemaRutaId(null);
                     }}
                   >
-                    {mat?.cursos?.nombre || `Curso ${mat.id}`}
+                    {construirNombreGrupo(mat?.cursos) || `Curso ${mat.id}`}
                   </Button>
                 </Col>
               );
@@ -1409,7 +1410,7 @@ export default function PortalEstudiante() {
           pagination={{ pageSize: 5 }}
           locale={{ emptyText: "No hay certificados disponibles" }}
           columns={[
-            { title: "Curso", render: (_, r: any) => r.cursos?.nombre },
+            { title: "Curso", render: (_, r: any) => construirNombreGrupo(r.cursos) },
             { title: "Nota Final", dataIndex: "nota_final" },
             { title: "Acción", render: (_, r) => <Button icon={<DownloadOutlined />} onClick={() => descargarCertificado(r)}>Descargar</Button> },
           ]}
@@ -1524,7 +1525,7 @@ export default function PortalEstudiante() {
               locale={{ emptyText: "No hay registros de asistencia" }}
               columns={[
                 { title: "Fecha", dataIndex: "fecha", render: (f) => formatDate(f) },
-                { title: "Curso", render: (_, r: any) => r.matriculas?.cursos?.nombre },
+                { title: "Curso", render: (_, r: any) => construirNombreGrupo(r.matriculas?.cursos) },
                 { title: "Clase #", dataIndex: "clase_numero", width: 90, render: (n) => n || "-" },
                 {
                   title: "Tema visto",

@@ -13,6 +13,8 @@ export interface ProfesorDashboardCurso {
   programaId?: number | null;
   diasSemana?: string[] | string | null;
   horaInicio?: string | null;
+  horaFin?: string | null;
+  horario?: string | null;
   fechaInicio?: string | null;
   estudiantesActivos: number;
   asistenciaPromedio?: number | null;
@@ -238,7 +240,7 @@ export const fetchProfessorDashboardData = async (
 ): Promise<Omit<ProfessorDashboardData, "loading" | "profesorNombre">> => {
   const cursosResponse = await supabaseBrowserClient
     .from("cursos")
-    .select("id, nombre, estado, programa_id, dias_semana, hora_inicio, fecha_inicio")
+    .select("id, nombre, estado, programa_id, dias_semana, hora_inicio, hora_fin, horario, fecha_inicio")
     .eq("profesor_id", profesorId)
     .neq("estado", "eliminado")
     .order("nombre", { ascending: true });
@@ -628,6 +630,8 @@ export const fetchProfessorDashboardData = async (
       programaId: curso.programa_id ?? null,
       diasSemana: curso.dias_semana ?? null,
       horaInicio: curso.hora_inicio ?? null,
+      horaFin: curso.hora_fin ?? null,
+      horario: curso.horario ?? null,
       fechaInicio: curso.fecha_inicio ?? null,
       estudiantesActivos: estudiantesPorCurso.get(curso.id) || 0,
       asistenciaPromedio:

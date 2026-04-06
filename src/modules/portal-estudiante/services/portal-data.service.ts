@@ -7,6 +7,7 @@ import {
   obtenerPensumPorProgramas,
 } from "@modules/academico/pensum.service";
 import { extractClassNumber, getMaterialCanonicalKey } from "@/modules/portal-estudiante/utils";
+import { construirNombreGrupo } from "@utils/grupos";
 
 type PortalDataErrorCode = "NOT_AUTHENTICATED" | "PROFILE_NOT_FOUND" | "UNKNOWN";
 
@@ -300,12 +301,13 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
 
     const avancePorCurso = matriculas.map((m: any) => ({
       matriculaId: m.id,
-      curso: m.cursos?.nombre,
+      curso: construirNombreGrupo(m.cursos),
       programa: m.cursos?.programas?.nombre,
       programaId: m.cursos?.programa_id,
       diasSemana: m.cursos?.dias_semana,
       horaInicio: m.cursos?.hora_inicio,
       horaFin: m.cursos?.hora_fin,
+      horario: m.cursos?.horario || null,
       nota: m.nota_final || 0,
       estado: m.estado_academico,
     }));
