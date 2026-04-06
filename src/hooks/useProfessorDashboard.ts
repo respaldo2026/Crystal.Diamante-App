@@ -35,6 +35,7 @@ export interface ProfesorDashboardStats {
   horasMes: number;
   porcentajeAsistencia: number;
   promedioCalificaciones: number;
+  tieneCalificaciones: boolean;
   pendientesPorCalificar: number;
   asistenciaChart: Array<{ fecha: string; porcentaje: number; presentes: number; total: number; clases?: string | null }>;
   calificacionesChart: Array<{ fecha: string; promedio: number; evaluaciones: number }>;
@@ -107,6 +108,7 @@ const emptyStats: ProfesorDashboardStats = {
   horasMes: 0,
   porcentajeAsistencia: 0,
   promedioCalificaciones: 0,
+  tieneCalificaciones: false,
   pendientesPorCalificar: 0,
   asistenciaChart: [],
   calificacionesChart: [],
@@ -674,6 +676,7 @@ export const fetchProfessorDashboardData = async (
     horasMes,
     porcentajeAsistencia,
     promedioCalificaciones,
+    tieneCalificaciones: notasValidas.length > 0,
     pendientesPorCalificar: pendientesList.length,
     asistenciaChart,
     calificacionesChart,

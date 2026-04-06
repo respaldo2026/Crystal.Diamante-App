@@ -59,6 +59,7 @@ const fallbackStats: ProfessorDashboardData["stats"] = {
   horasMes: 0,
   porcentajeAsistencia: 0,
   promedioCalificaciones: 0,
+  tieneCalificaciones: false,
   pendientesPorCalificar: 0,
   asistenciaChart: [],
   calificacionesChart: [],
@@ -729,9 +730,9 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                     <Statistic
                       prefix={<StarOutlined style={{ color: "#a78bfa" }} />}
                       title={<span style={{ color: "rgba(255,255,255,0.65)" }}>Promedio</span>}
-                      value={statsData.promedioCalificaciones}
-                      suffix="/100"
-                      precision={1}
+                      value={statsData.tieneCalificaciones ? statsData.promedioCalificaciones : "Sin calificaciones"}
+                      suffix={statsData.tieneCalificaciones ? "/5" : ""}
+                      precision={statsData.tieneCalificaciones ? 1 : undefined}
                       valueStyle={{ color: "#fff", fontWeight: 600 }}
                     />
                   </Col>
