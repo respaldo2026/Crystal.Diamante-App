@@ -50,6 +50,7 @@ export interface ProfesorDashboardSesion {
   fecha: string;
   cursoId: string;
   curso: string;
+  horaInicio?: string | null;
   tema?: string | null;
   claseNumero?: number | null;
   horas?: number | null;
@@ -256,7 +257,11 @@ export const fetchProfessorDashboardData = async (
   const cursoIds = cursosData.map((c) => c.id) || [];
 
   const cursoNombreMap = new Map<string, string>(
-    cursosData.map((curso: any) => [curso.id, construirNombreGrupo(curso) || curso.nombre]),
+    cursosData.map((curso: any) => [String(curso.id), construirNombreGrupo(curso) || curso.nombre]),
+  );
+
+  const cursoHoraInicioMap = new Map<string, string | null>(
+    cursosData.map((curso: any) => [String(curso.id), curso.hora_inicio || null]),
   );
 
   const startOfMonth = dayjs().startOf("month").format("YYYY-MM-DD");
@@ -554,8 +559,9 @@ export const fetchProfessorDashboardData = async (
   const proximasSesionesList: ProfesorDashboardSesion[] = proximasSesionesData.map((sesion: any) => ({
     id: sesion.id,
     fecha: sesion.fecha,
-    cursoId: sesion.curso_id,
-    curso: cursoNombreMap.get(sesion.curso_id) || "Curso",
+    cursoId: String(sesion.curso_id),
+    curso: cursoNombreMap.get(String(sesion.curso_id)) || "Curso",
+    horaInicio: cursoHoraInicioMap.get(String(sesion.curso_id)) || null,
     tema: sesion.tema_visto,
     claseNumero: extractClassNumber(sesion.tema_visto),
     horas: Number(sesion.horas_dictadas) || null,
@@ -577,8 +583,9 @@ export const fetchProfessorDashboardData = async (
       return {
         id: `fallback-${curso.id}`,
         fecha: fechaFallback,
-        cursoId: curso.id,
-        curso: cursoNombreMap.get(curso.id) || curso.nombre || "Curso",
+        cursoId: String(curso.id),
+        curso: cursoNombreMap.get(String(curso.id)) || curso.nombre || "Curso",
+        horaInicio: cursoHoraInicioMap.get(String(curso.id)) || curso.hora_inicio || null,
         tema: null,
         horas: null,
       } as ProfesorDashboardSesion;

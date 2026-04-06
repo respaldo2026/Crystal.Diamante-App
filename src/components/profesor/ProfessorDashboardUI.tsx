@@ -80,6 +80,28 @@ const dedupeByKey = <T,>(items: T[] = [], keySelector: (item: T) => string): T[]
   return Array.from(map.values());
 };
 
+const applyCourseStartTime = (fechaRaw?: string | null, horaInicioRaw?: string | null) => {
+  if (!fechaRaw) return null;
+  const parsedFecha = dayjs(fechaRaw);
+  if (!parsedFecha.isValid()) return null;
+
+  const onlyDateOrMidnight = parsedFecha.hour() === 0 && parsedFecha.minute() === 0;
+  if (!onlyDateOrMidnight || !horaInicioRaw) return parsedFecha;
+
+  const [hRaw, mRaw] = String(horaInicioRaw).split(":");
+  const hour = Number(hRaw);
+  const minute = Number(mRaw);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return parsedFecha;
+
+  return parsedFecha.hour(hour).minute(minute).second(0).millisecond(0);
+};
+
+const formatSessionStartLabel = (fechaRaw?: string | null, horaInicioRaw?: string | null) => {
+  const fecha = applyCourseStartTime(fechaRaw, horaInicioRaw);
+  if (!fecha) return "Sin próxima sesión";
+  return fecha.format("dddd D [de] MMMM, h:mm A");
+};
+
 const parseTemaTituloMaterial = (titulo?: string | null) => {
   const raw = String(titulo || "").trim();
   const match = raw.match(/^\s*(?:\[?tema[:\-]\s*)(.+?)(?:\]|—|–|-|:)\s*(.+)?$/i);
@@ -302,8 +324,8 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
 
   const courseCards = useMemo(() => {
     return cursosOrdenados.map((curso) => {
-      const proxFecha = curso.proximaSesion?.fecha ? dayjs(curso.proximaSesion.fecha) : null;
-      const proxLabel = proxFecha ? proxFecha.format("ddd D MMM, HH:mm") : "Sin próxima sesión";
+      const proxFecha = applyCourseStartTime(curso.proximaSesion?.fecha, curso.horaInicio);
+      const proxLabel = formatSessionStartLabel(curso.proximaSesion?.fecha, curso.horaInicio);
       const isSoon = proxFecha ? proxFecha.isBefore(dayjs().add(24, "hour")) : false;
       const asistenciaColor = typeof curso.asistenciaPromedio === "number"
         ? curso.asistenciaPromedio >= 85
@@ -903,7 +925,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                           title={sesion.curso}
                           description={
                             <Space split={<Divider type="vertical" />}> 
-                              <span>{dayjs(sesion.fecha).format("ddd D MMM, HH:mm")}</span>
+                              <span>{formatSessionStartLabel(sesion.fecha, sesion.horaInicio)}</span>
                               {sesion.claseNumero ? <span>Clase #{sesion.claseNumero}</span> : null}
                               {sesion.tema ? <span>{sesion.tema}</span> : null}
                               {sesion.horas ? <span>{sesion.horas} hrs</span> : null}
