@@ -21,7 +21,7 @@ export default function ProfesorEdit() {
         resource: "perfiles",
         action: "edit",
         id: id,
-        redirect: "list",
+        redirect: false,
         onMutationError: (error: any) => {
             logger.error("Error al guardar:", error);
             message.error(error?.message || "No se pudo guardar los cambios");
@@ -115,6 +115,9 @@ export default function ProfesorEdit() {
                     );
                 }
             }
+
+            message.success("Profesor actualizado correctamente");
+            router.push("/profesores");
         } catch (err) {
             logger.error("Error guardando profesores_info/perfil", err);
             message.error("No se pudo guardar la información del profesor");
