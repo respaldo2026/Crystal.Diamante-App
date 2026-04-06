@@ -258,6 +258,17 @@ export const fetchProfessorDashboardData = async (
   const cursosActivos = cursosData.filter((c) => c.estado === "activo") || [];
   const cursoIds = cursosData.map((c) => c.id) || [];
 
+  const cursoFechaInicioMap = new Map<string, dayjs.Dayjs>();
+  (cursosData || []).forEach((curso: any) => {
+    const cursoId = String(curso?.id || "");
+    const fechaInicioRaw = curso?.fecha_inicio;
+    if (!cursoId || !fechaInicioRaw) return;
+    const fechaInicio = dayjs(fechaInicioRaw).startOf("day");
+    if (fechaInicio.isValid()) {
+      cursoFechaInicioMap.set(cursoId, fechaInicio);
+    }
+  });
+
   const cursoNombreMap = new Map<string, string>(
     cursosData.map((curso: any) => [String(curso.id), construirNombreGrupo(curso) || curso.nombre]),
   );
@@ -520,6 +531,15 @@ export const fetchProfessorDashboardData = async (
   const notasValidas: number[] = [];
 
   calificacionesData.forEach((calificacion: any) => {
+    const cursoId = calificacion?.matricula_id ? matriculaCursoMap.get(Number(calificacion.matricula_id)) : undefined;
+    const fechaEvaluacion = calificacion?.fecha_evaluacion ? dayjs(calificacion.fecha_evaluacion).startOf("day") : null;
+    const fechaInicioCurso = cursoId ? cursoFechaInicioMap.get(String(cursoId)) : null;
+
+    // Evita arrastrar notas históricas previas al inicio del grupo actual.
+    if (fechaInicioCurso && fechaEvaluacion && fechaEvaluacion.isBefore(fechaInicioCurso)) {
+      return;
+    }
+
     const nota = Number(calificacion.nota ?? calificacion.calificacion);
     if (!Number.isFinite(nota)) return;
     notasValidas.push(nota);
@@ -533,7 +553,6 @@ export const fetchProfessorDashboardData = async (
       total: acumuladoFecha.total + 1,
     });
 
-    const cursoId = calificacion?.matricula_id ? matriculaCursoMap.get(Number(calificacion.matricula_id)) : undefined;
     if (cursoId) {
       const acumuladoCurso = calificacionesPorCurso.get(cursoId) || { suma: 0, total: 0 };
       calificacionesPorCurso.set(cursoId, {
