@@ -1802,7 +1802,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
   const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta|abono|abonar|pago parcial|cuota inicial)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
-  const hasScheduleIntent = /\b(horarios?|horas?|dias?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|todos\s+los\s+dias|cuantos\s+dias|que\s+dias)\b/i.test(text);
+  const hasScheduleIntent = /\b(horarios?|horas?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|todos\s+los\s+dias|cuantos\s+dias|que\s+dias|dias\s+de\s+clase)\b/i.test(text);
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horarios?|horas?)\b/i.test(text);
   const hasMaterialsKeyword = /\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text);
   // "llevar" solo cuenta como requisito si NO hay keyword de materiales (evitar que "llevar materiales" sea requisito)
@@ -1818,6 +1818,9 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   if (hasEnrollmentIntent) {
     return "inscripcion";
   }
+  if (hasMaterialsKeyword) {
+    return "materiales";
+  }
   if (hasScheduleIntent && hasStrongScheduleIntent) {
     return "horario";
   }
@@ -1829,9 +1832,6 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   }
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
     return "temario";
-  }
-  if (hasMaterialsKeyword) {
-    return "materiales";
   }
   if (/\b(inscrib|matricul|admisiones|contacto|numero|whatsapp|separar\s+cupo|reservar\s+cupo)\b/i.test(text)) {
     return "inscripcion";
@@ -2921,10 +2921,20 @@ function isKitContentsQuestion(message: string): boolean {
   return mentionsKit && asksContents;
 }
 
+function isMaterialsOwnershipQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const mentionsMaterials = /\b(material|materiales|kit|insumo|insumos|herramienta|herramientas|implementos?)\b/i.test(text);
+  const asksOwnership = /\b(se\s+queda|me\s+quedo|quedan\s+para\s+mi|son\s+mios|son\s+mios|me\s+los\s+puedo\s+llevar|me\s+los\s+llevo|se\s+los\s+lleva|quedan\s+de\s+uno|quedan\s+de\s+la\s+alumna)\b/i.test(text);
+
+  return mentionsMaterials && asksOwnership;
+}
+
 function buildKitContentsReply(detectedProgram: any | null): string {
   const programLabel = detectedProgram?.nombre ? ` para *${detectedProgram.nombre}*` : "";
 
-  return `¡Claro! 🙌 Te cuento qué incluye el *kit mensual*${programLabel}:\n\n✅ Limas y buffer\n✅ Palitos de naranjo y/o herramientas básicas de preparación\n✅ Base, gel de construcción y top coat\n✅ Deshidratador/prep y primer\n✅ Tips o formas (según la clase)\n✅ Decoración básica del mes\n✅ Insumos de práctica para las técnicas del ciclo\n\n📌 El kit cubre aproximadamente el *70%* de lo que se usa en ese mes, y si te falta algo puntual en clase, la academia te lo presta.\n\nSi quieres, te detallo exactamente qué se usa en el *primer mes*.`;
+  return `¡Claro! 🙌 Te cuento qué incluye el *kit mensual*${programLabel}:\n\n✅ Limas y buffer\n✅ Palitos de naranjo y/o herramientas básicas de preparación\n✅ Base, gel de construcción y top coat\n✅ Deshidratador/prep y primer\n✅ Tips o formas (según la clase)\n✅ Decoración básica del mes\n✅ Insumos de práctica para las técnicas del ciclo\n\n📌 El kit cubre aproximadamente el *70%* de lo que se usa en ese mes.\n✅ Los materiales del kit son *totalmente tuyos* y *te los llevas*.\n\nSi quieres, te detallo exactamente qué se usa en el *primer mes*.`;
 }
 
 function hasProgramCorrectionSignal(message: string): boolean {
@@ -4203,12 +4213,17 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
 
   const asksKitPurchase = isKitPurchaseQuestion(message);
   const asksKitContents = isKitContentsQuestion(message);
+  const asksMaterialsOwnership = isMaterialsOwnershipQuestion(message);
   const asksKitRescue = isKitRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
   const asksMorningSchedule = /\b(manana|manana\s+temprano|por\s+la\s+manana|en\s+la\s+manana)\b/i.test(normalizedMessage)
     && /\b(horario|hora|grupo|noche|tarde|pm|solo|unico|4|7)\b/i.test(normalizedMessage);
 
   if (asksKitRescue) {
-    return "¡Sí! 🙌 Los materiales principales te los damos aquí con el kit mensual, así que no necesitas comprar todo por fuera al inicio. ¿Quieres que te diga qué trae el kit del primer mes?";
+    return "¡Sí! 🙌 Los materiales del kit son *totalmente tuyos* y *te los llevas*. Además, no necesitas comprar todo por fuera al inicio. ¿Quieres que te diga qué trae el kit del primer mes?";
+  }
+
+  if (asksMaterialsOwnership) {
+    return "¡Sí! 🙌 Los materiales del kit son *totalmente tuyos* y *te los llevas*. Lo que te entregamos para tu práctica queda para ti. ¿Quieres que te detalle qué incluye el kit del primer mes?";
   }
 
   if (asksKitContents) {
@@ -4231,7 +4246,7 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
   }
 
   if (asksKitPurchase) {
-    return `¡Buena pregunta! 👌\n\nNo necesitas comprar todo por fuera: te entregamos un *kit mensual* que cubre la mayor parte de materiales.\n\nSi algo puntual te falta, la academia te apoya en clase.\n\n¿Quieres que te detalle qué trae el kit del primer mes?`;
+    return `¡Buena pregunta! 👌\n\nNo necesitas comprar todo por fuera: te entregamos un *kit mensual* que cubre la mayor parte de materiales.\n\n✅ Esos materiales del kit son *totalmente tuyos* y *te los llevas*.\n\n¿Quieres que te detalle qué trae el kit del primer mes?`;
   }
 
   if (asksMorningSchedule) {
