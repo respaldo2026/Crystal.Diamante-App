@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useCurrentUser } from "@hooks/useCurrentUser";
+import { construirNombreGrupo } from "@utils/grupos";
 import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
 
@@ -10,6 +11,7 @@ export interface ProfesorDashboardCurso {
   id: string;
   nombre: string;
   estado: string;
+  programas?: { nombre?: string | null } | null;
   programaId?: number | null;
   diasSemana?: string[] | string | null;
   horaInicio?: string | null;
@@ -240,7 +242,7 @@ export const fetchProfessorDashboardData = async (
 ): Promise<Omit<ProfessorDashboardData, "loading" | "profesorNombre">> => {
   const cursosResponse = await supabaseBrowserClient
     .from("cursos")
-    .select("id, nombre, estado, programa_id, dias_semana, hora_inicio, hora_fin, horario, fecha_inicio")
+    .select("id, nombre, estado, programa_id, dias_semana, hora_inicio, hora_fin, horario, fecha_inicio, programas:programa_id(nombre)")
     .eq("profesor_id", profesorId)
     .neq("estado", "eliminado")
     .order("nombre", { ascending: true });
@@ -254,7 +256,7 @@ export const fetchProfessorDashboardData = async (
   const cursoIds = cursosData.map((c) => c.id) || [];
 
   const cursoNombreMap = new Map<string, string>(
-    cursosData.map((curso) => [curso.id, curso.nombre]),
+    cursosData.map((curso: any) => [curso.id, construirNombreGrupo(curso) || curso.nombre]),
   );
 
   const startOfMonth = dayjs().startOf("month").format("YYYY-MM-DD");
@@ -625,8 +627,9 @@ export const fetchProfessorDashboardData = async (
     const proximaSesion = proximasSesionPorCurso.get(curso.id) || null;
     return {
       id: curso.id,
-      nombre: curso.nombre,
+      nombre: cursoNombreMap.get(curso.id) || curso.nombre,
       estado: curso.estado,
+      programas: curso.programas ?? null,
       programaId: curso.programa_id ?? null,
       diasSemana: curso.dias_semana ?? null,
       horaInicio: curso.hora_inicio ?? null,
