@@ -85,8 +85,7 @@ const applyCourseStartTime = (fechaRaw?: string | null, horaInicioRaw?: string |
   const parsedFecha = dayjs(fechaRaw);
   if (!parsedFecha.isValid()) return null;
 
-  const onlyDateOrMidnight = parsedFecha.hour() === 0 && parsedFecha.minute() === 0;
-  if (!onlyDateOrMidnight || !horaInicioRaw) return parsedFecha;
+  if (!horaInicioRaw) return parsedFecha;
 
   const [hRaw, mRaw] = String(horaInicioRaw).split(":");
   const hour = Number(hRaw);

@@ -10,20 +10,21 @@ const formatearDias = (dias?: string | string[] | null) => {
     .join(" · ");
 };
 
-const formatearHorario = (inicio?: string | null, fin?: string | null) => {
-  if (!inicio && !fin) return "";
-  const formato = (valor: string | null | undefined) => {
-    if (!valor) return "";
-    const parsed = dayjs(valor, ["HH:mm:ss", "HH:mm"], true);
-    if (parsed.isValid()) return parsed.format("hh:mm A");
+const formatearHoraInicio = (valor?: string | null) => {
+  if (!valor) return "";
+  const match = String(valor).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return "";
+
+  const hour24 = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isFinite(hour24) || !Number.isFinite(minute) || hour24 < 0 || hour24 > 23 || minute < 0 || minute > 59) {
     return "";
-  };
-  const inicioFmt = formato(inicio);
-  const finFmt = formato(fin);
-  if (inicioFmt && finFmt) {
-    return `${inicioFmt} - ${finFmt}`;
   }
-  return inicioFmt || finFmt || "";
+
+  const suffix = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  const minuteText = String(minute).padStart(2, "0");
+  return `${hour12}:${minuteText}${suffix}`;
 };
 
 const formatearHorarioLibre = (horario?: string | null) => {
@@ -49,9 +50,9 @@ export const construirNombreGrupo = (grupo?: GrupoLike | null) => {
   if (!grupo) return "Grupo";
   const programa = grupo.programas?.nombre || grupo.programa_nombre || grupo.programaNombre || "";
   const dias = formatearDias(grupo.dias_semana ?? grupo.diasSemana ?? null);
-  const horario = formatearHorario(grupo.hora_inicio || grupo.horaInicio || null, grupo.hora_fin || grupo.horaFin || null)
+  const horario = formatearHoraInicio(grupo.hora_inicio || grupo.horaInicio || null)
     || formatearHorarioLibre(grupo.horario);
   const partes = [programa, dias, horario].filter(Boolean);
-  if (partes.length > 0) return partes.join(" · ");
+  if (partes.length > 0) return partes.join(" ");
   return grupo.nombre || "Grupo";
 };
