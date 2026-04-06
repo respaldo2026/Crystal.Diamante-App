@@ -1895,6 +1895,23 @@ function isShortAffirmativeReply(message: string): boolean {
   return /^(si|dale|ok|okay|okey|claro|listo|perfecto|de una|por favor|porfavor|porfa|porfis|si por favor|si porfavor|claro que si|esta bien|ta bien|todo bien|entendido|clase|ciclo|ambos|los dos)$/i.test(text);
 }
 
+function isAllInfoSelection(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  return /^(todo|toda|todos|todas|ambos|las dos|los dos|todo eso|todo por favor)$/i.test(text);
+}
+
+function extractPaymentOptionSelection(message: string): "a" | "b" | "por_clase" | null {
+  const text = normalizeForMatch(message);
+  if (!text) return null;
+
+  if (/^(a|opcion a|opciona|mensual a|mensual opcion a)$/i.test(text)) return "a";
+  if (/^(b|opcion b|opcionb|mensual b|mensual opcion b)$/i.test(text)) return "b";
+  if (/^(por clase|clase|pago por clase)$/i.test(text)) return "por_clase";
+
+  return null;
+}
+
 function isNoiseOnlyMessage(message: string): boolean {
   const raw = String(message || "").trim();
   if (!raw) return true;
@@ -2126,6 +2143,15 @@ function buildShortAckContinuationReply(
     return null;
   }
 
+  const normalizedLastAgent = normalizeForMatch(lastAgentMessage || "");
+  // Si acabamos de preguntar por pasos de inscripción y responde afirmativo,
+  // avanzar directo al proceso para evitar repetir el mismo bloque anterior.
+  if (
+    /\b(pasos\s+para\s+inscribirte|pasos\s+de\s+inscripcion|te\s+comparta\s+los\s+pasos\s+para\s+inscribirte|separar\s+tu\s+cupo)\b/i.test(normalizedLastAgent)
+  ) {
+    return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
+  }
+
   const pendingTopic = inferPendingTopicFromHistory(history);
   const normalizedPending = normalizeForMatch(pendingTopic || "");
   if (!normalizedPending) {
@@ -2232,8 +2258,8 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
   if (normalizedQuestion) {
     if (/\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado)\b/i.test(normalizedQuestion)) return "quiero el temario clase por clase";
     if (/\b(referencia|como llegar|llegar mas facil|indicaciones|llegar alli)\b/i.test(normalizedQuestion)) return "quiero la referencia para llegar";
+    if (/\b(separar\s+cupo|reservar|reservo|reservame|inscribir|inscribirte|matricular|avanzar\s+con\s+el\s+cupo|pasos\s+para\s+inscribirte|pasos\s+de\s+inscripcion)\b/i.test(normalizedQuestion)) return "quiero inscribirme y separar cupo";
     if (/\b(validar|confirmar|grupo|horario|queda bien|otro horario|mostrar otra opcion)\b/i.test(normalizedQuestion)) return "quiero confirmar el horario y grupo";
-    if (/\b(separar cupo|reservar|reservo|reservame|inscribir|matricular|avanzar con el cupo)\b/i.test(normalizedQuestion)) return "quiero inscribirme y separar cupo";
     if (/\b(formas de pago|medios de pago|fechas de pago|metodo de pago)\b/i.test(normalizedQuestion)) return "quiero saber los medios de pago";
     if (/\b(pasos de inscripcion|como me inscribo|como inscribirme)\b/i.test(normalizedQuestion)) return "quiero saber como me inscribo";
     if (/\b(inversion|precio|inscripcion|mensualidad)\b/i.test(normalizedQuestion)) return "quiero saber la inversion";
@@ -3980,6 +4006,32 @@ function buildIntentFocusedDirectResponse(
   let intent = detectUserIntent(message);
   const normalizedMessage = normalizeForMatch(message);
   const lastAgentForFlow = history[history.length - 1]?.agent || "";
+  const normalizedLastAgentForFlow = normalizeForMatch(lastAgentForFlow);
+
+  const paymentOptionSelection = extractPaymentOptionSelection(message);
+  if (paymentOptionSelection && detectedProgram && /\b(modalidades\s+de\s+pago|opcion\s+a|opcion\s+b|por\s+clase|mensual\s+opcion)\b/i.test(normalizedLastAgentForFlow)) {
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+
+    if (paymentOptionSelection === "a") {
+      return `Perfecto 🙌 Te quedaría *Mensual Opción A* en *${options.mensual70Text}/mes* (incluye ~70% de materiales del mes).\n\n¿Quieres que te pase los pasos para separar tu cupo?`;
+    }
+
+    if (paymentOptionSelection === "b") {
+      return `Excelente 🙌 Te quedaría *Mensual Opción B* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\n¿Quieres que te pase los pasos para separar tu cupo?`;
+    }
+
+    return `Perfecto 🙌 En *Por Clase* te queda en *${options.porClaseText}* por clase (no incluye materiales).\n\n¿Quieres que te pase los pasos para separar tu cupo?`;
+  }
+
+  if (isAllInfoSelection(message) && detectedProgram) {
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const nextStart = primaryCourse?.fecha_inicio ? (formatDateLong(primaryCourse.fecha_inicio) || formatDateShort(primaryCourse.fecha_inicio)) : "Por confirmar";
+    const schedule = primaryCourse?.horario || "Por confirmar";
+    const priceOptions = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+
+    return `Perfecto 🙌 Te resumo todo de *${detectedProgram.nombre}*:\n\n📅 *Inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n💰 *Inscripción:* ${priceOptions.inscripcionText}\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que avancemos de una con los pasos para inscribirte?`;
+  }
 
   const shortAckContinuationReply = buildShortAckContinuationReply(
     message,
