@@ -1,10 +1,10 @@
 import dayjs from "dayjs";
 
-const formatearDias = (dias?: string | null) => {
+const formatearDias = (dias?: string | string[] | null) => {
   if (!dias) return "";
-  return dias
-    .split(",")
-    .map((d) => d.trim())
+  const diasList = Array.isArray(dias) ? dias : dias.split(",");
+  return diasList
+    .map((d) => String(d).trim())
     .filter(Boolean)
     .map((dia) => dia.charAt(0).toUpperCase() + dia.slice(1))
     .join(" · ");
@@ -36,8 +36,8 @@ type GrupoLike = {
   programa_nombre?: string | null;
   programaNombre?: string | null;
   programas?: { nombre?: string | null } | null;
-  dias_semana?: string | null;
-  diasSemana?: string | null;
+  dias_semana?: string | string[] | null;
+  diasSemana?: string | string[] | null;
   hora_inicio?: string | null;
   horaInicio?: string | null;
   hora_fin?: string | null;
@@ -48,7 +48,7 @@ type GrupoLike = {
 export const construirNombreGrupo = (grupo?: GrupoLike | null) => {
   if (!grupo) return "Grupo";
   const programa = grupo.programas?.nombre || grupo.programa_nombre || grupo.programaNombre || "";
-  const dias = formatearDias(grupo.dias_semana || grupo.diasSemana || null);
+  const dias = formatearDias(grupo.dias_semana ?? grupo.diasSemana ?? null);
   const horario = formatearHorario(grupo.hora_inicio || grupo.horaInicio || null, grupo.hora_fin || grupo.horaFin || null)
     || formatearHorarioLibre(grupo.horario);
   const partes = [programa, dias, horario].filter(Boolean);
