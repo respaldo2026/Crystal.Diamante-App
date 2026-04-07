@@ -25,6 +25,7 @@ import { useCurrentUser } from "@hooks/useCurrentUser";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { construirNombreGrupo } from "@utils/grupos";
+import { getPaymentPlan, getPaymentPlanDisplay } from "@/types/payment-plans";
 const { Text } = Typography;
 
 export default function EstudiantesList() {
@@ -56,7 +57,7 @@ export default function EstudiantesList() {
         resource: "perfiles",
         // TRUCO AVANZADO: Especificar explícitamente la FK para evitar ambigüedad
         meta: {
-            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, created_at, fecha_inicio, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
+            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
         },
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
         pagination: {
@@ -102,6 +103,7 @@ export default function EstudiantesList() {
     const [groupFilter, setGroupFilter] = useState<string | undefined>(undefined);
     const [shirtSizeFilter, setShirtSizeFilter] = useState<string | undefined>(undefined);
     const [contactFilter, setContactFilter] = useState<string | undefined>(undefined);
+    const [paymentPlanFilter, setPaymentPlanFilter] = useState<'POR_CLASE' | 'MENSUAL_70' | 'MENSUAL_100' | undefined>(undefined);
     const [sortMode, setSortMode] = useState<'name_asc' | 'name_desc' | 'recent' | 'oldest'>('name_asc');
     const [asistStats, setAsistStats] = useState<Record<number, { total: number; present: number; porcentaje: number; minimo: number; cumple: boolean; tieneDatos: boolean }>>({});
     const [loadingAsist, setLoadingAsist] = useState(false);
@@ -360,6 +362,21 @@ export default function EstudiantesList() {
             .map((value) => ({ label: value, value }));
     }, [dataSource]);
 
+    const paymentPlanOptions = useMemo(() => ([
+        { label: getPaymentPlan('POR_CLASE').label, value: 'POR_CLASE' },
+        { label: getPaymentPlan('MENSUAL_70').label, value: 'MENSUAL_70' },
+        { label: getPaymentPlan('MENSUAL_100').label, value: 'MENSUAL_100' },
+    ]), []);
+
+    const getPlanPagoDisplay = useCallback((record: any) => {
+        const matriculaPrincipal = obtenerMatriculasVigentes(record)[0];
+        return getPaymentPlanDisplay({
+            modalidadPago: matriculaPrincipal?.modalidad_pago,
+            valorMensualPlan: matriculaPrincipal?.valor_mensual_plan,
+            porcentajeProductos: matriculaPrincipal?.porcentaje_productos,
+        });
+    }, [obtenerMatriculasVigentes]);
+
     let filteredDataSource = activeTab === 'activos' ? activos : activeTab === 'graduados' ? graduados : desertores;
 
     // Apply attendance quick filters
@@ -404,6 +421,10 @@ export default function EstudiantesList() {
         filteredDataSource = filteredDataSource.filter((s: any) => Boolean(String(s?.telefono || '').trim()));
     } else if (contactFilter === 'sin_whatsapp') {
         filteredDataSource = filteredDataSource.filter((s: any) => !String(s?.telefono || '').trim());
+    }
+
+    if (paymentPlanFilter) {
+        filteredDataSource = filteredDataSource.filter((s: any) => getPlanPagoDisplay(s).modalidad === paymentPlanFilter);
     }
 
     filteredDataSource = [...filteredDataSource].sort((a: any, b: any) => {
@@ -486,6 +507,14 @@ export default function EstudiantesList() {
                     style={{ minWidth: 190 }}
                 />
                 <Select
+                    allowClear
+                    placeholder="Plan de pago"
+                    value={paymentPlanFilter}
+                    onChange={(value) => setPaymentPlanFilter(value)}
+                    options={paymentPlanOptions}
+                    style={{ minWidth: 200 }}
+                />
+                <Select
                     value={sortMode}
                     onChange={(value) => setSortMode(value)}
                     options={[
@@ -507,6 +536,8 @@ export default function EstudiantesList() {
                         const mats = obtenerMatriculasVigentes(record);
                         const cursoNombre = construirNombreGrupo(mats[0]?.cursos);
                         const pagoTag = obtenerEstadoPago(record);
+                        const planPago = getPlanPagoDisplay(record);
+                        const planColor = planPago.modalidad === 'POR_CLASE' ? 'orange' : planPago.modalidad === 'MENSUAL_100' ? 'green' : 'blue';
 
                         return (
                             <Card
@@ -583,6 +614,7 @@ export default function EstudiantesList() {
 
                                     <Space size={4} wrap style={{ marginTop: 2 }}>
                                         {cursoNombre && <Tag color="blue">{cursoNombre}</Tag>}
+                                        <Tag color={planColor}>{planPago.label}</Tag>
                                         <Tag color={pagoTag.color}>{pagoTag.label}</Tag>
                                     </Space>
 
@@ -712,6 +744,17 @@ export default function EstudiantesList() {
                                     })}
                                 </div>
                             );
+                        }}
+                    />
+                )}
+
+                {!isMobile && (
+                    <Table.Column
+                        title="Plan de pago"
+                        render={(_, record: any) => {
+                            const planPago = getPlanPagoDisplay(record);
+                            const color = planPago.modalidad === 'POR_CLASE' ? 'orange' : planPago.modalidad === 'MENSUAL_100' ? 'green' : 'blue';
+                            return <Tag color={color}>{planPago.label}</Tag>;
                         }}
                     />
                 )}
