@@ -99,6 +99,10 @@ export default function EstudiantesList() {
     // Tabs: activos, graduados, desertores
     const [activeTab, setActiveTab] = useState<string>('activos');
     const [attFilter, setAttFilter] = useState<'all' | 'bajo' | 'sin'>('all');
+    const [groupFilter, setGroupFilter] = useState<string | undefined>(undefined);
+    const [shirtSizeFilter, setShirtSizeFilter] = useState<string | undefined>(undefined);
+    const [contactFilter, setContactFilter] = useState<string | undefined>(undefined);
+    const [sortMode, setSortMode] = useState<'name_asc' | 'name_desc' | 'recent' | 'oldest'>('name_asc');
     const [asistStats, setAsistStats] = useState<Record<number, { total: number; present: number; porcentaje: number; minimo: number; cumple: boolean; tieneDatos: boolean }>>({});
     const [loadingAsist, setLoadingAsist] = useState(false);
     const [pagosStats, setPagosStats] = useState<Record<number, {
@@ -331,6 +335,31 @@ export default function EstudiantesList() {
         return st && st.tieneDatos && !st.cumple;
     })), [dataSource, asistStats]);
 
+    const groupFilterOptions = useMemo(() => {
+        const set = new Set<string>();
+        dataSource.forEach((record: any) => {
+            const mats = obtenerMatriculasVigentes(record);
+            mats.forEach((m: any) => {
+                const groupName = construirNombreGrupo(m?.cursos) || m?.cursos?.nombre;
+                if (groupName) set.add(groupName);
+            });
+        });
+        return Array.from(set)
+            .sort((a, b) => a.localeCompare(b, 'es-CO'))
+            .map((value) => ({ label: value, value }));
+    }, [dataSource, obtenerMatriculasVigentes]);
+
+    const shirtSizeOptions = useMemo(() => {
+        const set = new Set<string>();
+        dataSource.forEach((record: any) => {
+            const talla = String(record?.talla_camiseta || '').trim().toUpperCase();
+            if (talla) set.add(talla);
+        });
+        return Array.from(set)
+            .sort((a, b) => a.localeCompare(b, 'es-CO'))
+            .map((value) => ({ label: value, value }));
+    }, [dataSource]);
+
     let filteredDataSource = activeTab === 'activos' ? activos : activeTab === 'graduados' ? graduados : desertores;
 
     // Apply attendance quick filters
@@ -356,6 +385,39 @@ export default function EstudiantesList() {
             return !anyDatos;
         });
     }
+
+    if (groupFilter) {
+        filteredDataSource = filteredDataSource.filter((s: any) => {
+            const mats = obtenerMatriculasVigentes(s);
+            return mats.some((m: any) => {
+                const groupName = construirNombreGrupo(m?.cursos) || m?.cursos?.nombre;
+                return groupName === groupFilter;
+            });
+        });
+    }
+
+    if (shirtSizeFilter) {
+        filteredDataSource = filteredDataSource.filter((s: any) => String(s?.talla_camiseta || '').trim().toUpperCase() === shirtSizeFilter);
+    }
+
+    if (contactFilter === 'con_whatsapp') {
+        filteredDataSource = filteredDataSource.filter((s: any) => Boolean(String(s?.telefono || '').trim()));
+    } else if (contactFilter === 'sin_whatsapp') {
+        filteredDataSource = filteredDataSource.filter((s: any) => !String(s?.telefono || '').trim());
+    }
+
+    filteredDataSource = [...filteredDataSource].sort((a: any, b: any) => {
+        if (sortMode === 'recent') {
+            return dayjs(b?.created_at || 0).valueOf() - dayjs(a?.created_at || 0).valueOf();
+        }
+        if (sortMode === 'oldest') {
+            return dayjs(a?.created_at || 0).valueOf() - dayjs(b?.created_at || 0).valueOf();
+        }
+        const nameA = String(a?.nombre_completo || '').toLowerCase();
+        const nameB = String(b?.nombre_completo || '').toLowerCase();
+        if (sortMode === 'name_desc') return nameB.localeCompare(nameA, 'es-CO');
+        return nameA.localeCompare(nameB, 'es-CO');
+    });
 
     return (
         <List
@@ -391,6 +453,49 @@ export default function EstudiantesList() {
                 <Button type={attFilter === 'all' ? 'primary' : 'default'} size="small" onClick={() => setAttFilter('all')}>Todas</Button>
                 <Button type={attFilter === 'bajo' ? 'primary' : 'default'} size="small" onClick={() => setAttFilter('bajo')}>Bajo Asistencia</Button>
                 <Button type={attFilter === 'sin' ? 'primary' : 'default'} size="small" onClick={() => setAttFilter('sin')}>Sin Asistencia</Button>
+            </Space>
+
+            <Space style={{ marginBottom: 16 }} wrap>
+                <Select
+                    allowClear
+                    placeholder="Filtrar por grupo"
+                    value={groupFilter}
+                    onChange={(value) => setGroupFilter(value)}
+                    options={groupFilterOptions}
+                    style={{ minWidth: 260 }}
+                    showSearch
+                    optionFilterProp="label"
+                />
+                <Select
+                    allowClear
+                    placeholder="Talla camiseta"
+                    value={shirtSizeFilter}
+                    onChange={(value) => setShirtSizeFilter(value)}
+                    options={shirtSizeOptions}
+                    style={{ minWidth: 170 }}
+                />
+                <Select
+                    allowClear
+                    placeholder="Contacto WhatsApp"
+                    value={contactFilter}
+                    onChange={(value) => setContactFilter(value)}
+                    options={[
+                        { label: 'Con WhatsApp', value: 'con_whatsapp' },
+                        { label: 'Sin WhatsApp', value: 'sin_whatsapp' },
+                    ]}
+                    style={{ minWidth: 190 }}
+                />
+                <Select
+                    value={sortMode}
+                    onChange={(value) => setSortMode(value)}
+                    options={[
+                        { label: 'Nombre A-Z', value: 'name_asc' },
+                        { label: 'Nombre Z-A', value: 'name_desc' },
+                        { label: 'Más recientes', value: 'recent' },
+                        { label: 'Más antiguos', value: 'oldest' },
+                    ]}
+                    style={{ minWidth: 180 }}
+                />
             </Space>
 
             {isMobile ? (
