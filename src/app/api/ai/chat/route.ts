@@ -3880,7 +3880,8 @@ function buildIntentFocusedDirectResponse(
   academy: any | null,
   history: Array<{ user: string; agent: string }> = [],
   programs: any[] = [],
-  mediosPago: any[] = []
+  mediosPago: any[] = [],
+  isKnownStudentByPhone: boolean = false
 ): string | null {
   const hasPaymentConfirmedContext = hasRecentPaymentConfirmedContext(history);
   const hasPaymentReminderContext = hasRecentPaymentReminderContext(history);
@@ -3897,6 +3898,9 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (isThanksOnlyMessage(message)) {
+    if (isKnownStudentByPhone) {
+      return "Con gusto 😊 Si quieres, también te confirmo salón, profesora o materiales de tu próxima clase.";
+    }
     return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
   }
 
@@ -4814,7 +4818,9 @@ function buildStudentDirectResponse(message: string, studentContext: any, medios
   const asksDebt = /\b(cuanto debo|deuda|saldo pendiente|debo)\b/i.test(text);
   const asksNextPay = /\b(proxima mensualidad|proximo pago|cuando debo pagar|fecha de pago|vence|vencimiento)\b/i.test(text);
   const asksTotalDebtExplicit = /\b(deuda total|saldo total|total pendiente|deuda acumulada)\b/i.test(text);
-  const asksNextClass = /\b(proxima clase|siguiente clase|hoy hay clase|hoy tengo clase|clase hoy)\b/i.test(text);
+  const asksNextClass = /\b(proxima clase|siguiente clase|hoy hay clase|hoy tengo clase|clase hoy|a que hora empieza|manana hay clase|clase manana)\b/i.test(text);
+  const asksTomorrowClassTime = /\b(manana|manana\s+temprano|por\s+la\s+manana)\b/i.test(text)
+    && /\b(hora|empieza|inicio|comienza|clase|curso)\b/i.test(text);
   const asksEnrolledCourses = /\b(en que curso|que cursos|mis cursos|inscrita|inscrito)\b/i.test(text);
 
   if (asksDebt || asksNextPay || asksTotalDebtExplicit) {
@@ -4831,6 +4837,30 @@ function buildStudentDirectResponse(message: string, studentContext: any, medios
     if (!nextClass) {
       return `No pude calcular tu próxima clase con los horarios actuales. ${formatStudentCoursesList(studentContext)}`;
     }
+
+    if (asksTomorrowClassTime) {
+      const nextDate = nextClass?.fechaHoraIso ? new Date(nextClass.fechaHoraIso) : null;
+      const nowCo = getColombiaNowDate();
+      const tomorrowCo = new Date(nowCo);
+      tomorrowCo.setDate(tomorrowCo.getDate() + 1);
+
+      const sameDayAsTomorrow = Boolean(
+        nextDate
+        && !Number.isNaN(nextDate.getTime())
+        && nextDate.getFullYear() === tomorrowCo.getFullYear()
+        && nextDate.getMonth() === tomorrowCo.getMonth()
+        && nextDate.getDate() === tomorrowCo.getDate()
+      );
+
+      const timeLabel = nextDate && !Number.isNaN(nextDate.getTime())
+        ? nextDate.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()
+        : null;
+
+      if (sameDayAsTomorrow && timeLabel) {
+        return `Mañana tu clase de ${nextClass.cursoNombre} empieza a las ${timeLabel}.`;
+      }
+    }
+
     return `Tu próxima clase es ${nextClass.cursoNombre}${nextClass.programaNombre ? ` (${nextClass.programaNombre})` : ""}, el ${nextClass.fechaHoraTexto}.`;
   }
 
@@ -5789,7 +5819,7 @@ export async function POST(req: NextRequest) {
       }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
     
-    let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs, mediosPago);
+    let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs, mediosPago, knownStudentByPhone);
     if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage)) {
       const pendingTopic = inferPendingTopicFromHistory(history);
       if (pendingTopic) {
@@ -5800,7 +5830,8 @@ export async function POST(req: NextRequest) {
           academy,
           history,
           programs,
-          mediosPago
+          mediosPago,
+          knownStudentByPhone
         );
 
         if (retriedDirectResponse && !isRepetitiveResponse(retriedDirectResponse, history, effectiveMessage)) {
@@ -5826,7 +5857,8 @@ export async function POST(req: NextRequest) {
           academy,
           history,
           programs,
-          mediosPago
+          mediosPago,
+          knownStudentByPhone
         );
 
         if (forcedProgressResponse) {
