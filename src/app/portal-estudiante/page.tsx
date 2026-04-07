@@ -754,6 +754,87 @@ export default function PortalEstudiante() {
     return match ? Number(match[0]) : null;
   };
 
+  const parseDiasSemana = (value?: string | null): number[] => {
+    const raw = String(value || "").toLowerCase();
+    if (!raw) return [];
+
+    const diasMap: Array<{ keys: string[]; day: number }> = [
+      { keys: ["domingo", "dom"], day: 0 },
+      { keys: ["lunes", "lun"], day: 1 },
+      { keys: ["martes", "mar"], day: 2 },
+      { keys: ["miercoles", "miércoles", "mie", "mié"], day: 3 },
+      { keys: ["jueves", "jue"], day: 4 },
+      { keys: ["viernes", "vie"], day: 5 },
+      { keys: ["sabado", "sábado", "sab", "sáb"], day: 6 },
+    ];
+
+    const result = new Set<number>();
+    diasMap.forEach(({ keys, day }) => {
+      if (keys.some((k) => raw.includes(k))) result.add(day);
+    });
+    return Array.from(result.values()).sort((a, b) => a - b);
+  };
+
+  const getSegundaClaseDate = (matricula: any): dayjs.Dayjs | null => {
+    const fechaInicio = matricula?.fecha_inicio ? dayjs(matricula.fecha_inicio).startOf("day") : null;
+    if (!fechaInicio || !fechaInicio.isValid()) return null;
+
+    const dias = parseDiasSemana(matricula?.cursos?.dias_semana);
+    if (!dias.length) {
+      return fechaInicio.add(7, "day");
+    }
+
+    let primera: dayjs.Dayjs | null = null;
+    for (let i = 0; i <= 21; i += 1) {
+      const candidate = fechaInicio.add(i, "day");
+      if (dias.includes(candidate.day())) {
+        primera = candidate;
+        break;
+      }
+    }
+    if (!primera) return fechaInicio.add(7, "day");
+
+    for (let i = 1; i <= 21; i += 1) {
+      const candidate = primera.add(i, "day");
+      if (dias.includes(candidate.day())) {
+        return candidate.startOf("day");
+      }
+    }
+
+    return primera.add(7, "day").startOf("day");
+  };
+
+  const getFechaVencimientoEfectiva = (pago: any): dayjs.Dayjs | null => {
+    const cuota = parseNumeroCuota(pago);
+    const estado = String(pago?.estado || "").toLowerCase();
+    const base = pago?.fecha_vencimiento ? dayjs(pago.fecha_vencimiento).startOf("day") : null;
+
+    if (cuota !== 1 || estado !== "pendiente") {
+      return base && base.isValid() ? base : null;
+    }
+
+    const matricula = matriculas.find((m: any) => String(m?.id) === String(pago?.matricula_id));
+    if (!matricula) return base && base.isValid() ? base : null;
+
+    if (normalizeModalidadPago(matricula?.modalidad_pago) === "POR_CLASE") {
+      return base && base.isValid() ? base : null;
+    }
+
+    const segundaClase = getSegundaClaseDate(matricula);
+    if (!segundaClase) return base && base.isValid() ? base : null;
+    if (!base || !base.isValid()) return segundaClase;
+    return segundaClase.isAfter(base) ? segundaClase : base;
+  };
+
+  const getVisiblePaymentStatusWithGrace = (pago: any) => {
+    const fechaEfectiva = getFechaVencimientoEfectiva(pago);
+    if (!fechaEfectiva) return getVisiblePaymentStatus(pago);
+    return getVisiblePaymentStatus({
+      ...pago,
+      fecha_vencimiento: fechaEfectiva.format("YYYY-MM-DD"),
+    });
+  };
+
   const obtenerMensualidad = (matricula: any) =>
     Number(
       matricula?.valor_mensual_plan ||
@@ -837,9 +918,10 @@ export default function PortalEstudiante() {
     const hoy = dayjs().startOf("day");
     return pagosConPendientes.some((p: any) => {
       if (p.estado !== "pendiente") return false;
-      if (!p.fecha_vencimiento) return false;
+      const fechaVencimientoEfectiva = getFechaVencimientoEfectiva(p);
+      if (!fechaVencimientoEfectiva) return false;
       // vencida = la fecha de cobro ya pasó
-      return hoy.isAfter(dayjs(p.fecha_vencimiento));
+      return hoy.isAfter(fechaVencimientoEfectiva);
     });
   }, [pagosConPendientes]);
 
@@ -847,7 +929,7 @@ export default function PortalEstudiante() {
     const formatPagoCOP = (valor?: number | null) => `$ ${Number(valor || 0).toLocaleString()}`;
     const pendientes = pagosConPendientes
       .filter((p) => {
-        const visibleStatus = getVisiblePaymentStatus(p);
+        const visibleStatus = getVisiblePaymentStatusWithGrace(p);
         return visibleStatus === "pendiente" || visibleStatus === "abono_parcial" || visibleStatus === "vencido";
       })
       .sort((a, b) => {
@@ -858,11 +940,12 @@ export default function PortalEstudiante() {
         if (fechaB) return 1;
         return (Number(a?.numero_cuota || 0) - Number(b?.numero_cuota || 0));
       });
-    const realizados = pagosConPendientes.filter((p) => getVisiblePaymentStatus(p) === "pagado");
+    const realizados = pagosConPendientes.filter((p) => getVisiblePaymentStatusWithGrace(p) === "pagado");
 
     // Función auxiliar para determinar si está vencido (estrictamente anterior a hoy)
-    const isVencido = (fecha: string) => {
-      return fecha && dayjs().startOf('day').isAfter(dayjs(fecha));
+    const isVencido = (pago: any) => {
+      const fecha = getFechaVencimientoEfectiva(pago);
+      return Boolean(fecha && dayjs().startOf('day').isAfter(fecha));
     };
 
     return (
@@ -881,7 +964,7 @@ export default function PortalEstudiante() {
                     title: 'Concepto', 
                     dataIndex: 'periodo_pagado', 
                     render: (t, r: any) => {
-                      const vencido = isVencido(r.fecha_vencimiento);
+                      const vencido = isVencido(r);
                       const style = !vencido ? { color: '#8c8c8c', fontSize: '13px' } : {};
                       return <span style={style}>{t || `Cuota ${r.numero_cuota}`}</span>;
                     } 
@@ -902,16 +985,17 @@ export default function PortalEstudiante() {
                     title: 'Vence', 
                     dataIndex: 'fecha_vencimiento', 
                     render: (d, r: any) => {
-                      const vencido = isVencido(r.fecha_vencimiento);
+                      const vencido = isVencido(r);
+                      const fechaEfectiva = getFechaVencimientoEfectiva(r);
                       const style = !vencido ? { color: '#8c8c8c', fontSize: '13px' } : {};
-                      return <span style={style}>{d ? dayjs(d).format("DD/MM/YYYY") : '-'}</span>;
+                      return <span style={style}>{fechaEfectiva ? fechaEfectiva.format("DD/MM/YYYY") : '-'}</span>;
                     }
                   },
                   { 
                     title: 'Monto', 
                     dataIndex: 'monto', 
                     render: (v, r: any) => {
-                      const vencido = isVencido(r.fecha_vencimiento);
+                      const vencido = isVencido(r);
                       const style = !vencido ? { color: '#8c8c8c', fontSize: '13px' } : {};
                       return <span style={style}>{formatPagoCOP(getMontoProgramado(r) || v)}</span>;
                     }
@@ -931,7 +1015,7 @@ export default function PortalEstudiante() {
                   { 
                     title: 'Estado', 
                     render: (_, r: any) => {
-                      const visibleStatus = getVisiblePaymentStatus(r);
+                      const visibleStatus = getVisiblePaymentStatusWithGrace(r);
                       if (visibleStatus === "vencido") return <Tag color="red">VENCIDO</Tag>;
                       if (visibleStatus === "abono_parcial") return <Tag color="gold">ABONO PARCIAL</Tag>;
                       return <Tag style={{ color: '#8c8c8c', borderColor: '#d9d9d9', fontSize: '11px' }}>PENDIENTE</Tag>;
