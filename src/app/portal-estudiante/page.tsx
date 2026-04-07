@@ -925,6 +925,13 @@ export default function PortalEstudiante() {
     });
   }, [pagosConPendientes]);
 
+  const hasMonthlyEnrollment = React.useMemo(() => {
+    return (matriculas || []).some((m: any) => normalizeModalidadPago(m?.modalidad_pago) !== "POR_CLASE");
+  }, [matriculas]);
+
+  // El bloqueo global de contenidos aplica solo a planes mensuales en mora.
+  const enMoraBloqueante = enMora && hasMonthlyEnrollment;
+
   const renderFinanciero = () => {
     const formatPagoCOP = (valor?: number | null) => `$ ${Number(valor || 0).toLocaleString()}`;
     const pendientes = pagosConPendientes
@@ -1510,8 +1517,8 @@ export default function PortalEstudiante() {
   const menuSecciones = [
     { key: "1", label: "Mis Cursos", icon: <BookOutlined /> },
     { key: "2", label: enMora ? "💰 Financiero ⚠️" : "Financiero", icon: <DollarCircleOutlined /> },
-    { key: "3", label: enMora ? "🔒 Materiales" : (isMobile ? "Materiales" : "Lista de materiales"), icon: <FileOutlined /> },
-    { key: "5", label: enMora ? "🔒 Pensum" : "Pensum", icon: <BookOutlined /> },
+    { key: "3", label: enMoraBloqueante ? "🔒 Materiales" : (isMobile ? "Materiales" : "Lista de materiales"), icon: <FileOutlined /> },
+    { key: "5", label: enMoraBloqueante ? "🔒 Pensum" : "Pensum", icon: <BookOutlined /> },
   ];
 
   const renderSeccionActiva = () => {
@@ -1657,7 +1664,7 @@ export default function PortalEstudiante() {
     if (activeTab === "2") return renderFinanciero();
 
     // ── Bloqueo por mora ───────────────────────────────────────────
-    if (enMora && (activeTab === "3" || activeTab === "5")) {
+    if (enMoraBloqueante && (activeTab === "3" || activeTab === "5")) {
       return (
         <div
           style={{
