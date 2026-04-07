@@ -1124,6 +1124,13 @@ export default function PortalEstudiante() {
     });
 
     const modalidadMateriales = normalizeModalidadPago(matriculaSeleccionada?.modalidad_pago);
+    const porClaseTieneMoraMatriculaSeleccionada = modalidadMateriales === "POR_CLASE"
+      && pagosConPendientes.some((p: any) => {
+        if (String(p?.matricula_id || "") !== String(matriculaSeleccionada?.id || "")) return false;
+        if (String(p?.estado || "").toLowerCase() !== "pendiente") return false;
+        const fecha = getFechaVencimientoEfectiva(p);
+        return Boolean(fecha && dayjs().startOf("day").isAfter(fecha));
+      });
 
     const resumenPlanMateriales =
       modalidadMateriales === "POR_CLASE"
@@ -1242,6 +1249,15 @@ export default function PortalEstudiante() {
               }
               description={resumenPlanMateriales}
             />
+            {porClaseTieneMoraMatriculaSeleccionada ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginTop: 10 }}
+                message="Pago por clase pendiente"
+                description="Tienes una clase vencida por pagar. Se bloquea solo la siguiente clase hasta que registremos tu pago."
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -1346,16 +1362,19 @@ export default function PortalEstudiante() {
                         material: recurso,
                       }));
                     const insumosTema = obtenerInsumosTema(tema, cicloId);
+                    const temaCompletado = isTemaCompletadoByTemaId(temaId);
+                    const bloqueoTemaActualPorPagoPorClase = porClaseTieneMoraMatriculaSeleccionada
+                      && temaIndex === primerIndexActual
+                      && !temaCompletado;
                     // Bloqueo en cascada:
                     // - vista "plan": bloqueado por módulo O por clase (quiz pendiente)
                     // - vistas de materiales/kits: solo por módulo, nunca por clase
                     const temaBloqueado = vista === "plan"
-                      ? (cicloBloqueado || temaIndex > primerIndexActual)
-                      : cicloBloqueado;
+                      ? (cicloBloqueado || temaIndex > primerIndexActual || bloqueoTemaActualPorPagoPorClase)
+                      : (cicloBloqueado || bloqueoTemaActualPorPagoPorClase);
                     const quizTema = getQuizByTemaId(temaId);
                     const notaQuizTema = getNotaByTemaId(temaId);
                     const notaActividadTema = actividadPorTemaMatricula.get(`${matriculaSeleccionada?.id || ""}-${temaId}`) ?? null;
-                    const temaCompletado = isTemaCompletadoByTemaId(temaId);
                     const colorAvatarTema = temaBloqueado ? "#bfbfbf" : temaCompletado ? "#16a34a" : colorNumeroTema;
                     const insumosMarcados = insumosTema.filter((insumo: any) => {
                       const key = buildChecklistKey(
