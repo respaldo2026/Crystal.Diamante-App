@@ -17,6 +17,7 @@ export default function TomarAsistencia() {
   const [form] = Form.useForm();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const HORAS_POR_SESION = 3;
   const [cursoSeleccionado, setCursoSeleccionado] = useState<number | null>(null);
   const [fecha, setFecha] = useState(dayjs());
   const [alumnos, setAlumnos] = useState<any[]>([]);
@@ -354,6 +355,7 @@ export default function TomarAsistencia() {
       const nombreClase = temaLimpio || claseSeleccionada?.nombre || `Clase ${numeroClase}`;
       const referenciaClase = `Clase #${numeroClase}`;
       const detalleClase = `${referenciaClase} · ${nombreClase}`;
+      const observacionSesion = `${detalleClase}. Sesión registrada desde llamado de lista`;
 
       const guardarTemaSesion = async () => {
         if (!nombreClase) return;
@@ -374,7 +376,12 @@ export default function TomarAsistencia() {
           // 2a. Ya existe → actualizar tema
           const { error: errUpdate } = await supabaseBrowserClient
             .from("sesiones_clase")
-            .update({ tema_visto: nombreClase, observaciones: detalleClase })
+            .update({
+              profesor_id: cursoSeleccionadoData?.profesor_id || null,
+              horas_dictadas: HORAS_POR_SESION,
+              tema_visto: detalleClase,
+              observaciones: observacionSesion,
+            })
             .eq("id", sesionExistente.id);
           if (errUpdate) throw errUpdate;
           return;
@@ -387,9 +394,9 @@ export default function TomarAsistencia() {
             curso_id: cursoSeleccionado,
             profesor_id: cursoSeleccionadoData?.profesor_id || null,
             fecha: fechaSesion,
-            horas_dictadas: 0,
-            tema_visto: nombreClase,
-            observaciones: `${detalleClase}. Sesión registrada desde llamado de lista`,
+            horas_dictadas: HORAS_POR_SESION,
+            tema_visto: detalleClase,
+            observaciones: observacionSesion,
           });
 
         // Si hay 409 (conflicto de unicidad por race condition), hacer update como fallback
@@ -405,7 +412,12 @@ export default function TomarAsistencia() {
             if (id2) {
               await supabaseBrowserClient
                 .from("sesiones_clase")
-                .update({ tema_visto: nombreClase, observaciones: detalleClase })
+                .update({
+                  profesor_id: cursoSeleccionadoData?.profesor_id || null,
+                  horas_dictadas: HORAS_POR_SESION,
+                  tema_visto: detalleClase,
+                  observaciones: observacionSesion,
+                })
                 .eq("id", id2);
             }
             return;
@@ -509,7 +521,7 @@ export default function TomarAsistencia() {
         );
       }
 
-      message.success("✅ ¡Asistencia guardada correctamente!");
+      message.success(`✅ ¡Asistencia y sesión guardadas correctamente! Se registraron ${HORAS_POR_SESION} horas para ${referenciaClase}.`);
       setTimeout(() => router.push(returnTo), 800);
     } catch (error) {
       console.error(error);
