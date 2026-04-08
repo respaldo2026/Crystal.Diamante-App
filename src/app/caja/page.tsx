@@ -36,8 +36,10 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { generarTicketPagoBlob, abrirTicketPagoDesdeBlob, imprimirTicketTermicoTM20II } from "@utils/pago-ticket";
 import { abrirCajonConQzTray, imprimirTicketConQzTray, verificarQzTrayDisponible } from "@utils/qz-tray";
 import { subirTicketPago } from "@utils/ticket-storage";
+import { obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 import { getDescuentoAplicado, getMontoProgramado, getSaldoPendiente, getTotalAbonado, getVisiblePaymentStatus } from "@utils/payment-balances";
+import { getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
 
 const { Title, Text } = Typography;
 
@@ -54,6 +56,7 @@ interface Estudiante {
 interface Matricula {
   id: string;
   curso_nombre: string;
+  curso_programa_id?: string | null;
   fecha_inicio?: string | null;
   curso_dias_semana?: string | null;
   numero_cuotas?: number | null;
@@ -197,9 +200,24 @@ const metodoPagoLabels: Record<MetodoPago, string> = {
   qr: "Código QR",
 };
 
-const normalizeModalidadPago = (value?: string | null) => {
-  const raw = String(value || "").toUpperCase().trim();
-  return raw === "POR_CLASE" ? "POR_CLASE" : "MENSUAL";
+const getPeriodoPagoLegible = (
+  cuota: Pick<Cuota, "periodo_pagado" | "numero_cuota" | "tipo_cuota">,
+  modalidadPago?: string | null,
+) => {
+  const periodoActual = String(cuota?.periodo_pagado || "").trim();
+  const numeroCuota = Number(cuota?.numero_cuota || 0);
+  const tipoCuota = String(cuota?.tipo_cuota || "").toLowerCase().trim();
+  const modalidad = normalizeModalidadPago(modalidadPago);
+
+  if (numeroCuota === 0) {
+    return periodoActual || "Inscripción";
+  }
+
+  if (modalidad === "POR_CLASE" || tipoCuota === "por_clase") {
+    return `Clase #${numeroCuota}`;
+  }
+
+  return periodoActual || `Cuota ${numeroCuota}`.trim();
 };
 
 export default function CajaPage() {
@@ -366,7 +384,7 @@ export default function CajaPage() {
         // Cargar matrículas del estudiante
         const { data: matriculasData, error: matriculasError } = await supabaseBrowserClient
           .from("matriculas")
-          .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, numero_cuotas, duracion, dias_semana, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
+          .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, programa_id, numero_cuotas, duracion, dias_semana, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
           .eq("estudiante_id", estudianteId)
           .eq("estado", "activo");
 
@@ -375,6 +393,7 @@ export default function CajaPage() {
         const matriculasFormat = (matriculasData || []).map((m: any) => ({
           id: m.id,
           curso_nombre: m.cursos?.nombre || "Sin nombre",
+          curso_programa_id: m.cursos?.programa_id || null,
           fecha_inicio: m.fecha_inicio || null,
           curso_dias_semana: m.cursos?.dias_semana || null,
           curso_numero_cuotas: m.cursos?.numero_cuotas ?? null,
@@ -420,12 +439,42 @@ export default function CajaPage() {
             }
           });
 
+          const programaIds = Array.from(
+            new Set(
+              matriculasFormat
+                .map((matricula) => String(matricula.curso_programa_id || ""))
+                .filter(Boolean)
+            )
+          );
+
+          const totalClasesPorPrograma = new Map<string, number>();
+          if (programaIds.length > 0) {
+            const pensumData = await obtenerPensumPorProgramas(programaIds);
+            (pensumData || []).forEach((ciclo: any) => {
+              const programaId = String(ciclo?.programa_id || "");
+              if (!programaId) return;
+              const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+              totalClasesPorPrograma.set(
+                programaId,
+                Number(totalClasesPorPrograma.get(programaId) || 0) + temasCiclo.length
+              );
+            });
+          }
+
           const totalCuotasEsperadasPorMatricula = new Map<string, number>();
           matriculasFormat.forEach((m) => {
-            const totalEsperado =
-              parseDuracionMeses(m.programa_duracion) ||
-              parseDuracionMeses(m.duracion) ||
-              parseDuracionMeses(m.curso_numero_cuotas);
+            const modalidadPago = normalizeModalidadPago(m.modalidad_pago);
+            const resumenPlan = resumenPlanPorMatricula.get(String(m.id));
+            const totalEsperado = modalidadPago === "POR_CLASE"
+              ? Math.max(
+                  Number(totalClasesPorPrograma.get(String(m.curso_programa_id || "")) || 0),
+                  Number(resumenPlan?.maxNumero || 0)
+                )
+              : (
+                  parseDuracionMeses(m.programa_duracion) ||
+                  parseDuracionMeses(m.duracion) ||
+                  parseDuracionMeses(m.curso_numero_cuotas)
+                );
 
             if (totalEsperado > 0) {
               totalCuotasEsperadasPorMatricula.set(m.id, totalEsperado);
@@ -551,17 +600,21 @@ export default function CajaPage() {
           const cuotasVirtuales: Cuota[] = [];
           matriculasFormat.forEach((matricula) => {
             const modalidadPago = normalizeModalidadPago(matricula.modalidad_pago);
-            if (modalidadPago === "POR_CLASE") return;
-
             const totalEsperado = totalCuotasEsperadasPorMatricula.get(matricula.id) || 0;
             if (totalEsperado <= 0) return;
 
             const cuotasRegistradas = cuotasRegistradasPorMatricula.get(matricula.id) || new Set<number>();
             const cuotasPendientesSet = cuotasPendientesRegistradas.get(matricula.id) || new Set<number>();
             const montoBase =
-              Number(matricula.valor_mensual_plan || 0) ||
-              Number(matricula.precio_mensualidad || 0) ||
-              Number(matricula.programa_precio_mensualidad || 0) ||
+              (modalidadPago === "POR_CLASE"
+                ? Number(
+                    cuotasNormalizadasFinal.find(
+                      (q) => q.matricula_id === matricula.id && Number(q.numero_cuota) > 0
+                    )?.monto || getPaymentPlan(matricula.modalidad_pago).montoPorClase || 0
+                  )
+                : Number(matricula.valor_mensual_plan || 0) ||
+                  Number(matricula.precio_mensualidad || 0) ||
+                  Number(matricula.programa_precio_mensualidad || 0)) ||
               Number(
                 cuotasNormalizadasFinal.find((q) => q.matricula_id === matricula.id && Number(q.numero_cuota) > 0)?.monto || 0
               );
@@ -578,12 +631,14 @@ export default function CajaPage() {
                 saldo_pendiente: montoBase,
                 motivo_descuento: null,
                 numero_cuota: i,
-                fecha_vencimiento: calcularFechaVencimientoCuota(matricula.fecha_inicio, i),
-                periodo_pagado: `Cuota ${i} de ${totalEsperado}`,
+                fecha_vencimiento: modalidadPago === "POR_CLASE"
+                  ? (calcularFechaVencimientoClase(matricula.fecha_inicio, matricula.curso_dias_semana, i) || "")
+                  : calcularFechaVencimientoCuota(matricula.fecha_inicio, i),
+                periodo_pagado: modalidadPago === "POR_CLASE" ? `Clase #${i}` : `Cuota ${i} de ${totalEsperado}`,
                 estado: "pendiente",
                 matricula_id: matricula.id,
                 es_virtual: true,
-                tipo_cuota: "mensual",
+                tipo_cuota: modalidadPago === "POR_CLASE" ? "por_clase" : "mensual",
               });
             }
           });
@@ -725,7 +780,7 @@ export default function CajaPage() {
               saldo_pendiente: Number(cuota.monto || 0),
               numero_cuota: Number(cuota.numero_cuota || 0),
               fecha_vencimiento: cuota.fecha_vencimiento || null,
-              periodo_pagado: cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim(),
+              periodo_pagado: getPeriodoPagoLegible(cuota, matriculaCuota?.modalidad_pago),
               tipo_cuota: cuota.tipo_cuota || (normalizeModalidadPago(matriculaCuota?.modalidad_pago) === "POR_CLASE" ? "por_clase" : "mensual"),
             })
             .select("id")
@@ -754,9 +809,10 @@ export default function CajaPage() {
           throw new Error("No se pudo confirmar el abono en caja");
         }
 
+        const periodoPagoLegible = getPeriodoPagoLegible(cuota, matriculaCuota?.modalidad_pago);
         const conceptoTicket = ajuste.saldo_pendiente > 0
-          ? `Abono a ${cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}`
-          : `${cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}`;
+          ? `Abono a ${periodoPagoLegible}`
+          : `${periodoPagoLegible}`;
         const detalleOperacion = [
           descuento > 0 ? `Descuento aplicado: ${formatCurrency(descuento)}` : null,
           ajuste.saldo_pendiente > 0 ? `Saldo pendiente: ${formatCurrency(ajuste.saldo_pendiente)}` : "Cuota saldada",
@@ -875,7 +931,7 @@ export default function CajaPage() {
               concepto: conceptoTicket,
               nombreCurso: matriculaCuota?.curso_nombre || "Curso",
               fechaVigencia: dayjs().add(1, "month").format("DD/MM/YYYY"),
-              fechaProximaClase: "Por confirmar",
+              fechaProximaClase: cuota.fecha_vencimiento ? dayjs(cuota.fecha_vencimiento).format("DD/MM/YYYY") : "Por confirmar",
             });
           } catch (whatsappError) {
             console.error("Error enviando confirmación de pago por WhatsApp desde Caja:", whatsappError);
@@ -923,7 +979,7 @@ export default function CajaPage() {
                 saldo_pendiente: 0,
                 numero_cuota: Number(cuota.numero_cuota || 0),
                 fecha_vencimiento: cuota.fecha_vencimiento || null,
-                periodo_pagado: cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim(),
+                periodo_pagado: getPeriodoPagoLegible(cuota, matriculas.find((m) => String(m.id) === String(cuota.matricula_id))?.modalidad_pago),
               })
               .select()
               .single()
@@ -939,10 +995,11 @@ export default function CajaPage() {
 
         // Registrar movimiento financiero
         try {
+          const matriculaCuota = matriculas.find((m) => String(m.id) === String(cuota.matricula_id));
           await registrarIngresoDesdePago({
             fecha: dayjs().format("YYYY-MM-DD"),
             monto: pagoActualizado.monto,
-            concepto: `Pago de ${cuota.periodo_pagado || `cuota ${cuota.numero_cuota}`}`,
+            concepto: `Pago de ${getPeriodoPagoLegible(cuota, matriculaCuota?.modalidad_pago)}`,
             categoria: "inscripciones",
             metodo_pago: pagoActualizado.metodo_pago,
             referencia: pagoActualizado.referencia,
@@ -990,9 +1047,13 @@ export default function CajaPage() {
           metodo: metodoPagoLabels[metodoPago],
           fecha: dayjs().format("DD/MM/YYYY HH:mm"),
           referencia: referenciaPago,
-          concepto: cuotasAPagar.map((c) => c.periodo_pagado || `Cuota ${c.numero_cuota ?? ""}`.trim()).join(", "),
+          concepto: cuotasAPagar
+            .map((c) => getPeriodoPagoLegible(c, matriculas.find((m) => String(m.id) === String(c.matricula_id))?.modalidad_pago))
+            .join(", "),
           numeroCuota: cuotasAPagar.length === 1 ? cuotasAPagar[0]?.numero_cuota : undefined,
-          periodo: cuotasAPagar.map((c) => c.periodo_pagado).join(", "),
+          periodo: cuotasAPagar
+            .map((c) => getPeriodoPagoLegible(c, matriculas.find((m) => String(m.id) === String(c.matricula_id))?.modalidad_pago))
+            .join(", "),
           valorEntregado: valorEntregado || undefined,
           cambio: cambio || undefined,
         },
@@ -1064,7 +1125,7 @@ export default function CajaPage() {
               : "Varios cursos";
 
           const conceptoPago = cuotasAPagar
-            .map((cuota) => cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim())
+            .map((cuota) => getPeriodoPagoLegible(cuota, matriculas.find((m) => String(m.id) === String(cuota.matricula_id))?.modalidad_pago))
             .filter(Boolean)
             .join(", ");
 
@@ -1168,9 +1229,12 @@ export default function CajaPage() {
         const tipoNormalizado = String(record?.tipo_cuota || "").toLowerCase().trim();
         const matricula = matriculas.find((m) => String(m.id) === String(record.matricula_id));
         const modalidad = normalizeModalidadPago(matricula?.modalidad_pago);
-        const tipoCuota = modalidad === "POR_CLASE" ? "por_clase" : (tipoNormalizado || "mensual");
+        const tipoCuota = record.numero_cuota === 0 ? "inscripcion" : (modalidad === "POR_CLASE" ? "por_clase" : (tipoNormalizado || "mensual"));
         if (tipoCuota === "por_clase") {
           return <Text strong style={{ color: "#d46b08" }}>{`Clase #${val}`}</Text>;
+        }
+        if (tipoCuota === "inscripcion") {
+          return <Text strong>Inscripción</Text>;
         }
         return `#${val}`;
       },
@@ -1354,7 +1418,7 @@ export default function CajaPage() {
                       type="info"
                       showIcon
                       style={{ marginBottom: 16 }}
-                      message={cuotaSeleccionada.periodo_pagado || `Cuota ${cuotaSeleccionada.numero_cuota}`}
+                      message={getPeriodoPagoLegible(cuotaSeleccionada, matriculas.find((m) => String(m.id) === String(cuotaSeleccionada.matricula_id))?.modalidad_pago)}
                       description={
                         <div>
                           <div>Valor programado: {formatCurrency(getMontoProgramado(cuotaSeleccionada))}</div>
@@ -1565,9 +1629,13 @@ export default function CajaPage() {
                         metodo: metodoPagoLabels[metodoPago],
                         fecha: dayjs().format("DD/MM/YYYY HH:mm"),
                         referencia: values.referencia || `FAC-${generarNumeroFactura()}`,
-                        concepto: cuotasAPagar.map((c) => c.periodo_pagado || `Cuota ${c.numero_cuota ?? ""}`.trim()).join(", "),
+                        concepto: cuotasAPagar
+                          .map((c) => getPeriodoPagoLegible(c, matriculas.find((m) => String(m.id) === String(c.matricula_id))?.modalidad_pago))
+                          .join(", "),
                         numeroCuota: cuotasAPagar.length === 1 ? cuotasAPagar[0]?.numero_cuota : undefined,
-                        periodo: cuotasAPagar.map((c) => c.periodo_pagado).join(", "),
+                        periodo: cuotasAPagar
+                          .map((c) => getPeriodoPagoLegible(c, matriculas.find((m) => String(m.id) === String(c.matricula_id))?.modalidad_pago))
+                          .join(", "),
                         valorEntregado: valorEntregado || undefined,
                         cambio: cambio || undefined,
                       },

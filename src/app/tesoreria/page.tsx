@@ -54,6 +54,7 @@ import {
     type MovimientoFinanciero,
 } from "@modules/finanzas/movimientos.service";
 import { MOVIMIENTO_CATEGORIAS, MOVIMIENTO_TIPO, MOVIMIENTO_TIPO_COLOR, MOVIMIENTO_TIPO_LABEL } from "@constants/movimientos";
+import { normalizeModalidadPago } from "@/types/payment-plans";
 
 const { useBreakpoint } = Grid;
 
@@ -62,6 +63,28 @@ const { RangePicker } = DatePicker;
 
 const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
+
+const getPeriodoPagoLegible = (pago: {
+    periodo_pagado?: string | null;
+    numero_cuota?: number | null;
+    tipo_cuota?: string | null;
+    matriculas?: { modalidad_pago?: string | null } | null;
+}) => {
+    const periodoActual = String(pago?.periodo_pagado || "").trim();
+    const numeroCuota = Number(pago?.numero_cuota || 0);
+    const tipoCuota = String(pago?.tipo_cuota || "").toLowerCase().trim();
+    const modalidadPago = normalizeModalidadPago(pago?.matriculas?.modalidad_pago);
+
+    if (numeroCuota === 0) {
+        return periodoActual || "Inscripción";
+    }
+
+    if (modalidadPago === "POR_CLASE" || tipoCuota === "por_clase") {
+        return `Clase #${numeroCuota}`;
+    }
+
+    return periodoActual || `Cuota ${numeroCuota}`.trim();
+};
 
 export default function TesoreriaPage() {
     const screens = useBreakpoint();
@@ -566,12 +589,12 @@ export default function TesoreriaPage() {
             const { data: pagoData, error: pagoError } = record.pago_abono_id
                 ? await supabaseBrowserClient
                     .from("pagos_abonos")
-                    .select("id, pago_id, fecha_pago, monto_abono, metodo_pago, referencia, observaciones, pagos(id, periodo_pagado, numero_cuota, estudiante_id, matriculas!pagos_matricula_id_fkey(cursos(nombre))))")
+                    .select("id, pago_id, fecha_pago, monto_abono, metodo_pago, referencia, observaciones, pagos(id, periodo_pagado, numero_cuota, tipo_cuota, estudiante_id, matriculas!pagos_matricula_id_fkey(modalidad_pago, cursos(nombre))))")
                     .eq("id", record.pago_abono_id)
                     .maybeSingle()
                 : await supabaseBrowserClient
                     .from("pagos")
-                    .select("id, fecha_pago, monto, metodo_pago, referencia, periodo_pagado, numero_cuota, estudiante_id, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
+                    .select("id, fecha_pago, monto, metodo_pago, referencia, periodo_pagado, numero_cuota, tipo_cuota, estudiante_id, matriculas!pagos_matricula_id_fkey(modalidad_pago, cursos(nombre))")
                     .eq("id", record.pago_id)
                     .maybeSingle();
 
@@ -588,6 +611,7 @@ export default function TesoreriaPage() {
                     referencia: (pagoData as any)?.referencia,
                     periodo_pagado: (pagoData as any)?.pagos?.periodo_pagado,
                     numero_cuota: (pagoData as any)?.pagos?.numero_cuota,
+                    tipo_cuota: (pagoData as any)?.pagos?.tipo_cuota,
                     estudiante_id: (pagoData as any)?.pagos?.estudiante_id,
                     matriculas: (pagoData as any)?.pagos?.matriculas,
                     abono_id: (pagoData as any)?.id,
@@ -604,7 +628,7 @@ export default function TesoreriaPage() {
                 : { data: null as any };
 
             const cursoNombre = (pago as any)?.matriculas?.cursos?.nombre || "Curso";
-            const periodoLegible = pago?.periodo_pagado || `Cuota ${pago?.numero_cuota ?? ""}`.trim();
+            const periodoLegible = getPeriodoPagoLegible(pago as any);
             const fechaPagoLegible = pago?.fecha_pago ? dayjs(pago.fecha_pago).format("DD/MM/YYYY") : dayjs().format("DD/MM/YYYY");
             const concepto = record.pago_abono_id ? `Abono a ${periodoLegible} - ${cursoNombre}` : `${periodoLegible} - ${cursoNombre}`;
 
