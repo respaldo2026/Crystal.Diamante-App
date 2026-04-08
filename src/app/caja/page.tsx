@@ -55,6 +55,7 @@ interface Matricula {
   id: string;
   curso_nombre: string;
   fecha_inicio?: string | null;
+  curso_dias_semana?: string | null;
   numero_cuotas?: number | null;
   curso_numero_cuotas?: number | null;
   duracion?: string | number | null;
@@ -120,6 +121,54 @@ const calcularFechaVencimientoCuota = (fechaInicio: string | null | undefined, n
   if (!base.isValid()) return "";
   // Cuota 1 vence el mismo día de inicio, cuota 2 un mes después, etc.
   return base.add(numeroCuota - 1, "month").format("YYYY-MM-DD");
+};
+
+const parseDiasSemana = (value?: string | null): number[] => {
+  const raw = String(value || "").toLowerCase();
+  if (!raw) return [];
+
+  const diasMap: Array<{ keys: string[]; day: number }> = [
+    { keys: ["domingo", "dom"], day: 0 },
+    { keys: ["lunes", "lun"], day: 1 },
+    { keys: ["martes", "mar"], day: 2 },
+    { keys: ["miercoles", "miércoles", "mie", "mié"], day: 3 },
+    { keys: ["jueves", "jue"], day: 4 },
+    { keys: ["viernes", "vie"], day: 5 },
+    { keys: ["sabado", "sábado", "sab", "sáb"], day: 6 },
+  ];
+
+  const result = new Set<number>();
+  diasMap.forEach(({ keys, day }) => {
+    if (keys.some((k) => raw.includes(k))) result.add(day);
+  });
+  return Array.from(result.values()).sort((a, b) => a - b);
+};
+
+const calcularFechaVencimientoClase = (
+  fechaInicio: string | null | undefined,
+  diasSemanaRaw: string | null | undefined,
+  numeroClase: number,
+) => {
+  if (!fechaInicio || !numeroClase || numeroClase < 1) return "";
+  const base = dayjs(fechaInicio).startOf("day");
+  if (!base.isValid()) return "";
+
+  const dias = parseDiasSemana(diasSemanaRaw);
+  if (!dias.length) {
+    return base.add((numeroClase - 1) * 7, "day").format("YYYY-MM-DD");
+  }
+
+  let encontradas = 0;
+  for (let i = 0; i <= 365; i += 1) {
+    const candidate = base.add(i, "day");
+    if (!dias.includes(candidate.day())) continue;
+    encontradas += 1;
+    if (encontradas === numeroClase) {
+      return candidate.format("YYYY-MM-DD");
+    }
+  }
+
+  return base.add((numeroClase - 1) * 7, "day").format("YYYY-MM-DD");
 };
 
 // Función para generar número de factura secuencial (1000-9999)
@@ -317,7 +366,7 @@ export default function CajaPage() {
         // Cargar matrículas del estudiante
         const { data: matriculasData, error: matriculasError } = await supabaseBrowserClient
           .from("matriculas")
-          .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, numero_cuotas, duracion, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
+          .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, numero_cuotas, duracion, dias_semana, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
           .eq("estudiante_id", estudianteId)
           .eq("estado", "activo");
 
@@ -327,6 +376,7 @@ export default function CajaPage() {
           id: m.id,
           curso_nombre: m.cursos?.nombre || "Sin nombre",
           fecha_inicio: m.fecha_inicio || null,
+          curso_dias_semana: m.cursos?.dias_semana || null,
           curso_numero_cuotas: m.cursos?.numero_cuotas ?? null,
           duracion: m.cursos?.duracion ?? null,
           programa_duracion: m.cursos?.programas?.duracion ?? null,
@@ -416,10 +466,27 @@ export default function CajaPage() {
           const cuotasNormalizadas = cuotasFiltradas.map((cuota: any) => {
             const matriculaId = String(cuota?.matricula_id || "");
             const resumen = resumenPlanPorMatricula.get(matriculaId);
+            const matricula = matriculasFormat.find((m) => String(m.id) === matriculaId);
+            const modalidadPago = normalizeModalidadPago(matricula?.modalidad_pago);
             const numero = Number(cuota?.numero_cuota);
 
+            const cuotaPorClaseNormalizada = modalidadPago === "POR_CLASE" && Number.isFinite(numero) && numero > 0
+              ? {
+                  ...cuota,
+                  tipo_cuota: "por_clase",
+                  periodo_pagado: `Clase #${numero}`,
+                  fecha_vencimiento:
+                    calcularFechaVencimientoClase(matricula?.fecha_inicio, matricula?.curso_dias_semana, numero)
+                    || cuota?.fecha_vencimiento,
+                }
+              : cuota;
+
+            if (modalidadPago === "POR_CLASE" && Number.isFinite(numero) && numero > 0) {
+              return cuotaPorClaseNormalizada;
+            }
+
             if (!resumen || !Number.isFinite(numero) || numero <= 0) {
-              return cuota;
+              return cuotaPorClaseNormalizada;
             }
 
             const totalCalculado = resumen.tieneInscripcion
@@ -433,11 +500,11 @@ export default function CajaPage() {
             const pareceEtiquetaCuota = /cuota/i.test(periodoActual) || !periodoActual;
 
             if (!pareceEtiquetaCuota) {
-              return cuota;
+              return cuotaPorClaseNormalizada;
             }
 
             return {
-              ...cuota,
+              ...cuotaPorClaseNormalizada,
               periodo_pagado: `Cuota ${numero} de ${total}`,
             };
           });

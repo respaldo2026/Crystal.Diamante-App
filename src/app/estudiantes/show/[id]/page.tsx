@@ -235,6 +235,50 @@ export default function StudentDetailView() {
     return fechaBase.add(numeroCuota - 1, "month").format("YYYY-MM-DD");
   };
 
+  const parseDiasSemana = (value?: string | null): number[] => {
+    const raw = String(value || "").toLowerCase();
+    if (!raw) return [];
+
+    const diasMap: Array<{ keys: string[]; day: number }> = [
+      { keys: ["domingo", "dom"], day: 0 },
+      { keys: ["lunes", "lun"], day: 1 },
+      { keys: ["martes", "mar"], day: 2 },
+      { keys: ["miercoles", "miércoles", "mie", "mié"], day: 3 },
+      { keys: ["jueves", "jue"], day: 4 },
+      { keys: ["viernes", "vie"], day: 5 },
+      { keys: ["sabado", "sábado", "sab", "sáb"], day: 6 },
+    ];
+
+    const result = new Set<number>();
+    diasMap.forEach(({ keys, day }) => {
+      if (keys.some((k) => raw.includes(k))) result.add(day);
+    });
+    return Array.from(result.values()).sort((a, b) => a - b);
+  };
+
+  const calcularFechaVencimientoClase = (matricula: any, numeroClase: number) => {
+    if (!numeroClase || numeroClase < 1) return null;
+    const fechaBase = matricula?.fecha_inicio ? dayjs(matricula.fecha_inicio).startOf("day") : null;
+    if (!fechaBase || !fechaBase.isValid()) return null;
+
+    const dias = parseDiasSemana(matricula?.cursos?.dias_semana);
+    if (!dias.length) {
+      return fechaBase.add((numeroClase - 1) * 7, "day").format("YYYY-MM-DD");
+    }
+
+    let encontradas = 0;
+    for (let i = 0; i <= 365; i += 1) {
+      const candidate = fechaBase.add(i, "day");
+      if (!dias.includes(candidate.day())) continue;
+      encontradas += 1;
+      if (encontradas === numeroClase) {
+        return candidate.format("YYYY-MM-DD");
+      }
+    }
+
+    return fechaBase.add((numeroClase - 1) * 7, "day").format("YYYY-MM-DD");
+  };
+
   const cargarDatosCompletos = useCallback(async () => {
     if (!idEstudiante) return;
 
@@ -286,20 +330,22 @@ export default function StudentDetailView() {
       );
 
       const temaPorProgramaClase = new Map<string, string>();
-      const ordenesPorPrograma = new Map<string, Set<number>>();
+      const totalTemasPorPrograma = new Map<string, number>();
       if (programaIds.length > 0) {
         const pensumData = await obtenerPensumPorProgramas(programaIds);
         (pensumData || []).forEach((ciclo: any) => {
           const programaId = String(ciclo?.programa_id || "");
           if (!programaId) return;
           const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+          totalTemasPorPrograma.set(
+            programaId,
+            Number(totalTemasPorPrograma.get(programaId) || 0) + temasCiclo.length
+          );
           temasCiclo.forEach((tema: any) => {
             const orden = Number(tema?.orden ?? 0);
             if (!Number.isFinite(orden) || orden <= 0) return;
-            const setOrdenes = ordenesPorPrograma.get(programaId) || new Set<number>();
-            setOrdenes.add(orden);
-            ordenesPorPrograma.set(programaId, setOrdenes);
-            const key = `${programaId}-${orden}`;
+            const cicloId = String(ciclo?.id || ciclo?.numero_ciclo || "0");
+            const key = `${programaId}-${cicloId}-${orden}`;
             if (temaPorProgramaClase.has(key)) return;
             temaPorProgramaClase.set(key, String(tema?.nombre_curso || tema?.titulo || `Clase ${orden}`));
           });
@@ -307,8 +353,8 @@ export default function StudentDetailView() {
       }
 
       const clasesPorProgramaObj: Record<string, number> = {};
-      ordenesPorPrograma.forEach((ordenes, programaId) => {
-        clasesPorProgramaObj[programaId] = ordenes.size;
+      totalTemasPorPrograma.forEach((totalTemas, programaId) => {
+        clasesPorProgramaObj[programaId] = totalTemas;
       });
       setTotalClasesPorPrograma(clasesPorProgramaObj);
 
@@ -373,7 +419,10 @@ export default function StudentDetailView() {
             const programaIdCurso = String(cursoData?.programa_id || "");
             const temaDesdePensum =
               claseNumero && programaIdCurso
-                ? temaPorProgramaClase.get(`${programaIdCurso}-${claseNumero}`) || null
+                ? (
+                    Array.from(temaPorProgramaClase.entries()).find(([k]) => k.startsWith(`${programaIdCurso}-`) && k.endsWith(`-${claseNumero}`))?.[1]
+                    || null
+                  )
                 : null;
             const temaFinal = temaSesionEsGenerico ? temaDesdePensum || temaSesion || null : temaSesion;
 
@@ -1198,7 +1247,20 @@ export default function StudentDetailView() {
     for (let ciclo = 0; ciclo <= totalPeriodos; ciclo += 1) {
       const pago = pagosMap.get(ciclo);
       if (pago) {
-        pagosEsperados.push(pago);
+        const fechaVencimientoAjustada = ciclo === 0
+          ? (pago?.fecha_vencimiento || null)
+          : (esPorClase
+            ? (calcularFechaVencimientoClase(record, ciclo) || pago?.fecha_vencimiento || null)
+            : (pago?.fecha_vencimiento || calcularFechaVencimientoCuota(record, ciclo)));
+        pagosEsperados.push({
+          ...pago,
+          fecha_vencimiento: fechaVencimientoAjustada,
+          periodo_pagado: ciclo === 0
+            ? "Inscripción"
+            : esPorClase
+              ? `Clase #${ciclo}`
+              : (pago?.periodo_pagado || `Ciclo mensual ${ciclo} de ${totalCiclos}`),
+        });
         continue;
       }
 
@@ -1206,7 +1268,11 @@ export default function StudentDetailView() {
         id: `pendiente-${record.id}-${ciclo}`,
         created_at: null,
         fecha_pago: null,
-        fecha_vencimiento: ciclo === 0 ? null : calcularFechaVencimientoCuota(record, ciclo),
+        fecha_vencimiento: ciclo === 0
+          ? null
+          : (esPorClase
+            ? calcularFechaVencimientoClase(record, ciclo)
+            : calcularFechaVencimientoCuota(record, ciclo)),
         numero_cuota: ciclo,
         matricula_id: record.id,
         matriculas: record.matriculas ?? null,
