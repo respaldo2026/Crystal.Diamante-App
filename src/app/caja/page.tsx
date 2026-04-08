@@ -235,7 +235,6 @@ export default function CajaPage() {
   const [configuracion, setConfiguracion] = useState<any>(null);
   const [valorEntregado, setValorEntregado] = useState<number | null>(null);
   const [mediosPago, setMediosPago] = useState<any[]>([]);
-  const [impresionLocalDisponible] = useState(true);
 
   const intentarImprimirTicket = useCallback(async (ticketData: any) => {
     try {
@@ -1327,18 +1326,6 @@ export default function CajaPage() {
             />
 
             <Divider style={{ margin: "12px 0" }} />
-
-            <Alert
-              type={impresionLocalDisponible ? "success" : "warning"}
-              showIcon
-              style={{ marginBottom: 16 }}
-              message={impresionLocalDisponible ? "Impresión local Epson activa" : "Impresión local no disponible"}
-              description={
-                impresionLocalDisponible
-                  ? "La caja usará la impresión local del navegador. Configura la Epson TM-T20II como impresora predeterminada de Windows y activa en el driver la apertura del cajón al imprimir en efectivo."
-                  : "No se detectó impresión local en esta estación."
-              }
-            />
 
             <Form form={form} layout="vertical">
               {cuotasSeleccionadas.length === 1 && (() => {

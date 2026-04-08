@@ -39,6 +39,7 @@ Permitir popups para:
 Usar este script:
 
 - abrir-caja-kiosco.ps1
+- abrir-caja-kiosco.bat
 
 El script abre Edge o Chrome con:
 
@@ -46,6 +47,30 @@ El script abre Edge o Chrome con:
 - --app=https://app.crystaldiamante.com/caja
 
 Eso hace que el navegador imprima usando la impresora predeterminada sin mostrar el diálogo.
+
+Si el empleado va a abrir Caja con doble clic, usa preferiblemente:
+
+- abrir-caja-kiosco.bat
+
+## 4.1 Crear acceso directo para empleados
+
+Usar este script en la máquina de caja:
+
+- crear-acceso-directo-caja.ps1
+- instalar-caja-kiosco.bat
+
+Ese script crea dos accesos directos:
+
+- uno en el escritorio
+- otro en el inicio automático de Windows
+
+Así el empleado puede abrir Caja con doble clic o dejar que se abra sola al iniciar sesión.
+
+Si quieres hacerlo con el método más simple para el personal, usa:
+
+- instalar-caja-kiosco.bat
+
+Ese archivo ya no depende de otros scripts al lado. Puede ejecutarse solo y deja todo listo con doble clic.
 
 ## 5. Prueba recomendada
 
@@ -61,7 +86,8 @@ Eso hace que el navegador imprima usando la impresora predeterminada sin mostrar
 Si la estación será solo de caja:
 
 1. Crear un acceso directo al script abrir-caja-kiosco.ps1.
-2. Colocarlo en la carpeta Inicio del usuario.
+2. O ejecutar crear-acceso-directo-caja.ps1 para que lo haga automáticamente.
+3. O usar instalar-caja-kiosco.bat, que crea además un lanzador estable en LocalAppData.
 
 Ruta típica:
 
