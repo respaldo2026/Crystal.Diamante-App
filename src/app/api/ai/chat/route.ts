@@ -2608,7 +2608,7 @@ function isDurationQuestion(message: string): boolean {
 
 function isClassFrequencyQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia|las clases son cada)\b/i.test(text);
+  return /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia|las clases son cada|cuantos dias a la semana|dias a la semana|cuantos dias ven clase|cuantos dias son clase)\b/i.test(text);
 }
 
 function isCertificationQuestion(message: string): boolean {
@@ -3878,6 +3878,8 @@ function buildScheduleHumanReply(
   schedule: string
 ): string {
   const tone = pickHumanToneSeed(message, history);
+  const asksClassFrequency = isClassFrequencyQuestion(message);
+  const frequency = inferClassFrequencyFromSchedule(schedule);
 
   // Revisar qué temas ya se cubrieron en el historial reciente para no repetirlos
   const normalizedHistory = normalizeForMatch(
@@ -3896,12 +3898,26 @@ function buildScheduleHumanReply(
     followup = "💰 ¿Quieres que te comparta también la *inversión*?";
   }
 
+  if (asksClassFrequency) {
+    followup = "Si quieres, también te confirmo cuántas *clases ves al mes* con ese horario.";
+  }
+
   if (tone === 0) {
+    if (asksClassFrequency) {
+      return `¡Claro! Te lo confirmo 🙌\n\n📚 *${detectedProgram.nombre}*\n✅ *Frecuencia:* ${frequency}\n🕓 *Horario:* ${schedule}\n📅 *Próximo inicio:* ${nextStart}\n\n${followup}`;
+    }
     return `¡Claro! Te cuento de una 🙌\n\n📚 *${detectedProgram.nombre}*\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}`;
   }
 
   if (tone === 1) {
+    if (asksClassFrequency) {
+      return `Perfecto, aquí va rápido 👌\n\nPara *${detectedProgram.nombre}* ves clase *${frequency}*.\n🕓 *Horario:* ${schedule}\n📅 *Próximo inicio:* ${nextStart}\n\n${followup}`;
+    }
     return `Perfecto, aquí va rápido 👌\n\nPara *${detectedProgram.nombre}* tenemos:\n📅 *Inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}`;
+  }
+
+  if (asksClassFrequency) {
+    return `Súper, te confirmo ese dato ✨\n\n📚 *${detectedProgram.nombre}*\n✅ *Frecuencia:* ${frequency}\n🕓 *Horario:* ${schedule}\n📅 *Próximo inicio:* ${nextStart}\n\n${followup}`;
   }
 
   return `Súper, te confirmo ese dato ✨\n\n📚 *${detectedProgram.nombre}*\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n${followup}`;
