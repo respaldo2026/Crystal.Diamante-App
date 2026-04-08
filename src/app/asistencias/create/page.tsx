@@ -360,7 +360,34 @@ export default function TomarAsistencia() {
       const guardarTemaSesion = async () => {
         if (!nombreClase) return;
 
-        // 1. Buscar sesión existente usando limit(1) para evitar error 400 de maybeSingle con múltiples filas
+        const payloadSesion = {
+          curso_id: cursoSeleccionado,
+          profesor_id: cursoSeleccionadoData?.profesor_id || null,
+          fecha: fechaSesion,
+          horas_dictadas: HORAS_POR_SESION,
+          tema_visto: detalleClase,
+          observaciones: observacionSesion,
+        };
+
+        const { error: upsertError } = await supabaseBrowserClient
+          .from("sesiones_clase")
+          .upsert(payloadSesion, { onConflict: "curso_id,fecha" });
+
+        if (!upsertError) {
+          return;
+        }
+
+        const upsertMessage = String(upsertError.message || "").toLowerCase();
+        const constraintMissing = upsertMessage.includes("no unique")
+          || upsertMessage.includes("there is no unique")
+          || upsertMessage.includes("constraint")
+          || upsertMessage.includes("on conflict");
+
+        if (!constraintMissing) {
+          throw upsertError;
+        }
+
+        // Fallback temporal para entornos donde aún no se haya aplicado el constraint único.
         const { data: sesionesExistentes, error: errBuscar } = await supabaseBrowserClient
           .from("sesiones_clase")
           .select("id")
@@ -390,14 +417,7 @@ export default function TomarAsistencia() {
         // 2b. No existe → insertar, ignorando 409 si acaso hay race condition
         const { error: errInsert } = await supabaseBrowserClient
           .from("sesiones_clase")
-          .insert({
-            curso_id: cursoSeleccionado,
-            profesor_id: cursoSeleccionadoData?.profesor_id || null,
-            fecha: fechaSesion,
-            horas_dictadas: HORAS_POR_SESION,
-            tema_visto: detalleClase,
-            observaciones: observacionSesion,
-          });
+          .insert(payloadSesion);
 
         // Si hay 409 (conflicto de unicidad por race condition), hacer update como fallback
         if (errInsert) {

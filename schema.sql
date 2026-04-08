@@ -148,7 +148,8 @@ CREATE TABLE IF NOT EXISTS sesiones_clase (
     horas_dictadas NUMERIC(5,2),
     tema_visto TEXT,
     estado_pago TEXT DEFAULT 'pendiente' CHECK (estado_pago IN ('pendiente', 'pagado')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(curso_id, fecha)
 );
 
 -- 9. TABLA ASISTENCIAS
