@@ -34,7 +34,6 @@ import {
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { generarTicketPagoBlob, abrirTicketPagoDesdeBlob, imprimirTicketTermicoTM20II } from "@utils/pago-ticket";
-import { abrirCajonConQzTray, imprimirTicketConQzTray, verificarQzTrayDisponible } from "@utils/qz-tray";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
@@ -236,20 +235,16 @@ export default function CajaPage() {
   const [configuracion, setConfiguracion] = useState<any>(null);
   const [valorEntregado, setValorEntregado] = useState<number | null>(null);
   const [mediosPago, setMediosPago] = useState<any[]>([]);
-  const [qzTrayDisponible, setQzTrayDisponible] = useState(false);
+  const [impresionLocalDisponible] = useState(true);
 
-  const intentarImprimirTicket = useCallback(async (ticketData: any, printerName: string) => {
+  const intentarImprimirTicket = useCallback(async (ticketData: any) => {
     try {
-      const impresoPorQz = await imprimirTicketConQzTray(ticketData, printerName);
+      const placeholder = window.open("", "_blank");
 
-      if (!impresoPorQz) {
-        const placeholder = window.open("", "_blank");
-
-        if (placeholder) {
-          await imprimirTicketTermicoTM20II(ticketData, placeholder);
-        } else {
-          await imprimirTicketTermicoTM20II(ticketData);
-        }
+      if (placeholder) {
+        await imprimirTicketTermicoTM20II(ticketData, placeholder);
+      } else {
+        await imprimirTicketTermicoTM20II(ticketData);
       }
 
       return true;
@@ -334,23 +329,6 @@ export default function CajaPage() {
     cargarConfiguracion();
     cargarMediosPago();
   }, [cargarEstudiantes, cargarConfiguracion, cargarMediosPago]);
-
-  useEffect(() => {
-    let activo = true;
-
-    const validarQzTray = async () => {
-      const disponible = await verificarQzTrayDisponible();
-      if (activo) {
-        setQzTrayDisponible(disponible);
-      }
-    };
-
-    void validarQzTray();
-
-    return () => {
-      activo = false;
-    };
-  }, []);
 
   // Generar número de factura cuando se selecciona una cuota
   useEffect(() => {
@@ -851,7 +829,6 @@ export default function CajaPage() {
         const configTicket = configActual || configuracion;
 
         if (montoAbono > 0) {
-          const printerName = String(configTicket?.impresora_pos || configTicket?.impresora_termica || "EPSON TM-T20II");
           const ticketData = {
             academia: {
               nombre: configTicket?.nombre_academia || "Academia Crystal Diamante",
@@ -882,16 +859,9 @@ export default function CajaPage() {
             },
           };
 
-          await intentarImprimirTicket(ticketData, printerName);
+          await intentarImprimirTicket(ticketData);
 
           const blob = await generarTicketPagoBlob(ticketData);
-
-          if (metodoPago === "efectivo") {
-            const cajonAbiertoPorQz = await abrirCajonConQzTray(printerName);
-            if (!cajonAbiertoPorQz) {
-              abrirCajonRegistrador();
-            }
-          }
 
           try {
             const { publicUrl } = await subirTicketPago({
@@ -1072,17 +1042,9 @@ export default function CajaPage() {
         },
       };
 
-      const printerName = String(configTicket?.impresora_pos || configTicket?.impresora_termica || "EPSON TM-T20II");
-      await intentarImprimirTicket(ticketData, printerName);
+      await intentarImprimirTicket(ticketData);
 
       const blob = await generarTicketPagoBlob(ticketData);
-
-      if (metodoPago === "efectivo") {
-        const cajonAbiertoPorQz = await abrirCajonConQzTray(printerName);
-        if (!cajonAbiertoPorQz) {
-          abrirCajonRegistrador();
-        }
-      }
 
       // Subir ticket a storage y asociarlo a todos los pagos del lote
       if (pagosActualizados.length > 0) {
@@ -1177,35 +1139,6 @@ export default function CajaPage() {
     valorEntregado,
     cambio,
   ]);
-
-  const abrirCajonRegistrador = () => {
-    try {
-      // Comando ESC/POS para abrir cajón: ESC p m t1 t2
-      // ESC = 27, p = 112, m = 0 (pin 2), t1 = 50 (tiempo on en ms), t2 = 50 (tiempo off en ms)
-      const comando = String.fromCharCode(27, 112, 0, 50, 50);
-      
-      // Crear un iframe oculto para enviar el comando a la impresora
-      const iframe = document.createElement("iframe");
-      iframe.style.display = "none";
-      document.body.appendChild(iframe);
-      
-      const iframeDoc = iframe.contentWindow?.document;
-      if (iframeDoc) {
-        iframeDoc.open();
-        iframeDoc.write(`<pre>${comando}</pre>`);
-        iframeDoc.close();
-        
-        setTimeout(() => {
-          iframe.contentWindow?.print();
-          setTimeout(() => document.body.removeChild(iframe), 1000);
-        }, 100);
-      }
-      
-      console.log("Comando de apertura de cajón enviado");
-    } catch (error) {
-      console.error("Error abriendo cajón registrador:", error);
-    }
-  };
 
   const cuotasColumns = [
     {
@@ -1396,14 +1329,14 @@ export default function CajaPage() {
             <Divider style={{ margin: "12px 0" }} />
 
             <Alert
-              type={qzTrayDisponible ? "success" : "warning"}
+              type={impresionLocalDisponible ? "success" : "warning"}
               showIcon
               style={{ marginBottom: 16 }}
-              message={qzTrayDisponible ? "Impresion directa Epson disponible" : "Impresion local no detectada"}
+              message={impresionLocalDisponible ? "Impresión local Epson activa" : "Impresión local no disponible"}
               description={
-                qzTrayDisponible
-                  ? "La caja intentara imprimir directo en la Epson TM-T20II y abrir el cajon en pagos en efectivo."
-                  : "Si QZ Tray no esta instalado o no detecta la impresora, se usara el dialogo normal del navegador."
+                impresionLocalDisponible
+                  ? "La caja usará la impresión local del navegador. Configura la Epson TM-T20II como impresora predeterminada de Windows y activa en el driver la apertura del cajón al imprimir en efectivo."
+                  : "No se detectó impresión local en esta estación."
               }
             />
 
