@@ -4732,9 +4732,21 @@ function hasLinkOrAppAccessIntent(message: string): boolean {
 
   const linkToken = /\b(link|lin|lik|enlace|url)\b/i.test(text);
   const accessToken = /\b(no puedo|no abre|no me abre|no funciona|problema|error|ingresar|entrar|acceder|abrir)\b/i.test(text);
-  const appToken = /\b(app|aplicacion|aplicacion|portal)\b/i.test(text);
+  const appToken = /\b(app|aplicacion|portal|plataforma|quiz|quizz|cuestionario|evaluacion)\b/i.test(text);
 
   return (linkToken && (accessToken || appToken)) || /\bno puedo abrir\b/i.test(text);
+}
+
+function hasQuizPlatformAccessIntent(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const quizToken = /\b(quiz|quizz|cuestionario|evaluacion|evaluacione?s)\b/i.test(text);
+  const platformToken = /\b(plataforma|app|portal)\b/i.test(text);
+  const accessToken = /\b(link|enlace|url|ingresar|entrar|acceder|abrir|usuario|clave|contrasena|password)\b/i.test(text);
+  const contextualToken = /\b(para\s+lo\s+del|es\s+para|lo\s+del)\b/i.test(text);
+
+  return (quizToken && (platformToken || accessToken || contextualToken)) || (platformToken && quizToken);
 }
 
 function hasRecentLinkSupportContext(history: Array<{ user: string; agent: string }>): boolean {
@@ -4742,7 +4754,7 @@ function hasRecentLinkSupportContext(history: Array<{ user: string; agent: strin
   return recent.some((turn) => {
     const combined = `${turn?.user || ""} ${turn?.agent || ""}`;
     const normalized = normalizeForMatch(combined);
-    return /\b(link|lin|lik|enlace|app|aplicacion|portal|usuario|cedula|identificacion)\b/i.test(normalized);
+    return /\b(link|lin|lik|enlace|app|aplicacion|portal|plataforma|quiz|quizz|cuestionario|usuario|clave|cedula|identificacion|ingreso|acceso)\b/i.test(normalized);
   });
 }
 
@@ -4774,11 +4786,14 @@ async function buildLinkAccessDirectResponse(
 ): Promise<string | null> {
   const appUrl = "https://app.crystaldiamante.com";
   const isLinkIntent = hasLinkOrAppAccessIntent(userMessage);
+  const isQuizPlatformIntent = hasQuizPlatformAccessIntent(userMessage);
   const hasLinkContext = hasRecentLinkSupportContext(history);
   const idRequestedForAccess = wasAppAccessIdRequestedRecently(history);
+  const shouldHandleAccessSupport = isLinkIntent || isQuizPlatformIntent || (hasLinkContext && isQuizPlatformIntent);
+  const accessLabel = isQuizPlatformIntent ? "la plataforma y el quiz" : "la app";
 
   const directId = extractIdentificationFromText(userMessage) || extractIdentificationLoose(userMessage);
-  const shouldTryIdentification = Boolean(directId && (isLinkIntent || (hasLinkContext && idRequestedForAccess)));
+  const shouldTryIdentification = Boolean(directId && (shouldHandleAccessSupport || (hasLinkContext && idRequestedForAccess)));
 
   if (shouldTryIdentification && directId) {
     const { data: profile, error } = await supabase
@@ -4795,16 +4810,20 @@ async function buildLinkAccessDirectResponse(
     if (profile) {
       const userLogin = String(profile?.email || "").trim();
       if (userLogin) {
-        return `Perfecto. Este es el link de la app: ${appUrl}\n\nTu usuario es: ${userLogin}\nTu clave es tu número de cédula: ${directId}\n\n¿Te funcionó el ingreso?`;
+        return `Perfecto. Si es para ingresar a ${accessLabel}, entra aquí: ${appUrl}\n\nTu usuario es: ${userLogin}\nTu clave es tu número de cédula: ${directId}\n\nSi al entrar no te aparece el quiz, me avisas y lo revisamos.`;
       }
 
-      return `Ya validé tu cédula. Este es el link de la app: ${appUrl}\n\nTu clave es tu número de cédula: ${directId}\nSi no recuerdas tu usuario, te ayudo a recuperarlo con Secretaría.\n\n¿Te funcionó el ingreso?`;
+      return `Ya validé tu cédula. Si es para ingresar a ${accessLabel}, entra aquí: ${appUrl}\n\nTu clave es tu número de cédula: ${directId}\nSi no recuerdas tu usuario, te ayudo a recuperarlo con Secretaría.\n\nSi al entrar no te aparece el quiz, me avisas y lo revisamos.`;
     }
 
-    return `No encontré un estudiante con la cédula ${directId}.\nEste es el link de la app: ${appUrl}\n\nRevísame el número de cédula (solo números) y te confirmo tu usuario.\nTu clave es tu número de cédula.`;
+    return `No encontré un estudiante con la cédula ${directId}.\nSi es para ingresar a ${accessLabel}, usa este link: ${appUrl}\n\nRevísame el número de cédula (solo números) y te confirmo tu usuario.\nTu clave es tu número de cédula.`;
   }
 
-  if (isLinkIntent) {
+  if (shouldHandleAccessSupport) {
+    if (isQuizPlatformIntent) {
+      return `Sí, si es para lo del quiz debes ingresar por aquí: ${appUrl}\n\nTu usuario es el correo con el que quedaste registrado y tu clave es tu número de cédula.\nSi no recuerdas tu usuario, compárteme tu número de cédula (solo números) y te lo confirmo.`;
+    }
+
     return `¿Te refieres al link de la app?\nAquí te lo dejo: ${appUrl}\n\nSi necesitas tu usuario, compárteme tu número de cédula (solo números) y te lo confirmo.\nTu clave es tu número de cédula.`;
   }
 
