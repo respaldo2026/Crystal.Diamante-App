@@ -2850,6 +2850,10 @@ function shouldAttachMediaSuggestion(userMessage: string, responseText: string):
   if (isNeutralAcknowledgement(userMessage)) return false;
   if (isShortAffirmativeReply(userMessage) && !/[?¿]/.test(userMessage)) return false;
   if (isRepeatedInfoComplaint(userMessage)) return false;
+  if (detectUserIntent(userMessage) === "materiales") return false;
+  if (isKitPurchaseQuestion(userMessage)) return false;
+  if (isKitContentsQuestion(userMessage)) return false;
+  if (isMaterialsOwnershipQuestion(userMessage)) return false;
 
   const normalizedResponse = normalizeForMatch(responseText || "");
   if (/\b(prefieres\s+que\s+empecemos|te\s+refieres\s+a|en\s+que\s+te\s+puedo\s+ayudar)\b/i.test(normalizedResponse)) {
@@ -2961,6 +2965,36 @@ function buildKitContentsReply(detectedProgram: any | null): string {
   const programLabel = detectedProgram?.nombre ? ` para *${detectedProgram.nombre}*` : "";
 
   return `¡Claro! 🙌 Te cuento qué incluye el *kit mensual*${programLabel}:\n\n✅ Limas y buffer\n✅ Palitos de naranjo y/o herramientas básicas de preparación\n✅ Base, gel de construcción y top coat\n✅ Deshidratador/prep y primer\n✅ Tips o formas (según la clase)\n✅ Decoración básica del mes\n✅ Insumos de práctica para las técnicas del ciclo\n\n📌 El kit cubre aproximadamente el *70%* de lo que se usa en ese mes.\n✅ Los materiales del kit son *totalmente tuyos* y *te los llevas*.\n\nSi quieres, te detallo exactamente qué se usa en el *primer mes*.`;
+}
+
+function buildMaterialsDirectResponse(
+  message: string,
+  detectedProgram: any | null,
+  lastAgentMessage: string,
+  inferredPendingTopic: string
+): string | null {
+  const asksKitPurchase = isKitPurchaseQuestion(message);
+  const asksKitContents = isKitContentsQuestion(message);
+  const asksMaterialsOwnership = isMaterialsOwnershipQuestion(message);
+  const asksKitRescue = isKitRescueClarification(message, lastAgentMessage, inferredPendingTopic);
+
+  if (asksKitRescue) {
+    return "¡Sí! 🙌 Los materiales del kit son *totalmente tuyos* y *te los llevas*. Además, no necesitas comprar todo por fuera al inicio. ¿Quieres que te diga qué trae el kit del primer mes?";
+  }
+
+  if (asksMaterialsOwnership) {
+    return "¡Sí! 🙌 Los materiales del kit son *totalmente tuyos* y *te los llevas*. Lo que te entregamos para tu práctica queda para ti. ¿Quieres que te detalle qué incluye el kit del primer mes?";
+  }
+
+  if (asksKitContents) {
+    return buildKitContentsReply(detectedProgram);
+  }
+
+  if (asksKitPurchase) {
+    return "¡Buena pregunta! 👌\n\nNo necesitas comprar todo por fuera: te entregamos un *kit mensual* que cubre la mayor parte de materiales.\n\n✅ Esos materiales del kit son *totalmente tuyos* y *te los llevas*.\n\n¿Quieres que te detalle qué trae el kit del primer mes?";
+  }
+
+  return null;
 }
 
 function hasProgramCorrectionSignal(message: string): boolean {
@@ -3919,9 +3953,21 @@ function buildIntentFocusedDirectResponse(
     return `${greeting} 😊 Bienvenid@ a *${academyName}* 💎\n\nSi quieres, te cuento *horarios*, *precios* o *inscripción* del curso que te interese.`;
   }
 
+  const lastAgentForFlow = history[history.length - 1]?.agent || "";
+  const inferredPendingTopic = inferPendingTopicFromHistory(history);
+  const prioritizedMaterialsResponse = buildMaterialsDirectResponse(
+    message,
+    detectedProgram,
+    lastAgentForFlow,
+    inferredPendingTopic
+  );
+  if (prioritizedMaterialsResponse) {
+    return prioritizedMaterialsResponse;
+  }
+
   if (isRepeatedInfoComplaint(message)) {
     const programLabel = detectedProgram?.nombre ? ` de *${detectedProgram.nombre}*` : "";
-    const pendingTopic = inferPendingTopicFromHistory(history);
+    const pendingTopic = inferredPendingTopic;
 
     if (/temario|clase\s+por\s+clase|contenido/.test(normalizeForMatch(pendingTopic))) {
       return `Tienes razón, eso ya te lo había dicho 😊\n\nTe respondo más puntual${programLabel}: ¿quieres que te comparta el *temario* general o el *detalle clase por clase*?`;
@@ -4009,7 +4055,6 @@ function buildIntentFocusedDirectResponse(
 
   let intent = detectUserIntent(message);
   const normalizedMessage = normalizeForMatch(message);
-  const lastAgentForFlow = history[history.length - 1]?.agent || "";
   const normalizedLastAgentForFlow = normalizeForMatch(lastAgentForFlow);
 
   const paymentOptionSelection = extractPaymentOptionSelection(message);
@@ -4137,7 +4182,6 @@ function buildIntentFocusedDirectResponse(
     }
   }
 
-  const inferredPendingTopic = inferPendingTopicFromHistory(history);
   const hasRecentPricingContext = /\b(modalidades?|mensual\s+opcion|por\s+clase|inscripci[oó]n|mensualidad|presupuesto|inversion|precio)\b/i
     .test(`${normalizeForMatch(lastAgentForFlow)} ${normalizeForMatch(inferredPendingTopic || "")}`);
 
