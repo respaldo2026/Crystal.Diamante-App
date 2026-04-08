@@ -238,6 +238,28 @@ export default function CajaPage() {
   const [mediosPago, setMediosPago] = useState<any[]>([]);
   const [qzTrayDisponible, setQzTrayDisponible] = useState(false);
 
+  const intentarImprimirTicket = useCallback(async (ticketData: any, printerName: string) => {
+    try {
+      const impresoPorQz = await imprimirTicketConQzTray(ticketData, printerName);
+
+      if (!impresoPorQz) {
+        const placeholder = window.open("", "_blank");
+
+        if (placeholder) {
+          await imprimirTicketTermicoTM20II(ticketData, placeholder);
+        } else {
+          await imprimirTicketTermicoTM20II(ticketData);
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("No se pudo imprimir el ticket:", error);
+      messageApi.warning("El pago se registró, pero no se pudo abrir la ventana de impresión. Revisa el bloqueador de ventanas emergentes.");
+      return false;
+    }
+  }, [messageApi]);
+
   const totalAPagar = useMemo(
     () => {
       if (cuotasSeleccionadas.length === 1) {
@@ -860,16 +882,7 @@ export default function CajaPage() {
             },
           };
 
-          const impresoPorQz = await imprimirTicketConQzTray(ticketData, printerName);
-
-          if (!impresoPorQz) {
-            const placeholder = window.open("", "_blank");
-            if (placeholder) {
-              await imprimirTicketTermicoTM20II(ticketData, placeholder);
-            } else {
-              await imprimirTicketTermicoTM20II(ticketData);
-            }
-          }
+          await intentarImprimirTicket(ticketData, printerName);
 
           const blob = await generarTicketPagoBlob(ticketData);
 
@@ -1060,17 +1073,7 @@ export default function CajaPage() {
       };
 
       const printerName = String(configTicket?.impresora_pos || configTicket?.impresora_termica || "EPSON TM-T20II");
-      const impresoPorQz = await imprimirTicketConQzTray(ticketData, printerName);
-
-      if (!impresoPorQz) {
-        const placeholder = window.open("", "_blank");
-
-        if (placeholder) {
-          await imprimirTicketTermicoTM20II(ticketData, placeholder);
-        } else {
-          await imprimirTicketTermicoTM20II(ticketData);
-        }
-      }
+      await intentarImprimirTicket(ticketData, printerName);
 
       const blob = await generarTicketPagoBlob(ticketData);
 
@@ -1169,6 +1172,7 @@ export default function CajaPage() {
     estudianteSeleccionado,
     totalAPagar,
     configuracion,
+    intentarImprimirTicket,
     matriculas,
     valorEntregado,
     cambio,
