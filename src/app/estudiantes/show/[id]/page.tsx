@@ -334,7 +334,7 @@ export default function StudentDetailView() {
 
           const sesionesQuery = supabaseBrowserClient
             .from("sesiones_clase")
-            .select("curso_id, fecha, tema_visto, observaciones")
+            .select("curso_id, fecha, tema_visto")
             .in("curso_id", cursoIds);
 
           const { data: sesionesData } = await (fechaMin && fechaMax
@@ -349,7 +349,7 @@ export default function StudentDetailView() {
               temaPorCursoFecha.set(key, sesion?.tema_visto || "");
               claseNumeroPorCursoFecha.set(
                 key,
-                extractClassNumber(sesion?.observaciones || sesion?.tema_visto || "")
+                extractClassNumber(sesion?.tema_visto || "")
               );
             }
           });
@@ -1167,10 +1167,18 @@ export default function StudentDetailView() {
       });
 
     const modalidadPago = normalizeModalidadPago(record?.modalidad_pago);
-    const esPorClase = modalidadPago === "POR_CLASE";
+    const esPorClase = modalidadPago === "POR_CLASE" || cuotasMatricula.some((p) => {
+      const modalidadPagoPago = normalizeModalidadPago(p?.matriculas?.modalidad_pago);
+      const periodo = String(p?.periodo_pagado || p?.observaciones || "").toLowerCase();
+      return modalidadPagoPago === "POR_CLASE" || periodo.includes("clase");
+    });
     const totalCiclos = Math.max(obtenerDuracionMeses(record), 0);
     const totalClasesPrograma = Math.max(obtenerTotalClasesPrograma(record), 0);
-    const totalPeriodos = esPorClase ? totalClasesPrograma : totalCiclos;
+    const maxClasePagada = cuotasMatricula.reduce((max, p) => {
+      const n = parseNumeroCuota(p);
+      return n && n > max ? n : max;
+    }, 0);
+    const totalPeriodos = esPorClase ? Math.max(totalClasesPrograma, maxClasePagada) : totalCiclos;
     const valorPorClase = obtenerValorPorClase(record);
     const pagosMap = new Map<number, Pago>();
     cuotasMatricula.forEach((p) => {
