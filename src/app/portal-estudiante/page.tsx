@@ -934,6 +934,17 @@ export default function PortalEstudiante() {
 
   const renderFinanciero = () => {
     const formatPagoCOP = (valor?: number | null) => `$ ${Number(valor || 0).toLocaleString()}`;
+    const getConceptoPago = (pago: any) => {
+      const matricula = matriculas.find((m: any) => String(m?.id) === String(pago?.matricula_id));
+      const modalidad = normalizeModalidadPago(matricula?.modalidad_pago);
+      const numero = Number(pago?.numero_cuota || 0);
+
+      if (modalidad === "POR_CLASE" && Number.isFinite(numero) && numero > 0) {
+        return `Clase #${numero}`;
+      }
+
+      return pago?.periodo_pagado || `Cuota ${numero || ""}`.trim();
+    };
     const pendientes = pagosConPendientes
       .filter((p) => {
         const visibleStatus = getVisiblePaymentStatusWithGrace(p);
@@ -973,7 +984,7 @@ export default function PortalEstudiante() {
                     render: (t, r: any) => {
                       const vencido = isVencido(r);
                       const style = !vencido ? { color: '#8c8c8c', fontSize: '13px' } : {};
-                      return <span style={style}>{t || `Cuota ${r.numero_cuota}`}</span>;
+                      return <span style={style}>{getConceptoPago(r)}</span>;
                     } 
                   },
                   {
@@ -1044,7 +1055,7 @@ export default function PortalEstudiante() {
                 size="small"
                scroll={{ x: 520 }}
                 columns={[
-                  { title: 'Concepto', dataIndex: 'periodo_pagado', render: (t, r: any) => t || `Cuota ${r.numero_cuota}` },
+                  { title: 'Concepto', dataIndex: 'periodo_pagado', render: (_, r: any) => getConceptoPago(r) },
                   {
                     title: 'Plan',
                     render: (_, r: any) => {

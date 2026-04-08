@@ -203,7 +203,7 @@ export async function sincronizarIngresosDesdePagos(createdBy?: string | null) {
 
     const { data: pagosPagados, error: pagosError } = await supabaseBrowserClient
         .from("pagos")
-        .select("id, fecha_pago, monto, metodo_pago, referencia, observaciones, estudiante_id, ticket_url, periodo_pagado, numero_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
+        .select("id, fecha_pago, monto, metodo_pago, referencia, observaciones, estudiante_id, ticket_url, periodo_pagado, numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(modalidad_pago, cursos(nombre))")
         .eq("estado", "pagado")
         .not("fecha_pago", "is", null);
 
@@ -218,7 +218,13 @@ export async function sincronizarIngresosDesdePagos(createdBy?: string | null) {
         .filter((p) => Number(p?.monto || 0) > 0)
         .map((p) => {
             const fecha = String(p.fecha_pago).slice(0, 10);
-            const periodo = p.periodo_pagado || `Cuota ${p.numero_cuota ?? ""}`.trim();
+            const modalidadPago = String(p?.matriculas?.modalidad_pago || "").toUpperCase().trim();
+            const tipoCuota = String(p?.tipo_cuota || "").toLowerCase().trim();
+            const numeroCuota = Number(p?.numero_cuota || 0);
+            const esPorClase = modalidadPago === "POR_CLASE" || tipoCuota === "por_clase";
+            const periodo = esPorClase
+                ? `Clase #${numeroCuota || ""}`.trim()
+                : (p.periodo_pagado || `Cuota ${p.numero_cuota ?? ""}`.trim());
             const curso = p?.matriculas?.cursos?.nombre || "Curso";
             const textoPeriodo = String(periodo || "").toLowerCase();
             const esInscripcion = textoPeriodo.includes("inscrip") || textoPeriodo.includes("matric") || Number(p.numero_cuota) === 0;

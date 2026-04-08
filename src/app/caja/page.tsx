@@ -148,6 +148,11 @@ const metodoPagoLabels: Record<MetodoPago, string> = {
   qr: "Código QR",
 };
 
+const normalizeModalidadPago = (value?: string | null) => {
+  const raw = String(value || "").toUpperCase().trim();
+  return raw === "POR_CLASE" ? "POR_CLASE" : "MENSUAL";
+};
+
 export default function CajaPage() {
   const { message: messageApi } = App.useApp();
   const [form] = Form.useForm();
@@ -478,6 +483,9 @@ export default function CajaPage() {
 
           const cuotasVirtuales: Cuota[] = [];
           matriculasFormat.forEach((matricula) => {
+            const modalidadPago = normalizeModalidadPago(matricula.modalidad_pago);
+            if (modalidadPago === "POR_CLASE") return;
+
             const totalEsperado = totalCuotasEsperadasPorMatricula.get(matricula.id) || 0;
             if (totalEsperado <= 0) return;
 
@@ -508,6 +516,7 @@ export default function CajaPage() {
                 estado: "pendiente",
                 matricula_id: matricula.id,
                 es_virtual: true,
+                tipo_cuota: "mensual",
               });
             }
           });
@@ -633,6 +642,7 @@ export default function CajaPage() {
         }
 
         let pagoBaseId = cuota.id;
+        const matriculaCuota = matriculas.find((m) => String(m.id) === String(cuota.matricula_id));
 
         if (cuota.es_virtual) {
           const { data: pagoCreado, error: errorCrearPago } = await supabaseBrowserClient
@@ -649,7 +659,7 @@ export default function CajaPage() {
               numero_cuota: Number(cuota.numero_cuota || 0),
               fecha_vencimiento: cuota.fecha_vencimiento || null,
               periodo_pagado: cuota.periodo_pagado || `Cuota ${cuota.numero_cuota ?? ""}`.trim(),
-              tipo_cuota: cuota.tipo_cuota || "mensual",
+              tipo_cuota: cuota.tipo_cuota || (normalizeModalidadPago(matriculaCuota?.modalidad_pago) === "POR_CLASE" ? "por_clase" : "mensual"),
             })
             .select("id")
             .single();
@@ -677,7 +687,6 @@ export default function CajaPage() {
           throw new Error("No se pudo confirmar el abono en caja");
         }
 
-        const matriculaCuota = matriculas.find((m) => String(m.id) === String(cuota.matricula_id));
         const conceptoTicket = ajuste.saldo_pendiente > 0
           ? `Abono a ${cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}`
           : `${cuota.periodo_pagado || `Cuota ${cuota.numero_cuota}`}`;
@@ -1073,7 +1082,12 @@ export default function CajaPage() {
       key: "tipo_cuota",
       width: 110,
       render: (tipo: string | null, record: Cuota) => {
-        const t = tipo || (record.es_virtual ? "mensual" : "mensual");
+        const tipoNormalizado = String(tipo || "").toLowerCase().trim();
+        const matricula = matriculas.find((m) => String(m.id) === String(record.matricula_id));
+        const modalidad = normalizeModalidadPago(matricula?.modalidad_pago);
+        const t = record.numero_cuota === 0
+          ? "inscripcion"
+          : (modalidad === "POR_CLASE" ? "por_clase" : (tipoNormalizado || "mensual"));
         if (t === "por_clase") return <Tag color="orange">Por Clase</Tag>;
         if (t === "inscripcion") return <Tag color="purple">Inscripción</Tag>;
         return <Tag color="blue">Mensual</Tag>;
@@ -1084,7 +1098,11 @@ export default function CajaPage() {
       dataIndex: "numero_cuota",
       key: "numero_cuota",
       render: (val: number, record: Cuota) => {
-        if (record.tipo_cuota === "por_clase") {
+        const tipoNormalizado = String(record?.tipo_cuota || "").toLowerCase().trim();
+        const matricula = matriculas.find((m) => String(m.id) === String(record.matricula_id));
+        const modalidad = normalizeModalidadPago(matricula?.modalidad_pago);
+        const tipoCuota = modalidad === "POR_CLASE" ? "por_clase" : (tipoNormalizado || "mensual");
+        if (tipoCuota === "por_clase") {
           return <Text strong style={{ color: "#d46b08" }}>{`Clase #${val}`}</Text>;
         }
         return `#${val}`;

@@ -106,7 +106,7 @@ export default function TesoreriaPage() {
 
         const { data: pagosSinTicket, error: errPagosSinTicket } = await supabaseBrowserClient
             .from("pagos")
-            .select("id, fecha_pago, monto, metodo_pago, referencia, periodo_pagado, numero_cuota, estudiante_id, matricula_id, ticket_url, matriculas!pagos_matricula_id_fkey(estudiante_id, cursos(nombre))")
+            .select("id, fecha_pago, monto, metodo_pago, referencia, periodo_pagado, numero_cuota, tipo_cuota, estudiante_id, matricula_id, ticket_url, matriculas!pagos_matricula_id_fkey(estudiante_id, modalidad_pago, cursos(nombre))")
             .eq("estado", "pagado")
             .or("ticket_url.is.null,ticket_url.eq.")
             .not("fecha_pago", "is", null)
@@ -143,7 +143,13 @@ export default function TesoreriaPage() {
                 const estudianteId = String(pago?.estudiante_id || pago?.matriculas?.estudiante_id || "");
                 const perfil = perfilesMap.get(estudianteId);
                 const cursoNombre = pago?.matriculas?.cursos?.nombre || "Curso";
-                const periodoLegible = pago?.periodo_pagado || `Cuota ${pago?.numero_cuota ?? ""}`.trim();
+                const modalidadPago = String(pago?.matriculas?.modalidad_pago || "").toUpperCase().trim();
+                const tipoCuota = String(pago?.tipo_cuota || "").toLowerCase().trim();
+                const numeroCuota = Number(pago?.numero_cuota || 0);
+                const esPorClase = modalidadPago === "POR_CLASE" || tipoCuota === "por_clase";
+                const periodoLegible = esPorClase
+                    ? `Clase #${numeroCuota || ""}`.trim()
+                    : (pago?.periodo_pagado || `Cuota ${pago?.numero_cuota ?? ""}`.trim());
 
                 const ticketData = {
                     academia: {
