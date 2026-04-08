@@ -164,6 +164,7 @@ export default function StudentDetailView() {
     totalPagado: 0,
     deudaTotal: 0,
   });
+  const [totalClasesPorPrograma, setTotalClasesPorPrograma] = useState<Record<string, number>>({});
   const [ciclosPorMatricula, setCiclosPorMatricula] = useState<Record<number, { total: number; pagados: number; faltantes: number; periodos: string[]; inscripcionPagada: boolean }>>({});
 
   const parseDuracionMeses = (valor?: string | number | null) => {
@@ -210,6 +211,19 @@ export default function StudentDetailView() {
       matricula?.cursos?.programas?.precio_mensualidad ??
       0
     );
+
+  const obtenerValorPorClase = (matricula: any) =>
+    Number(
+      matricula?.valor_por_clase ??
+      getPaymentPlan("POR_CLASE").montoPorClase ??
+      40000
+    );
+
+  const obtenerTotalClasesPrograma = useCallback((matricula: any) => {
+    const programaId = String(matricula?.cursos?.programa_id || "");
+    if (!programaId) return 0;
+    return Number(totalClasesPorPrograma[programaId] || 0);
+  }, [totalClasesPorPrograma]);
 
   const calcularFechaVencimientoCuota = (matricula: any, numeroCuota: number) => {
     if (!numeroCuota || numeroCuota < 1) return null;
@@ -272,6 +286,7 @@ export default function StudentDetailView() {
       );
 
       const temaPorProgramaClase = new Map<string, string>();
+      const ordenesPorPrograma = new Map<string, Set<number>>();
       if (programaIds.length > 0) {
         const pensumData = await obtenerPensumPorProgramas(programaIds);
         (pensumData || []).forEach((ciclo: any) => {
@@ -281,12 +296,21 @@ export default function StudentDetailView() {
           temasCiclo.forEach((tema: any) => {
             const orden = Number(tema?.orden ?? 0);
             if (!Number.isFinite(orden) || orden <= 0) return;
+            const setOrdenes = ordenesPorPrograma.get(programaId) || new Set<number>();
+            setOrdenes.add(orden);
+            ordenesPorPrograma.set(programaId, setOrdenes);
             const key = `${programaId}-${orden}`;
             if (temaPorProgramaClase.has(key)) return;
             temaPorProgramaClase.set(key, String(tema?.nombre_curso || tema?.titulo || `Clase ${orden}`));
           });
         });
       }
+
+      const clasesPorProgramaObj: Record<string, number> = {};
+      ordenesPorPrograma.forEach((ordenes, programaId) => {
+        clasesPorProgramaObj[programaId] = ordenes.size;
+      });
+      setTotalClasesPorPrograma(clasesPorProgramaObj);
 
       if (matriculaIds.length > 0) {
         const { data: dataAsistencias, error: errAsistencias } = await supabaseBrowserClient
@@ -460,7 +484,8 @@ export default function StudentDetailView() {
       listaMats.forEach((m: any) => {
         const modalidadPago = normalizeModalidadPago(m?.modalidad_pago);
         const duracionMeses = obtenerDuracionMeses(m);
-        const totalPagosEsperados = modalidadPago === "POR_CLASE" ? 1 : duracionMeses + 1; // inscripción + cuotas mensuales
+        const totalClasesPrograma = Number(clasesPorProgramaObj[String(m?.cursos?.programa_id || "")] || 0);
+        const totalPagosEsperados = modalidadPago === "POR_CLASE" ? totalClasesPrograma + 1 : duracionMeses + 1; // inscripción + clases/cuotas
         const pagosMat = pagosList.filter((p) => p.matricula_id === m.id);
         const pagados = pagosMat.filter((p) => (p.estado || "").toLowerCase() === "pagado").length;
         const faltantes = totalPagosEsperados > 0 ? Math.max(totalPagosEsperados - pagados, 0) : 0;
@@ -664,7 +689,12 @@ export default function StudentDetailView() {
         .maybeSingle();
 
       const cursoNombre = construirNombreGrupo(record?.matriculas?.cursos) || "Curso";
-      const periodoLegible = record?.periodo_pagado || (record?.numero_cuota === 0 ? "Inscripción" : `Cuota ${record?.numero_cuota ?? ""}`.trim());
+      const modalidadPago = normalizeModalidadPago(record?.matriculas?.modalidad_pago);
+      const periodoLegible = record?.numero_cuota === 0
+        ? "Inscripción"
+        : (modalidadPago === "POR_CLASE"
+          ? `Clase #${record?.numero_cuota ?? ""}`.trim()
+          : (record?.periodo_pagado || `Cuota ${record?.numero_cuota ?? ""}`.trim()));
       const fechaPagoLegible = record?.fecha_pago ? dayjs(record.fecha_pago).format("DD/MM/YYYY") : dayjs().format("DD/MM/YYYY");
 
       const ticketData = {
@@ -1035,8 +1065,12 @@ export default function StudentDetailView() {
         key: "obs",
         render: (_: string | null, record: any) => {
           if (esInscripcion(record)) return "Inscripción";
-          const totalCiclos = Math.max(obtenerDuracionMeses(record?.matriculas), 0);
+          const modalidadPago = normalizeModalidadPago(record?.matriculas?.modalidad_pago);
           const numero = parseNumeroCuota(record);
+          if (modalidadPago === "POR_CLASE" && numero) {
+            return `Clase #${numero}`;
+          }
+          const totalCiclos = Math.max(obtenerDuracionMeses(record?.matriculas), 0);
           if (numero && totalCiclos) {
             return `Ciclo mensual ${numero} de ${totalCiclos}`;
           }
@@ -1132,7 +1166,12 @@ export default function StudentDetailView() {
         return String(a?.id || "").localeCompare(String(b?.id || ""));
       });
 
+    const modalidadPago = normalizeModalidadPago(record?.modalidad_pago);
+    const esPorClase = modalidadPago === "POR_CLASE";
     const totalCiclos = Math.max(obtenerDuracionMeses(record), 0);
+    const totalClasesPrograma = Math.max(obtenerTotalClasesPrograma(record), 0);
+    const totalPeriodos = esPorClase ? totalClasesPrograma : totalCiclos;
+    const valorPorClase = obtenerValorPorClase(record);
     const pagosMap = new Map<number, Pago>();
     cuotasMatricula.forEach((p) => {
       if (typeof p.numero_cuota === "number") {
@@ -1148,7 +1187,7 @@ export default function StudentDetailView() {
     }
 
     const pagosEsperados: Pago[] = [];
-    for (let ciclo = 0; ciclo <= totalCiclos; ciclo += 1) {
+    for (let ciclo = 0; ciclo <= totalPeriodos; ciclo += 1) {
       const pago = pagosMap.get(ciclo);
       if (pago) {
         pagosEsperados.push(pago);
@@ -1163,18 +1202,20 @@ export default function StudentDetailView() {
         numero_cuota: ciclo,
         matricula_id: record.id,
         matriculas: record.matriculas ?? null,
-        monto: ciclo === 0 ? record?.cursos?.precio || null : obtenerMensualidad(record),
-        monto_programado: ciclo === 0 ? record?.cursos?.precio || null : obtenerMensualidad(record),
+        monto: ciclo === 0 ? record?.cursos?.precio || null : (esPorClase ? valorPorClase : obtenerMensualidad(record)),
+        monto_programado: ciclo === 0 ? record?.cursos?.precio || null : (esPorClase ? valorPorClase : obtenerMensualidad(record)),
         descuento_aplicado: 0,
         total_abonado: 0,
-        saldo_pendiente: ciclo === 0 ? record?.cursos?.precio || 0 : obtenerMensualidad(record),
+        saldo_pendiente: ciclo === 0 ? record?.cursos?.precio || 0 : (esPorClase ? valorPorClase : obtenerMensualidad(record)),
         motivo_descuento: null,
         metodo_pago: null,
         referencia: null,
         observaciones: null,
         periodo_pagado: ciclo === 0
           ? "Inscripción"
-          : `Ciclo mensual ${ciclo} de ${totalCiclos}`,
+          : esPorClase
+            ? `Clase #${ciclo}`
+            : `Ciclo mensual ${ciclo} de ${totalCiclos}`,
         estado: "pendiente",
         ticket_url: null,
       });
@@ -1221,7 +1262,9 @@ export default function StudentDetailView() {
 
           const etiqueta = cuota.numero_cuota === 0
             ? "Inscripción"
-            : `Ciclo mensual ${cuota.numero_cuota} de ${totalCiclos}`;
+            : esPorClase
+              ? `Clase #${cuota.numero_cuota}`
+              : `Ciclo mensual ${cuota.numero_cuota} de ${totalCiclos}`;
 
           return (
             <Tooltip
@@ -1627,7 +1670,7 @@ export default function StudentDetailView() {
                         render: (_: string, record: any) => <Text strong>{construirNombreGrupo(record.cursos) || "Curso no asociado"}</Text>,
                       },
                       {
-                        title: "Ciclos de Pago",
+                        title: "Ciclos / Clases de Pago",
                         render: (_: any, record: any) => renderCuotasPorMatricula(record),
                         width: 600,
                       },
