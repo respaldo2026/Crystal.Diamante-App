@@ -84,11 +84,12 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
     .filter((id) => Number.isFinite(id));
 
   const ultimaSesionPorCurso = new Map<number, { numero: number | null; tema: string | null; fecha: string | null }>();
+  const totalSesionesPorCurso = new Map<number, number>();
 
   if (cursoIds.length > 0) {
     const { data: sesiones, error: sesionesError } = await supabaseBrowserClient
       .from("sesiones_clase")
-      .select("curso_id, fecha, tema_visto")
+      .select("curso_id, fecha, tema_visto, observaciones")
       .in("curso_id", cursoIds)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false });
@@ -97,21 +98,84 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
 
     (sesiones || []).forEach((sesion: any) => {
       const cursoId = Number(sesion?.curso_id);
-      if (!Number.isFinite(cursoId) || ultimaSesionPorCurso.has(cursoId)) return;
+      if (!Number.isFinite(cursoId)) return;
+
+      totalSesionesPorCurso.set(cursoId, (totalSesionesPorCurso.get(cursoId) || 0) + 1);
+
+      if (ultimaSesionPorCurso.has(cursoId)) return;
+
+      const textoClase = String(sesion?.observaciones || sesion?.tema_visto || "").trim();
 
       ultimaSesionPorCurso.set(cursoId, {
-        numero: extractClassNumber(sesion?.tema_visto || ""),
-        tema: String(sesion?.tema_visto || "").trim() || null,
+        numero: extractClassNumber(textoClase),
+        tema: String(sesion?.tema_visto || "").trim() || String(sesion?.observaciones || "").trim() || null,
         fecha: sesion?.fecha || null,
       });
     });
+
+    const cursosSinNumero = cursoIds.filter((cursoId) => {
+      const sesion = ultimaSesionPorCurso.get(cursoId);
+      return !sesion || !Number.isFinite(Number(sesion.numero)) || Number(sesion.numero) <= 0;
+    });
+
+    if (cursosSinNumero.length > 0) {
+      const { data: asistencias, error: asistenciasError } = await supabaseBrowserClient
+        .from("asistencias")
+        .select("fecha, observaciones, matriculas!inner(curso_id)")
+        .in("matriculas.curso_id", cursosSinNumero)
+        .order("fecha", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (asistenciasError) throw asistenciasError;
+
+      const fechasUnicasPorCurso = new Map<number, Set<string>>();
+
+      (asistencias || []).forEach((registro: any) => {
+        const cursoId = Number(registro?.matriculas?.curso_id);
+        const fecha = String(registro?.fecha || "").trim();
+        if (!Number.isFinite(cursoId) || !fecha) return;
+
+        if (!fechasUnicasPorCurso.has(cursoId)) {
+          fechasUnicasPorCurso.set(cursoId, new Set<string>());
+        }
+
+        fechasUnicasPorCurso.get(cursoId)?.add(fecha);
+
+        const sesionActual = ultimaSesionPorCurso.get(cursoId);
+        if (!sesionActual || !sesionActual.fecha || fecha > String(sesionActual.fecha)) {
+          const detalle = String(registro?.observaciones || "").trim();
+          ultimaSesionPorCurso.set(cursoId, {
+            numero: extractClassNumber(detalle),
+            tema: detalle || sesionActual?.tema || null,
+            fecha,
+          });
+        }
+      });
+
+      fechasUnicasPorCurso.forEach((fechas, cursoId) => {
+        const totalFechas = fechas.size;
+        const totalPrevio = totalSesionesPorCurso.get(cursoId) || 0;
+        if (totalFechas > totalPrevio) {
+          totalSesionesPorCurso.set(cursoId, totalFechas);
+        }
+      });
+    }
   }
 
   const normalizados = normalizadosBase.map((item: any) => {
     const ultimaSesion = ultimaSesionPorCurso.get(Number(item.id));
+    const totalSesiones = totalSesionesPorCurso.get(Number(item.id)) || 0;
+    const numeroClase = (() => {
+      const numeroDetectado = Number(ultimaSesion?.numero || 0);
+      if (Number.isFinite(numeroDetectado) && numeroDetectado > 0) {
+        return numeroDetectado;
+      }
+      return totalSesiones > 0 ? totalSesiones : null;
+    })();
+
     return {
       ...item,
-      ultima_clase_numero: ultimaSesion?.numero ?? null,
+      ultima_clase_numero: numeroClase,
       ultima_clase_tema: ultimaSesion?.tema ?? null,
       ultima_clase_fecha: ultimaSesion?.fecha ?? null,
     };
