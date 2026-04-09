@@ -105,6 +105,32 @@ function obtenerMetaCapacidad(inscritos: number, capacidad: number) {
   return { libres, color: "success" as const, texto: `${libres} cupos disponibles` };
 }
 
+function construirAvanceGrupo(grupo: GrupoAcademico) {
+  const numeroClase = Number(grupo.ultima_clase_numero || 0);
+  const fecha = grupo.ultima_clase_fecha ? dayjs(grupo.ultima_clase_fecha).format("DD MMM YYYY") : null;
+  const tema = String(grupo.ultima_clase_tema || "").trim();
+
+  if (numeroClase > 0) {
+    return {
+      titulo: `Van en clase #${numeroClase}`,
+      detalle: fecha ? `Último registro: ${fecha}` : "Último registro confirmado",
+      tema: tema || null,
+      color: "#7C3AED",
+      fondo: "#F5F3FF",
+      borde: "#DDD6FE",
+    };
+  }
+
+  return {
+    titulo: "Aún no registran clase",
+    detalle: "Todavía no hay una sesión tomada en el sistema",
+    tema: null,
+    color: "#475569",
+    fondo: "#F8FAFC",
+    borde: "#E2E8F0",
+  };
+}
+
 export default function CursosList() {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -197,6 +223,7 @@ export default function CursosList() {
     const ocupacion = capacidad > 0 ? Math.round((inscritos / capacidad) * 100) : 0;
     const mensajeInicio = construirMensajeInicio(grupo.fecha_inicio);
     const metaCapacidad = obtenerMetaCapacidad(inscritos, capacidad);
+    const avanceGrupo = construirAvanceGrupo(grupo);
 
     return (
       <Card
@@ -333,19 +360,46 @@ export default function CursosList() {
             }}
           >
             <Row gutter={[16, 12]}>
-              <Col xs={24} md={12}>
+              <Col xs={24} md={8}>
                 <Text type="secondary">Profesor asignado</Text>
                 <div style={{ fontWeight: 600, color: "#0F172A" }}>
                   {grupo.profesor?.nombre_completo || "Por definir"}
                 </div>
               </Col>
-              <Col xs={24} md={12}>
+              <Col xs={24} md={8}>
                 <Text type="secondary">Disponibilidad actual</Text>
                 <div style={{ fontWeight: 600, color: "#0F172A" }}>
                   {capacidad > 0 ? `${metaCapacidad.libres} de ${capacidad} cupos libres` : "Capacidad por definir"}
                 </div>
               </Col>
+              <Col xs={24} md={8}>
+                <Text type="secondary">Progreso del grupo</Text>
+                <div style={{ fontWeight: 600, color: "#0F172A" }}>
+                  {avanceGrupo.titulo}
+                </div>
+              </Col>
             </Row>
+          </div>
+
+          <div
+            style={{
+              borderRadius: 16,
+              padding: isMobile ? 12 : 14,
+              background: avanceGrupo.fondo,
+              border: `1px solid ${avanceGrupo.borde}`,
+            }}
+          >
+            <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 4 }}>
+              {avanceGrupo.titulo}
+            </Text>
+            <Text type="secondary" style={{ display: "block" }}>
+              {avanceGrupo.detalle}
+            </Text>
+            {avanceGrupo.tema ? (
+              <Text style={{ display: "block", marginTop: 6, color: "#0F172A" }}>
+                {avanceGrupo.tema}
+              </Text>
+            ) : null}
           </div>
         </Space>
       </Card>
