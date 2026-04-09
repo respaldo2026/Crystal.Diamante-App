@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Create } from "@refinedev/antd";
-import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, TimePicker, Button } from "antd";
-import { UserOutlined, BookOutlined } from "@ant-design/icons";
+import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, TimePicker, Button, Card, Typography, Space, Alert, Tag, Grid } from "antd";
+import { UserOutlined, BookOutlined, CalendarOutlined, ClockCircleOutlined, TeamOutlined } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
@@ -11,9 +11,14 @@ import "dayjs/locale/es";
 
 dayjs.locale("es");
 
+const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
+
 export default function CursoCreate() {
     const [form] = Form.useForm();
     const router = useRouter();
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
     const [loading, setLoading] = useState(false);
     
     const [profesores, setProfesores] = useState<any[]>([]);
@@ -22,6 +27,9 @@ export default function CursoCreate() {
     const [diasSeleccionados, setDiasSeleccionados] = useState<string[]>([]);
     const [fechaInicio, setFechaInicio] = useState<Dayjs | null>(null);
     const [horaInicio, setHoraInicio] = useState<Dayjs | null>(null);
+    const nombrePreview = Form.useWatch("nombre", form);
+    const profesorPreview = Form.useWatch("profesor_id", form);
+    const cuposPreview = Form.useWatch("cupos", form) ?? 20;
     
     useEffect(() => {
         const cargarDatos = async () => {
@@ -231,6 +239,12 @@ export default function CursoCreate() {
         }
     };
 
+    const profesorSeleccionado = profesores.find((prof) => String(prof.id) === String(profesorPreview));
+    const programaSeleccionado = programas.find((programa) => Number(programa.id) === Number(form.getFieldValue("programa_id")));
+    const fechaInicioPreview = fechaInicio ? fechaInicio.format("DD MMM YYYY") : "Por definir";
+    const horarioPreview = horaInicio ? `${horaInicio.format("h:mm A")} - ${horaInicio.add(3, "hour").format("h:mm A")}` : "Se calculará automáticamente";
+    const diasPreview = diasSeleccionados.length > 0 ? diasSeleccionados.join(" · ") : "Sin días seleccionados";
+
     return (
         <Create 
             title="Crear nuevo grupo"
@@ -250,14 +264,44 @@ export default function CursoCreate() {
                 </>
             )}
         >
+            <Space direction="vertical" size={18} style={{ width: "100%" }}>
+                <div>
+                    <Title level={isMobile ? 4 : 3} style={{ marginTop: 0, marginBottom: 4 }}>
+                        Configuración del grupo
+                    </Title>
+                    <Text type="secondary">
+                        Define programa, agenda y capacidad. El nombre del grupo se genera automáticamente a partir del horario seleccionado.
+                    </Text>
+                </div>
+
+                <Alert
+                    type="info"
+                    showIcon
+                    message="Nombre automático del grupo"
+                    description="No necesitas escribir el nombre manualmente. Se construye con el programa, los días elegidos y la hora de inicio."
+                    style={{ borderRadius: 16 }}
+                />
+
             <Form 
                 form={form}
                 layout="vertical" 
                 onFinish={handleOnFinish}
             >
-                
-                <Row gutter={24}>
-                    <Col span={24}>
+                <Row gutter={[20, 20]}>
+                    <Col xs={24} xl={16}>
+                        <Card
+                            bordered={false}
+                            style={{ borderRadius: 24, boxShadow: "0 16px 40px rgba(15, 23, 42, 0.06)" }}
+                            bodyStyle={{ padding: isMobile ? 16 : 24 }}
+                        >
+                            <Space direction="vertical" size={18} style={{ width: "100%" }}>
+                                <div>
+                                    <Title level={5} style={{ margin: 0 }}>
+                                        <BookOutlined /> Información base
+                                    </Title>
+                                    <Text type="secondary">Selecciona el programa y la profesora responsable del grupo.</Text>
+                                </div>
+
                         <Form.Item
                             label="Programa Académico"
                             name="programa_id"
@@ -283,11 +327,27 @@ export default function CursoCreate() {
                                 }}
                             />
                         </Form.Item>
-                    </Col>
-                </Row>
 
-                <Row gutter={24}>
-                    <Col span={12}>
+                        <Form.Item
+                            label="Profesor Asignado"
+                            name="profesor_id"
+                            rules={[{ required: true, message: "Asigna un profesor" }]}
+                        >
+                            <Select 
+                                placeholder="Buscar profesor..."
+                                showSearch
+                                filterOption={(input, option) =>
+                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                options={profesores.map(p => ({ 
+                                    label: p.nombre_completo, 
+                                    value: p.id 
+                                }))}
+                            />
+                        </Form.Item>
+
+                                <Row gutter={[16, 0]}>
+                                    <Col xs={24} md={12}>
                         <Form.Item
                             label="Días de la Semana"
                             name="dias_semana"
@@ -312,8 +372,8 @@ export default function CursoCreate() {
                                 }}
                             />
                         </Form.Item>
-                    </Col>
-                    <Col span={6}>
+                                    </Col>
+                                    <Col xs={24} md={6}>
                         <Form.Item
                             label="Hora Inicio"
                             name="hora_inicio"
@@ -340,8 +400,8 @@ export default function CursoCreate() {
                                 })}
                             />
                         </Form.Item>
-                    </Col>
-                    <Col span={6}>
+                                    </Col>
+                                    <Col xs={24} md={6}>
                         <Form.Item
                             label="Hora Fin"
                             name="hora_fin"
@@ -364,8 +424,8 @@ export default function CursoCreate() {
                                 })}
                             />
                         </Form.Item>
-                    </Col>
-                </Row>
+                                    </Col>
+                                </Row>
 
                 <Form.Item
                     name="nombre"
@@ -375,53 +435,8 @@ export default function CursoCreate() {
                     <Input />
                 </Form.Item>
 
-                <Row gutter={24}>
-                    <Col span={16}>
-                        <Form.Item
-                            label="Descripción/Notas del Grupo"
-                            name="descripcion" 
-                        >
-                            <Input.TextArea rows={2} placeholder="Información adicional del grupo" />
-                        </Form.Item>
-                    </Col>
-                    
-                    <Col span={8}>
-                        <Form.Item
-                            label="Estado"
-                            name="estado"
-                            initialValue="activo"
-                        >
-                            <Select
-                                options={[
-                                    { label: "Activo", value: "activo" },
-                                    { label: "Cerrado", value: "cerrado" },
-                                    { label: "Finalizado", value: "finalizado" },
-                                ]}
-                            />
-                        </Form.Item>
-                    </Col>
-                </Row>
-
-                <Form.Item
-                    label="Profesor Asignado"
-                    name="profesor_id"
-                    rules={[{ required: true, message: "Asigna un profesor" }]}
-                >
-                    <Select 
-                        placeholder="Buscar profesor..."
-                        showSearch
-                        filterOption={(input, option) =>
-                            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                        }
-                        options={profesores.map(p => ({ 
-                            label: p.nombre_completo, 
-                            value: p.id 
-                        }))}
-                    />
-                </Form.Item>
-
-                <Row gutter={24}>
-                    <Col span={8}>
+                                <Row gutter={[16, 0]}>
+                                    <Col xs={24} md={8}>
                         <Form.Item
                             label="Cupos Disponibles"
                             name="cupos"
@@ -430,9 +445,8 @@ export default function CursoCreate() {
                         >
                             <InputNumber min={1} style={{ width: "100%" }} />
                         </Form.Item>
-                    </Col>
-
-                    <Col span={8}>
+                                    </Col>
+                                    <Col xs={24} md={8}>
                          <Form.Item 
                             label="Fecha Inicio" 
                             name="fecha_inicio"
@@ -446,17 +460,95 @@ export default function CursoCreate() {
                                 }}
                             />
                          </Form.Item>
-                    </Col>
-                    <Col span={8}>
+                                    </Col>
+                                    <Col xs={24} md={8}>
                          <Form.Item label="Fecha Fin" name="fecha_fin">
                             <DatePicker style={{width: '100%'}} format="YYYY-MM-DD" />
                          </Form.Item>
+                                    </Col>
+                                </Row>
+
+                        <Form.Item
+                            label="Estado"
+                            name="estado"
+                            initialValue="activo"
+                        >
+                            <Select
+                                options={[
+                                    { label: "Activo", value: "activo" },
+                                    { label: "Cerrado", value: "cerrado" },
+                                    { label: "Finalizado", value: "finalizado" },
+                                ]}
+                            />
+                        </Form.Item>
+                            </Space>
+                        </Card>
+                    </Col>
+
+                    <Col xs={24} xl={8}>
+                        <Card
+                            bordered={false}
+                            style={{
+                                borderRadius: 24,
+                                boxShadow: "0 16px 40px rgba(15, 23, 42, 0.06)",
+                                background: "linear-gradient(180deg, #F8FBFF 0%, #FFFFFF 100%)",
+                                position: "sticky",
+                                top: 24,
+                            }}
+                            bodyStyle={{ padding: isMobile ? 16 : 22 }}
+                        >
+                            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                                <div>
+                                    <Title level={5} style={{ margin: 0 }}>
+                                        Vista previa del grupo
+                                    </Title>
+                                    <Text type="secondary">Así quedará identificado dentro del sistema.</Text>
+                                </div>
+
+                                <Card
+                                    size="small"
+                                    style={{ borderRadius: 18, borderColor: "#DBEAFE", background: "#F8FAFF" }}
+                                >
+                                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                                        <div>
+                                            <Text type="secondary">Nombre generado</Text>
+                                            <div style={{ fontWeight: 700, fontSize: 18, color: "#0F172A" }}>
+                                                {nombrePreview || "Se generará al elegir programa, días y hora"}
+                                            </div>
+                                        </div>
+                                        <Space wrap>
+                                            <Tag color="purple" icon={<CalendarOutlined />}>{fechaInicioPreview}</Tag>
+                                            <Tag color="green" icon={<ClockCircleOutlined />}>{horarioPreview}</Tag>
+                                            <Tag color="blue" icon={<TeamOutlined />}>{cuposPreview} cupos</Tag>
+                                        </Space>
+                                    </Space>
+                                </Card>
+
+                                <div>
+                                    <Text type="secondary">Programa</Text>
+                                    <div style={{ fontWeight: 600 }}>{programaSeleccionado?.nombre || "Por definir"}</div>
+                                </div>
+                                <div>
+                                    <Text type="secondary">Días seleccionados</Text>
+                                    <div style={{ fontWeight: 600 }}>{diasPreview}</div>
+                                </div>
+                                <div>
+                                    <Text type="secondary">Profesor asignado</Text>
+                                    <div style={{ fontWeight: 600 }}>{profesorSeleccionado?.nombre_completo || "Por definir"}</div>
+                                </div>
+                                <Alert
+                                    type="warning"
+                                    showIcon
+                                    message="Validación automática"
+                                    description="Antes de guardar se revisa si el nuevo grupo se cruza en fecha, día y horario con otro grupo activo o próximo."
+                                    style={{ borderRadius: 16 }}
+                                />
+                            </Space>
+                        </Card>
                     </Col>
                 </Row>
-
-
-
             </Form>
+            </Space>
         </Create>
     );
 }
