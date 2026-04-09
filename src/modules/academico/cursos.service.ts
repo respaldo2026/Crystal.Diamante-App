@@ -91,8 +91,7 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
       .from("sesiones_clase")
       .select("curso_id, fecha, tema_visto, observaciones")
       .in("curso_id", cursoIds)
-      .order("fecha", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("fecha", { ascending: false });
 
     if (sesionesError) throw sesionesError;
 
@@ -123,8 +122,7 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
         .from("asistencias")
         .select("fecha, observaciones, matriculas!inner(curso_id)")
         .in("matriculas.curso_id", cursosSinNumero)
-        .order("fecha", { ascending: false })
-        .order("created_at", { ascending: false });
+        .order("fecha", { ascending: false });
 
       if (asistenciasError) throw asistenciasError;
 
