@@ -2,14 +2,17 @@
 
 import React, { useState, useEffect } from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, Button, Modal, Space, TimePicker, Typography, Tag } from "antd";
-import { DeleteOutlined, ArrowLeftOutlined, BookOutlined } from "@ant-design/icons";
+import { Form, Input, Select, InputNumber, Row, Col, DatePicker, message, Button, Modal, Space, TimePicker, Typography, Tag, Card, Alert, Grid } from "antd";
+import { DeleteOutlined, ArrowLeftOutlined, BookOutlined, CalendarOutlined, ClockCircleOutlined, TeamOutlined, UserOutlined } from "@ant-design/icons";
 import { useRouter, useParams } from "next/navigation";
 import dayjs, { Dayjs } from "dayjs";
 import "dayjs/locale/es";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 dayjs.locale("es");
+
+const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
 
 export default function CursoEdit() {
     const { formProps, saveButtonProps } = useForm({
@@ -18,6 +21,8 @@ export default function CursoEdit() {
     const formInstance = formProps.form;
     const router = useRouter();
     const params = useParams();
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
     const [deleting, setDeleting] = useState(false);
     const [modal, modalContextHolder] = Modal.useModal();
     const [estadoActual, setEstadoActual] = useState<string | undefined>(undefined);
@@ -26,6 +31,12 @@ export default function CursoEdit() {
     const [clasesPrograma, setClasesPrograma] = useState<number | null>(null);
     const [fechaInicio, setFechaInicio] = useState<Dayjs | null>(null);
     const [diasSeleccionados, setDiasSeleccionados] = useState<string[]>([]);
+    const nombrePreview = Form.useWatch("nombre", formInstance);
+    const profesorPreview = Form.useWatch("profesor_id", formInstance);
+    const cuposPreview = Form.useWatch("cupos", formInstance);
+    const estadoPreview = Form.useWatch("estado", formInstance);
+    const horaInicioPreview = Form.useWatch("hora_inicio", formInstance);
+    const horaFinPreview = Form.useWatch("hora_fin", formInstance);
     const rawCursoId = params?.id as string;
     const cursoId = rawCursoId ? Number(rawCursoId) : undefined;
         useEffect(() => {
@@ -341,6 +352,19 @@ export default function CursoEdit() {
         }
     };
 
+    const profesorSeleccionado = profesores.find((prof) => String(prof.id) === String(profesorPreview));
+    const programaSeleccionado = programas.find((programa) => Number(programa.id) === Number(formInstance?.getFieldValue("programa_id")));
+    const fechaInicioPreviewText = fechaInicio ? fechaInicio.format("DD MMM YYYY") : "Por definir";
+    const diasPreview = diasSeleccionados.length > 0 ? diasSeleccionados.join(" · ") : "Sin días seleccionados";
+    const normalizarHoraPreview = (value: any) => {
+        if (!value) return "";
+        if (dayjs.isDayjs(value)) return value.format("h:mm A");
+        if (typeof value === "string") return dayjs(value, "HH:mm:ss").format("h:mm A");
+        return "";
+    };
+    const horarioPreview = [normalizarHoraPreview(horaInicioPreview), normalizarHoraPreview(horaFinPreview)].filter(Boolean).join(" - ") || "Horario por definir";
+    const estadoColor = estadoPreview === "finalizado" ? "default" : estadoPreview === "activo" ? "green" : "blue";
+
     return (
         <>
             {modalContextHolder}
@@ -482,9 +506,41 @@ export default function CursoEdit() {
                     }
                 }}
             >
-                
-                <Row gutter={24}>
-                    <Col span={8}>
+                <Space direction="vertical" size={18} style={{ width: "100%" }}>
+                    <div>
+                        <Title level={isMobile ? 4 : 3} style={{ marginTop: 0, marginBottom: 4 }}>
+                            Ajustes del grupo
+                        </Title>
+                        <Text type="secondary">
+                            Actualiza programa, agenda, capacidad y profesor sin perder el historial del grupo.
+                        </Text>
+                    </div>
+
+                    <Alert
+                        type="info"
+                        showIcon
+                        message="Edición segura del grupo"
+                        description="Los cambios de horario se validan contra otros grupos activos o próximos para evitar cruces de agenda."
+                        style={{ borderRadius: 16 }}
+                    />
+
+                    <Row gutter={[20, 20]}>
+                        <Col xs={24} xl={16}>
+                            <Card
+                                bordered={false}
+                                style={{ borderRadius: 24, boxShadow: "0 16px 40px rgba(15, 23, 42, 0.06)" }}
+                                bodyStyle={{ padding: isMobile ? 16 : 24 }}
+                            >
+                                <Space direction="vertical" size={18} style={{ width: "100%" }}>
+                                    <div>
+                                        <Title level={5} style={{ margin: 0 }}>
+                                            <BookOutlined /> Información principal
+                                        </Title>
+                                        <Text type="secondary">Ajusta los datos que identifican y organizan el grupo.</Text>
+                                    </div>
+
+                <Row gutter={[16, 0]}>
+                    <Col xs={24} md={12}>
                         <Form.Item
                             label="Programa Académico"
                             name="programa_id"
@@ -508,7 +564,7 @@ export default function CursoEdit() {
                         </Form.Item>
                     </Col>
                     
-                    <Col span={8}>
+                    <Col xs={24} md={12}>
                         <Form.Item
                             label="Nombre del grupo"
                             name="nombre"
@@ -518,7 +574,10 @@ export default function CursoEdit() {
                         </Form.Item>
                     </Col>
 
-                    <Col span={8}>
+                </Row>
+
+                <Row gutter={[16, 0]}>
+                    <Col xs={24} md={12}>
                         <Form.Item
                             label="Profesor Asignado"
                             name="profesor_id"
@@ -538,19 +597,8 @@ export default function CursoEdit() {
                             />
                         </Form.Item>
                     </Col>
-                </Row>
-
-                <Row gutter={24}>
-                    <Col span={16}>
-                        <Form.Item
-                            label="Descripción/Notas"
-                            name="descripcion"
-                        >
-                            <Input.TextArea rows={2} />
-                        </Form.Item>
-                    </Col>
                     
-                    <Col span={8}>
+                    <Col xs={24} md={12}>
                         <Form.Item
                             label="Estado"
                             name="estado"
@@ -565,8 +613,8 @@ export default function CursoEdit() {
                     </Col>
                 </Row>
 
-                <Row gutter={24}>
-                    <Col span={8}>
+                <Row gutter={[16, 0]}>
+                    <Col xs={24} md={8}>
                         <Form.Item
                             label="Cupos Totales"
                             name="cupos"
@@ -576,10 +624,8 @@ export default function CursoEdit() {
                             <InputNumber min={1} style={{ width: "100%" }} />
                         </Form.Item>
                     </Col>
-                </Row>
 
-                <Row gutter={24}>
-                    <Col span={8}>
+                    <Col xs={24} md={8}>
                          <Form.Item 
                             label="Fecha Inicio" 
                             name="fecha_inicio"
@@ -594,7 +640,7 @@ export default function CursoEdit() {
                             />
                          </Form.Item>
                     </Col>
-                    <Col span={8}>
+                          <Col xs={24} md={8}>
                          <Form.Item 
                             label="Fecha Fin" 
                             name="fecha_fin"
@@ -607,8 +653,8 @@ export default function CursoEdit() {
                     </Col>
                 </Row>
 
-                <Row gutter={24}>
-                    <Col span={12}>
+                <Row gutter={[16, 0]}>
+                    <Col xs={24} md={12}>
                         <Form.Item
                             label="Días de la Semana"
                             name="dias_semana"
@@ -635,7 +681,7 @@ export default function CursoEdit() {
                             />
                         </Form.Item>
                     </Col>
-                    <Col span={6}>
+                    <Col xs={24} md={6}>
                         <Form.Item
                             label="Hora Inicio"
                             name="hora_inicio"
@@ -649,7 +695,7 @@ export default function CursoEdit() {
                             <TimePicker style={{ width: '100%' }} format="h:mm A" use12Hours />
                         </Form.Item>
                     </Col>
-                    <Col span={6}>
+                    <Col xs={24} md={6}>
                         <Form.Item
                             label="Hora Fin"
                             name="hora_fin"
@@ -664,6 +710,74 @@ export default function CursoEdit() {
                         </Form.Item>
                     </Col>
                 </Row>
+                                </Space>
+                            </Card>
+                        </Col>
+
+                        <Col xs={24} xl={8}>
+                            <Card
+                                bordered={false}
+                                style={{
+                                    borderRadius: 24,
+                                    boxShadow: "0 16px 40px rgba(15, 23, 42, 0.06)",
+                                    background: "linear-gradient(180deg, #F8FBFF 0%, #FFFFFF 100%)",
+                                    position: "sticky",
+                                    top: 24,
+                                }}
+                                bodyStyle={{ padding: isMobile ? 16 : 22 }}
+                            >
+                                <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                                    <div>
+                                        <Title level={5} style={{ margin: 0 }}>
+                                            Vista rápida del grupo
+                                        </Title>
+                                        <Text type="secondary">Comprueba el resultado antes de guardar los cambios.</Text>
+                                    </div>
+
+                                    <Card size="small" style={{ borderRadius: 18, borderColor: "#DBEAFE", background: "#F8FAFF" }}>
+                                        <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                                            <div>
+                                                <Text type="secondary">Nombre del grupo</Text>
+                                                <div style={{ fontWeight: 700, fontSize: 18, color: "#0F172A" }}>
+                                                    {nombrePreview || "Sin nombre definido"}
+                                                </div>
+                                            </div>
+                                            <Space wrap>
+                                                <Tag color={estadoColor}>{estadoPreview || estadoActual || "Sin estado"}</Tag>
+                                                <Tag color="purple" icon={<CalendarOutlined />}>{fechaInicioPreviewText}</Tag>
+                                                <Tag color="green" icon={<ClockCircleOutlined />}>{horarioPreview}</Tag>
+                                                <Tag color="blue" icon={<TeamOutlined />}>{cuposPreview || 0} cupos</Tag>
+                                            </Space>
+                                        </Space>
+                                    </Card>
+
+                                    <div>
+                                        <Text type="secondary">Programa</Text>
+                                        <div style={{ fontWeight: 600 }}>{programaSeleccionado?.nombre || "Por definir"}</div>
+                                    </div>
+                                    <div>
+                                        <Text type="secondary">Días seleccionados</Text>
+                                        <div style={{ fontWeight: 600 }}>{diasPreview}</div>
+                                    </div>
+                                    <div>
+                                        <Text type="secondary">Profesor asignado</Text>
+                                        <div style={{ fontWeight: 600 }}>
+                                            <UserOutlined style={{ marginRight: 8, color: "#64748B" }} />
+                                            {profesorSeleccionado?.nombre_completo || "Por definir"}
+                                        </div>
+                                    </div>
+                                    <Alert
+                                        type="warning"
+                                        showIcon
+                                        message="Cambios sensibles"
+                                        description="Si ajustas cupos, fechas o estado, revisa que siga siendo coherente con las matrículas activas y el calendario del grupo."
+                                        style={{ borderRadius: 16 }}
+                                    />
+                                </Space>
+                            </Card>
+                        </Col>
+                    </Row>
+                </Space>
 
             </Form>
             </Edit>
