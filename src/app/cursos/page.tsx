@@ -16,6 +16,7 @@ import {
   Tooltip,
   App,
   Grid,
+  Flex,
 } from "antd";
 import {
   PlusOutlined,
@@ -88,6 +89,20 @@ function obtenerInscritos(grupo: GrupoAcademico) {
 function obtenerEstado(grupo: GrupoAcademico) {
   const estado = (grupo.estado || "").toLowerCase();
   return ESTADO_META[estado] ?? { label: estado || "Sin estado", color: "default" };
+}
+
+function obtenerMetaCapacidad(inscritos: number, capacidad: number) {
+  const libres = Math.max(capacidad - inscritos, 0);
+  if (capacidad <= 0) {
+    return { libres, color: "default" as const, texto: "Capacidad por definir" };
+  }
+  if (libres === 0) {
+    return { libres, color: "error" as const, texto: "Grupo lleno" };
+  }
+  if (libres <= 2) {
+    return { libres, color: "warning" as const, texto: `${libres} cupo${libres === 1 ? "" : "s"} libre${libres === 1 ? "" : "s"}` };
+  }
+  return { libres, color: "success" as const, texto: `${libres} cupos disponibles` };
 }
 
 export default function CursosList() {
@@ -181,50 +196,90 @@ export default function CursosList() {
     const capacidad = Number(grupo.cupos || 0);
     const ocupacion = capacidad > 0 ? Math.round((inscritos / capacidad) * 100) : 0;
     const mensajeInicio = construirMensajeInicio(grupo.fecha_inicio);
+    const metaCapacidad = obtenerMetaCapacidad(inscritos, capacidad);
 
     return (
       <Card
         key={grupo.id}
         hoverable
-        style={{ marginBottom: 16 }}
-        bodyStyle={{ padding: isMobile ? 12 : 20 }}
+        style={{
+          marginBottom: 18,
+          borderRadius: 22,
+          border: "1px solid #E5E7EB",
+          boxShadow: "0 14px 34px rgba(15, 23, 42, 0.06)",
+          overflow: "hidden",
+          background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
+        }}
+        bodyStyle={{ padding: isMobile ? 14 : 22 }}
       >
         <Space direction="vertical" size={isMobile ? 12 : 16} style={{ width: "100%" }}>
-          <Space 
-            style={{ width: "100%", justifyContent: "space-between", alignItems: "flex-start" }}
-            direction={isMobile ? "vertical" : "horizontal"}
+          <Flex
+            justify="space-between"
+            align={isMobile ? "flex-start" : "center"}
+            gap={12}
+            vertical={isMobile}
           >
             <div style={{ width: isMobile ? "100%" : "auto" }}>
-              <Title level={isMobile ? 5 : 4} style={{ marginBottom: 4 }}>
+              <Space size={8} wrap style={{ marginBottom: 6 }}>
+                <Tag
+                  bordered={false}
+                  style={{
+                    borderRadius: 999,
+                    paddingInline: 10,
+                    paddingBlock: 4,
+                    fontWeight: 600,
+                    background: "#F5F3FF",
+                    color: "#6D28D9",
+                    marginInlineEnd: 0,
+                  }}
+                >
+                  {grupo.programas?.nombre || "Programa sin asignar"}
+                </Tag>
+                <Tag color={estado.color} style={{ borderRadius: 999, marginInlineEnd: 0 }}>
+                  {estado.label}
+                </Tag>
+              </Space>
+              <Title level={isMobile ? 5 : 4} style={{ marginBottom: 4, marginTop: 0 }}>
                 {construirNombreGrupo(grupo)}
               </Title>
-              <Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>
-                {grupo.programas?.nombre || "Programa sin asignar"}
-              </Text>
+              <Space size={8} wrap>
+                {mensajeInicio ? (
+                  <Tag bordered={false} color="blue" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
+                    {mensajeInicio}
+                  </Tag>
+                ) : null}
+                <Tag bordered={false} color="cyan" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
+                  {formatearDias(grupo.dias_semana)}
+                </Tag>
+                <Tag bordered={false} color={metaCapacidad.color} style={{ borderRadius: 999, marginInlineEnd: 0 }}>
+                  {metaCapacidad.texto}
+                </Tag>
+              </Space>
             </div>
             <Space wrap size={isMobile ? 4 : 8}>
-              <Tag color={estado.color}>{estado.label}</Tag>
               <Button 
                 size={isMobile ? "small" : "middle"}
                 icon={<EditOutlined />} 
                 onClick={() => edit("cursos", grupo.id)}
+                style={{ borderRadius: 12 }}
               >
-                {isMobile ? "Editar" : "Editar"}
+                Editar
               </Button>
               <Button 
                 type="link" 
                 size={isMobile ? "small" : "middle"}
                 onClick={() => show("cursos", grupo.id)}
+                style={{ paddingInline: 4, fontWeight: 600 }}
               >
                 {isMobile ? "Ver" : "Ver detalle"}
               </Button>
             </Space>
-          </Space>
+          </Flex>
 
           <Row gutter={[16, 16]}>
             <Col xs={24} md={8}>
               <Space align="start">
-                <CalendarOutlined style={{ fontSize: 20, color: "#722ed1" }} />
+                <CalendarOutlined style={{ fontSize: 20, color: "#7C3AED" }} />
                 <div>
                   <Text strong>Inicio</Text>
                   <div>{grupo.fecha_inicio ? dayjs(grupo.fecha_inicio).format("DD MMM YYYY") : "Sin fecha"}</div>
@@ -238,7 +293,7 @@ export default function CursosList() {
             </Col>
             <Col xs={24} md={8}>
               <Space align="start">
-                <ClockCircleOutlined style={{ fontSize: 20, color: "#237804" }} />
+                <ClockCircleOutlined style={{ fontSize: 20, color: "#15803D" }} />
                 <div>
                   <Text strong>Horario</Text>
                   <div>{formatearHorario(grupo.hora_inicio, grupo.hora_fin)}</div>
@@ -250,15 +305,16 @@ export default function CursosList() {
             </Col>
             <Col xs={24} md={8}>
               <Space align="start">
-                <TeamOutlined style={{ fontSize: 20, color: "#1890ff" }} />
+                <TeamOutlined style={{ fontSize: 20, color: "#0284C7" }} />
                 <div style={{ width: "100%" }}>
-                  <Text strong>Capacidad</Text>
+                  <Text strong>Ocupación</Text>
                   <div>{`${inscritos}/${capacidad || 0} estudiantes`}</div>
                   <Tooltip title={`Cupos libres: ${Math.max((capacidad || 0) - inscritos, 0)}`}>
                     <Progress
                       percent={ocupacion}
                       size="small"
-                      status={ocupacion >= 100 ? "exception" : "active"}
+                      strokeColor={ocupacion >= 100 ? "#EF4444" : ocupacion >= 80 ? "#F59E0B" : "#10B981"}
+                      trailColor="#E5E7EB"
                       showInfo={false}
                       style={{ marginTop: 4 }}
                     />
@@ -268,18 +324,29 @@ export default function CursosList() {
             </Col>
           </Row>
 
-          <Divider style={{ margin: "12px 0" }} />
-
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={12}>
-              <Text type="secondary">Profesor asignado</Text>
-              <div>{grupo.profesor?.nombre_completo || "Por definir"}</div>
-            </Col>
-            <Col xs={24} md={12}>
-              <Text type="secondary">Notas</Text>
-              <div>{grupo.descripcion || "Sin notas adicionales"}</div>
-            </Col>
-          </Row>
+          <div
+            style={{
+              borderRadius: 16,
+              padding: isMobile ? 12 : 14,
+              background: "#F8FAFC",
+              border: "1px solid #E2E8F0",
+            }}
+          >
+            <Row gutter={[16, 12]}>
+              <Col xs={24} md={12}>
+                <Text type="secondary">Profesor asignado</Text>
+                <div style={{ fontWeight: 600, color: "#0F172A" }}>
+                  {grupo.profesor?.nombre_completo || "Por definir"}
+                </div>
+              </Col>
+              <Col xs={24} md={12}>
+                <Text type="secondary">Disponibilidad actual</Text>
+                <div style={{ fontWeight: 600, color: "#0F172A" }}>
+                  {capacidad > 0 ? `${metaCapacidad.libres} de ${capacidad} cupos libres` : "Capacidad por definir"}
+                </div>
+              </Col>
+            </Row>
+          </div>
         </Space>
       </Card>
     );
@@ -294,17 +361,28 @@ export default function CursosList() {
   }
 
   return (
-    <Card variant="borderless" style={{ background: "transparent" }}>
+    <Card
+      variant="borderless"
+      style={{
+        background: "linear-gradient(180deg, #F8FBFF 0%, #FFFFFF 32%)",
+        borderRadius: 28,
+      }}
+      bodyStyle={{ padding: isMobile ? 14 : 22 }}
+    >
       <Space direction="vertical" size={isMobile ? 16 : 24} style={{ width: "100%" }}>
-        <Space 
-          style={{ width: "100%", justifyContent: "space-between", flexWrap: "wrap" }}
-          direction={isMobile ? "vertical" : "horizontal"}
+        <Flex
+          justify="space-between"
+          align={isMobile ? "flex-start" : "center"}
+          gap={12}
+          vertical={isMobile}
         >
           <div>
-            <Title level={isMobile ? 3 : 2} style={{ marginBottom: 0 }}>
+            <Title level={isMobile ? 3 : 2} style={{ marginBottom: 0, marginTop: 0 }}>
               Grupos académicos
             </Title>
-            {!isMobile && <Text type="secondary">Revisa los grupos activos y los próximos lanzamientos en un solo lugar.</Text>}
+            <Text type="secondary">
+              Revisa el estado, la disponibilidad y el calendario de cada grupo en un solo lugar.
+            </Text>
           </div>
           <Space size={isMobile ? 8 : 12}>
             <Button 
@@ -312,6 +390,7 @@ export default function CursosList() {
               onClick={refrescar} 
               loading={refreshing}
               size={isMobile ? "middle" : "large"}
+              style={{ borderRadius: 14 }}
             >
               {isMobile ? "" : "Actualizar"}
             </Button>
@@ -320,29 +399,42 @@ export default function CursosList() {
               icon={<PlusOutlined />} 
               onClick={() => create("cursos")}
               size={isMobile ? "middle" : "large"}
+              style={{ borderRadius: 14, boxShadow: "0 10px 24px rgba(217, 28, 130, 0.22)" }}
             >
               {isMobile ? "Nuevo" : "Nuevo grupo"}
             </Button>
           </Space>
-        </Space>
+        </Flex>
 
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={8}>
-            <Card variant="outlined" size="small">
+            <Card
+              variant="outlined"
+              size="small"
+              style={{ borderRadius: 18, borderColor: "#D6E4FF", background: "#F7FAFF" }}
+            >
               <Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>Grupos activos</Text>
-              <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>{gruposActivos.length}</Title>
+              <Title level={isMobile ? 4 : 3} style={{ margin: 0, color: "#1D4ED8" }}>{gruposActivos.length}</Title>
             </Card>
           </Col>
           <Col xs={24} sm={8}>
-            <Card variant="outlined" size="small">
+            <Card
+              variant="outlined"
+              size="small"
+              style={{ borderRadius: 18, borderColor: "#D1FAE5", background: "#F5FFFB" }}
+            >
               <Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>Próximos grupos</Text>
-              <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>{gruposProximos.length}</Title>
+              <Title level={isMobile ? 4 : 3} style={{ margin: 0, color: "#047857" }}>{gruposProximos.length}</Title>
             </Card>
           </Col>
           <Col xs={24} sm={8}>
-            <Card variant="outlined" size="small">
+            <Card
+              variant="outlined"
+              size="small"
+              style={{ borderRadius: 18, borderColor: "#FBCFE8", background: "#FFF7FB" }}
+            >
               <Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>Cupos disponibles (activos)</Text>
-              <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>{cuposDisponibles}</Title>
+              <Title level={isMobile ? 4 : 3} style={{ margin: 0, color: "#BE185D" }}>{cuposDisponibles}</Title>
             </Card>
           </Col>
         </Row>
