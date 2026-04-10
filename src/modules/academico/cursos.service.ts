@@ -87,37 +87,13 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
   const totalSesionesPorCurso = new Map<number, number>();
 
   if (cursoIds.length > 0) {
-    let sesiones: any[] | null = null;
-
-    const { data: sesionesConObservaciones, error: sesionesConObservacionesError } = await supabaseBrowserClient
+    const { data: sesiones, error: sesionesError } = await supabaseBrowserClient
       .from("sesiones_clase")
-      .select("curso_id, fecha, tema_visto, observaciones")
+      .select("curso_id, fecha, tema_visto")
       .in("curso_id", cursoIds)
       .order("fecha", { ascending: false });
 
-    if (!sesionesConObservacionesError) {
-      sesiones = sesionesConObservaciones;
-    } else {
-      const errorText = String(
-        sesionesConObservacionesError.message || sesionesConObservacionesError.details || ""
-      ).toLowerCase();
-      const missingObservaciones = errorText.includes("observaciones")
-        || errorText.includes("column")
-        || errorText.includes("schema cache");
-
-      if (!missingObservaciones) {
-        throw sesionesConObservacionesError;
-      }
-
-      const { data: sesionesBasicas, error: sesionesBasicasError } = await supabaseBrowserClient
-        .from("sesiones_clase")
-        .select("curso_id, fecha, tema_visto")
-        .in("curso_id", cursoIds)
-        .order("fecha", { ascending: false });
-
-      if (sesionesBasicasError) throw sesionesBasicasError;
-      sesiones = sesionesBasicas;
-    }
+    if (sesionesError) throw sesionesError;
 
     (sesiones || []).forEach((sesion: any) => {
       const cursoId = Number(sesion?.curso_id);
@@ -127,11 +103,11 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
 
       if (ultimaSesionPorCurso.has(cursoId)) return;
 
-      const textoClase = String(sesion?.observaciones || sesion?.tema_visto || "").trim();
+      const textoClase = String(sesion?.tema_visto || "").trim();
 
       ultimaSesionPorCurso.set(cursoId, {
         numero: extractClassNumber(textoClase),
-        tema: String(sesion?.tema_visto || "").trim() || String(sesion?.observaciones || "").trim() || null,
+        tema: String(sesion?.tema_visto || "").trim() || null,
         fecha: sesion?.fecha || null,
       });
     });
