@@ -87,13 +87,37 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
   const totalSesionesPorCurso = new Map<number, number>();
 
   if (cursoIds.length > 0) {
-    const { data: sesiones, error: sesionesError } = await supabaseBrowserClient
+    let sesiones: any[] | null = null;
+
+    const { data: sesionesConObservaciones, error: sesionesConObservacionesError } = await supabaseBrowserClient
       .from("sesiones_clase")
       .select("curso_id, fecha, tema_visto, observaciones")
       .in("curso_id", cursoIds)
       .order("fecha", { ascending: false });
 
-    if (sesionesError) throw sesionesError;
+    if (!sesionesConObservacionesError) {
+      sesiones = sesionesConObservaciones;
+    } else {
+      const errorText = String(
+        sesionesConObservacionesError.message || sesionesConObservacionesError.details || ""
+      ).toLowerCase();
+      const missingObservaciones = errorText.includes("observaciones")
+        || errorText.includes("column")
+        || errorText.includes("schema cache");
+
+      if (!missingObservaciones) {
+        throw sesionesConObservacionesError;
+      }
+
+      const { data: sesionesBasicas, error: sesionesBasicasError } = await supabaseBrowserClient
+        .from("sesiones_clase")
+        .select("curso_id, fecha, tema_visto")
+        .in("curso_id", cursoIds)
+        .order("fecha", { ascending: false });
+
+      if (sesionesBasicasError) throw sesionesBasicasError;
+      sesiones = sesionesBasicas;
+    }
 
     (sesiones || []).forEach((sesion: any) => {
       const cursoId = Number(sesion?.curso_id);
