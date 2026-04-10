@@ -46,8 +46,18 @@ create policy "Service role y admins pueden acceder followups"
     )
   );
 
+create or replace function public.tg_set_conversation_followups_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
 drop trigger if exists update_conversation_followups_updated_at on public.conversation_followups;
 create trigger update_conversation_followups_updated_at
   before update on public.conversation_followups
   for each row
-  execute function update_timestamp();
+  execute function public.tg_set_conversation_followups_updated_at();
