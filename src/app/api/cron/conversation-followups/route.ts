@@ -5,6 +5,7 @@ import { WhatsAppService, normalizePhoneNumber, validatePhoneNumber } from "@/se
 export const runtime = "nodejs";
 
 const FOLLOWUP_TYPE = "followup_3h_social";
+const FOLLOWUP_AUDIT_USER_MESSAGE = "[SISTEMA] Follow-up automático 3h · redes";
 const FOLLOWUP_DELAY_HOURS = 3;
 const META_SAFE_WINDOW_HOURS = 22;
 const LOOKBACK_HOURS = 26;
@@ -114,6 +115,10 @@ function buildThreadKey(row: Pick<ConversationRow, "phone_number" | "channel">):
 
 function isSystemConversation(row: Pick<ConversationRow, "user_message">): boolean {
   return /^\s*\[SISTEMA\]/i.test(String(row.user_message || ""));
+}
+
+function isThreeHourFollowupAudit(row: Pick<ConversationRow, "user_message">): boolean {
+  return String(row.user_message || "").trim() === FOLLOWUP_AUDIT_USER_MESSAGE;
 }
 
 function buildFollowupMessage(): string {
@@ -323,11 +328,47 @@ async function runFollowupsJob(): Promise<NextResponse> {
         continue;
       }
 
-      const hasLaterTouch = sortedRows.some((row) => new Date(row.created_at).getTime() > referenceMessageAt.getTime());
       const cycleKey = `${threadKey}__${lastCustomerTurn.created_at}`;
       const priorFollowup = followupStateByCycle.get(cycleKey);
 
-      if (hasLaterTouch) {
+      if (priorFollowup?.status === "sent" || priorFollowup?.status === "skipped") {
+        skipped++;
+        continue;
+      }
+
+      const hasFollowupAuditAfterReference = sortedRows.some((row) => {
+        const rowTime = new Date(row.created_at).getTime();
+        return rowTime > referenceMessageAt.getTime() && isThreeHourFollowupAudit(row);
+      });
+
+      if (hasFollowupAuditAfterReference) {
+        if (!priorFollowup) {
+          await upsertFollowupRecord(supabase, {
+            conversationId: threadKey,
+            phone: normalizedPhone,
+            type: FOLLOWUP_TYPE,
+            referenceMessageAt: lastCustomerTurn.created_at,
+            status: "skipped",
+            payload: { reason: "followup_already_audited" },
+          });
+          followupStateByCycle.set(cycleKey, {
+            id: cycleKey,
+            conversation_id: threadKey,
+            type: FOLLOWUP_TYPE,
+            reference_message_at: lastCustomerTurn.created_at,
+            status: "skipped",
+          });
+        }
+        skipped++;
+        continue;
+      }
+
+      const hasLaterNonSystemTouch = sortedRows.some((row) => {
+        const rowTime = new Date(row.created_at).getTime();
+        return rowTime > referenceMessageAt.getTime() && !isSystemConversation(row);
+      });
+
+      if (hasLaterNonSystemTouch) {
         if (!priorFollowup) {
           await upsertFollowupRecord(supabase, {
             conversationId: threadKey,
@@ -337,12 +378,14 @@ async function runFollowupsJob(): Promise<NextResponse> {
             status: "skipped",
             payload: { reason: "conversation_touched_after_customer_message" },
           });
+          followupStateByCycle.set(cycleKey, {
+            id: cycleKey,
+            conversation_id: threadKey,
+            type: FOLLOWUP_TYPE,
+            reference_message_at: lastCustomerTurn.created_at,
+            status: "skipped",
+          });
         }
-        skipped++;
-        continue;
-      }
-
-      if (priorFollowup?.status === "sent" || priorFollowup?.status === "skipped") {
         skipped++;
         continue;
       }
@@ -385,7 +428,7 @@ async function runFollowupsJob(): Promise<NextResponse> {
 
         await saveConversationAudit(supabase, {
           phone: normalizedPhone,
-          userMessage: "[SISTEMA] Follow-up automático 3h · redes",
+          userMessage: FOLLOWUP_AUDIT_USER_MESSAGE,
           agentResponse: message,
           profileName: contactName,
         });
@@ -402,6 +445,13 @@ async function runFollowupsJob(): Promise<NextResponse> {
             contactName,
             courseName,
           },
+        });
+        followupStateByCycle.set(cycleKey, {
+          id: cycleKey,
+          conversation_id: threadKey,
+          type: FOLLOWUP_TYPE,
+          reference_message_at: lastCustomerTurn.created_at,
+          status: "sent",
         });
 
         sent++;
