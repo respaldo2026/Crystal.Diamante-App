@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/recordatorios-pago",
       "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron/conversation-followups",
-      "schedule": "*/15 * * * *"
     }
   ]
 }
