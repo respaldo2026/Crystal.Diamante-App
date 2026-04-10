@@ -10,13 +10,17 @@ const META_SAFE_WINDOW_HOURS = 22;
 const LOOKBACK_HOURS = 26;
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_FOLLOWUP_MAX_PER_RUN || 25);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_FOLLOWUP_DELAY_MS || 900);
-const DEFAULT_TEMPLATE = [
-  "Hola{{name}} 😊",
+const DEFAULT_FOLLOWUP_MESSAGE = [
+  "💗 Mientras decides, mira lo que están logrando nuestras estudiantes 😍",
   "",
-  "Te comparto nuestras redes para que veas resultados reales, tips y contenido de nuestras estudiantes{{course}}:",
-  "{{social_links}}",
+  "💎 Instagram:",
+  "https://instagram.com/crystal.diamante.academia",
   "",
-  "Si quieres, te ayudo a retomar tu proceso y resolver cualquier duda.",
+  "💎 Facebook:",
+  "https://www.facebook.com/Crystal.Diamante.cali",
+  "",
+  "📲 Guarda nuestro número y revisa nuestros estados (subimos trabajos reales y promociones):",
+  "👉 3012038582",
 ].join("\n");
 
 type ConversationRow = {
@@ -51,14 +55,6 @@ type FollowupRow = {
   type: string;
   reference_message_at?: string | null;
   status: "sent" | "skipped" | "failed";
-};
-
-type ConfigRow = {
-  nombre_academia?: string | null;
-  instagram?: string | null;
-  facebook?: string | null;
-  youtube?: string | null;
-  ciudad?: string | null;
 };
 
 function sleep(ms: number) {
@@ -120,50 +116,10 @@ function isSystemConversation(row: Pick<ConversationRow, "user_message">): boole
   return /^\s*\[SISTEMA\]/i.test(String(row.user_message || ""));
 }
 
-function normalizeUrl(url?: string | null): string {
-  const value = String(url || "").trim();
-  if (!value) return "";
-  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
-}
-
-function renderTemplate(template: string, variables: Record<string, string>): string {
-  let output = template;
-  for (const [key, value] of Object.entries(variables)) {
-    output = output.replace(new RegExp(`{{\\s*${key}\\s*}}`, "gi"), value);
-  }
-
-  return output
-    .replace(/{{\s*[^}]+\s*}}/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]+\n/g, "\n")
+function buildFollowupMessage(): string {
+  return String(process.env.WHATSAPP_AUTO_FOLLOWUP_3H_TEMPLATE || DEFAULT_FOLLOWUP_MESSAGE)
+    .replace(/\r\n/g, "\n")
     .trim();
-}
-
-function buildSocialLinks(config: ConfigRow | null): string[] {
-  const links = [
-    { label: "Instagram", value: normalizeUrl(config?.instagram) },
-    { label: "Facebook", value: normalizeUrl(config?.facebook) },
-    { label: "YouTube", value: normalizeUrl(config?.youtube) },
-  ].filter((item) => item.value);
-
-  return links.map((item) => `• ${item.label}: ${item.value}`);
-}
-
-function buildFollowupMessage(input: {
-  contactName?: string | null;
-  courseName?: string | null;
-  city?: string | null;
-  socialLinks: string[];
-}): string {
-  return renderTemplate(
-    process.env.WHATSAPP_AUTO_FOLLOWUP_3H_TEMPLATE || DEFAULT_TEMPLATE,
-    {
-      name: input.contactName ? ` ${input.contactName.trim()}` : "",
-      course: input.courseName ? ` del curso de ${input.courseName.trim()}` : "",
-      city: input.city ? input.city.trim() : "",
-      social_links: input.socialLinks.join("\n"),
-    }
-  );
 }
 
 async function saveConversationAudit(
@@ -257,7 +213,6 @@ async function runFollowupsJob(): Promise<NextResponse> {
       conversationsResult,
       leadsResult,
       profilesResult,
-      configResult,
       followupsResult,
     ] = await Promise.all([
       supabase
@@ -276,11 +231,6 @@ async function runFollowupsJob(): Promise<NextResponse> {
         .or("telefono.not.is.null,telefono_2.not.is.null")
         .limit(5000),
       supabase
-        .from("configuracion")
-        .select("nombre_academia, instagram, facebook, youtube, ciudad")
-        .limit(1)
-        .maybeSingle(),
-      supabase
         .from("conversation_followups")
         .select("id, conversation_id, type, reference_message_at, status")
         .eq("type", FOLLOWUP_TYPE)
@@ -296,21 +246,8 @@ async function runFollowupsJob(): Promise<NextResponse> {
     if (profilesResult.error) {
       throw new Error(`Error consultando perfiles: ${profilesResult.error.message}`);
     }
-    if (configResult.error) {
-      throw new Error(`Error consultando configuración: ${configResult.error.message}`);
-    }
     if (followupsResult.error) {
       throw new Error(`Error consultando follow-ups previos: ${followupsResult.error.message}`);
-    }
-
-    const socialLinks = buildSocialLinks((configResult.data as ConfigRow | null) || null);
-    if (!socialLinks.length) {
-      return NextResponse.json({
-        success: true,
-        skipped: true,
-        reason: "No hay redes sociales configuradas para enviar el follow-up automático",
-        timestamp: new Date().toISOString(),
-      });
     }
 
     const conversations = (conversationsResult.data || []) as ConversationRow[];
@@ -441,12 +378,7 @@ async function runFollowupsJob(): Promise<NextResponse> {
 
       const contactName = String(lead?.nombre || profile?.nombre_completo || lastCustomerTurn.profile_name || "").trim() || null;
       const courseName = String(lead?.interes || "").trim() || null;
-      const message = buildFollowupMessage({
-        contactName,
-        courseName,
-        city: configResult.data?.ciudad || null,
-        socialLinks,
-      });
+      const message = buildFollowupMessage();
 
       try {
         const response = await WhatsAppService.sendText(normalizedPhone, message);
