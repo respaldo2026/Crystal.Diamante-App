@@ -120,7 +120,7 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
     if (cursosSinNumero.length > 0) {
       const { data: asistencias, error: asistenciasError } = await supabaseBrowserClient
         .from("asistencias")
-        .select("fecha, observaciones, matriculas!inner(curso_id)")
+        .select("fecha, observaciones, matriculas:matriculas!asistencias_matricula_id_fkey!inner(curso_id)")
         .in("matriculas.curso_id", cursosSinNumero)
         .order("fecha", { ascending: false });
 
