@@ -22,6 +22,13 @@ export interface WhatsAppSendRequest {
   template?: string;
   templateVariables?: string[];
   templateLanguage?: string;
+  auditEntry?: {
+    userMessage?: string;
+    agentResponse?: string;
+    transcription?: string | null;
+    channel?: string | null;
+    profileName?: string | null;
+  };
 }
 
 /**

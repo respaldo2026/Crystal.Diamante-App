@@ -22,6 +22,15 @@ type TemplateAuditLogInput = {
   messageId?: string;
 };
 
+type ConversationAuditInput = {
+  phone: string;
+  userMessage: string;
+  agentResponse: string;
+  transcription?: string | null;
+  channel?: string | null;
+  profileName?: string | null;
+};
+
 function getSupabaseServiceClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -36,24 +45,35 @@ function getSupabaseServiceClient() {
 }
 
 async function saveTemplateAuditConversation(input: TemplateAuditLogInput) {
+  await saveConversationAudit({
+    phone: input.phone,
+    userMessage: "[SISTEMA] Envio de plantilla WhatsApp",
+    agentResponse:
+      `📤 Plantilla enviada: ${input.templateName}\n` +
+      `Idioma: ${input.templateLanguage}\n` +
+      `Variables: ${input.templateVariables.length ? input.templateVariables.join(" | ") : "-"}\n` +
+      `Meta Message ID: ${input.messageId || "sin ID"}`,
+    transcription: null,
+    channel: "whatsapp",
+    profileName: null,
+  });
+}
+
+async function saveConversationAudit(input: ConversationAuditInput) {
   try {
     const supabase = getSupabaseServiceClient();
     if (!supabase) {
-      console.warn("[WhatsApp API] No se pudo guardar auditoria de plantilla: faltan variables de Supabase");
+      console.warn("[WhatsApp API] No se pudo guardar auditoria de conversación: faltan variables de Supabase");
       return;
     }
 
     const payload = {
       phone_number: input.phone,
-      user_message: "[SISTEMA] Envio de plantilla WhatsApp",
-      agent_response:
-        `📤 Plantilla enviada: ${input.templateName}\n` +
-        `Idioma: ${input.templateLanguage}\n` +
-        `Variables: ${input.templateVariables.length ? input.templateVariables.join(" | ") : "-"}\n` +
-        `Meta Message ID: ${input.messageId || "sin ID"}`,
-      transcription: null,
-      channel: "whatsapp",
-      profile_name: null,
+      user_message: input.userMessage,
+      agent_response: input.agentResponse,
+      transcription: input.transcription ?? null,
+      channel: input.channel ?? "whatsapp",
+      profile_name: input.profileName ?? null,
     };
 
     let { error } = await supabase.from("agent_conversations").insert(payload);
@@ -70,10 +90,10 @@ async function saveTemplateAuditConversation(input: TemplateAuditLogInput) {
     }
 
     if (error) {
-      console.warn("[WhatsApp API] Error guardando auditoria de plantilla:", error);
+      console.warn("[WhatsApp API] Error guardando auditoria de conversación:", error);
     }
   } catch (error) {
-    console.warn("[WhatsApp API] Excepcion guardando auditoria de plantilla:", error);
+    console.warn("[WhatsApp API] Excepcion guardando auditoria de conversación:", error);
   }
 }
 
@@ -257,6 +277,17 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Responder con éxito
+    if (body.auditEntry?.agentResponse) {
+      await saveConversationAudit({
+        phone: body.phone,
+        userMessage: body.auditEntry.userMessage || "[SISTEMA] Mensaje manual WhatsApp",
+        agentResponse: body.auditEntry.agentResponse,
+        transcription: body.auditEntry.transcription ?? null,
+        channel: body.auditEntry.channel ?? "whatsapp",
+        profileName: body.auditEntry.profileName ?? null,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       messageId: response.messages?.[0]?.id,

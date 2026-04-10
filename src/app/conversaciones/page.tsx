@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
+  Alert,
+  App,
   Card,
   Table,
   Input,
@@ -22,6 +24,7 @@ import {
   Divider,
   Tabs,
   Grid,
+  Typography,
 } from "antd";
 import {
   SearchOutlined,
@@ -32,8 +35,8 @@ import {
   MessageOutlined,
   RobotOutlined,
   BarsOutlined,
-  PrinterOutlined,
   FileTextOutlined,
+  SendOutlined,
 } from "@ant-design/icons";
 import Image from "next/image";
 import { supabaseBrowserClient } from "@/utils/supabase/client";
@@ -104,6 +107,40 @@ interface ChatBubbleItem {
   isTemplate?: boolean;
   templateName?: string;
 }
+
+type QuickReminderPreset = {
+  key: string;
+  label: string;
+  description: string;
+  buildMessage: (contactName?: string | null) => string;
+};
+
+const META_SAFE_WINDOW_HOURS = 22;
+const WHATSAPP_FREE_WINDOW_HOURS = 24;
+
+const QUICK_REMINDER_PRESETS: QuickReminderPreset[] = [
+  {
+    key: "seguimiento_interes",
+    label: "Seguimiento de interés",
+    description: "Retoma la conversación antes de que el lead se enfríe.",
+    buildMessage: (contactName) =>
+      `Hola${contactName ? ` ${contactName}` : ""} 😊 Te escribimos para no dejar enfriar tu proceso en Academia Crystal Diamante. Si todavía te interesa el curso, con gusto te ayudo a resolver tus dudas y a continuar con la inscripción.`,
+  },
+  {
+    key: "recordatorio_cupo",
+    label: "Recordar separación de cupo",
+    description: "Recuerda el valor y el beneficio de separar el cupo hoy.",
+    buildMessage: (contactName) =>
+      `Hola${contactName ? ` ${contactName}` : ""} 😊 Te recuerdo que puedes separar tu cupo con *$190.000*. Ese valor ya incluye camisa uniforme, ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. Si quieres, te comparto los medios de pago.`,
+  },
+  {
+    key: "recordatorio_visita",
+    label: "Invitar a visitar la sede",
+    description: "Invita al lead a acercarse a la academia antes de perder la ventana.",
+    buildMessage: (contactName) =>
+      `Hola${contactName ? ` ${contactName}` : ""} 😊 Si quieres, puedes visitarnos en barrio Comuneros 1, cerca de la panadería Pablos Pan, en La Cosmetiquera, segundo piso. Si te sirve, te comparto la ubicación y te dejamos listo el siguiente paso para tu inscripción.`,
+  },
+];
 
 const isSystemTemplateConversation = (conv: Pick<Conversation, "user_message" | "agent_response">) => {
   const user = String(conv.user_message || "").trim();
@@ -361,6 +398,8 @@ const buildWhatsAppPreviewHtml = (threadLabel: string, messages: ChatBubbleItem[
 };
 
 export default function ConversacionesPage() {
+  const { message } = App.useApp();
+  const { Text } = Typography;
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -375,6 +414,8 @@ export default function ConversacionesPage() {
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [activeTab, setActiveTab] = useState("todos");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [selectedReminderKey, setSelectedReminderKey] = useState<string>(QUICK_REMINDER_PRESETS[0]?.key || "seguimiento_interes");
+  const [sendingReminder, setSendingReminder] = useState(false);
   const [templateCatalogByKey, setTemplateCatalogByKey] = useState<
     Record<string, { text: string; variableNames: string[] }>
   >({});
@@ -527,6 +568,10 @@ export default function ConversacionesPage() {
   useEffect(() => {
     cargarConversaciones();
   }, [cargarConversaciones]);
+
+  useEffect(() => {
+    setSelectedReminderKey(QUICK_REMINDER_PRESETS[0]?.key || "seguimiento_interes");
+  }, [selectedThreadKey]);
 
   const threads = useMemo<ConversationThread[]>(() => {
     const grouped = new Map<string, Conversation[]>();
@@ -704,6 +749,105 @@ export default function ConversacionesPage() {
     return threads.find((item) => item.thread_key === selectedThreadKey) || null;
   }, [threads, selectedThreadKey]);
 
+  const lastInboundConversation = useMemo(() => {
+    return phoneConversations
+      .slice()
+      .reverse()
+      .find((conv) => !isSystemTemplateConversation(conv) && String(conv.user_message || "").trim()) || null;
+  }, [phoneConversations]);
+
+  const reminderPreset = useMemo<QuickReminderPreset>(
+    () =>
+      QUICK_REMINDER_PRESETS.find((item) => item.key === selectedReminderKey)
+      || QUICK_REMINDER_PRESETS[0]
+      || {
+        key: "seguimiento_interes",
+        label: "Seguimiento de interés",
+        description: "Retoma la conversación antes de que el lead se enfríe.",
+        buildMessage: (contactName) =>
+          `Hola${contactName ? ` ${contactName}` : ""} 😊 Te escribimos para no dejar enfriar tu proceso en Academia Crystal Diamante.`,
+      },
+    [selectedReminderKey]
+  );
+
+  const reminderPreviewText = useMemo(
+    () => reminderPreset.buildMessage(selectedThread?.contact_name),
+    [reminderPreset, selectedThread?.contact_name]
+  );
+
+  const reminderWindowState = useMemo(() => {
+    const channel = selectedThread?.channel || "unknown";
+    const isWhatsappThread = channel === "whatsapp";
+    const normalizedPhone = normalizePhoneForMatch(selectedThread?.phone_number);
+    const hasReachablePhone = Boolean(normalizedPhone) && !normalizedPhone.startsWith("ig:");
+
+    if (!selectedThread) {
+      return {
+        enabled: false,
+        severity: "info" as const,
+        title: "Selecciona una conversación",
+        description: "Abre un hilo para ver y enviar un recordatorio rápido.",
+        elapsedHours: null as number | null,
+        remainingSafeHours: null as number | null,
+      };
+    }
+
+    if (!isWhatsappThread || !hasReachablePhone) {
+      return {
+        enabled: false,
+        severity: "warning" as const,
+        title: "Disponible solo para WhatsApp",
+        description: "Los recordatorios rápidos solo se pueden enviar a conversaciones de WhatsApp con número válido.",
+        elapsedHours: null as number | null,
+        remainingSafeHours: null as number | null,
+      };
+    }
+
+    if (!lastInboundConversation?.created_at) {
+      return {
+        enabled: false,
+        severity: "warning" as const,
+        title: "No hay mensaje reciente del cliente",
+        description: "No encontramos el último mensaje del lead para validar la ventana segura de envío.",
+        elapsedHours: null as number | null,
+        remainingSafeHours: null as number | null,
+      };
+    }
+
+    const now = dayjs();
+    const lastInboundAt = dayjs(lastInboundConversation.created_at);
+    const elapsedMinutes = Math.max(now.diff(lastInboundAt, "minute"), 0);
+    const elapsedHours = elapsedMinutes / 60;
+    const remainingSafeHours = Math.max(META_SAFE_WINDOW_HOURS - elapsedHours, 0);
+    const remainingFreeHours = Math.max(WHATSAPP_FREE_WINDOW_HOURS - elapsedHours, 0);
+
+    if (elapsedHours >= META_SAFE_WINDOW_HOURS) {
+      return {
+        enabled: false,
+        severity: "error" as const,
+        title: "Bloqueado por seguridad",
+        description: `Ya pasaron ${elapsedHours.toFixed(1)} horas desde el último mensaje del cliente. Desde las 22 horas bloqueamos este recordatorio para evitar riesgos con Meta.`,
+        elapsedHours,
+        remainingSafeHours,
+        remainingFreeHours,
+      };
+    }
+
+    const severity = elapsedHours >= 20 ? "warning" as const : "success" as const;
+    return {
+      enabled: true,
+      severity,
+      title: elapsedHours >= 20 ? "Ventana por vencer" : "Ventana segura activa",
+      description:
+        elapsedHours >= 20
+          ? `Han pasado ${elapsedHours.toFixed(1)} horas desde el último mensaje del cliente. Aún puedes enviar este recordatorio, pero solo quedan ${remainingSafeHours.toFixed(1)} horas antes del bloqueo automático.`
+          : `Han pasado ${elapsedHours.toFixed(1)} horas desde el último mensaje del cliente. Puedes enviar un recordatorio rápido antes de cumplir ${META_SAFE_WINDOW_HOURS} horas.`,
+      elapsedHours,
+      remainingSafeHours,
+      remainingFreeHours,
+    };
+  }, [lastInboundConversation, normalizePhoneForMatch, selectedThread]);
+
   const previewMessages = useMemo<ChatBubbleItem[]>(() => {
     if (!phoneConversations.length) return [];
 
@@ -774,9 +918,53 @@ export default function ConversacionesPage() {
 
   const previewLabel = selectedThread?.contact_name || getPhoneLabel(selectedThread?.phone_number);
 
+  const abrirHilo = (threadKey: string) => {
+    setSelectedThreadKey(threadKey);
+    setDrawerOpen(true);
+  };
+
   const abrirPreviewWhatsApp = (threadKey: string) => {
     setSelectedThreadKey(threadKey);
     setPreviewOpen(true);
+  };
+
+  const enviarRecordatorioRapido = async () => {
+    if (!selectedThread || !reminderWindowState.enabled || !reminderPreviewText.trim()) {
+      return;
+    }
+
+    try {
+      setSendingReminder(true);
+      const response = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: selectedThread.phone_number,
+          type: "text",
+          message: reminderPreviewText,
+          auditEntry: {
+            userMessage: `[SISTEMA] Recordatorio rápido manual · ${reminderPreset.label}`,
+            agentResponse: reminderPreviewText,
+            transcription: null,
+            channel: "whatsapp",
+            profileName: selectedThread.contact_name || null,
+          },
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result?.success === false) {
+        throw new Error(result?.error || "No se pudo enviar el recordatorio");
+      }
+
+      message.success("Recordatorio enviado y guardado en la conversación");
+      await cargarConversaciones();
+    } catch (error) {
+      console.error("Error enviando recordatorio rápido:", error);
+      message.error(error instanceof Error ? error.message : "No se pudo enviar el recordatorio");
+    } finally {
+      setSendingReminder(false);
+    }
   };
 
   const abrirPreviewEnPestana = () => {
@@ -964,6 +1152,13 @@ export default function ConversacionesPage() {
       width: 110,
       render: (_: any, record: ConversationThread) => (
         <Space size={4}>
+          <Tooltip title="Abrir hilo y acciones rápidas">
+            <Button
+              size="small"
+              icon={<MessageOutlined />}
+              onClick={() => abrirHilo(record.thread_key)}
+            />
+          </Tooltip>
           <Tooltip title="Ver conversación completa tipo WhatsApp">
             <Button
               type="primary"
@@ -1167,6 +1362,13 @@ export default function ConversacionesPage() {
 
                         <Space wrap>
                           <Button
+                            size="small"
+                            icon={<MessageOutlined />}
+                            onClick={() => abrirHilo(record.thread_key)}
+                          >
+                            Hilo
+                          </Button>
+                          <Button
                             type="primary"
                             size="small"
                             icon={<FileTextOutlined />}
@@ -1248,6 +1450,86 @@ export default function ConversacionesPage() {
         width={600}
         bodyStyle={{ padding: "24px" }}
       >
+          <Card size="small" style={{ marginBottom: 16, borderRadius: 12 }}>
+            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+              <div>
+                <Text strong>Recordatorio rápido</Text>
+                <div style={{ color: "#667085", marginTop: 4 }}>
+                  Envía un seguimiento prediseñado solo dentro de la ventana segura de WhatsApp.
+                </div>
+              </div>
+
+              <Alert
+                type={reminderWindowState.severity}
+                showIcon
+                message={reminderWindowState.title}
+                description={reminderWindowState.description}
+              />
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={12}>
+                  <Card size="small" style={{ borderRadius: 10, background: "#fafafa" }}>
+                    <Statistic
+                      title="Último mensaje del cliente"
+                      value={lastInboundConversation?.created_at ? dayjs(lastInboundConversation.created_at).fromNow() : "Sin dato"}
+                    />
+                  </Card>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Card size="small" style={{ borderRadius: 10, background: "#fafafa" }}>
+                    <Statistic
+                      title="Horas seguras restantes"
+                      value={reminderWindowState.remainingSafeHours !== null ? reminderWindowState.remainingSafeHours.toFixed(1) : "-"}
+                      suffix="h"
+                    />
+                  </Card>
+                </Col>
+              </Row>
+
+              <div>
+                <Text strong>Plantilla prediseñada</Text>
+                <Select
+                  style={{ width: "100%", marginTop: 8 }}
+                  value={selectedReminderKey}
+                  onChange={setSelectedReminderKey}
+                  options={QUICK_REMINDER_PRESETS.map((preset) => ({
+                    label: `${preset.label} · ${preset.description}`,
+                    value: preset.key,
+                  }))}
+                  disabled={!selectedThread || selectedThread.channel !== "whatsapp"}
+                />
+              </div>
+
+              <div>
+                <Text strong>Vista previa</Text>
+                <div
+                  style={{
+                    marginTop: 8,
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 10,
+                    padding: 12,
+                    background: "#FAFAFA",
+                    whiteSpace: "pre-wrap",
+                    color: "#111827",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {reminderPreviewText}
+                </div>
+              </div>
+
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={enviarRecordatorioRapido}
+                loading={sendingReminder}
+                disabled={!reminderWindowState.enabled}
+              >
+                Enviar recordatorio rápido
+              </Button>
+            </Space>
+          </Card>
+
         {phoneConversations.length === 0 ? (
           <Empty description="No hay conversaciones para este número" />
         ) : (
