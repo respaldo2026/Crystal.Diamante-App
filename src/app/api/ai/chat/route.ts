@@ -654,7 +654,7 @@ Sigue siempre este orden:
 ⚠️ "Puedo ir personal" / "¿Puedo ir en persona?" → confirma que SÍ pueden atenderte en la academia y pide que indique cuándo puede ir. NO muestres el menú de horarios/inversión/inscripción.
 ⚠️ Si el usuario muestra frustración ("cuando atienda una persona de verdad", "no me entiendes", "siempre lo mismo") → pide disculpas brevemente, reconoce la limitación y da el número de Admisiones directamente.
 ⚠️ Si el usuario ya dijo "Horarios" y recibió el menú en respuesta — y lo repite — es porque el sistema no respondió su pregunta. Responde INMEDIATAMENTE con los horarios, sin preguntar de nuevo qué tema prefiere.
-⚠️ "Y el uniforme" / "y el uniforme?" / cualquier mensaje que contenga la palabra "uniforme" → SIEMPRE responde directamente: el uniforme (camiseta) se entrega al momento de inscribirse, sin costo adicional. NUNCA muestres el bloque de curso, horarios ni precio en respuesta a esto.
+⚠️ "Y el uniforme" / "y el uniforme?" / cualquier mensaje que contenga la palabra "uniforme" → SIEMPRE responde directamente: la camisa uniforme ya viene incluida dentro de los *$190.000* para separar el cupo. En esa misma respuesta también puedes aclarar que esos $190.000 incluyen ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. NUNCA muestres el bloque de curso, horarios ni precio completo en respuesta a esto.
 ⚠️ "Ya viene ahí" / "ya viene" / "viene incluido" / "viene con eso" / "viene con la inscripción" → el usuario está CONFIRMANDO que algo viene incluido (generalmente el uniforme o el kit). Confirma directamente con un "¡Así es! [lo que preguntó] viene incluido..." y continúa el flujo natural. NUNCA interpretes estas frases como una señal de que el usuario quiere ver horarios o información del curso.
 ⚠️ Patrón "Y el X" / "Y la X" → el usuario está AGREGANDO una pregunta puntual sobre X a la conversación en curso. SIEMPRE responde primero esa pregunta concreta y luego retoma el hilo si aplica. NUNCA ignores la pregunta agregada ni la reemplaces con el bloque de curso/horarios.
 ⚠️ SALUDO SIMPLE ("hola", "hola buenas", "hola buena tarde", "buenas tardes", "buenas noches", "buenos días") → SIEMPRE responde primero el saludo con calidez ("¡Buenas tardes! 😊 Bienvenida a Crystal Diamante...") antes de retomar cualquier contexto previo. NUNCA empieces directamente con "Perfecto, te refieres a [curso]" sin saludar.
@@ -674,14 +674,14 @@ Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
 
 - Precio: confirma inscripción + mensualidad, incluye 1-2 beneficios clave y pregunta si desea medios/fechas de pago.
 - Precio (formato obligatorio): muestra siempre *3 opciones de pago* en este orden y con negrilla: *Por Clase*, *Mensual Opción A*, *Mensual Opción B*. Hazlo en formato corto y comercial (sin texto técnico largo). Debes aclarar materiales en cada una: Por Clase = no incluye materiales; Opción A = incluye ~70% de materiales; Opción B = incluye 100% de materiales del mes.
-- "Efectivo" / confirmación de medio de pago: NO reinicies el embudo. Confirma que efectivo está disponible y da el siguiente paso: "¡Perfecto! Entonces puedes separar tu cupo pagando la inscripción en efectivo directamente en la academia. ¿Quieres que te diga los pasos para hacerlo?"
+- "Efectivo" / confirmación de medio de pago: NO reinicies el embudo. Confirma que efectivo está disponible y da el siguiente paso: "¡Perfecto! Entonces puedes separar tu cupo pagando *$190.000* en efectivo directamente en la academia. Ese valor ya incluye camisa uniforme, ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. ¿Quieres que te diga los pasos para hacerlo?"
 - "Sí" / "sí porfavor" / "porfavor" después de preguntar si quiere medios y fechas de pago: da inmediatamente la lista de medios de pago y la fecha límite de mensualidad. NO preguntes de nuevo qué quiere saber.
 - Medios/fechas de pago: lista los medios disponibles (💵 Efectivo • 💜 Nequi: 3006402575 • 🟡 Bancolombia • 🟢 Sistecredito • 💳 Tarjeta), indica que la mensualidad tiene plazo hasta la segunda clase, y pregunta si quiere guía de inscripción.
 - "¿Por todo cuánto se paga?" / "¿Cuánto es en total?": responde inscripción + (mensualidad × meses del programa). Ej: para Artista Integral en Uñas = $190.000 inscripción + 5 mensualidades de $260.000 = $1.490.000 en total aproximado. Luego pregunta si quiere separar cupo.
 - Horarios (cuando ya se identificó el programa): da directamente la información de días y horarios del programa en cuestión. NO preguntes de nuevo qué quiere saber.
 - Sábados (cuando hay grupo en sábado): confirma el horario disponible y pregunta si le queda bien.
 - Sábados (cuando NO hay grupo en sábado): di claramente que por ahora no hay grupo los sábados. Valida que es una situación entendible si trabajan entre semana. Pregunta si quieren quedar en lista de espera para cuando se abra un grupo en ese horario. NO ofrezcas el grupo de martes ni ningún otro día como alternativa sin que te lo pidan.
-- Uniforme / kit primer día: el uniforme (camiseta) se entrega al momento de la inscripción. El kit de materiales se entrega al inicio de cada mes junto con el pago de mensualidad; contiene aproximadamente el 70% de los productos que se usan durante ese mes de clases. El primer día puedes venir con ropa cómoda, no necesitas llevar nada.
+- Uniforme / kit primer día: la camisa uniforme ya viene incluida en los *$190.000* de separación del cupo. Ese valor también incluye ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. El kit de materiales se entrega al inicio de cada mes junto con el pago de mensualidad; contiene aproximadamente el 70% de los productos que se usan durante ese mes de clases. El primer día puedes venir con ropa cómoda, no necesitas llevar nada.
 - "¿Cuántas clases cubre la mensualidad?": cada mensualidad cubre 4 clases aproximadamente (el programa es de 20 clases en 5 meses). Ofrece detallar el contenido de algún mes específico.
 - "¿No le rebajan a la mensualidad?" / negociación de precio: la mensualidad tiene un precio fijo de $260.000. Sin embargo, Sistecredito permite financiar en cuotas. ¿Quieres que te explique cómo funciona esa opción?
 - Fotos del kit: di que puedes conseguirlas, pide confirmar programa/ciclo para enviar las correctas.
@@ -2185,12 +2185,7 @@ function buildShortAckContinuationReply(
   }
 
   if (/referencia|llegar|ubicacion|direccion|maps/.test(normalizedPending)) {
-    if (academy?.direccion) {
-      if (academy?.maps_url) {
-        return `¡Claro! 🙌\n\nDirección: *${academy.direccion}*.\n🗺️ Mapa: ${academy.maps_url}\n\nSi quieres, también te doy una referencia rápida para llegar sin enredos 😊`;
-      }
-      return `¡Claro! 🙌\n\nDirección: *${academy.direccion}*.\n\nSi quieres, también te doy una referencia rápida para llegar sin enredos 😊`;
-    }
+    return buildLocationReferenceReply(academy);
   }
 
   if (/inscribirme|separar\s+cupo|pasos\s+de\s+inscripcion/.test(normalizedPending)) {
@@ -3540,7 +3535,16 @@ function buildSeparaCupoPaymentReply(
 
   const direccion = String(academy?.direccion || "").trim();
   const mapsUrl = String(academy?.maps_url || "").trim();
-  const locationRef = "*La Cosmetikera (segundo piso)*, oriente de Cali, cerca a la Panadería Pablos Pam";
+  const locationRef = "*La Cosmetiquera (segundo piso)*, barrio Comuneros 1, cerca de la panadería Pablos Pan";
+  const addedValueBlock = [
+    "✨ *Ese valor ya te incluye:*",
+    "• Camisa uniforme",
+    "• Ceremonia de grado",
+    "• Certificado",
+    "• Alquiler de toga",
+    "• Guías",
+    "• Plataforma educativa",
+  ].join("\n");
 
   const montoLine = insText ? `• Monto: *${insText}*` : `• Monto: te lo confirma Admisiones al contactarte`;
   const pagoEfectivoLine = insText ? `• Paga *${insText}* en efectivo` : `• Pago en efectivo (valor exacto te lo confirma Admisiones)`;
@@ -3554,10 +3558,12 @@ function buildSeparaCupoPaymentReply(
   ].filter(Boolean).join("\n");
 
   const intro = insText
-    ? `¡Perfecto! 🙌 Para separar tu cupo${programLabel}, el pago de inscripción es de *${insText}*.`
+    ? `¡Perfecto! 🙌 Para separar tu cupo${programLabel}, el valor es de *${insText}*.`
     : `¡Perfecto! 🙌 Para separar tu cupo${programLabel}, el pago de inscripción te lo confirma nuestro equipo de Admisiones.`;
 
   return `${intro}
+
+${addedValueBlock}
 
 Puedes hacerlo de estas formas:
 
@@ -3589,6 +3595,14 @@ function buildInstagramFollowup(academy: any | null): string {
 
   if (!links.length) return "";
   return `\n\n📲 Si quieres más info, también te comparto nuestras redes:\n${links.join("\n")}`;
+}
+
+function buildLocationReferenceReply(academy: any | null): string {
+  const direccion = String(academy?.direccion || "Calle 53 #30a 101 - Barrio Comuneros 1").trim();
+  const mapsUrl = String(academy?.maps_url || "").trim();
+  const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
+
+  return `¡Claro! 🙌\n\n📍 *${direccion}*${mapsLine}\n\nReferencia: estamos en *barrio Comuneros 1*, cerca de la *panadería Pablos Pan*, en *La Cosmetiquera, segundo piso*.\n\nSi quieres, también te indico la forma más fácil de llegar.`;
 }
 
 function buildCuposReply(
@@ -3803,11 +3817,7 @@ function isVisitCommitmentMessage(message: string, lastAgentMessage: string): bo
 }
 
 function buildVisitCommitmentReply(academy: any | null): string {
-  const direccion = String(academy?.direccion || "Calle 53 #30a 101 - Barrio Comuneros 1").trim();
-  const mapsUrl = String(academy?.maps_url || "").trim();
-  const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
-
-  return `¡Perfecto! 🙌 Te esperamos ese día en la sede.\n\n📍 *${direccion}*${mapsLine}\n\nSi quieres, también te dejo una referencia rápida para llegar sin enredos 😊`;
+  return `¡Perfecto! 🙌 Te esperamos ese día en la sede.\n\n${buildLocationReferenceReply(academy)}`;
 }
 
 function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
@@ -4306,25 +4316,7 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (asksLocation) {
-    const locationReference = "Estamos ubicados en el *oriente de Cali*, cerca a la *Panadería Pablos Pam*, en *La Cosmetikera (segundo piso)*.";
-    if (academy?.direccion) {
-      if (academy?.maps_url) {
-        return `¡Claro! 📍
-
-${locationReference}
-\nDirección: *${academy.direccion}*.
-🗺️ Te comparto el mapa para que llegues fácil: ${academy.maps_url}
-
-Si quieres, también te envío una referencia rápida para llegar 😊`;
-      }
-      return `¡Claro! 📍
-
-${locationReference}
-\nDirección: *${academy.direccion}*.
-
-Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
-    }
-    return `¡Claro! 😊\n\n${locationReference}\n\nEnseguida te comparto la ubicación exacta por aquí.\n\nSi prefieres, también te envío el WhatsApp de admisiones para guiarte paso a paso.`;
+    return buildLocationReferenceReply(academy);
   }
 
   const asksKitPurchase = isKitPurchaseQuestion(message);
