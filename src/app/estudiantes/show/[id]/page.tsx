@@ -289,6 +289,7 @@ export default function StudentDetailView() {
       const { data: dataPerfil, error: errPerfil } = await supabaseBrowserClient
         .from("perfiles")
         .select("*")
+        .eq("id", idEstudiante)
         .maybeSingle();
       if (errPerfil) {
         setLoadError("Error cargando información del estudiante.");
