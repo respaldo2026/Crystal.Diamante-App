@@ -1008,6 +1008,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       return { presentados: 0, pendientes: 0, promedio: 0, participacion: 0 };
     }
 
+    const totalEvaluables = estudiantes.filter((est) => est.estado !== "pendiente_pago").length;
     const presentados = resultadosQuizSeleccionado.length;
     const pendientes = pendientesQuiz.length;
     const promedio = presentados > 0
@@ -1018,12 +1019,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           ).toFixed(2)
         )
       : 0;
-    const participacion = totalEstudiantesEvaluables > 0
-      ? Number(((presentados / totalEstudiantesEvaluables) * 100).toFixed(1))
+    const participacion = totalEvaluables > 0
+      ? Number(((presentados / totalEvaluables) * 100).toFixed(1))
       : 0;
 
     return { presentados, pendientes, promedio, participacion };
-  }, [pendientesQuiz.length, quizSeleccionado, resultadosQuizSeleccionado, totalEstudiantesEvaluables]);
+  }, [estudiantes, pendientesQuiz.length, quizSeleccionado, resultadosQuizSeleccionado]);
 
   const temaSeleccionado = useMemo(() => {
     if (!temaSeleccionadoId) return null;
