@@ -1985,14 +1985,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         title: "Estudiante",
         dataIndex: "estudiante",
         key: "estudiante",
-        render: (value: string, record: any) => (
-          <Space direction="vertical" size={0}>
-            <Text strong>{value}</Text>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {`Estado: ${String(record?.estado || "en curso").toUpperCase()}`}
-            </Text>
-          </Space>
-        ),
+        render: (value: string) => <Text strong>{value}</Text>,
       },
       {
         title: "Asistencia",
@@ -2030,16 +2023,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         },
       },
       {
-        title: "Riesgo",
-        key: "riesgo",
-        width: 170,
-        render: (_: any, record: any) => {
-          if (record.scoreRiesgo >= 2) return <Tag color="error">Alto</Tag>;
-          if (record.scoreRiesgo === 1) return <Tag color="warning">Medio</Tag>;
-          return <Tag color="success">Bajo</Tag>;
-        },
-      },
-      {
         title: "Alertas",
         key: "alertas",
         render: (_: any, record: any) => {
@@ -2062,7 +2045,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       {
         title: "Acciones",
         key: "acciones",
-        width: 230,
+        width: 180,
         render: (_: any, record: any) => (
           <Space wrap>
             <Button
@@ -2085,16 +2068,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               }}
             >
               Ver estudiante
-            </Button>
-            <Button
-              size="small"
-              onClick={() =>
-                router.push(
-                  `/asistencias/create?curso_id=${cursoId}&curso_nombre=${encodeURIComponent(construirNombreGrupo(curso))}`
-                )
-              }
-            >
-              Asistencia
             </Button>
           </Space>
         ),
@@ -2671,34 +2644,24 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     </Row>
 
                     <Row gutter={[10, 10]}>
-                      <Col xs={12} md={4}>
-                        <Card size="small" styles={{ body: { padding: 12 } }}>
-                          <Statistic title="Evaluables" value={totalEstudiantesEvaluables} />
-                        </Card>
-                      </Col>
-                      <Col xs={12} md={4}>
+                      <Col xs={12} md={6}>
                         <Card size="small" styles={{ body: { padding: 12 } }}>
                           <Statistic title="Act. pendientes" value={resumenCalificacionTema.pendientes} valueStyle={{ color: resumenCalificacionTema.pendientes > 0 ? "#faad14" : undefined }} />
                         </Card>
                       </Col>
-                      <Col xs={12} md={4}>
+                      <Col xs={12} md={6}>
                         <Card size="small" styles={{ body: { padding: 12 } }}>
                           <Statistic title="Prom. actividad" value={resumenCalificacionTema.promedio} precision={1} suffix="/5" />
                         </Card>
                       </Col>
-                      <Col xs={12} md={4}>
-                        <Card size="small" styles={{ body: { padding: 12 } }}>
-                          <Statistic title="Quiz presentados" value={resumenQuizSeleccionado.presentados} />
-                        </Card>
-                      </Col>
-                      <Col xs={12} md={4}>
+                      <Col xs={12} md={6}>
                         <Card size="small" styles={{ body: { padding: 12 } }}>
                           <Statistic title="Quiz pendientes" value={resumenQuizSeleccionado.pendientes} valueStyle={{ color: resumenQuizSeleccionado.pendientes > 0 ? "#fa541c" : undefined }} />
                         </Card>
                       </Col>
-                      <Col xs={12} md={4}>
+                      <Col xs={12} md={6}>
                         <Card size="small" styles={{ body: { padding: 12 } }}>
-                          <Statistic title="Prom. quiz" value={resumenQuizSeleccionado.promedio} precision={1} suffix="/5" />
+                          <Statistic title="Quiz presentados" value={`${resumenQuizSeleccionado.presentados}/${totalEstudiantesEvaluables}`} />
                         </Card>
                       </Col>
                     </Row>
@@ -2715,7 +2678,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
                 >
                   <Text type="secondary" style={{ display: "block", marginBottom: 10 }}>
-                    {`Riesgo alto: ${resumenLibroRiesgo.alto} • Riesgo medio: ${resumenLibroRiesgo.medio} • Riesgo bajo: ${resumenLibroRiesgo.bajo} • Total: ${resumenLibroRiesgo.total}`}
+                    {`Casos con alerta: ${resumenLibroRiesgo.alto + resumenLibroRiesgo.medio} de ${resumenLibroRiesgo.total}`}
                   </Text>
 
                   <Table
