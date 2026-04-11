@@ -754,7 +754,7 @@ export default function PortalEstudiante() {
     return match ? Number(match[0]) : null;
   };
 
-  const parseDiasSemana = (value?: string | null): number[] => {
+  const parseDiasSemana = useCallback((value?: string | null): number[] => {
     const raw = String(value || "").toLowerCase();
     if (!raw) return [];
 
@@ -773,9 +773,9 @@ export default function PortalEstudiante() {
       if (keys.some((k) => raw.includes(k))) result.add(day);
     });
     return Array.from(result.values()).sort((a, b) => a - b);
-  };
+  }, []);
 
-  const getSegundaClaseDate = (matricula: any): dayjs.Dayjs | null => {
+  const getSegundaClaseDate = useCallback((matricula: any): dayjs.Dayjs | null => {
     const fechaInicio = matricula?.fecha_inicio ? dayjs(matricula.fecha_inicio).startOf("day") : null;
     if (!fechaInicio || !fechaInicio.isValid()) return null;
 
@@ -802,9 +802,9 @@ export default function PortalEstudiante() {
     }
 
     return primera.add(7, "day").startOf("day");
-  };
+  }, [parseDiasSemana]);
 
-  const getFechaVencimientoEfectiva = (pago: any): dayjs.Dayjs | null => {
+  const getFechaVencimientoEfectiva = useCallback((pago: any): dayjs.Dayjs | null => {
     const cuota = parseNumeroCuota(pago);
     const estado = String(pago?.estado || "").toLowerCase();
     const base = pago?.fecha_vencimiento ? dayjs(pago.fecha_vencimiento).startOf("day") : null;
@@ -824,7 +824,7 @@ export default function PortalEstudiante() {
     if (!segundaClase) return base && base.isValid() ? base : null;
     if (!base || !base.isValid()) return segundaClase;
     return segundaClase.isAfter(base) ? segundaClase : base;
-  };
+  }, [getSegundaClaseDate, matriculas]);
 
   const getVisiblePaymentStatusWithGrace = (pago: any) => {
     const fechaEfectiva = getFechaVencimientoEfectiva(pago);
@@ -923,7 +923,7 @@ export default function PortalEstudiante() {
       // vencida = la fecha de cobro ya pasó
       return hoy.isAfter(fechaVencimientoEfectiva);
     });
-  }, [pagosConPendientes]);
+  }, [getFechaVencimientoEfectiva, pagosConPendientes]);
 
   const hasMonthlyEnrollment = React.useMemo(() => {
     return (matriculas || []).some((m: any) => normalizeModalidadPago(m?.modalidad_pago) !== "POR_CLASE");

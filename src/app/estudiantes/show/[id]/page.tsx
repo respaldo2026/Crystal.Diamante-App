@@ -10,6 +10,7 @@ import {
   Card,
   Button,
   Statistic,
+  Spin,
   Table,
   Tag,
   Avatar,
@@ -527,7 +528,7 @@ export default function StudentDetailView() {
       });
 
       // Ciclos/meses: duración + 1 inscripción. Ej: 5 ciclos = 6 pagos (1 inscripción + 5 cuotas)
-            montoPorClase: record?.matriculas?.valor_por_clase ?? 0,
+      const ciclosMap: Record<number, { total: number; pagados: number; faltantes: number; periodos: string[]; inscripcionPagada: boolean }> = {};
       listaMats.forEach((m: any) => {
         const modalidadPago = normalizeModalidadPago(m?.modalidad_pago);
         const duracionMeses = obtenerDuracionMeses(m);
