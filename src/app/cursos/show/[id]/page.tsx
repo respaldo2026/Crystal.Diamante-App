@@ -1179,15 +1179,28 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   useEffect(() => {
     const firstQuizId = quizzesClase?.[0]?.id;
-    if (!firstQuizId) {
+    const quizConResultadosId = (quizzesClase || [])
+      .find((quiz: any) =>
+        (resultadosQuizResumen || []).some((item: any) => String(item?.quiz_id || "") === String(quiz?.id || ""))
+      )?.id;
+    const preferredQuizId = quizConResultadosId || firstQuizId;
+
+    if (!preferredQuizId) {
       setQuizProfesorSeleccionadoId(null);
       return;
     }
 
-    if (!quizProfesorSeleccionadoId || !quizzesClase.some((quiz: any) => String(quiz.id) === String(quizProfesorSeleccionadoId))) {
-      setQuizProfesorSeleccionadoId(String(firstQuizId));
+    const seleccionadoExiste = quizzesClase.some(
+      (quiz: any) => String(quiz.id) === String(quizProfesorSeleccionadoId || "")
+    );
+    const seleccionadoTieneResultados = (resultadosQuizResumen || []).some(
+      (item: any) => String(item?.quiz_id || "") === String(quizProfesorSeleccionadoId || "")
+    );
+
+    if (!quizProfesorSeleccionadoId || !seleccionadoExiste || (!seleccionadoTieneResultados && Boolean(quizConResultadosId))) {
+      setQuizProfesorSeleccionadoId(String(preferredQuizId));
     }
-  }, [quizzesClase, quizProfesorSeleccionadoId]);
+  }, [quizzesClase, quizProfesorSeleccionadoId, resultadosQuizResumen]);
 
   const cargarDatos = useCallback(async (id: string) => {
     setLoading(true);
