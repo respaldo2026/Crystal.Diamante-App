@@ -86,8 +86,9 @@ export default function MatriculaEdit() {
 
     useEffect(() => {
         formProps.form?.setFieldValue("valor_mensual_plan", infoPlanSeleccionado.montoMensual);
+        formProps.form?.setFieldValue("valor_por_clase", infoPlanSeleccionado.montoPorClase);
         formProps.form?.setFieldValue("porcentaje_productos", infoPlanSeleccionado.porcentajeProductos);
-    }, [formProps.form, infoPlanSeleccionado.montoMensual, infoPlanSeleccionado.porcentajeProductos]);
+    }, [formProps.form, infoPlanSeleccionado.montoMensual, infoPlanSeleccionado.montoPorClase, infoPlanSeleccionado.porcentajeProductos]);
 
     return (
         <Edit saveButtonProps={saveButtonProps} title="Actualizar Matrícula">
@@ -103,6 +104,9 @@ export default function MatriculaEdit() {
 
             <Form {...formProps} form={formProps.form} layout="vertical">
                 <Form.Item name="valor_mensual_plan" hidden>
+                    <Input />
+                </Form.Item>
+                <Form.Item name="valor_por_clase" hidden>
                     <Input />
                 </Form.Item>
                 <Form.Item name="porcentaje_productos" hidden>

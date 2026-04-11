@@ -12,7 +12,7 @@ import {
   Statistic,
   Table,
   Tag,
-  Spin,
+            montoPorClase: record?.valor_por_clase ?? 0,
   Avatar,
   Alert,
   Tabs,
@@ -289,7 +289,7 @@ export default function StudentDetailView() {
       const { data: dataPerfil, error: errPerfil } = await supabaseBrowserClient
         .from("perfiles")
         .select("*")
-        .eq("id", idEstudiante)
+            montoPorClase: record?.valor_por_clase ?? 0,
         .maybeSingle();
       if (errPerfil) {
         setLoadError("Error cargando información del estudiante.");
@@ -462,7 +462,7 @@ export default function StudentDetailView() {
       const { data: dataPagos, error: errPagos } = await supabaseBrowserClient
         .from("pagos")
         .select(
-          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, monto_programado, descuento_aplicado, total_abonado, saldo_pendiente, motivo_descuento, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+          "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, monto_programado, descuento_aplicado, total_abonado, saldo_pendiente, motivo_descuento, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
         )
         .eq("estudiante_id", idEstudiante)
         .order("matricula_id", { ascending: true })
@@ -479,7 +479,7 @@ export default function StudentDetailView() {
         const { data: dataPagosPorMatricula, error: errPagosPorMatricula } = await supabaseBrowserClient
           .from("pagos")
           .select(
-            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, monto_programado, descuento_aplicado, total_abonado, saldo_pendiente, motivo_descuento, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
+            "id, created_at, estudiante_id, fecha_pago, fecha_vencimiento, matricula_id, periodo_pagado, numero_cuota, monto, monto_programado, descuento_aplicado, total_abonado, saldo_pendiente, motivo_descuento, metodo_pago, referencia, observaciones, estado, ticket_url, matriculas!pagos_matricula_id_fkey(modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, cursos(nombre, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad)))"
           )
           .in("matricula_id", matriculaIds)
           .order("matricula_id", { ascending: true })
@@ -529,7 +529,7 @@ export default function StudentDetailView() {
       });
 
       // Ciclos/meses: duración + 1 inscripción. Ej: 5 ciclos = 6 pagos (1 inscripción + 5 cuotas)
-      const ciclosMap: Record<number, { total: number; pagados: number; faltantes: number; periodos: string[]; inscripcionPagada: boolean }> = {};
+            montoPorClase: record?.matriculas?.valor_por_clase ?? 0,
       listaMats.forEach((m: any) => {
         const modalidadPago = normalizeModalidadPago(m?.modalidad_pago);
         const duracionMeses = obtenerDuracionMeses(m);

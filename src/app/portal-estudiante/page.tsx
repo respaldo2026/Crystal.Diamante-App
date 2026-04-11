@@ -994,6 +994,7 @@ export default function PortalEstudiante() {
                       const plan = getPaymentPlanDisplay({
                         modalidadPago: matricula?.modalidad_pago,
                         valorMensualPlan: matricula?.valor_mensual_plan,
+                        montoPorClase: matricula?.valor_por_clase,
                         porcentajeProductos: matricula?.porcentaje_productos,
                       });
                       return <Tag color={plan.color}>{plan.label}</Tag>;
@@ -1063,6 +1064,7 @@ export default function PortalEstudiante() {
                       const plan = getPaymentPlanDisplay({
                         modalidadPago: matricula?.modalidad_pago,
                         valorMensualPlan: matricula?.valor_mensual_plan,
+                        montoPorClase: matricula?.valor_por_clase,
                         porcentajeProductos: matricula?.porcentaje_productos,
                       });
                       return <Tag color={plan.color}>{plan.label}</Tag>;
@@ -1131,6 +1133,7 @@ export default function PortalEstudiante() {
     const planMateriales = getPaymentPlanDisplay({
       modalidadPago: matriculaSeleccionada?.modalidad_pago,
       valorMensualPlan: matriculaSeleccionada?.valor_mensual_plan,
+      montoPorClase: matriculaSeleccionada?.valor_por_clase,
       porcentajeProductos: matriculaSeleccionada?.porcentaje_productos,
     });
 

@@ -600,6 +600,7 @@ export default function MatriculaCreate() {
                 .update({
                     modalidad_pago: modalidadPago,
                     valor_mensual_plan: planPago.montoMensual,
+                    valor_por_clase: planPago.montoPorClase,
                     porcentaje_productos: planPago.porcentajeProductos,
                 })
                 .eq("id", matriculaExistente.id);
@@ -647,6 +648,7 @@ export default function MatriculaCreate() {
             tipo_pago: "cuotas",
             modalidad_pago: modalidadPago,
             valor_mensual_plan: planPago.montoMensual,
+            valor_por_clase: planPago.montoPorClase,
             porcentaje_productos: planPago.porcentajeProductos,
         };
         console.log("Payload matrícula:", payload);

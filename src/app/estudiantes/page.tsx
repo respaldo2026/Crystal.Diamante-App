@@ -57,7 +57,7 @@ export default function EstudiantesList() {
         resource: "perfiles",
         // TRUCO AVANZADO: Especificar explícitamente la FK para evitar ambigüedad
         meta: {
-            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, porcentaje_productos, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
+            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
         },
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
         pagination: {
@@ -373,6 +373,7 @@ export default function EstudiantesList() {
         return getPaymentPlanDisplay({
             modalidadPago: matriculaPrincipal?.modalidad_pago,
             valorMensualPlan: matriculaPrincipal?.valor_mensual_plan,
+            montoPorClase: matriculaPrincipal?.valor_por_clase,
             porcentajeProductos: matriculaPrincipal?.porcentaje_productos,
         });
     }, [obtenerMatriculasVigentes]);
