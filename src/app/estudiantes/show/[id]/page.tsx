@@ -12,7 +12,6 @@ import {
   Statistic,
   Table,
   Tag,
-            montoPorClase: record?.valor_por_clase ?? 0,
   Avatar,
   Alert,
   Tabs,
