@@ -1797,39 +1797,17 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     ? Math.round(estudiantes.reduce((sum, e) => sum + e.asistencia_porcentaje, 0) / estudiantes.length)
     : 0;
   const estudiantesEnRiesgo = estudiantes.filter(e => e.asistencia_porcentaje < (curso.porcentaje_minimo || 80)).length;
-  const notas = estudiantes.filter((e) => e.nota_final !== null && e.nota_final !== undefined);
-  const promedioNota = notas.length > 0
-    ? (notas.reduce((sum, e) => sum + (e.nota_final || 0), 0) / notas.length)
-    : 0;
-  const cuposTotales = curso.cupos || 0;
-  const cuposOcupados = totalEstudiantes;
-  const totalTemas = clasesPensum.length;
-  const temasConActividad = promedioActividadPorTema.size;
-  const temasSinActividad = Math.max(totalTemas - temasConActividad, 0);
-  const quizzesActivosPublicados = (quizzesClase || []).filter((quiz: any) => quiz?.activo === true && quiz?.publicado === true).length;
-  const quizzesNoDisponibles = Math.max((quizzesClase || []).length - quizzesActivosPublicados, 0);
   const hoy = dayjs();
   const sesionesMesActual = (sesiones || []).filter((sesion: any) => {
     if (!sesion?.fecha) return false;
     const fechaSesion = dayjs(sesion.fecha);
     return fechaSesion.isValid() && fechaSesion.isSame(hoy, "month") && fechaSesion.isSame(hoy, "year");
   });
-  const horasPrimeraQuincena = Number(
+  const horasMesActual = Number(
     sesionesMesActual
-      .filter((sesion: any) => dayjs(sesion?.fecha).date() <= 15)
       .reduce((acc: number, sesion: any) => acc + Number(sesion?.horas_dictadas || 0), 0)
       .toFixed(1)
   );
-  const horasSegundaQuincena = Number(
-    sesionesMesActual
-      .filter((sesion: any) => dayjs(sesion?.fecha).date() > 15)
-      .reduce((acc: number, sesion: any) => acc + Number(sesion?.horas_dictadas || 0), 0)
-      .toFixed(1)
-  );
-  const horasMesActual = Number((horasPrimeraQuincena + horasSegundaQuincena).toFixed(1));
-  const primeraQuincenaActiva = hoy.date() <= 15;
-  const horasQuincenaActual = primeraQuincenaActiva ? horasPrimeraQuincena : horasSegundaQuincena;
-  const etiquetaQuincenaActual = primeraQuincenaActiva ? "Horas 1-15" : "Horas 16-fin";
   const estudiantesEvaluables = estudiantes.filter((est) => est.estado !== "pendiente_pago");
   const totalEstudiantesEvaluables = estudiantesEvaluables.length;
 
@@ -2188,7 +2166,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           <div>
           {/* RESUMEN RÁPIDO DEL CURSO */}
           <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
-            <Col xs={12} md={6}>
+            <Col xs={12} md={8}>
               <Card
                 size="small"
                 style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
@@ -2202,7 +2180,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 />
               </Card>
             </Col>
-            <Col xs={12} md={6}>
+            <Col xs={12} md={8}>
               <Card
                 size="small"
                 style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
@@ -2216,31 +2194,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 />
               </Card>
             </Col>
-            <Col xs={12} md={6}>
+            <Col xs={12} md={8}>
               <Card
                 size="small"
                 style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
                 styles={{ body: { padding: 14 } }}
               >
                 <Statistic
-                  title={<span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Promedio nota</span>}
-                  value={promedioNota}
-                  precision={1}
-                  suffix="/5"
-                  valueStyle={{ color: "#fff", fontWeight: 700 }}
-                />
-              </Card>
-            </Col>
-            <Col xs={12} md={6}>
-              <Card
-                size="small"
-                style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
-                styles={{ body: { padding: 14 } }}
-              >
-                <Statistic
-                  title={<span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Cupos</span>}
-                  value={cuposOcupados}
-                  suffix={cuposTotales ? `/ ${cuposTotales}` : ""}
+                  title={<span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Alertas del grupo</span>}
+                  value={estudiantesEnRiesgo + estudiantesEnMora}
+                  suffix="casos"
                   valueStyle={{ color: "#fff", fontWeight: 700 }}
                 />
               </Card>
@@ -2255,6 +2218,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               <Text style={{ color: "#ffffff" }}><strong>Horario:</strong> {curso.dias_semana || "-"} {curso.hora_inicio && `• ${dayjs(curso.hora_inicio, 'HH:mm:ss').format('h:mm A')}`} {curso.hora_fin && ` - ${dayjs(curso.hora_fin, 'HH:mm:ss').format('h:mm A')}`}</Text>
               <Text style={{ color: "#f8fafc" }}><strong>Fecha de inicio:</strong> {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format('DD MMM YYYY') : "-"}</Text>
               <Text style={{ color: "#f8fafc" }}><strong>Fecha de fin:</strong> {curso.fecha_fin ? dayjs(curso.fecha_fin).format('DD MMM YYYY') : "No definida"}</Text>
+              <Space wrap size={8}>
+                <Tag color={estudiantesEnRiesgo > 0 ? "error" : "success"}>{`En riesgo: ${estudiantesEnRiesgo}`}</Tag>
+                <Tag color={estudiantesEnMora > 0 ? "error" : "success"}>{`En mora: ${estudiantesEnMora}`}</Tag>
+                <Tag color="processing">{`Horas del mes: ${horasMesActual}h`}</Tag>
+              </Space>
             </Space>
           </Card>
             <Text style={{ color: "rgba(255,255,255,0.94)", fontSize: 15 }}>
@@ -2263,59 +2231,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           </div>
         </Space>
       </div>
-
-      {/* ESTADÍSTICAS OPERATIVAS */}
-      <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <Card>
-            <Statistic title="En Riesgo" value={estudiantesEnRiesgo} valueStyle={{ color: estudiantesEnRiesgo > 0 ? "#ff4d4f" : "#52c41a" }} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <Card>
-            <Statistic
-              title="Actividad pendiente"
-              value={temasSinActividad}
-              suffix={`/ ${totalTemas || 0}`}
-              valueStyle={{ color: temasSinActividad > 0 ? "#faad14" : "#52c41a" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <Card>
-            <Statistic
-              title="Quiz no habilitados"
-              value={quizzesNoDisponibles}
-              valueStyle={{ color: quizzesNoDisponibles > 0 ? "#faad14" : "#1677ff" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <Card>
-            <Statistic title="En mora" value={estudiantesEnMora} valueStyle={{ color: estudiantesEnMora > 0 ? "#ff4d4f" : "#52c41a" }} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <Card>
-            <Statistic
-              title={etiquetaQuincenaActual}
-              value={horasQuincenaActual}
-              suffix="h"
-              valueStyle={{ color: "#1677ff" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <Card>
-            <Statistic
-              title="Horas mes"
-              value={horasMesActual}
-              suffix="h"
-              valueStyle={{ color: "#722ed1" }}
-            />
-          </Card>
-        </Col>
-      </Row>
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: isMobile ? "flex-start" : "flex-end" }}>
