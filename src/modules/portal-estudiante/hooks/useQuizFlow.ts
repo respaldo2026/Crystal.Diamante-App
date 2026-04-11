@@ -167,6 +167,7 @@ export const useQuizFlow = ({
         total_preguntas: total,
         calificacion,
       };
+      const enviadoAt = new Date().toISOString();
 
       const { data: intentosExistentes, error: errorBuscarIntento } = await supabaseBrowserClient
         .from("quiz_intentos_clase")
@@ -195,8 +196,29 @@ export const useQuizFlow = ({
       const intentoLocal = {
         id: String(intentosExistentes?.[0]?.id || `${quizActivo.id}-${matriculaQuiz.id}`),
         ...payload,
-        enviado_at: new Date().toISOString(),
+        enviado_at: enviadoAt,
       };
+
+      const syncCalificacionResponse = await fetch("/api/portal-estudiante/sync-quiz-calificacion", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          quizId: String(quizActivo.id),
+          matriculaId: Number(matriculaQuiz.id),
+          calificacion,
+          respuestasCorrectas: correctas,
+          totalPreguntas: total,
+          enviadoAt,
+        }),
+      });
+
+      if (!syncCalificacionResponse.ok) {
+        const syncError = await syncCalificacionResponse.json().catch(() => null);
+        logger.error("Error sincronizando calificación de quiz", syncError);
+        message.warning("El quiz se envió, pero la calificación no se sincronizó con el panel académico.");
+      }
 
       setQuizIntentosAction((prev) => {
         const base = Array.isArray(prev) ? prev : [];
