@@ -1319,7 +1319,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             .from("calificaciones")
             .select("matricula_id, tema_id, concepto, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
             .in("matricula_id", matriculaIds)
-            .in("tipo_evaluacion", ["actividad", "tema"])
+            .in("tipo_evaluacion", ["actividad", "tema", "quiz"])
             .order("fecha_evaluacion", { ascending: false });
           califDataCurso = califData || [];
         }
@@ -1375,6 +1375,19 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
         setQuizzesClase(quizzesData || []);
 
+        const quizPorTema = new Map<string, any>();
+        const quizPorTitulo = new Map<string, any>();
+        (quizzesData || []).forEach((quiz: any) => {
+          const temaId = String(quiz?.pensum_curso_id || "").trim();
+          const tituloNormalizado = normalizarTema(String(quiz?.titulo || ""));
+          if (temaId && !quizPorTema.has(temaId)) {
+            quizPorTema.set(temaId, quiz);
+          }
+          if (tituloNormalizado && !quizPorTitulo.has(tituloNormalizado)) {
+            quizPorTitulo.set(tituloNormalizado, quiz);
+          }
+        });
+
         if (matriculaIdsCurso.length > 0 && (quizzesData || []).length > 0) {
           const quizIds = (quizzesData || []).map((quiz: any) => quiz.id);
           const { data: intentosData } = await supabaseBrowserClient
@@ -1384,7 +1397,52 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             .in("matricula_id", matriculaIdsCurso)
             .order("enviado_at", { ascending: false });
 
-          setResultadosQuiz(intentosData || []);
+          const intentosBase = intentosData || [];
+          const clavesExistentes = new Set(
+            intentosBase.map((item: any) => `${String(item?.matricula_id || "")}-${String(item?.quiz_id || "")}`)
+          );
+
+          const quizCalificacionesFallback = (califDataCurso || [])
+            .filter((item: any) => String(item?.tipo_evaluacion || "").toLowerCase() === "quiz")
+            .map((item: any) => {
+              const temaId = String(item?.tema_id || "").trim();
+              const conceptoBase = String(item?.concepto || "")
+                .replace(/^quiz\s*de\s*clase\s*:\s*/i, "")
+                .trim();
+              const quizRelacionado =
+                quizPorTema.get(temaId) ||
+                quizPorTitulo.get(normalizarTema(conceptoBase)) ||
+                null;
+
+              if (!quizRelacionado) return null;
+
+              const clave = `${String(item?.matricula_id || "")}-${String(quizRelacionado?.id || "")}`;
+              if (clavesExistentes.has(clave)) return null;
+              clavesExistentes.add(clave);
+
+              const nota = Number(item?.calificacion ?? item?.nota);
+              if (!Number.isFinite(nota)) return null;
+
+              return {
+                id: `calif-${String(item?.matricula_id || "")}-${String(quizRelacionado?.id || "")}-${String(item?.fecha_evaluacion || "")}`,
+                quiz_id: quizRelacionado.id,
+                matricula_id: item.matricula_id,
+                respuestas_correctas: null,
+                total_preguntas: quizRelacionado?.total_preguntas ?? null,
+                calificacion: nota,
+                enviado_at: item?.fecha_evaluacion || null,
+                origen: "calificaciones",
+              };
+            })
+            .filter(Boolean);
+
+          setResultadosQuiz(
+            [...intentosBase, ...quizCalificacionesFallback].sort((a: any, b: any) => {
+              const fechaA = a?.enviado_at ? new Date(a.enviado_at).getTime() : 0;
+              const fechaB = b?.enviado_at ? new Date(b.enviado_at).getTime() : 0;
+              return fechaB - fechaA;
+            })
+          );
         } else {
           setResultadosQuiz([]);
         }
