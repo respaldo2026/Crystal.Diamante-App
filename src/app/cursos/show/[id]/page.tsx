@@ -997,6 +997,34 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return estudiantes.filter((est) => est.estado !== "pendiente_pago" && !presentados.has(String(est.id)));
   }, [estudiantes, quizSeleccionado, resultadosQuizResumen]);
 
+  const resultadosQuizSeleccionado = useMemo(() => {
+    if (!quizSeleccionado) return [] as any[];
+    const quizId = String(quizSeleccionado.id || "");
+    return (resultadosQuizResumen || []).filter((item: any) => String(item?.quiz_id || "") === quizId);
+  }, [quizSeleccionado, resultadosQuizResumen]);
+
+  const resumenQuizSeleccionado = useMemo(() => {
+    if (!quizSeleccionado) {
+      return { presentados: 0, pendientes: 0, promedio: 0, participacion: 0 };
+    }
+
+    const presentados = resultadosQuizSeleccionado.length;
+    const pendientes = pendientesQuiz.length;
+    const promedio = presentados > 0
+      ? Number(
+          (
+            resultadosQuizSeleccionado.reduce((sum: number, item: any) => sum + Number(item?.calificacion || 0), 0) /
+            presentados
+          ).toFixed(2)
+        )
+      : 0;
+    const participacion = totalEstudiantesEvaluables > 0
+      ? Number(((presentados / totalEstudiantesEvaluables) * 100).toFixed(1))
+      : 0;
+
+    return { presentados, pendientes, promedio, participacion };
+  }, [pendientesQuiz.length, quizSeleccionado, resultadosQuizSeleccionado, totalEstudiantesEvaluables]);
+
   const temaSeleccionado = useMemo(() => {
     if (!temaSeleccionadoId) return null;
     return clasesPensum.find((tema: any) => String(tema.id) === String(temaSeleccionadoId)) || null;
@@ -2638,13 +2666,119 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             label: <span><FileTextOutlined /> Calificaciones</span>,
             children: (
               <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                <Alert
-                  message="Calificaciones de actividad por clase"
-                  description="Selecciona la clase (tema) para ver y guardar la actividad calificable (1 a 5). Los estudiantes pendientes de pago no pueden ser calificados."
-                  type="info"
-                  showIcon
-                  style={{ padding: "8px 10px" }}
-                />
+                <Card
+                  bodyStyle={{ padding: 14 }}
+                  style={{
+                    borderRadius: 14,
+                    background: "linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(250,250,255,1) 100%)",
+                    border: "1px solid rgba(64,87,214,0.10)",
+                  }}
+                >
+                  <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                    <Row gutter={[10, 10]} align="middle">
+                      <Col xs={24} md={9}>
+                        <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                          <Text strong>Clase para actividad</Text>
+                          <Select
+                            placeholder="Selecciona una clase"
+                            value={temaSeleccionadoId || undefined}
+                            style={{ width: "100%" }}
+                            options={clasesPensum.map((tema: any) => ({
+                              value: String(tema.id),
+                              label: formatearNombreClase(tema),
+                            }))}
+                            onChange={(value) => setTemaSeleccionadoId(String(value))}
+                          />
+                        </Space>
+                      </Col>
+                      <Col xs={24} md={9}>
+                        <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                          <Text strong>Quiz a revisar</Text>
+                          <Select
+                            placeholder="Selecciona un quiz"
+                            value={quizProfesorSeleccionadoId || undefined}
+                            style={{ width: "100%" }}
+                            options={(quizzesOrdenadosPorPensum || []).map((quiz: any) => {
+                              const temaId = String(quiz?.pensum_curso_id || "");
+                              const nombreTema = nombreTemaPorId.get(temaId) || quiz?.titulo || "Quiz";
+                              const ordenTema = ordenTemaPorId.get(temaId);
+                              const nombreOrdenado = ordenTema ? `${ordenTema}. ${nombreTema}` : nombreTema;
+                              return { value: String(quiz.id), label: nombreOrdenado };
+                            })}
+                            onChange={(value) => setQuizProfesorSeleccionadoId(String(value))}
+                          />
+                        </Space>
+                      </Col>
+                      <Col xs={24} md={6}>
+                        <Space direction={isMobile ? "vertical" : "vertical"} size={8} style={{ width: "100%" }}>
+                          <Button
+                            type="primary"
+                            onClick={() => {
+                              if (!temaSeleccionadoId && clasesPensum.length > 0) {
+                                setTemaSeleccionadoId(String(clasesPensum[0]?.id || ""));
+                              }
+                              abrirModalActividad(true);
+                            }}
+                            block
+                          >
+                            Calificar actividad
+                          </Button>
+                          <Button
+                            disabled={!quizProfesorSeleccionadoId}
+                            onClick={() => {
+                              const quiz = (quizzesOrdenadosPorPensum || []).find((item: any) => String(item.id) === String(quizProfesorSeleccionadoId));
+                              if (!quiz) {
+                                message.warning("Selecciona un quiz válido.");
+                                return;
+                              }
+                              abrirQuizProfesor(quiz);
+                            }}
+                            block
+                          >
+                            Resolver quiz
+                          </Button>
+                        </Space>
+                      </Col>
+                    </Row>
+
+                    <Row gutter={[10, 10]}>
+                      <Col xs={12} md={4}>
+                        <Card size="small" styles={{ body: { padding: 12 } }}>
+                          <Statistic title="Evaluables" value={totalEstudiantesEvaluables} />
+                        </Card>
+                      </Col>
+                      <Col xs={12} md={4}>
+                        <Card size="small" styles={{ body: { padding: 12 } }}>
+                          <Statistic title="Act. pendientes" value={resumenCalificacionTema.pendientes} valueStyle={{ color: resumenCalificacionTema.pendientes > 0 ? "#faad14" : undefined }} />
+                        </Card>
+                      </Col>
+                      <Col xs={12} md={4}>
+                        <Card size="small" styles={{ body: { padding: 12 } }}>
+                          <Statistic title="Prom. actividad" value={resumenCalificacionTema.promedio} precision={1} suffix="/5" />
+                        </Card>
+                      </Col>
+                      <Col xs={12} md={4}>
+                        <Card size="small" styles={{ body: { padding: 12 } }}>
+                          <Statistic title="Quiz presentados" value={resumenQuizSeleccionado.presentados} />
+                        </Card>
+                      </Col>
+                      <Col xs={12} md={4}>
+                        <Card size="small" styles={{ body: { padding: 12 } }}>
+                          <Statistic title="Quiz pendientes" value={resumenQuizSeleccionado.pendientes} valueStyle={{ color: resumenQuizSeleccionado.pendientes > 0 ? "#fa541c" : undefined }} />
+                        </Card>
+                      </Col>
+                      <Col xs={12} md={4}>
+                        <Card size="small" styles={{ body: { padding: 12 } }}>
+                          <Statistic title="Prom. quiz" value={resumenQuizSeleccionado.promedio} precision={1} suffix="/5" />
+                        </Card>
+                      </Col>
+                    </Row>
+
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Actividad y quiz se gestionan desde aquí. Se removieron bloques repetidos y la tabla del quiz ahora refleja el quiz seleccionado.
+                    </Text>
+                  </Space>
+                </Card>
 
                 <Card
                   title={<Text strong style={{ fontSize: 14 }}>Libro de calificaciones unificado</Text>}
@@ -2660,227 +2794,157 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     dataSource={libroCalificacionesUnificado}
                     columns={columnasLibroUnificado as any}
                     rowKey="key"
-                    pagination={{ pageSize: 8 }}
+                    pagination={{ pageSize: 6 }}
                     scroll={{ x: "max-content" }}
                   />
                 </Card>
 
-                <Card bodyStyle={{ padding: 10 }}>
-                  <Row gutter={[8, 8]}>
-                    <Col xs={12} md={6}>
-                      <Statistic title="Estudiantes" value={estudiantes.length} />
-                    </Col>
-                    <Col xs={12} md={6}>
-                      <Statistic title="Calificadas" value={resumenCalificacionTema.calificadas} valueStyle={{ color: "#1677ff" }} />
-                    </Col>
-                    <Col xs={12} md={6}>
-                      <Statistic title="Pendientes" value={resumenCalificacionTema.pendientes} valueStyle={{ color: resumenCalificacionTema.pendientes > 0 ? "#faad14" : undefined }} />
-                    </Col>
-                    <Col xs={12} md={6}>
-                      <Statistic title="Promedio clase" value={resumenCalificacionTema.promedio} precision={2} suffix="/5" />
-                    </Col>
-                  </Row>
-                </Card>
-
-                <Card
-                  title={<Text strong style={{ fontSize: 14 }}>Resultados de Quiz por Clase (último intento)</Text>}
-                  bodyStyle={{ padding: 10 }}
-                  headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
-                >
-                  <Space direction={isMobile ? "vertical" : "horizontal"} size={8} style={{ width: "100%", marginBottom: 10 }}>
-                    <Select
-                      placeholder="Selecciona un quiz"
-                      value={quizProfesorSeleccionadoId || undefined}
-                      style={{ minWidth: isMobile ? "100%" : 320 }}
-                      options={(quizzesOrdenadosPorPensum || []).map((quiz: any) => {
-                        const temaId = String(quiz?.pensum_curso_id || "");
-                        const nombreTema = nombreTemaPorId.get(temaId) || quiz?.titulo || "Quiz";
-                        const ordenTema = ordenTemaPorId.get(temaId);
-                        const nombreOrdenado = ordenTema ? `${ordenTema}. ${nombreTema}` : nombreTema;
-                        const estado = quiz?.activo ? "Activo" : "Inactivo";
-                        const publicacion = quiz?.publicado ? "Publicado" : "Borrador";
-                        return { value: String(quiz.id), label: `${nombreOrdenado} • ${estado} • ${publicacion}` };
-                      })}
-                      onChange={(value) => setQuizProfesorSeleccionadoId(String(value))}
-                    />
-                    <Button
-                      type="primary"
-                      disabled={!quizProfesorSeleccionadoId}
-                      onClick={() => {
-                        const quiz = (quizzesOrdenadosPorPensum || []).find((item: any) => String(item.id) === String(quizProfesorSeleccionadoId));
-                        if (!quiz) {
-                          message.warning("Selecciona un quiz válido.");
-                          return;
-                        }
-                        abrirQuizProfesor(quiz);
-                      }}
-                    >
-                      Resolver quiz como profesor
-                    </Button>
-                  </Space>
-
-                  <Table
-                    size="small"
-                    dataSource={resultadosQuizResumen}
-                    rowKey="id"
-                    pagination={{ pageSize: 8 }}
-                    scroll={{ x: "max-content" }}
-                    locale={{ emptyText: "No hay intentos de quiz registrados" }}
-                    columns={[
-                      {
-                        title: "Estudiante",
-                        render: (_: any, record: any) => {
-                          const estudiante = estudiantes.find((item) => String(item.id) === String(record?.matricula_id));
-                          return estudiante?.nombre_completo || "-";
-                        },
-                      },
-                      {
-                        title: "Clase",
-                        render: (_: any, record: any) => {
-                          const quiz = quizzesClase.find((item: any) => String(item?.id) === String(record?.quiz_id));
-                          const temaId = String(quiz?.pensum_curso_id || "");
-                          return nombreTemaPorId.get(temaId) || quiz?.titulo || "Quiz";
-                        },
-                      },
-                      {
-                        title: "Aciertos",
-                        render: (_: any, record: any) => `${Number(record?.respuestas_correctas || 0)}/${Number(record?.total_preguntas || 0)}`,
-                      },
-                      {
-                        title: "Calificación",
-                        dataIndex: "calificacion",
-                        render: (valor: number) => {
-                          const nota = Number(valor || 0);
-                          const aprobado = nota >= 3.75;
-                          return <Tag color={aprobado ? "green" : "red"}>{`${nota.toFixed(1)}/5`}</Tag>;
-                        },
-                      },
-                      {
-                        title: "Fecha",
-                        dataIndex: "enviado_at",
-                        render: (fecha: string) => (fecha ? dayjs(fecha).format("DD/MM/YYYY HH:mm") : "-"),
-                      },
-                    ]}
-                  />
-
-                  {quizProfesorResultado ? (
-                    <Card
-                      size="small"
-                      style={{ marginTop: 12 }}
-                      title={<Text strong>{`Tus respuestas: ${quizProfesorResultado.titulo}`}</Text>}
-                    >
-                      <Space wrap size={8} style={{ marginBottom: 8 }}>
-                        <Tag color={getActividadColor(quizProfesorResultado.calificacion)}>{`Nota: ${quizProfesorResultado.calificacion.toFixed(1)}/5`}</Tag>
-                        <Tag color="blue">{`Aciertos: ${quizProfesorResultado.correctas}/${quizProfesorResultado.totalPreguntas}`}</Tag>
-                        <Tag>{`${quizProfesorResultado.porcentaje.toFixed(1)}%`}</Tag>
-                      </Space>
-
-                      <List
-                        size="small"
-                        dataSource={quizProfesorResultado.respuestas}
-                        renderItem={(item) => (
-                          <List.Item>
-                            <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                              <Text strong>{`${item.orden}. ${item.pregunta}`}</Text>
-                              <Text>{`Tu respuesta: ${item.respuestaMarcada}`}</Text>
-                              <Text type={item.esCorrecta ? undefined : "secondary"}>{`Correcta: ${item.respuestaCorrecta}`}</Text>
-                              <Tag color={item.esCorrecta ? "green" : "red"}>{item.esCorrecta ? "Correcta" : "Incorrecta"}</Tag>
-                            </Space>
-                          </List.Item>
-                        )}
-                      />
-                    </Card>
-                  ) : null}
-
-                  <Card size="small" style={{ marginTop: 12 }} title={<Text strong>Pendientes por presentar</Text>}>
-                    <Row gutter={[12, 12]}>
-                      <Col xs={24} md={12}>
-                        <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                          <Text strong>{`Quiz pendiente: ${pendientesQuiz.length}`}</Text>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {quizSeleccionado
-                              ? `Clase: ${nombreTemaPorId.get(String(quizSeleccionado.pensum_curso_id || "")) || quizSeleccionado.titulo || "Quiz"}`
-                              : "Selecciona un quiz para ver pendientes"}
+                <Row gutter={[12, 12]}>
+                  <Col xs={24} xl={12}>
+                    {clasesPensum.length === 0 ? (
+                      <Card><Empty description="No hay temario cargado" /></Card>
+                    ) : (
+                      <Card
+                        title={<Text strong style={{ fontSize: 14 }}>Actividad por clase</Text>}
+                        bodyStyle={{ padding: 10 }}
+                        headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
+                      >
+                        <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                          <Text type="secondary">
+                            Usa esta vista para cerrar pendientes rápido y luego abrir el modal de calificación masiva.
                           </Text>
-                          {quizSeleccionado ? (
-                            pendientesQuiz.length ? (
+                          <Space wrap size={8}>
+                            <Tag color={resumenCalificacionTema.pendientes > 0 ? "gold" : "green"}>{`Pendientes: ${resumenCalificacionTema.pendientes}`}</Tag>
+                            <Tag color="blue">{`Calificadas: ${resumenCalificacionTema.calificadas}`}</Tag>
+                            <Tag>{`Promedio: ${resumenCalificacionTema.promedio.toFixed(1)}/5`}</Tag>
+                          </Space>
+                          {temaSeleccionado ? (
+                            pendientesActividad.length ? (
                               <List
                                 size="small"
-                                dataSource={pendientesQuiz}
+                                bordered
+                                dataSource={pendientesActividad.slice(0, 6)}
+                                locale={{ emptyText: "Sin pendientes" }}
                                 renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
                               />
                             ) : (
-                              <Text type="secondary">Todos presentaron este quiz.</Text>
+                              <Text type="secondary">Todos tienen actividad registrada en esta clase.</Text>
                             )
-                          ) : null}
-                        </Space>
-                      </Col>
-                      <Col xs={24} md={12}>
-                        <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                          <Text strong>{`Actividad pendiente: ${pendientesActividad.length}`}</Text>
+                          ) : (
+                            <Text type="secondary">Selecciona una clase para ver pendientes.</Text>
+                          )}
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            {temaSeleccionado
-                              ? `Clase: ${temaSeleccionado?.nombre_curso || temaSeleccionado?.titulo || "Clase"}`
-                              : "Selecciona una clase para ver pendientes"}
+                            Esta nota queda visible también en el panel del estudiante.
                           </Text>
-                          {temaSeleccionado ? (
-                            pendientesActividad.length ? (
-                              <>
-                                <List
-                                  size="small"
-                                  dataSource={pendientesActividad}
-                                  renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
-                                />
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  Usa Calificar clase para registrar estas pendientes.
-                                </Text>
-                              </>
-                            ) : (
-                              <Text type="secondary">Todos presentaron actividad en esta clase.</Text>
-                            )
-                          ) : null}
                         </Space>
-                      </Col>
-                    </Row>
-                  </Card>
-                </Card>
+                      </Card>
+                    )}
+                  </Col>
+                  <Col xs={24} xl={12}>
+                    <Card
+                      title={<Text strong style={{ fontSize: 14 }}>Resultados del quiz seleccionado</Text>}
+                      bodyStyle={{ padding: 10 }}
+                      headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
+                    >
+                      {quizSeleccionado ? (
+                        <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                          <Space wrap size={8}>
+                            <Tag color="blue">{nombreTemaPorId.get(String(quizSeleccionado.pensum_curso_id || "")) || quizSeleccionado.titulo || "Quiz"}</Tag>
+                            <Tag color={quizSeleccionado?.publicado ? "green" : "default"}>{quizSeleccionado?.publicado ? "Publicado" : "Borrador"}</Tag>
+                            <Tag color={resumenQuizSeleccionado.participacion < 70 ? "orange" : "green"}>{`Participación ${resumenQuizSeleccionado.participacion}%`}</Tag>
+                          </Space>
 
-                {clasesPensum.length === 0 ? (
-                  <Card><Empty description="No hay temario cargado" /></Card>
-                ) : (
-                  <Card
-                    title={<Text strong style={{ fontSize: 14 }}>Actividad por clase</Text>}
-                    bodyStyle={{ padding: 10 }}
-                    headStyle={{ padding: "8px 12px", background: "#0f172a0f" }}
-                  >
-                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                      <Text type="secondary">
-                        Selecciona una clase y abre el modal para calificar rápidamente a todos los estudiantes.
-                      </Text>
+                          <Table
+                            size="small"
+                            dataSource={resultadosQuizSeleccionado}
+                            rowKey="id"
+                            pagination={{ pageSize: 6 }}
+                            scroll={{ x: "max-content" }}
+                            locale={{ emptyText: "No hay intentos registrados para este quiz" }}
+                            columns={[
+                              {
+                                title: "Estudiante",
+                                render: (_: any, record: any) => {
+                                  const estudiante = estudiantes.find((item) => String(item.id) === String(record?.matricula_id));
+                                  return estudiante?.nombre_completo || "-";
+                                },
+                              },
+                              {
+                                title: "Aciertos",
+                                render: (_: any, record: any) => {
+                                  if (record?.respuestas_correctas == null || record?.total_preguntas == null) return "-";
+                                  return `${Number(record?.respuestas_correctas || 0)}/${Number(record?.total_preguntas || 0)}`;
+                                },
+                              },
+                              {
+                                title: "Calificación",
+                                dataIndex: "calificacion",
+                                render: (valor: number) => {
+                                  const nota = Number(valor || 0);
+                                  const aprobado = nota >= 3.75;
+                                  return <Tag color={aprobado ? "green" : "red"}>{`${nota.toFixed(1)}/5`}</Tag>;
+                                },
+                              },
+                              {
+                                title: "Fecha",
+                                dataIndex: "enviado_at",
+                                render: (fecha: string) => (fecha ? dayjs(fecha).format("DD/MM/YYYY HH:mm") : "-"),
+                              },
+                            ]}
+                          />
 
-                      <Space direction={isMobile ? "vertical" : "horizontal"} size={8} style={{ width: "100%" }}>
-                        <Select
-                          placeholder="Selecciona una clase"
-                          value={temaSeleccionadoId || undefined}
-                          style={{ minWidth: isMobile ? "100%" : 320 }}
-                          options={clasesPensum.map((tema: any) => ({
-                            value: String(tema.id),
-                            label: formatearNombreClase(tema),
-                          }))}
-                          onChange={(value) => setTemaSeleccionadoId(String(value))}
-                        />
-                      </Space>
+                          {quizProfesorResultado ? (
+                            <Card
+                              size="small"
+                              style={{ marginTop: 4 }}
+                              title={<Text strong>{`Tus respuestas: ${quizProfesorResultado.titulo}`}</Text>}
+                            >
+                              <Space wrap size={8} style={{ marginBottom: 8 }}>
+                                <Tag color={getActividadColor(quizProfesorResultado.calificacion)}>{`Nota: ${quizProfesorResultado.calificacion.toFixed(1)}/5`}</Tag>
+                                <Tag color="blue">{`Aciertos: ${quizProfesorResultado.correctas}/${quizProfesorResultado.totalPreguntas}`}</Tag>
+                                <Tag>{`${quizProfesorResultado.porcentaje.toFixed(1)}%`}</Tag>
+                              </Space>
 
-                      <Text type="secondary">
-                        {`Calificadas: ${resumenCalificacionTema.calificadas}/${estudiantes.length} • Pendientes: ${resumenCalificacionTema.pendientes} • Promedio clase: ${resumenCalificacionTema.promedio.toFixed(1)}/5`}
-                      </Text>
+                              <List
+                                size="small"
+                                dataSource={quizProfesorResultado.respuestas}
+                                renderItem={(item) => (
+                                  <List.Item>
+                                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                                      <Text strong>{`${item.orden}. ${item.pregunta}`}</Text>
+                                      <Text>{`Tu respuesta: ${item.respuestaMarcada}`}</Text>
+                                      <Text type={item.esCorrecta ? undefined : "secondary"}>{`Correcta: ${item.respuestaCorrecta}`}</Text>
+                                      <Tag color={item.esCorrecta ? "green" : "red"}>{item.esCorrecta ? "Correcta" : "Incorrecta"}</Tag>
+                                    </Space>
+                                  </List.Item>
+                                )}
+                              />
+                            </Card>
+                          ) : null}
 
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        Esta calificación de actividad queda visible también en el panel del estudiante.
-                      </Text>
-                    </Space>
-                  </Card>
-                )}
+                          <div>
+                            <Text strong>{`Pendientes por presentar: ${pendientesQuiz.length}`}</Text>
+                            {pendientesQuiz.length ? (
+                              <List
+                                size="small"
+                                bordered
+                                style={{ marginTop: 8 }}
+                                dataSource={pendientesQuiz.slice(0, 6)}
+                                renderItem={(est: Student) => <List.Item>{est.nombre_completo}</List.Item>}
+                              />
+                            ) : (
+                              <Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+                                Todos presentaron este quiz.
+                              </Text>
+                            )}
+                          </div>
+                        </Space>
+                      ) : (
+                        <Empty description="Selecciona un quiz para revisar resultados" />
+                      )}
+                    </Card>
+                  </Col>
+                </Row>
               </Space>
             )
           }
