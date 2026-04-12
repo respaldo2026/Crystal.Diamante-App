@@ -1,10 +1,47 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select, message } from "antd";
+import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select, message, Card, Typography, Spin } from "antd";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation";
+import { supabaseBrowserClient } from "@utils/supabase/client";
+import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, normalizeModalidadPago, resolvePaymentPlanAmounts, type ModalidadPago, type ProgramaPaymentConfig } from "@/types/payment-plans";
+
+type MatriculaEditable = {
+    id: string;
+    curso_id: string | number | null;
+    fecha_inicio: string | null;
+    estado: string | null;
+    modalidad_pago: string | null;
+    valor_mensual_plan: number | null;
+    valor_por_clase: number | null;
+    porcentaje_productos: number | null;
+    cursos?: {
+        nombre?: string | null;
+        precio_mensualidad?: number | null;
+        numero_cuotas?: number | null;
+        duracion?: string | number | null;
+        programas?: {
+            nombre?: string | null;
+            precio_por_clase?: number | null;
+            precio_mensual_70?: number | null;
+            precio_mensual_100?: number | null;
+            precio_mensualidad?: number | null;
+            numero_cuotas?: number | null;
+        } | null;
+    } | null;
+};
+
+const { Text } = Typography;
+
+const formatoCOP = (valor: number) =>
+    new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
+
+const opcionesPlanPago = Object.values(PLANES_PAGO).map((plan) => ({
+    value: plan.modalidad,
+    label: `${plan.label} · ${plan.descripcion}`,
+}));
 
 export default function EditEstudiante() {
   const params = useParams();
@@ -12,6 +49,9 @@ export default function EditEstudiante() {
 
   console.log("🟣 [COMPONENTE] EditEstudiante montado");
   console.log("🟣 [COMPONENTE] ID desde params:", id);
+
+    const [matriculasEditable, setMatriculasEditable] = useState<MatriculaEditable[]>([]);
+    const [loadingMatriculas, setLoadingMatriculas] = useState(true);
 
   const { formProps, saveButtonProps, formLoading, onFinish } = useForm({
     resource: "perfiles", // Guardamos en la tabla perfiles
@@ -24,6 +64,164 @@ export default function EditEstudiante() {
       returning: true 
     } 
   });
+        const modalidadesMatriculaWatch = Form.useWatch("modalidades_matricula", formProps.form) || {};
+
+    const calcularFechaVencimientoCuota = useCallback((fechaInicio?: string | null, numeroCuota?: number | null) => {
+        if (!fechaInicio || !numeroCuota || numeroCuota < 1) return null;
+        const fecha = dayjs(fechaInicio);
+        if (!fecha.isValid()) return null;
+        return fecha.add(numeroCuota - 1, "month").format("YYYY-MM-DD");
+    }, []);
+
+    const parseNumeroCuotas = useCallback((matricula: MatriculaEditable) => {
+        const direct = Number(
+            matricula?.cursos?.numero_cuotas ??
+            matricula?.cursos?.programas?.numero_cuotas ??
+            0,
+        );
+        if (Number.isFinite(direct) && direct > 0) return direct;
+
+        const raw = String(matricula?.cursos?.duracion ?? "");
+        const match = raw.match(/\d+/);
+        if (match?.[0]) {
+            const parsed = Number(match[0]);
+            if (Number.isFinite(parsed) && parsed > 0) return parsed;
+        }
+
+        return 4;
+    }, []);
+
+    const cargarMatriculas = useCallback(async () => {
+        if (!id) return;
+
+        setLoadingMatriculas(true);
+        const { data, error } = await supabaseBrowserClient
+            .from("matriculas")
+            .select(`
+                id,
+                curso_id,
+                fecha_inicio,
+                estado,
+                modalidad_pago,
+                valor_mensual_plan,
+                valor_por_clase,
+                porcentaje_productos,
+                cursos(
+                    nombre,
+                    precio_mensualidad,
+                    numero_cuotas,
+                    duracion,
+                    programas:programa_id(
+                        nombre,
+                        precio_por_clase,
+                        precio_mensual_70,
+                        precio_mensual_100,
+                        precio_mensualidad,
+                        numero_cuotas
+                    )
+                )
+            `)
+            .eq("estudiante_id", id)
+            .order("created_at", { ascending: false });
+
+        if (error) {
+            console.error("❌ Error cargando matrículas del estudiante:", error);
+            message.warning("No se pudieron cargar las modalidades de pago de las matrículas.");
+            setMatriculasEditable([]);
+            setLoadingMatriculas(false);
+            return;
+        }
+
+        const matriculas = (data as MatriculaEditable[] | null) ?? [];
+        setMatriculasEditable(matriculas);
+
+        const modalidadesIniciales = matriculas.reduce<Record<string, ModalidadPago>>((acc, matricula) => {
+            acc[String(matricula.id)] = normalizeModalidadPago(matricula.modalidad_pago);
+            return acc;
+        }, {});
+
+        formProps.form?.setFieldValue("modalidades_matricula", modalidadesIniciales);
+        setLoadingMatriculas(false);
+    }, [formProps.form, id]);
+
+    useEffect(() => {
+        cargarMatriculas();
+    }, [cargarMatriculas]);
+
+    const sincronizarPagosPendientes = useCallback(async (matricula: MatriculaEditable, modalidadPago: ModalidadPago) => {
+        const programaPricing: ProgramaPaymentConfig = {
+            precio_por_clase: matricula?.cursos?.programas?.precio_por_clase,
+            precio_mensual_70: matricula?.cursos?.programas?.precio_mensual_70,
+            precio_mensual_100: matricula?.cursos?.programas?.precio_mensual_100,
+            precio_mensualidad: matricula?.cursos?.precio_mensualidad ?? matricula?.cursos?.programas?.precio_mensualidad,
+        };
+
+        const montos = resolvePaymentPlanAmounts(modalidadPago, programaPricing);
+        const numeroCuotas = parseNumeroCuotas(matricula);
+
+        const { data: pagosExistentes, error: pagosError } = await supabaseBrowserClient
+            .from("pagos")
+            .select("id, numero_cuota, estado, periodo_pagado")
+            .eq("matricula_id", matricula.id)
+            .order("numero_cuota", { ascending: true });
+
+        if (pagosError) throw pagosError;
+
+        const pagos = (pagosExistentes || []) as Array<{ id: string; numero_cuota: number | null; estado: string | null; periodo_pagado: string | null }>;
+        const cuotasPendientes = pagos.filter((pago) => {
+            const estado = String(pago.estado || "").toLowerCase().trim();
+            return (estado === "pendiente" || estado === "vencido") && Number(pago.numero_cuota || 0) > 0;
+        });
+
+        if (modalidadPago === "POR_CLASE") {
+            if (cuotasPendientes.length > 0) {
+                const { error: deleteError } = await supabaseBrowserClient
+                    .from("pagos")
+                    .delete()
+                    .in("id", cuotasPendientes.map((cuota) => cuota.id));
+                if (deleteError) throw deleteError;
+            }
+            return;
+        }
+
+        if (cuotasPendientes.length > 0) {
+            const { error: updateError } = await supabaseBrowserClient
+                .from("pagos")
+                .update({
+                    monto: montos.montoMensual,
+                    tipo_cuota: "mensual",
+                })
+                .in("id", cuotasPendientes.map((cuota) => cuota.id));
+            if (updateError) throw updateError;
+        }
+
+        const cuotasExistentes = new Set(
+            pagos
+                .map((pago) => Number(pago.numero_cuota || 0))
+                .filter((numero) => Number.isFinite(numero) && numero > 0),
+        );
+
+        const nuevasCuotas = [] as Array<Record<string, unknown>>;
+        for (let i = 1; i <= numeroCuotas; i += 1) {
+            if (cuotasExistentes.has(i)) continue;
+            nuevasCuotas.push({
+                estudiante_id: id,
+                matricula_id: matricula.id,
+                numero_cuota: i,
+                periodo_pagado: `Cuota ${i} de ${numeroCuotas}`,
+                tipo_cuota: "mensual",
+                monto: montos.montoMensual,
+                estado: "pendiente",
+                metodo_pago: null,
+                fecha_vencimiento: calcularFechaVencimientoCuota(matricula.fecha_inicio, i),
+            });
+        }
+
+        if (nuevasCuotas.length > 0) {
+            const { error: insertError } = await supabaseBrowserClient.from("pagos").insert(nuevasCuotas);
+            if (insertError) throw insertError;
+        }
+    }, [calcularFechaVencimientoCuota, id, parseNumeroCuotas]);
 
   console.log("🟣 [COMPONENTE] useForm retornó:");
   console.log("  - formProps:", formProps ? "OK" : "NULL");
@@ -50,9 +248,11 @@ export default function EditEstudiante() {
       ...values,
       fecha_nacimiento: values.fecha_nacimiento ? dayjs(values.fecha_nacimiento).format("YYYY-MM-DD") : null,
     };
+        const modalidadesMatricula = datosListos.modalidades_matricula || {};
     delete datosListos.created_at;
     delete datosListos.updated_at;
     delete datosListos.id;
+        delete datosListos.modalidades_matricula;
     
     console.log("🟢 [FORM] Datos limpios para enviar:", datosListos);
     console.log("🟢 [FORM] Cantidad de campos:", Object.keys(datosListos).length);
@@ -62,6 +262,40 @@ export default function EditEstudiante() {
       const result = await onFinish(datosListos);
       console.log("✅ [FORM] onFinish retornó:", result);
       console.log("✅ [FORM] result?.data:", result?.data);
+
+            let cambiosModalidad = 0;
+            for (const matricula of matriculasEditable) {
+                const nuevaModalidad = normalizeModalidadPago(modalidadesMatricula[String(matricula.id)] || matricula.modalidad_pago);
+                const modalidadActual = normalizeModalidadPago(matricula.modalidad_pago);
+                if (nuevaModalidad === modalidadActual) continue;
+                cambiosModalidad += 1;
+
+                const programaPricing: ProgramaPaymentConfig = {
+                    precio_por_clase: matricula?.cursos?.programas?.precio_por_clase,
+                    precio_mensual_70: matricula?.cursos?.programas?.precio_mensual_70,
+                    precio_mensual_100: matricula?.cursos?.programas?.precio_mensual_100,
+                    precio_mensualidad: matricula?.cursos?.precio_mensualidad ?? matricula?.cursos?.programas?.precio_mensualidad,
+                };
+
+                const montos = resolvePaymentPlanAmounts(nuevaModalidad, programaPricing);
+
+                const { error: matriculaError } = await supabaseBrowserClient
+                    .from("matriculas")
+                    .update({
+                        modalidad_pago: nuevaModalidad,
+                        valor_mensual_plan: montos.montoMensual,
+                        valor_por_clase: montos.montoPorClase,
+                        porcentaje_productos: montos.porcentajeProductos,
+                    })
+                    .eq("id", matricula.id);
+
+                if (matriculaError) throw matriculaError;
+                await sincronizarPagosPendientes(matricula, nuevaModalidad);
+            }
+
+            if (cambiosModalidad > 0) {
+                message.success("Modalidades de pago actualizadas en las matrículas del estudiante.");
+            }
 
             const emailActualizado = String(datosListos?.email || "").trim().toLowerCase();
             if (emailActualizado) {
@@ -206,6 +440,69 @@ export default function EditEstudiante() {
         <Form.Item label="Observaciones / Notas Especiales" name="observaciones">
             <Input.TextArea rows={3} placeholder="Alergias, condiciones, preferencias..." />
         </Form.Item>
+
+                <Divider orientation="left" style={{color: '#722ed1'}}>Modalidad de Pago por Matrícula</Divider>
+
+                <Alert
+                    message="Estas modalidades se guardan en las matrículas"
+                    description="Si corriges una modalidad aquí, el cambio se reflejará en listados, ficha del estudiante, portal y paneles que leen la información desde matrícula."
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                />
+
+                {loadingMatriculas ? (
+                    <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+                        <Spin />
+                    </div>
+                ) : matriculasEditable.length === 0 ? (
+                    <Alert
+                        message="Este estudiante no tiene matrículas registradas"
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 16 }}
+                    />
+                ) : (
+                    matriculasEditable.map((matricula) => {
+                        const modalidadActual = normalizeModalidadPago(modalidadesMatriculaWatch[String(matricula.id)] || matricula.modalidad_pago || MODALIDAD_PAGO_DEFAULT);
+                        const pricingPrograma: ProgramaPaymentConfig = {
+                            precio_por_clase: matricula?.cursos?.programas?.precio_por_clase,
+                            precio_mensual_70: matricula?.cursos?.programas?.precio_mensual_70,
+                            precio_mensual_100: matricula?.cursos?.programas?.precio_mensual_100,
+                            precio_mensualidad: matricula?.cursos?.precio_mensualidad ?? matricula?.cursos?.programas?.precio_mensualidad,
+                        };
+                        const resumenPlan = resolvePaymentPlanAmounts(modalidadActual, pricingPrograma);
+
+                        return (
+                            <Card key={matricula.id} size="small" style={{ marginBottom: 12 }}>
+                                <Row gutter={16} align="middle">
+                                    <Col xs={24} md={8}>
+                                        <Text strong>{matricula?.cursos?.nombre || "Curso sin nombre"}</Text>
+                                        <br />
+                                        <Text type="secondary">Estado: {matricula.estado || "Sin estado"}</Text>
+                                    </Col>
+                                    <Col xs={24} md={10}>
+                                        <Form.Item
+                                            label="Modalidad de pago"
+                                            name={["modalidades_matricula", String(matricula.id)]}
+                                            initialValue={normalizeModalidadPago(matricula.modalidad_pago)}
+                                            style={{ marginBottom: 0 }}
+                                        >
+                                            <Select options={opcionesPlanPago} />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col xs={24} md={6}>
+                                        {modalidadActual === "POR_CLASE" ? (
+                                            <Text>Cobro por clase: <strong>{formatoCOP(resumenPlan.montoPorClase)}</strong></Text>
+                                        ) : (
+                                            <Text>Mensualidad: <strong>{formatoCOP(resumenPlan.montoMensual)}</strong></Text>
+                                        )}
+                                    </Col>
+                                </Row>
+                            </Card>
+                        );
+                    })
+                )}
 
       </Form>
     </Edit>
