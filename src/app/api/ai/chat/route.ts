@@ -3934,6 +3934,68 @@ function buildPaymentMethodsAndDatesReply(
   return `¡Claro! Te respondo puntual 🙌\n\n${methodsBlock}${modalidadesBlock}\n\nLa *matrícula* se paga anticipada para separar cupo y la *mensualidad* se puede pagar hasta la segunda clase.\n\n¿Quieres que te recomiende la modalidad según tu presupuesto?`;
 }
 
+function isPaymentDatesOnlyQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|vence|vencimiento|plazo\s+de\s+pago|hasta\s+cuando\s+pago|segunda\s+clase)\b/i.test(text);
+  const asksMethods = /\b(medios\s+de\s+pago|formas\s+de\s+pago|metodos?\s+de\s+pago|nequi|bancolombia|sistecredito|daviplata|tarjeta|efectivo|transferencia)\b/i.test(text);
+  return asksDates && !asksMethods;
+}
+
+function buildPaymentDatesOnlyReply(): string {
+  return "¡Claro! 🙌 Te confirmo las fechas de pago:\n\n• La *matrícula* se paga anticipada para separar el cupo.\n• La *mensualidad* la puedes pagar hasta la *segunda clase*.\n• Si eliges *Por Clase*, vas pagando cada clase que asistas.\n\nSi quieres, también te paso los *medios de pago*.";
+}
+
+function extractDurationMonths(program: any): number | null {
+  const direct = Number(program?.duracion_meses ?? 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  const text = String(program?.duracion || "");
+  const match = text.match(/(\d{1,2})\s*mes/);
+  if (match?.[1]) {
+    const parsed = Number(match[1]);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+
+  return null;
+}
+
+function isMonthlyClassLoadQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(en\s*1\s*mes|en\s*un\s*mes|al\s*mes|por\s*mes|mensualmente)\b/i.test(text)
+    && /\b(cuantas\s+clases|cuantas\s+veces|cuanto\s+se\s+ve|que\s+se\s+ve)\b/i.test(text);
+}
+
+function buildMonthlyClassLoadReply(detectedProgram: any, primaryCourse: any): string {
+  const totalClasses = Number(detectedProgram?.total_clases ?? 0);
+  const durationMonths = extractDurationMonths(detectedProgram);
+  const schedule = primaryCourse?.horario || "Por confirmar";
+  const frequency = inferClassFrequencyFromSchedule(schedule);
+
+  if (totalClasses > 0 && durationMonths && durationMonths > 0) {
+    const monthlyClasses = Math.max(Math.round(totalClasses / durationMonths), 1);
+    return `✅ En *${detectedProgram.nombre}* normalmente ves *${monthlyClasses} clases al mes* aproximadamente.\n\nEn total son *${totalClasses} clases* en *${durationMonths} meses*, con este horario: *${schedule}*.\n\nSi quieres, también te explico cómo se distribuye el contenido por mes.`;
+  }
+
+  return `✅ En *${detectedProgram.nombre}* ves clase *${frequency}*.\n\nHorario actual: *${schedule}*.\n\nSi quieres, también te explico cómo se distribuye el contenido por mes.`;
+}
+
+function isLateArrivalConcern(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(llegaria|llegare|llegaria\s+un\s+poquito\s+mas\s+tarde|llegaria\s+tarde|un\s+poquito\s+mas\s+tarde|mas\s+tarde\s+a\s+clase|llegar\s+tarde|salgo\s+a\s+las\s+\d{1,2})\b/i.test(text)
+    && /\b(clase|curso|horario)\b/i.test(text);
+}
+
+function buildLateArrivalReply(detectedProgram: any, primaryCourse: any): string {
+  const schedule = primaryCourse?.horario || "Por confirmar";
+  return `Sí, normalmente damos un pequeño margen mientras van llegando las demás compañeras 😊\n\nSi un día se te hace un poco tarde, puedes incorporarte apenas llegues. Para *${detectedProgram.nombre}* el horario es *${schedule}*.\n\nSi quieres, también te reviso si ese grupo te sigue funcionando o si prefieres otro horario.`;
+}
+
 function isMonthlyOrBiweeklyQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
@@ -4253,6 +4315,16 @@ function buildIntentFocusedDirectResponse(
     return `Perfecto 🙌 Te resumo todo de *${detectedProgram.nombre}*:\n\n📅 *Inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n💰 *Inscripción:* ${priceOptions.inscripcionText}\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que avancemos de una con los pasos para inscribirte?`;
   }
 
+  if (extractPaymentOptionSelection(message) === "por_clase" && detectedProgram) {
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+    return `Claro 🙌 Si eliges *Por Clase*, el valor es *${options.porClaseText}* por cada clase que asistas y *no incluye materiales*.\n\nLa matrícula se paga para separar el cupo y luego vas pagando por asistencia. Si quieres, también te paso los *medios* y las *fechas de pago*.`;
+  }
+
+  if (isPaymentDatesOnlyQuestion(message)) {
+    return buildPaymentDatesOnlyReply();
+  }
+
   const shortAckContinuationReply = buildShortAckContinuationReply(
     message,
     lastAgentForFlow,
@@ -4309,6 +4381,7 @@ function buildIntentFocusedDirectResponse(
   const asksSocialMedia = isSocialMediaQuestion(message);
   const asksGeneralInfo = isCourseInfoRequest(message);
   const asksClassFrequency = isClassFrequencyQuestion(message);
+  const asksMonthlyClassLoad = isMonthlyClassLoadQuestion(message);
   const asksCertification = isCertificationQuestion(message);
   const asksPaymentMethodsOrDates = isPaymentMethodsOrDatesQuestion(message);
   const asksStepOne = isStepOneSelection(message);
@@ -4318,7 +4391,8 @@ function buildIntentFocusedDirectResponse(
   const confirmsVisitCommitment = isVisitCommitmentMessage(message, lastAgentForFlow);
   const requestedTemarioMonth = extractRequestedTemarioMonth(message);
   const inferredTemarioMonthFromFlow = inferTemarioMonthFromAgentPrompt(lastAgentForFlow);
-  const asksTemarioByClass = /\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado|detalle\s+por\s+clase)\b/i.test(normalizedMessage);
+  const asksTemarioByClass = extractPaymentOptionSelection(message) !== "por_clase"
+    && /\b(clase\s+por\s+clase|temario\s+detallado|detalle\s+por\s+clase)\b/i.test(normalizedMessage);
   const asksCompleteTemario = new RegExp(
     [
       "\\b(?:",
@@ -4361,6 +4435,11 @@ function buildIntentFocusedDirectResponse(
   const hasRecentPricingContext = /\b(modalidades?|mensual\s+opcion|por\s+clase|inscripci[oó]n|mensualidad|presupuesto|inversion|precio)\b/i
     .test(`${normalizeForMatch(lastAgentForFlow)} ${normalizeForMatch(inferredPendingTopic || "")}`);
 
+  if (isLateArrivalConcern(message) && detectedProgram) {
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    return buildLateArrivalReply(detectedProgram, primaryCourse);
+  }
+
   if (confirmsVisitCommitment) {
     return buildVisitCommitmentReply(academy);
   }
@@ -4383,6 +4462,11 @@ function buildIntentFocusedDirectResponse(
     const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
 
     return `Claro, te recomiendo la *Mensual Opción B* (${options.mensual100Text}/mes) porque incluye el 100% de materiales y estudias con todo completo desde el inicio.\n\nSi prefieres comenzar con menor inversión, la *Mensual Opción A* (${options.mensual70Text}/mes) también funciona muy bien y puedes complementar algunos materiales por tu cuenta.\n\n¿Quieres que te detalle exactamente qué incluye la inscripción (${options.inscripcionText})?`;
+  }
+
+  if (asksMonthlyClassLoad && detectedProgram) {
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    return buildMonthlyClassLoadReply(detectedProgram, primaryCourse);
   }
 
   const asksScheduleRescue = isScheduleRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
