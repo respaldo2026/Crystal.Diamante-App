@@ -2076,6 +2076,141 @@ function buildOnlyScheduleConfirmationReply(
   return `No, también tenemos más opciones de horario para *${detectedProgram.nombre}*:\n${options}\n\n¿Cuál te queda mejor para ayudarte a separar cupo?`;
 }
 
+function extractMentionedDayIndex(message: string): number | null {
+  const text = normalizeForMatch(message);
+  const dayTokens: Record<number, string[]> = {
+    0: ["domingo", "dom"],
+    1: ["lunes", "lun"],
+    2: ["martes", "mar"],
+    3: ["miercoles", "mie", "mier"],
+    4: ["jueves", "jue"],
+    5: ["viernes", "vie"],
+    6: ["sabado", "sab"],
+  };
+
+  for (const [dayIndex, tokens] of Object.entries(dayTokens)) {
+    if (tokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(text))) {
+      return Number(dayIndex);
+    }
+  }
+
+  return null;
+}
+
+function countScheduledClassesUntil(course: any, referenceDate: Date): number {
+  if (!course?.fecha_inicio) return 0;
+
+  const start = new Date(course.fecha_inicio);
+  if (Number.isNaN(start.getTime())) return 0;
+
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(referenceDate);
+  end.setHours(0, 0, 0, 0);
+
+  if (start > end) return 0;
+
+  let total = 0;
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    if (scheduleIncludesDay(course?.horario || "", cursor.getDay())) {
+      total += 1;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  if (total > 0) return total;
+
+  const diffMs = end.getTime() - start.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.max(Math.floor(diffDays / 7) + 1, 1);
+}
+
+function describeCourseAvailability(course: any, referenceDate: Date): string {
+  const schedule = String(course?.horario || "Por confirmar").trim();
+  const startText = formatDateLong(course?.fecha_inicio) || formatDateShort(course?.fecha_inicio) || "Por confirmar";
+
+  if (!course?.fecha_inicio) {
+    return `• ${schedule} — fecha de inicio por confirmar`;
+  }
+
+  const start = new Date(course.fecha_inicio);
+  if (Number.isNaN(start.getTime())) {
+    return `• ${schedule} — fecha de inicio por confirmar`;
+  }
+
+  start.setHours(0, 0, 0, 0);
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+
+  if (start > today) {
+    return `• ${schedule} — este grupo inicia el ${startText}`;
+  }
+
+  const classesCount = countScheduledClassesUntil(course, today);
+  return `• ${schedule} — este grupo ya inició y va aprox. en la clase ${classesCount}`;
+}
+
+function isScheduleDayAvailabilityQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const mentionsDay = /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/i.test(text);
+  const asksOnlyOrAlternative = /\b(solo|solamente|unico|unica|otros?|otras?|mas|tambien|aparte|disponibles?)\b/i.test(text);
+  const asksClassesOrSchedule = /\b(clase|clases|horario|horarios|dias|dias de clase|grupo|grupos)\b/i.test(text);
+
+  return mentionsDay && asksOnlyOrAlternative && asksClassesOrSchedule;
+}
+
+function buildScheduleDayAvailabilityReply(
+  message: string,
+  detectedProgram: any | null,
+  courses: any[]
+): string | null {
+  if (!detectedProgram || !isScheduleDayAvailabilityQuestion(message)) {
+    return null;
+  }
+
+  const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
+  const relatedCourses = (courses || []).filter((course) => {
+    const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+    const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
+    return Boolean(sameProgramId || sameProgramName);
+  });
+
+  if (!relatedCourses.length) {
+    return null;
+  }
+
+  const mentionedDayIndex = extractMentionedDayIndex(message);
+  const coursesForMentionedDay = mentionedDayIndex === null
+    ? []
+    : relatedCourses.filter((course) => scheduleIncludesDay(course?.horario || "", mentionedDayIndex));
+  const alternativeCourses = mentionedDayIndex === null
+    ? relatedCourses
+    : relatedCourses.filter((course) => !scheduleIncludesDay(course?.horario || "", mentionedDayIndex));
+
+  const dayNames = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+  const mentionedDayLabel = mentionedDayIndex !== null ? dayNames[mentionedDayIndex] : null;
+  const referenceDate = new Date();
+
+  if (!alternativeCourses.length) {
+    const currentSchedule = coursesForMentionedDay[0]?.horario || relatedCourses[0]?.horario || "Por confirmar";
+    return `Sí, por ahora ese es el horario que tenemos para *${detectedProgram.nombre}*: *${currentSchedule}*.\n\nSi quieres, te aviso apenas abramos otro día disponible.`;
+  }
+
+  const alternativesText = alternativeCourses
+    .slice(0, 3)
+    .map((course) => describeCourseAvailability(course, referenceDate))
+    .join("\n");
+
+  if (mentionedDayLabel && coursesForMentionedDay.length > 0) {
+    return `Sí, también tenemos grupo${coursesForMentionedDay.length > 1 ? "s" : ""} los *${mentionedDayLabel}* para *${detectedProgram.nombre}*.\n\nAdemás, estos otros días están disponibles:\n${alternativesText}\n\nSi quieres, te digo cuál te conviene más.`;
+  }
+
+  return `Sí, tenemos más horarios para *${detectedProgram.nombre}*.\n\nEstos son los otros grupos disponibles:\n${alternativesText}\n\nSi quieres, te digo cuál te conviene más.`;
+}
+
 function buildNaturalAckReply(
   message: string,
   lastAgentMessage: string,
@@ -4129,6 +4264,11 @@ function buildIntentFocusedDirectResponse(
   );
   if (shortAckContinuationReply) {
     return shortAckContinuationReply;
+  }
+
+  const scheduleDayAvailabilityReply = buildScheduleDayAvailabilityReply(message, detectedProgram, courses);
+  if (scheduleDayAvailabilityReply) {
+    return scheduleDayAvailabilityReply;
   }
 
   if (isOnlyScheduleConfirmationQuestion(message)) {
