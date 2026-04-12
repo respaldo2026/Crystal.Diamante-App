@@ -2166,6 +2166,16 @@ function buildShortAckContinuationReply(
     return buildPaymentMethodsAndDatesReply(mediosPago, detectedProgram, courses);
   }
 
+  if (/temario|contenido|que\s+aprend|que\s+ver|modulo|ciclo/.test(normalizedPending)) {
+    if (!detectedProgram) {
+      return "¡Claro! 🙌 Dime el curso y te comparto lo que aprenderás.";
+    }
+
+    const rawTemario = String(detectedProgram?.contenido || "").trim();
+    const temarioReply = rawTemario ? buildTemarioCompleteReply(detectedProgram, rawTemario) : null;
+    return temarioReply || `¡Claro! 🙌 En *${detectedProgram.nombre}* verás el contenido paso a paso. Si quieres, te comparto el temario completo o el detalle clase por clase.`;
+  }
+
   if (/dias\s+y\s+horario|horario|inicio|fecha|grupo/.test(normalizedPending) && detectedProgram) {
     const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
     const nextStart = formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) || "Por confirmar";
@@ -2261,7 +2271,7 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
     if (/\b(fecha|inicio|horario|dias|dia|hora)\b/i.test(normalizedQuestion)) return "quiero saber dias y horario";
     if (/\b(cupo|cupos|disponible)\b/i.test(normalizedQuestion)) return "quiero saber si hay cupos disponibles";
     if (/\b(material|materiales|insumo|kit)\b/i.test(normalizedQuestion)) return "quiero saber materiales";
-    if (/\b(temario|contenido|modulo|ciclo)\b/i.test(normalizedQuestion)) return "quiero saber el temario";
+    if (/\b(temario|contenido|modulo|ciclo|que\s+aprend|que\s+ver|que\s+ensenan?|que\s+incluye\s+el\s+curso)\b/i.test(normalizedQuestion)) return "quiero saber el temario";
   }
 
   // Fallback: escanear todo el mensaje (solo si no hubo pregunta clara)
@@ -2271,7 +2281,7 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
   if (/\b(proximo grupo|siguiente grupo|proximo curso|fecha confirmada|por confirmar)\b/i.test(normalized)) return "quiero saber el proximo grupo y su fecha";
   if (/\b(materiales|material|insumo|kit|por clase o por ciclo)\b/i.test(normalized)) return "quiero saber materiales";
   if (/\b(clase\s+por\s+clase|por\s+clase|temario\s+detallado)\b/i.test(normalized)) return "quiero el temario clase por clase";
-  if (/\b(temario|contenido|modulo|modulos|ciclo)\b/i.test(normalized)) return "quiero saber el temario";
+  if (/\b(temario|contenido|modulo|modulos|ciclo|que\s+aprend|que\s+ver|que\s+ensenan?|que\s+incluye\s+el\s+curso)\b/i.test(normalized)) return "quiero saber el temario";
   if (/\b(horario|dias|dia|hora)\b/i.test(normalized)) return "quiero saber dias y horario";
   if (/\b(inscripcion|inscribirme|admisiones|matricula|matricularme|pago)\b/i.test(normalized)) return "quiero saber como me inscribo";
   if (/\b(inversion|mensualidad|precio|costa|valor)\b/i.test(normalized)) return "quiero saber la inversion";
@@ -4793,12 +4803,32 @@ function hasQuizPlatformAccessIntent(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
 
+  if (isPortalQuizInfoQuestion(message)) return false;
+
   const quizToken = /\b(quiz|quizz|cuestionario|evaluacion|evaluacione?s)\b/i.test(text);
   const platformToken = /\b(plataforma|app|portal)\b/i.test(text);
   const accessToken = /\b(link|enlace|url|ingresar|entrar|acceder|abrir|usuario|clave|contrasena|password)\b/i.test(text);
   const contextualToken = /\b(para\s+lo\s+del|es\s+para|lo\s+del)\b/i.test(text);
 
   return (quizToken && (platformToken || accessToken || contextualToken)) || (platformToken && quizToken);
+}
+
+function isPortalQuizInfoQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const platformToken = /\b(portal|app|aplicacion|plataforma)\b/i.test(text);
+  const evaluationToken = /\b(quiz|quizz|cuestionario|evaluacion|evaluaciones|examen|examenes)\b/i.test(text);
+  const quantityOrFlowToken = /\b(cuanto|cuantos|cuantas|solo\s+uno|uno\s+solo|varios|hacer|debo\s+hacer|se\s+deben?\s+de\s+hacer|presentar|resolver|toca|hay|aparece|sale|son)\b/i.test(text);
+
+  return platformToken && evaluationToken && quantityOrFlowToken;
+}
+
+function buildPortalQuizGuidanceReply(message: string, detectedProgram: any | null): string | null {
+  if (!isPortalQuizInfoQuestion(message)) return null;
+
+  const programLabel = detectedProgram?.nombre ? ` de *${detectedProgram.nombre}*` : "";
+  return `Depende del curso${programLabel}. En el portal pueden aparecer uno o varios quizzes o evaluaciones según la clase y el avance, así que no siempre es solo uno.\n\nSi quieres, te digo cómo verlo en tu caso exacto. Compárteme el curso que estás haciendo y, si lo prefieres, tu número de cédula.`;
 }
 
 function hasRecentLinkSupportContext(history: Array<{ user: string; agent: string }>): boolean {
@@ -5270,6 +5300,7 @@ function buildContextualDirective(
     ? `MODO SOPORTE ESTUDIANTE ACTIVADO:
 - Responde primero la pregunta exacta del estudiante de forma natural y concreta.
 - No pidas cédula ni des credenciales de acceso a menos que el usuario pida explícitamente link/app/ingreso/usuario.
+  - Si pregunta cuántos quizzes, evaluaciones o exámenes ve en el portal, responde primero de forma general o con el curso si ya está identificado; solo pide un dato adicional si realmente hace falta validar su caso exacto.
 - Si pregunta por kit/materiales de clase, responde directamente qué debe llevar (o indica que validarás el ciclo/tema exacto).
 - Evita respuestas genéricas o cambio de tema.`
     : "";
@@ -5791,6 +5822,26 @@ export async function POST(req: NextRequest) {
     const academy = await getAcademyInfo();
     const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
     const mediosPago = await getMediosPago();
+
+    const portalQuizGuidanceReply = buildPortalQuizGuidanceReply(effectiveMessage, detectedProgram);
+    if (portalQuizGuidanceReply) {
+      const truncatedResponse = truncateResponse(portalQuizGuidanceReply, 1000);
+
+      await persistConversation(message, truncatedResponse);
+
+      const sanitizedResponse = sanitizeForJSON(truncatedResponse);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
+
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      }, null)), commentEvent));
+    }
 
     // Anular imagen si es el primer mensaje de la conversación (saludo inicial)
     // o si el mensaje original es un saludo / afirmación corta ("si", "ok", "dale", etc.)
