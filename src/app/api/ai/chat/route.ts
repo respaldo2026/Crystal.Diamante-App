@@ -2748,7 +2748,22 @@ function isDurationQuestion(message: string): boolean {
 
 function isClassFrequencyQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia|las clases son cada|cuantos dias a la semana|dias a la semana|cuantos dias ven clase|cuantos dias son clase)\b/i.test(text);
+  return /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia|las clases son cada|cuantos dias a la semana|dias a la semana|cuantos dias ven clase|cuantos dias son clase|cuantas clases por semana|clases por semana|clases a la semana|cuantas clases a la semana|una vez a la semana|es un dia a la semana|solo un dia a la semana)\b/i.test(text);
+}
+
+function isOfficeHoursQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(horario de atencion|horario de atencion presencial|horarios de atencion|a que hora atienden|que horario manejan|horario de la sede|horario para ir|hora atienden|cuando atienden presencial|horario de oficina)\b/i.test(text);
+}
+
+function buildOfficeHoursReply(academy: any): string {
+  const direccion = String(academy?.direccion || "Calle 53 #30a 101 - Barrio Comuneros 1").trim();
+  const mapsUrl = String(academy?.maps_url || "").trim();
+  const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
+
+  return `¡Sí, claro! 🙌 Atendemos *presencialmente en la sede* y te coordinamos la visita para recibirte bien.\n\n📍 *${direccion}*${mapsLine}\n\nSi quieres venir o pagar *antes del inicio*, sí puedes hacerlo para *dejar tu cupo separado* antes de que el grupo se llene.\n\n¿Qué día te queda bien para coordinarte?`;
 }
 
 function isCertificationQuestion(message: string): boolean {
@@ -2953,6 +2968,33 @@ function isPaymentMethodQuestion(message: string): boolean {
     /\b(nequi|daviplata|transferencia|presencial|virtual|en linea|online|efectivo|tarjeta|consignacion|deposito)\b/i.test(text) &&
     /\b(pagar|pago|pagos|aceptan|reciben|pueden|puedo|puede|se puede|se acepta|admiten)\b/i.test(text)
   );
+}
+
+function isPresentialPaymentQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const mentionsPresentialPayment = /\b(pagar presencial|pago presencial|presencial|en efectivo|efectivo)\b/i.test(text);
+  const mentionsPaymentIntent = /\b(pago|pagar|abonar|cancelar|se puede|puedo|debo esperar|antes del inicio|antes de iniciar|antes de empezar|antes de ese lunes|hasta ese lunes|antes de la fecha)\b/i.test(text);
+
+  return mentionsPresentialPayment && mentionsPaymentIntent;
+}
+
+function buildPresentialPaymentReply(
+  detectedProgram: any | null,
+  primaryCourse: any | null,
+  academy: any
+): string {
+  const nextStart = primaryCourse?.fecha_inicio
+    ? (formatDateLong(primaryCourse.fecha_inicio) || formatDateShort(primaryCourse.fecha_inicio))
+    : null;
+  const direccion = String(academy?.direccion || "Calle 53 #30a 101 - Barrio Comuneros 1").trim();
+  const programLabel = detectedProgram?.nombre ? ` para *${detectedProgram.nombre}*` : "";
+  const urgencyLine = nextStart
+    ? `Lo ideal es hacerlo *antes del ${nextStart}* para dejar tu cupo asegurado, porque los grupos suelen moverse antes de iniciar.`
+    : "Lo ideal es hacerlo *antes del inicio* para dejar tu cupo asegurado, porque los grupos suelen moverse antes de iniciar.";
+
+  return `¡Sí! 🙌 Puedes pagar *presencialmente*${programLabel} y *no tienes que esperar al día de inicio*.\n\n${urgencyLine}\n\n📍 Puedes hacerlo directamente en la sede: *${direccion}*.\n\nSi quieres, te indico qué día te conviene venir para dejarlo listo de una vez.`;
 }
 
 function isSocialMediaQuestion(message: string): boolean {
@@ -4237,6 +4279,10 @@ function buildIntentFocusedDirectResponse(
     return `Entiendo tu molestia y lo siento mucho 🙏 A veces soy limitada en ciertas preguntas.\n\nTe comunico con alguien de *Admisiones* para que te atienda personalmente:\n📲 WhatsApp: *${wa}*\n\nEscríbeles directamente y te resolverán todo de inmediato 💙`;
   }
 
+  if (isOfficeHoursQuestion(message)) {
+    return buildOfficeHoursReply(academy);
+  }
+
   // Pregunta directa de visita presencial → responder SÍ primero, luego dirección
   const asksPresencialVisit = /\b(puedo\s+ir|puedo\s+pasar|puedo\s+ir\s+presencial|puedo\s+ir\s+personal|ir\s+presencial|ir\s+en\s+persona|voy\s+a\s+ir|voy\s+presencial|puedo\s+visitar|puedo\s+ir\s+a\s+la\s+sede)\b/i.test(normalizeForMatch(message));
   if (asksPresencialVisit && !isPaymentMethodQuestion(message)) {
@@ -4467,6 +4513,11 @@ function buildIntentFocusedDirectResponse(
   if (asksMonthlyClassLoad && detectedProgram) {
     const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
     return buildMonthlyClassLoadReply(detectedProgram, primaryCourse);
+  }
+
+  if (isPresentialPaymentQuestion(message)) {
+    const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
+    return buildPresentialPaymentReply(detectedProgram, primaryCourse, academy);
   }
 
   const asksScheduleRescue = isScheduleRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
