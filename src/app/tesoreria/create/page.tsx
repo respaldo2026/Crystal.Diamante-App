@@ -65,6 +65,12 @@ type PaymentAdjustmentRpcResult = {
 
 const formatoCOP = (valor: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
+const generarNumeroFactura = (): string => {
+    const min = 1000;
+    const max = 9999;
+    return Math.floor(Math.random() * (max - min + 1) + min).toString();
+};
+
 export default function PagoCreate() {
     const { formProps, saveButtonProps } = useForm({ redirect: "list" });
 
@@ -271,6 +277,7 @@ export default function PagoCreate() {
 
     const handleOnFinish = async (values: any) => {
         const { cuota_id, monto, metodo_pago, fecha_pago, referencia, descuento_aplicado, motivo_descuento } = values;
+        const referenciaPago = String(referencia || "").trim() || `FAC-${generarNumeroFactura()}`;
 
         if (!cuota_id) {
             message.error("Debes seleccionar una cuota a pagar");
@@ -324,7 +331,7 @@ export default function PagoCreate() {
                 p_monto_abono: montoNumero,
                 p_descuento_aplicado: descuentoNumero,
                 p_metodo_pago: metodo_pago || null,
-                p_referencia: referencia || null,
+                p_referencia: referenciaPago,
                 p_observaciones: `Movimiento registrado manualmente el ${dayjs().format("DD/MM/YYYY HH:mm")}`,
                 p_motivo_descuento: motivo_descuento || null,
                 p_fecha_pago: dayjs(fechaPagoISO).toISOString(),
@@ -378,7 +385,7 @@ export default function PagoCreate() {
                         telefono: estudianteSeleccionado?.telefono ?? undefined,
                     },
                     pago: {
-                        referencia: referencia || ajuste.abono_id,
+                        referencia: referenciaPago,
                         metodo: metodo_pago,
                         monto: montoNumero,
                         fecha: fechaPagoLegible,
@@ -426,7 +433,7 @@ export default function PagoCreate() {
                         concepto: conceptoTicket,
                         categoria: "matriculas",
                         metodo_pago,
-                        referencia: referencia || ajuste.abono_id,
+                        referencia: referenciaPago,
                         descripcion: detalleOperacion || null,
                         estudiante_id: estudianteSeleccionado?.id ?? values.estudiante_id,
                         ticket_url: publicUrl,
@@ -448,7 +455,7 @@ export default function PagoCreate() {
                   await enviarConfirmacionPago(estudianteSeleccionado.id, {
                     nombre: estudianteSeleccionado.nombre_completo,
                     telefono: estudianteSeleccionado.telefono,
-                    referenciaPago: referencia || 'Pago registrado',
+                                        referenciaPago,
                     monto: montoNumero,
                     fechaPago: dayjs().format('DD/MM/YYYY'),
                     concepto: conceptoTicket,

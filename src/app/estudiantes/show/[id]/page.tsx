@@ -80,6 +80,7 @@ type Matricula = {
     nombre: string | null;
     descripcion: string | null;
     precio: number | null;
+    precio_inscripcion?: number | null;
     precio_mensualidad: number | null;
     perfiles?: {
       nombre_completo: string | null;
@@ -219,6 +220,14 @@ export default function StudentDetailView() {
       40000
     );
 
+  const obtenerValorInscripcion = (matricula: any) =>
+    Number(
+      matricula?.cursos?.precio_inscripcion ??
+      matricula?.precio_inscripcion ??
+      matricula?.cursos?.precio ??
+      0
+    );
+
   const obtenerTotalClasesPrograma = useCallback((matricula: any) => {
     const programaId = String(matricula?.cursos?.programa_id || "");
     if (!programaId) return 0;
@@ -306,7 +315,7 @@ export default function StudentDetailView() {
         .select(
           `
             *,
-            cursos ( id, programa_id, nombre, descripcion, precio, precio_mensualidad, duracion, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad), perfiles(nombre_completo) )
+            cursos ( id, programa_id, nombre, descripcion, precio, precio_inscripcion, precio_mensualidad, duracion, dias_semana, hora_inicio, hora_fin, programas(nombre, duracion, precio_mensualidad), perfiles(nombre_completo) )
           `
         )
         .eq("estudiante_id", idEstudiante)
@@ -505,17 +514,30 @@ export default function StudentDetailView() {
         .reduce((sum, p) => sum + getTotalAbonado(p), 0);
       console.log("💰 Total Pagado Real calculado:", totalPagadoReal);
       
-      const totalMensualidadEsperada = listaMats.reduce((sum, m: any) => {
+      const deudaPendienteReal = listaMats.reduce((sum, m: any) => {
+        const pagosMat = pagosList.filter((p) => p.matricula_id === m.id);
+        const modalidadPago = normalizeModalidadPago(m?.modalidad_pago);
+        const pagoInscripcion = pagosMat.find((p) => esInscripcion(p));
+        const deudaInscripcion = pagoInscripcion
+          ? getSaldoPendiente(pagoInscripcion)
+          : obtenerValorInscripcion(m);
+
+        if (modalidadPago === "POR_CLASE") {
+          const deudaClasesGeneradas = pagosMat
+            .filter((p) => !esInscripcion(p))
+            .reduce((acc, p) => acc + getSaldoPendiente(p), 0);
+          return sum + deudaInscripcion + deudaClasesGeneradas;
+        }
+
         const meses = obtenerDuracionMeses(m);
         const mensualidad = obtenerMensualidad(m);
-        return sum + (meses * mensualidad);
+        const totalMensualidadEsperada = meses * mensualidad;
+        const totalMensualidadPagada = pagosMat
+          .filter((p) => !esInscripcion(p))
+          .reduce((acc, p) => acc + getTotalAbonado(p), 0);
+
+        return sum + deudaInscripcion + Math.max(totalMensualidadEsperada - totalMensualidadPagada, 0);
       }, 0);
-
-      const totalMensualidadPagada = pagosList
-        .filter((p) => !esInscripcion(p))
-        .reduce((sum, p) => sum + getTotalAbonado(p), 0);
-
-      const deudaPendienteReal = Math.max(totalMensualidadEsperada - totalMensualidadPagada, 0);
       console.log("📊 Deuda Pendiente Real calculada:", deudaPendienteReal);
 
       setEstadisticasGlobales((prev) => ({
@@ -1080,7 +1102,7 @@ export default function StudentDetailView() {
         key: "monto",
         render: (_val: number | null, record: Pago) => (
           <Text strong style={{ color: getVisiblePaymentStatus(record) === "pagado" ? "#52c41a" : "#1677ff" }}>
-            ${getSaldoPendiente(record).toLocaleString()}
+            ${getMontoProgramado(record).toLocaleString()}
           </Text>
         ),
       },
@@ -1106,7 +1128,7 @@ export default function StudentDetailView() {
         title: "Referencia",
         dataIndex: "referencia",
         key: "ref",
-        render: (text: string | null) => text || "-",
+        render: (text: string | null, record: Pago) => text || (record?.fecha_pago ? String(record?.id || "-") : "-"),
       },
       {
         title: "Observaciones",
@@ -1130,8 +1152,12 @@ export default function StudentDetailView() {
         title: "Ticket",
         dataIndex: "ticket_url",
         key: "ticket",
-        render: (url: string | null, record: Pago) =>
-          url ? (
+        render: (url: string | null, record: Pago) => {
+          const esVirtual = String(record?.id || "").startsWith("pendiente-");
+          const puedeRegenerar = !esVirtual && getTotalAbonado(record) > 0;
+
+          if (url) {
+            return (
             <Space size={6} wrap>
               <Tooltip title="Ver PDF">
                 <Button size="small" icon={<FilePdfOutlined />} onClick={() => window.open(url, "_blank")} />
@@ -1161,14 +1187,22 @@ export default function StudentDetailView() {
                 />
               </Tooltip>
             </Space>
-          ) : (
-            <Space size={6} wrap>
-              <Text type="secondary">No disponible</Text>
-              <Tooltip title="Regenerar ticket">
-                <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRegenerarTicket(record)} />
-              </Tooltip>
-            </Space>
-          ),
+            );
+          }
+
+          if (puedeRegenerar) {
+            return (
+              <Space size={6} wrap>
+                <Text type="secondary">No disponible</Text>
+                <Tooltip title="Regenerar ticket">
+                  <Button size="small" icon={<ReloadOutlined />} onClick={() => void handleRegenerarTicket(record)} />
+                </Tooltip>
+              </Space>
+            );
+          }
+
+          return <Text type="secondary">-</Text>;
+        },
       },
       {
         title: "Recordatorio",
@@ -1276,11 +1310,11 @@ export default function StudentDetailView() {
         numero_cuota: ciclo,
         matricula_id: record.id,
         matriculas: record.matriculas ?? null,
-        monto: ciclo === 0 ? record?.cursos?.precio || null : (esPorClase ? valorPorClase : obtenerMensualidad(record)),
-        monto_programado: ciclo === 0 ? record?.cursos?.precio || null : (esPorClase ? valorPorClase : obtenerMensualidad(record)),
+        monto: ciclo === 0 ? obtenerValorInscripcion(record) || null : (esPorClase ? valorPorClase : obtenerMensualidad(record)),
+        monto_programado: ciclo === 0 ? obtenerValorInscripcion(record) || null : (esPorClase ? valorPorClase : obtenerMensualidad(record)),
         descuento_aplicado: 0,
         total_abonado: 0,
-        saldo_pendiente: ciclo === 0 ? record?.cursos?.precio || 0 : (esPorClase ? valorPorClase : obtenerMensualidad(record)),
+        saldo_pendiente: ciclo === 0 ? obtenerValorInscripcion(record) || 0 : (esPorClase ? valorPorClase : obtenerMensualidad(record)),
         motivo_descuento: null,
         metodo_pago: null,
         referencia: null,
