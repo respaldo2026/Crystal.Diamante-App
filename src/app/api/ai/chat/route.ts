@@ -654,7 +654,7 @@ Sigue siempre este orden:
 ⚠️ "Puedo ir personal" / "¿Puedo ir en persona?" → confirma que SÍ pueden atenderte en la academia y pide que indique cuándo puede ir. NO muestres el menú de horarios/inversión/inscripción.
 ⚠️ Si el usuario muestra frustración ("cuando atienda una persona de verdad", "no me entiendes", "siempre lo mismo") → pide disculpas brevemente, reconoce la limitación y da el número de Admisiones directamente.
 ⚠️ Si el usuario ya dijo "Horarios" y recibió el menú en respuesta — y lo repite — es porque el sistema no respondió su pregunta. Responde INMEDIATAMENTE con los horarios, sin preguntar de nuevo qué tema prefiere.
-⚠️ "Y el uniforme" / "y el uniforme?" / cualquier mensaje que contenga la palabra "uniforme" → SIEMPRE responde directamente: la camisa uniforme ya viene incluida dentro de los *$190.000* para separar el cupo. En esa misma respuesta también puedes aclarar que esos $190.000 incluyen ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. NUNCA muestres el bloque de curso, horarios ni precio completo en respuesta a esto.
+⚠️ "Y el uniforme" / "y el uniforme?" / cualquier mensaje que contenga la palabra "uniforme" → SIEMPRE responde directamente: la camisa uniforme ya viene incluida dentro del valor de inscripción vigente para separar el cupo. Si la promo de abril está activa, aclara: *hasta el 30 de abril la inscripción baja de $190.000 a $120.000*. En esa misma respuesta también puedes aclarar que la inscripción incluye ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. NUNCA muestres el bloque de curso, horarios ni precio completo en respuesta a esto.
 ⚠️ "Ya viene ahí" / "ya viene" / "viene incluido" / "viene con eso" / "viene con la inscripción" → el usuario está CONFIRMANDO que algo viene incluido (generalmente el uniforme o el kit). Confirma directamente con un "¡Así es! [lo que preguntó] viene incluido..." y continúa el flujo natural. NUNCA interpretes estas frases como una señal de que el usuario quiere ver horarios o información del curso.
 ⚠️ Patrón "Y el X" / "Y la X" → el usuario está AGREGANDO una pregunta puntual sobre X a la conversación en curso. SIEMPRE responde primero esa pregunta concreta y luego retoma el hilo si aplica. NUNCA ignores la pregunta agregada ni la reemplaces con el bloque de curso/horarios.
 ⚠️ SALUDO SIMPLE ("hola", "hola buenas", "hola buena tarde", "buenas tardes", "buenas noches", "buenos días") → SIEMPRE responde primero el saludo con calidez ("¡Buenas tardes! 😊 Bienvenida a Crystal Diamante...") antes de retomar cualquier contexto previo. NUNCA empieces directamente con "Perfecto, te refieres a [curso]" sin saludar.
@@ -674,14 +674,14 @@ Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
 
 - Precio: confirma inscripción + mensualidad, incluye 1-2 beneficios clave y pregunta si desea medios/fechas de pago.
 - Precio (formato obligatorio): muestra siempre *3 opciones de pago* en este orden y con negrilla: *Por Clase*, *Mensual Opción A*, *Mensual Opción B*. Hazlo en formato corto y comercial (sin texto técnico largo). Debes aclarar materiales en cada una: Por Clase = no incluye materiales; Opción A = incluye ~70% de materiales; Opción B = incluye 100% de materiales del mes.
-- "Efectivo" / confirmación de medio de pago: NO reinicies el embudo. Confirma que efectivo está disponible y da el siguiente paso: "¡Perfecto! Entonces puedes separar tu cupo pagando *$190.000* en efectivo directamente en la academia. Ese valor ya incluye camisa uniforme, ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. ¿Quieres que te diga los pasos para hacerlo?"
+- "Efectivo" / confirmación de medio de pago: NO reinicies el embudo. Confirma que efectivo está disponible y da el siguiente paso. Si la promo de abril está activa, usa: "¡Perfecto! Entonces puedes separar tu cupo pagando *$120.000* en efectivo directamente en la academia hasta el *30 de abril* (antes *$190.000*). Ese valor ya incluye camisa uniforme, ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. ¿Quieres que te diga los pasos para hacerlo?"
 - "Sí" / "sí porfavor" / "porfavor" después de preguntar si quiere medios y fechas de pago: da inmediatamente la lista de medios de pago y la fecha límite de mensualidad. NO preguntes de nuevo qué quiere saber.
 - Medios/fechas de pago: lista los medios disponibles (💵 Efectivo • 💜 Nequi: 3006402575 • 🟡 Bancolombia • 🟢 Sistecredito • 💳 Tarjeta), indica que la mensualidad tiene plazo hasta la segunda clase, y pregunta si quiere guía de inscripción.
-- "¿Por todo cuánto se paga?" / "¿Cuánto es en total?": responde inscripción + (mensualidad × meses del programa). Ej: para Artista Integral en Uñas = $190.000 inscripción + 5 mensualidades de $260.000 = $1.490.000 en total aproximado. Luego pregunta si quiere separar cupo.
+- "¿Por todo cuánto se paga?" / "¿Cuánto es en total?": responde inscripción + (mensualidad × meses del programa). Si la promo de abril está activa, usa la inscripción en *$120.000* y aclara que es válida *hasta el 30 de abril*; si no, usa el valor regular. Luego pregunta si quiere separar cupo.
 - Horarios (cuando ya se identificó el programa): da directamente la información de días y horarios del programa en cuestión. NO preguntes de nuevo qué quiere saber.
 - Sábados (cuando hay grupo en sábado): confirma el horario disponible y pregunta si le queda bien.
 - Sábados (cuando NO hay grupo en sábado): di claramente que por ahora no hay grupo los sábados. Valida que es una situación entendible si trabajan entre semana. Pregunta si quieren quedar en lista de espera para cuando se abra un grupo en ese horario. NO ofrezcas el grupo de martes ni ningún otro día como alternativa sin que te lo pidan.
-- Uniforme / kit primer día: la camisa uniforme ya viene incluida en los *$190.000* de separación del cupo. Ese valor también incluye ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. El kit de materiales se entrega al inicio de cada mes junto con el pago de mensualidad; contiene aproximadamente el 70% de los productos que se usan durante ese mes de clases. El primer día puedes venir con ropa cómoda, no necesitas llevar nada.
+- Uniforme / kit primer día: la camisa uniforme ya viene incluida en el valor vigente de separación del cupo. Si la promo de abril está activa, aclara que *hasta el 30 de abril* la inscripción está en *$120.000* (antes *$190.000*). Ese valor también incluye ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. El kit de materiales se entrega al inicio de cada mes junto con el pago de mensualidad; contiene aproximadamente el 70% de los productos que se usan durante ese mes de clases. El primer día puedes venir con ropa cómoda, no necesitas llevar nada.
 - "¿Cuántas clases cubre la mensualidad?": cada mensualidad cubre 4 clases aproximadamente (el programa es de 20 clases en 5 meses). Ofrece detallar el contenido de algún mes específico.
 - "¿No le rebajan a la mensualidad?" / negociación de precio: la mensualidad tiene un precio fijo de $260.000. Sin embargo, Sistecredito permite financiar en cuotas. ¿Quieres que te explique cómo funciona esa opción?
 - Fotos del kit: di que puedes conseguirlas, pide confirmar programa/ciclo para enviar las correctas.
@@ -2669,8 +2669,49 @@ function formatCurrencyCOP(value: number): string {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+const APRIL_INSCRIPTION_PROMO = {
+  startsAt: new Date("2026-04-01T00:00:00-05:00"),
+  endsAt: new Date("2026-04-30T23:59:59-05:00"),
+  regularPrice: 190000,
+  promoPrice: 120000,
+};
+
+function resolveInscriptionOffer(baseInscripcion: number) {
+  const originalPrice = Number.isFinite(baseInscripcion) ? baseInscripcion : 0;
+  const now = new Date();
+  const promoEligible = originalPrice === APRIL_INSCRIPTION_PROMO.regularPrice;
+  const promoActive = promoEligible
+    && now >= APRIL_INSCRIPTION_PROMO.startsAt
+    && now <= APRIL_INSCRIPTION_PROMO.endsAt;
+  const effectivePrice = promoActive ? APRIL_INSCRIPTION_PROMO.promoPrice : originalPrice;
+
+  const regularText = originalPrice > 0 ? formatCurrencyCOP(originalPrice) : "Por confirmar";
+  const effectiveText = effectivePrice > 0 ? formatCurrencyCOP(effectivePrice) : "Por confirmar";
+  const promoHeadline = promoActive
+    ? `🔥 *Promo Abril:* inscripción de *${regularText}* a *${effectiveText}* hasta el *30 de abril*.`
+    : null;
+  const promoShortText = promoActive
+    ? `${effectiveText} *promo hasta el 30 de abril* (antes ${regularText})`
+    : effectiveText;
+  const urgencyLine = promoActive
+    ? "Aprovecha esta oportunidad: el valor promocional de inscripción solo aplica durante abril."
+    : null;
+
+  return {
+    originalPrice,
+    effectivePrice,
+    promoActive,
+    regularText,
+    effectiveText,
+    promoHeadline,
+    promoShortText,
+    urgencyLine,
+  };
+}
+
 function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) {
-  const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
+  const baseInscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
+  const inscriptionOffer = resolveInscriptionOffer(baseInscripcion);
   const mensual70 = Number(
     detectedProgram?.precio_mensual_70
     ?? primaryCourse?.precio_mensual_70
@@ -2689,11 +2730,15 @@ function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) 
   const porClase = Number(detectedProgram?.precio_por_clase ?? primaryCourse?.precio_por_clase ?? 0);
 
   return {
-    inscripcion,
+    inscripcion: inscriptionOffer.effectivePrice,
+    inscripcionBase: inscriptionOffer.originalPrice,
+    inscripcionPromoActiva: inscriptionOffer.promoActive,
+    inscripcionPromoHeadline: inscriptionOffer.promoHeadline,
+    inscripcionUrgencyLine: inscriptionOffer.urgencyLine,
     mensual70,
     mensual100,
     porClase,
-    inscripcionText: inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar",
+    inscripcionText: inscriptionOffer.promoShortText,
     mensual70Text: mensual70 > 0 ? formatCurrencyCOP(mensual70) : "Por confirmar",
     mensual100Text: mensual100 > 0 ? formatCurrencyCOP(mensual100) : "Por confirmar",
     porClaseText: porClase > 0 ? formatCurrencyCOP(porClase) : "Por confirmar",
@@ -3715,9 +3760,10 @@ function buildSeparaCupoPaymentReply(
   const nequiNumber = "3006402575";
 
   const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
-  const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
+  const priceOptions = detectedProgram ? resolveProgramPaymentOptions(detectedProgram, primaryCourse) : null;
+  const inscripcion = Number(priceOptions?.inscripcion ?? 0);
   const hasPrice = inscripcion > 0;
-  const insText = hasPrice ? formatCurrencyCOP(inscripcion) : null;
+  const insText = hasPrice ? priceOptions?.inscripcionText : null;
   const programLabel = detectedProgram?.nombre ? ` en *${detectedProgram.nombre}*` : "";
 
   const direccion = String(academy?.direccion || "").trim();
@@ -3733,6 +3779,8 @@ function buildSeparaCupoPaymentReply(
     "• Plataforma educativa",
   ].join("\n");
 
+  const promoHeadline = priceOptions?.inscripcionPromoHeadline ? `${priceOptions.inscripcionPromoHeadline}\n` : "";
+  const urgencyLine = priceOptions?.inscripcionUrgencyLine ? `\n${priceOptions.inscripcionUrgencyLine}` : "";
   const montoLine = insText ? `• Monto: *${insText}*` : `• Monto: te lo confirma Admisiones al contactarte`;
   const pagoEfectivoLine = insText ? `• Paga *${insText}* en efectivo` : `• Pago en efectivo (valor exacto te lo confirma Admisiones)`;
 
@@ -3748,7 +3796,7 @@ function buildSeparaCupoPaymentReply(
     ? `¡Perfecto! 🙌 Para separar tu cupo${programLabel}, el valor es de *${insText}*.`
     : `¡Perfecto! 🙌 Para separar tu cupo${programLabel}, el pago de inscripción te lo confirma nuestro equipo de Admisiones.`;
 
-  return `${intro}
+  return `${promoHeadline}${intro}${urgencyLine}
 
 ${addedValueBlock}
 
@@ -4538,11 +4586,12 @@ function buildIntentFocusedDirectResponse(
 
   if (asksPaymentRescue) {
     const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
-    const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
-    const insText = inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar";
+    const priceOptions = detectedProgram ? resolveProgramPaymentOptions(detectedProgram, primaryCourse) : null;
+    const promoHeadline = priceOptions?.inscripcionPromoHeadline ? `${priceOptions.inscripcionPromoHeadline}\n\n` : "";
+    const insText = priceOptions?.inscripcionText || "Por confirmar";
 
     if (detectedProgram) {
-      return `Claro, aquí va directo para *${detectedProgram.nombre}*:\n\n💰 *Inscripción:* ${insText}\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que te pase los medios de pago?`;
+      return `Claro, aquí va directo para *${detectedProgram.nombre}*:\n\n${promoHeadline}💰 *Inscripción:* ${insText}\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que te pase los medios de pago?`;
     }
 
     return "¡Claro! 🙌 Te respondo corto: manejamos *3 modalidades* (*Por Clase*, *Mensual Opción A* y *Mensual Opción B*). Si me dices el curso, te doy los valores exactos de cada una.";
@@ -4879,6 +4928,8 @@ function buildIntentFocusedDirectResponse(
 
     const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
     const monthlyIncludes = "Incluye: kit mensual según la modalidad que elijas";
+    const promoHeadline = priceOptions.inscripcionPromoHeadline ? `${priceOptions.inscripcionPromoHeadline}\n\n` : "";
+    const urgencyLine = priceOptions.inscripcionUrgencyLine ? `\n${priceOptions.inscripcionUrgencyLine}` : "";
 
     const normalizedMessage = normalizeForMatch(message);
     const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
@@ -4984,7 +5035,7 @@ function buildIntentFocusedDirectResponse(
       }
     }
 
-    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
+    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n${promoHeadline}💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}${urgencyLine}\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
   }
 
   if (intent === "horario") {
