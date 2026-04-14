@@ -2315,7 +2315,7 @@ function buildShortAckContinuationReply(
     const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
     const nextStart = formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) || "Por confirmar";
     const schedule = primaryCourse?.horario || "Por confirmar";
-    return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta los pasos para *separar tu cupo*?`;
+    return `Perfecto 👌 Te confirmo *${detectedProgram.nombre}*:\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\nSi quieres, también te confirmo la *fecha de finalización* o la *inversión*.`;
   }
 
   if (/inversion|precio|mensualidad|inscripcion/.test(normalizedPending)) {
@@ -2788,7 +2788,7 @@ function ensurePaymentModalitiesInResponse(
 
 function isDurationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
+  return /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso|cuando termina|cuando finaliza|fecha de finalizacion|fecha final|hasta cuando va|cuando se acaba)\b/i.test(text);
 }
 
 function isClassFrequencyQuestion(message: string): boolean {
@@ -2800,7 +2800,7 @@ function isOfficeHoursQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
 
-  return /\b(horario de atencion|horario de atencion presencial|horarios de atencion|a que hora atienden|que horario manejan|horario de la sede|horario para ir|hora atienden|cuando atienden presencial|horario de oficina)\b/i.test(text);
+  return /\b(horario de atencion|horario de atencion presencial|horarios de atencion|a que hora atienden|en que horario atienden|que horario manejan|horario de la sede|horario para ir|hora atienden|cuando atienden presencial|horario de oficina|en horario atienden|que horario de atencion tienen)\b/i.test(text);
 }
 
 function buildOfficeHoursReply(academy: any): string {
@@ -2808,7 +2808,19 @@ function buildOfficeHoursReply(academy: any): string {
   const mapsUrl = String(academy?.maps_url || "").trim();
   const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
 
-  return `¡Sí, claro! 🙌 Atendemos *presencialmente en la sede* y te coordinamos la visita para recibirte bien.\n\n📍 *${direccion}*${mapsLine}\n\nSi quieres venir o pagar *antes del inicio*, sí puedes hacerlo para *dejar tu cupo separado* antes de que el grupo se llene.\n\n¿Qué día te queda bien para coordinarte?`;
+  return `Claro. Nuestro horario de atención presencial es en la sede y te ayudamos a coordinar la visita.\n\n📍 *${direccion}*${mapsLine}\n\nSi quieres, te indico también cómo llegar o te digo si puedes acercarte hoy.`;
+}
+
+function isHumanAdvisorRequest(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(necesito\s+hablar\s+con\s+un\s+asesor|quiero\s+hablar\s+con\s+un\s+asesor|me\s+puede\s+atender\s+un\s+asesor|me\s+atiende\s+un\s+asesor|quiero\s+un\s+asesor|asesor\s+humano|persona\s+real|hablar\s+con\s+alguien|atienda\s+una\s+persona)\b/i.test(text);
+}
+
+function buildHumanAdvisorReply(academy: any): string {
+  const wa = academy?.whatsapp_admisiones || ADMISSIONS_NUMBER;
+  return `Claro, te apoyo con eso. Si prefieres atención directa con un asesor, puedes escribir a *Admisiones* al *${wa}*.\n\nSi quieres, antes de pasarte, también puedo dejarte organizada aquí la información exacta que necesitas.`;
 }
 
 function isCertificationQuestion(message: string): boolean {
@@ -4194,15 +4206,21 @@ function buildScheduleHumanReply(
   );
   const historyHasPrice = /\b(inversion|inscripcion|mensualidad|cuota|precio|costo|vale|valor)\b/i.test(normalizedHistory);
   const historyHasEnrollment = /\b(inscrib|cupo|separar|reservar|matricul|admision)\b/i.test(normalizedHistory);
+  const historyHasDuration = /\b(duracion|cuanto dura|meses|fecha de finalizacion|cuando termina|finaliza)\b/i.test(normalizedHistory);
+  const historyHasMaterials = /\b(material|materiales|insumo|kit)\b/i.test(normalizedHistory);
 
   // Ofrecer el siguiente paso lógico que aún NO se ha cubierto
   let followup: string;
-  if (historyHasPrice && historyHasEnrollment) {
-    followup = "¿Quieres que te ayude a *reservar tu cupo*? 🙌";
+  if (historyHasMaterials && !historyHasPrice) {
+    followup = "Si quieres, también te confirmo la *inversión* en un solo mensaje.";
+  } else if (historyHasPrice && !historyHasDuration) {
+    followup = "Si quieres, también te confirmo *cuándo termina* para que tengas el dato completo.";
+  } else if (historyHasPrice && historyHasEnrollment) {
+    followup = "Si quieres, te dejo todo resumido en un solo mensaje para que lo compartas fácil.";
   } else if (historyHasPrice) {
-    followup = "📝 ¿Quieres que te comparta los *pasos para inscribirte*?";
+    followup = "Si quieres, también te explico *cómo sería la inscripción* sin enredarte.";
   } else {
-    followup = "💰 ¿Quieres que te comparta también la *inversión*?";
+    followup = "Si quieres, también te comparto la *inversión* de forma clara.";
   }
 
   if (asksClassFrequency) {
@@ -4322,6 +4340,10 @@ function buildIntentFocusedDirectResponse(
   }
 
   // Detectar frustración del usuario antes de cualquier otro flujo
+  if (isHumanAdvisorRequest(message)) {
+    return buildHumanAdvisorReply(academy);
+  }
+
   if (isFrustrationMessage(message)) {
     const wa = academy?.whatsapp_admisiones || ADMISSIONS_NUMBER;
     return `Entiendo tu molestia y lo siento mucho 🙏 A veces soy limitada en ciertas preguntas.\n\nTe comunico con alguien de *Admisiones* para que te atienda personalmente:\n📲 WhatsApp: *${wa}*\n\nEscríbeles directamente y te resolverán todo de inmediato 💙`;
@@ -4840,9 +4862,10 @@ function buildIntentFocusedDirectResponse(
     const duration = detectedProgram?.duracion || (detectedProgram?.duracion_horas ? `${detectedProgram.duracion_horas} horas` : null);
     const totalClasses = detectedProgram?.total_clases ? `${detectedProgram.total_clases} clases` : null;
     const nextStart = hasUpcomingStart ? formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) : "Por confirmar";
+    const endDate = primaryCourse?.fecha_fin ? (formatDateLong(primaryCourse.fecha_fin) || formatDateShort(primaryCourse.fecha_fin)) : null;
     const schedule = primaryCourse?.horario || "Por confirmar";
 
-    return `📚 *${detectedProgram.nombre}*\n\n⏳ *Duración:* ${duration || "el tiempo definido en el plan académico"}${totalClasses ? ` (${totalClasses})` : ""}\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}\n\n¿Quieres que te comparta ahora la *inversión*?`;
+    return `📚 *${detectedProgram.nombre}*\n\n⏳ *Duración:* ${duration || "el tiempo definido en el plan académico"}${totalClasses ? ` (${totalClasses})` : ""}\n📅 *Próximo inicio:* ${nextStart}${endDate ? `\n🏁 *Fecha de finalización:* ${endDate}` : ""}\n🕓 *Horario:* ${schedule}\n\nSi quieres, también te dejo la *inversión* o los *materiales* en un solo mensaje.`;
   }
 
   if (asksClassFrequency) {
@@ -5698,7 +5721,7 @@ function buildContextualDirective(
     intentInstructionMap[intent],
     objectionInstructionMap[objection],
     explicitBuyingIntent
-      ? 'ACCIÓN OBLIGATORIA: Entrega el número de la academia/admisiones (+57 301 203 8582) y guía el siguiente paso de inscripción.'
+      ? 'ACCIÓN OBLIGATORIA: responde primero la duda exacta del usuario. Solo después, si sigue haciendo sentido, entrega el número de la academia/admisiones (+57 301 203 8582) y guía el siguiente paso de inscripción.'
       : 'Si no hay señal explícita de compra, continúa en modo informativo y consultivo.',
     asksNextGroup
       ? 'CASO ESPECIAL: Si pregunta por "otro curso" o "próximo grupo", NO envíes ficha comercial completa. Responde corto, natural y humano: 1) reconoce que el grupo actual puede ir avanzado, 2) da fecha/horario solo si están confirmados, 3) si no hay fecha, dilo claramente sin rodeos, 4) cierra con una sola pregunta de seguimiento.'
