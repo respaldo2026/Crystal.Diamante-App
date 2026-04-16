@@ -2006,7 +2006,7 @@ function buildPostPaymentThanksReply(academy: any | null): string {
 function isShortNegativeReply(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
-  return /^(no|nop|nope|negativo|no\s+gracias|gracias\s+pero\s+no)$/i.test(text);
+  return /^(no|nop|nope|negativo|nada|ninguna|ninguno|no\s+gracias|gracias\s+pero\s+no|nada\s+gracias|solo\s+eso|eso\s+era)$/i.test(text);
 }
 
 function buildKnownStudentSupportReply(name: string | null = null): string {
@@ -6061,7 +6061,6 @@ export async function POST(req: NextRequest) {
       : null;
 
     const studentContextByPhone = !studentContextById
-      && phoneProfile?.rol === 'estudiante'
       && phone
       && phone !== 'unknown'
       ? await getStudentContextByPhone(phone)

@@ -48,6 +48,7 @@ type ProfileRow = {
   telefono?: string | null;
   telefono_2?: string | null;
   notif_whatsapp?: boolean | null;
+  rol?: string | null;
 };
 
 type FollowupRow = {
@@ -218,6 +219,7 @@ async function runFollowupsJob(): Promise<NextResponse> {
       conversationsResult,
       leadsResult,
       profilesResult,
+      enrollmentsResult,
       followupsResult,
     ] = await Promise.all([
       supabase
@@ -232,9 +234,14 @@ async function runFollowupsJob(): Promise<NextResponse> {
         .limit(5000),
       supabase
         .from("perfiles")
-        .select("id, nombre_completo, telefono, telefono_2, notif_whatsapp")
+        .select("id, nombre_completo, telefono, telefono_2, notif_whatsapp, rol")
         .or("telefono.not.is.null,telefono_2.not.is.null")
         .limit(5000),
+      supabase
+        .from("matriculas")
+        .select("estudiante_id, estado")
+        .neq("estado", "cancelado")
+        .limit(10000),
       supabase
         .from("conversation_followups")
         .select("id, conversation_id, type, reference_message_at, status")
@@ -251,6 +258,9 @@ async function runFollowupsJob(): Promise<NextResponse> {
     if (profilesResult.error) {
       throw new Error(`Error consultando perfiles: ${profilesResult.error.message}`);
     }
+    if (enrollmentsResult.error) {
+      throw new Error(`Error consultando matrículas: ${enrollmentsResult.error.message}`);
+    }
     if (followupsResult.error) {
       throw new Error(`Error consultando follow-ups previos: ${followupsResult.error.message}`);
     }
@@ -258,6 +268,7 @@ async function runFollowupsJob(): Promise<NextResponse> {
     const conversations = (conversationsResult.data || []) as ConversationRow[];
     const leads = (leadsResult.data || []) as LeadRow[];
     const profiles = (profilesResult.data || []) as ProfileRow[];
+    const enrollments = (enrollmentsResult.data || []) as Array<{ estudiante_id?: string | null; estado?: string | null }>;
     const followups = (followupsResult.data || []) as FollowupRow[];
 
     const leadByPhone = new Map<string, LeadRow>();
@@ -277,6 +288,12 @@ async function runFollowupsJob(): Promise<NextResponse> {
         }
       }
     }
+
+    const enrolledProfileIds = new Set(
+      enrollments
+        .map((row) => String(row?.estudiante_id || "").trim())
+        .filter(Boolean)
+    );
 
     const followupStateByCycle = new Map<string, FollowupRow>();
     for (const followup of followups) {
@@ -414,6 +431,29 @@ async function runFollowupsJob(): Promise<NextResponse> {
           referenceMessageAt: lastCustomerTurn.created_at,
           status: "skipped",
           payload: { reason: "profile_opted_out" },
+        });
+        skipped++;
+        continue;
+      }
+
+      const normalizedRole = String(profile?.rol || "").trim().toLowerCase();
+      const isEnrolledStudent = Boolean(
+        (profile?.id && enrolledProfileIds.has(String(profile.id)))
+        || normalizedRole === "estudiante"
+      );
+
+      if (isEnrolledStudent) {
+        await upsertFollowupRecord(supabase, {
+          conversationId: threadKey,
+          phone: normalizedPhone,
+          type: FOLLOWUP_TYPE,
+          referenceMessageAt: lastCustomerTurn.created_at,
+          status: "skipped",
+          payload: {
+            reason: "enrolled_student_or_student_role",
+            profileId: profile?.id || null,
+            profileRole: normalizedRole || null,
+          },
         });
         skipped++;
         continue;
