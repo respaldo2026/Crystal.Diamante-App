@@ -863,7 +863,7 @@ export default function StudentDetailView() {
       console.error("Error regenerando ticket del pago:", error);
       message.error("No se pudo regenerar el ticket");
     }
-  }, [idEstudiante, perfil]);
+  }, [getPeriodoPagoLegible, idEstudiante, perfil]);
 
   const columnasCursos = useMemo(
     () => [

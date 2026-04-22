@@ -232,28 +232,21 @@ export default function EditEstudiante() {
                 return fechaA - fechaB;
             });
 
-        const actualizacionesConsecutivo: Array<Promise<any>> = [];
-        cuotasMensualesExistentes.forEach((pago, index) => {
+        for (const [index, pago] of cuotasMensualesExistentes.entries()) {
             const consecutivoEsperado = index + 1;
             const consecutivoActual = Number(pago.numero_cuota || 0);
-            if (consecutivoActual === consecutivoEsperado) return;
+            if (consecutivoActual === consecutivoEsperado) continue;
 
-            actualizacionesConsecutivo.push(
-                supabaseBrowserClient
-                    .from("pagos")
-                    .update({
-                        numero_cuota: consecutivoEsperado,
-                        periodo_pagado: `Cuota ${consecutivoEsperado} de ${numeroCuotas}`,
-                        tipo_cuota: "mensual",
-                    })
-                    .eq("id", pago.id)
-            );
-        });
+            const { error: updateConsecutivoError } = await supabaseBrowserClient
+                .from("pagos")
+                .update({
+                    numero_cuota: consecutivoEsperado,
+                    periodo_pagado: `Cuota ${consecutivoEsperado} de ${numeroCuotas}`,
+                    tipo_cuota: "mensual",
+                })
+                .eq("id", pago.id);
 
-        if (actualizacionesConsecutivo.length > 0) {
-            const resultados = await Promise.all(actualizacionesConsecutivo);
-            const primerError = resultados.find((resultado) => resultado.error)?.error;
-            if (primerError) throw primerError;
+            if (updateConsecutivoError) throw updateConsecutivoError;
         }
 
         const cuotasExistentes = new Set<number>();
