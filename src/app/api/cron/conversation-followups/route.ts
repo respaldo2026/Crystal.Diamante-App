@@ -122,6 +122,27 @@ function isThreeHourFollowupAudit(row: Pick<ConversationRow, "user_message">): b
   return String(row.user_message || "").trim() === FOLLOWUP_AUDIT_USER_MESSAGE;
 }
 
+function normalizeForMatch(value: string): string {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isClosureLikeCustomerMessage(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  if (/\b(donde|direccion|ubicacion|precio|horario|inscripcion|mensualidad|pago|fecha|cupo|curso|clases?)\b/i.test(text)) {
+    return false;
+  }
+
+  return /^(ok|okay|okey|listo|perfecto|vale|gracias|muchas gracias|gracias entonces|gracias linda|gracias amable|feliz tarde|bonita tarde|chao|adios|hasta luego|nos vemos|de acuerdo|esta bien|ta bien)$/i.test(text);
+}
+
 function buildFollowupMessage(): string {
   return String(process.env.WHATSAPP_AUTO_FOLLOWUP_3H_TEMPLATE || DEFAULT_FOLLOWUP_MESSAGE)
     .replace(/\r\n/g, "\n")
@@ -327,6 +348,19 @@ async function runFollowupsJob(): Promise<NextResponse> {
         .find((row) => !isSystemConversation(row) && String(row.user_message || "").trim());
 
       if (!lastCustomerTurn?.created_at) {
+        skipped++;
+        continue;
+      }
+
+      if (isClosureLikeCustomerMessage(lastCustomerTurn.user_message || "")) {
+        await upsertFollowupRecord(supabase, {
+          conversationId: threadKey,
+          phone: normalizePhoneNumber(lastCustomerTurn.phone_number || ""),
+          type: FOLLOWUP_TYPE,
+          referenceMessageAt: lastCustomerTurn.created_at,
+          status: "skipped",
+          payload: { reason: "customer_closed_conversation" },
+        });
         skipped++;
         continue;
       }

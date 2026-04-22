@@ -1909,6 +1909,10 @@ function extractPaymentOptionSelection(message: string): "a" | "b" | "por_clase"
   if (/^(b|opcion b|opcionb|mensual b|mensual opcion b)$/i.test(text)) return "b";
   if (/^(por clase|clase|pago por clase)$/i.test(text)) return "por_clase";
 
+  if (/\b(tomare|escojo|elijo|me quedo con|prefiero|voy con)\b.*\b(opcion\s*a|mensual\s*(opcion\s*)?a|260\s*000|260000)\b/i.test(text)) return "a";
+  if (/\b(tomare|escojo|elijo|me quedo con|prefiero|voy con)\b.*\b(opcion\s*b|mensual\s*(opcion\s*)?b|300\s*000|300000)\b/i.test(text)) return "b";
+  if (/\b(tomare|escojo|elijo|me quedo con|prefiero|voy con)\b.*\b(por\s+clase|clase)\b/i.test(text)) return "por_clase";
+
   return null;
 }
 
@@ -2785,6 +2789,15 @@ function ensurePaymentModalitiesInResponse(
 
   if (!asksPriceOrPayment) return base;
   if (hasScannablePaymentModalities(base)) return base;
+
+  const normalizedBase = normalizeForMatch(base);
+  const isClosureOrThanksReply = /\b(con\s+gusto|quedo\s+atenta|nos\s+vemos|gracias|feliz\s+tarde|bonita\s+tarde|cuando\s+quieras)\b/i.test(normalizedBase);
+  const isLocationReply = /\b(mapa|direccion|ubicad|barrio|sede|panaderia|cosmetikera)\b/i.test(normalizedBase);
+  const isSocialReply = /\b(instagram|facebook|tiktok|youtube|redes)\b/i.test(normalizedBase);
+  const hasPriceSignalsInResponse = /\b(inscripcion|mensualidad|por\s+clase|modalidades\s+de\s+pago|inversion|\$)\b/i.test(normalizedBase);
+
+  if (isClosureOrThanksReply || isLocationReply || isSocialReply) return base;
+  if (!hasPriceSignalsInResponse) return base;
 
   const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
   const block = buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse);
@@ -4045,7 +4058,7 @@ function isPaymentDatesOnlyQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
 
-  const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|vence|vencimiento|plazo\s+de\s+pago|hasta\s+cuando\s+pago|segunda\s+clase)\b/i.test(text);
+  const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|vence|vencimiento|plazo\s+de\s+pago|hasta\s+cuando\s+pago|segunda\s+clase|dia\s+de\s+la\s+clase|el\s+dia\s+de\s+clase)\b/i.test(text);
   const asksMethods = /\b(medios\s+de\s+pago|formas\s+de\s+pago|metodos?\s+de\s+pago|nequi|bancolombia|sistecredito|daviplata|tarjeta|efectivo|transferencia)\b/i.test(text);
   return asksDates && !asksMethods;
 }
@@ -4073,7 +4086,7 @@ function isMonthlyClassLoadQuestion(message: string): boolean {
   if (!text) return false;
 
   return /\b(en\s*1\s*mes|en\s*un\s*mes|al\s*mes|por\s*mes|mensualmente)\b/i.test(text)
-    && /\b(cuantas\s+clases|cuantas\s+veces|cuanto\s+se\s+ve|que\s+se\s+ve)\b/i.test(text);
+    && /\b(cuant[ao]s\s+clases|cuant[ao]s\s+dias\s+de\s+clase|clases\s+vemos|dias\s+de\s+clase|cuantas\s+veces|cuanto\s+se\s+ve|que\s+se\s+ve)\b/i.test(text);
 }
 
 function buildMonthlyClassLoadReply(detectedProgram: any, primaryCourse: any): string {
@@ -4281,7 +4294,7 @@ function buildIntentFocusedDirectResponse(
     if (isKnownStudentByPhone) {
       return "Con gusto 😊 Si quieres, también te confirmo salón, profesora o materiales de tu próxima clase.";
     }
-    return `Con gusto 😊 Cuando quieras, te ayudo con lo que necesites del curso.${buildInstagramFollowup(academy)}`;
+    return "Con gusto 😊 Cuando quieras, aquí quedo atenta para ayudarte con cualquier duda del curso.";
   }
 
   if (isNoiseOnlyMessage(message)) {
@@ -4417,14 +4430,14 @@ function buildIntentFocusedDirectResponse(
     const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
 
     if (paymentOptionSelection === "a") {
-      return `Perfecto 🙌 Te quedaría *Mensual Opción A* en *${options.mensual70Text}/mes* (incluye ~70% de materiales del mes).\n\n¿Quieres que te pase los pasos para separar tu cupo?`;
+      return `Perfecto 🙌 Quedas con *Mensual Opción A* en *${options.mensual70Text}/mes* (incluye ~70% de materiales del mes).\n\nLa inscripción separa tu cupo y la mensualidad la puedes pagar hasta la segunda clase. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
     }
 
     if (paymentOptionSelection === "b") {
-      return `Excelente 🙌 Te quedaría *Mensual Opción B* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\n¿Quieres que te pase los pasos para separar tu cupo?`;
+      return `Excelente 🙌 Quedas con *Mensual Opción B* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción separa tu cupo y la mensualidad la puedes pagar hasta la segunda clase. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
     }
 
-    return `Perfecto 🙌 En *Por Clase* te queda en *${options.porClaseText}* por clase (no incluye materiales).\n\n¿Quieres que te pase los pasos para separar tu cupo?`;
+    return `Perfecto 🙌 Quedas en *Por Clase* con *${options.porClaseText}* por clase (no incluye materiales).\n\nLa inscripción separa tu cupo y luego pagas por asistencia. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
   }
 
   if (isAllInfoSelection(message) && detectedProgram) {
