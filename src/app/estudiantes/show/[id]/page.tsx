@@ -605,7 +605,7 @@ export default function StudentDetailView() {
     } finally {
       setLoading(false);
     }
-  }, [idEstudiante, obtenerDuracionMeses]);
+  }, [esInscripcion, esPagoHistoricoPorClase, idEstudiante, obtenerDuracionMeses]);
 
   // Matrículas con modalidad POR_CLASE (para mostrar el botón "Registrar Clase")
   const matriculasPorClase = useMemo(
@@ -1081,7 +1081,7 @@ export default function StudentDetailView() {
 
       return String(a?.id || "").localeCompare(String(b?.id || ""));
     });
-  }, [pagosHistorial, matriculas, obtenerDuracionMeses]);
+  }, [esInscripcion, pagosHistorial, matriculas, obtenerDuracionMeses]);
 
   const columnasPagos = useMemo(
     () => [
@@ -1255,7 +1255,7 @@ export default function StudentDetailView() {
         ),
       },
     ],
-    [contactoPerfil, handleRegenerarTicket, obtenerDuracionMeses]
+    [contactoPerfil, esInscripcion, esPagoHistoricoPorClase, handleRegenerarTicket, obtenerDuracionMeses]
   );
 
   const renderCuotasPorMatricula = (record: any) => {
