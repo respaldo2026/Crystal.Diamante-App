@@ -175,13 +175,13 @@ export default function StudentDetailView() {
     return match ? Number(match[0]) : 0;
   };
 
-  const parseNumeroCuota = (pago: any): number | null => {
+  const parseNumeroCuota = useCallback((pago: any): number | null => {
     const numero = Number(pago?.numero_cuota);
     if (Number.isFinite(numero) && numero > 0) return numero;
     const raw = String(pago?.periodo_pagado || pago?.observaciones || "");
     const match = raw.match(/\d+/);
     return match ? Number(match[0]) : null;
-  };
+  }, []);
 
   const extractClassNumber = (value?: string | null): number | null => {
     const text = String(value || "");
@@ -224,6 +224,54 @@ export default function StudentDetailView() {
 
     return periodoActual || `Cuota ${numeroCuota}`;
   }, [esInscripcion, esPagoHistoricoPorClase]);
+
+  const numeroCuotaVisualPorPagoId = useMemo(() => {
+    const mapa = new Map<string, number>();
+    if (!Array.isArray(pagosHistorial) || !Array.isArray(matriculas) || pagosHistorial.length === 0) {
+      return mapa;
+    }
+
+    const pagosPorMatricula = new Map<string, Pago[]>();
+    pagosHistorial.forEach((pago) => {
+      const key = String(pago?.matricula_id || "");
+      if (!key) return;
+      const actuales = pagosPorMatricula.get(key) || [];
+      actuales.push(pago);
+      pagosPorMatricula.set(key, actuales);
+    });
+
+    matriculas.forEach((matricula: any) => {
+      const modalidad = normalizeModalidadPago(matricula?.modalidad_pago);
+      if (modalidad === "POR_CLASE") return;
+
+      const key = String(matricula?.id || "");
+      const pagosMatricula = (pagosPorMatricula.get(key) || [])
+        .filter((pago) => !esInscripcion(pago))
+        .filter((pago) => !esPagoHistoricoPorClase(pago, modalidad))
+        .sort((a, b) => {
+          const numeroA = parseNumeroCuota(a) ?? Number.MAX_SAFE_INTEGER;
+          const numeroB = parseNumeroCuota(b) ?? Number.MAX_SAFE_INTEGER;
+          if (numeroA !== numeroB) return numeroA - numeroB;
+
+          const fechaA = a?.fecha_pago ? dayjs(a.fecha_pago).valueOf() : Number.MAX_SAFE_INTEGER;
+          const fechaB = b?.fecha_pago ? dayjs(b.fecha_pago).valueOf() : Number.MAX_SAFE_INTEGER;
+          if (fechaA !== fechaB) return fechaA - fechaB;
+
+          const createdA = a?.created_at ? dayjs(a.created_at).valueOf() : Number.MAX_SAFE_INTEGER;
+          const createdB = b?.created_at ? dayjs(b.created_at).valueOf() : Number.MAX_SAFE_INTEGER;
+          if (createdA !== createdB) return createdA - createdB;
+
+          return String(a?.id || "").localeCompare(String(b?.id || ""));
+        });
+
+      pagosMatricula.forEach((pago, idx) => {
+        if (!pago?.id) return;
+        mapa.set(String(pago.id), idx + 1);
+      });
+    });
+
+    return mapa;
+  }, [esInscripcion, esPagoHistoricoPorClase, matriculas, pagosHistorial, parseNumeroCuota]);
 
   const obtenerDuracionMeses = useCallback((matricula: any) =>
     parseDuracionMeses(
@@ -1010,7 +1058,7 @@ export default function StudentDetailView() {
 
       pagosMatricula.forEach((p) => {
         if (esInscripcion(p)) return;
-        const cuota = parseNumeroCuota(p);
+        const cuota = numeroCuotaVisualPorPagoId.get(String(p?.id || "")) ?? parseNumeroCuota(p);
         if (cuota && cuota >= 1 && cuota <= totalCiclos) {
           cuotasExistentes.add(cuota);
         }
@@ -1081,7 +1129,7 @@ export default function StudentDetailView() {
 
       return String(a?.id || "").localeCompare(String(b?.id || ""));
     });
-  }, [esInscripcion, pagosHistorial, matriculas, obtenerDuracionMeses]);
+  }, [esInscripcion, numeroCuotaVisualPorPagoId, pagosHistorial, matriculas, obtenerDuracionMeses, parseNumeroCuota]);
 
   const columnasPagos = useMemo(
     () => [
@@ -1165,7 +1213,7 @@ export default function StudentDetailView() {
         render: (_: string | null, record: any) => {
           if (esInscripcion(record)) return "Inscripción";
           const modalidadPago = normalizeModalidadPago(record?.matriculas?.modalidad_pago);
-          const numero = parseNumeroCuota(record);
+          const numero = numeroCuotaVisualPorPagoId.get(String(record?.id || "")) ?? parseNumeroCuota(record);
           if (esPagoHistoricoPorClase(record, modalidadPago)) return "Pago previo por clase";
           if (modalidadPago === "POR_CLASE" && numero) return `Clase #${numero}`;
           const totalCiclos = Math.max(obtenerDuracionMeses(record?.matriculas), 0);
@@ -1255,7 +1303,7 @@ export default function StudentDetailView() {
         ),
       },
     ],
-    [contactoPerfil, esInscripcion, esPagoHistoricoPorClase, handleRegenerarTicket, obtenerDuracionMeses]
+    [contactoPerfil, esInscripcion, esPagoHistoricoPorClase, handleRegenerarTicket, numeroCuotaVisualPorPagoId, obtenerDuracionMeses, parseNumeroCuota]
   );
 
   const renderCuotasPorMatricula = (record: any) => {
@@ -1301,8 +1349,14 @@ export default function StudentDetailView() {
     const valorPorClase = obtenerValorPorClase(record);
     const pagosMap = new Map<number, Pago>();
     cuotasRelevantes.forEach((p) => {
-      if (typeof p.numero_cuota === "number") {
-        pagosMap.set(p.numero_cuota, p);
+      if (esInscripcion(p)) return;
+      const numeroCuota = esPorClase
+        ? parseNumeroCuota(p)
+        : (numeroCuotaVisualPorPagoId.get(String(p?.id || "")) ?? parseNumeroCuota(p));
+
+      if (!numeroCuota || numeroCuota <= 0) return;
+      if (!pagosMap.has(numeroCuota)) {
+        pagosMap.set(numeroCuota, p);
       }
     });
 
@@ -1324,12 +1378,13 @@ export default function StudentDetailView() {
             : (pago?.fecha_vencimiento || calcularFechaVencimientoCuota(record, ciclo)));
         pagosEsperados.push({
           ...pago,
+          numero_cuota: ciclo,
           fecha_vencimiento: fechaVencimientoAjustada,
           periodo_pagado: ciclo === 0
             ? "Inscripción"
             : esPorClase
               ? `Clase #${ciclo}`
-              : (pago?.periodo_pagado || `Ciclo mensual ${ciclo} de ${totalCiclos}`),
+              : `Ciclo mensual ${ciclo} de ${totalCiclos}`,
         });
         continue;
       }
