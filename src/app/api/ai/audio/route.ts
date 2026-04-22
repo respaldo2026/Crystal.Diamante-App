@@ -511,7 +511,7 @@ async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string
   let sawRateLimit = false;
 
   for (let index = 0; index < modelCandidates.length; index++) {
-    const modelName = modelCandidates[index];
+    const modelName = modelCandidates[index]!;
     try {
       console.log(`[speechToText] Intentando modelo: ${modelName}`);
       const model = genAI.getGenerativeModel({ model: modelName });
@@ -2688,7 +2688,7 @@ async function generateResponse(apiKey: string, prompt: string): Promise<string>
   let sawRateLimit = false;
 
   for (let index = 0; index < modelCandidates.length; index++) {
-    const candidate = modelCandidates[index];
+    const candidate = modelCandidates[index]!;
     try {
       console.log(`[generateResponse] Intentando modelo: ${candidate}`);
       const model = genAI.getGenerativeModel({ model: candidate });
