@@ -161,17 +161,34 @@ export default function EditEstudiante() {
 
         const { data: pagosExistentes, error: pagosError } = await supabaseBrowserClient
             .from("pagos")
-            .select("id, numero_cuota, estado, periodo_pagado")
+            .select("id, numero_cuota, estado, periodo_pagado, tipo_cuota, fecha_pago")
             .eq("matricula_id", matricula.id)
             .order("numero_cuota", { ascending: true });
 
         if (pagosError) throw pagosError;
 
-        const pagos = (pagosExistentes || []) as Array<{ id: string; numero_cuota: number | null; estado: string | null; periodo_pagado: string | null }>;
+        const pagos = (pagosExistentes || []) as Array<{
+            id: string;
+            numero_cuota: number | null;
+            estado: string | null;
+            periodo_pagado: string | null;
+            tipo_cuota?: string | null;
+            fecha_pago?: string | null;
+        }>;
+        const esPagoPorClase = (pago: {
+            tipo_cuota?: string | null;
+            periodo_pagado?: string | null;
+        }) => {
+            const tipoCuota = String(pago?.tipo_cuota || "").toLowerCase().trim();
+            const periodo = String(pago?.periodo_pagado || "").toLowerCase().trim();
+            return tipoCuota === "por_clase" || /^clase\s*#?\s*\d+/i.test(periodo);
+        };
         const cuotasPendientes = pagos.filter((pago) => {
             const estado = String(pago.estado || "").toLowerCase().trim();
             return (estado === "pendiente" || estado === "vencido") && Number(pago.numero_cuota || 0) > 0;
         });
+        const cuotasPendientesPorClase = cuotasPendientes.filter((pago) => esPagoPorClase(pago));
+        const cuotasPendientesMensuales = cuotasPendientes.filter((pago) => !esPagoPorClase(pago));
 
         if (modalidadPago === "POR_CLASE") {
             if (cuotasPendientes.length > 0) {
@@ -184,22 +201,65 @@ export default function EditEstudiante() {
             return;
         }
 
-        if (cuotasPendientes.length > 0) {
+        if (cuotasPendientesPorClase.length > 0) {
+            const { error: deletePendientesPorClaseError } = await supabaseBrowserClient
+                .from("pagos")
+                .delete()
+                .in("id", cuotasPendientesPorClase.map((cuota) => cuota.id));
+            if (deletePendientesPorClaseError) throw deletePendientesPorClaseError;
+        }
+
+        if (cuotasPendientesMensuales.length > 0) {
             const { error: updateError } = await supabaseBrowserClient
                 .from("pagos")
                 .update({
                     monto: montos.montoMensual,
                     tipo_cuota: "mensual",
                 })
-                .in("id", cuotasPendientes.map((cuota) => cuota.id));
+                .in("id", cuotasPendientesMensuales.map((cuota) => cuota.id));
             if (updateError) throw updateError;
         }
 
-        const cuotasExistentes = new Set(
-            pagos
-                .map((pago) => Number(pago.numero_cuota || 0))
-                .filter((numero) => Number.isFinite(numero) && numero > 0),
-        );
+        const cuotasMensualesExistentes = pagos
+            .filter((pago) => Number(pago.numero_cuota || 0) > 0)
+            .filter((pago) => !esPagoPorClase(pago))
+            .sort((a, b) => {
+                const numeroA = Number(a.numero_cuota || 0);
+                const numeroB = Number(b.numero_cuota || 0);
+                if (numeroA !== numeroB) return numeroA - numeroB;
+                const fechaA = a.fecha_pago ? dayjs(a.fecha_pago).valueOf() : Number.MAX_SAFE_INTEGER;
+                const fechaB = b.fecha_pago ? dayjs(b.fecha_pago).valueOf() : Number.MAX_SAFE_INTEGER;
+                return fechaA - fechaB;
+            });
+
+        const actualizacionesConsecutivo: Array<Promise<any>> = [];
+        cuotasMensualesExistentes.forEach((pago, index) => {
+            const consecutivoEsperado = index + 1;
+            const consecutivoActual = Number(pago.numero_cuota || 0);
+            if (consecutivoActual === consecutivoEsperado) return;
+
+            actualizacionesConsecutivo.push(
+                supabaseBrowserClient
+                    .from("pagos")
+                    .update({
+                        numero_cuota: consecutivoEsperado,
+                        periodo_pagado: `Cuota ${consecutivoEsperado} de ${numeroCuotas}`,
+                        tipo_cuota: "mensual",
+                    })
+                    .eq("id", pago.id)
+            );
+        });
+
+        if (actualizacionesConsecutivo.length > 0) {
+            const resultados = await Promise.all(actualizacionesConsecutivo);
+            const primerError = resultados.find((resultado) => resultado.error)?.error;
+            if (primerError) throw primerError;
+        }
+
+        const cuotasExistentes = new Set<number>();
+        for (let i = 1; i <= cuotasMensualesExistentes.length; i += 1) {
+            cuotasExistentes.add(i);
+        }
 
         const nuevasCuotas = [] as Array<Record<string, unknown>>;
         for (let i = 1; i <= numeroCuotas; i += 1) {

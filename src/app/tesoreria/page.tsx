@@ -74,13 +74,20 @@ const getPeriodoPagoLegible = (pago: {
     const numeroCuota = Number(pago?.numero_cuota || 0);
     const tipoCuota = String(pago?.tipo_cuota || "").toLowerCase().trim();
     const modalidadPago = normalizeModalidadPago(pago?.matriculas?.modalidad_pago);
+    const esRegistroHistoricoPorClase =
+        modalidadPago !== "POR_CLASE" &&
+        (tipoCuota === "por_clase" || /^clase\s*#?\s*\d+/i.test(periodoActual));
 
     if (numeroCuota === 0) {
         return periodoActual || "Inscripción";
     }
 
-    if (modalidadPago === "POR_CLASE" || tipoCuota === "por_clase") {
+    if (modalidadPago === "POR_CLASE") {
         return `Clase #${numeroCuota}`;
+    }
+
+    if (esRegistroHistoricoPorClase) {
+        return "Pago previo por clase";
     }
 
     return periodoActual || `Cuota ${numeroCuota}`.trim();
@@ -166,13 +173,7 @@ export default function TesoreriaPage() {
                 const estudianteId = String(pago?.estudiante_id || pago?.matriculas?.estudiante_id || "");
                 const perfil = perfilesMap.get(estudianteId);
                 const cursoNombre = pago?.matriculas?.cursos?.nombre || "Curso";
-                const modalidadPago = String(pago?.matriculas?.modalidad_pago || "").toUpperCase().trim();
-                const tipoCuota = String(pago?.tipo_cuota || "").toLowerCase().trim();
-                const numeroCuota = Number(pago?.numero_cuota || 0);
-                const esPorClase = modalidadPago === "POR_CLASE" || tipoCuota === "por_clase";
-                const periodoLegible = esPorClase
-                    ? `Clase #${numeroCuota || ""}`.trim()
-                    : (pago?.periodo_pagado || `Cuota ${pago?.numero_cuota ?? ""}`.trim());
+                const periodoLegible = getPeriodoPagoLegible(pago as any);
 
                 const ticketData = {
                     academia: {

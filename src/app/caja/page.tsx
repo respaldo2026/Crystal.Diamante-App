@@ -207,13 +207,20 @@ const getPeriodoPagoLegible = (
   const numeroCuota = Number(cuota?.numero_cuota || 0);
   const tipoCuota = String(cuota?.tipo_cuota || "").toLowerCase().trim();
   const modalidad = normalizeModalidadPago(modalidadPago);
+  const esRegistroHistoricoPorClase =
+    modalidad !== "POR_CLASE" &&
+    (tipoCuota === "por_clase" || /^clase\s*#?\s*\d+/i.test(periodoActual));
 
   if (numeroCuota === 0) {
     return periodoActual || "Inscripción";
   }
 
-  if (modalidad === "POR_CLASE" || tipoCuota === "por_clase") {
+  if (modalidad === "POR_CLASE") {
     return `Clase #${numeroCuota}`;
+  }
+
+  if (esRegistroHistoricoPorClase) {
+    return "Pago previo por clase";
   }
 
   return periodoActual || `Cuota ${numeroCuota}`.trim();

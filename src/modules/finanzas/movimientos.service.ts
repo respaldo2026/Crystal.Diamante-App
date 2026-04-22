@@ -1,5 +1,35 @@
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import type { MovimientoCategoria, MovimientoTipo } from "@constants/movimientos";
+import { normalizeModalidadPago } from "@/types/payment-plans";
+
+const getPeriodoPagoLegible = (pago: {
+    periodo_pagado?: string | null;
+    numero_cuota?: number | null;
+    tipo_cuota?: string | null;
+    matriculas?: { modalidad_pago?: string | null } | null;
+}) => {
+    const periodoActual = String(pago?.periodo_pagado || "").trim();
+    const numeroCuota = Number(pago?.numero_cuota || 0);
+    const tipoCuota = String(pago?.tipo_cuota || "").toLowerCase().trim();
+    const modalidadPago = normalizeModalidadPago(pago?.matriculas?.modalidad_pago);
+    const esRegistroHistoricoPorClase =
+        modalidadPago !== "POR_CLASE" &&
+        (tipoCuota === "por_clase" || /^clase\s*#?\s*\d+/i.test(periodoActual));
+
+    if (numeroCuota === 0) {
+        return periodoActual || "Inscripción";
+    }
+
+    if (modalidadPago === "POR_CLASE") {
+        return `Clase #${numeroCuota}`;
+    }
+
+    if (esRegistroHistoricoPorClase) {
+        return "Pago previo por clase";
+    }
+
+    return periodoActual || `Cuota ${numeroCuota}`.trim();
+};
 
 export interface MovimientoFinanciero {
     id: string;
@@ -218,13 +248,7 @@ export async function sincronizarIngresosDesdePagos(createdBy?: string | null) {
         .filter((p) => Number(p?.monto || 0) > 0)
         .map((p) => {
             const fecha = String(p.fecha_pago).slice(0, 10);
-            const modalidadPago = String(p?.matriculas?.modalidad_pago || "").toUpperCase().trim();
-            const tipoCuota = String(p?.tipo_cuota || "").toLowerCase().trim();
-            const numeroCuota = Number(p?.numero_cuota || 0);
-            const esPorClase = modalidadPago === "POR_CLASE" || tipoCuota === "por_clase";
-            const periodo = esPorClase
-                ? `Clase #${numeroCuota || ""}`.trim()
-                : (p.periodo_pagado || `Cuota ${p.numero_cuota ?? ""}`.trim());
+            const periodo = getPeriodoPagoLegible(p as any);
             const curso = p?.matriculas?.cursos?.nombre || "Curso";
             const textoPeriodo = String(periodo || "").toLowerCase();
             const esInscripcion = textoPeriodo.includes("inscrip") || textoPeriodo.includes("matric") || Number(p.numero_cuota) === 0;

@@ -196,6 +196,35 @@ export default function StudentDetailView() {
     return texto.includes("matric") || Number(pago?.numero_cuota) === 0;
   };
 
+  const esPagoHistoricoPorClase = (pago: any, modalidadActual?: string | null) => {
+    const modalidad = normalizeModalidadPago(modalidadActual || pago?.matriculas?.modalidad_pago);
+    if (modalidad === "POR_CLASE") return false;
+
+    const tipoCuota = String(pago?.tipo_cuota || "").toLowerCase().trim();
+    const periodo = String(pago?.periodo_pagado || pago?.observaciones || "").toLowerCase().trim();
+    return tipoCuota === "por_clase" || /^clase\s*#?\s*\d+/i.test(periodo);
+  };
+
+  const getPeriodoPagoLegible = (pago: any, modalidadActual?: string | null) => {
+    const periodoActual = String(pago?.periodo_pagado || "").trim();
+    const numeroCuota = Number(pago?.numero_cuota || 0);
+    const modalidad = normalizeModalidadPago(modalidadActual || pago?.matriculas?.modalidad_pago);
+
+    if (numeroCuota === 0 || esInscripcion(pago)) {
+      return periodoActual || "Inscripción";
+    }
+
+    if (modalidad === "POR_CLASE") {
+      return `Clase #${numeroCuota}`;
+    }
+
+    if (esPagoHistoricoPorClase(pago, modalidad)) {
+      return "Pago previo por clase";
+    }
+
+    return periodoActual || `Cuota ${numeroCuota}`;
+  };
+
   const obtenerDuracionMeses = useCallback((matricula: any) =>
     parseDuracionMeses(
       matricula?.cursos?.programas?.duracion ??
@@ -534,6 +563,7 @@ export default function StudentDetailView() {
         const totalMensualidadEsperada = meses * mensualidad;
         const totalMensualidadPagada = pagosMat
           .filter((p) => !esInscripcion(p))
+          .filter((p) => !esPagoHistoricoPorClase(p, modalidadPago))
           .reduce((acc, p) => acc + getTotalAbonado(p), 0);
 
         return sum + deudaInscripcion + Math.max(totalMensualidadEsperada - totalMensualidadPagada, 0);
@@ -558,9 +588,12 @@ export default function StudentDetailView() {
         const totalClasesPrograma = Number(clasesPorProgramaObj[String(m?.cursos?.programa_id || "")] || 0);
         const totalPagosEsperados = modalidadPago === "POR_CLASE" ? totalClasesPrograma + 1 : duracionMeses + 1; // inscripción + clases/cuotas
         const pagosMat = pagosList.filter((p) => p.matricula_id === m.id);
-        const pagados = pagosMat.filter((p) => (p.estado || "").toLowerCase() === "pagado").length;
+        const pagosValidosPorModalidad = modalidadPago === "POR_CLASE"
+          ? pagosMat
+          : pagosMat.filter((p) => !esPagoHistoricoPorClase(p, modalidadPago));
+        const pagados = pagosValidosPorModalidad.filter((p) => (p.estado || "").toLowerCase() === "pagado").length;
         const faltantes = totalPagosEsperados > 0 ? Math.max(totalPagosEsperados - pagados, 0) : 0;
-        const periodos = pagosMat.map((p) => p.periodo_pagado).filter(Boolean) as string[];
+        const periodos = pagosValidosPorModalidad.map((p) => p.periodo_pagado).filter(Boolean) as string[];
         const inscripcionPagada = pagosMat.some((p) => (p.periodo_pagado || "").toLowerCase().includes("matric") || (p.numero_cuota === 0 && (p.estado || "").toLowerCase() === "pagado"));
         ciclosMap[m.id] = { total: totalPagosEsperados, pagados, faltantes, periodos, inscripcionPagada };
       });
@@ -760,12 +793,7 @@ export default function StudentDetailView() {
         .maybeSingle();
 
       const cursoNombre = construirNombreGrupo(record?.matriculas?.cursos) || "Curso";
-      const modalidadPago = normalizeModalidadPago(record?.matriculas?.modalidad_pago);
-      const periodoLegible = record?.numero_cuota === 0
-        ? "Inscripción"
-        : (modalidadPago === "POR_CLASE"
-          ? `Clase #${record?.numero_cuota ?? ""}`.trim()
-          : (record?.periodo_pagado || `Cuota ${record?.numero_cuota ?? ""}`.trim()));
+      const periodoLegible = getPeriodoPagoLegible(record, record?.matriculas?.modalidad_pago);
       const fechaPagoLegible = record?.fecha_pago ? dayjs(record.fecha_pago).format("DD/MM/YYYY") : dayjs().format("DD/MM/YYYY");
 
       const ticketData = {
@@ -1138,9 +1166,8 @@ export default function StudentDetailView() {
           if (esInscripcion(record)) return "Inscripción";
           const modalidadPago = normalizeModalidadPago(record?.matriculas?.modalidad_pago);
           const numero = parseNumeroCuota(record);
-          if (modalidadPago === "POR_CLASE" && numero) {
-            return `Clase #${numero}`;
-          }
+          if (esPagoHistoricoPorClase(record, modalidadPago)) return "Pago previo por clase";
+          if (modalidadPago === "POR_CLASE" && numero) return `Clase #${numero}`;
           const totalCiclos = Math.max(obtenerDuracionMeses(record?.matriculas), 0);
           if (numero && totalCiclos) {
             return `Ciclo mensual ${numero} de ${totalCiclos}`;
@@ -1261,16 +1288,19 @@ export default function StudentDetailView() {
       : null;
     const modalidadEfectiva = modalidadPago || modalidadDesdePagos || "MENSUAL_70";
     const esPorClase = modalidadEfectiva === "POR_CLASE";
+    const cuotasRelevantes = esPorClase
+      ? cuotasMatricula
+      : cuotasMatricula.filter((p) => !esPagoHistoricoPorClase(p, modalidadEfectiva));
     const totalCiclos = Math.max(obtenerDuracionMeses(record), 0);
     const totalClasesPrograma = Math.max(obtenerTotalClasesPrograma(record), 0);
-    const maxClasePagada = cuotasMatricula.reduce((max, p) => {
+    const maxClasePagada = cuotasRelevantes.reduce((max, p) => {
       const n = parseNumeroCuota(p);
       return n && n > max ? n : max;
     }, 0);
     const totalPeriodos = esPorClase ? Math.max(totalClasesPrograma, maxClasePagada) : totalCiclos;
     const valorPorClase = obtenerValorPorClase(record);
     const pagosMap = new Map<number, Pago>();
-    cuotasMatricula.forEach((p) => {
+    cuotasRelevantes.forEach((p) => {
       if (typeof p.numero_cuota === "number") {
         pagosMap.set(p.numero_cuota, p);
       }
