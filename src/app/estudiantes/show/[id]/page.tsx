@@ -1249,12 +1249,18 @@ export default function StudentDetailView() {
         return String(a?.id || "").localeCompare(String(b?.id || ""));
       });
 
-    const modalidadPago = normalizeModalidadPago(record?.modalidad_pago);
-    const esPorClase = modalidadPago === "POR_CLASE" || cuotasMatricula.some((p) => {
-      const modalidadPagoPago = normalizeModalidadPago(p?.matriculas?.modalidad_pago);
-      const periodo = String(p?.periodo_pagado || p?.observaciones || "").toLowerCase();
-      return modalidadPagoPago === "POR_CLASE" || periodo.includes("clase");
-    });
+    const modalidadRawMatricula = String(record?.modalidad_pago || "").trim();
+    const modalidadPago = modalidadRawMatricula
+      ? normalizeModalidadPago(modalidadRawMatricula)
+      : null;
+    const modalidadRawDesdePagos = cuotasMatricula
+      .map((p) => String(p?.matriculas?.modalidad_pago || "").trim())
+      .find(Boolean);
+    const modalidadDesdePagos = modalidadRawDesdePagos
+      ? normalizeModalidadPago(modalidadRawDesdePagos)
+      : null;
+    const modalidadEfectiva = modalidadPago || modalidadDesdePagos || "MENSUAL_70";
+    const esPorClase = modalidadEfectiva === "POR_CLASE";
     const totalCiclos = Math.max(obtenerDuracionMeses(record), 0);
     const totalClasesPrograma = Math.max(obtenerTotalClasesPrograma(record), 0);
     const maxClasePagada = cuotasMatricula.reduce((max, p) => {
