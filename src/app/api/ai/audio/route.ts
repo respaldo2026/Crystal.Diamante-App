@@ -453,6 +453,44 @@ async function downloadAudio(audioUrl: string, bearerToken?: string): Promise<Bu
   }
 }
 
+function isGeminiNotFoundError(error: any): boolean {
+  const errorMsg = String(error?.message || "").toLowerCase();
+  return errorMsg.includes("404") || errorMsg.includes("not found");
+}
+
+function isGeminiRateLimitError(error: any): boolean {
+  const errorMsg = String(error?.message || "").toLowerCase();
+  return (
+    error?.status === 429 ||
+    error?.statusCode === 429 ||
+    errorMsg.includes("429") ||
+    errorMsg.includes("too many requests") ||
+    errorMsg.includes("resource exhausted")
+  );
+}
+
+function createGeminiRateLimitError(operation: string, lastError?: any): Error & { statusCode: number; retryAfter: string } {
+  const message = `Gemini saturado durante ${operation}. Intenta nuevamente en un momento.`;
+  const error = new Error(message) as Error & { statusCode: number; retryAfter: string; cause?: any };
+  error.statusCode = 429;
+  error.retryAfter = "60";
+  if (lastError) {
+    error.cause = lastError;
+  }
+  return error;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getGeminiBackoffMs(attemptIndex: number): number {
+  const baseMs = 600;
+  const maxMs = 2500;
+  const jitterMs = Math.floor(Math.random() * 250);
+  return Math.min(baseMs * Math.max(1, attemptIndex + 1) + jitterMs, maxMs);
+}
+
 /**
  * Convertir audio a texto (STT) usando Google Generative AI
  */
@@ -460,18 +498,20 @@ async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string
   const genAI = new GoogleGenerativeAI(apiKey);
   
   // Usar la misma lista de modelos que funciona en el endpoint de chat
-  const modelCandidates = [
+  const modelCandidates = Array.from(new Set([
     "gemini-2.0-flash",
     "gemini-1.5-pro",
     "gemini-1.5-flash-002",
     "gemini-1.5-pro-002",
     process.env.GEMINI_MODEL_SUMMARY,
-  ].filter(Boolean) as string[];
+  ].filter(Boolean))) as string[];
 
   const base64Audio = audioBuffer.toString("base64");
   let lastError: any = null;
+  let sawRateLimit = false;
 
-  for (const modelName of modelCandidates) {
+  for (let index = 0; index < modelCandidates.length; index++) {
+    const modelName = modelCandidates[index];
     try {
       console.log(`[speechToText] Intentando modelo: ${modelName}`);
       const model = genAI.getGenerativeModel({ model: modelName });
@@ -504,11 +544,24 @@ async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string
       const errorMsg = String(err?.message || "").toLowerCase();
       console.warn(`[speechToText] Error con ${modelName}:`, errorMsg);
 
-      if (errorMsg.includes("404") || errorMsg.includes("not found")) {
+      if (isGeminiNotFoundError(err)) {
         continue;
       }
+
+      if (isGeminiRateLimitError(err)) {
+        sawRateLimit = true;
+        const backoffMs = getGeminiBackoffMs(index);
+        console.warn(`[speechToText] ${modelName} saturado. Esperando ${backoffMs}ms antes de probar el siguiente modelo...`);
+        await wait(backoffMs);
+        continue;
+      }
+
       throw err;
     }
+  }
+
+  if (sawRateLimit) {
+    throw createGeminiRateLimitError("la transcripción de audio", lastError);
   }
 
   throw lastError || new Error("No available Gemini model for speech-to-text");
@@ -2621,7 +2674,7 @@ function buildContextualDirective(userMessage: string, detectedProgram: any | nu
 async function generateResponse(apiKey: string, prompt: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  const modelCandidates = [
+  const modelCandidates = Array.from(new Set([
     "gemini-2.0-flash",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
@@ -2629,11 +2682,13 @@ async function generateResponse(apiKey: string, prompt: string): Promise<string>
     "gemini-1.5-pro-002",
     process.env.GEMINI_MODEL_CHAT,
     process.env.GEMINI_MODEL_SUMMARY,
-  ].filter(Boolean) as string[];
+  ].filter(Boolean))) as string[];
 
   let lastError: any = null;
+  let sawRateLimit = false;
 
-  for (const candidate of modelCandidates) {
+  for (let index = 0; index < modelCandidates.length; index++) {
+    const candidate = modelCandidates[index];
     try {
       console.log(`[generateResponse] Intentando modelo: ${candidate}`);
       const model = genAI.getGenerativeModel({ model: candidate });
@@ -2646,11 +2701,24 @@ async function generateResponse(apiKey: string, prompt: string): Promise<string>
       const errorMsg = String(err?.message || "").toLowerCase();
       console.warn(`[generateResponse] Error con ${candidate}:`, errorMsg);
 
-      if (errorMsg.includes("404") || errorMsg.includes("not found")) {
+      if (isGeminiNotFoundError(err)) {
         continue;
       }
+
+      if (isGeminiRateLimitError(err)) {
+        sawRateLimit = true;
+        const backoffMs = getGeminiBackoffMs(index);
+        console.warn(`[generateResponse] ${candidate} saturado. Esperando ${backoffMs}ms antes de probar el siguiente modelo...`);
+        await wait(backoffMs);
+        continue;
+      }
+
       throw err;
     }
+  }
+
+  if (sawRateLimit) {
+    throw createGeminiRateLimitError("la generación de respuesta", lastError);
   }
 
   throw lastError || new Error("No available Gemini model for chat");
@@ -3602,6 +3670,22 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("[POST /api/ai/audio] Error:", error);
     const errorMessage = error?.message || "Error procesando audio";
+
+    if (error?.statusCode === 429 || isGeminiRateLimitError(error)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: String(errorMessage).substring(0, 200),
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(error?.retryAfter || "60"),
+          },
+        }
+      );
+    }
+
     return NextResponse.json(
       { 
         ok: false,
