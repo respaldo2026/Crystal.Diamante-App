@@ -2788,6 +2788,7 @@ function ensurePaymentModalitiesInResponse(
     || /\b(precio|cuanto|costo|valor|inversion|inscripcion|mensualidad|pago|pagos|modalidad|modalidades|quincena|quincenal)\b/i.test(normalizedMessage);
 
   if (!asksPriceOrPayment) return base;
+  if (isPaymentValidationQuestion(message)) return base;
   if (hasScannablePaymentModalities(base)) return base;
 
   const normalizedBase = normalizeForMatch(base);
@@ -3106,6 +3107,7 @@ function shouldAttachMediaSuggestion(userMessage: string, responseText: string):
   if (isThanksOnlyMessage(userMessage)) return false;
   if (isNeutralAcknowledgement(userMessage)) return false;
   if (isShortAffirmativeReply(userMessage) && !/[?¿]/.test(userMessage)) return false;
+  if (isPaymentValidationQuestion(userMessage)) return false;
   if (isRepeatedInfoComplaint(userMessage)) return false;
   if (detectUserIntent(userMessage) === "materiales") return false;
   if (isKitPurchaseQuestion(userMessage)) return false;
@@ -3196,6 +3198,16 @@ function isPaymentRescueClarification(
   const normalizedPending = normalizeForMatch(inferredPendingTopic || "");
 
   return paymentKeywords.test(text) || paymentKeywords.test(normalizedLast) || paymentKeywords.test(normalizedPending);
+}
+
+function isPaymentValidationQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const asksConfirmation = /\b(es\s+cierto|es\s+verdad|verdad|vale|correcto|correcta|confirmame|confirmar|si\s+o\s+no)\b/i.test(text) || /[?¿]/.test(message);
+  const mentionsPaymentCase = /\b(opcion\s+a|opcion\s+b|mensualidad|300\s*000|300000|260\s*000|260000|por\s+clase|5\s+meses|durante\s+los\s+5\s+meses|cada\s+mes|todo\s+el\s+curso|inscripcion)\b/i.test(text);
+
+  return asksConfirmation && mentionsPaymentCase;
 }
 
 function isKitContentsQuestion(message: string): boolean {
@@ -4635,6 +4647,32 @@ function buildIntentFocusedDirectResponse(
     }
 
     return "¡Claro! 🙌 Te respondo corto: manejamos *3 modalidades* (*Por Clase*, *Mensual Opción A* y *Mensual Opción B*). Si me dices el curso, te doy los valores exactos de cada una.";
+  }
+
+  if (isPaymentValidationQuestion(message) && detectedProgram) {
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+    const normalizedValidation = normalizeForMatch(message);
+    const durationMonths = extractDurationMonths(detectedProgram);
+    const durationLabel = durationMonths ? `${durationMonths} meses` : "la duración del curso";
+
+    if (/\b(opcion\s*b|mensual\s+opcion\s*b|300\s*000|300000)\b/i.test(normalizedValidation)) {
+      return `Sí, correcto ✅ En *Mensual Opción B* pagas *${options.mensual100Text}* cada mes durante *${durationLabel}*.
+La inscripción se paga una sola vez para separar cupo.`;
+    }
+
+    if (/\b(opcion\s*a|mensual\s+opcion\s*a|260\s*000|260000)\b/i.test(normalizedValidation)) {
+      return `Sí, correcto ✅ En *Mensual Opción A* pagas *${options.mensual70Text}* cada mes durante *${durationLabel}*.
+La inscripción se paga una sola vez para separar cupo.`;
+    }
+
+    if (/\b(por\s+clase|clase)\b/i.test(normalizedValidation)) {
+      return `Sí, correcto ✅ En *Por Clase* pagas *${options.porClaseText}* por cada clase asistida.
+La inscripción se paga una sola vez para separar cupo.`;
+    }
+
+    return `Sí ✅ Se maneja con inscripción única para separar cupo y luego el pago según la modalidad que elijas.
+Si quieres, te confirmo en una línea cuál te aplica en tu caso.`;
   }
 
   if (asksPaymentMethodsOrDates || confirmsPaymentInfo) {
