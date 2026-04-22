@@ -191,21 +191,21 @@ export default function StudentDetailView() {
     return Number.isFinite(parsed) ? parsed : null;
   };
 
-  const esInscripcion = (pago: any) => {
+  const esInscripcion = useCallback((pago: any) => {
     const texto = String(pago?.periodo_pagado || pago?.observaciones || "").toLowerCase();
     return texto.includes("matric") || Number(pago?.numero_cuota) === 0;
-  };
+  }, []);
 
-  const esPagoHistoricoPorClase = (pago: any, modalidadActual?: string | null) => {
+  const esPagoHistoricoPorClase = useCallback((pago: any, modalidadActual?: string | null) => {
     const modalidad = normalizeModalidadPago(modalidadActual || pago?.matriculas?.modalidad_pago);
     if (modalidad === "POR_CLASE") return false;
 
     const tipoCuota = String(pago?.tipo_cuota || "").toLowerCase().trim();
     const periodo = String(pago?.periodo_pagado || pago?.observaciones || "").toLowerCase().trim();
     return tipoCuota === "por_clase" || /^clase\s*#?\s*\d+/i.test(periodo);
-  };
+  }, []);
 
-  const getPeriodoPagoLegible = (pago: any, modalidadActual?: string | null) => {
+  const getPeriodoPagoLegible = useCallback((pago: any, modalidadActual?: string | null) => {
     const periodoActual = String(pago?.periodo_pagado || "").trim();
     const numeroCuota = Number(pago?.numero_cuota || 0);
     const modalidad = normalizeModalidadPago(modalidadActual || pago?.matriculas?.modalidad_pago);
@@ -223,7 +223,7 @@ export default function StudentDetailView() {
     }
 
     return periodoActual || `Cuota ${numeroCuota}`;
-  };
+  }, [esInscripcion, esPagoHistoricoPorClase]);
 
   const obtenerDuracionMeses = useCallback((matricula: any) =>
     parseDuracionMeses(
