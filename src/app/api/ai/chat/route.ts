@@ -5090,6 +5090,35 @@ function formatStudentCoursesList(studentContext: any): string {
   return `Tus cursos inscritos son:\n${lines}`;
 }
 
+function hasStudentMaterialSupportIntent(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const mentionsMaterials = /\b(material|materiales|kit|kits|insumo|insumos|implemento|implementos|esmalte|esmaltes|electrodo|primer|pincel|lima|removedor|acetona|monomero|acrilico)\b/i.test(text);
+  if (!mentionsMaterials) return false;
+
+  return /\b(me falta|me faltan|que me falta|que me faltan|me hace falta|me hacen falta|debo comprar|necesito comprar|toca comprar|tengo que comprar|para hoy|clase de hoy|kit de hoy|kit completo|me dieron|me entregaron|me entregan|me aceptan pagar)\b/i.test(text);
+}
+
+function formatStudentMaterialDeliveries(studentContext: any): string {
+  const deliveries = Array.isArray(studentContext?.materialDeliveries) ? studentContext.materialDeliveries : [];
+  if (!deliveries.length) {
+    return "No veo entregas de materiales registradas a tu nombre en este momento.";
+  }
+
+  const lines = deliveries
+    .slice(0, 5)
+    .map((item: any) => {
+      const meta = [item?.mesCiclo, item?.talla].filter(Boolean).join(" | ");
+      const dateLabel = formatDateShort(item?.fechaEntrega || null);
+      const label = item?.descripcion || item?.tipoMaterial || "Material";
+      return `- ${label}${meta ? ` (${meta})` : ""}${dateLabel ? ` | Entrega: ${dateLabel}` : ""}`;
+    })
+    .join("\n");
+
+  return `Estas son las últimas entregas registradas en sistema:\n${lines}`;
+}
+
 function extractIdentificationFromText(message: string): string | null {
   const text = String(message || "").trim();
   if (!text) return null;
@@ -5112,8 +5141,8 @@ function extractIdentificationFromText(message: string): string | null {
 
 function hasStudentAccountIntent(message: string): boolean {
   const text = normalizeForMatch(message);
-  // NOTA: "materiales" NO se incluye aquí — los materiales son info pública del curso, no del perfil estudiantil
-  return /\b(cuanto debo|deuda|saldo pendiente|mensualidad|proxima mensualidad|proximo pago|cuando debo pagar|proxima clase|siguiente clase|hoy hay clase|inscrita|inscrito|mis cursos)\b/i.test(text);
+  return hasStudentMaterialSupportIntent(text)
+    || /\b(cuanto debo|deuda|saldo pendiente|mensualidad|proxima mensualidad|proximo pago|cuando debo pagar|proxima clase|siguiente clase|hoy hay clase|inscrita|inscrito|mis cursos)\b/i.test(text);
 }
 
 function resolveStudentIdentification(
@@ -5265,13 +5294,24 @@ function buildStudentDirectResponse(message: string, studentContext: any, medios
   if (!studentContext) return null;
 
   const text = normalizeForMatch(message);
-  const asksDebt = /\b(cuanto debo|deuda|saldo pendiente|debo)\b/i.test(text);
+  const mentionsMaterials = /\b(material|materiales|kit|kits|insumo|insumos|implemento|implementos|esmalte|esmaltes|electrodo|primer|pincel|lima|removedor|acetona|monomero|acrilico)\b/i.test(text);
+  const asksDebt = !mentionsMaterials && /\b(cuanto debo|deuda|saldo pendiente|debo)\b/i.test(text);
   const asksNextPay = /\b(proxima mensualidad|proximo pago|cuando debo pagar|fecha de pago|vence|vencimiento)\b/i.test(text);
   const asksTotalDebtExplicit = /\b(deuda total|saldo total|total pendiente|deuda acumulada)\b/i.test(text);
   const asksNextClass = /\b(proxima clase|siguiente clase|hoy hay clase|hoy tengo clase|clase hoy|a que hora empieza|manana hay clase|clase manana)\b/i.test(text);
   const asksTomorrowClassTime = /\b(manana|manana\s+temprano|por\s+la\s+manana)\b/i.test(text)
     && /\b(hora|empieza|inicio|comienza|clase|curso)\b/i.test(text);
   const asksEnrolledCourses = /\b(en que curso|que cursos|mis cursos|inscrita|inscrito)\b/i.test(text);
+  const asksPersonalMaterials = hasStudentMaterialSupportIntent(text);
+
+  if (asksPersonalMaterials) {
+    const deliveriesBlock = formatStudentMaterialDeliveries(studentContext);
+    if (/\b(hoy|clase de hoy|para hoy|kit de hoy)\b/i.test(text)) {
+      return `${deliveriesBlock}\n\nSi quieres, te digo también la lista base de materiales de la clase de hoy para contrastar qué te falta exactamente.`;
+    }
+
+    return `${deliveriesBlock}\n\nSi me dices si lo quieres revisar para *la clase de hoy* o para *el kit completo*, te ayudo a contrastarlo mejor.`;
+  }
 
   if (asksDebt || asksNextPay || asksTotalDebtExplicit) {
     const next = studentContext?.nextMonthlyPayment;
@@ -6122,7 +6162,7 @@ export async function POST(req: NextRequest) {
     });
 
     const knownStudentByPhone = Boolean(studentContext || phoneProfile?.rol === 'estudiante');
-    if (knownStudentByPhone && (isPureGreeting(message) || isShortNegativeReply(message))) {
+    if (knownStudentByPhone && isPureGreeting(message)) {
       const supportReply = buildKnownStudentSupportReply(phoneProfileName || studentContext?.estudianteNombre || null);
       await persistConversation(message, supportReply);
 
@@ -6141,12 +6181,7 @@ export async function POST(req: NextRequest) {
     }
 
     const knownTeacherByPhone = phoneProfile?.rol === 'profesor';
-    const teacherNeedsSupportReply = knownTeacherByPhone
-      && (isPureGreeting(message)
-        || isShortNegativeReply(message)
-        || isThanksOnlyMessage(message)
-        || isNeutralAcknowledgement(message)
-        || isNoiseOnlyMessage(message));
+    const teacherNeedsSupportReply = knownTeacherByPhone && isPureGreeting(message);
 
     if (teacherNeedsSupportReply) {
       const supportReply = buildKnownTeacherSupportReply(phoneProfileName);

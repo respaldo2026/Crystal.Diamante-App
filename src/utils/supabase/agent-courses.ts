@@ -146,6 +146,16 @@ interface StudentPendingPaymentInfo {
   periodoPagado: string | null
 }
 
+interface StudentMaterialDeliveryInfo {
+  id: string
+  tipoMaterial: string | null
+  descripcion: string | null
+  talla: string | null
+  mesCiclo: string | null
+  fechaEntrega: string | null
+  observaciones: string | null
+}
+
 export interface StudentAgentContext {
   estudianteId: string
   estudianteNombre: string
@@ -154,6 +164,7 @@ export interface StudentAgentContext {
   enrollments: StudentEnrollmentInfo[]
   enrolledProgramIds: number[]
   pendingPayments: StudentPendingPaymentInfo[]
+  materialDeliveries: StudentMaterialDeliveryInfo[]
   deudaTotal: number
   nextMonthlyPayment: StudentPendingPaymentInfo | null
   nextClass: {
@@ -491,6 +502,28 @@ export async function getStudentContextByIdentification(rawIdentification: strin
       }
     }
 
+    let materialDeliveries: StudentMaterialDeliveryInfo[] = []
+    const { data: materialRows, error: materialError } = await supabase
+      .from('entregas_materiales')
+      .select('id, tipo_material, descripcion, talla, mes_ciclo, fecha_entrega, observaciones')
+      .eq('estudiante_id', studentProfile.id)
+      .order('fecha_entrega', { ascending: false })
+      .limit(12)
+
+    if (materialError) {
+      console.error('[getStudentContextByIdentification] Error entregas_materiales:', materialError)
+    } else {
+      materialDeliveries = ((materialRows || []) as any[]).map((row: any) => ({
+        id: String(row?.id || ''),
+        tipoMaterial: row?.tipo_material ?? null,
+        descripcion: row?.descripcion ?? null,
+        talla: row?.talla ?? null,
+        mesCiclo: row?.mes_ciclo ?? null,
+        fechaEntrega: row?.fecha_entrega ?? null,
+        observaciones: row?.observaciones ?? null,
+      }))
+    }
+
     const pendingDebtFromPayments = pendingPayments.reduce((sum, item) => sum + Math.max(0, Number(item.monto || 0)), 0)
     const pendingDebtFromEnrollments = enrollments.reduce((sum, item) => sum + Math.max(0, Number(item.deudaPendiente || 0)), 0)
     const deudaTotal = pendingDebtFromPayments > 0 ? pendingDebtFromPayments : pendingDebtFromEnrollments
@@ -547,6 +580,17 @@ export async function getStudentContextByIdentification(rawIdentification: strin
       ? `- Cuota ${nextMonthlyPayment.numeroCuota ?? '?'} | Vence: ${formatDateShort(nextMonthlyPayment.fechaVencimiento)} | Valor: ${formatCurrency(nextMonthlyPayment.monto)}`
       : '- No tiene mensualidades pendientes registradas.'
 
+    const materialsText = materialDeliveries.length
+      ? materialDeliveries
+          .slice(0, 5)
+          .map((item) => {
+            const meta = [item.mesCiclo, item.talla].filter(Boolean).join(' | ')
+            const dateLabel = item.fechaEntrega ? formatDateShort(item.fechaEntrega) : 'fecha no registrada'
+            return `- ${item.descripcion || item.tipoMaterial || 'Material'}${meta ? ` (${meta})` : ''} | Entrega: ${dateLabel}`
+          })
+          .join('\n')
+      : '- No hay entregas de materiales registradas recientemente.'
+
     const contextText = `
 ## CONTEXTO PRIVADO DE ESTUDIANTE (IDENTIFICACIÓN VALIDADA)
 Estudiante: ${studentName}
@@ -563,10 +607,13 @@ Estado financiero del estudiante:
 Próxima mensualidad pendiente:
 ${nextMonthlyText}
 
+Historial reciente de entregas de materiales:
+${materialsText}
+
 Reglas obligatorias con este contexto:
 - Si pregunta "cuánto debo", responde con "Deuda total pendiente".
 - Si pregunta "cuándo debo pagar" o "próxima mensualidad", responde con "Próxima mensualidad pendiente".
-- Si pregunta por materiales sin mencionar curso, prioriza los cursos inscritos arriba.
+- Si pregunta por materiales personales o faltantes, usa primero el historial de entregas de materiales; si no alcanza para confirmar faltantes exactos, dilo claro y luego apóyate en los cursos inscritos arriba.
 - Nunca mezcles datos de otro estudiante ni inventes cuotas/fechas no listadas.
 `.trim()
 
@@ -578,6 +625,7 @@ Reglas obligatorias con este contexto:
       enrollments: activeEnrollments,
       enrolledProgramIds,
       pendingPayments,
+      materialDeliveries,
       deudaTotal,
       nextMonthlyPayment,
       nextClass,
