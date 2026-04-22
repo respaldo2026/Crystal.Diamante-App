@@ -437,6 +437,8 @@ async function runFollowupsJob(): Promise<NextResponse> {
       }
 
       const normalizedRole = String(profile?.rol || "").trim().toLowerCase();
+      const isTeacherProfile = ["profesor", "profesora", "docente", "maestra"].includes(normalizedRole);
+      const isStaffProfile = ["admin", "director", "secretaria", "administrativo", "administradora"].includes(normalizedRole);
       const isEnrolledStudent = Boolean(
         (profile?.id && enrolledProfileIds.has(String(profile.id)))
         || normalizedRole === "estudiante"
@@ -451,6 +453,23 @@ async function runFollowupsJob(): Promise<NextResponse> {
           status: "skipped",
           payload: {
             reason: "enrolled_student_or_student_role",
+            profileId: profile?.id || null,
+            profileRole: normalizedRole || null,
+          },
+        });
+        skipped++;
+        continue;
+      }
+
+      if (isTeacherProfile || isStaffProfile) {
+        await upsertFollowupRecord(supabase, {
+          conversationId: threadKey,
+          phone: normalizedPhone,
+          type: FOLLOWUP_TYPE,
+          referenceMessageAt: lastCustomerTurn.created_at,
+          status: "skipped",
+          payload: {
+            reason: "internal_profile_role",
             profileId: profile?.id || null,
             profileRole: normalizedRole || null,
           },

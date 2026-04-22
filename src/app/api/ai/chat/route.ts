@@ -2021,6 +2021,11 @@ function buildKnownTeacherSupportReply(name: string | null = null): string {
   return `${lead} Ya te tengo identificada como docente y te atiendo en modo soporte.\n\n¿Te ayudo con *clase de hoy/próxima clase*, *liquidación/pago de quincena* o *novedades de tus grupos*?`;
 }
 
+function isTeacherRole(role: string | null | undefined): boolean {
+  const normalized = normalizeForMatch(role || "");
+  return /^(profesor|profesora|docente|maestra)$/i.test(normalized);
+}
+
 function isPaymentAlreadyDoneClaim(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
@@ -6180,8 +6185,16 @@ export async function POST(req: NextRequest) {
       }, null)), commentEvent));
     }
 
-    const knownTeacherByPhone = phoneProfile?.rol === 'profesor';
-    const teacherNeedsSupportReply = knownTeacherByPhone && isPureGreeting(message);
+    const knownTeacherByPhone = isTeacherRole(phoneProfile?.rol || null);
+    const teacherNeedsSupportReply = knownTeacherByPhone
+      && (
+        isPureGreeting(message)
+        || isShortNegativeReply(message)
+        || isThanksOnlyMessage(message)
+        || isNeutralAcknowledgement(message)
+        || isShortAffirmativeReply(message)
+        || isNoiseOnlyMessage(message)
+      );
 
     if (teacherNeedsSupportReply) {
       const supportReply = buildKnownTeacherSupportReply(phoneProfileName);
