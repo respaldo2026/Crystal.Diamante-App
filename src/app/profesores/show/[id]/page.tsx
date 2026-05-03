@@ -17,6 +17,7 @@ import {
   DeleteOutlined,
 } from "@ant-design/icons";
 import {
+  App,
   Avatar,
   Button,
   Card,
@@ -33,8 +34,6 @@ import {
   Spin,
   Empty,
   Dropdown,
-  Modal,
-  message,
 } from "antd";
 import dayjs from "dayjs";
 
@@ -50,6 +49,7 @@ export default function ShowProfesorDashboard() {
   const [deleteLoading, setDeleteLoading] = React.useState(false);
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.sm;
+  const { message, modal } = App.useApp();
 
   React.useEffect(() => {
     if (!idProfesor) return;
@@ -88,7 +88,7 @@ export default function ShowProfesorDashboard() {
   };
 
   const handleDeleteProfesor = () => {
-    Modal.confirm({
+    modal.confirm({
       title: "Eliminar profesor",
       content: `¿Estás seguro de que deseas eliminar a ${perfil?.nombre_completo}? Esta acción no se puede deshacer.`,
       okText: "Eliminar",
