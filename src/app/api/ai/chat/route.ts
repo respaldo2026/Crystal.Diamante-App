@@ -4299,7 +4299,19 @@ function buildIntentFocusedDirectResponse(
     return buildPaymentAlreadyDoneReply(academy);
   }
   if (hasPaymentReminderContext && !hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
-    return buildReminderFollowupReply();
+    // NO activar el follow-up de recordatorio si hay señales de reclamo, frustración o discrepancia de precio
+    const normalizedMsg = normalizeForMatch(message);
+    const isBillingComplaint =
+      /\b(ya\s+(me\s+)?(cobr(aron|ando)|est[aá]n\s+cobrando)|no\s+ha[n]?\s+empezado|primera\s+clase.*cobr|sin\s+(dar|haber\s+dado)\s+clase|cobr.*antes\s+de|antes\s+de\s+(empezar|iniciar))\b/i.test(normalizedMsg);
+    const isPriceConflict =
+      /\b(no\s+se\s+supon[ií]a|me\s+(dijeron|hab[ií]an?\s+dicho|ofrecieron)|pens[eé]\s+que)\b/i.test(normalizedMsg);
+    const isFrustrated =
+      /\b(no\s+leen?|no\s+entiend[eo]n?|no\s+sirve|hablar\s+con\s+persona)\b/i.test(normalizedMsg)
+      || /hayyy|haayyy|uffff/i.test(message);
+
+    if (!isBillingComplaint && !isPriceConflict && !isFrustrated) {
+      return buildReminderFollowupReply();
+    }
   }
 
   if (isThanksOnlyMessage(message)) {
@@ -5731,6 +5743,72 @@ function buildContextualDirective(
   );
   const normalizedPhoneRole = normalizeForMatch(phoneProfileRol || "");
   const teacherRoleByPhone = /^(profesor|profesora|docente|maestra)$/i.test(normalizedPhoneRole);
+
+  // ── Detecciones de situaciones críticas de conversación ─────────────────
+  // 1. Reclamo de cobro antes de iniciar clases
+  const isBillingBeforeClassComplaint =
+    /\b(ya\s+(me\s+)?(cobr(aron|ando)|est[aá]n\s+cobrando)|cobr.*sin\s+(empezar|iniciar|haber\s+empezado)|no\s+ha[n]?\s+empezado.*cobr|primera\s+clase.*cobr|sin\s+(dar|haber\s+dado)\s+clase|cobr.*antes\s+de|antes\s+de\s+(empezar|iniciar|la\s+primera))\b/i.test(normalizedUser)
+    || /\b(no\s+ha\s+empezado\s+la\s+primera\s+clase)\b/i.test(normalizedUser);
+
+  // 2. Discrepancia de precio cotizado previamente
+  const isPriceDiscrepancyComplaint =
+    /\b(no\s+se\s+supon[ií]a\s+que|me\s+(dijeron|hab[ií]an?\s+dicho|dijo|ofrecieron)\s+(que\s+)?(val[ií]a|costaba|era|por)|pens[eé]\s+que\s+(val[ií]a|costaba|era)|me\s+hab[ií]an\s+dicho\s+(que\s+)?\$?[\d\.]+|hab[ií]an\s+dicho\s+(que\s+)?\$?[\d\.]+)\b/i.test(normalizedUser);
+
+  // 3. Detectar si el último mensaje del agente fue un recordatorio de pago/plantilla masiva
+  const lastAgentNorm = normalizeForMatch(history[history.length - 1]?.agent || "");
+  const lastWasPaymentReminder =
+    /\b(recordatorio\s+de\s+pago|mensualidad.*venc|vencimiento.*mensualidad|fecha\s+l[ií]mite.*pago|ya\s+realizaste\s+el\s+pago|est[aá]s\s+al\s+d[ií]a\s+con|al\s+d[ií]a\s+con\s+tu\s+pago)\b/i.test(lastAgentNorm);
+
+  // 4. Frustración / incomprensión del usuario
+  const isUserFrustrated =
+    /\b(no\s+(me\s+)?entiend[eo]n?|no\s+leen?\s+(los\s+)?mensajes?|no\s+sirve\s+este\s+(bot|sistema)|hablar\s+con\s+una\s+persona\s+(real|de\s+verdad)|atiend[ae]n?\s+(mal|p[eé]simo)|nadie\s+me\s+responde|esto\s+no\s+funciona|cuando\s+atiende\s+una\s+persona|que\s+atienda\s+una\s+persona|mala\s+atencion|p[eé]simo\s+servicio)\b/i.test(normalizedUser)
+    || /hayyy|haayyy|uffff|ufff/i.test(userMessage);
+
+  // Reglas generadas según detecciones ──────────────────────────────────────
+  const billingComplaintRule = isBillingBeforeClassComplaint
+    ? `🔴 MODO RECLAMO DE PAGO ACTIVADO:
+- El usuario está reclamando que se le cobra ANTES de que inicien las clases. Es un reclamo legítimo: trátalo con MÁXIMA EMPATÍA.
+- ESTRUCTURA OBLIGATORIA:
+  1) Pide disculpas de forma sincera (ej: "Entiendo tu molestia y tienes toda la razón en preguntar esto 😞")
+  2) Si conoces la política real, explícala brevemente. Si no, admítelo y escala.
+  3) Cierra SIEMPRE derivando al área administrativa: "Para aclarar esto directamente, escríbele a nuestro equipo al {{admissions_number}}, ellos pueden revisar tu caso puntual."
+- PROHIBIDO en esta respuesta:
+  - Preguntar si ya realizó el pago
+  - Enviar ficha comercial del curso o medios de pago
+  - Usar la frase "¡Gracias por responder!"
+  - Continuar flujo de ventas`
+    : "";
+
+  const priceDiscrepancyRule = isPriceDiscrepancyComplaint
+    ? `🟡 DISCREPANCIA DE PRECIO DETECTADA:
+- El usuario menciona un precio diferente al estándar que posiblemente le fue cotizado antes (ej: oferta especial o promoción).
+- PROHIBIDO: No insistas en el precio estándar ni corrijas al usuario diciendo "el precio correcto es $X".
+- RESPUESTA CORRECTA:
+  1) Reconoce la posibilidad: "Entiendo, es posible que hayas recibido una oferta especial 😊"
+  2) Escala para confirmar: "Para validar ese precio escríbele a nuestro equipo al {{admissions_number}} con el nombre del asesor o la fecha en que te lo ofrecieron."
+  3) NO menciones el precio estándar a menos que el usuario lo pida explícitamente después.`
+    : "";
+
+  const postPaymentTemplateRule = lastWasPaymentReminder && isBillingBeforeClassComplaint
+    ? `⚠️ CONTEXTO POST-PLANTILLA DE PAGO CON RECLAMO:
+- El mensaje anterior del agente era un recordatorio de pago automático, pero el usuario respondió con un reclamo.
+- PROHIBIDO decir "¡Gracias por responder!" o retomar el tema del pago.
+- Cambia completamente al modo de empatía y escala a administrativo inmediatamente.`
+    : lastWasPaymentReminder && /\b(ya\s+pagu[eé]|ya\s+lo\s+pagu[eé]|ya\s+realic[eé]|ya\s+hice\s+el\s+pago|acabo\s+de\s+pagar|lo\s+pague\s+ayer|ya\s+est[aá]\s+pagado)\b/i.test(normalizedUser)
+    ? `✅ CONFIRMACIÓN DE PAGO POST-PLANTILLA:
+- El usuario confirma que ya pagó. Responde brevemente agradeciendo la confirmación y diciendo que el equipo lo verificará.
+- PROHIBIDO enviar otra solicitud de pago, ficha de curso ni información comercial.`
+    : "";
+
+  const frustrationEscalationRule = isUserFrustrated
+    ? `🔴 FRUSTRACIÓN DEL USUARIO DETECTADA:
+- El usuario expresa frustración porque siente que no le están respondiendo bien.
+- RESPUESTA OBLIGATORIA en máximo 3 líneas:
+  1) Disculpa sincera: "Disculpa si no te respondí bien 😔"
+  2) Reconoce la limitación del asistente automático
+  3) Da INMEDIATAMENTE el número humano: "Para hablar directamente con alguien de nuestro equipo escríbenos al {{admissions_number}} 😊"
+- PROHIBIDO: No des info de cursos, no preguntes "¿en qué te puedo ayudar?", no uses frases de ventas.`
+    : "";
   const isTeacherSupport = teacherRoleByPhone || /\b(profesora|profesor|docente|maestra|soy\s+profesor|soy\s+profe|mis\s+clases|mi\s+pago\s+quincena|quincena)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
   const isStudentSupport = /\b(estudiante|alumna|alumno|estoy\s+estudiando|tengo\s+clase\s+hoy|hay\s+clase\s+hoy|kit|materiales\s+de\s+la\s+clase|mis\s+cursos|proxima\s+clase|proximo\s+pago)\b/i.test(`${normalizedUser} ${normalizedRecentHistory}`);
 
@@ -5828,6 +5906,10 @@ function buildContextualDirective(
     'REGLA DE FOCO: no hagas preguntas de "¿qué curso te interesa?" si ya está claro por contexto.',
     'Si hay objeción, estructura la respuesta en: 1) Empatía breve, 2) Dato concreto del curso, 3) Propuesta clara, 4) CTA corta.',
     'Prohibido responder con: "¿En qué curso estás interesado?" cuando el usuario ya mencionó un curso o tema específico.',
+    billingComplaintRule,
+    priceDiscrepancyRule,
+    postPaymentTemplateRule,
+    frustrationEscalationRule,
     roleSupportRule,
     noRepeatRule,
     isPersonalDataCorrectionMessage(userMessage)
