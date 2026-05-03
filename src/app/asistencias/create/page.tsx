@@ -17,7 +17,6 @@ export default function TomarAsistencia() {
   const [form] = Form.useForm();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const HORAS_POR_SESION = 3;
   const [cursoSeleccionado, setCursoSeleccionado] = useState<number | null>(null);
   const [fecha, setFecha] = useState(dayjs());
   const [alumnos, setAlumnos] = useState<any[]>([]);
@@ -61,7 +60,7 @@ export default function TomarAsistencia() {
     const cargarCursos = async () => {
       const { data } = await supabaseBrowserClient
         .from("cursos")
-        .select("id, nombre, profesor_id, total_clases, programa_id, programas(id, nombre, total_clases, duracion)")
+        .select("id, nombre, profesor_id, total_clases, duracion_horas, programa_id, programas(id, nombre, total_clases, duracion)")
         .eq("estado", "activo");
       setCursos(data || []);
     };
@@ -346,9 +345,20 @@ export default function TomarAsistencia() {
       return;
     }
 
+    const cursoSeleccionadoData = cursos.find((c) => Number(c.id) === Number(cursoSeleccionado));
+
+    if (!cursoSeleccionadoData?.profesor_id) {
+      message.error("⚠️ Este curso no tiene un profesor asignado. Asigna el profesor en la configuración del curso antes de registrar la sesión.");
+      return;
+    }
+
+    // Usar las horas configuradas en el curso, si existen; de lo contrario 3 horas por defecto
+    const HORAS_POR_SESION = Number(cursoSeleccionadoData?.duracion_horas) > 0
+      ? Number(cursoSeleccionadoData.duracion_horas)
+      : 3;
+
     setGuardando(true);
     try {
-      const cursoSeleccionadoData = cursos.find((c) => Number(c.id) === Number(cursoSeleccionado));
       const temaLimpio = temaVisto.trim();
       const fechaSesion = fecha.format("YYYY-MM-DD");
       const claseSeleccionada = clasesDisponibles.find((c) => Number(c.numero) === Number(numeroClase));
@@ -560,6 +570,8 @@ export default function TomarAsistencia() {
   ).length;
   const totalHabilitados = alumnos.filter((a) => a.estado === "activo" || a.estado === "en curso").length;
   const claseSeleccionadaValida = Boolean(numeroClase && Number(numeroClase) > 0);
+  const cursoActual = cursos.find((c) => Number(c.id) === Number(cursoSeleccionado));
+  const cursoSinProfesor = cursoSeleccionado && !cursoActual?.profesor_id;
 
   return (
     <div style={{ padding: "24px" }}>
@@ -626,9 +638,20 @@ export default function TomarAsistencia() {
               />
             </div>
           </Col>
-          <Col xs={24} md={12}>
-            <div>
-              <Text strong>Número de clase (obligatorio):</Text>
+              {cursoSinProfesor && (
+                <Col xs={24}>
+                  <Alert
+                    type="error"
+                    showIcon
+                    message="Este curso no tiene un profesor asignado"
+                    description="Las horas de esta clase NO se registrarán en nómina. Ve a la edición del curso y asigna el profesor antes de tomar lista."
+                    style={{ marginTop: 8 }}
+                  />
+                </Col>
+              )}
+              <Col xs={24} md={12}>
+                <div>
+                  <Text strong>Número de clase (obligatorio):</Text>
               <Select
                 style={{ width: "100%", marginTop: 8 }}
                 status={!claseSeleccionadaValida ? "error" : undefined}
@@ -773,7 +796,7 @@ export default function TomarAsistencia() {
                   size="large"
                   icon={<SaveOutlined />}
                   loading={guardando}
-                  disabled={!claseSeleccionadaValida}
+                  disabled={!claseSeleccionadaValida || !!cursoSinProfesor}
                   onClick={guardarAsistencia}
                 >
                   💾 Guardar Asistencia
