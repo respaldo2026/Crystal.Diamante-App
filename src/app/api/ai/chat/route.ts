@@ -2288,6 +2288,15 @@ function buildShortAckContinuationReply(
   }
 
   const normalizedLastAgent = normalizeForMatch(lastAgentMessage || "");
+
+  // Si el último mensaje del agente era sobre revisar ESTADO DE CUENTA (no inscripción),
+  // un "sí" del estudiante debe redirigir a soporte, no enviar proceso de inscripción.
+  if (
+    /\b(estado\s+de\s+cuenta|revisar\s+tu\s+cuenta|revisar\s+tu\s+estado|tu\s+estado\s+actual|verificar\s+tu\s+pago|verificar\s+tu\s+estado)\b/i.test(normalizedLastAgent)
+  ) {
+    return "Para revisar tu estado de cuenta con detalle, te recomiendo escribirle directamente a Admisiones:\n📲 *+57 301 203 8582*\n\nEllos pueden confirmarte pagos, saldos y cualquier novedad de tu matrícula 😊";
+  }
+
   // Si acabamos de preguntar por pasos de inscripción y responde afirmativo,
   // avanzar directo al proceso para evitar repetir el mismo bloque anterior.
   if (
@@ -4289,6 +4298,25 @@ function buildIntentFocusedDirectResponse(
   isKnownStudentByPhone: boolean = false
 ): string | null {
   const hasPaymentConfirmedContext = hasRecentPaymentConfirmedContext(history);
+
+  // ── Guardia para estudiantes conocidas ────────────────────────────────
+  // Una estudiante activa NUNCA debe recibir mensajes de inscripción, separar cupo,
+  // ni la ficha comercial completa. Si llega aquí desde el flujo general,
+  // redirigir al modo soporte en lugar de responder como prospecto.
+  if (isKnownStudentByPhone) {
+    const normalizedMsg = normalizeForMatch(message);
+    // "Ya" / acuse breve → no enviar ficha de curso
+    if (isNeutralAcknowledgement(message) || isShortNegativeReply(message) || isNoiseOnlyMessage(message)) {
+      return "Claro 😊 Si necesitas algo más, con gusto te ayudo.";
+    }
+    // Mensajes sobre inscripción/separar cupo → modo soporte, no enrolarla de nuevo
+    const isEnrollmentQuery = /\b(inscribirme|matricularme|separar\s+cupo|como\s+(me\s+)?inscribo|pasos\s+de\s+inscripcion)\b/i.test(normalizedMsg);
+    if (isEnrollmentQuery) {
+      const wa = academy?.whatsapp_admisiones || ADMISSIONS_NUMBER;
+      return `Como ya eres estudiante, para cualquier gestión de matrícula o cuenta escríbele directamente a Admisiones:\n📲 *${wa}* 😊`;
+    }
+  }
+
   const hasPaymentReminderContext = hasRecentPaymentReminderContext(history);
 
   if (hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
@@ -5363,6 +5391,26 @@ function buildStudentDirectResponse(message: string, studentContext: any, medios
 
   const text = normalizeForMatch(message);
   const mentionsMaterials = /\b(material|materiales|kit|kits|insumo|insumos|implemento|implementos|esmalte|esmaltes|electrodo|primer|pincel|lima|removedor|acetona|monomero|acrilico)\b/i.test(text);
+
+  // Detectar si la estudiante dice que YA ESTÁ MATRICULADA/INSCRITA → modo soporte
+  const claimsEnrolled = /\b(ya\s+estoy\s+(matriculada|inscrita|inscrito|matriculado)|ya\s+(me\s+)?(inscrib[ií]|matricul[eé])|ya\s+pagu[eé]\s+la\s+inscripcion|ya\s+soy\s+estudiante)\b/i.test(text);
+  if (claimsEnrolled) {
+    const cursoLabel = studentContext?.enrolledCourses?.[0]?.nombre || null;
+    const cursoPart = cursoLabel ? ` en *${cursoLabel}*` : "";
+    return `Sí, tienes razón 😊 Ya estás matriculada${cursoPart}. ¿En qué te puedo ayudar: *próxima clase*, *estado de pagos* o *materiales*?`;
+  }
+
+  // Detectar si la estudiante pregunta sobre pagar por clase (su plan de pago)
+  const asksPaymentPlan = !mentionsMaterials && /\b(pagar?\s+por\s+clase|pago\s+por\s+clase|plan\s+por\s+clase|mi\s+plan\s+de\s+pago|como\s+pago\s+mi\s+(clase|mensualidad)|cuando\s+(debo\s+)?pago|cuanto\s+(debo\s+)?pagar\s+por\s+clase)\b/i.test(text);
+  if (asksPaymentPlan) {
+    const next = studentContext?.nextMonthlyPayment;
+    const methodsBlock = buildStudentPaymentMethodsBlock(mediosPago);
+    if (next) {
+      return `Tu próximo pago es la cuota ${next.numeroCuota ?? "?"} por ${formatCurrencyCOP(Number(next.monto || 0))}, vence el ${formatDateShort(next.fechaVencimiento)}.\n\n${methodsBlock}\n\nSi tienes dudas sobre tu plan de pago, también puedes consultar con Admisiones 😊`;
+    }
+    return `Según tu plan de pago por clase, el valor por sesión está registrado en tu matrícula. Si quieres confirmarlo exactamente, consulta con Admisiones o compárteme tu número de cédula y lo verifico.\n\n${methodsBlock}`;
+  }
+
   const asksDebt = !mentionsMaterials && /\b(cuanto debo|deuda|saldo pendiente|debo)\b/i.test(text);
   const asksNextPay = /\b(proxima mensualidad|proximo pago|cuando debo pagar|fecha de pago|vence|vencimiento)\b/i.test(text);
   const asksTotalDebtExplicit = /\b(deuda total|saldo total|total pendiente|deuda acumulada)\b/i.test(text);
@@ -6399,6 +6447,10 @@ export async function POST(req: NextRequest) {
       if (isPersonalDataCorrectionMessage(message)) {
         mediaSuggestion = null;
       }
+      // Nunca enviar imágenes comerciales a estudiantes activas
+      if (knownStudentByPhone) {
+        mediaSuggestion = null;
+      }
     }
 
     const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext, mediosPago);
@@ -6576,11 +6628,20 @@ export async function POST(req: NextRequest) {
     const studentDirective = studentContext
       ? 'Existe contexto de estudiante validado por identificación. Prioriza responder con sus cursos inscritos, su próxima clase y su estado real de pagos antes de información general.'
       : '';
+    const knownStudentDirective = knownStudentByPhone && !studentContext
+      ? `🔴 MODO SOPORTE ESTUDIANTE ACTIVA:
+- Esta persona ya es estudiante de la academia. PROHIBIDO enviar información de inscripción, medios de pago de nuevo ingreso, ni ficha comercial del curso.
+- Si pregunta sobre "pagar por clase": CONFIRMA que esa opción SÍ existe ($40.000 por clase, sin materiales incluidos). NO digas que "no está disponible".
+- Si dice "ya estoy matriculada/inscrita": Confirma, pide disculpas si el sistema envió info comercial, y pregunta en qué le puedes ayudar (próxima clase, pagos, materiales).
+- Si pregunta sobre estado de cuenta o pagos: Ofrece redirigir a Admisiones (${ADMISSIONS_NUMBER}).
+- Responde en modo soporte: corto, útil, sin embudo de ventas.`
+      : '';
     const contextualDirective = [
       buildContextualDirective(effectiveMessage, detectedProgram, courses, history, phoneProfile?.rol || null),
       buildNameSafetyDirective(preferredStudentName, profileName || null, channel, phoneProfileName, phoneProfile?.rol || null),
       buildUpcomingStartDirective(detectedProgram, courses),
       studentDirective,
+      knownStudentDirective,
     ]
       .filter(Boolean)
       .join('\n');
