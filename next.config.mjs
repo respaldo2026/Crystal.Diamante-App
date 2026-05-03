@@ -12,6 +12,18 @@ const supabaseHostname = (() => {
 const nextConfig = {
   transpilePackages: ["@refinedev/antd"],
   output: "standalone",
+  excludeDefaultMomentLocales: true,
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  webpack(config) {
+    // Excluir la carpeta academia-crystal-main del bundle
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: [...(config.watchOptions?.ignored || []), "**/academia-crystal-main/**"],
+    };
+    return config;
+  },
   images: {
     remotePatterns: [
       ...(supabaseHostname
