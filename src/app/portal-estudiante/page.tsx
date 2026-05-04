@@ -859,7 +859,7 @@ export default function PortalEstudiante() {
     const estado = String(pago?.estado || "").toLowerCase();
     const base = pago?.fecha_vencimiento ? dayjs(pago.fecha_vencimiento).startOf("day") : null;
 
-    if (cuota !== 1 || estado !== "pendiente") {
+    if (estado !== "pendiente") {
       return base && base.isValid() ? base : null;
     }
 
