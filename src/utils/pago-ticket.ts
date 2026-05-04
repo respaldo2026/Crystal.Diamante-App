@@ -1,7 +1,7 @@
 import React from "react";
 import { pdf } from "@react-pdf/renderer";
 import type { DocumentProps } from "@react-pdf/renderer";
-import { TicketPagoPDF, type TicketPagoData } from "@components/pdf/TicketPagoPDF";
+import { TicketPagoPDF, type TicketCamposVisibles, type TicketPagoData } from "@components/pdf/TicketPagoPDF";
 
 const crearDocumento = (data: TicketPagoData) =>
   React.createElement(TicketPagoPDF, data) as React.ReactElement<DocumentProps>;
@@ -47,6 +47,33 @@ const prepararTicketData = async (data: TicketPagoData): Promise<TicketPagoData>
   } catch {
     return data;
   }
+};
+
+const TICKET_CAMPOS_DEFAULT: TicketCamposVisibles = {
+  logo: true,
+  nombreAcademia: true,
+  ruc: true,
+  direccion: true,
+  telefono: true,
+  email: true,
+  fecha: true,
+  concepto: true,
+  monto: true,
+  nota: true,
+  pie: true,
+  titulo: true,
+};
+
+const normalizarCampos = (campos?: Partial<TicketCamposVisibles> | null): TicketCamposVisibles => ({
+  ...TICKET_CAMPOS_DEFAULT,
+  ...(campos ?? {}),
+});
+
+const truncarTexto = (valor: string | null | undefined, max: number) => {
+  const texto = String(valor || "").trim();
+  if (!texto) return "";
+  if (texto.length <= max) return texto;
+  return `${texto.slice(0, Math.max(0, max - 1)).trim()}…`;
 };
 
 export const generarTicketPagoBlob = async (data: TicketPagoData) => {
@@ -155,71 +182,94 @@ const formatCop = (value?: number): string =>
     Number(value || 0)
   );
 
+export const generarTicketTermicoHtml = async (data: TicketPagoData): Promise<string> => {
+  const dataPreparada = await prepararTicketData(data);
+  const campos = normalizarCampos(dataPreparada.academia.ticketCampos);
+  const monto = Number(dataPreparada.pago.monto || 0);
+  const valorEntregado = Number(dataPreparada.pago.valorEntregado || 0);
+  const cambio = Number(dataPreparada.pago.cambio || 0);
+  const conceptoBase =
+    dataPreparada.pago.concepto ||
+    dataPreparada.pago.periodo ||
+    (dataPreparada.pago.numeroCuota ? `Cuota ${dataPreparada.pago.numeroCuota}` : null) ||
+    "Pago";
+  const concepto = truncarTexto(conceptoBase, 92);
+  const estudiante = truncarTexto(dataPreparada.estudiante.nombre, 56);
+  const metodo = truncarTexto(dataPreparada.pago.metodo, 28);
+  const referencia = truncarTexto(dataPreparada.pago.referencia, 32);
+  const curso = truncarTexto(dataPreparada.curso?.nombre, 64);
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(dataPreparada.academia.nombre || "Recibo")}</title>
+  <style>
+    @page { size: 80mm auto; margin: 3mm; }
+    html, body { width: 74mm; margin: 0; padding: 0; background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; font-size: 11px; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .ticket { width: 74mm; box-sizing: border-box; padding: 2mm 1.5mm; }
+    .header { text-align: center; margin-bottom: 5px; }
+    .logo { max-width: 30mm; max-height: 16mm; object-fit: contain; margin: 0 auto 4px auto; display: block; }
+    .academy { font-size: 15px; font-weight: 700; line-height: 1.2; }
+    .muted { color: #555; font-size: 10px; line-height: 1.35; }
+    .section { border-top: 1px dashed #b8b8b8; padding-top: 5px; margin-top: 5px; }
+    .title { font-size: 12px; font-weight: 700; margin-bottom: 4px; text-align: center; }
+    .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 3px; }
+    .row .label { color: #444; }
+    .row .value { font-weight: 600; text-align: right; flex: 1; }
+    .block-label { font-weight: 700; margin-bottom: 2px; }
+    .block-value { margin-bottom: 4px; line-height: 1.35; }
+    .total { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 800; margin-top: 2px; }
+    .note { font-size: 10px; line-height: 1.35; white-space: pre-wrap; }
+    .footer { text-align: center; font-size: 10px; line-height: 1.35; color: #555; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="ticket">
+    <div class="header">
+      ${campos.logo && dataPreparada.academia.logoUrl ? `<img class="logo" src="${escapeHtml(dataPreparada.academia.logoUrl)}" alt="Logo" />` : ""}
+      ${campos.nombreAcademia ? `<div class="academy">${escapeHtml(dataPreparada.academia.nombre || "Academia")}</div>` : ""}
+      ${campos.ruc && dataPreparada.academia.ruc ? `<div class="muted">RUC/NIT: ${escapeHtml(dataPreparada.academia.ruc)}</div>` : ""}
+      ${campos.direccion && dataPreparada.academia.direccion ? `<div class="muted">${escapeHtml(dataPreparada.academia.direccion)}</div>` : ""}
+      ${campos.telefono && dataPreparada.academia.telefono ? `<div class="muted">Tel: ${escapeHtml(dataPreparada.academia.telefono)}</div>` : ""}
+      ${campos.email && dataPreparada.academia.email ? `<div class="muted">${escapeHtml(dataPreparada.academia.email)}</div>` : ""}
+    </div>
+
+    <div class="section">
+      ${campos.titulo ? `<div class="title">${escapeHtml(dataPreparada.academia.ticketTitulo || "Recibo de Pago")}</div>` : ""}
+      ${campos.fecha ? `<div class="row"><span class="label">Fecha</span><span class="value">${escapeHtml(dataPreparada.pago.fecha || "-")}</span></div>` : ""}
+      ${campos.concepto ? `<div class="row"><span class="label">Concepto</span><span class="value">${escapeHtml(concepto)}</span></div>` : ""}
+      ${campos.monto ? `<div class="total"><span>TOTAL</span><span>${escapeHtml(formatCop(monto))}</span></div>` : ""}
+    </div>
+
+    <div class="section">
+      <div class="block-label">Estudiante</div>
+      <div class="block-value">${escapeHtml(estudiante || "-")}</div>
+      ${dataPreparada.estudiante.identificacion ? `<div class="block-label">Documento</div><div class="block-value">${escapeHtml(dataPreparada.estudiante.identificacion)}</div>` : ""}
+      ${curso ? `<div class="block-label">Curso</div><div class="block-value">${escapeHtml(curso)}</div>` : ""}
+      ${metodo ? `<div class="block-label">Método</div><div class="block-value">${escapeHtml(metodo)}</div>` : ""}
+      ${referencia ? `<div class="block-label">Referencia</div><div class="block-value">${escapeHtml(referencia)}</div>` : ""}
+      ${valorEntregado > 0 ? `<div class="row"><span class="label">Valor entregado</span><span class="value">${escapeHtml(formatCop(valorEntregado))}</span></div>` : ""}
+      ${dataPreparada.pago.cambio !== undefined && dataPreparada.pago.cambio !== null ? `<div class="row"><span class="label">Cambio</span><span class="value">${escapeHtml(formatCop(cambio))}</span></div>` : ""}
+      ${dataPreparada.estudiante.telefono ? `<div class="muted">Contacto estudiante: ${escapeHtml(dataPreparada.estudiante.telefono)}</div>` : ""}
+    </div>
+
+    ${campos.nota && dataPreparada.academia.ticketNota ? `<div class="section"><div class="note">${escapeHtml(dataPreparada.academia.ticketNota)}</div></div>` : ""}
+    ${campos.pie ? `<div class="footer">${escapeHtml(dataPreparada.academia.ticketPie || "Gracias por su pago. Conserva este comprobante.")}</div>` : ""}
+  </div>
+</body>
+</html>`;
+};
+
 export const imprimirTicketTermicoTM20II = async (data: TicketPagoData, placeholder?: Window | null) => {
   const targetWindow = placeholder ?? window.open("", "_blank", "width=420,height=780");
 
   if (!targetWindow) {
     throw new Error("No se pudo abrir la ventana de impresion");
   }
-
-  const lineasConcepto = String(data.pago.concepto || "Pago").split(",").map((item) => item.trim()).filter(Boolean);
-  const monto = Number(data.pago.monto || 0);
-  const valorEntregado = Number(data.pago.valorEntregado || 0);
-  const cambio = Number(data.pago.cambio || 0);
-
-  const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(data.academia.nombre || "Recibo")}</title>
-  <style>
-    @page { size: 80mm auto; margin: 3mm; }
-    html, body { width: 74mm; margin: 0; padding: 0; font-family: "Courier New", monospace; font-size: 12px; background: #fff; color: #000; }
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .ticket { width: 74mm; padding: 0; box-sizing: border-box; }
-    .center { text-align: center; }
-    .sep { border-top: 1px dashed #000; margin: 6px 0; }
-    .row { display: flex; justify-content: space-between; gap: 8px; }
-    .strong { font-weight: 700; }
-    .small { font-size: 11px; }
-    ul { margin: 4px 0 0 14px; padding: 0; }
-    li { margin: 0 0 2px 0; }
-  </style>
-</head>
-<body>
-  <div class="ticket">
-    <div class="center strong">${escapeHtml(data.academia.nombre || "Academia")}</div>
-    ${data.academia.direccion ? `<div class="center small">${escapeHtml(data.academia.direccion)}</div>` : ""}
-    ${data.academia.telefono ? `<div class="center small">Tel: ${escapeHtml(data.academia.telefono)}</div>` : ""}
-    ${data.academia.ruc ? `<div class="center small">RUC: ${escapeHtml(data.academia.ruc)}</div>` : ""}
-    <div class="sep"></div>
-
-    <div class="row"><span>Fecha:</span><span>${escapeHtml(data.pago.fecha || "-")}</span></div>
-    <div class="row"><span>Ref:</span><span>${escapeHtml(data.pago.referencia || "-")}</span></div>
-    <div class="row"><span>Metodo:</span><span>${escapeHtml(data.pago.metodo || "-")}</span></div>
-    <div class="sep"></div>
-
-    <div class="small">Estudiante: <span class="strong">${escapeHtml(data.estudiante.nombre || "-")}</span></div>
-    ${data.estudiante.telefono ? `<div class="small">Tel: ${escapeHtml(data.estudiante.telefono)}</div>` : ""}
-    <div class="sep"></div>
-
-    <div class="strong">Detalle</div>
-    <ul>
-      ${lineasConcepto.map((line) => `<li>${escapeHtml(line)}</li>`).join("") || `<li>${escapeHtml(data.pago.periodo || "Pago")}</li>`}
-    </ul>
-    <div class="sep"></div>
-
-    <div class="row strong"><span>TOTAL:</span><span>${escapeHtml(formatCop(monto))}</span></div>
-    ${valorEntregado > 0 ? `<div class="row"><span>Recibido:</span><span>${escapeHtml(formatCop(valorEntregado))}</span></div>` : ""}
-    ${cambio > 0 ? `<div class="row"><span>Cambio:</span><span>${escapeHtml(formatCop(cambio))}</span></div>` : ""}
-
-    ${data.academia.ticketNota ? `<div class="sep"></div><div class="small">${escapeHtml(data.academia.ticketNota)}</div>` : ""}
-    <div class="sep"></div>
-    <div class="center small">${escapeHtml(data.academia.ticketPie || "Gracias por su pago")}</div>
-  </div>
-</body>
-</html>`;
+  const html = await generarTicketTermicoHtml(data);
 
   await new Promise<void>((resolve) => {
     let resolved = false;
