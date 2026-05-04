@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
-import { Form, Input, Select, DatePicker, Card, Alert, Typography } from "antd";
+import { Form, Input, Select, DatePicker, Card, Alert, Typography, message } from "antd";
 import { 
     UserOutlined, 
     BookOutlined, 
@@ -11,6 +11,7 @@ import {
     CloseCircleOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { useParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, getPaymentPlan, normalizeModalidadPago, resolvePaymentPlanAmounts, type ProgramaPaymentConfig } from "@/types/payment-plans";
 
@@ -18,7 +19,10 @@ const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
 export default function MatriculaEdit() {
-    const { formProps, saveButtonProps } = useForm();
+    const params = useParams();
+    const matriculaId = params?.id ? String(params.id) : null;
+
+    const { formProps, saveButtonProps, onFinish } = useForm();
     const [programaId, setProgramaId] = useState<string | undefined>(undefined);
     const [programaPricing, setProgramaPricing] = useState<ProgramaPaymentConfig | null>(null);
     const planSeleccionado = normalizeModalidadPago(Form.useWatch("modalidad_pago", formProps.form));
@@ -26,6 +30,15 @@ export default function MatriculaEdit() {
         ...getPaymentPlan(planSeleccionado),
         ...resolvePaymentPlanAmounts(planSeleccionado, programaPricing),
     };
+
+    // Guarda la modalidad original al cargar el formulario
+    const originalModalidadRef = useRef<string | null>(null);
+    const modalidadActualFormWatch = Form.useWatch("modalidad_pago", formProps.form);
+    useEffect(() => {
+        if (modalidadActualFormWatch && !originalModalidadRef.current) {
+            originalModalidadRef.current = String(modalidadActualFormWatch);
+        }
+    }, [modalidadActualFormWatch]);
 
     // Obtenemos datos de las tablas relacionadas para los selectores (aunque sean solo lectura)
     const { selectProps: studentSelectProps } = useSelect({
@@ -90,6 +103,76 @@ export default function MatriculaEdit() {
         formProps.form?.setFieldValue("porcentaje_productos", infoPlanSeleccionado.porcentajeProductos);
     }, [formProps.form, infoPlanSeleccionado.montoMensual, infoPlanSeleccionado.montoPorClase, infoPlanSeleccionado.porcentajeProductos]);
 
+    const sincronizarPagosAlCambiarPlan = useCallback(async (nuevaModalidad: string, montoMensual: number) => {
+        if (!matriculaId) return;
+
+        const { data: pagosExistentes, error: pagosError } = await supabaseBrowserClient
+            .from("pagos")
+            .select("id, tipo_cuota, periodo_pagado, estado")
+            .eq("matricula_id", matriculaId)
+            .in("estado", ["pendiente", "vencido"]);
+
+        if (pagosError) throw pagosError;
+
+        const pagos = pagosExistentes || [];
+        const esPagoPorClase = (p: { tipo_cuota?: string | null; periodo_pagado?: string | null }) => {
+            const tipoCuota = String(p?.tipo_cuota || "").toLowerCase().trim();
+            const periodo = String(p?.periodo_pagado || "").toLowerCase().trim();
+            return tipoCuota === "por_clase" || /^clase\s*#?\s*\d+/i.test(periodo);
+        };
+
+        if (nuevaModalidad === "POR_CLASE") {
+            // Eliminar cuotas mensuales pendientes al pasar a cobro por clase
+            const pendientesMensuales = pagos.filter((p) => !esPagoPorClase(p));
+            if (pendientesMensuales.length > 0) {
+                await supabaseBrowserClient
+                    .from("pagos")
+                    .delete()
+                    .in("id", pendientesMensuales.map((p) => p.id));
+            }
+            return;
+        }
+
+        // Al pasar a plan mensual: eliminar pendientes por clase y actualizar monto de mensuales
+        const pendientesPorClase = pagos.filter(esPagoPorClase);
+        if (pendientesPorClase.length > 0) {
+            await supabaseBrowserClient
+                .from("pagos")
+                .delete()
+                .in("id", pendientesPorClase.map((p) => p.id));
+        }
+
+        const pendientesMensuales = pagos.filter((p) => !esPagoPorClase(p));
+        if (pendientesMensuales.length > 0) {
+            await supabaseBrowserClient
+                .from("pagos")
+                .update({
+                    monto: montoMensual,
+                    monto_programado: montoMensual,
+                    tipo_cuota: "mensual",
+                })
+                .in("id", pendientesMensuales.map((p) => p.id));
+        }
+    }, [matriculaId]);
+
+    const handleOnFinish = useCallback(async (values: any) => {
+        const result = await onFinish(values);
+        const nuevaModalidad = normalizeModalidadPago(values.modalidad_pago);
+        const modalidadOriginal = normalizeModalidadPago(originalModalidadRef.current);
+        if (nuevaModalidad !== modalidadOriginal) {
+            try {
+                const montos = resolvePaymentPlanAmounts(nuevaModalidad, programaPricing);
+                await sincronizarPagosAlCambiarPlan(nuevaModalidad, montos.montoMensual);
+                message.success("Plan de pago actualizado. Los cobros pendientes fueron ajustados.");
+                originalModalidadRef.current = nuevaModalidad;
+            } catch (err: any) {
+                message.warning("El plan se guardó, pero no se pudieron ajustar los pagos pendientes automáticamente.");
+                console.error("Error sincronizando pagos al cambiar plan:", err);
+            }
+        }
+        return result;
+    }, [onFinish, programaPricing, sincronizarPagosAlCambiarPlan]);
+
     return (
         <Edit saveButtonProps={saveButtonProps} title="Actualizar Matrícula">
             
@@ -102,7 +185,7 @@ export default function MatriculaEdit() {
                 style={{ marginBottom: 20 }}
             />
 
-            <Form {...formProps} form={formProps.form} layout="vertical">
+            <Form {...formProps} form={formProps.form} layout="vertical" onFinish={handleOnFinish}>
                 <Form.Item name="valor_mensual_plan" hidden>
                     <Input />
                 </Form.Item>

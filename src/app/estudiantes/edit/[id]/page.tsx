@@ -214,6 +214,7 @@ export default function EditEstudiante() {
                 .from("pagos")
                 .update({
                     monto: montos.montoMensual,
+                    monto_programado: montos.montoMensual,
                     tipo_cuota: "mensual",
                 })
                 .in("id", cuotasPendientesMensuales.map((cuota) => cuota.id));
