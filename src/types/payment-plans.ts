@@ -77,7 +77,9 @@ export function resolvePaymentPlanAmounts(
   if (modalidad === "MENSUAL_100") {
     return {
       montoMensual: Number(
-        cfg.precio_mensual_100 ?? cfg.precio_mensualidad ?? fallback.montoMensual ?? 0,
+        // NO usar precio_mensualidad como fallback: ese campo generalmente guarda el precio del
+        // plan 70% y haría que matriculas MENSUAL_100 se creen con monto incorrecto (260k).
+        cfg.precio_mensual_100 ?? fallback.montoMensual ?? 0,
       ),
       montoPorClase: 0,
       porcentajeProductos: 100,
