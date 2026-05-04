@@ -1936,6 +1936,26 @@ function isNeutralAcknowledgement(message: string): boolean {
   return /^(ok|okay|okey|listo|perfecto|esta bien|ta bien|entendido|vale|de acuerdo|super|genial|claro)$/i.test(text);
 }
 
+/**
+ * Detecta "ya sé" / "ya lo sé" / "si ya se" → el usuario dice que ya conoce la info
+ * No es una confirmación de acción, es un rechazo educado.
+ */
+function isAlreadyKnowsReply(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  return /^(ya\s+se|si\s+ya\s+se|ya\s+lo\s+se|ya\s+se\s+eso|ya\s+lo\s+sabia|ya\s+sabia|ya\s+me\s+lo\s+dijeron|si\s+ya\s+lo\s+se|ya\s+estoy\s+enterada)$/i.test(text);
+}
+
+/**
+ * Detecta si el usuario pregunta por clases virtuales / modalidad virtual
+ */
+function isVirtualClassQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  return /\b(virtual|en\s+linea|online|a\s+distancia|remoto|remota|por\s+zoom|por\s+meet|digital|no\s+presencial)\b/i.test(text)
+    && /\b(podria|puede|hay|tienen|existe|es|seria|clases?|curso?|modalidad|estudiar|aprender)\b/i.test(text);
+}
+
 function buildNoiseFollowupFromHistory(
   history: Array<{ user: string; agent: string }>,
   message: string = ""
@@ -2449,6 +2469,28 @@ function isPureGreeting(message: string): boolean {
   return /^(hola|hola\s+de\s+nuevo|hola\s+buenas?|hola\s+buenas?\s*(d[ií]as?|tardes?|noches?)?|buenas?\s*(d[ií]as?|tardes?|noches?)?|buen\s*d[ií]a|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|saludos|qué\s+tal|que\s+tal)$/.test(text.trim());
 }
 
+/**
+ * Normaliza palabras pegadas típicas de WhatsApp por escritura rápida.
+ * Ej: "letocapagar lamensualida" → "le toca pagar la mensualidad"
+ * Ej: "cuandoletoca pagar" → "cuando le toca pagar"
+ */
+function normalizeRunTogetherWords(message: string): string {
+  if (!message || message.length > 200) return message;
+  return message
+    .replace(/\bletocarealizar\b/gi, "le toca realizar")
+    .replace(/\bletocapagar\b/gi, "le toca pagar")
+    .replace(/\bcuandoletoca\b/gi, "cuando le toca")
+    .replace(/\blamensualida\b/gi, "la mensualidad")
+    .replace(/\blamensualidad\b/gi, "la mensualidad")
+    .replace(/\blamensualida\b/gi, "la mensualidad")
+    .replace(/\bpagarlamentualidad\b/gi, "pagar la mensualidad")
+    .replace(/\bpagarlamesualidad\b/gi, "pagar la mensualidad")
+    .replace(/\bcuandodebo\b/gi, "cuando debo")
+    .replace(/\bfechapago\b/gi, "fecha de pago")
+    .replace(/\bcuantodebo\b/gi, "cuánto debo")
+    .replace(/\bpagomensual\b/gi, "pago mensual");
+}
+
 function enrichMessageWithFollowUpContext(
   userMessage: string,
   history: Array<{ user: string; agent: string }>
@@ -2461,6 +2503,11 @@ function enrichMessageWithFollowUpContext(
 
   // "Gracias" y similares no deben heredar tema pendiente del bot.
   if (isThanksOnlyMessage(userMessage)) {
+    return userMessage;
+  }
+
+  // "Ya sé" / "si ya sé" → no enriquecer con tema pendiente
+  if (isAlreadyKnowsReply(userMessage)) {
     return userMessage;
   }
 
@@ -4305,8 +4352,8 @@ function buildIntentFocusedDirectResponse(
   // redirigir al modo soporte en lugar de responder como prospecto.
   if (isKnownStudentByPhone) {
     const normalizedMsg = normalizeForMatch(message);
-    // "Ya" / acuse breve → no enviar ficha de curso
-    if (isNeutralAcknowledgement(message) || isShortNegativeReply(message) || isNoiseOnlyMessage(message)) {
+    // "Ya" / acuse breve / "ya sé" → no enviar ficha de curso
+    if (isNeutralAcknowledgement(message) || isShortNegativeReply(message) || isNoiseOnlyMessage(message) || isAlreadyKnowsReply(message)) {
       return "Claro 😊 Si necesitas algo más, con gusto te ayudo.";
     }
     // Mensajes sobre inscripción/separar cupo → modo soporte, no enrolarla de nuevo
@@ -4327,6 +4374,11 @@ function buildIntentFocusedDirectResponse(
     return buildPaymentAlreadyDoneReply(academy);
   }
   if (hasPaymentReminderContext && !hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
+    // Si el usuario dice "ya sé" / "si ya sé" → no repetir el recordatorio
+    if (isAlreadyKnowsReply(message)) {
+      return "Entendido 😊 Cuando lo realices, aquí quedo para cualquier duda. ¿Hay algo más en que te pueda ayudar?";
+    }
+
     // NO activar el follow-up de recordatorio si hay señales de reclamo, frustración o discrepancia de precio
     const normalizedMsg = normalizeForMatch(message);
     const isBillingComplaint =
@@ -4430,6 +4482,11 @@ function buildIntentFocusedDirectResponse(
     const mapsUrl = String(academy?.maps_url || "").trim();
     const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
     return `¡Sí, claro! 🙌 Puedes venir directamente a nuestra sede:\n\n📍 *${direccion}*${mapsLine}\n\n¿Cuándo puedes venir? Así coordinamos para que te atiendan de inmediato 😊`;
+  }
+
+  // Pregunta sobre clases virtuales → respuesta directa (NO enviar ficha comercial)
+  if (isVirtualClassQuestion(message)) {
+    return `Actualmente los cursos son *100% presenciales* en nuestra sede en Cali (La Cosmetikera, segundo piso) 😊\n\nSi estás en Cali y quieres conocer horarios disponibles, con gusto te cuento. ¿Estás cerca de la zona oriente?`;
   }
 
   if (isOutOfCaliConstraintMessage(message)) {
@@ -6242,7 +6299,9 @@ export async function POST(req: NextRequest) {
 
     // Obtener historial
     const history = await getConversationHistory(supabase, phone || "unknown", 5);
-    const effectiveMessage = enrichMessageWithFollowUpContext(message, history);
+    // Normalizar palabras pegadas por escritura rápida antes de cualquier proceso
+    const normalizedMessage = normalizeRunTogetherWords(message);
+    const effectiveMessage = enrichMessageWithFollowUpContext(normalizedMessage, history);
     const preferredStudentName = resolvePreferredStudentName(message, history);
 
     // Buscar nombre por teléfono en perfiles (estudiante, profesor, exalumno)
