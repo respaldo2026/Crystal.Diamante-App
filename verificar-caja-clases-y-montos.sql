@@ -20,8 +20,8 @@ SELECT
 FROM programas prog
 JOIN cursos c          ON c.programa_id = prog.id
 JOIN matriculas m      ON m.curso_id = c.id AND m.estado = 'activo'
-LEFT JOIN ciclos_pensum cp   ON cp.programa_id = prog.id
-LEFT JOIN pensum_cursos pc   ON pc.ciclo_id = cp.id
+LEFT JOIN pensum ps          ON ps.programa_id = prog.id AND ps.activo = true
+LEFT JOIN pensum_cursos pc   ON pc.pensum_id = ps.id
 WHERE m.modalidad_pago = 'POR_CLASE'
 GROUP BY prog.id, prog.nombre
 ORDER BY total_clases_pensum ASC;
@@ -36,8 +36,8 @@ WITH clases_pensum AS (
         c.id AS curso_id,
         COUNT(pc.id) AS total_clases
     FROM cursos c
-    JOIN ciclos_pensum cp ON cp.programa_id = c.programa_id
-    JOIN pensum_cursos pc  ON pc.ciclo_id = cp.id
+    JOIN pensum ps         ON ps.programa_id = c.programa_id AND ps.activo = true
+    JOIN pensum_cursos pc  ON pc.pensum_id = ps.id
     GROUP BY c.id
 ),
 clases_pagadas AS (
