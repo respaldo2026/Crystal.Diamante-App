@@ -390,7 +390,7 @@ export default function CajaPage() {
         // Cargar matrículas del estudiante
         const { data: matriculasData, error: matriculasError } = await supabaseBrowserClient
           .from("matriculas")
-          .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, programa_id, numero_cuotas, duracion, dias_semana, precio_mensualidad, programas ( duracion, precio_mensualidad ) )")
+          .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, programa_id, numero_cuotas, duracion, dias_semana, precio_mensualidad, programas ( duracion, precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase ) )")
           .eq("estudiante_id", estudianteId)
           .eq("estado", "activo");
 
@@ -407,6 +407,9 @@ export default function CajaPage() {
           programa_duracion: m.cursos?.programas?.duracion ?? null,
           precio_mensualidad: m.cursos?.precio_mensualidad ?? null,
           programa_precio_mensualidad: m.cursos?.programas?.precio_mensualidad ?? null,
+          programa_precio_mensual_70: m.cursos?.programas?.precio_mensual_70 ?? null,
+          programa_precio_mensual_100: m.cursos?.programas?.precio_mensual_100 ?? null,
+          programa_precio_por_clase: m.cursos?.programas?.precio_por_clase ?? null,
           valor_mensual_plan: m.valor_mensual_plan ?? null,
           modalidad_pago: m.modalidad_pago ?? null,
           porcentaje_productos: m.porcentaje_productos ?? null,
@@ -611,19 +614,38 @@ export default function CajaPage() {
 
             const cuotasRegistradas = cuotasRegistradasPorMatricula.get(matricula.id) || new Set<number>();
             const cuotasPendientesSet = cuotasPendientesRegistradas.get(matricula.id) || new Set<number>();
-            const montoBase =
-              (modalidadPago === "POR_CLASE"
-                ? Number(
+            // Resolver monto base según plan:
+            // - POR_CLASE: monto del primer pago registrado o precio_por_clase del programa
+            // - MENSUAL_100: valor_mensual_plan (300k) → precio_mensual_100 del programa → fallback plan
+            // - MENSUAL_70:  valor_mensual_plan        → precio_mensual_70  del programa → precio_mensualidad
+            const montoBase = (() => {
+              if (modalidadPago === "POR_CLASE") {
+                return (
+                  Number(
                     cuotasNormalizadasFinal.find(
                       (q) => q.matricula_id === matricula.id && Number(q.numero_cuota) > 0
-                    )?.monto || getPaymentPlan(matricula.modalidad_pago).montoPorClase || 0
-                  )
-                : Number(matricula.valor_mensual_plan || 0) ||
-                  Number(matricula.precio_mensualidad || 0) ||
-                  Number(matricula.programa_precio_mensualidad || 0)) ||
-              Number(
-                cuotasNormalizadasFinal.find((q) => q.matricula_id === matricula.id && Number(q.numero_cuota) > 0)?.monto || 0
+                    )?.monto || 0
+                  ) ||
+                  Number(matricula.programa_precio_por_clase || 0) ||
+                  getPaymentPlan(matricula.modalidad_pago).montoPorClase
+                );
+              }
+              if (modalidadPago === "MENSUAL_100") {
+                return (
+                  Number(matricula.valor_mensual_plan || 0) ||
+                  Number(matricula.programa_precio_mensual_100 || 0) ||
+                  getPaymentPlan("MENSUAL_100").montoMensual
+                );
+              }
+              // MENSUAL_70 (default)
+              return (
+                Number(matricula.valor_mensual_plan || 0) ||
+                Number(matricula.programa_precio_mensual_70 || 0) ||
+                Number(matricula.precio_mensualidad || 0) ||
+                Number(matricula.programa_precio_mensualidad || 0) ||
+                getPaymentPlan("MENSUAL_70").montoMensual
               );
+            })();
 
             for (let i = 1; i <= totalEsperado; i += 1) {
               if (cuotasRegistradas.has(i) || cuotasPendientesSet.has(i)) continue;
