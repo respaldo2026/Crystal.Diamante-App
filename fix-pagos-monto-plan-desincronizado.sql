@@ -38,8 +38,7 @@ WHERE
 ORDER BY p.matricula_id, p.numero_cuota;
 
 
--- Paso 2: Aplicar la corrección (descomentar cuando estés listo)
-/*
+-- Paso 2: Aplicar la corrección
 UPDATE pagos p
 SET
     monto            = m.valor_mensual_plan,
@@ -54,4 +53,3 @@ WHERE
     AND (p.tipo_cuota IS NULL OR p.tipo_cuota NOT IN ('por_clase', 'inscripcion'))
     AND p.numero_cuota > 0
     AND p.monto <> m.valor_mensual_plan;
-*/
