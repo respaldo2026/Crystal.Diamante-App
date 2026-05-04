@@ -754,6 +754,56 @@ export default function PortalEstudiante() {
     return match ? Number(match[0]) : null;
   };
 
+  const CLASES_POR_MENSUALIDAD = 4;
+
+  /**
+   * Devuelve las fechas únicas de clases DICTADAS para una matrícula,
+   * sin importar si el estudiante asistió o no.
+   *
+   * Regla de negocio:
+   *   - Si el profesor enseñó y el estudiante asistió → asistencias.estado = "presente" → clase dictada ✅
+   *   - Si el profesor enseñó y el estudiante NO vino → asistencias.estado = "ausente" → clase dictada ✅ (el estudiante debe pagar)
+   *   - Si el profesor NO vino → no existe registro en asistencias para esa fecha → clase no dictada ⛔ (no habilita cobro)
+   *
+   * Se cuenta cualquier registro en `asistencias` (estado presente O ausente) como evidencia
+   * de que la clase fue dictada por el profesor.
+   */
+  const getFechasClaseDictadaByMatricula = useCallback((matriculaId: string | number | null | undefined) => {
+    if (!matriculaId) return [] as dayjs.Dayjs[];
+
+    const vistas = new Set<string>();
+    const fechas: dayjs.Dayjs[] = [];
+
+    // Se recorre SIN filtrar por estado: "ausente" también cuenta porque el
+    // registro existe solo cuando el profesor tomó la asistencia (clase dictada).
+    (asistencias || []).forEach((registro: any) => {
+      if (String(registro?.matricula_id || "") !== String(matriculaId)) return;
+      const fechaRaw = String(registro?.fecha || "").trim();
+      if (!fechaRaw || vistas.has(fechaRaw)) return;
+
+      const fecha = dayjs(fechaRaw).startOf("day");
+      if (!fecha.isValid()) return;
+
+      vistas.add(fechaRaw);
+      fechas.push(fecha);
+    });
+
+    return fechas.sort((a, b) => a.valueOf() - b.valueOf());
+  }, [asistencias]);
+
+  const getFechaHabilitacionPorClases = useCallback((matriculaId: string | number | null | undefined, numeroCuota: number) => {
+    if (!matriculaId || numeroCuota <= 1) return null;
+
+    const clasesPreviasRequeridas = (numeroCuota - 1) * CLASES_POR_MENSUALIDAD;
+    const fechasDictadas = getFechasClaseDictadaByMatricula(matriculaId);
+
+    if (fechasDictadas.length < clasesPreviasRequeridas) {
+      return null;
+    }
+
+    return fechasDictadas[clasesPreviasRequeridas - 1] || null;
+  }, [getFechasClaseDictadaByMatricula]);
+
   const parseDiasSemana = useCallback((value?: string | null): number[] => {
     const raw = String(value || "").toLowerCase();
     if (!raw) return [];
@@ -816,19 +866,43 @@ export default function PortalEstudiante() {
     const matricula = matriculas.find((m: any) => String(m?.id) === String(pago?.matricula_id));
     if (!matricula) return base && base.isValid() ? base : null;
 
-    if (normalizeModalidadPago(matricula?.modalidad_pago) === "POR_CLASE") {
+    const modalidadPago = normalizeModalidadPago(matricula?.modalidad_pago);
+
+    if (modalidadPago === "POR_CLASE") {
       return base && base.isValid() ? base : null;
+    }
+
+    // Para planes mensuales desde cuota 2, solo habilitar vencimiento cuando ya se
+    // hayan dictado las clases cubiertas por la mensualidad previa.
+    if ((cuota || 0) > 1) {
+      const habilitacionPorClases = getFechaHabilitacionPorClases(matricula?.id, cuota || 0);
+      if (!habilitacionPorClases) {
+        return null;
+      }
+      if (!base || !base.isValid()) return habilitacionPorClases;
+      return habilitacionPorClases.isAfter(base) ? habilitacionPorClases : base;
     }
 
     const segundaClase = getSegundaClaseDate(matricula);
     if (!segundaClase) return base && base.isValid() ? base : null;
     if (!base || !base.isValid()) return segundaClase;
     return segundaClase.isAfter(base) ? segundaClase : base;
-  }, [getSegundaClaseDate, matriculas]);
+  }, [getFechaHabilitacionPorClases, getSegundaClaseDate, matriculas]);
 
   const getVisiblePaymentStatusWithGrace = (pago: any) => {
     const fechaEfectiva = getFechaVencimientoEfectiva(pago);
-    if (!fechaEfectiva) return getVisiblePaymentStatus(pago);
+    if (!fechaEfectiva) {
+      const cuota = parseNumeroCuota(pago) || 0;
+      const matricula = matriculas.find((m: any) => String(m?.id) === String(pago?.matricula_id));
+      const modalidadPago = normalizeModalidadPago(matricula?.modalidad_pago);
+      const habilitacionPorClases = getFechaHabilitacionPorClases(matricula?.id, cuota);
+
+      if (modalidadPago !== "POR_CLASE" && cuota > 1 && !habilitacionPorClases) {
+        return getTotalAbonado(pago) > 0 && getSaldoPendiente(pago) > 0 ? "abono_parcial" : "pendiente";
+      }
+
+      return getVisiblePaymentStatus(pago);
+    }
     return getVisiblePaymentStatus({
       ...pago,
       fecha_vencimiento: fechaEfectiva.format("YYYY-MM-DD"),
