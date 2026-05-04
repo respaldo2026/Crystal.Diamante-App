@@ -804,56 +804,6 @@ export default function PortalEstudiante() {
     return fechasDictadas[clasesPreviasRequeridas - 1] || null;
   }, [getFechasClaseDictadaByMatricula]);
 
-  const parseDiasSemana = useCallback((value?: string | null): number[] => {
-    const raw = String(value || "").toLowerCase();
-    if (!raw) return [];
-
-    const diasMap: Array<{ keys: string[]; day: number }> = [
-      { keys: ["domingo", "dom"], day: 0 },
-      { keys: ["lunes", "lun"], day: 1 },
-      { keys: ["martes", "mar"], day: 2 },
-      { keys: ["miercoles", "miércoles", "mie", "mié"], day: 3 },
-      { keys: ["jueves", "jue"], day: 4 },
-      { keys: ["viernes", "vie"], day: 5 },
-      { keys: ["sabado", "sábado", "sab", "sáb"], day: 6 },
-    ];
-
-    const result = new Set<number>();
-    diasMap.forEach(({ keys, day }) => {
-      if (keys.some((k) => raw.includes(k))) result.add(day);
-    });
-    return Array.from(result.values()).sort((a, b) => a - b);
-  }, []);
-
-  const getSegundaClaseDate = useCallback((matricula: any): dayjs.Dayjs | null => {
-    const fechaInicio = matricula?.fecha_inicio ? dayjs(matricula.fecha_inicio).startOf("day") : null;
-    if (!fechaInicio || !fechaInicio.isValid()) return null;
-
-    const dias = parseDiasSemana(matricula?.cursos?.dias_semana);
-    if (!dias.length) {
-      return fechaInicio.add(7, "day");
-    }
-
-    let primera: dayjs.Dayjs | null = null;
-    for (let i = 0; i <= 21; i += 1) {
-      const candidate = fechaInicio.add(i, "day");
-      if (dias.includes(candidate.day())) {
-        primera = candidate;
-        break;
-      }
-    }
-    if (!primera) return fechaInicio.add(7, "day");
-
-    for (let i = 1; i <= 21; i += 1) {
-      const candidate = primera.add(i, "day");
-      if (dias.includes(candidate.day())) {
-        return candidate.startOf("day");
-      }
-    }
-
-    return primera.add(7, "day").startOf("day");
-  }, [parseDiasSemana]);
-
   const getFechaVencimientoEfectiva = useCallback((pago: any): dayjs.Dayjs | null => {
     const cuota = parseNumeroCuota(pago);
     const estado = String(pago?.estado || "").toLowerCase();
@@ -883,11 +833,12 @@ export default function PortalEstudiante() {
       return habilitacionPorClases.isAfter(base) ? habilitacionPorClases : base;
     }
 
-    const segundaClase = getSegundaClaseDate(matricula);
-    if (!segundaClase) return base && base.isValid() ? base : null;
-    if (!base || !base.isValid()) return segundaClase;
-    return segundaClase.isAfter(base) ? segundaClase : base;
-  }, [getFechaHabilitacionPorClases, getSegundaClaseDate, matriculas]);
+    const fechasDictadas = getFechasClaseDictadaByMatricula(matricula?.id);
+    const segundaClaseDictada = fechasDictadas[1] || null;
+    if (!segundaClaseDictada) return null;
+    if (!base || !base.isValid()) return segundaClaseDictada;
+    return segundaClaseDictada.isAfter(base) ? segundaClaseDictada : base;
+  }, [getFechaHabilitacionPorClases, getFechasClaseDictadaByMatricula, matriculas]);
 
   const getVisiblePaymentStatusWithGrace = (pago: any) => {
     const fechaEfectiva = getFechaVencimientoEfectiva(pago);
