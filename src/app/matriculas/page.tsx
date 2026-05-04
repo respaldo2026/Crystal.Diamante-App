@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { List, useTable, EditButton, DeleteButton, CreateButton, useSelect } from "@refinedev/antd";
-import { Table, Space, Tag, Typography, Button, Tooltip, Progress, Select, Modal, message, Tabs, Card, Row, Col, App, Grid } from "antd";
+import { Table, Space, Tag, Typography, Button, Tooltip, Progress, Select, Modal, message, Tabs, Card, Row, Col, App, Grid, Dropdown } from "antd";
+import type { MenuProps } from "antd";
 import { 
   FileTextOutlined, 
   CheckCircleOutlined, 
@@ -67,7 +68,10 @@ export default function MatriculasList() {
         },
         filters: {
             permanent: permanentFilters()
-        }
+        },
+        pagination: {
+            pageSize: 100,
+        },
     });
 
     const matriculas = useMemo(() => (tableProps.dataSource as any[]) || [], [tableProps.dataSource]);
@@ -701,23 +705,34 @@ export default function MatriculasList() {
                 {/* COLUMNA 9: ACCIONES */}
                 <Table.Column
                     title="Acciones"
-                    render={(_, record: any) => (
-                        <Space wrap>
-                            <EditButton hideText size="small" recordItemId={record.id} />
-                            <Button size="small" type="dashed" onClick={() => {
-                                const url = `/tesoreria/create?estudiante_id=${record.estudiante_id}&matricula_id=${record.id}`;
-                                router.push(url);
-                            }}>
-                                Registrar Pago
-                            </Button>
-                            <Button size="small" onClick={() => handleCancelar(record)}>
-                                Cancelar Matrícula
-                            </Button>
-                            <Button danger size="small" onClick={() => handleEliminar(record)}>
-                                Eliminar
-                            </Button>
-                        </Space>
-                    )}
+                    render={(_, record: any) => {
+                        const moreItems: MenuProps['items'] = [
+                            {
+                                key: 'cancelar',
+                                label: 'Cancelar Matrícula',
+                                onClick: () => handleCancelar(record),
+                            },
+                            {
+                                key: 'eliminar',
+                                label: <span style={{ color: '#ff4d4f' }}>Eliminar</span>,
+                                onClick: () => handleEliminar(record),
+                            },
+                        ];
+                        return (
+                            <Space size={4}>
+                                <EditButton hideText size="small" recordItemId={record.id} />
+                                <Button size="small" type="primary" ghost onClick={() => {
+                                    const url = `/tesoreria/create?estudiante_id=${record.estudiante_id}&matricula_id=${record.id}`;
+                                    router.push(url);
+                                }}>
+                                    Registrar Pago
+                                </Button>
+                                <Dropdown menu={{ items: moreItems }} trigger={['click']}>
+                                    <Button size="small">···</Button>
+                                </Dropdown>
+                            </Space>
+                        );
+                    }}
                 />
             </Table>
             )}
