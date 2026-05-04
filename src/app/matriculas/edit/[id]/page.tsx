@@ -22,19 +22,36 @@ export default function MatriculaEdit() {
     const params = useParams();
     const matriculaId = params?.id ? String(params.id) : null;
 
-    const { formProps, saveButtonProps, onFinish, queryResult } = useForm();
+    const { formProps, saveButtonProps, onFinish } = useForm();
     const [programaId, setProgramaId] = useState<string | undefined>(undefined);
     const [programaPricing, setProgramaPricing] = useState<ProgramaPaymentConfig | null>(null);
+    const [originalModalidad, setOriginalModalidad] = useState(MODALIDAD_PAGO_DEFAULT);
     const planSeleccionado = normalizeModalidadPago(Form.useWatch("modalidad_pago", formProps.form));
     const infoPlanSeleccionado = {
         ...getPaymentPlan(planSeleccionado),
         ...resolvePaymentPlanAmounts(planSeleccionado, programaPricing),
     };
 
-    // Modalidad original desde la BD (no del form, para evitar capturar initialValues)
-    const originalModalidad = normalizeModalidadPago(
-        (queryResult?.data?.data as any)?.modalidad_pago ?? null
-    );
+    useEffect(() => {
+        const cargarModalidadOriginal = async () => {
+            if (!matriculaId) return;
+
+            const { data, error } = await supabaseBrowserClient
+                .from("matriculas")
+                .select("modalidad_pago")
+                .eq("id", matriculaId)
+                .maybeSingle();
+
+            if (error) {
+                console.warn("No se pudo cargar la modalidad original de la matrícula", error);
+                return;
+            }
+
+            setOriginalModalidad(normalizeModalidadPago(data?.modalidad_pago ?? null));
+        };
+
+        cargarModalidadOriginal();
+    }, [matriculaId]);
     // Obtenemos datos de las tablas relacionadas para los selectores (aunque sean solo lectura)
     const { selectProps: studentSelectProps } = useSelect({
         resource: "perfiles",
