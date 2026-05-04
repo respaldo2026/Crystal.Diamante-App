@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
 import { Form, Input, Select, DatePicker, Card, Alert, Typography, message } from "antd";
 import { 
@@ -22,7 +22,7 @@ export default function MatriculaEdit() {
     const params = useParams();
     const matriculaId = params?.id ? String(params.id) : null;
 
-    const { formProps, saveButtonProps, onFinish } = useForm();
+    const { formProps, saveButtonProps, onFinish, queryResult } = useForm();
     const [programaId, setProgramaId] = useState<string | undefined>(undefined);
     const [programaPricing, setProgramaPricing] = useState<ProgramaPaymentConfig | null>(null);
     const planSeleccionado = normalizeModalidadPago(Form.useWatch("modalidad_pago", formProps.form));
@@ -31,15 +31,10 @@ export default function MatriculaEdit() {
         ...resolvePaymentPlanAmounts(planSeleccionado, programaPricing),
     };
 
-    // Guarda la modalidad original al cargar el formulario
-    const originalModalidadRef = useRef<string | null>(null);
-    const modalidadActualFormWatch = Form.useWatch("modalidad_pago", formProps.form);
-    useEffect(() => {
-        if (modalidadActualFormWatch && !originalModalidadRef.current) {
-            originalModalidadRef.current = String(modalidadActualFormWatch);
-        }
-    }, [modalidadActualFormWatch]);
-
+    // Modalidad original desde la BD (no del form, para evitar capturar initialValues)
+    const originalModalidad = normalizeModalidadPago(
+        (queryResult?.data?.data as any)?.modalidad_pago ?? null
+    );
     // Obtenemos datos de las tablas relacionadas para los selectores (aunque sean solo lectura)
     const { selectProps: studentSelectProps } = useSelect({
         resource: "perfiles",
@@ -158,20 +153,18 @@ export default function MatriculaEdit() {
     const handleOnFinish = useCallback(async (values: any) => {
         const result = await onFinish(values);
         const nuevaModalidad = normalizeModalidadPago(values.modalidad_pago);
-        const modalidadOriginal = normalizeModalidadPago(originalModalidadRef.current);
-        if (nuevaModalidad !== modalidadOriginal) {
+        if (nuevaModalidad !== originalModalidad) {
             try {
                 const montos = resolvePaymentPlanAmounts(nuevaModalidad, programaPricing);
                 await sincronizarPagosAlCambiarPlan(nuevaModalidad, montos.montoMensual);
                 message.success("Plan de pago actualizado. Los cobros pendientes fueron ajustados.");
-                originalModalidadRef.current = nuevaModalidad;
             } catch (err: any) {
                 message.warning("El plan se guardó, pero no se pudieron ajustar los pagos pendientes automáticamente.");
                 console.error("Error sincronizando pagos al cambiar plan:", err);
             }
         }
         return result;
-    }, [onFinish, programaPricing, sincronizarPagosAlCambiarPlan]);
+    }, [onFinish, originalModalidad, programaPricing, sincronizarPagosAlCambiarPlan]);
 
     return (
         <Edit saveButtonProps={saveButtonProps} title="Actualizar Matrícula">
