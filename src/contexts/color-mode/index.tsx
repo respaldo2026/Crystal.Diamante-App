@@ -29,48 +29,37 @@ type ColorModeContextProviderProps = {
 
 export const ColorModeContextProvider: React.FC<
   PropsWithChildren<ColorModeContextProviderProps>
-> = ({ children, defaultMode = "dark" }) => {
-  const [mode, setModeState] = useState<ColorMode>(defaultMode);
+> = ({ children, defaultMode = "light" }) => {
+  const [mode, setModeState] = useState<ColorMode>("light");
 
   useEffect(() => {
-    const stored = Cookies.get("theme");
-    const prefersDark =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const nextMode: ColorMode = "light";
 
-    const nextMode =
-      stored === "light" || stored === "dark"
-        ? stored
-        : prefersDark
-          ? "dark"
-          : defaultMode;
-
-    setModeState(nextMode as ColorMode);
-
-    if (typeof document !== "undefined") {
-      document.documentElement.dataset.theme = nextMode;
-      document.body.style.backgroundColor =
-        nextMode === "dark" ? "#0B1220" : "#FFFFFF";
-      document.body.style.color = nextMode === "dark" ? "#E5E7EB" : "#111827";
-    }
-  }, [defaultMode]);
-
-  const setMode = useCallback((nextMode: ColorMode) => {
     setModeState(nextMode);
     Cookies.set("theme", nextMode, { expires: 365 });
 
     if (typeof document !== "undefined") {
       document.documentElement.dataset.theme = nextMode;
-      document.body.style.backgroundColor =
-        nextMode === "dark" ? "#0B1220" : "#FFFFFF";
-      document.body.style.color = nextMode === "dark" ? "#E5E7EB" : "#111827";
+      document.body.style.backgroundColor = "#FFFFFF";
+      document.body.style.color = "#111827";
+    }
+  }, [defaultMode]);
+
+  const setMode = useCallback((nextMode: ColorMode) => {
+    setModeState("light");
+    Cookies.set("theme", "light", { expires: 365 });
+
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = "light";
+      document.body.style.backgroundColor = "#FFFFFF";
+      document.body.style.color = "#111827";
       document.body.style.transition = "background-color 0.25s ease, color 0.25s ease";
     }
   }, []);
 
   const toggle = useCallback(() => {
-    setMode(mode === "dark" ? "light" : "dark");
-  }, [mode, setMode]);
+    setMode("light");
+  }, [setMode]);
 
   const value = useMemo(
     () => ({ mode, setMode, toggle }),

@@ -9,7 +9,6 @@ import { BookOutlined, SearchOutlined, PlusOutlined, PrinterOutlined, DollarCirc
 import dayjs from "dayjs";
 import { formatDate } from "@utils/date";
 import { useRouter } from "next/navigation";
-import { useColorMode } from "@/contexts/color-mode";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
@@ -31,8 +30,6 @@ export default function MatriculaCreate() {
     const router = useRouter();
     const { formProps, saveButtonProps, onFinish } = useForm({ redirect: false });
     const printRef = useRef<HTMLDivElement>(null);
-    const { mode } = useColorMode();
-    const isDark = mode === "dark";
 
     // Estados para fase 1: crear inscripción
     const [cuposInfo, setCuposInfo] = useState<{ ocupados: number; total: number } | null>(null);
