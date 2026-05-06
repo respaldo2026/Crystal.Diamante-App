@@ -1716,13 +1716,28 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const onAddSesion = async (values: any) => {
     try {
       const fechaSesion = values.fecha.format("YYYY-MM-DD");
+      const claseSeleccionada = clasesPensum.find((tema: any) => String(tema.id) === String(values.pensum_curso_id || ""));
+      const claseOrden = claseSeleccionada ? ordenTemaPorId.get(String(claseSeleccionada.id)) : null;
+      const nombreClase = claseSeleccionada
+        ? String(claseSeleccionada?.nombre_curso || claseSeleccionada?.titulo || "Clase")
+        : String(values.tema_visto || "Clase sin nombre");
+      const temaVisto = claseOrden
+        ? `Clase #${claseOrden} - ${nombreClase}`
+        : nombreClase;
+      const observacionClase = claseOrden
+        ? `Clase #${claseOrden}`
+        : "Clase registrada";
+      const observacionesFinal = [observacionClase, String(values.observaciones || "").trim()]
+        .filter(Boolean)
+        .join(" · ");
+
       const payloadSesion = {
         curso_id: parseInt(cursoId),
         profesor_id: curso.profesor_id,
         fecha: fechaSesion,
         horas_dictadas: values.horas_dictadas,
-        tema_visto: values.tema_visto,
-        observaciones: values.observaciones,
+        tema_visto: temaVisto,
+        observaciones: observacionesFinal,
       };
 
       const { error } = await supabaseBrowserClient
@@ -1734,8 +1749,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           .from("sesiones_clase")
           .update({
             horas_dictadas: values.horas_dictadas,
-            tema_visto: values.tema_visto,
-            observaciones: values.observaciones,
+            tema_visto: temaVisto,
+            observaciones: observacionesFinal,
           })
           .eq("curso_id", parseInt(cursoId))
           .eq("fecha", fechaSesion);
@@ -1750,6 +1765,74 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       }
 
       if (error) throw error;
+
+      const { data: matriculasCurso, error: matriculasError } = await supabaseBrowserClient
+        .from("matriculas")
+        .select("id")
+        .eq("curso_id", parseInt(cursoId))
+        .in("estado", ["activo", "en curso", "pendiente_pago"]);
+
+      if (matriculasError) throw matriculasError;
+
+      const matriculaIds = (matriculasCurso || [])
+        .map((row: any) => Number(row?.id))
+        .filter((id: number) => Number.isFinite(id));
+
+      if (matriculaIds.length > 0) {
+        const { data: asistenciasExistentes, error: asistenciasError } = await supabaseBrowserClient
+          .from("asistencias")
+          .select("id, matricula_id, observaciones")
+          .in("matricula_id", matriculaIds)
+          .eq("fecha", fechaSesion);
+
+        if (asistenciasError) throw asistenciasError;
+
+        const existentesPorMatricula = new Map<number, any>();
+        (asistenciasExistentes || []).forEach((item: any) => {
+          const matriculaId = Number(item?.matricula_id);
+          if (Number.isFinite(matriculaId) && !existentesPorMatricula.has(matriculaId)) {
+            existentesPorMatricula.set(matriculaId, item);
+          }
+        });
+
+        const updates = matriculaIds
+          .filter((matriculaId) => existentesPorMatricula.has(matriculaId))
+          .map(async (matriculaId) => {
+            const actual = existentesPorMatricula.get(matriculaId);
+            const observacionesActuales = String(actual?.observaciones || "").trim();
+            const observacionesAsistencia = observacionesActuales
+              ? `${observacionClase} · ${observacionesActuales}`
+              : observacionClase;
+
+            return supabaseBrowserClient
+              .from("asistencias")
+              .update({ observaciones: observacionesAsistencia })
+              .eq("id", actual.id);
+          });
+
+        if (updates.length > 0) {
+          const results = await Promise.all(updates);
+          const updateError = results.find((result) => result.error)?.error;
+          if (updateError) throw updateError;
+        }
+
+        const inserts = matriculaIds
+          .filter((matriculaId) => !existentesPorMatricula.has(matriculaId))
+          .map((matriculaId) => ({
+            matricula_id: matriculaId,
+            fecha: fechaSesion,
+            estado: "presente",
+            observaciones: observacionClase,
+          }));
+
+        if (inserts.length > 0) {
+          const { error: insertAsistenciaError } = await supabaseBrowserClient
+            .from("asistencias")
+            .insert(inserts);
+          if (insertAsistenciaError) throw insertAsistenciaError;
+        }
+      }
+
       message.success("✅ Sesión registrada correctamente.");
       formSesion.resetFields();
       setModalSesionVisible(false);
@@ -2508,7 +2591,30 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               <Card
                 title="Registro de Sesiones y Clases Dictadas"
                 extra={
-                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalSesionVisible(true)}>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      if (!clasesPensum.length) {
+                        message.warning("Este curso aún no tiene clases del pensum para seleccionar.");
+                        return;
+                      }
+
+                      const indiceSugerido = Math.min(
+                        Math.max((sesiones || []).length, 0),
+                        Math.max(clasesPensum.length - 1, 0),
+                      );
+                      const claseSugerida = clasesPensum[indiceSugerido] || clasesPensum[0];
+
+                      formSesion.setFieldsValue({
+                        fecha: dayjs(),
+                        horas_dictadas: Number(curso?.horas || 3) || 3,
+                        pensum_curso_id: claseSugerida ? String(claseSugerida.id) : undefined,
+                        observaciones: "",
+                      });
+                      setModalSesionVisible(true);
+                    }}
+                  >
                     Registrar Sesión
                   </Button>
                 }
@@ -3202,17 +3308,33 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         title="Registrar Sesión de Clase"
         open={modalSesionVisible}
         onOk={() => formSesion.submit()}
-        onCancel={() => setModalSesionVisible(false)}
+        onCancel={() => {
+          setModalSesionVisible(false);
+          formSesion.resetFields();
+        }}
       >
         <Form form={formSesion} layout="vertical" onFinish={onAddSesion}>
           <Form.Item label="Fecha" name="fecha" rules={[{ required: true }]}>
             <DatePicker style={{ width: "100%" }} />
           </Form.Item>
+          <Form.Item
+            label="Clase que se dictó"
+            name="pensum_curso_id"
+            rules={[{ required: true, message: "Selecciona la clase dictada" }]}
+            help="Puedes registrar una fecha adelantada o reprogramada y mantener la trazabilidad de la clase correcta."
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder="Selecciona la clase del pensum"
+              options={clasesPensum.map((tema: any) => ({
+                value: String(tema.id),
+                label: formatearNombreClase(tema),
+              }))}
+            />
+          </Form.Item>
           <Form.Item label="Horas Dictadas" name="horas_dictadas" rules={[{ required: true }]}>
             <InputNumber min={0.5} step={0.5} placeholder="Ej: 2" />
-          </Form.Item>
-          <Form.Item label="Tema Visto" name="tema_visto">
-            <Input placeholder="Ej: Introducción a React" />
           </Form.Item>
           <Form.Item label="Observaciones" name="observaciones">
             <Input.TextArea rows={3} placeholder="Notas sobre la clase..." />
