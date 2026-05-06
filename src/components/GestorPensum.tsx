@@ -1317,7 +1317,47 @@ export default function GestorPensum({
           if (error) throw error;
           message.success(`${payloads.length} materiales necesarios agregados`);
         } else {
-          const materialId = selectedMaterialIds[0] || values.material_ciclo_id || null;
+          let materialId = selectedMaterialIds[0] || values.material_ciclo_id || null;
+
+          // Si no se seleccionó catálogo, intentamos vincular por nombre o crearlo automáticamente.
+          if (!materialId) {
+            const nombreNormalizado = String(nombreMaterial || "").trim().toLowerCase();
+            const materialExistente = materialesCicloGeneralOrdenados.find(
+              (item) => String(item.nombre || "").trim().toLowerCase() === nombreNormalizado,
+            );
+
+            if (materialExistente?.id) {
+              materialId = materialExistente.id;
+            } else if (nombreNormalizado) {
+              const siguienteOrden = Math.max(
+                0,
+                ...materialesCicloGeneralOrdenados
+                  .map((item) => Number(item.orden || 0))
+                  .filter((n) => Number.isFinite(n)),
+              ) + 1;
+
+              const { data: nuevoMaterialCiclo, error: errorMaterialCiclo } = await supabaseBrowserClient
+                .from("materiales_ciclo")
+                .insert([
+                  {
+                    programa_id: Number(programaId),
+                    pensum_id: selectedCicloId,
+                    nombre: nombreMaterial,
+                    cantidad: cantidadMaterial,
+                    cobertura_material: "NINGUNO",
+                    incluido_kit: false,
+                    orden: siguienteOrden,
+                    activo: true,
+                  },
+                ])
+                .select("id")
+                .single();
+
+              if (errorMaterialCiclo) throw errorMaterialCiclo;
+              materialId = nuevoMaterialCiclo?.id || null;
+            }
+          }
+
           const selected = materialId
             ? materialesCicloGeneral.find((material) => String(material.id) === String(materialId))
             : null;
@@ -1333,13 +1373,15 @@ export default function GestorPensum({
             .from("materiales_clase")
             .insert([payloadSingle]);
           if (error) throw error;
-          message.success("Material necesario agregado");
+          message.success(materialId ? "Insumo agregado y vinculado al catálogo" : "Insumo agregado");
         }
       }
 
       setModalMaterialClaseVisible(false);
       setEditingMaterialClase(null);
+      setCursoActivoMaterialClase(null);
       formMaterialClase.resetFields();
+      await cargarMaterialesCiclo();
       await cargarMaterialesClase();
     } catch (error) {
       if (error instanceof Error) {
@@ -2675,50 +2717,51 @@ export default function GestorPensum({
                     </Space>
 
                     <div style={{ marginBottom: 10 }}>
-                      {vistaCicloActiva === "temas" && (
-                        <Button
-                          size="small"
-                          type="primary"
-                          ghost
-                          onClick={() => {
-                            setEditingCurso(curso);
-                            formCurso.setFieldsValue({ ...curso, horas: HORAS_CLASE_FIJAS });
-                            setModalCursoVisible(true);
-                          }}
-                        >
-                          Gestionar tema
-                        </Button>
-                      )}
-                      {vistaCicloActiva === "material" && (
-                        <Button
-                          size="small"
-                          type="primary"
-                          ghost
-                          onClick={() => abrirDrawerMaterialParaTema(curso.nombre_curso)}
-                        >
-                          Subir material
-                        </Button>
-                      )}
-                      {vistaCicloActiva === "necesarios" && (
-                        <Button
-                          size="small"
-                          type="primary"
-                          ghost
-                          onClick={() => abrirModalMaterialClase(curso.id)}
-                        >
-                          Agregar insumo
-                        </Button>
-                      )}
-                      {vistaCicloActiva === "quiz" && (
-                        <Button
-                          size="small"
-                          type="primary"
-                          ghost
-                          onClick={() => abrirModalQuiz(curso, quizTema || null)}
-                        >
-                          {quizTema ? "Gestionar quiz" : "Crear quiz"}
-                        </Button>
-                      )}
+                      <Space wrap size={8}>
+                        {canManageMateriales ? (
+                          <>
+                            <Button
+                              size="small"
+                              type="primary"
+                              ghost
+                              onClick={() => abrirDrawerMaterialParaTema(curso.nombre_curso)}
+                            >
+                              + Material
+                            </Button>
+                            <Button
+                              size="small"
+                              type="default"
+                              onClick={() => abrirModalMaterialClase(curso.id)}
+                            >
+                              + Insumo
+                            </Button>
+                          </>
+                        ) : null}
+
+                        {vistaCicloActiva === "temas" && (
+                          <Button
+                            size="small"
+                            type="link"
+                            onClick={() => {
+                              setEditingCurso(curso);
+                              formCurso.setFieldsValue({ ...curso, horas: HORAS_CLASE_FIJAS });
+                              setModalCursoVisible(true);
+                            }}
+                          >
+                            Editar tema
+                          </Button>
+                        )}
+
+                        {vistaCicloActiva === "quiz" && (
+                          <Button
+                            size="small"
+                            type="link"
+                            onClick={() => abrirModalQuiz(curso, quizTema || null)}
+                          >
+                            {quizTema ? "Gestionar quiz" : "Crear quiz"}
+                          </Button>
+                        )}
+                      </Space>
                     </div>
 
                     {vistaCicloActiva === "material" && (
@@ -3198,6 +3241,14 @@ export default function GestorPensum({
         }}
       >
         <Form form={formMaterialClase} layout="vertical">
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="Flujo rápido"
+            description="Escribe el nombre del insumo y guarda. Si no existe en el catálogo del ciclo, se crea automáticamente y queda asignado a esta clase."
+          />
+
           {!cursoActivoMaterialClase && (
             <Form.Item
               name="pensum_curso_id"
