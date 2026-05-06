@@ -268,10 +268,22 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   const extractClassNumber = (value?: string | null): number | null => {
     const text = String(value || "");
-    const match = text.match(/clase\s*#?\s*(\d{1,3})/i);
-    if (!match?.[1]) return null;
-    const parsed = Number(match[1]);
-    return Number.isFinite(parsed) ? parsed : null;
+    const patterns = [
+      /clase\s*#?\s*(\d{1,3})/i,
+      /\b(\d{1,3})\b\s*$/,
+      /^\s*(\d{1,3})\b/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (!match?.[1]) continue;
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+
+    return null;
   };
 
   const normalizeHttpUrl = (value?: string | null) => {
@@ -420,6 +432,17 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     },
     [ordenTemaPorId]
   );
+
+  const nombreOficialClasePorNumero = useMemo(() => {
+    const map = new Map<number, string>();
+    clasesPensum.forEach((tema: any) => {
+      const temaId = String(tema?.id || "");
+      const orden = ordenTemaPorId.get(temaId);
+      if (!orden || !Number.isFinite(orden)) return;
+      map.set(orden, String(tema?.nombre_curso || tema?.titulo || `Clase ${orden}`).trim());
+    });
+    return map;
+  }, [clasesPensum, ordenTemaPorId]);
 
   const claseIdPorOrden = useMemo(() => {
     const map = new Map<number, string>();
@@ -904,12 +927,18 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         ellipsis: true,
         width: isMobile ? 200 : undefined,
         render: (tema: string, record: any) => {
+          const numeroClase = extractClassNumber(record?.tema_visto || record?.observaciones || "");
+          const nombreOficial = numeroClase ? nombreOficialClasePorNumero.get(numeroClase) : null;
+          const temaSincronizado = numeroClase && nombreOficial
+            ? `Clase #${numeroClase} - ${nombreOficial}`
+            : (tema || "-");
+
           const estadoCalendario = estadoCalendarioSesionPorId.get(String(record?.id || ""));
-          if (!tema && !estadoCalendario) return <Text type="secondary">-</Text>;
+          if (!temaSincronizado && !estadoCalendario) return <Text type="secondary">-</Text>;
 
           return (
             <Space direction="vertical" size={4}>
-              {tema ? <Tag>{tema}</Tag> : <Text type="secondary">-</Text>}
+              {temaSincronizado ? <Tag>{temaSincronizado}</Tag> : <Text type="secondary">-</Text>}
               {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
             </Space>
           );
@@ -930,7 +959,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         render: (obs: string) => (obs ? <Text type="secondary">{obs}</Text> : <Text type="secondary">-</Text>),
       },
     ],
-    [isMobile, estadoCalendarioSesionPorId]
+    [isMobile, estadoCalendarioSesionPorId, nombreOficialClasePorNumero]
   );
 
   const estadoOptions = useMemo(

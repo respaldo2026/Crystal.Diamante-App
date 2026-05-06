@@ -1634,6 +1634,68 @@ export default function PortalEstudiante() {
     return statusMap;
   }, [asistencias]);
 
+  const programaIdPorCursoId = React.useMemo(() => {
+    const map = new Map<string, string>();
+    (matriculas || []).forEach((matricula: any) => {
+      const cursoId = String(matricula?.cursos?.id || matricula?.curso_id || "");
+      const programaId = String(matricula?.cursos?.programa_id || "");
+      if (!cursoId || !programaId || map.has(cursoId)) return;
+      map.set(cursoId, programaId);
+    });
+    return map;
+  }, [matriculas]);
+
+  const temaPorProgramaClase = React.useMemo(() => {
+    const map = new Map<string, string>();
+    (pensum || []).forEach((ciclo: any) => {
+      const programaId = String(ciclo?.programa_id || "");
+      if (!programaId) return;
+
+      const temasOrdenados = (ciclo?.pensum_cursos || [])
+        .slice()
+        .sort((a: any, b: any) => {
+          const ordenA = Number(a?.orden || 0);
+          const ordenB = Number(b?.orden || 0);
+          if (ordenA !== ordenB) return ordenA - ordenB;
+          return Number(a?.id || 0) - Number(b?.id || 0);
+        });
+
+      temasOrdenados.forEach((tema: any) => {
+        const numero = Number(tema?.orden || 0);
+        if (!Number.isFinite(numero) || numero <= 0) return;
+        const key = `${programaId}-${numero}`;
+        if (!map.has(key)) {
+          map.set(key, String(tema?.nombre_curso || tema?.titulo || `Clase ${numero}`));
+        }
+      });
+    });
+    return map;
+  }, [pensum]);
+
+  const temaSincronizadoAsistenciaById = React.useMemo(() => {
+    const map = new Map<string, string>();
+
+    (asistencias || []).forEach((registro: any) => {
+      const id = String(registro?.id || "");
+      if (!id) return;
+
+      const cursoId = String(registro?.matriculas?.curso_id || "");
+      const programaId = programaIdPorCursoId.get(cursoId) || "";
+      const claseNumero = Number(
+        registro?.clase_numero || extractClassNumber(registro?.tema_visto || registro?.registro_clase || ""),
+      );
+
+      if (!programaId || !Number.isFinite(claseNumero) || claseNumero <= 0) return;
+
+      const nombreOficial = temaPorProgramaClase.get(`${programaId}-${claseNumero}`);
+      if (!nombreOficial) return;
+
+      map.set(id, `Clase #${claseNumero} - ${nombreOficial}`);
+    });
+
+    return map;
+  }, [asistencias, programaIdPorCursoId, temaPorProgramaClase]);
+
   const renderSeccionActiva = () => {
     if (activeTab === "1") {
       return (
@@ -1735,7 +1797,7 @@ export default function PortalEstudiante() {
                   title: "Tema visto",
                   dataIndex: "tema_visto",
                   render: (t, r: any) => {
-                    const tema = t || "-";
+                    const tema = temaSincronizadoAsistenciaById.get(String(r?.id || "")) || t || "-";
                     const registro = String(r?.registro_clase || "").trim();
                     const estadoCalendario = estadoCalendarioAsistenciaById.get(String(r?.id || ""));
 

@@ -185,10 +185,22 @@ export default function StudentDetailView() {
 
   const extractClassNumber = (value?: string | null): number | null => {
     const text = String(value || "");
-    const match = text.match(/clase\s*#?\s*(\d{1,3})/i);
-    if (!match?.[1]) return null;
-    const parsed = Number(match[1]);
-    return Number.isFinite(parsed) ? parsed : null;
+    const patterns = [
+      /clase\s*#?\s*(\d{1,3})/i,
+      /\b(\d{1,3})\b\s*$/,
+      /^\s*(\d{1,3})\b/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (!match?.[1]) continue;
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+
+    return null;
   };
 
   const esInscripcion = useCallback((pago: any) => {
