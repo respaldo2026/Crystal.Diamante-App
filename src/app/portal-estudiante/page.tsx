@@ -1766,7 +1766,7 @@ export default function PortalEstudiante() {
       const programaId = programaIdPorCursoId.get(cursoId) || "";
       const claseNumero = claseNumeroAsistenciaCanonicoById.get(id);
 
-      if (!programaId || !Number.isFinite(claseNumero) || claseNumero <= 0) return;
+      if (!programaId || typeof claseNumero !== "number" || !Number.isFinite(claseNumero) || claseNumero <= 0) return;
 
       const nombreOficial = temaPorProgramaClase.get(`${programaId}-${claseNumero}`);
       if (!nombreOficial) return;
