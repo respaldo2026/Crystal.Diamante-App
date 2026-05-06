@@ -325,7 +325,7 @@ function extractAudioInputsFromBody(body: any): { mediaId: string; audioUrl: str
 /**
  * Obtener historial reciente de conversación
  */
-async function getConversationHistory(supabase: any, phone: string, limit = 5): Promise<Array<{user: string, agent: string, agent_raw?: string, created_at?: string | null}>> {
+async function getConversationHistory(supabase: any, phone: string, limit = 12): Promise<Array<{user: string, agent: string, agent_raw?: string, created_at?: string | null}>> {
   try {
     const { data, error } = await supabase
       .from("agent_conversations")
@@ -771,14 +771,14 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
   const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|cuanto vale|cuanto es|cuanto cuesta)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
-  const hasScheduleIntent = /\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy)\b/i.test(text);
+  const hasScheduleIntent = /\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|manana\s+hay\s+clase|hay\s+clase\s+manana|tengo\s+clase\s+manana|me\s+toca\s+clase|toca\s+clase|clase\s+manana)\b/i.test(text);
 
   if (hasDurationIntent || hasClassFrequencyIntent) return "horario";
   if (hasEnrollmentIntent) return "inscripcion";
   if (hasPriceIntent) return "precio";
   if (hasScheduleIntent) return "horario";
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) return "temario";
-  if (/\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|implementos|lista\s+de\s+materiales)\b/i.test(text)) return "materiales";
+  if (/\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|implementos|cuaderno|libreta|lista\s+de\s+materiales)\b/i.test(text)) return "materiales";
   if (/\b(inscrib|matricul|admisiones|contacto|numero|whatsapp|separar\s+cupo|reservar\s+cupo)\b/i.test(text)) return "inscripcion";
   return "general";
 }
@@ -808,7 +808,7 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   // Si es afirmación corta colombiana ("Si de una", "dale", "de una") → no es nombre de programa
   if (isShortAffirmativeReply(message)) return false;
 
-  return !/\b(precio|horario|hora|material|temario|inscrip|matricul|pago|cuanto|cuando|donde|reservar|cupo|separar)\b/i.test(text);
+  return !/\b(precio|horario|hora|material|temario|inscrip|matricul|pago|cuanto|cuando|donde|reservar|cupo|separar|manana|toca\s+clase|clase\s+manana|cuaderno|libreta)\b/i.test(text);
 }
 
 function isShortAffirmativeReply(message: string): boolean {
@@ -3414,7 +3414,7 @@ export async function POST(req: NextRequest) {
 
     // 7. Obtener historial de conversación
     console.log("[POST /api/ai/audio] Leyendo historial de conversación...");
-    const history = await getConversationHistory(supabase, resolvedPhone, 5);
+    const history = await getConversationHistory(supabase, resolvedPhone, 12);
     const effectiveTranscription = enrichMessageWithFollowUpContext(transcription, history);
     const preferredStudentName = resolvePreferredStudentName(transcription, history);
     const detectedIntent = detectUserIntent(effectiveTranscription);

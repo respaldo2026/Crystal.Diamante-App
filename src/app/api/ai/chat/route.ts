@@ -1802,9 +1802,9 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
   const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta|abono|abonar|pago parcial|cuota inicial)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
-  const hasScheduleIntent = /\b(horarios?|horas?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|todos\s+los\s+dias|cuantos\s+dias|que\s+dias|dias\s+de\s+clase)\b/i.test(text);
+  const hasScheduleIntent = /\b(horarios?|horas?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|manana\s+hay\s+clase|hay\s+clase\s+manana|tengo\s+clase\s+manana|me\s+toca\s+clase|toca\s+clase|clase\s+manana|todos\s+los\s+dias|cuantos\s+dias|que\s+dias|dias\s+de\s+clase)\b/i.test(text);
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horarios?|horas?)\b/i.test(text);
-  const hasMaterialsKeyword = /\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text);
+  const hasMaterialsKeyword = /\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|cuaderno|libreta|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text);
   // "llevar" solo cuenta como requisito si NO hay keyword de materiales (evitar que "llevar materiales" sea requisito)
   const hasRequirementsIntent = /\b(requisito|requisitos|edad|anos|menor|mayor|cedula|documento|necesito|experiencia|conocimiento)\b/i.test(text)
     || (!hasMaterialsKeyword && /\b(llevar)\b/i.test(text));
@@ -1876,7 +1876,7 @@ function isLikelyProgramOnlyReply(message: string): boolean {
   if (isShortAffirmativeReply(message)) return false;
 
   // Excluir si contiene palabras de intención real (plurales incluidos)
-  const hasIntentKeyword = /\b(?:precio|horarios?|horas?|materiales?|temarios?|inscrip\w*|matricul\w*|pagos?|cuantos?|cuando|donde|ubicaci[oó]n|ubicados?|direcci[oó]n|cali|s[aá]bados?|fin\s+de\s+semana|trabajo|lunes|viernes|personal|presencial|dias?|todos?|ir\s+a|puedo\s+ir|aparte|ademas|ademas?|mas\s+all[aá]|cobr[a-z]+|reservar|cupo|separar|abono|abonar|pago\s+parcial|cuota\s+inicial|cual|sirve|conviene|mejor|redes|instagram|facebook|youtube|tiktok)\b/i.test(text);
+  const hasIntentKeyword = /\b(?:precio|horarios?|horas?|materiales?|temarios?|inscrip\w*|matricul\w*|pagos?|cuantos?|cuando|donde|ubicaci[oó]n|ubicados?|direcci[oó]n|cali|s[aá]bados?|fin\s+de\s+semana|trabajo|lunes|viernes|personal|presencial|dias?|todos?|ir\s+a|puedo\s+ir|aparte|ademas|ademas?|mas\s+all[aá]|cobr[a-z]+|reservar|cupo|separar|abono|abonar|pago\s+parcial|cuota\s+inicial|cual|sirve|conviene|mejor|redes|instagram|facebook|youtube|tiktok|manana|toca\s+clase|clase\s+manana|cuaderno|libreta)\b/i.test(text);
   if (hasIntentKeyword) return false;
 
   return true;
@@ -2048,6 +2048,32 @@ function buildKnownTeacherSupportReply(name: string | null = null): string {
 function isTeacherRole(role: string | null | undefined): boolean {
   const normalized = normalizeForMatch(role || "");
   return /^(profesor|profesora|docente|maestra)$/i.test(normalized);
+}
+
+function hasEnrolledSupportSignal(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(ya\s+estoy\s+en\s+el\s+curso|ya\s+estoy\s+inscrit|ya\s+estoy\s+matricul|ya\s+soy\s+estudiante|necesito\s+meterme\s+en\s+el\s+grupo\s+de\s+whatsapp|grupo\s+de\s+whatsapp|mi\s+grupo|mi\s+curso|mi\s+profesora|mi\s+salon|mi\s+salon|proxima\s+clase|siguiente\s+clase)\b/i.test(text);
+}
+
+function buildKnownTeacherIntentReply(message: string, name: string | null = null): string {
+  const text = normalizeForMatch(message);
+  const lead = name ? `Profe ${String(name).trim()}, ` : "";
+
+  if (/\b(liquidacion|nomina|n[oó]mina|quincena|pago\s+de\s+quincena|me\s+han\s+pagado|cuando\s+pagan)\b/i.test(text)) {
+    return `${lead}te atiendo en modo soporte docente 😊 Si es sobre *liquidación/pago de quincena*, te ayudo a escalarlo de inmediato con administración.`;
+  }
+
+  if (/\b(clase\s+de\s+hoy|proxima\s+clase|siguiente\s+clase|grupo|grupos|novedades|asistencia|asistencias)\b/i.test(text)) {
+    return `${lead}te atiendo en modo soporte docente 😊 Cuéntame el *grupo* o *curso* y te apoyo con la novedad puntual.`;
+  }
+
+  if (isPureGreeting(message) || isNeutralAcknowledgement(message) || isShortAffirmativeReply(message)) {
+    return buildKnownTeacherSupportReply(name);
+  }
+
+  return `${lead}te atiendo en modo soporte docente 😊 ¿Necesitas ayuda con *clase de hoy/próxima clase*, *liquidación* o *novedades de tus grupos*?`;
 }
 
 function isPaymentAlreadyDoneClaim(message: string): boolean {
@@ -4342,9 +4368,15 @@ function buildIntentFocusedDirectResponse(
   history: Array<{ user: string; agent: string }> = [],
   programs: any[] = [],
   mediosPago: any[] = [],
-  isKnownStudentByPhone: boolean = false
+  isKnownStudentByPhone: boolean = false,
+  isKnownTeacherByPhone: boolean = false,
+  knownProfileName: string | null = null
 ): string | null {
   const hasPaymentConfirmedContext = hasRecentPaymentConfirmedContext(history);
+
+  if (isKnownTeacherByPhone) {
+    return buildKnownTeacherIntentReply(message, knownProfileName);
+  }
 
   // ── Guardia para estudiantes conocidas ────────────────────────────────
   // Una estudiante activa NUNCA debe recibir mensajes de inscripción, separar cupo,
@@ -4362,6 +4394,10 @@ function buildIntentFocusedDirectResponse(
       const wa = academy?.whatsapp_admisiones || ADMISSIONS_NUMBER;
       return `Como ya eres estudiante, para cualquier gestión de matrícula o cuenta escríbele directamente a Admisiones:\n📲 *${wa}* 😊`;
     }
+  }
+
+  if (!isKnownStudentByPhone && hasEnrolledSupportSignal(message)) {
+    return "Entiendo 🙌 Veo que ya estás en curso. Te atiendo en modo soporte: ¿te ayudo con *grupo de WhatsApp*, *próxima clase* o *materiales*?";
   }
 
   const hasPaymentReminderContext = hasRecentPaymentReminderContext(history);
@@ -6298,7 +6334,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Obtener historial
-    const history = await getConversationHistory(supabase, phone || "unknown", 5);
+    const history = await getConversationHistory(supabase, phone || "unknown", 12);
     // Normalizar palabras pegadas por escritura rápida antes de cualquier proceso
     const normalizedMessage = normalizeRunTogetherWords(message);
     const effectiveMessage = enrichMessageWithFollowUpContext(normalizedMessage, history);
@@ -6406,6 +6442,7 @@ export async function POST(req: NextRequest) {
       excludeUrls: extractSentImageUrlsFromHistory(history),
     });
 
+    const knownTeacherByPhone = isTeacherRole(phoneProfile?.rol || null);
     const knownStudentByPhone = Boolean(studentContext || phoneProfile?.rol === 'estudiante');
     if (knownStudentByPhone && isPureGreeting(message)) {
       const supportReply = buildKnownStudentSupportReply(phoneProfileName || studentContext?.estudianteNombre || null);
@@ -6425,7 +6462,6 @@ export async function POST(req: NextRequest) {
       }, null)), commentEvent));
     }
 
-    const knownTeacherByPhone = isTeacherRole(phoneProfile?.rol || null);
     const teacherNeedsSupportReply = knownTeacherByPhone
       && (
         isPureGreeting(message)
@@ -6510,6 +6546,9 @@ export async function POST(req: NextRequest) {
       if (knownStudentByPhone) {
         mediaSuggestion = null;
       }
+      if (knownTeacherByPhone) {
+        mediaSuggestion = null;
+      }
     }
 
     const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext, mediosPago);
@@ -6581,7 +6620,18 @@ export async function POST(req: NextRequest) {
       }, null)), commentEvent)); // TEMPORAL: Desactivado hasta arreglar Router de Make
     }
     
-    let directIntentResponse = buildIntentFocusedDirectResponse(effectiveMessage, detectedProgram, courses, academy, history, programs, mediosPago, knownStudentByPhone);
+    let directIntentResponse = buildIntentFocusedDirectResponse(
+      effectiveMessage,
+      detectedProgram,
+      courses,
+      academy,
+      history,
+      programs,
+      mediosPago,
+      knownStudentByPhone,
+      knownTeacherByPhone,
+      phoneProfileName || studentContext?.estudianteNombre || null
+    );
     if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage)) {
       const pendingTopic = inferPendingTopicFromHistory(history);
       if (pendingTopic) {
@@ -6593,7 +6643,9 @@ export async function POST(req: NextRequest) {
           history,
           programs,
           mediosPago,
-          knownStudentByPhone
+          knownStudentByPhone,
+          knownTeacherByPhone,
+          phoneProfileName || studentContext?.estudianteNombre || null
         );
 
         if (retriedDirectResponse && !isRepetitiveResponse(retriedDirectResponse, history, effectiveMessage)) {
@@ -6620,7 +6672,9 @@ export async function POST(req: NextRequest) {
           history,
           programs,
           mediosPago,
-          knownStudentByPhone
+          knownStudentByPhone,
+          knownTeacherByPhone,
+          phoneProfileName || studentContext?.estudianteNombre || null
         );
 
         if (forcedProgressResponse) {
@@ -6695,12 +6749,19 @@ export async function POST(req: NextRequest) {
 - Si pregunta sobre estado de cuenta o pagos: Ofrece redirigir a Admisiones (${ADMISSIONS_NUMBER}).
 - Responde en modo soporte: corto, útil, sin embudo de ventas.`
       : '';
+    const knownTeacherDirective = knownTeacherByPhone
+      ? `🔴 MODO SOPORTE DOCENTE:
+- Esta persona está identificada como docente. PROHIBIDO tratarla como prospecto o enviar embudo comercial.
+- Prioriza soporte operativo docente: clase de hoy/próxima clase, novedades de grupos, liquidación o pago de quincena.
+- Responde breve, claro y con continuidad de contexto.`
+      : '';
     const contextualDirective = [
       buildContextualDirective(effectiveMessage, detectedProgram, courses, history, phoneProfile?.rol || null),
       buildNameSafetyDirective(preferredStudentName, profileName || null, channel, phoneProfileName, phoneProfile?.rol || null),
       buildUpcomingStartDirective(detectedProgram, courses),
       studentDirective,
       knownStudentDirective,
+      knownTeacherDirective,
     ]
       .filter(Boolean)
       .join('\n');
