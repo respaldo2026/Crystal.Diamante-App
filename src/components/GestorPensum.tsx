@@ -391,6 +391,7 @@ export default function GestorPensum({
   const [editingMaterialClase, setEditingMaterialClase] = useState<MaterialClase | null>(null);
   const [modalMaterialCicloVisible, setModalMaterialCicloVisible] = useState(false);
   const [editingMaterialCiclo, setEditingMaterialCiclo] = useState<MaterialCiclo | null>(null);
+  const [cursoActivoMaterialClase, setCursoActivoMaterialClase] = useState<PensumCurso | null>(null);
   const [quizzesClase, setQuizzesClase] = useState<QuizClase[]>([]);
   const [loadingQuizzesClase, setLoadingQuizzesClase] = useState(false);
   const [modalQuizVisible, setModalQuizVisible] = useState(false);
@@ -1239,6 +1240,8 @@ export default function GestorPensum({
       message.warning("Solo administración y secretaría pueden gestionar materiales.");
       return;
     }
+    const cursoEncontrado = cursosPensum.find(c => c.id === (material?.pensum_curso_id || cursoId)) || null;
+    setCursoActivoMaterialClase(cursoEncontrado);
     setEditingMaterialClase(material || null);
     formMaterialClase.setFieldsValue({
       pensum_curso_id: material?.pensum_curso_id || cursoId,
@@ -2345,12 +2348,11 @@ export default function GestorPensum({
                   type="primary"
                   icon={<UploadOutlined />}
                   onClick={() => {
-                    const primerTema = cursosPensum[0];
-                    if (!primerTema) {
+                    if (cursosPensum.length === 0) {
                       message.warning("Primero crea al menos un tema para subir material didáctico.");
                       return;
                     }
-                    abrirDrawerMaterialParaTema(primerTema.nombre_curso);
+                    abrirDrawerMaterialParaTema(undefined);
                   }}
                 >
                   Subir material didáctico
@@ -2363,15 +2365,17 @@ export default function GestorPensum({
                     type="primary"
                     icon={<GiftOutlined />}
                     onClick={() => {
-                      const primerTema = cursosPensum[0];
-                      if (!primerTema) {
+                      if (cursosPensum.length === 0) {
                         message.warning("Primero debes crear al menos un tema para asociar materiales.");
                         return;
                       }
-                      abrirModalMaterialClase(primerTema.id);
+                      setCursoActivoMaterialClase(null);
+                      setEditingMaterialClase(null);
+                      formMaterialClase.resetFields();
+                      setModalMaterialClaseVisible(true);
                     }}
                   >
-                    Agregar material necesario
+                    Agregar insumo
                   </Button>
                   <Button onClick={() => setMostrarListaCompletaNecesarios((prev) => !prev)}>
                     {mostrarListaCompletaNecesarios ? "Ver insumos resumidos" : "Ver lista completa de insumos"}
@@ -3183,65 +3187,49 @@ export default function GestorPensum({
       </Modal>
 
       <Modal
-        title={editingMaterialClase ? "Editar material necesario" : "Agregar material necesario"}
+        title={editingMaterialClase ? `Editar insumo — ${cursoActivoMaterialClase?.nombre_curso || ""}` : `Agregar insumo — ${cursoActivoMaterialClase?.nombre_curso || "Selecciona una clase"}`}
         open={modalMaterialClaseVisible}
         onOk={handleGuardarMaterialClase}
         onCancel={() => {
           setModalMaterialClaseVisible(false);
           setEditingMaterialClase(null);
+          setCursoActivoMaterialClase(null);
           formMaterialClase.resetFields();
         }}
       >
         <Form form={formMaterialClase} layout="vertical">
-          <Form.Item
-            name="pensum_curso_id"
-            label="Tema"
-            rules={[{ required: true, message: "Selecciona un tema" }]}
-          >
-            <Select
-              options={cursosPensum.map((curso) => ({
-                value: curso.id,
-                label: curso.nombre_curso,
-              }))}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name={editingMaterialClase ? "material_ciclo_id" : "material_ciclo_ids"}
-            label="Material del ciclo (lista general)"
-            rules={materialesCicloGeneralOrdenados.length > 0 ? [{ required: true, message: "Selecciona al menos un material del ciclo" }] : []}
-          >
-            <Select
-              allowClear
-              mode={editingMaterialClase ? undefined : "multiple"}
-              showSearch
-              optionFilterProp="label"
-              placeholder={editingMaterialClase ? "Selecciona un material del ciclo" : "Selecciona uno o varios materiales del ciclo"}
-              options={materialesCicloGeneralOrdenados.map((material) => ({
-                value: material.id,
-                label: `${material.nombre} (${getMaterialCoverageRuleDisplay(material.cobertura_material, material.incluido_kit).shortLabel})`,
-              }))}
-              onChange={(value) => {
-                const selectedIds = Array.isArray(value) ? value : [value].filter(Boolean);
-                if (selectedIds.length !== 1) return;
-                const selected = materialesCicloGeneralOrdenados.find((item) => String(item.id) === String(selectedIds[0]));
-                if (!selected) return;
-                if (!editingMaterialClase) {
-                  formMaterialClase.setFieldsValue({
-                    nombre_material: selected.nombre,
-                    cantidad: selected.cantidad || "",
-                  });
-                }
-              }}
-            />
-          </Form.Item>
+          {!cursoActivoMaterialClase && (
+            <Form.Item
+              name="pensum_curso_id"
+              label="Clase"
+              rules={[{ required: true, message: "Selecciona una clase" }]}
+              style={{ marginBottom: 12 }}
+            >
+              <Select
+                placeholder="Selecciona la clase"
+                options={cursosPensum.map((curso) => ({
+                  value: curso.id,
+                  label: curso.nombre_curso,
+                }))}
+                onChange={(value) => {
+                  const c = cursosPensum.find(x => x.id === value);
+                  setCursoActivoMaterialClase(c || null);
+                }}
+              />
+            </Form.Item>
+          )}
 
           <Form.Item
             name="nombre_material"
-            label="Material requerido"
+            label="Nombre del insumo / material"
             rules={[{ required: true, message: "El material es requerido" }]}
+            style={{ marginBottom: 12 }}
           >
-            <Input placeholder="Ej: Cuaderno de dibujo" />
+            <Input
+              placeholder="Ej: Esmalte base, Lima, Acetona…"
+              autoFocus
+              size="large"
+            />
           </Form.Item>
 
           <Space style={{ width: "100%" }} align="start">
@@ -3249,17 +3237,45 @@ export default function GestorPensum({
               <Input placeholder="Ej: 1" />
             </Form.Item>
             <Form.Item name="unidad" label="Unidad" style={{ flex: 1 }}>
-              <Input placeholder="Ej: unidad(es), paquete" />
+              <Input placeholder="Ej: unidad(es), ml" />
             </Form.Item>
           </Space>
 
-          <Form.Item name="orden" label="Orden">
-            <InputNumber min={1} style={{ width: "100%" }} />
+          <Form.Item name="observaciones" label="Notas adicionales">
+            <Input.TextArea rows={2} placeholder="Detalles, marca, presentación…" />
           </Form.Item>
 
-          <Form.Item name="observaciones" label="Observaciones">
-            <Input.TextArea rows={3} placeholder="Detalles adicionales del material" />
-          </Form.Item>
+          {materialesCicloGeneralOrdenados.length > 0 && (
+            <Form.Item
+              name={editingMaterialClase ? "material_ciclo_id" : "material_ciclo_ids"}
+              label="Vincular al catálogo del ciclo (opcional)"
+              help="Si el insumo ya existe en la lista general, puedes vincularlo aquí para heredar su cobertura de planes."
+            >
+              <Select
+                allowClear
+                mode={editingMaterialClase ? undefined : "multiple"}
+                showSearch
+                optionFilterProp="label"
+                placeholder="Buscar en catálogo…"
+                options={materialesCicloGeneralOrdenados.map((material) => ({
+                  value: material.id,
+                  label: `${material.nombre} (${getMaterialCoverageRuleDisplay(material.cobertura_material, material.incluido_kit).shortLabel})`,
+                }))}
+                onChange={(value) => {
+                  const selectedIds = Array.isArray(value) ? value : [value].filter(Boolean);
+                  if (selectedIds.length !== 1) return;
+                  const selected = materialesCicloGeneralOrdenados.find((item) => String(item.id) === String(selectedIds[0]));
+                  if (!selected) return;
+                  if (!editingMaterialClase) {
+                    formMaterialClase.setFieldsValue({
+                      nombre_material: selected.nombre,
+                      cantidad: selected.cantidad || "",
+                    });
+                  }
+                }}
+              />
+            </Form.Item>
+          )}
         </Form>
       </Modal>
 
@@ -3287,12 +3303,15 @@ export default function GestorPensum({
 
           <Form.Item
             name="tema_relacionado"
-            label="Tema relacionado (opcional)"
-            help="Selecciona el tema para que el material quede claramente asociado."
+            label="¿Para qué clase es este material?"
+            help="Selecciona la clase para que el material quede asociado correctamente."
           >
             <Select
               allowClear
-              placeholder="Ej: Introducción, Herramientas, Técnica base"
+              showSearch
+              optionFilterProp="label"
+              size="large"
+              placeholder="Selecciona la clase…"
               options={cursosPensum.map((curso) => ({
                 value: curso.nombre_curso,
                 label: curso.nombre_curso,
