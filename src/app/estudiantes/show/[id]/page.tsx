@@ -1539,6 +1539,61 @@ export default function StudentDetailView() {
     );
   };
 
+  const estadoCalendarioAsistenciaById = useMemo(() => {
+    const grupos = new Map<string, Array<{ id: string; fecha: dayjs.Dayjs; claseNumero: number }>>();
+
+    (asistenciasHistorial || []).forEach((item) => {
+      const id = String(item?.id || "");
+      const matriculaId = String(item?.matricula_id || "");
+      const fecha = dayjs(String(item?.fecha || ""));
+      const claseNumero = Number(item?.clase_numero);
+
+      if (!id || !matriculaId || !fecha.isValid() || !Number.isFinite(claseNumero) || claseNumero <= 0) {
+        return;
+      }
+
+      const current = grupos.get(matriculaId) || [];
+      current.push({ id, fecha, claseNumero });
+      grupos.set(matriculaId, current);
+    });
+
+    const statusMap = new Map<string, { label: string; color: string }>();
+
+    grupos.forEach((registros) => {
+      const porFecha = [...registros].sort((a, b) => {
+        const diff = a.fecha.valueOf() - b.fecha.valueOf();
+        if (diff !== 0) return diff;
+        return a.claseNumero - b.claseNumero;
+      });
+
+      const porClase = [...registros].sort((a, b) => {
+        const diff = a.claseNumero - b.claseNumero;
+        if (diff !== 0) return diff;
+        return a.fecha.valueOf() - b.fecha.valueOf();
+      });
+
+      const posFecha = new Map<string, number>();
+      const posClase = new Map<string, number>();
+
+      porFecha.forEach((item, index) => posFecha.set(item.id, index + 1));
+      porClase.forEach((item, index) => posClase.set(item.id, index + 1));
+
+      registros.forEach((item) => {
+        const pf = posFecha.get(item.id);
+        const pc = posClase.get(item.id);
+        if (!pf || !pc || pf === pc) return;
+
+        if (pf < pc) {
+          statusMap.set(item.id, { label: "Clase adelantada", color: "green" });
+        } else {
+          statusMap.set(item.id, { label: "Clase reprogramada", color: "orange" });
+        }
+      });
+    });
+
+    return statusMap;
+  }, [asistenciasHistorial]);
+
   if (loading) {
     return (
       <div style={{ padding: 50, textAlign: "center" }}>
@@ -1946,7 +2001,17 @@ export default function StudentDetailView() {
                       {
                         title: "Tema visto",
                         dataIndex: "tema_visto",
-                        render: (val: string | null) => val || <Text type="secondary">-</Text>,
+                        render: (val: string | null, record: AsistenciaEstudiante) => {
+                          const estadoCalendario = estadoCalendarioAsistenciaById.get(String(record?.id || ""));
+                          if (!val && !estadoCalendario) return <Text type="secondary">-</Text>;
+
+                          return (
+                            <Space direction="vertical" size={2}>
+                              <span>{val || "-"}</span>
+                              {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
+                            </Space>
+                          );
+                        },
                       },
                       {
                         title: "Estado",

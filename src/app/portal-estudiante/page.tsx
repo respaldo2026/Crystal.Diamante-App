@@ -1579,6 +1579,61 @@ export default function PortalEstudiante() {
     { key: "5", label: enMoraBloqueante ? "🔒 Pensum" : "Pensum", icon: <BookOutlined /> },
   ];
 
+  const estadoCalendarioAsistenciaById = React.useMemo(() => {
+    const grupos = new Map<string, Array<{ id: string; fecha: dayjs.Dayjs; claseNumero: number }>>();
+
+    (asistencias || []).forEach((item: any) => {
+      const id = String(item?.id || "");
+      const matriculaId = String(item?.matricula_id || "");
+      const fecha = dayjs(String(item?.fecha || ""));
+      const claseNumero = Number(item?.clase_numero);
+
+      if (!id || !matriculaId || !fecha.isValid() || !Number.isFinite(claseNumero) || claseNumero <= 0) {
+        return;
+      }
+
+      const current = grupos.get(matriculaId) || [];
+      current.push({ id, fecha, claseNumero });
+      grupos.set(matriculaId, current);
+    });
+
+    const statusMap = new Map<string, { label: string; color: string }>();
+
+    grupos.forEach((registros) => {
+      const porFecha = [...registros].sort((a, b) => {
+        const diff = a.fecha.valueOf() - b.fecha.valueOf();
+        if (diff !== 0) return diff;
+        return a.claseNumero - b.claseNumero;
+      });
+
+      const porClase = [...registros].sort((a, b) => {
+        const diff = a.claseNumero - b.claseNumero;
+        if (diff !== 0) return diff;
+        return a.fecha.valueOf() - b.fecha.valueOf();
+      });
+
+      const posFecha = new Map<string, number>();
+      const posClase = new Map<string, number>();
+
+      porFecha.forEach((item, index) => posFecha.set(item.id, index + 1));
+      porClase.forEach((item, index) => posClase.set(item.id, index + 1));
+
+      registros.forEach((item) => {
+        const pf = posFecha.get(item.id);
+        const pc = posClase.get(item.id);
+        if (!pf || !pc || pf === pc) return;
+
+        if (pf < pc) {
+          statusMap.set(item.id, { label: "Clase adelantada", color: "green" });
+        } else {
+          statusMap.set(item.id, { label: "Clase reprogramada", color: "orange" });
+        }
+      });
+    });
+
+    return statusMap;
+  }, [asistencias]);
+
   const renderSeccionActiva = () => {
     if (activeTab === "1") {
       return (
@@ -1682,13 +1737,24 @@ export default function PortalEstudiante() {
                   render: (t, r: any) => {
                     const tema = t || "-";
                     const registro = String(r?.registro_clase || "").trim();
+                    const estadoCalendario = estadoCalendarioAsistenciaById.get(String(r?.id || ""));
 
                     if (!isMobile) {
-                      return tema;
+                      return (
+                        <Space direction="vertical" size={2}>
+                          <span>{tema}</span>
+                          {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
+                        </Space>
+                      );
                     }
 
                     if (!registro || registro === tema) {
-                      return tema;
+                      return (
+                        <Space direction="vertical" size={2}>
+                          <span>{tema}</span>
+                          {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
+                        </Space>
+                      );
                     }
 
                     return (
@@ -1697,6 +1763,7 @@ export default function PortalEstudiante() {
                         <Text type="secondary" style={{ fontSize: 12 }}>
                           {registro}
                         </Text>
+                        {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
                       </Space>
                     );
                   },
