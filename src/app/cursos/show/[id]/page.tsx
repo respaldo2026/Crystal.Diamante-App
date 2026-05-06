@@ -270,8 +270,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     const text = String(value || "");
     const patterns = [
       /clase\s*#?\s*(\d{1,3})/i,
-      /\b(\d{1,3})\b\s*$/,
-      /^\s*(\d{1,3})\b/,
+      /^\s*(\d{1,3})\s*[\).:-]/,
     ];
 
     for (const pattern of patterns) {
@@ -455,47 +454,84 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return map;
   }, [clasesPensum, ordenTemaPorId]);
 
-  const claseIdPorNombreNormalizado = useMemo(() => {
-    const map = new Map<string, string>();
-    clasesPensum.forEach((tema: any) => {
-      const temaId = String(tema?.id || "");
-      if (!temaId) return;
+  const numeroClaseSesionPorId = useMemo(() => {
+    const map = new Map<string, number>();
+    const totalClases = clasesPensum.length;
 
-      const nombre = String(tema?.nombre_curso || tema?.titulo || "").trim();
-      const nombreFormateado = formatearNombreClase(tema);
-      const keys = [normalizarTema(nombre), normalizarTema(nombreFormateado)].filter(Boolean);
+    if (!totalClases || !(sesiones || []).length) {
+      return map;
+    }
 
-      keys.forEach((key) => {
-        if (!map.has(key)) {
-          map.set(key, temaId);
-        }
+    const usadas = new Set<number>();
+    const sinNumero: Array<{ id: string; fecha: dayjs.Dayjs; createdAt: dayjs.Dayjs | null }> = [];
+
+    const sesionesOrdenadas = [...(sesiones || [])]
+      .map((sesion: any) => ({
+        id: String(sesion?.id || ""),
+        fecha: dayjs(String(sesion?.fecha || "")),
+        createdAt: sesion?.created_at ? dayjs(String(sesion.created_at)) : null,
+        tema: String(sesion?.tema_visto || ""),
+        observaciones: String(sesion?.observaciones || ""),
+      }))
+      .filter((sesion) => sesion.id && sesion.fecha.isValid())
+      .sort((a, b) => {
+        const diffFecha = a.fecha.valueOf() - b.fecha.valueOf();
+        if (diffFecha !== 0) return diffFecha;
+        const aCreated = a.createdAt?.isValid() ? a.createdAt.valueOf() : 0;
+        const bCreated = b.createdAt?.isValid() ? b.createdAt.valueOf() : 0;
+        if (aCreated !== bCreated) return aCreated - bCreated;
+        return a.id.localeCompare(b.id);
       });
+
+    sesionesOrdenadas.forEach((sesion) => {
+      const declarada = extractClassNumber(sesion.tema || sesion.observaciones);
+      if (
+        declarada &&
+        Number.isFinite(declarada) &&
+        declarada > 0 &&
+        declarada <= totalClases &&
+        !usadas.has(declarada)
+      ) {
+        map.set(sesion.id, declarada);
+        usadas.add(declarada);
+      } else {
+        sinNumero.push({ id: sesion.id, fecha: sesion.fecha, createdAt: sesion.createdAt });
+      }
     });
+
+    let siguiente = 1;
+    const obtenerSiguienteLibre = () => {
+      while (siguiente <= totalClases && usadas.has(siguiente)) {
+        siguiente += 1;
+      }
+      return siguiente <= totalClases ? siguiente : null;
+    };
+
+    sinNumero.forEach((sesion) => {
+      const libre = obtenerSiguienteLibre();
+      if (!libre) return;
+      map.set(sesion.id, libre);
+      usadas.add(libre);
+    });
+
     return map;
-  }, [clasesPensum, formatearNombreClase]);
+  }, [sesiones, clasesPensum.length]);
 
   const clasesRegistradasIds = useMemo(() => {
     const ids = new Set<string>();
 
     (sesiones || []).forEach((sesion: any) => {
-      const temaTexto = String(sesion?.tema_visto || "").trim();
-      if (!temaTexto) return;
+      const sesionId = String(sesion?.id || "");
+      if (!sesionId) return;
 
-      const numeroClase = extractClassNumber(temaTexto);
+      const numeroClase = numeroClaseSesionPorId.get(sesionId);
       if (numeroClase && claseIdPorOrden.has(numeroClase)) {
         ids.add(String(claseIdPorOrden.get(numeroClase)));
-      }
-
-      const temaSinPrefijo = temaTexto.replace(/^\s*clase\s*#?\s*\d+\s*[-–:]*\s*/i, "").trim();
-      const temaNormalizado = normalizarTema(temaSinPrefijo || temaTexto);
-      const temaId = claseIdPorNombreNormalizado.get(temaNormalizado);
-      if (temaId) {
-        ids.add(String(temaId));
       }
     });
 
     return ids;
-  }, [sesiones, claseIdPorOrden, claseIdPorNombreNormalizado]);
+  }, [sesiones, claseIdPorOrden, numeroClaseSesionPorId]);
 
   const clasesPendientesPensum = useMemo(() => {
     return (clasesPensum || []).filter((tema: any) => !clasesRegistradasIds.has(String(tema?.id || "")));
@@ -866,7 +902,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       .map((sesion: any) => ({
         id: String(sesion?.id || ""),
         fecha: dayjs(sesion?.fecha),
-        claseNumero: extractClassNumber(sesion?.tema_visto),
+        claseNumero: numeroClaseSesionPorId.get(String(sesion?.id || "")),
       }))
       .filter((item) => item.id && item.fecha.isValid() && Number.isFinite(item.claseNumero));
 
@@ -909,7 +945,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     });
 
     return statusMap;
-  }, [sesiones]);
+  }, [sesiones, numeroClaseSesionPorId]);
 
   // Memoized columns to avoid re-creation on every render
   const columnasSesiones = useMemo(
@@ -927,7 +963,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         ellipsis: true,
         width: isMobile ? 200 : undefined,
         render: (tema: string, record: any) => {
-          const numeroClase = extractClassNumber(record?.tema_visto || record?.observaciones || "");
+          const numeroClase = numeroClaseSesionPorId.get(String(record?.id || ""));
           const nombreOficial = numeroClase ? nombreOficialClasePorNumero.get(numeroClase) : null;
           const temaSincronizado = numeroClase && nombreOficial
             ? `Clase #${numeroClase} - ${nombreOficial}`
@@ -959,7 +995,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         render: (obs: string) => (obs ? <Text type="secondary">{obs}</Text> : <Text type="secondary">-</Text>),
       },
     ],
-    [isMobile, estadoCalendarioSesionPorId, nombreOficialClasePorNumero]
+    [isMobile, estadoCalendarioSesionPorId, nombreOficialClasePorNumero, numeroClaseSesionPorId]
   );
 
   const estadoOptions = useMemo(
@@ -1361,6 +1397,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     try {
       let matriculaIdsCurso: number[] = [];
       let califDataCurso: any[] = [];
+      let temasDataCurso: any[] = [];
       const cursoIdNumerico = parseInt(id);
 
       // Curso
@@ -1531,6 +1568,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           obtenerMaterialesClasePorProgramas(programaIds),
         ]);
 
+        temasDataCurso = temasData || [];
+
         const temasPorNombreLocal = new Map<string, string>();
         (temasData || []).forEach((ciclo: any) => {
           const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
@@ -1559,7 +1598,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         });
         setCalificacionesTema(mapa);
 
-        setTemas(temasData || []);
+        setTemas(temasDataCurso);
         setMateriales(materialesData || []);
         setMaterialesClase(materialesClaseData || []);
 
@@ -1657,7 +1696,122 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         .select("*")
         .eq("curso_id", cursoIdNumerico)
         .order("fecha", { ascending: false });
-      setSesiones(sesionesData || []);
+
+      const sesionesRaw = sesionesData || [];
+      const temasOrdenadosGlobal = (temasDataCurso || [])
+        .slice()
+        .sort((a: any, b: any) => {
+          const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 0);
+          const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 0);
+          if (ordenA !== ordenB) return ordenA - ordenB;
+          return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+        })
+        .flatMap((ciclo: any) =>
+          (Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [])
+            .slice()
+            .sort((a: any, b: any) => {
+              const ordenA = Number(a?.orden ?? 0);
+              const ordenB = Number(b?.orden ?? 0);
+              if (ordenA !== ordenB) return ordenA - ordenB;
+              return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+            })
+        );
+
+      const nombreOficialPorNumero = new Map<number, string>();
+      temasOrdenadosGlobal.forEach((tema: any, index: number) => {
+        const numero = index + 1;
+        const nombre = String(tema?.nombre_curso || tema?.titulo || `Clase ${numero}`).trim();
+        if (nombre && !nombreOficialPorNumero.has(numero)) {
+          nombreOficialPorNumero.set(numero, nombre);
+        }
+      });
+
+      const totalClasesPensum = nombreOficialPorNumero.size;
+      const sesionesAsc = sesionesRaw
+        .map((sesion: any) => ({
+          ...sesion,
+          _fecha: dayjs(String(sesion?.fecha || "")),
+          _created: sesion?.created_at ? dayjs(String(sesion.created_at)) : null,
+        }))
+        .filter((sesion: any) => sesion?._fecha?.isValid?.())
+        .sort((a: any, b: any) => {
+          const diffFecha = a._fecha.valueOf() - b._fecha.valueOf();
+          if (diffFecha !== 0) return diffFecha;
+          const aCreated = a?._created?.isValid?.() ? a._created.valueOf() : 0;
+          const bCreated = b?._created?.isValid?.() ? b._created.valueOf() : 0;
+          if (aCreated !== bCreated) return aCreated - bCreated;
+          return String(a?.id || "").localeCompare(String(b?.id || ""));
+        });
+
+      const numeroClasePorSesionId = new Map<string, number>();
+      if (totalClasesPensum > 0) {
+        const usados = new Set<number>();
+        const pendientes: any[] = [];
+
+        sesionesAsc.forEach((sesion: any) => {
+          const numeroDeclarado = extractClassNumber(String(sesion?.tema_visto || sesion?.observaciones || ""));
+          if (
+            numeroDeclarado &&
+            Number.isFinite(numeroDeclarado) &&
+            numeroDeclarado > 0 &&
+            numeroDeclarado <= totalClasesPensum &&
+            !usados.has(numeroDeclarado)
+          ) {
+            usados.add(numeroDeclarado);
+            numeroClasePorSesionId.set(String(sesion.id), numeroDeclarado);
+          } else {
+            pendientes.push(sesion);
+          }
+        });
+
+        let siguiente = 1;
+        const obtenerSiguienteLibre = () => {
+          while (siguiente <= totalClasesPensum && usados.has(siguiente)) {
+            siguiente += 1;
+          }
+          return siguiente <= totalClasesPensum ? siguiente : null;
+        };
+
+        pendientes.forEach((sesion: any) => {
+          const libre = obtenerSiguienteLibre();
+          if (!libre) return;
+          usados.add(libre);
+          numeroClasePorSesionId.set(String(sesion.id), libre);
+        });
+      }
+
+      const sesionesNormalizadas = sesionesRaw.map((sesion: any) => {
+        const numeroClase = numeroClasePorSesionId.get(String(sesion?.id || ""));
+        const nombreOficial = numeroClase ? nombreOficialPorNumero.get(numeroClase) : null;
+        const temaCanonico = numeroClase && nombreOficial
+          ? `Clase #${numeroClase} - ${nombreOficial}`
+          : String(sesion?.tema_visto || "");
+
+        return {
+          ...sesion,
+          tema_visto: temaCanonico,
+        };
+      });
+
+      const updates = sesionesNormalizadas.filter((sesion: any) => {
+        const original = sesionesRaw.find((item: any) => String(item?.id || "") === String(sesion?.id || ""));
+        const actual = String(original?.tema_visto || "").trim();
+        const canonico = String(sesion?.tema_visto || "").trim();
+        return canonico && actual !== canonico;
+      });
+
+      if (updates.length > 0) {
+        await Promise.all(
+          updates.map((sesion: any) =>
+            supabaseBrowserClient
+              .from("sesiones_clase")
+              .update({ tema_visto: sesion.tema_visto })
+              .eq("id", sesion.id)
+          )
+        );
+      }
+
+      setSesiones(sesionesNormalizadas);
     } catch (error) {
       console.error("Error cargando datos:", error);
     } finally {

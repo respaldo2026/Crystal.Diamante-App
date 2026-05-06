@@ -1579,61 +1579,6 @@ export default function PortalEstudiante() {
     { key: "5", label: enMoraBloqueante ? "🔒 Pensum" : "Pensum", icon: <BookOutlined /> },
   ];
 
-  const estadoCalendarioAsistenciaById = React.useMemo(() => {
-    const grupos = new Map<string, Array<{ id: string; fecha: dayjs.Dayjs; claseNumero: number }>>();
-
-    (asistencias || []).forEach((item: any) => {
-      const id = String(item?.id || "");
-      const matriculaId = String(item?.matricula_id || "");
-      const fecha = dayjs(String(item?.fecha || ""));
-      const claseNumero = Number(item?.clase_numero);
-
-      if (!id || !matriculaId || !fecha.isValid() || !Number.isFinite(claseNumero) || claseNumero <= 0) {
-        return;
-      }
-
-      const current = grupos.get(matriculaId) || [];
-      current.push({ id, fecha, claseNumero });
-      grupos.set(matriculaId, current);
-    });
-
-    const statusMap = new Map<string, { label: string; color: string }>();
-
-    grupos.forEach((registros) => {
-      const porFecha = [...registros].sort((a, b) => {
-        const diff = a.fecha.valueOf() - b.fecha.valueOf();
-        if (diff !== 0) return diff;
-        return a.claseNumero - b.claseNumero;
-      });
-
-      const porClase = [...registros].sort((a, b) => {
-        const diff = a.claseNumero - b.claseNumero;
-        if (diff !== 0) return diff;
-        return a.fecha.valueOf() - b.fecha.valueOf();
-      });
-
-      const posFecha = new Map<string, number>();
-      const posClase = new Map<string, number>();
-
-      porFecha.forEach((item, index) => posFecha.set(item.id, index + 1));
-      porClase.forEach((item, index) => posClase.set(item.id, index + 1));
-
-      registros.forEach((item) => {
-        const pf = posFecha.get(item.id);
-        const pc = posClase.get(item.id);
-        if (!pf || !pc || pf === pc) return;
-
-        if (pf < pc) {
-          statusMap.set(item.id, { label: "Clase adelantada", color: "green" });
-        } else {
-          statusMap.set(item.id, { label: "Clase reprogramada", color: "orange" });
-        }
-      });
-    });
-
-    return statusMap;
-  }, [asistencias]);
-
   const programaIdPorCursoId = React.useMemo(() => {
     const map = new Map<string, string>();
     (matriculas || []).forEach((matricula: any) => {
@@ -1672,6 +1617,144 @@ export default function PortalEstudiante() {
     return map;
   }, [pensum]);
 
+  const totalClasesPorPrograma = React.useMemo(() => {
+    const map = new Map<string, number>();
+    temaPorProgramaClase.forEach((_nombreTema, key) => {
+      const [programaId, numeroTexto] = key.split("-");
+      const numero = Number(numeroTexto || 0);
+      if (!programaId || !Number.isFinite(numero) || numero <= 0) return;
+      const actual = map.get(programaId) || 0;
+      if (numero > actual) {
+        map.set(programaId, numero);
+      }
+    });
+    return map;
+  }, [temaPorProgramaClase]);
+
+  const claseNumeroAsistenciaCanonicoById = React.useMemo(() => {
+    const porMatricula = new Map<
+      string,
+      Array<{ id: string; fecha: dayjs.Dayjs; numeroDeclarado: number | null; programaId: string }>
+    >();
+
+    (asistencias || []).forEach((item: any) => {
+      const id = String(item?.id || "");
+      const matriculaId = String(item?.matricula_id || "");
+      const cursoId = String(item?.matriculas?.curso_id || "");
+      const programaId = programaIdPorCursoId.get(cursoId) || "";
+      const fecha = dayjs(String(item?.fecha || ""));
+      const numeroDeclaradoRaw = Number(item?.clase_numero || extractClassNumber(item?.tema_visto || item?.registro_clase || ""));
+      const numeroDeclarado = Number.isFinite(numeroDeclaradoRaw) && numeroDeclaradoRaw > 0 ? numeroDeclaradoRaw : null;
+
+      if (!id || !matriculaId || !programaId || !fecha.isValid()) return;
+
+      const current = porMatricula.get(matriculaId) || [];
+      current.push({ id, fecha, numeroDeclarado, programaId });
+      porMatricula.set(matriculaId, current);
+    });
+
+    const map = new Map<string, number>();
+
+    porMatricula.forEach((registros) => {
+      if (!registros.length) return;
+
+      const programaId = registros[0]?.programaId || "";
+      const totalClases = totalClasesPorPrograma.get(programaId) || 0;
+      if (!totalClases) return;
+
+      const usados = new Set<number>();
+      const pendientes: typeof registros = [];
+
+      const ordenados = [...registros].sort((a, b) => {
+        const diff = a.fecha.valueOf() - b.fecha.valueOf();
+        if (diff !== 0) return diff;
+        return a.id.localeCompare(b.id);
+      });
+
+      ordenados.forEach((registro) => {
+        const n = Number(registro.numeroDeclarado || 0);
+        if (Number.isFinite(n) && n > 0 && n <= totalClases && !usados.has(n)) {
+          usados.add(n);
+          map.set(registro.id, n);
+        } else {
+          pendientes.push(registro);
+        }
+      });
+
+      let siguiente = 1;
+      const siguienteLibre = () => {
+        while (siguiente <= totalClases && usados.has(siguiente)) {
+          siguiente += 1;
+        }
+        return siguiente <= totalClases ? siguiente : null;
+      };
+
+      pendientes.forEach((registro) => {
+        const libre = siguienteLibre();
+        if (!libre) return;
+        usados.add(libre);
+        map.set(registro.id, libre);
+      });
+    });
+
+    return map;
+  }, [asistencias, programaIdPorCursoId, totalClasesPorPrograma]);
+
+  const estadoCalendarioAsistenciaById = React.useMemo(() => {
+    const grupos = new Map<string, Array<{ id: string; fecha: dayjs.Dayjs; claseNumero: number }>>();
+
+    (asistencias || []).forEach((item: any) => {
+      const id = String(item?.id || "");
+      const matriculaId = String(item?.matricula_id || "");
+      const fecha = dayjs(String(item?.fecha || ""));
+      const claseNumero = claseNumeroAsistenciaCanonicoById.get(id);
+
+      if (!id || !matriculaId || !fecha.isValid() || !Number.isFinite(claseNumero)) {
+        return;
+      }
+
+      const current = grupos.get(matriculaId) || [];
+      current.push({ id, fecha, claseNumero: Number(claseNumero) });
+      grupos.set(matriculaId, current);
+    });
+
+    const statusMap = new Map<string, { label: string; color: string }>();
+
+    grupos.forEach((registros) => {
+      const porFecha = [...registros].sort((a, b) => {
+        const diff = a.fecha.valueOf() - b.fecha.valueOf();
+        if (diff !== 0) return diff;
+        return a.claseNumero - b.claseNumero;
+      });
+
+      const porClase = [...registros].sort((a, b) => {
+        const diff = a.claseNumero - b.claseNumero;
+        if (diff !== 0) return diff;
+        return a.fecha.valueOf() - b.fecha.valueOf();
+      });
+
+      const posFecha = new Map<string, number>();
+      const posClase = new Map<string, number>();
+
+      porFecha.forEach((item, index) => posFecha.set(item.id, index + 1));
+      porClase.forEach((item, index) => posClase.set(item.id, index + 1));
+
+      registros.forEach((item) => {
+        const pf = posFecha.get(item.id);
+        const pc = posClase.get(item.id);
+        if (!pf || !pc || pf === pc) return;
+
+        if (pf < pc) {
+          statusMap.set(item.id, { label: "Clase adelantada", color: "green" });
+        } else {
+          statusMap.set(item.id, { label: "Clase reprogramada", color: "orange" });
+        }
+      });
+    });
+
+    return statusMap;
+  }, [asistencias, claseNumeroAsistenciaCanonicoById]);
+
   const temaSincronizadoAsistenciaById = React.useMemo(() => {
     const map = new Map<string, string>();
 
@@ -1681,9 +1764,7 @@ export default function PortalEstudiante() {
 
       const cursoId = String(registro?.matriculas?.curso_id || "");
       const programaId = programaIdPorCursoId.get(cursoId) || "";
-      const claseNumero = Number(
-        registro?.clase_numero || extractClassNumber(registro?.tema_visto || registro?.registro_clase || ""),
-      );
+      const claseNumero = claseNumeroAsistenciaCanonicoById.get(id);
 
       if (!programaId || !Number.isFinite(claseNumero) || claseNumero <= 0) return;
 
@@ -1694,7 +1775,7 @@ export default function PortalEstudiante() {
     });
 
     return map;
-  }, [asistencias, programaIdPorCursoId, temaPorProgramaClase]);
+  }, [asistencias, programaIdPorCursoId, temaPorProgramaClase, claseNumeroAsistenciaCanonicoById]);
 
   const renderSeccionActiva = () => {
     if (activeTab === "1") {
