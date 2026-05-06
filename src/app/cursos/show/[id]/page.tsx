@@ -266,6 +266,14 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       .replace(/\s+/g, " ")
       .trim();
 
+  const extractClassNumber = (value?: string | null): number | null => {
+    const text = String(value || "");
+    const match = text.match(/clase\s*#?\s*(\d{1,3})/i);
+    if (!match?.[1]) return null;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   const normalizeHttpUrl = (value?: string | null) => {
     const raw = String(value || "").trim().replace(/&amp;/gi, "&");
     if (!raw) return "";
@@ -773,6 +781,56 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     }
   }, [searchParams]);
 
+  const estadoCalendarioSesionPorId = useMemo(() => {
+    const sesionesConClase = (sesiones || [])
+      .map((sesion: any) => ({
+        id: String(sesion?.id || ""),
+        fecha: dayjs(sesion?.fecha),
+        claseNumero: extractClassNumber(sesion?.tema_visto),
+      }))
+      .filter((item) => item.id && item.fecha.isValid() && Number.isFinite(item.claseNumero));
+
+    if (!sesionesConClase.length) return new Map<string, { label: string; color: string }>();
+
+    const porFecha = [...sesionesConClase].sort((a, b) => {
+      const dateDiff = a.fecha.valueOf() - b.fecha.valueOf();
+      if (dateDiff !== 0) return dateDiff;
+      return Number(a.claseNumero) - Number(b.claseNumero);
+    });
+
+    const porClase = [...sesionesConClase].sort((a, b) => {
+      const classDiff = Number(a.claseNumero) - Number(b.claseNumero);
+      if (classDiff !== 0) return classDiff;
+      return a.fecha.valueOf() - b.fecha.valueOf();
+    });
+
+    const posicionPorFecha = new Map<string, number>();
+    const posicionPorClase = new Map<string, number>();
+
+    porFecha.forEach((item, index) => {
+      posicionPorFecha.set(item.id, index + 1);
+    });
+
+    porClase.forEach((item, index) => {
+      posicionPorClase.set(item.id, index + 1);
+    });
+
+    const statusMap = new Map<string, { label: string; color: string }>();
+    sesionesConClase.forEach((item) => {
+      const fechaPos = posicionPorFecha.get(item.id);
+      const clasePos = posicionPorClase.get(item.id);
+      if (!fechaPos || !clasePos || fechaPos === clasePos) return;
+
+      if (fechaPos < clasePos) {
+        statusMap.set(item.id, { label: "Clase adelantada", color: "green" });
+      } else {
+        statusMap.set(item.id, { label: "Clase reprogramada", color: "orange" });
+      }
+    });
+
+    return statusMap;
+  }, [sesiones]);
+
   // Memoized columns to avoid re-creation on every render
   const columnasSesiones = useMemo(
     () => [
@@ -788,7 +846,17 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         dataIndex: "tema_visto",
         ellipsis: true,
         width: isMobile ? 200 : undefined,
-        render: (tema: string) => (tema ? <Tag>{tema}</Tag> : <Text type="secondary">-</Text>),
+        render: (tema: string, record: any) => {
+          const estadoCalendario = estadoCalendarioSesionPorId.get(String(record?.id || ""));
+          if (!tema && !estadoCalendario) return <Text type="secondary">-</Text>;
+
+          return (
+            <Space direction="vertical" size={4}>
+              {tema ? <Tag>{tema}</Tag> : <Text type="secondary">-</Text>}
+              {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
+            </Space>
+          );
+        },
       },
       {
         title: "Horas Dictadas",
@@ -805,7 +873,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         render: (obs: string) => (obs ? <Text type="secondary">{obs}</Text> : <Text type="secondary">-</Text>),
       },
     ],
-    [isMobile]
+    [isMobile, estadoCalendarioSesionPorId]
   );
 
   const estadoOptions = useMemo(
