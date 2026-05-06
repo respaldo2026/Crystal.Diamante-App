@@ -421,6 +421,63 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     [ordenTemaPorId]
   );
 
+  const claseIdPorOrden = useMemo(() => {
+    const map = new Map<number, string>();
+    clasesPensum.forEach((tema: any) => {
+      const temaId = String(tema?.id || "");
+      const orden = ordenTemaPorId.get(temaId);
+      if (!temaId || !orden || !Number.isFinite(orden)) return;
+      map.set(orden, temaId);
+    });
+    return map;
+  }, [clasesPensum, ordenTemaPorId]);
+
+  const claseIdPorNombreNormalizado = useMemo(() => {
+    const map = new Map<string, string>();
+    clasesPensum.forEach((tema: any) => {
+      const temaId = String(tema?.id || "");
+      if (!temaId) return;
+
+      const nombre = String(tema?.nombre_curso || tema?.titulo || "").trim();
+      const nombreFormateado = formatearNombreClase(tema);
+      const keys = [normalizarTema(nombre), normalizarTema(nombreFormateado)].filter(Boolean);
+
+      keys.forEach((key) => {
+        if (!map.has(key)) {
+          map.set(key, temaId);
+        }
+      });
+    });
+    return map;
+  }, [clasesPensum, formatearNombreClase]);
+
+  const clasesRegistradasIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    (sesiones || []).forEach((sesion: any) => {
+      const temaTexto = String(sesion?.tema_visto || "").trim();
+      if (!temaTexto) return;
+
+      const numeroClase = extractClassNumber(temaTexto);
+      if (numeroClase && claseIdPorOrden.has(numeroClase)) {
+        ids.add(String(claseIdPorOrden.get(numeroClase)));
+      }
+
+      const temaSinPrefijo = temaTexto.replace(/^\s*clase\s*#?\s*\d+\s*[-–:]*\s*/i, "").trim();
+      const temaNormalizado = normalizarTema(temaSinPrefijo || temaTexto);
+      const temaId = claseIdPorNombreNormalizado.get(temaNormalizado);
+      if (temaId) {
+        ids.add(String(temaId));
+      }
+    });
+
+    return ids;
+  }, [sesiones, claseIdPorOrden, claseIdPorNombreNormalizado]);
+
+  const clasesPendientesPensum = useMemo(() => {
+    return (clasesPensum || []).filter((tema: any) => !clasesRegistradasIds.has(String(tema?.id || "")));
+  }, [clasesPensum, clasesRegistradasIds]);
+
   const temasPorNombre = useMemo(() => {
     const map = new Map<string, string>();
     ciclosOrdenados.forEach((ciclo: any) => {
@@ -1784,6 +1841,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const onAddSesion = async (values: any) => {
     try {
       const fechaSesion = values.fecha.format("YYYY-MM-DD");
+      const temaSeleccionadoId = String(values.pensum_curso_id || "");
+
+      if (clasesRegistradasIds.has(temaSeleccionadoId)) {
+        message.warning("Esa clase ya fue registrada. Selecciona una clase pendiente.");
+        return;
+      }
+
       const claseSeleccionada = clasesPensum.find((tema: any) => String(tema.id) === String(values.pensum_curso_id || ""));
       const claseOrden = claseSeleccionada ? ordenTemaPorId.get(String(claseSeleccionada.id)) : null;
       const nombreClase = claseSeleccionada
@@ -2668,11 +2732,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                         return;
                       }
 
-                      const indiceSugerido = Math.min(
-                        Math.max((sesiones || []).length, 0),
-                        Math.max(clasesPensum.length - 1, 0),
-                      );
-                      const claseSugerida = clasesPensum[indiceSugerido] || clasesPensum[0];
+                      if (clasesPendientesPensum.length === 0) {
+                        message.info("Todas las clases del pensum ya fueron registradas.");
+                        return;
+                      }
+
+                      const claseSugerida = clasesPendientesPensum[0];
 
                       formSesion.setFieldsValue({
                         fecha: dayjs(),
@@ -3395,10 +3460,15 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               showSearch
               optionFilterProp="label"
               placeholder="Selecciona la clase del pensum"
-              options={clasesPensum.map((tema: any) => ({
-                value: String(tema.id),
-                label: formatearNombreClase(tema),
-              }))}
+              options={clasesPensum.map((tema: any) => {
+                const temaId = String(tema?.id || "");
+                const estaRegistrada = clasesRegistradasIds.has(temaId);
+                return {
+                  value: temaId,
+                  label: `${formatearNombreClase(tema)}${estaRegistrada ? " (ya registrada)" : ""}`,
+                  disabled: estaRegistrada,
+                };
+              })}
             />
           </Form.Item>
           <Form.Item label="Horas Dictadas" name="horas_dictadas" rules={[{ required: true }]}>
