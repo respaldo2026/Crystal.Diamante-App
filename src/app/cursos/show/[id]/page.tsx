@@ -2052,7 +2052,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         fecha: fechaSesion,
         horas_dictadas: values.horas_dictadas,
         tema_visto: temaVisto,
-        observaciones: observacionesFinal,
       };
 
       const { error } = await supabaseBrowserClient
@@ -2065,7 +2064,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           .update({
             horas_dictadas: values.horas_dictadas,
             tema_visto: temaVisto,
-            observaciones: observacionesFinal,
           })
           .eq("curso_id", parseInt(cursoId))
           .eq("fecha", fechaSesion);
