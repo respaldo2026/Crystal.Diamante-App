@@ -133,6 +133,35 @@ const isAsistenciaPositiva = (estado?: string | null) => {
 
 const safeNumber = (value: number) => (Number.isFinite(value) ? value : 0);
 
+const normalizeStateText = (value?: string | null): string =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const isEnrollmentActiveState = (estado?: string | null): boolean => {
+  const normalized = normalizeStateText(estado);
+  if (!normalized) return true;
+
+  const inactiveStates = [
+    "cancelado",
+    "cancelada",
+    "retirado",
+    "retirada",
+    "inactivo",
+    "inactiva",
+    "expulsado",
+    "suspendido",
+    "graduado",
+    "egresado",
+    "finalizado",
+    "completado",
+  ];
+
+  return !inactiveStates.some((state) => normalized.includes(state));
+};
+
 const normalizeEvaluationText = (value?: string | null): string =>
   String(value || "")
     .toLowerCase()
@@ -284,31 +313,36 @@ export const fetchProfessorDashboardData = async (
     cursoIds.length > 0
       ? supabaseBrowserClient
           .from("matriculas")
-          .select("id, curso_id, estudiante_id, perfiles!matriculas_estudiante_id_fkey(nombre_completo)")
-          .eq("estado", "activo")
+          .select("id, curso_id, estudiante_id, estado, perfiles!matriculas_estudiante_id_fkey(nombre_completo)")
           .in("curso_id", cursoIds)
       : Promise.resolve({ data: [], error: null }),
-    supabaseBrowserClient
-      .from("sesiones_clase")
-      .select("id, fecha, horas_dictadas, curso_id, tema_visto")
-      .eq("profesor_id", profesorId)
-      .gte("fecha", startOfMonth)
-      .lte("fecha", endOfMonth)
-      .order("fecha", { ascending: true }),
-    supabaseBrowserClient
-      .from("sesiones_clase")
-      .select("id, fecha, horas_dictadas, tema_visto, curso_id")
-      .eq("profesor_id", profesorId)
-      .gte("fecha", dayjs().startOf("day").format("YYYY-MM-DD"))
-      .order("fecha", { ascending: true })
-      .limit(6),
-    supabaseBrowserClient
-      .from("sesiones_clase")
-      .select("id, fecha, tema_visto, curso_id")
-      .eq("profesor_id", profesorId)
-      .lte("fecha", dayjs().format("YYYY-MM-DD"))
-      .order("fecha", { ascending: false })
-      .limit(200),
+    cursoIds.length > 0
+      ? supabaseBrowserClient
+          .from("sesiones_clase")
+          .select("id, fecha, horas_dictadas, curso_id, tema_visto")
+          .in("curso_id", cursoIds)
+          .gte("fecha", startOfMonth)
+          .lte("fecha", endOfMonth)
+          .order("fecha", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    cursoIds.length > 0
+      ? supabaseBrowserClient
+          .from("sesiones_clase")
+          .select("id, fecha, horas_dictadas, tema_visto, curso_id")
+          .in("curso_id", cursoIds)
+          .gte("fecha", dayjs().startOf("day").format("YYYY-MM-DD"))
+          .order("fecha", { ascending: true })
+          .limit(6)
+      : Promise.resolve({ data: [], error: null }),
+    cursoIds.length > 0
+      ? supabaseBrowserClient
+          .from("sesiones_clase")
+          .select("id, fecha, tema_visto, curso_id")
+          .in("curso_id", cursoIds)
+          .lte("fecha", dayjs().format("YYYY-MM-DD"))
+          .order("fecha", { ascending: false })
+          .limit(200)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (matriculasResult.error) {
@@ -324,7 +358,9 @@ export const fetchProfessorDashboardData = async (
     console.error("Error obteniendo sesiones históricas", sesionesHistoricasResult.error);
   }
 
-  const matriculasData = matriculasResult.data || [];
+  const matriculasData = (matriculasResult.data || []).filter((matricula: any) =>
+    isEnrollmentActiveState(matricula?.estado),
+  );
   const sesionesMesData = sesionesMesResult.data || [];
   const proximasSesionesData = proximasSesionesResult.data || [];
   const sesionesHistoricas = sesionesHistoricasResult.data || [];
