@@ -765,16 +765,18 @@ function buildAgentPrompt(
   return prompt;
 }
 
-function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "general" {
+function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "pago" | "general" {
   const text = normalizeForMatch(message);
   const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
+  const hasPaymentMethodsIntent = /\b(nequi|bancolombia|sistecredito|daviplata|medios\s+de\s+pago|formas?\s+de\s+pago|metodos?\s+de\s+pago|como\s+se\s+paga|donde\s+pago|numero\s+de\s+pago|a\s+que\s+numero\s+pago)\b/i.test(text);
   const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|cuanto vale|cuanto es|cuanto cuesta)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
   const hasScheduleIntent = /\b(horario|hora|dias|dia|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|manana\s+hay\s+clase|hay\s+clase\s+manana|tengo\s+clase\s+manana|me\s+toca\s+clase|toca\s+clase|clase\s+manana)\b/i.test(text);
 
   if (hasDurationIntent || hasClassFrequencyIntent) return "horario";
   if (hasEnrollmentIntent) return "inscripcion";
+  if (hasPaymentMethodsIntent) return "pago";
   if (hasPriceIntent) return "precio";
   if (hasScheduleIntent) return "horario";
   if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) return "temario";
@@ -1701,7 +1703,7 @@ function buildSeparaCupoPaymentReply(
   academy: any,
   courses: any[]
 ): string {
-  const admissionsContact = academy?.whatsapp || "+57 301 203 8582";
+  const admissionsContact = String(academy?.whatsapp_admisiones || "+57 301 203 8582").trim();
   const nequiNumber = "3006402575";
 
   const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
@@ -1949,7 +1951,7 @@ function buildIntentFocusedDirectResponse(
   // Contacto/número → responder antes que flujo de inscripción
   const asksContactDirect = /\b(numero|telefono|contacto|whatsapp|llamar|admisiones|dame\s+el\s+numero|me\s+das\s+el\s+numero|contacto\s+de)\b/i.test(normalizeForMatch(message));
   if (asksContactDirect) {
-    const wa = String(academy?.whatsapp_admisiones || academy?.whatsapp || "").trim();
+    const wa = String(academy?.whatsapp_admisiones || "+57 301 203 8582").trim();
     if (wa) {
       return `¡Claro! 📱 Número de Admisiones: *${wa}* (WhatsApp)\n\nEscríveles directamente y te atienden de inmediato 🙌`;
     }
@@ -3507,12 +3509,13 @@ export async function POST(req: NextRequest) {
       const normalizedTranscription = normalizeForMatch(trimmedTranscription);
       const isOperationalQuestion = /\b(pago|pagos|nequi|bancolombia|sistecredito|inscrip|inscripcion|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps|precio|valor|cuanto)\b/i.test(normalizedTranscription)
         || /^(1|uno|paso\s*1)$/i.test(normalizedTranscription);
+      const isPaymentMethodsQuestion = detectedIntent === "pago";
       const lastAgentMessage = history[history.length - 1]?.agent || "";
       const isClosureAckInput = isClosureAcknowledgement(trimmedTranscription, lastAgentMessage);
       if (isFirstInteraction || isGreetingOrShortInput) {
         mediaSuggestion = null;
       }
-      if (isOperationalQuestion) {
+      if (isOperationalQuestion && !isPaymentMethodsQuestion) {
         mediaSuggestion = null;
       }
       if (isClosureAckInput) {

@@ -1796,10 +1796,11 @@ NO inventes horarios, precios ni fechas que no estén en el contexto.
 
 type AgentIntent = "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "general";
 
-function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "general" {
+function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "pago" | "general" {
   const text = normalizeForMatch(message);
   const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia)\b/i.test(text);
+  const hasPaymentMethodsIntent = /\b(nequi|bancolombia|sistecredito|daviplata|medios\s+de\s+pago|formas?\s+de\s+pago|metodos?\s+de\s+pago|como\s+se\s+paga|donde\s+pago|numero\s+de\s+pago|a\s+que\s+numero\s+pago)\b/i.test(text);
   const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta|abono|abonar|pago parcial|cuota inicial)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
   const hasScheduleIntent = /\b(horarios?|horas?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|manana\s+hay\s+clase|hay\s+clase\s+manana|tengo\s+clase\s+manana|me\s+toca\s+clase|toca\s+clase|clase\s+manana|todos\s+los\s+dias|cuantos\s+dias|que\s+dias|dias\s+de\s+clase)\b/i.test(text);
@@ -1823,6 +1824,9 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   }
   if (hasScheduleIntent && hasStrongScheduleIntent) {
     return "horario";
+  }
+  if (hasPaymentMethodsIntent) {
+    return "pago";
   }
   if (hasPriceIntent) {
     return "precio";
@@ -4077,7 +4081,7 @@ function buildSocialMediaReply(academy: any | null, userMessage: string = ""): s
   const fb = normalizeSocialUrl(academy?.facebook || "", "facebook");
   const yt = normalizeSocialUrl(academy?.youtube || "", "youtube");
   // Siempre usar el número de la academia como fallback para WhatsApp/teléfono
-  const wa = String(academy?.whatsapp_admisiones || academy?.whatsapp || ADMISSIONS_NUMBER).trim();
+  const wa = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
   const phone = String(academy?.telefono || wa).trim();
 
   const asksInstagram = /\b(instagram|insta|ig|perfil\s+de\s+instagram)\b/i.test(normalizeForMatch(userMessage));
@@ -6525,7 +6529,7 @@ export async function POST(req: NextRequest) {
       const normalizedOriginal = normalizeForMatch(trimmedOriginal);
       const isOperationalQuestion = /\b(nequi|bancolombia|sistecredito|paso\s*1|horario|hora|martes|miercoles|jueves|viernes|sabado|domingo|ubicacion|direccion|donde|maps|semana|vez\s+a\s+la\s+semana|frecuencia)\b/i.test(normalizedOriginal)
         || /^(1|uno|paso\s*1)$/i.test(normalizedOriginal);
-      const isPriceOrPaymentQuestion = detectedIntent === "precio"
+      const isPriceOrPaymentQuestion = detectedIntent === "precio" || detectedIntent === "pago"
         || /\b(precio|valor|cuanto|inversion|inscripcion|mensualidad|pago|pagos|modalidad|modalidades|quincena|quincenal)\b/i.test(normalizedOriginal);
       const lastAgentMessage = history[history.length - 1]?.agent || "";
       const isClosureAckInput = isClosureAcknowledgement(trimmedOriginal, lastAgentMessage);
@@ -6662,6 +6666,7 @@ export async function POST(req: NextRequest) {
           materiales: "quiero saber materiales",
           inscripcion: "quiero saber como me inscribo",
           requisitos: "quiero saber los requisitos",
+          pago: "quiero saber los medios de pago",
           general: "quiero saber dias y horario",
         };
         const forcedProgressResponse = buildIntentFocusedDirectResponse(
@@ -6693,7 +6698,7 @@ export async function POST(req: NextRequest) {
       );
       const truncatedResponse = truncateResponse(completedDirectResponse, 1000);
       const allowMediaSuggestion = shouldAttachMediaSuggestion(message, truncatedResponse);
-      const activeMedia = detectedProgram && allowMediaSuggestion ? mediaSuggestion : null;
+      const activeMedia = (detectedProgram || detectedIntent === "pago") && allowMediaSuggestion ? mediaSuggestion : null;
       const responseToSave = activeMedia
         ? `[📷 ${activeMedia.mediaUrl}|${activeMedia.caption}]\n${truncatedResponse}`
         : truncatedResponse;
