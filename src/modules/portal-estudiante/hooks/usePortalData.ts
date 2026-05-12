@@ -13,6 +13,7 @@ type PortalPayload = {
   asistencias: any[];
   quizIntentos: any[];
   calificacionesActividad: any[];
+  calificaciones: any[];
   pensum: any[];
   materiales: any[];
   materialesCiclo: any[];

@@ -24,6 +24,7 @@ export type PortalDataResult =
         asistencias: any[];
         quizIntentos: any[];
         calificacionesActividad: any[];
+        calificaciones: any[];
         pensum: any[];
         materiales: any[];
         materialesCiclo: any[];
@@ -197,12 +198,13 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
     let asistencias: any[] = [];
     let quizIntentos: any[] = [];
     let calificacionesActividad: any[] = [];
+    let calificaciones: any[] = [];
 
     if (matriculaIds.length > 0) {
       const [asistenciasRes, intentosQuizRes, calificacionesActividadRes] = await Promise.all([
         supabaseBrowserClient
           .from("asistencias")
-          .select("*, matriculas(id, curso_id, cursos(nombre))")
+          .select("*, matriculas(id, curso_id, cursos(nombre, dias_semana, hora_inicio))")
           .in("matricula_id", matriculaIds)
           .order("fecha", { ascending: false }),
         supabaseBrowserClient
@@ -212,16 +214,23 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
           .order("enviado_at", { ascending: false }),
         supabaseBrowserClient
           .from("calificaciones")
-          .select("matricula_id, tema_id, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
+          .select("id, matricula_id, tema_id, concepto, nota, calificacion, tipo_evaluacion, fecha_evaluacion, observaciones")
           .in("matricula_id", matriculaIds)
-          .in("tipo_evaluacion", ["actividad", "tema"])
           .order("fecha_evaluacion", { ascending: false }),
       ]);
 
       const dataAsistencias = asistenciasRes.data || [];
       asistencias = dataAsistencias;
       quizIntentos = intentosQuizRes.data || [];
-      calificacionesActividad = calificacionesActividadRes.data || [];
+      const todasCalificaciones = calificacionesActividadRes.data || [];
+
+      // Separar: tracking de actividades vs. notas visibles al estudiante
+      calificacionesActividad = todasCalificaciones.filter(
+        (c: any) => c.tipo_evaluacion === "actividad" || c.tipo_evaluacion === "tema",
+      );
+      calificaciones = todasCalificaciones.filter(
+        (c: any) => c.tipo_evaluacion !== "actividad" && c.tipo_evaluacion !== "tema",
+      );
 
       if ((dataAsistencias || []).length > 0 && cursoIds.length > 0) {
         const fechas = (dataAsistencias || [])
@@ -332,6 +341,7 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
         materialesClase,
         quizzesClase,
         avancePorCurso,
+        calificaciones,
         certificados,
       },
     };

@@ -135,6 +135,7 @@ export default function PortalEstudiante() {
   const [quizzesClase, setQuizzesClase] = useState<any[]>([]);
   const [quizIntentos, setQuizIntentos] = useState<any[]>([]);
   const [calificacionesActividad, setCalificacionesActividad] = useState<any[]>([]);
+  const [calificaciones, setCalificaciones] = useState<any[]>([]);
   const logrocardRef = useRef<HTMLDivElement>(null);
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
@@ -164,6 +165,7 @@ export default function PortalEstudiante() {
     setAsistencias(payload.asistencias);
     setQuizIntentos(payload.quizIntentos);
     setCalificacionesActividad(payload.calificacionesActividad);
+    setCalificaciones(payload.calificaciones || []);
     setPensum(payload.pensum);
     setMateriales(payload.materiales);
     setMaterialesCiclo(payload.materialesCiclo);
@@ -1925,6 +1927,77 @@ export default function PortalEstudiante() {
               ]}
             />
           </Card>
+
+          {calificaciones.length > 0 && (
+            <Card
+              size="small"
+              title={<><TrophyOutlined /> Calificaciones</>}
+              style={{ marginTop: 16 }}
+            >
+              <Table
+                dataSource={calificaciones}
+                rowKey="id"
+                size="small"
+                pagination={{ pageSize: 10 }}
+                scroll={{ x: 480 }}
+                locale={{ emptyText: "No hay calificaciones registradas" }}
+                columns={[
+                  {
+                    title: "Curso",
+                    render: (_: any, r: any) => {
+                      const mat = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
+                      return construirNombreGrupo(mat?.cursos) || "-";
+                    },
+                  },
+                  {
+                    title: "Tipo",
+                    dataIndex: "tipo_evaluacion",
+                    render: (t: string) => {
+                      const colores: Record<string, string> = {
+                        examen: "blue",
+                        quiz: "purple",
+                        taller: "cyan",
+                        participacion: "green",
+                        otro: "default",
+                      };
+                      return <Tag color={colores[t] || "default"}>{(t || "").toUpperCase()}</Tag>;
+                    },
+                  },
+                  {
+                    title: "Concepto",
+                    dataIndex: "concepto",
+                    render: (v: string) => v || "-",
+                  },
+                  {
+                    title: "Nota",
+                    render: (_: any, r: any) => {
+                      const nota = r.calificacion ?? r.nota;
+                      if (nota == null) return "-";
+                      return (
+                        <Text strong style={{ color: Number(nota) >= 70 ? "#52c41a" : "#ff4d4f" }}>
+                          {nota}/100
+                        </Text>
+                      );
+                    },
+                  },
+                  {
+                    title: "Fecha",
+                    dataIndex: "fecha_evaluacion",
+                    render: (f: string) => (f ? dayjs(f).format("DD/MM/YYYY") : "-"),
+                  },
+                  ...(!isMobile
+                    ? [
+                        {
+                          title: "Observaciones",
+                          dataIndex: "observaciones",
+                          render: (v: string) => v || "-",
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            </Card>
+          )}
         </>
       );
     }
