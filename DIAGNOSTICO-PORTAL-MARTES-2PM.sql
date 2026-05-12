@@ -29,37 +29,31 @@ ORDER BY c.id;
 
 
 -- ─────────────────────────────────────────────────────────────────
--- 2) Matrículas del curso (reemplaza <CURSO_ID> con el id del paso 1)
+-- 2) Matrículas del curso 84 — estado de cuenta auth por estudiante
 -- ─────────────────────────────────────────────────────────────────
-/*
 SELECT
   m.id            AS matricula_id,
   m.estado        AS estado_matricula,
   m.estudiante_id,
   p.nombre_completo,
   p.email,
-  -- ¿El estudiante_id tiene cuenta de auth?
   au.email        AS auth_email,
   au.id           AS auth_uid,
-  -- Si auth_uid ES NULL → no tienen cuenta de acceso creada
-  -- Si auth_uid != m.estudiante_id → hay mismatch de UUIDs
   CASE
-    WHEN au.id IS NULL THEN '❌ Sin cuenta de auth'
+    WHEN au.id IS NULL           THEN '❌ Sin cuenta de auth'
     WHEN au.id != m.estudiante_id THEN '⚠️ UUID mismatch'
     ELSE '✅ OK'
   END AS estado_cuenta
 FROM public.matriculas m
-LEFT JOIN public.perfiles p ON p.id = m.estudiante_id
-LEFT JOIN auth.users au ON au.id = m.estudiante_id
-WHERE m.curso_id = <CURSO_ID>   -- ← reemplaza con el id del paso 1
+LEFT JOIN public.perfiles p   ON p.id  = m.estudiante_id
+LEFT JOIN auth.users     au   ON au.id = m.estudiante_id
+WHERE m.curso_id = 84
 ORDER BY m.estado, p.nombre_completo;
-*/
 
 
 -- ─────────────────────────────────────────────────────────────────
--- 3) Asistencias registradas para ese curso
+-- 3) Asistencias registradas para el curso 84
 -- ─────────────────────────────────────────────────────────────────
-/*
 SELECT
   a.id            AS asistencia_id,
   a.fecha,
@@ -69,17 +63,15 @@ SELECT
   m.estudiante_id,
   p.nombre_completo
 FROM public.asistencias a
-JOIN public.matriculas m ON m.id = a.matricula_id
+JOIN  public.matriculas m ON m.id = a.matricula_id
 LEFT JOIN public.perfiles p ON p.id = m.estudiante_id
-WHERE m.curso_id = <CURSO_ID>   -- ← reemplaza
+WHERE m.curso_id = 84
 ORDER BY p.nombre_completo, a.fecha DESC;
-*/
 
 
 -- ─────────────────────────────────────────────────────────────────
--- 4) Calificaciones registradas para ese curso
+-- 4) Calificaciones registradas para el curso 84
 -- ─────────────────────────────────────────────────────────────────
-/*
 SELECT
   cal.id                AS calificacion_id,
   cal.matricula_id,
@@ -91,37 +83,34 @@ SELECT
   m.estudiante_id,
   p.nombre_completo
 FROM public.calificaciones cal
-JOIN public.matriculas m ON m.id = cal.matricula_id
+JOIN  public.matriculas m ON m.id = cal.matricula_id
 LEFT JOIN public.perfiles p ON p.id = m.estudiante_id
-WHERE m.curso_id = <CURSO_ID>   -- ← reemplaza
+WHERE m.curso_id = 84
 ORDER BY p.nombre_completo, cal.fecha_evaluacion DESC;
-*/
 
 
 -- ─────────────────────────────────────────────────────────────────
--- 5) Verificar perfiles sin cuenta auth (huérfanos)
---    Estos estudiantes NUNCA podrán ver su portal aunque tengan datos
+-- 5) Estudiantes del curso 84 sin cuenta auth (huérfanos)
+--    Estos NUNCA podrán ver su portal aunque tengan datos
 -- ─────────────────────────────────────────────────────────────────
-/*
 SELECT
   p.id            AS perfil_id,
   p.nombre_completo,
   p.email,
   p.rol,
   au.id           AS auth_uid
-FROM public.perfiles p
-LEFT JOIN auth.users au ON au.id = p.id
-WHERE au.id IS NULL
-  AND p.rol = 'estudiante'
+FROM public.matriculas m
+LEFT JOIN public.perfiles  p  ON p.id  = m.estudiante_id
+LEFT JOIN auth.users       au ON au.id = m.estudiante_id
+WHERE m.curso_id = 84
+  AND au.id IS NULL
 ORDER BY p.nombre_completo;
-*/
 
 
 -- ─────────────────────────────────────────────────────────────────
--- 6) QUICK CHECK: matriculas con estado = 'cancelado' para ese curso
---    Si aparecen aquí, el portal los ignora y no muestra sus datos
+-- 6) Matrículas con estado = 'cancelado' en el curso 84
+--    El portal las excluye completamente (neq cancelado)
 -- ─────────────────────────────────────────────────────────────────
-/*
 SELECT
   m.id,
   m.estado,
@@ -129,20 +118,18 @@ SELECT
   p.email
 FROM public.matriculas m
 LEFT JOIN public.perfiles p ON p.id = m.estudiante_id
-WHERE m.curso_id = <CURSO_ID>
+WHERE m.curso_id = 84
   AND m.estado = 'cancelado'
 ORDER BY p.nombre_completo;
-*/
 
 
 -- ─────────────────────────────────────────────────────────────────
--- 7) CORRECCIÓN RÁPIDA: si las matrículas están en 'cancelado' 
---    pero el estudiante sigue activo, cambiarlas a 'activo'
+-- 7) CORRECCIÓN: reactivar matrículas canceladas del curso 84
+--    EJECUTAR SOLO si el paso 6 muestra estudiantes que siguen activos
 -- ─────────────────────────────────────────────────────────────────
 /*
 UPDATE public.matriculas
 SET estado = 'activo'
-WHERE curso_id = <CURSO_ID>
+WHERE curso_id = 84
   AND estado = 'cancelado';
--- EJECUTAR SOLO después de verificar los resultados del paso 6
 */

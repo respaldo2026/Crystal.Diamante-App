@@ -1971,11 +1971,15 @@ export default function PortalEstudiante() {
                   {
                     title: "Nota",
                     render: (_: any, r: any) => {
-                      const nota = r.calificacion ?? r.nota;
-                      if (nota == null) return "-";
+                      const nota = Number(r.calificacion ?? r.nota);
+                      if (!Number.isFinite(nota)) return "-";
+                      // Escala 0-5 (Colombia) si nota <= 5, escala 0-100 si es mayor
+                      const esEscala5 = nota <= 5;
+                      const aprobado = esEscala5 ? nota >= 3.0 : nota >= 60;
+                      const display = esEscala5 ? nota.toFixed(1) : `${nota}/100`;
                       return (
-                        <Text strong style={{ color: Number(nota) >= 70 ? "#52c41a" : "#ff4d4f" }}>
-                          {nota}/100
+                        <Text strong style={{ color: aprobado ? "#52c41a" : "#ff4d4f" }}>
+                          {display}
                         </Text>
                       );
                     },
