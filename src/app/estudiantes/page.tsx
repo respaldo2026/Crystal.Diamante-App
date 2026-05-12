@@ -57,7 +57,7 @@ export default function EstudiantesList() {
         resource: "perfiles",
         // TRUCO AVANZADO: Especificar explícitamente la FK para evitar ambigüedad
         meta: {
-            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, programas(nombre)))"
+            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, numero_cuotas, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, numero_cuotas, programas(nombre, duracion)))"
         },
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
         pagination: {
@@ -149,9 +149,11 @@ export default function EstudiantesList() {
         const mats = obtenerMatriculasVigentes(record);
         if (mats.length === 0) return { label: 'Sin pagos', color: 'default' as const };
 
+        const hoy = dayjs().startOf('day');
         let matriculasConPagoVigente = 0;
         let matriculasConPendienteMesActual = 0;
         let mensualidadesPendientesVencidasMesActual = 0;
+        let cuotasVencidasFaltantes = 0;
 
         mats.forEach((m: any) => {
             const st = pagosStats[m.id];
@@ -162,9 +164,30 @@ export default function EstudiantesList() {
                 matriculasConPendienteMesActual += 1;
             }
             mensualidadesPendientesVencidasMesActual += st?.mensualidadesPendientesVencidasMesActual || 0;
+
+            // Detectar cuotas esperadas que faltan en BD (nunca se crearon como registro)
+            const modalidad = String(m?.modalidad_pago || '');
+            if (modalidad === 'POR_CLASE') return;
+            const totalCuotas = Number(
+                m?.cursos?.programas?.duracion ??
+                m?.cursos?.numero_cuotas ??
+                m?.numero_cuotas ??
+                0
+            );
+            if (!totalCuotas) return;
+            const fechaInicio = m?.fecha_inicio ? dayjs(m.fecha_inicio) : null;
+            if (!fechaInicio || !fechaInicio.isValid()) return;
+            // Cuántas cuotas deberían estar pagadas hasta hoy
+            let esperadasHastaHoy = 0;
+            for (let i = 1; i <= totalCuotas; i++) {
+                const vencimiento = fechaInicio.add(i - 1, 'month').endOf('day');
+                if (!vencimiento.isAfter(hoy)) esperadasHastaHoy++;
+            }
+            const pagadas = st?.mensualidadesPagadas || 0;
+            if (pagadas < esperadasHastaHoy) cuotasVencidasFaltantes += (esperadasHastaHoy - pagadas);
         });
 
-        if (mensualidadesPendientesVencidasMesActual > 0) {
+        if (mensualidadesPendientesVencidasMesActual > 0 || cuotasVencidasFaltantes > 0) {
             return { label: 'Vencido', color: 'red' as const };
         }
 
