@@ -165,7 +165,7 @@ export default function EstudiantesList() {
         });
 
         if (mensualidadesPendientesVencidasMesActual > 0) {
-            return { label: 'Pendiente', color: 'orange' as const };
+            return { label: 'Vencido', color: 'red' as const };
         }
 
         if (matriculasConPendienteMesActual > 0) {
@@ -298,13 +298,15 @@ export default function EstudiantesList() {
                             stats[matriculaId].mensualidadesPagadasMesActual += 1;
                         }
                     }
-                    if (p.estado === 'pendiente') {
+                    if (p.estado === 'pendiente' || p.estado === 'vencido') {
                         stats[matriculaId].pendientes += 1;
                         if (!esInscripcion) {
                             stats[matriculaId].mensualidadesPendientes += 1;
                             if (esExigibleEsteMes) stats[matriculaId].mensualidadesPendientesMesActual += 1;
                         }
-                        if (p.fecha_vencimiento && dayjs(p.fecha_vencimiento).endOf('day').isBefore(hoy)) {
+                        // estado='vencido' siempre es vencido; estado='pendiente' lo es si fecha_vencimiento < hoy
+                        const esVencido = p.estado === 'vencido' || (p.fecha_vencimiento && dayjs(p.fecha_vencimiento).endOf('day').isBefore(hoy));
+                        if (esVencido) {
                             stats[matriculaId].pendientesVencidos += 1;
                             if (!esInscripcion) {
                                 stats[matriculaId].mensualidadesPendientesVencidas += 1;
