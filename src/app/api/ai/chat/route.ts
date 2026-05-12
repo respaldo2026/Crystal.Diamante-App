@@ -1794,7 +1794,7 @@ NO inventes horarios, precios ni fechas que no estén en el contexto.
   return prompt;
 }
 
-type AgentIntent = "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "general";
+type AgentIntent = "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "pago" | "general";
 
 function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "pago" | "general" {
   const text = normalizeForMatch(message);
