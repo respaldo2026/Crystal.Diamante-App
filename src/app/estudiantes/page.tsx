@@ -47,7 +47,7 @@ export default function EstudiantesList() {
         
         // Si es profesor, solo ve estudiantes de sus cursos
         if (user?.rol === "profesor") {
-            filters.push({ field: "perfiles.profesor_id", operator: "eq", value: user.id });
+            filters.push({ field: "matriculas.cursos.profesor_id", operator: "eq", value: user.id });
         }
         
         return filters;
