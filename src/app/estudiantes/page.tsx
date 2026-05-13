@@ -37,6 +37,8 @@ export default function EstudiantesList() {
     const isTablet = screens.md && !screens.lg;
     const [searchValue, setSearchValue] = useState("");
     const [deletedIds, setDeletedIds] = useState<string[]>([]);
+    const [fallbackStudents, setFallbackStudents] = useState<any[] | null>(null);
+    const [loadingFallbackStudents, setLoadingFallbackStudents] = useState(false);
     
     // Construcción dinámica de filtros según rol
     const permanentFilters = () => {
@@ -80,6 +82,86 @@ export default function EstudiantesList() {
             ];
         }
     });
+
+    const mainDataSource = useMemo(
+        () => (tableProps.dataSource as any[]) || [],
+        [tableProps.dataSource]
+    );
+
+    useEffect(() => {
+        if (tableProps.loading) return;
+
+        if (mainDataSource.length > 0) {
+            setFallbackStudents(null);
+            return;
+        }
+
+        let cancelled = false;
+
+        const fetchStudentsFromMatriculas = async () => {
+            setLoadingFallbackStudents(true);
+            try {
+                let query = supabaseBrowserClient
+                    .from("matriculas")
+                    .select("id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, numero_cuotas, estudiante_id, perfiles!matriculas_estudiante_id_fkey(*), cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, numero_cuotas, profesor_id, programas(nombre, duracion))")
+                    .order("fecha_inicio", { ascending: false })
+                    .limit(500);
+
+                if (user?.rol === "profesor") {
+                    query = query.eq("cursos.profesor_id", user.id);
+                }
+
+                const { data, error } = await query;
+
+                if (error) {
+                    throw error;
+                }
+
+                const studentsById = new Map<string, any>();
+
+                (data || []).forEach((matricula: any) => {
+                    const perfil = Array.isArray(matricula?.perfiles) ? matricula.perfiles[0] : matricula?.perfiles;
+                    const curso = Array.isArray(matricula?.cursos) ? matricula.cursos[0] : matricula?.cursos;
+
+                    if (!perfil?.id) return;
+
+                    const existing = studentsById.get(perfil.id) || {
+                        ...perfil,
+                        matriculas: [],
+                    };
+
+                    existing.matriculas = [
+                        ...existing.matriculas,
+                        {
+                            ...matricula,
+                            cursos: curso,
+                        },
+                    ];
+
+                    studentsById.set(perfil.id, existing);
+                });
+
+                if (!cancelled) {
+                    setFallbackStudents(Array.from(studentsById.values()));
+                }
+            } catch (error) {
+                console.error("Error cargando estudiantes desde matrículas:", error);
+                if (!cancelled) {
+                    setFallbackStudents([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoadingFallbackStudents(false);
+                }
+            }
+        };
+
+        fetchStudentsFromMatriculas();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [mainDataSource.length, tableProps.loading, user?.id, user?.rol]);
 
     // Búsqueda en tiempo real mientras se escribe
     const handleSearchChange = (value: string) => {
@@ -202,10 +284,10 @@ export default function EstudiantesList() {
         return { label: 'Pendiente', color: 'gold' as const };
     };
 
-    const dataSource = useMemo(
-        () => ((tableProps.dataSource as any[]) || []).filter((s: any) => !deletedIds.includes(s.id)),
-        [tableProps.dataSource, deletedIds]
-    );
+    const dataSource = useMemo(() => {
+        const source = mainDataSource.length > 0 ? mainDataSource : (fallbackStudents || []);
+        return source.filter((s: any) => !deletedIds.includes(s.id));
+    }, [deletedIds, fallbackStudents, mainDataSource]);
 
     // Calcular asistencia por matrícula para cada estudiante (SOLO cuando se solicite)
     useEffect(() => {
@@ -453,6 +535,17 @@ export default function EstudiantesList() {
         filteredDataSource = filteredDataSource.filter((s: any) => getPlanPagoDisplay(s).modalidad === paymentPlanFilter);
     }
 
+    if (searchValue.trim()) {
+        const searchTerm = searchValue.trim().toLowerCase();
+        filteredDataSource = filteredDataSource.filter((s: any) => {
+            const haystack = [s?.nombre_completo, s?.identificacion, s?.telefono, s?.email]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase();
+            return haystack.includes(searchTerm);
+        });
+    }
+
     filteredDataSource = [...filteredDataSource].sort((a: any, b: any) => {
         if (sortMode === 'recent') {
             return dayjs(b?.created_at || 0).valueOf() - dayjs(a?.created_at || 0).valueOf();
@@ -669,7 +762,7 @@ export default function EstudiantesList() {
                     {...tableProps}
                     dataSource={filteredDataSource}
                     rowKey="id"
-                    loading={tableProps.loading || loadingAsist || loadingPagos}
+                    loading={tableProps.loading || loadingFallbackStudents || loadingAsist || loadingPagos}
                     onRow={(record: any) => ({
                         onClick: () => router.push(`/estudiantes/show/${record.id}`),
                         style: { cursor: "pointer" },
