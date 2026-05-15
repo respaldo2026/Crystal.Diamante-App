@@ -200,6 +200,7 @@ export default function EstudiantesList() {
         mensualidadesPagadasMesActual: number;
         mensualidadesPendientesMesActual: number;
         mensualidadesPendientesVencidasMesActual: number;
+        cuotasVencidas: { periodo: string }[];
     }>>({});
     const [loadingPagos, setLoadingPagos] = useState(false);
     const [calcularAsistencia, setCalcularAsistencia] = useState(false);
@@ -269,19 +270,42 @@ export default function EstudiantesList() {
             if (pagadas < esperadasHastaHoy) cuotasVencidasFaltantes += (esperadasHastaHoy - pagadas);
         });
 
-        if (mensualidadesPendientesVencidasMesActual > 0 || cuotasVencidasFaltantes > 0) {
-            return { label: 'Vencido', color: 'red' as const };
+        // Recopilar cuotas vencidas de todas las matrículas para el tooltip
+        const detalleVencidos: string[] = [];
+        mats.forEach((m: any) => {
+            const st = pagosStats[m.id];
+            if (st?.cuotasVencidas?.length) {
+                st.cuotasVencidas.forEach(c => detalleVencidos.push(c.periodo));
+            }
+        });
+
+        // Cuotas esperadas faltantes en BD → incluir etiqueta genérica
+        if (cuotasVencidasFaltantes > 0 && detalleVencidos.length === 0) {
+            for (let i = 0; i < cuotasVencidasFaltantes; i++) {
+                detalleVencidos.push('Mensualidad vencida');
+            }
+        }
+
+        const hayVencidos = mensualidadesPendientesVencidasMesActual > 0 ||
+            (mats.some((m: any) => (pagosStats[m.id]?.mensualidadesPendientesVencidas || 0) > 0)) ||
+            cuotasVencidasFaltantes > 0;
+
+        if (hayVencidos) {
+            const resumen = detalleVencidos.length > 0
+                ? `Debe: ${detalleVencidos.slice(0, 3).join(' · ')}${detalleVencidos.length > 3 ? ` +${detalleVencidos.length - 3} más` : ''}`
+                : 'Cuota(s) vencidas sin pagar';
+            return { label: 'Vencido', color: 'red' as const, tooltip: resumen };
         }
 
         if (matriculasConPendienteMesActual > 0) {
-            return { label: 'Pendiente', color: 'gold' as const };
+            return { label: 'Pendiente', color: 'gold' as const, tooltip: undefined };
         }
 
         if (matriculasConPagoVigente > 0) {
-            return { label: 'Pagado', color: 'green' as const };
+            return { label: 'Al día', color: 'green' as const, tooltip: undefined };
         }
 
-        return { label: 'Pendiente', color: 'gold' as const };
+        return { label: 'Pendiente', color: 'gold' as const, tooltip: undefined };
     };
 
     const dataSource = useMemo(() => {
@@ -372,6 +396,7 @@ export default function EstudiantesList() {
                     mensualidadesPagadasMesActual: number;
                     mensualidadesPendientesMesActual: number;
                     mensualidadesPendientesVencidasMesActual: number;
+                    cuotasVencidas: { periodo: string }[];
                 }> = {};
                 (pagos || []).forEach((p: any) => {
                     const matriculaId = p?.matricula_id;
@@ -388,6 +413,7 @@ export default function EstudiantesList() {
                             mensualidadesPagadasMesActual: 0,
                             mensualidadesPendientesMesActual: 0,
                             mensualidadesPendientesVencidasMesActual: 0,
+                            cuotasVencidas: [],
                         };
                     }
                     const esInscripcion = esPagoInscripcion(p);
@@ -416,6 +442,9 @@ export default function EstudiantesList() {
                             if (!esInscripcion) {
                                 stats[matriculaId].mensualidadesPendientesVencidas += 1;
                                 if (esExigibleEsteMes) stats[matriculaId].mensualidadesPendientesVencidasMesActual += 1;
+                                stats[matriculaId].cuotasVencidas.push({
+                                    periodo: p.periodo_pagado || `Cuota ${p.numero_cuota ?? '?'}`,
+                                });
                             }
                         }
                     }
@@ -883,7 +912,10 @@ export default function EstudiantesList() {
                         title="Pago"
                         render={(_, record: any) => {
                             const pagoTag = obtenerEstadoPago(record);
-                            return <Tag color={pagoTag.color}>{pagoTag.label}</Tag>;
+                            const tag = <Tag color={pagoTag.color}>{pagoTag.label}</Tag>;
+                            return pagoTag.tooltip
+                                ? <Tooltip title={pagoTag.tooltip}>{tag}</Tooltip>
+                                : tag;
                         }}
                     />
                 )}
