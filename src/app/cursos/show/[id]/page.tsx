@@ -2031,6 +2031,37 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         return;
       }
 
+      // Verificar que el profesor haya tomado lista antes de registrar la sesión
+      const { data: matriculasCursoCheck, error: matriculasCheckError } = await supabaseBrowserClient
+        .from("matriculas")
+        .select("id")
+        .eq("curso_id", parseInt(cursoId))
+        .in("estado", ["activo", "en curso", "pendiente_pago"]);
+
+      if (matriculasCheckError) throw matriculasCheckError;
+
+      const matriculaIdsCheck = (matriculasCursoCheck || [])
+        .map((row: any) => Number(row?.id))
+        .filter((id: number) => Number.isFinite(id));
+
+      if (matriculaIdsCheck.length > 0) {
+        const { data: listaVerificacion, error: listaError } = await supabaseBrowserClient
+          .from("asistencias")
+          .select("id")
+          .in("matricula_id", matriculaIdsCheck)
+          .eq("fecha", fechaSesion)
+          .limit(1);
+
+        if (listaError) throw listaError;
+
+        if (!listaVerificacion || listaVerificacion.length === 0) {
+          message.warning(
+            "⚠️ Debes llamar a lista antes de registrar la sesión. Usa el botón 'Tomar Lista' para registrar la asistencia del día y luego regresa aquí."
+          );
+          return;
+        }
+      }
+
       const claseSeleccionada = clasesPensum.find((tema: any) => String(tema.id) === String(values.pensum_curso_id || ""));
       const claseOrden = claseSeleccionada ? ordenTemaPorId.get(String(claseSeleccionada.id)) : null;
       const nombreClase = claseSeleccionada
