@@ -673,7 +673,7 @@ Sigue siempre este orden:
 Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
 
 - Precio: confirma inscripción + mensualidad, incluye 1-2 beneficios clave y pregunta si desea medios/fechas de pago.
-- Precio (formato obligatorio): muestra siempre *3 opciones de pago* en este orden y con negrilla: *Por Clase*, *Mensual Opción A*, *Mensual Opción B*. Hazlo en formato corto y comercial (sin texto técnico largo). Debes aclarar materiales en cada una: Por Clase = no incluye materiales; Opción A = incluye ~70% de materiales; Opción B = incluye 100% de materiales del mes.
+- Precio (formato obligatorio): muestra siempre *2 opciones de pago* en este orden y con negrilla: *Por Clase*, *Mensual*. Hazlo en formato corto y comercial (sin texto técnico largo). Debes aclarar materiales en cada una: Por Clase = no incluye materiales; Mensual = incluye 100% de materiales del mes ($300.000/mes).
 - "Efectivo" / confirmación de medio de pago: NO reinicies el embudo. Confirma que efectivo está disponible y da el siguiente paso. Si la promo de abril está activa, usa: "¡Perfecto! Entonces puedes separar tu cupo pagando *$120.000* en efectivo directamente en la academia hasta el *30 de abril* (antes *$190.000*). Ese valor ya incluye camisa uniforme, ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. ¿Quieres que te diga los pasos para hacerlo?"
 - "Sí" / "sí porfavor" / "porfavor" después de preguntar si quiere medios y fechas de pago: da inmediatamente la lista de medios de pago y la fecha límite de mensualidad. NO preguntes de nuevo qué quiere saber.
 - Medios/fechas de pago: lista los medios disponibles (💵 Efectivo • 💜 Nequi: 3006402575 • 🟡 Bancolombia • 🟢 Sistecredito • 💳 Tarjeta), indica que la mensualidad tiene plazo hasta la segunda clase, y pregunta si quiere guía de inscripción.
@@ -683,7 +683,7 @@ Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
 - Sábados (cuando NO hay grupo en sábado): di claramente que por ahora no hay grupo los sábados. Valida que es una situación entendible si trabajan entre semana. Pregunta si quieren quedar en lista de espera para cuando se abra un grupo en ese horario. NO ofrezcas el grupo de martes ni ningún otro día como alternativa sin que te lo pidan.
 - Uniforme / kit primer día: la camisa uniforme ya viene incluida en el valor vigente de separación del cupo. Si la promo de abril está activa, aclara que *hasta el 30 de abril* la inscripción está en *$120.000* (antes *$190.000*). Ese valor también incluye ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. El kit de materiales se entrega al inicio de cada mes junto con el pago de mensualidad; contiene aproximadamente el 70% de los productos que se usan durante ese mes de clases. El primer día puedes venir con ropa cómoda, no necesitas llevar nada.
 - "¿Cuántas clases cubre la mensualidad?": cada mensualidad cubre 4 clases aproximadamente (el programa es de 20 clases en 5 meses). Ofrece detallar el contenido de algún mes específico.
-- "¿No le rebajan a la mensualidad?" / negociación de precio: la mensualidad tiene un precio fijo de $260.000. Sin embargo, Sistecredito permite financiar en cuotas. ¿Quieres que te explique cómo funciona esa opción?
+- "¿No le rebajan a la mensualidad?" / negociación de precio: la mensualidad tiene un precio fijo de $300.000. Sin embargo, Sistecredito permite financiar en cuotas. ¿Quieres que te explique cómo funciona esa opción?
 - Fotos del kit: di que puedes conseguirlas, pide confirmar programa/ciclo para enviar las correctas.
 - ¿Qué trae el kit?: explica que el kit incluye aproximadamente el 70% de los productos que se usan durante ese mes de clases (varía por ciclo). Pregunta si quiere el detalle del primer mes o de un ciclo específico.
 - ¿Es kit básico?: confirma que el kit cubre aproximadamente el 70% de los productos que se usan ese mes (lo esencial para practicar); aclara que los materiales específicos varían por ciclo y ofrece detallar el primer ciclo.
@@ -2843,10 +2843,9 @@ function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) 
 function buildHumanPaymentModalitiesBlock(detectedProgram: any, primaryCourse: any): string {
   const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
   return [
-    `✅ *3 modalidades de pago:*`,
+    `✅ *2 modalidades de pago:*`,
     `• *Por Clase:* ${options.porClaseText} por clase (no incluye materiales).`,
-    `• *Mensual Opción A:* ${options.mensual70Text}/mes (incluye ~70% de materiales).`,
-    `• *Mensual Opción B:* ${options.mensual100Text}/mes (incluye 100% de materiales del mes).`,
+    `• *Mensual:* ${options.mensual100Text}/mes (incluye 100% de materiales del mes).`,
   ].join("\n");
 }
 
@@ -2855,8 +2854,7 @@ function hasScannablePaymentModalities(text: string): boolean {
   if (!normalized) return false;
 
   return /por\s+clase/.test(normalized)
-    && /mensual\s+opcion\s+a/.test(normalized)
-    && /mensual\s+opcion\s+b/.test(normalized);
+    && /mensual/.test(normalized);
 }
 
 function ensurePaymentModalitiesInResponse(
@@ -4147,7 +4145,7 @@ function buildPaymentMethodsAndDatesReply(
   const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
   const modalidadesBlock = detectedProgram
     ? `\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}`
-    : "\n\n💳 *Modalidades de pago:*\n• *Por Clase:* no incluye materiales.\n• *Mensual Opción A:* incluye ~70% de materiales del mes.\n• *Mensual Opción B:* incluye 100% de materiales del mes.";
+    : "\n\n💳 *Modalidades de pago:*\n• *Por Clase:* no incluye materiales.\n• *Mensual:* $300.000/mes (incluye 100% de materiales del mes).";  
 
   return `¡Claro! Te respondo puntual 🙌\n\n${methodsBlock}${modalidadesBlock}\n\nLa *matrícula* se paga anticipada para separar cupo y la *mensualidad* se puede pagar hasta la segunda clase.\n\n¿Quieres que te recomiende la modalidad según tu presupuesto?`;
 }
@@ -4579,7 +4577,7 @@ function buildIntentFocusedDirectResponse(
     const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
 
     if (paymentOptionSelection === "a") {
-      return `Perfecto 🙌 Quedas con *Mensual Opción A* en *${options.mensual70Text}/mes* (incluye ~70% de materiales del mes).\n\nLa inscripción separa tu cupo y la mensualidad la puedes pagar hasta la segunda clase. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
+      return `Perfecto 🙌 Quedas con *Mensual* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción separa tu cupo y la mensualidad la puedes pagar hasta la segunda clase. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
     }
 
     if (paymentOptionSelection === "b") {
@@ -4733,7 +4731,7 @@ function buildIntentFocusedDirectResponse(
       return `¡Buena pregunta! 👌 No manejamos pago quincenal fijo.\n\nSe maneja así:\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\nSi quieres, te recomiendo en una línea cuál te conviene más según tu presupuesto.`;
     }
 
-    return "¡Buena pregunta! 👌 No manejamos pago quincenal fijo. Trabajamos con *3 modalidades*: *Por Clase*, *Mensual Opción A* y *Mensual Opción B*. Si me dices el curso, te doy los valores exactos de cada una.";
+    return "¡Buena pregunta! 👌 No manejamos pago quincenal fijo. Trabajamos con *2 modalidades*: *Por Clase* y *Mensual* ($300.000/mes). Si me dices el curso, te doy los valores exactos.";
   }
 
   if (asksPlanRecommendation && (asksPrice || hasRecentPricingContext || Boolean(detectedProgram))) {
@@ -4744,7 +4742,7 @@ function buildIntentFocusedDirectResponse(
     const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
     const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
 
-    return `Claro, te recomiendo la *Mensual Opción B* (${options.mensual100Text}/mes) porque incluye el 100% de materiales y estudias con todo completo desde el inicio.\n\nSi prefieres comenzar con menor inversión, la *Mensual Opción A* (${options.mensual70Text}/mes) también funciona muy bien y puedes complementar algunos materiales por tu cuenta.\n\n¿Quieres que te detalle exactamente qué incluye la inscripción (${options.inscripcionText})?`;
+    return `Claro, te recomiendo el plan *Mensual* (${options.mensual100Text}/mes) porque incluye el 100% de materiales y estudias con todo completo desde el inicio.\n\nSi prefieres menor inversión inicial, también tenemos *Por Clase* (${options.porClaseText} por clase asistida, sin materiales incluidos).\n\n¿Quieres que te detalle exactamente qué incluye la inscripción (${options.inscripcionText})?`;
   }
 
   if (asksMonthlyClassLoad && detectedProgram) {
@@ -4783,7 +4781,7 @@ function buildIntentFocusedDirectResponse(
       return `Claro, aquí va directo para *${detectedProgram.nombre}*:\n\n${promoHeadline}💰 *Inscripción:* ${insText}\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n¿Quieres que te pase los medios de pago?`;
     }
 
-    return "¡Claro! 🙌 Te respondo corto: manejamos *3 modalidades* (*Por Clase*, *Mensual Opción A* y *Mensual Opción B*). Si me dices el curso, te doy los valores exactos de cada una.";
+    return "¡Claro! 🙌 Te respondo corto: manejamos *2 modalidades* (*Por Clase* y *Mensual* $300.000/mes). Si me dices el curso, te doy los valores exactos.";
   }
 
   if (isPaymentValidationQuestion(message) && detectedProgram) {
@@ -4799,8 +4797,7 @@ La inscripción se paga una sola vez para separar cupo.`;
     }
 
     if (/\b(opcion\s*a|mensual\s+opcion\s*a|260\s*000|260000)\b/i.test(normalizedValidation)) {
-      return `Sí, correcto ✅ En *Mensual Opción A* pagas *${options.mensual70Text}* cada mes durante *${durationLabel}*.
-La inscripción se paga una sola vez para separar cupo.`;
+      return `Actualmente manejamos el plan *Mensual* a *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción se paga una sola vez para separar cupo. ¿Te interesa ese plan?`;
     }
 
     if (/\b(por\s+clase|clase)\b/i.test(normalizedValidation)) {
