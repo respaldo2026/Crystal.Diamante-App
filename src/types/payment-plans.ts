@@ -75,11 +75,17 @@ export function resolvePaymentPlanAmounts(
   }
 
   if (modalidad === "MENSUAL_100") {
+    // Guard: si precio_mensual_100 === precio_mensual_70 fue copiado erróneamente
+    // por migration-modalidades-pago-matriculas.sql (COALESCE(precio_mensual_100, precio_mensualidad)).
+    // En ese caso, precio_mensual_100 tiene el valor del plan 70% (ej. 260k) y NO representa
+    // el precio real del plan 100%. Usamos el fallback del plan en ese caso.
+    const precio100 = cfg.precio_mensual_100;
+    const precio70 = cfg.precio_mensual_70 ?? cfg.precio_mensualidad;
+    const precio100EsValido =
+      precio100 != null && precio100 > 0 && precio100 !== precio70;
     return {
       montoMensual: Number(
-        // NO usar precio_mensualidad como fallback: ese campo generalmente guarda el precio del
-        // plan 70% y haría que matriculas MENSUAL_100 se creen con monto incorrecto (260k).
-        cfg.precio_mensual_100 ?? fallback.montoMensual ?? 0,
+        precio100EsValido ? precio100 : fallback.montoMensual ?? 0,
       ),
       montoPorClase: 0,
       porcentajeProductos: 100,

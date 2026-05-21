@@ -148,15 +148,8 @@ export default function EditEstudiante() {
         cargarMatriculas();
     }, [cargarMatriculas]);
 
-    const sincronizarPagosPendientes = useCallback(async (matricula: MatriculaEditable, modalidadPago: ModalidadPago) => {
-        const programaPricing: ProgramaPaymentConfig = {
-            precio_por_clase: matricula?.cursos?.programas?.precio_por_clase,
-            precio_mensual_70: matricula?.cursos?.programas?.precio_mensual_70,
-            precio_mensual_100: matricula?.cursos?.programas?.precio_mensual_100,
-            precio_mensualidad: matricula?.cursos?.precio_mensualidad ?? matricula?.cursos?.programas?.precio_mensualidad,
-        };
-
-        const montos = resolvePaymentPlanAmounts(modalidadPago, programaPricing);
+    const sincronizarPagosPendientes = useCallback(async (matricula: MatriculaEditable, modalidadPago: ModalidadPago, montoMensualCalculado: number) => {
+        const montos = { montoMensual: montoMensualCalculado };
         const numeroCuotas = parseNumeroCuotas(matricula);
 
         const { data: pagosExistentes, error: pagosError } = await supabaseBrowserClient
@@ -344,7 +337,7 @@ export default function EditEstudiante() {
                     .eq("id", matricula.id);
 
                 if (matriculaError) throw matriculaError;
-                await sincronizarPagosPendientes(matricula, nuevaModalidad);
+                await sincronizarPagosPendientes(matricula, nuevaModalidad, montos.montoMensual);
             }
 
             if (cambiosModalidad > 0) {
