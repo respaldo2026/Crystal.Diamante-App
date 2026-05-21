@@ -59,7 +59,7 @@ export default function EstudiantesList() {
         resource: "perfiles",
         // TRUCO AVANZADO: Especificar explícitamente la FK para evitar ambigüedad
         meta: {
-            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, numero_cuotas, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, numero_cuotas, programas(nombre, duracion)))"
+            select: "*, matriculas!matriculas_estudiante_id_fkey(id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, numero_cuotas, programas(nombre, duracion)))"
         },
         sorters: { initial: [{ field: "nombre_completo", order: "asc" }] },
         pagination: {
@@ -103,7 +103,7 @@ export default function EstudiantesList() {
             try {
                 let query = supabaseBrowserClient
                     .from("matriculas")
-                    .select("id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, numero_cuotas, estudiante_id, perfiles!matriculas_estudiante_id_fkey(*), cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, numero_cuotas, profesor_id, programas(nombre, duracion))")
+                    .select("id, estado, created_at, fecha_inicio, modalidad_pago, valor_mensual_plan, valor_por_clase, porcentaje_productos, estudiante_id, perfiles!matriculas_estudiante_id_fkey(*), cursos(nombre, porcentaje_minimo, dias_semana, hora_inicio, hora_fin, numero_cuotas, profesor_id, programas(nombre, duracion))")
                     .order("fecha_inicio", { ascending: false })
                     .limit(500);
 
