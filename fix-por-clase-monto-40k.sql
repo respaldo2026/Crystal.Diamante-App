@@ -17,14 +17,15 @@ SELECT
     p.nombre_completo,
     m.modalidad_pago,
     m.valor_por_clase AS valor_actual,
-    COALESCE(prog.precio_por_clase, 40000) AS valor_correcto,
+    COALESCE(NULLIF(prog.precio_por_clase, 0), 40000) AS valor_correcto,
     c.nombre AS curso
 FROM matriculas m
 JOIN perfiles p   ON p.id = m.estudiante_id
 JOIN cursos c     ON c.id = m.curso_id
 JOIN programas prog ON prog.id = c.programa_id
 WHERE m.modalidad_pago = 'POR_CLASE'
-  AND (m.valor_por_clase IS NULL OR m.valor_por_clase <> COALESCE(prog.precio_por_clase, 40000))
+  AND (m.valor_por_clase IS NULL OR m.valor_por_clase = 0
+       OR m.valor_por_clase <> COALESCE(NULLIF(prog.precio_por_clase, 0), 40000))
 ORDER BY p.nombre_completo;
 
 
@@ -38,7 +39,7 @@ SELECT
     pa.tipo_cuota,
     pa.estado,
     pa.monto        AS monto_actual,
-    COALESCE(prog.precio_por_clase, 40000) AS monto_correcto,
+    COALESCE(NULLIF(prog.precio_por_clase, 0), 40000) AS monto_correcto,
     pa.periodo_pagado
 FROM pagos pa
 JOIN matriculas m   ON m.id = pa.matricula_id
@@ -46,38 +47,47 @@ JOIN perfiles pr    ON pr.id = pa.estudiante_id
 JOIN cursos c       ON c.id = m.curso_id
 JOIN programas prog ON prog.id = c.programa_id
 WHERE m.modalidad_pago = 'POR_CLASE'
-  AND pa.tipo_cuota = 'por_clase'
-  AND pa.monto <> COALESCE(prog.precio_por_clase, 40000)
+  AND pa.numero_cuota > 0
+  AND COALESCE(pa.tipo_cuota, '') <> 'inscripcion'
+  AND pa.monto <> COALESCE(NULLIF(prog.precio_por_clase, 0), 40000)
 ORDER BY pr.nombre_completo, pa.numero_cuota;
 
 
 -- ─────────────────────────────────────────────────────────────
 -- PASO 3: Corregir valor_por_clase en matriculas POR_CLASE
+-- (incluye casos donde valor_por_clase = 0 o es incorrecto)
 -- ─────────────────────────────────────────────────────────────
 UPDATE matriculas m
-SET valor_por_clase = COALESCE(prog.precio_por_clase, 40000)
+SET valor_por_clase = COALESCE(NULLIF(prog.precio_por_clase, 0), 40000)
 FROM cursos c
 JOIN programas prog ON prog.id = c.programa_id
 WHERE m.curso_id = c.id
   AND m.modalidad_pago = 'POR_CLASE'
-  AND (m.valor_por_clase IS NULL OR m.valor_por_clase <> COALESCE(prog.precio_por_clase, 40000));
+  AND (
+    m.valor_por_clase IS NULL
+    OR m.valor_por_clase = 0
+    OR m.valor_por_clase <> COALESCE(NULLIF(prog.precio_por_clase, 0), 40000)
+  );
 
 
 -- ─────────────────────────────────────────────────────────────
 -- PASO 4: Corregir monto de todos los pagos POR_CLASE (cualquier estado)
---         con monto incorrecto
+--         con monto incorrecto. Incluye pagos con tipo_cuota NULL/mensual
+--         mal tipados, excluyendo solo inscripcion.
 -- ─────────────────────────────────────────────────────────────
 UPDATE pagos pa
 SET
-    monto            = COALESCE(prog.precio_por_clase, 40000),
-    monto_programado = COALESCE(prog.precio_por_clase, 40000)
+    monto            = COALESCE(NULLIF(prog.precio_por_clase, 0), 40000),
+    monto_programado = COALESCE(NULLIF(prog.precio_por_clase, 0), 40000),
+    tipo_cuota       = 'por_clase'
 FROM matriculas m
 JOIN cursos c       ON c.id = m.curso_id
 JOIN programas prog ON prog.id = c.programa_id
 WHERE pa.matricula_id = m.id
   AND m.modalidad_pago = 'POR_CLASE'
-  AND pa.tipo_cuota = 'por_clase'
-  AND pa.monto <> COALESCE(prog.precio_por_clase, 40000);
+  AND pa.numero_cuota > 0
+  AND COALESCE(pa.tipo_cuota, '') <> 'inscripcion'
+  AND pa.monto <> COALESCE(NULLIF(prog.precio_por_clase, 0), 40000);
 
 
 -- ─────────────────────────────────────────────────────────────
@@ -89,5 +99,6 @@ JOIN matriculas m   ON m.id = pa.matricula_id
 JOIN cursos c       ON c.id = m.curso_id
 JOIN programas prog ON prog.id = c.programa_id
 WHERE m.modalidad_pago = 'POR_CLASE'
-  AND pa.tipo_cuota = 'por_clase'
-  AND pa.monto <> COALESCE(prog.precio_por_clase, 40000);
+  AND pa.numero_cuota > 0
+  AND COALESCE(pa.tipo_cuota, '') <> 'inscripcion'
+  AND pa.monto <> COALESCE(NULLIF(prog.precio_por_clase, 40000), 40000);
