@@ -203,6 +203,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const iframeMaterialContainerRef = React.useRef<HTMLDivElement | null>(null);
   const [iframeFullscreen, setIframeFullscreen] = useState(false);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
+  const [asistenciasRaw, setAsistenciasRaw] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalSesionVisible, setModalSesionVisible] = useState(false);
   const [formSesion] = Form.useForm();
@@ -1535,6 +1536,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           enMora: moraSet.has(e.id),
         }));
 
+        setAsistenciasRaw(asistenciasRes.data || []);
         setEstudiantes(estudiantesConMora);
         const notasIniciales: Record<string, number | null> = {};
         const estadosIniciales: Record<string, string> = {};
@@ -1829,6 +1831,34 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     };
     resolveParams();
   }, [params, cargarDatos]);
+
+  const bitacora = useMemo(() => {
+    const asistPorFechaMatricula = new Map<string, Map<number, any>>();
+    asistenciasRaw.forEach((a: any) => {
+      const fecha = String(a?.fecha || "");
+      if (!asistPorFechaMatricula.has(fecha)) asistPorFechaMatricula.set(fecha, new Map());
+      asistPorFechaMatricula.get(fecha)!.set(Number(a.matricula_id), a);
+    });
+    return sesiones.map((sesion) => {
+      const fechaMap = asistPorFechaMatricula.get(String(sesion.fecha)) || new Map();
+      const lista = estudiantes.map((est) => {
+        const a = fechaMap.get(est.id);
+        return {
+          key: String(est.id),
+          matricula_id: est.id,
+          nombre_completo: est.nombre_completo,
+          identificacion: est.identificacion,
+          estado: a?.estado || "sin_registro",
+          observaciones: a?.observaciones || null,
+        };
+      }).sort((a, b) => {
+        const ord: Record<string, number> = { presente: 0, ausente: 1, justificada: 2, sin_registro: 3 };
+        return (ord[a.estado] ?? 3) - (ord[b.estado] ?? 3);
+      });
+      const presentes = lista.filter((l) => l.estado === "presente").length;
+      return { ...sesion, key: sesion.id, lista, presentes, totalEsperados: estudiantes.length };
+    });
+  }, [sesiones, asistenciasRaw, estudiantes]);
 
   const columnasEstudiantes = useMemo(
     () => [
@@ -3290,7 +3320,101 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 </Row>
               </Space>
             )
-          }
+          },
+          {
+            key: "6",
+            label: <span><CalendarOutlined /> Bitácora ({sesiones.length})</span>,
+            children: (
+              <Table
+                dataSource={bitacora}
+                rowKey="key"
+                pagination={false}
+                size="middle"
+                locale={{ emptyText: "No hay sesiones registradas" }}
+                expandable={{
+                  expandedRowRender: (record: any) => (
+                    <Table
+                      dataSource={record.lista}
+                      rowKey="key"
+                      pagination={false}
+                      size="small"
+                      style={{ margin: "0 0 8px 0" }}
+                      columns={[
+                        {
+                          title: "Estudiante",
+                          dataIndex: "nombre_completo",
+                          key: "nombre",
+                          ellipsis: true,
+                        },
+                        {
+                          title: "ID",
+                          dataIndex: "identificacion",
+                          key: "identificacion",
+                          width: 130,
+                        },
+                        {
+                          title: "Estado",
+                          dataIndex: "estado",
+                          key: "estado",
+                          width: 140,
+                          render: (val: string) => {
+                            const cfg: Record<string, { color: string; text: string }> = {
+                              presente: { color: "success", text: "Presente" },
+                              ausente: { color: "error", text: "Ausente" },
+                              justificada: { color: "warning", text: "Justificada" },
+                              sin_registro: { color: "default", text: "Sin registro" },
+                            };
+                            const c = cfg[val] || { color: "default", text: val };
+                            return <Tag color={c.color}>{c.text}</Tag>;
+                          },
+                        },
+                        {
+                          title: "Observaciones",
+                          dataIndex: "observaciones",
+                          key: "obs",
+                          render: (v: string | null) => v || "-",
+                        },
+                      ]}
+                    />
+                  ),
+                  rowExpandable: (record: any) => (record.lista || []).length > 0,
+                }}
+                columns={[
+                  {
+                    title: "Clase",
+                    dataIndex: "tema_visto",
+                    key: "tema",
+                    ellipsis: true,
+                    render: (v: string) => v || "-",
+                  },
+                  {
+                    title: "Fecha",
+                    dataIndex: "fecha",
+                    key: "fecha",
+                    width: 120,
+                    render: (v: string) => (v ? dayjs(v).format("DD/MM/YYYY") : "-"),
+                  },
+                  {
+                    title: "Horas",
+                    dataIndex: "horas_dictadas",
+                    key: "horas",
+                    width: 80,
+                  },
+                  {
+                    title: "Asistencia",
+                    key: "asistencia",
+                    width: 150,
+                    render: (_: any, record: any) => {
+                      const p = record.presentes as number;
+                      const t = record.totalEsperados as number;
+                      const color = t === 0 ? "default" : p === t ? "green" : p === 0 ? "red" : "orange";
+                      return <Tag color={color}>{p}/{t} presentes</Tag>;
+                    },
+                  },
+                ]}
+              />
+            ),
+          },
         ]}
       />
 
