@@ -6,68 +6,187 @@ import { construirNombreGrupo } from "@utils/grupos";
 
 const { Page, Text, View, Document, StyleSheet, Image } = ReactPDF;
 
+const BRAND = "#c0306e";
+const BRAND_LIGHT = "#fdf0f6";
+const BRAND_DARK = "#8a1f4c";
+const GRAY = "#6b7280";
+const DARK = "#1c1c2e";
+const BORDER = "#e5e7eb";
+
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 10,
-    paddingRight: 10,
-    paddingBottom: 10,
-    paddingLeft: 10,
+    paddingTop: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
     backgroundColor: "#ffffff",
     fontSize: 9,
     fontFamily: "Helvetica",
   },
+  /* ── HEADER ── */
   header: {
-    textAlign: "center",
-    marginBottom: 6,
+    backgroundColor: BRAND,
+    paddingTop: 14,
+    paddingBottom: 12,
+    paddingLeft: 12,
+    paddingRight: 12,
+    alignItems: "center",
   },
   logo: {
-    width: 104,
-    maxHeight: 42,
+    width: 100,
+    maxHeight: 40,
     objectFit: "contain",
-    alignSelf: "center",
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  ticketTitle: {
+  academiaName: {
     fontSize: 11,
-    fontWeight: 600,
+    fontFamily: "Helvetica-Bold",
+    color: "#ffffff",
+    textAlign: "center",
     marginBottom: 2,
   },
-  title: {
-    fontSize: 12,
-    fontWeight: 700,
-    marginBottom: 2,
+  academiaSubtitle: {
+    fontSize: 7.5,
+    color: "rgba(255,255,255,0.82)",
+    textAlign: "center",
   },
-  subtitle: {
-    fontSize: 9,
-    color: "#555555",
-  },
-  details: {
-    borderTop: "1px dashed #cccccc",
-    paddingTop: 5,
-    marginBottom: 5,
-  },
-  row: {
-    display: "flex",
+  /* ── TITLE BAND ── */
+  titleBand: {
+    backgroundColor: BRAND_DARK,
+    paddingTop: 6,
+    paddingBottom: 6,
+    paddingLeft: 12,
+    paddingRight: 12,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 3,
+    alignItems: "center",
   },
-  section: {
+  titleText: {
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: "#ffffff",
+    letterSpacing: 0.5,
+  },
+  fechaText: {
+    fontSize: 8,
+    color: "rgba(255,255,255,0.85)",
+  },
+  /* ── AMOUNT BOX ── */
+  amountBox: {
+    backgroundColor: BRAND_LIGHT,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: 14,
+    paddingRight: 14,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    borderBottomStyle: "solid",
+  },
+  amountLabel: {
+    fontSize: 7.5,
+    color: GRAY,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  amountValue: {
+    fontSize: 22,
+    fontFamily: "Helvetica-Bold",
+    color: BRAND,
+  },
+  /* ── DETAILS SECTION ── */
+  sectionPad: {
+    paddingTop: 10,
+    paddingBottom: 6,
+    paddingLeft: 14,
+    paddingRight: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    borderBottomStyle: "solid",
+  },
+  sectionHeader: {
+    fontSize: 7.5,
+    fontFamily: "Helvetica-Bold",
+    color: BRAND,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 7,
+  },
+  detailRow: {
+    flexDirection: "row",
     marginBottom: 5,
-    borderBottom: "1px dashed #cccccc",
-    paddingBottom: 4,
+    alignItems: "flex-start",
   },
-  label: {
-    fontWeight: "bold",
+  detailLabel: {
+    fontSize: 8,
+    color: GRAY,
+    width: 68,
+    flexShrink: 0,
   },
-  value: {
-    marginBottom: 1,
-  },
-  footer: {
-    textAlign: "center",
-    marginTop: 6,
+  detailValue: {
     fontSize: 8.5,
-    color: "#555555",
+    color: DARK,
+    fontFamily: "Helvetica-Bold",
+    flex: 1,
+  },
+  detailValueNormal: {
+    fontSize: 8.5,
+    color: DARK,
+    flex: 1,
+  },
+  /* ── CONCEPT HIGHLIGHT ── */
+  conceptoBox: {
+    backgroundColor: "#f9fafb",
+    borderRadius: 4,
+    paddingTop: 7,
+    paddingBottom: 7,
+    paddingLeft: 10,
+    paddingRight: 10,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: BRAND,
+    borderLeftStyle: "solid",
+  },
+  conceptoLabel: {
+    fontSize: 7.5,
+    color: GRAY,
+    marginBottom: 2,
+  },
+  conceptoValue: {
+    fontSize: 9,
+    fontFamily: "Helvetica-Bold",
+    color: DARK,
+  },
+  /* ── DIVIDER ── */
+  divider: {
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    borderTopStyle: "dashed",
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  /* ── FOOTER ── */
+  footer: {
+    backgroundColor: "#f9fafb",
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingLeft: 14,
+    paddingRight: 14,
+    alignItems: "center",
+  },
+  footerText: {
+    fontSize: 8,
+    color: GRAY,
+    textAlign: "center",
+    lineHeight: 1.5,
+  },
+  footerBrand: {
+    fontSize: 7.5,
+    color: BRAND,
+    textAlign: "center",
+    marginTop: 4,
+    fontFamily: "Helvetica-Bold",
   },
 });
 
@@ -165,89 +284,140 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
 
   return (
     <Document>
-      <Page size={[226.77, 520]} style={styles.page}>
+      <Page size={[226.77, 620]} style={styles.page}>
+
+        {/* ── HEADER ── */}
         <View style={styles.header}>
-          {/* eslint-disable-next-line jsx-a11y/alt-text */}
-          {campos.logo && academia.logoUrl ? <Image style={styles.logo} src={academia.logoUrl} /> : null}
-          {campos.nombreAcademia ? <Text style={styles.title}>{academia.nombre}</Text> : null}
-          {campos.ruc && academia.ruc ? <Text style={styles.subtitle}>RUC/NIT: {academia.ruc}</Text> : null}
-          {campos.direccion && academia.direccion ? <Text style={styles.subtitle}>{academia.direccion}</Text> : null}
-          {campos.telefono && academia.telefono ? <Text style={styles.subtitle}>Tel: {academia.telefono}</Text> : null}
-          {campos.email && academia.email ? <Text style={styles.subtitle}>{academia.email}</Text> : null}
-        </View>
-
-        <View style={styles.details}>
-          {campos.titulo ? (
-            <Text style={styles.ticketTitle}>{academia.ticketTitulo || "Recibo de Pago"}</Text>
+          {campos.logo && academia.logoUrl ? (
+            // eslint-disable-next-line jsx-a11y/alt-text
+            <Image style={styles.logo} src={academia.logoUrl} />
           ) : null}
-          {campos.fecha ? (
-            <Text style={[styles.subtitle, { marginBottom: 4 }]}>Fecha: {pago.fecha}</Text>
+          {campos.nombreAcademia ? (
+            <Text style={styles.academiaName}>{academia.nombre}</Text>
           ) : null}
-          {campos.concepto ? (
-            <View style={styles.row}>
-              <Text>Concepto</Text>
-              <Text>{concepto}</Text>
-            </View>
-          ) : null}
-          {campos.monto ? (
-            <View style={styles.row}>
-              <Text>Monto</Text>
-              <Text>{formatearCOP(pago.monto)}</Text>
-            </View>
+          {(campos.ruc && academia.ruc) ||
+          (campos.direccion && academia.direccion) ||
+          (campos.telefono && academia.telefono) ||
+          (campos.email && academia.email) ? (
+            <Text style={styles.academiaSubtitle}>
+              {[
+                campos.ruc && academia.ruc ? `NIT: ${academia.ruc}` : null,
+                campos.direccion && academia.direccion ? academia.direccion : null,
+                campos.telefono && academia.telefono ? `Tel: ${academia.telefono}` : null,
+                campos.email && academia.email ? academia.email : null,
+              ]
+                .filter(Boolean)
+                .join("  ·  ")}
+            </Text>
           ) : null}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Estudiante:</Text>
-          <Text style={styles.value}>{nombreEstudiante}</Text>
-          {estudiante.identificacion ? (
-            <>
-              <Text style={styles.label}>Documento:</Text>
-              <Text style={styles.value}>{estudiante.identificacion}</Text>
-            </>
-          ) : null}
-          {curso ? (
-            <>
-              <Text style={styles.label}>Curso:</Text>
-              <Text style={styles.value}>{nombreCurso}</Text>
-            </>
-          ) : null}
-          {metodo ? (
-            <>
-              <Text style={styles.label}>Método:</Text>
-              <Text style={styles.value}>{metodo}</Text>
-            </>
-          ) : null}
-          {referencia ? (
-            <>
-              <Text style={styles.label}>Referencia:</Text>
-              <Text style={styles.value}>{referencia}</Text>
-            </>
-          ) : null}
-          {pago.valorEntregado ? (
-            <>
-              <Text style={styles.label}>Valor entregado:</Text>
-              <Text style={styles.value}>{formatearCOP(pago.valorEntregado)}</Text>
-            </>
-          ) : null}
-          {pago.cambio !== undefined && pago.cambio !== null ? (
-            <>
-              <Text style={styles.label}>Cambio:</Text>
-              <Text style={styles.value}>{formatearCOP(pago.cambio)}</Text>
-            </>
-          ) : null}
-          {estudiante.telefono ? <Text style={styles.value}>Contacto estudiante: {estudiante.telefono}</Text> : null}
-        </View>
-
-        {campos.nota && academia.ticketNota ? (
-          <View style={styles.section}>
-            <Text>{academia.ticketNota}</Text>
+        {/* ── TITLE BAND ── */}
+        {campos.titulo ? (
+          <View style={styles.titleBand}>
+            <Text style={styles.titleText}>
+              {academia.ticketTitulo || "RECIBO DE PAGO"}
+            </Text>
+            {campos.fecha ? (
+              <Text style={styles.fechaText}>{pago.fecha}</Text>
+            ) : null}
+          </View>
+        ) : campos.fecha ? (
+          <View style={styles.titleBand}>
+            <Text style={styles.fechaText}>Fecha: {pago.fecha}</Text>
           </View>
         ) : null}
 
-        {campos.pie ? (
-          <Text style={styles.footer}>{academia.ticketPie || "Gracias por su pago. Conserva este comprobante."}</Text>
+        {/* ── AMOUNT BOX ── */}
+        {campos.monto ? (
+          <View style={styles.amountBox}>
+            <Text style={styles.amountLabel}>Total Pagado</Text>
+            <Text style={styles.amountValue}>{formatearCOP(pago.monto)}</Text>
+            {pago.valorEntregado ? (
+              <Text style={[styles.amountLabel, { marginTop: 4 }]}>
+                Recibido: {formatearCOP(pago.valorEntregado)}
+                {pago.cambio !== undefined && pago.cambio !== null
+                  ? `  ·  Cambio: ${formatearCOP(pago.cambio)}`
+                  : ""}
+              </Text>
+            ) : null}
+          </View>
         ) : null}
+
+        {/* ── CONCEPTO ── */}
+        {campos.concepto ? (
+          <View style={{ paddingTop: 10, paddingLeft: 14, paddingRight: 14 }}>
+            <View style={styles.conceptoBox}>
+              <Text style={styles.conceptoLabel}>Concepto</Text>
+              <Text style={styles.conceptoValue}>{concepto}</Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* ── PAGO DETAILS ── */}
+        {(metodo || referencia) ? (
+          <View style={[styles.sectionPad, { paddingTop: 4 }]}>
+            {metodo ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Método</Text>
+                <Text style={styles.detailValue}>{metodo}</Text>
+              </View>
+            ) : null}
+            {referencia ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Referencia</Text>
+                <Text style={styles.detailValueNormal}>{referencia}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* ── ESTUDIANTE ── */}
+        <View style={styles.sectionPad}>
+          <Text style={styles.sectionHeader}>Datos del Estudiante</Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Nombre</Text>
+            <Text style={styles.detailValue}>{nombreEstudiante}</Text>
+          </View>
+          {estudiante.identificacion ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Documento</Text>
+              <Text style={styles.detailValueNormal}>{estudiante.identificacion}</Text>
+            </View>
+          ) : null}
+          {nombreCurso ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Curso</Text>
+              <Text style={styles.detailValueNormal}>{nombreCurso}</Text>
+            </View>
+          ) : null}
+          {estudiante.telefono ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Contacto</Text>
+              <Text style={styles.detailValueNormal}>{estudiante.telefono}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* ── NOTA ── */}
+        {campos.nota && academia.ticketNota ? (
+          <View style={[styles.sectionPad, { backgroundColor: BRAND_LIGHT }]}>
+            <Text style={[styles.detailValueNormal, { textAlign: "center", color: BRAND_DARK }]}>
+              {academia.ticketNota}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* ── FOOTER ── */}
+        {campos.pie ? (
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
+              {academia.ticketPie || "Gracias por su pago. Conserva este comprobante."}
+            </Text>
+            <Text style={styles.footerBrand}>✦ {academia.nombre} ✦</Text>
+          </View>
+        ) : null}
+
       </Page>
     </Document>
   );
