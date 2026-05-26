@@ -128,8 +128,8 @@ function calcularProximaClase(grupo: GrupoAcademico): string | null {
     const candidato = hoy.add(i, "day");
     if (!numeroDias.includes(candidato.day())) continue;
     if (i === 0 && hora_inicio) {
-      const [h, m] = hora_inicio.split(":").map(Number);
-      const horaClase = hoy.hour(h).minute(m).second(0);
+      const partes = hora_inicio.split(":").map(Number);
+      const horaClase = hoy.hour(partes[0] ?? 0).minute(partes[1] ?? 0).second(0);
       if (hoy.isAfter(horaClase)) continue;
     }
     const horaFmt = hora_inicio
