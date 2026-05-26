@@ -105,16 +105,56 @@ function obtenerMetaCapacidad(inscritos: number, capacidad: number) {
   return { libres, color: "success" as const, texto: `${libres} cupos disponibles` };
 }
 
+const DIA_MAP: Record<string, number> = {
+  domingo: 0, lunes: 1, martes: 2,
+  miércoles: 3, miercoles: 3,
+  jueves: 4, viernes: 5,
+  sábado: 6, sabado: 6,
+};
+
+function calcularProximaClase(grupo: GrupoAcademico): string | null {
+  const { dias_semana, hora_inicio } = grupo;
+  if (!dias_semana) return null;
+
+  const numeroDias = dias_semana
+    .split(",")
+    .map((d) => DIA_MAP[d.trim().toLowerCase()])
+    .filter((d): d is number => d !== undefined);
+
+  if (numeroDias.length === 0) return null;
+
+  const hoy = dayjs();
+  for (let i = 0; i <= 7; i++) {
+    const candidato = hoy.add(i, "day");
+    if (!numeroDias.includes(candidato.day())) continue;
+    if (i === 0 && hora_inicio) {
+      const [h, m] = hora_inicio.split(":").map(Number);
+      const horaClase = hoy.hour(h).minute(m).second(0);
+      if (hoy.isAfter(horaClase)) continue;
+    }
+    const horaFmt = hora_inicio
+      ? dayjs(hora_inicio, "HH:mm:ss").format("hh:mm A")
+      : null;
+    const sufijo = horaFmt ? ` · ${horaFmt}` : "";
+    if (i === 0) return `Hoy${sufijo}`;
+    if (i === 1) return `Mañana${sufijo}`;
+    return `${candidato.format("ddd DD MMM")}${sufijo}`;
+  }
+  return null;
+}
+
 function construirAvanceGrupo(grupo: GrupoAcademico) {
   const numeroClase = Number(grupo.ultima_clase_numero || 0);
   const fecha = grupo.ultima_clase_fecha ? dayjs(grupo.ultima_clase_fecha).format("DD MMM YYYY") : null;
   const tema = String(grupo.ultima_clase_tema || "").trim();
+  const proximaClase = calcularProximaClase(grupo);
 
   if (numeroClase > 0) {
     return {
       titulo: `Van en clase #${numeroClase}`,
       detalle: fecha ? `Último registro: ${fecha}` : "Último registro confirmado",
       tema: tema || null,
+      proximaClase,
       color: "#7C3AED",
       fondo: "#F5F3FF",
       borde: "#DDD6FE",
@@ -125,6 +165,7 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     titulo: "Aún no registran clase",
     detalle: "Todavía no hay una sesión tomada en el sistema",
     tema: null,
+    proximaClase,
     color: "#475569",
     fondo: "#F8FAFC",
     borde: "#E2E8F0",
@@ -389,17 +430,59 @@ export default function CursosList() {
               border: `1px solid ${avanceGrupo.borde}`,
             }}
           >
-            <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 4 }}>
-              {avanceGrupo.titulo}
-            </Text>
-            <Text type="secondary" style={{ display: "block" }}>
-              {avanceGrupo.detalle}
-            </Text>
-            {avanceGrupo.tema ? (
-              <Text style={{ display: "block", marginTop: 6, color: "#0F172A" }}>
-                {avanceGrupo.tema}
-              </Text>
-            ) : null}
+            <Flex justify="space-between" align="flex-start" gap={8} wrap="wrap">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 4 }}>
+                  {avanceGrupo.titulo}
+                </Text>
+                <Text type="secondary" style={{ display: "block" }}>
+                  {avanceGrupo.detalle}
+                </Text>
+                {avanceGrupo.tema ? (
+                  <Text style={{ display: "block", marginTop: 6, color: "#0F172A" }}>
+                    {avanceGrupo.tema}
+                  </Text>
+                ) : null}
+              </div>
+              {avanceGrupo.proximaClase ? (
+                <div
+                  style={{
+                    background: "linear-gradient(135deg, #FF6B35 0%, #F59E0B 100%)",
+                    borderRadius: 10,
+                    padding: "7px 11px",
+                    flexShrink: 0,
+                    textAlign: "center",
+                    boxShadow: "0 2px 8px rgba(245,158,11,0.30)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      display: "block",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: "rgba(255,255,255,0.90)",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    Próxima clase
+                  </Text>
+                  <Text
+                    style={{
+                      display: "block",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#ffffff",
+                      lineHeight: 1.4,
+                      marginTop: 2,
+                    }}
+                  >
+                    {avanceGrupo.proximaClase}
+                  </Text>
+                </div>
+              ) : null}
+            </Flex>
           </div>
         </Space>
       </Card>
