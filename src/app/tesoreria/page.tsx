@@ -9,10 +9,12 @@ import {
     Card,
     Col,
     DatePicker,
+    Divider,
     Drawer,
     Form,
     Input,
     InputNumber,
+    Progress,
     Row,
     Select,
     Space,
@@ -20,6 +22,7 @@ import {
     Statistic,
     Table,
     Tag,
+    Tooltip,
     Typography,
     Popconfirm,
     message,
@@ -27,17 +30,22 @@ import {
     Dropdown,
 } from "antd";
 import {
+    BarChartOutlined,
     BankOutlined,
     CalendarOutlined,
     DeleteOutlined,
     DollarCircleOutlined,
+    FallOutlined,
     FileAddOutlined,
     FilterOutlined,
     ReloadOutlined,
+    RiseOutlined,
     SaveOutlined,
     SearchOutlined,
     EllipsisOutlined,
     PrinterOutlined,
+    TrophyOutlined,
+    WarningOutlined,
     WhatsAppOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -112,6 +120,7 @@ export default function TesoreriaPage() {
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [registrando, setRegistrando] = useState(false);
     const [ejecutandoLiquidacion, setEjecutandoLiquidacion] = useState(false);
+    const [periodoAnalisis, setPeriodoAnalisis] = useState<string>("mes_actual");
     const [form] = Form.useForm();
 
     const role = (user?.rol || "").toLowerCase();
@@ -424,6 +433,75 @@ export default function TesoreriaPage() {
     );
 
     const saldoCajaEfectivo = useMemo(() => totalIngresosEfectivo - totalSalidasEfectivo, [totalIngresosEfectivo, totalSalidasEfectivo]);
+
+    const movimientosAnalisis = useMemo(() => {
+        const hoy = dayjs();
+        let inicio: dayjs.Dayjs;
+        let fin: dayjs.Dayjs;
+        switch (periodoAnalisis) {
+            case "trimestre_actual": {
+                const q = Math.floor(hoy.month() / 3);
+                inicio = hoy.month(q * 3).startOf("month");
+                fin = hoy.month(q * 3 + 2).endOf("month");
+                break;
+            }
+            case "semestre_1":
+                inicio = hoy.startOf("year");
+                fin = hoy.month(5).endOf("month");
+                break;
+            case "semestre_2":
+                inicio = hoy.month(6).startOf("month");
+                fin = hoy.endOf("year");
+                break;
+            case "anio_actual":
+                inicio = hoy.startOf("year");
+                fin = hoy.endOf("year");
+                break;
+            case "anio_anterior": {
+                const ant = hoy.subtract(1, "year");
+                inicio = ant.startOf("year");
+                fin = ant.endOf("year");
+                break;
+            }
+            default: // mes_actual
+                inicio = hoy.startOf("month");
+                fin = hoy.endOf("month");
+        }
+        return movimientos.filter((m) => {
+            const f = dayjs(m.fecha);
+            return f.isBetween(inicio, fin.add(1, "day"), "day", "[)");
+        });
+    }, [movimientos, periodoAnalisis]);
+
+    const analisisFinanciero = useMemo(() => {
+        const ingresos = movimientosAnalisis
+            .filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO)
+            .reduce((acc, m) => acc + Number(m.monto || 0), 0);
+        const egresos = movimientosAnalisis
+            .filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO)
+            .reduce((acc, m) => acc + Number(m.monto || 0), 0);
+        const ganancia = ingresos - egresos;
+        const total = ingresos + egresos;
+        const pctIngresos = total > 0 ? Math.round((ingresos / total) * 100) : 0;
+        const pctEgresos = total > 0 ? Math.round((egresos / total) * 100) : 0;
+        const cobertura = egresos > 0 ? Math.min(Math.round((ingresos / egresos) * 100), 999) : 100;
+        const margen = ingresos > 0 ? Math.round((ganancia / ingresos) * 100) : 0;
+        const superoPE = ingresos >= egresos;
+        return { ingresos, egresos, ganancia, pctIngresos, pctEgresos, cobertura, margen, superoPE };
+    }, [movimientosAnalisis]);
+
+    const etiquetaPeriodo = useMemo(() => {
+        const hoy = dayjs();
+        const labels: Record<string, string> = {
+            mes_actual: hoy.format("MMMM YYYY"),
+            trimestre_actual: `T${Math.floor(hoy.month() / 3) + 1} ${hoy.year()}`,
+            semestre_1: `1er Semestre ${hoy.year()}`,
+            semestre_2: `2do Semestre ${hoy.year()}`,
+            anio_actual: String(hoy.year()),
+            anio_anterior: String(hoy.year() - 1),
+        };
+        return labels[periodoAnalisis] ?? periodoAnalisis;
+    }, [periodoAnalisis]);
 
     const handleRegistrarMovimiento = useCallback(async () => {
         try {
@@ -767,6 +845,156 @@ export default function TesoreriaPage() {
                     style={{ marginBottom: 20 }}
                 />
             )}
+
+            {/* ── ANÁLISIS FINANCIERO ── */}
+            <Card
+                style={{ marginBottom: 20, borderRadius: 14, border: "1px solid #e0e7ff" }}
+                bodyStyle={{ padding: isMobile ? 14 : 24 }}
+                title={
+                    <Space>
+                        <BarChartOutlined style={{ color: "#6366f1", fontSize: 16 }} />
+                        <span style={{ fontWeight: 700, fontSize: 15 }}>Análisis Financiero</span>
+                        <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 400 }}>— {etiquetaPeriodo}</span>
+                    </Space>
+                }
+                extra={
+                    <Select
+                        value={periodoAnalisis}
+                        onChange={setPeriodoAnalisis}
+                        size="small"
+                        style={{ minWidth: isMobile ? 140 : 180 }}
+                        options={[
+                            { label: "Este mes", value: "mes_actual" },
+                            { label: "Trimestre actual", value: "trimestre_actual" },
+                            { label: "Semestre 1 (Ene–Jun)", value: "semestre_1" },
+                            { label: "Semestre 2 (Jul–Dic)", value: "semestre_2" },
+                            { label: "Este año", value: "anio_actual" },
+                            { label: "Año anterior", value: "anio_anterior" },
+                        ]}
+                    />
+                }
+            >
+                {/* Tarjetas de métricas */}
+                <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
+                    <Col xs={12} sm={6}>
+                        <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 12, padding: "12px 14px", textAlign: "center" }}>
+                            <div style={{ fontSize: 11, color: "#15803d", fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Total Entradas</div>
+                            <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 700, color: "#16a34a" }}>{formatoCOP(analisisFinanciero.ingresos)}</div>
+                            <div style={{ fontSize: 11, color: "#15803d", marginTop: 2 }}>{analisisFinanciero.pctIngresos}% del flujo</div>
+                        </div>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                        <div style={{ background: "#fff1f2", border: "1px solid #fca5a5", borderRadius: 12, padding: "12px 14px", textAlign: "center" }}>
+                            <div style={{ fontSize: 11, color: "#b91c1c", fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Total Salidas</div>
+                            <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 700, color: "#dc2626" }}>{formatoCOP(analisisFinanciero.egresos)}</div>
+                            <div style={{ fontSize: 11, color: "#b91c1c", marginTop: 2 }}>{analisisFinanciero.pctEgresos}% del flujo</div>
+                        </div>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                        <div style={{
+                            background: analisisFinanciero.ganancia >= 0 ? "#eff6ff" : "#fff7ed",
+                            border: `1px solid ${analisisFinanciero.ganancia >= 0 ? "#93c5fd" : "#fdba74"}`,
+                            borderRadius: 12, padding: "12px 14px", textAlign: "center"
+                        }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5, color: analisisFinanciero.ganancia >= 0 ? "#1d4ed8" : "#c2410c" }}>
+                                {analisisFinanciero.ganancia >= 0 ? "Ganancia" : "Pérdida"}
+                            </div>
+                            <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 700, color: analisisFinanciero.ganancia >= 0 ? "#2563eb" : "#ea580c", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                                {analisisFinanciero.ganancia >= 0
+                                    ? <RiseOutlined style={{ fontSize: 14 }} />
+                                    : <FallOutlined style={{ fontSize: 14 }} />}
+                                {formatoCOP(Math.abs(analisisFinanciero.ganancia))}
+                            </div>
+                            <div style={{ fontSize: 11, marginTop: 2, color: analisisFinanciero.ganancia >= 0 ? "#1d4ed8" : "#c2410c" }}>
+                                Margen: {analisisFinanciero.margen}%
+                            </div>
+                        </div>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                        <div style={{
+                            background: analisisFinanciero.superoPE ? "#f0fdf4" : "#fef9c3",
+                            border: `1px solid ${analisisFinanciero.superoPE ? "#86efac" : "#fde047"}`,
+                            borderRadius: 12, padding: "12px 14px", textAlign: "center"
+                        }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5, color: analisisFinanciero.superoPE ? "#15803d" : "#854d0e" }}>
+                                Punto de Equilibrio
+                            </div>
+                            <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: analisisFinanciero.superoPE ? "#16a34a" : "#ca8a04", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                                {analisisFinanciero.superoPE
+                                    ? <><TrophyOutlined />  Superado</>  
+                                    : <><WarningOutlined />  No alcanzado</>}
+                            </div>
+                            <Tooltip title={analisisFinanciero.superoPE
+                                ? `Ingresos superan los gastos en ${formatoCOP(analisisFinanciero.ganancia)}`
+                                : `Faltan ${formatoCOP(analisisFinanciero.egresos - analisisFinanciero.ingresos)} para cubrir gastos`}>
+                                <div style={{ fontSize: 11, marginTop: 2, color: analisisFinanciero.superoPE ? "#15803d" : "#854d0e", cursor: "help", textDecoration: "underline dotted" }}>
+                                    Cobertura: {analisisFinanciero.cobertura}%
+                                </div>
+                            </Tooltip>
+                        </div>
+                    </Col>
+                </Row>
+
+                {/* Barras comparativas */}
+                <Divider style={{ margin: "12px 0" }} />
+                <div style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <Space>
+                            <span style={{ width: 10, height: 10, borderRadius: 2, background: "#22c55e", display: "inline-block" }} />
+                            <Text style={{ fontSize: 12 }}>Entradas</Text>
+                        </Space>
+                        <Text strong style={{ fontSize: 12, color: "#16a34a" }}>{formatoCOP(analisisFinanciero.ingresos)}</Text>
+                    </div>
+                    <Tooltip title={`${analisisFinanciero.pctIngresos}% del flujo total`}>
+                        <Progress
+                            percent={analisisFinanciero.pctIngresos}
+                            strokeColor="#22c55e"
+                            trailColor="#f0fdf4"
+                            showInfo={false}
+                            size={[undefined, 14]}
+                            style={{ marginBottom: 10 }}
+                        />
+                    </Tooltip>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <Space>
+                            <span style={{ width: 10, height: 10, borderRadius: 2, background: "#ef4444", display: "inline-block" }} />
+                            <Text style={{ fontSize: 12 }}>Salidas</Text>
+                        </Space>
+                        <Text strong style={{ fontSize: 12, color: "#dc2626" }}>{formatoCOP(analisisFinanciero.egresos)}</Text>
+                    </div>
+                    <Tooltip title={`${analisisFinanciero.pctEgresos}% del flujo total`}>
+                        <Progress
+                            percent={analisisFinanciero.pctEgresos}
+                            strokeColor="#ef4444"
+                            trailColor="#fff1f2"
+                            showInfo={false}
+                            size={[undefined, 14]}
+                        />
+                    </Tooltip>
+                </div>
+
+                {/* Barra de punto de equilibrio */}
+                <Divider style={{ margin: "12px 0" }} />
+                <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12 }}>Cobertura de gastos (entradas / salidas)</Text>
+                        <Text strong style={{ fontSize: 12, color: analisisFinanciero.superoPE ? "#16a34a" : "#ca8a04" }}>
+                            {analisisFinanciero.cobertura}% {analisisFinanciero.superoPE ? "✓" : "↓ falta más"}
+                        </Text>
+                    </div>
+                    <Progress
+                        percent={Math.min(analisisFinanciero.cobertura, 100)}
+                        strokeColor={analisisFinanciero.superoPE ? { from: "#22c55e", to: "#15803d" } : { from: "#fbbf24", to: "#f59e0b" }}
+                        trailColor="#f3f4f6"
+                        showInfo={false}
+                        size={[undefined, 18]}
+                    />
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                        <Text type="secondary" style={{ fontSize: 11 }}>0% — Sin ingresos</Text>
+                        <Text type="secondary" style={{ fontSize: 11 }}>100% — Punto de equilibrio</Text>
+                    </div>
+                </div>
+            </Card>
 
             <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
                 <Col xs={24} sm={8}>
