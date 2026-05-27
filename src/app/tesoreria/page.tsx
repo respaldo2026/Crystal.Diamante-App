@@ -951,7 +951,7 @@ export default function TesoreriaPage() {
                             strokeColor="#22c55e"
                             trailColor="#f0fdf4"
                             showInfo={false}
-                            size={[undefined, 14]}
+                            size={["100%", 14]}
                             style={{ marginBottom: 10 }}
                         />
                     </Tooltip>
@@ -968,7 +968,7 @@ export default function TesoreriaPage() {
                             strokeColor="#ef4444"
                             trailColor="#fff1f2"
                             showInfo={false}
-                            size={[undefined, 14]}
+                            size={["100%", 14]}
                         />
                     </Tooltip>
                 </div>
@@ -987,7 +987,7 @@ export default function TesoreriaPage() {
                         strokeColor={analisisFinanciero.superoPE ? { from: "#22c55e", to: "#15803d" } : { from: "#fbbf24", to: "#f59e0b" }}
                         trailColor="#f3f4f6"
                         showInfo={false}
-                        size={[undefined, 18]}
+                        size={["100%", 18]}
                     />
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
                         <Text type="secondary" style={{ fontSize: 11 }}>0% — Sin ingresos</Text>
