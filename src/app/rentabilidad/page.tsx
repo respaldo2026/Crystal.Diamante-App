@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -8,6 +8,7 @@ import {
   Col,
   DatePicker,
   Divider,
+  Dropdown,
   Progress,
   Row,
   Space,
@@ -17,9 +18,11 @@ import {
   Tag,
   Typography,
   Grid,
+  Radio,
 } from "antd";
 import {
   FallOutlined,
+  FilePdfOutlined,
   ReloadOutlined,
   RiseOutlined,
   TeamOutlined,
@@ -27,12 +30,15 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import { pdf } from "@react-pdf/renderer";
+import { ReporteCompleto, ReporteIngresos, ReporteEgresos, type DatosReporteRentabilidad } from "@components/pdf/ReporteRentabilidadPDF";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 dayjs.locale("es");
 
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
+const { RangePicker } = DatePicker;
 
 const formatoCOP = (valor: number) =>
   new Intl.NumberFormat("es-CO", {
@@ -70,29 +76,55 @@ type ResumenProfesor = {
   total: number;
 };
 
+type ModoFiltro = "mes" | "rango" | "todo";
+
 export default function RentabilidadPage() {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
 
+  const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesFiltro, setMesFiltro] = useState<dayjs.Dayjs>(dayjs());
+  const [rangoFiltro, setRangoFiltro] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
+    dayjs().startOf("year"),
+    dayjs(),
+  ]);
   const [loading, setLoading] = useState(false);
+  const [generandoPdf, setGenerandoPdf] = useState(false);
   const [pagosEstudiantes, setPagosEstudiantes] = useState<PagoEstudiante[]>([]);
   const [pagosNomina, setPagosNomina] = useState<PagoNomina[]>([]);
 
+  const periodoLabel = useMemo(() => {
+    if (modoFiltro === "todo") return "Todo el historial";
+    if (modoFiltro === "rango") {
+      return `${rangoFiltro[0].format("DD/MM/YYYY")} — ${rangoFiltro[1].format("DD/MM/YYYY")}`;
+    }
+    return mesFiltro.format("MMMM YYYY");
+  }, [modoFiltro, mesFiltro, rangoFiltro]);
+
   const cargarDatos = async () => {
     setLoading(true);
-    const inicio = mesFiltro.startOf("month").format("YYYY-MM-DD");
-    const fin = mesFiltro.endOf("month").format("YYYY-MM-DD");
 
-    // Ingresos: pagos de estudiantes (mensualidades + inscripciones)
-    const { data: pagosData } = await supabaseBrowserClient
+    let inicio: string | null = null;
+    let fin: string | null = null;
+
+    if (modoFiltro === "mes") {
+      inicio = mesFiltro.startOf("month").format("YYYY-MM-DD");
+      fin = mesFiltro.endOf("month").format("YYYY-MM-DD");
+    } else if (modoFiltro === "rango") {
+      inicio = rangoFiltro[0].startOf("day").format("YYYY-MM-DD");
+      fin = rangoFiltro[1].endOf("day").format("YYYY-MM-DD");
+    }
+    // modoFiltro === "todo" => sin filtro de fechas
+
+    // Ingresos
+    let qPagos = supabaseBrowserClient
       .from("pagos")
-      .select(
-        "id, fecha_pago, monto, numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre))"
-      )
-      .eq("estado", "pagado")
-      .gte("fecha_pago", inicio)
-      .lte("fecha_pago", fin);
+      .select("id, fecha_pago, monto, numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
+      .eq("estado", "pagado");
+    if (inicio) qPagos = qPagos.gte("fecha_pago", inicio);
+    if (fin) qPagos = qPagos.lte("fecha_pago", fin);
+
+    const { data: pagosData } = await qPagos;
 
     const parsed: PagoEstudiante[] = ((pagosData as any[]) || []).map((p) => ({
       id: p.id,
@@ -107,12 +139,14 @@ export default function RentabilidadPage() {
     }));
     setPagosEstudiantes(parsed);
 
-    // Egresos: pagos reales a profesoras (pagos_nomina)
-    const { data: nominaData } = await supabaseBrowserClient
+    // Egresos
+    let qNomina = supabaseBrowserClient
       .from("pagos_nomina")
-      .select("id, fecha_pago, total_pagado, total_horas, perfiles(nombre_completo)")
-      .gte("fecha_pago", inicio)
-      .lte("fecha_pago", fin);
+      .select("id, fecha_pago, total_pagado, total_horas, perfiles(nombre_completo)");
+    if (inicio) qNomina = qNomina.gte("fecha_pago", inicio);
+    if (fin) qNomina = qNomina.lte("fecha_pago", fin);
+
+    const { data: nominaData } = await qNomina;
 
     const nominaParsed: PagoNomina[] = ((nominaData as any[]) || []).map((n) => ({
       id: n.id,
@@ -129,24 +163,18 @@ export default function RentabilidadPage() {
   useEffect(() => {
     void cargarDatos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mesFiltro]);
+  }, [modoFiltro, mesFiltro, rangoFiltro]);
 
   const totalIngresos = useMemo(
     () => pagosEstudiantes.reduce((s, p) => s + p.monto, 0),
     [pagosEstudiantes]
   );
   const totalInscripciones = useMemo(
-    () =>
-      pagosEstudiantes
-        .filter((p) => p.tipo === "inscripcion")
-        .reduce((s, p) => s + p.monto, 0),
+    () => pagosEstudiantes.filter((p) => p.tipo === "inscripcion").reduce((s, p) => s + p.monto, 0),
     [pagosEstudiantes]
   );
   const totalMensualidades = useMemo(
-    () =>
-      pagosEstudiantes
-        .filter((p) => p.tipo === "mensualidad")
-        .reduce((s, p) => s + p.monto, 0),
+    () => pagosEstudiantes.filter((p) => p.tipo === "mensualidad").reduce((s, p) => s + p.monto, 0),
     [pagosEstudiantes]
   );
   const totalEgresos = useMemo(
@@ -190,29 +218,155 @@ export default function RentabilidadPage() {
   const coberturaEgresos =
     totalIngresos > 0 ? Math.round((totalEgresos / totalIngresos) * 100) : 0;
 
+  const datosReporte = useMemo<DatosReporteRentabilidad>(
+    () => ({
+      periodo: periodoLabel,
+      academia: "Academia Crystal Diamante",
+      totalIngresos,
+      totalInscripciones,
+      totalMensualidades,
+      totalEgresos,
+      totalHorasPagadas,
+      ganancia,
+      margen,
+      ingresosPorCurso,
+      egresosPorProfesor,
+    }),
+    [
+      periodoLabel,
+      totalIngresos,
+      totalInscripciones,
+      totalMensualidades,
+      totalEgresos,
+      totalHorasPagadas,
+      ganancia,
+      margen,
+      ingresosPorCurso,
+      egresosPorProfesor,
+    ]
+  );
+
+  const descargarPdf = async (tipo: "completo" | "ingresos" | "egresos") => {
+    setGenerandoPdf(true);
+    try {
+      let documento;
+      let nombre: string;
+      if (tipo === "ingresos") {
+        documento = <ReporteIngresos {...datosReporte} />;
+        nombre = `Ingresos-${periodoLabel}`;
+      } else if (tipo === "egresos") {
+        documento = <ReporteEgresos {...datosReporte} />;
+        nombre = `Egresos-${periodoLabel}`;
+      } else {
+        documento = <ReporteCompleto {...datosReporte} />;
+        nombre = `PYG-${periodoLabel}`;
+      }
+      const blob = await pdf(documento).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${nombre}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setGenerandoPdf(false);
+    }
+  };
+
   return (
     <div style={{ padding: isMobile ? 16 : 24 }}>
-      <Space direction="vertical" size={8} style={{ width: "100%", marginBottom: 16 }}>
-        <Title level={2} style={{ margin: 0 }}>
-          ðŸ“Š AnÃ¡lisis de Rentabilidad â€” P&G
-        </Title>
-        <Text type="secondary">
-          Ingresos reales (mensualidades + inscripciones) vs pagos a profesoras
-        </Text>
-      </Space>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }} wrap>
+        <Col>
+          <Title level={2} style={{ margin: 0 }}>
+            Analisis de Rentabilidad — P&G
+          </Title>
+          <Text type="secondary">
+            Ingresos (mensualidades + inscripciones) vs pagos a profesoras
+          </Text>
+        </Col>
+        <Col>
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: "completo",
+                  label: "Reporte completo P&G",
+                  icon: <FilePdfOutlined />,
+                  onClick: () => void descargarPdf("completo"),
+                },
+                {
+                  key: "ingresos",
+                  label: "Solo Ingresos por Curso",
+                  icon: <FilePdfOutlined />,
+                  onClick: () => void descargarPdf("ingresos"),
+                },
+                {
+                  key: "egresos",
+                  label: "Solo Egresos por Profesora",
+                  icon: <FilePdfOutlined />,
+                  onClick: () => void descargarPdf("egresos"),
+                },
+              ],
+            }}
+          >
+            <Button
+              icon={<FilePdfOutlined />}
+              type="primary"
+              ghost
+              loading={generandoPdf}
+              disabled={loading || totalIngresos + totalEgresos === 0}
+            >
+              {isMobile ? "PDF" : "Exportar PDF"}
+            </Button>
+          </Dropdown>
+        </Col>
+      </Row>
 
-      <Space style={{ marginBottom: 24 }} wrap>
-        <DatePicker
-          picker="month"
-          value={mesFiltro}
-          onChange={(v) => v && setMesFiltro(v)}
-          format="MMMM YYYY"
-          allowClear={false}
-        />
-        <Button icon={<ReloadOutlined />} onClick={() => void cargarDatos()} loading={loading}>
-          Actualizar
-        </Button>
-      </Space>
+      {/* Filtros */}
+      <Card size="small" style={{ marginBottom: 24 }}>
+        <Space wrap>
+          <Radio.Group
+            value={modoFiltro}
+            onChange={(e) => setModoFiltro(e.target.value as ModoFiltro)}
+            optionType="button"
+            buttonStyle="solid"
+          >
+            <Radio.Button value="mes">Por mes</Radio.Button>
+            <Radio.Button value="rango">Rango fechas</Radio.Button>
+            <Radio.Button value="todo">Todo el historial</Radio.Button>
+          </Radio.Group>
+
+          {modoFiltro === "mes" && (
+            <DatePicker
+              picker="month"
+              value={mesFiltro}
+              onChange={(v) => v && setMesFiltro(v)}
+              format="MMMM YYYY"
+              allowClear={false}
+            />
+          )}
+
+          {modoFiltro === "rango" && (
+            <RangePicker
+              value={rangoFiltro}
+              onChange={(v) => {
+                if (v && v[0] && v[1]) setRangoFiltro([v[0], v[1]]);
+              }}
+              format="DD/MM/YYYY"
+              allowClear={false}
+            />
+          )}
+
+          <Button icon={<ReloadOutlined />} onClick={() => void cargarDatos()} loading={loading}>
+            Actualizar
+          </Button>
+        </Space>
+        <div style={{ marginTop: 8 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Periodo: <strong>{periodoLabel}</strong>
+          </Text>
+        </div>
+      </Card>
 
       <Spin spinning={loading}>
         {/* KPI Cards */}
@@ -241,14 +395,14 @@ export default function RentabilidadPage() {
                 valueStyle={{ color: "#ff4d4f", fontSize: isMobile ? 16 : 20 }}
               />
               <Text type="secondary" style={{ fontSize: 11 }}>
-                {totalHorasPagadas}h liquidadas
+                {totalHorasPagadas}h liquidadas a profesoras
               </Text>
             </Card>
           </Col>
           <Col xs={12} sm={12} lg={6}>
             <Card>
               <Statistic
-                title={esRentable ? "Ganancia Neta" : "PÃ©rdida Neta"}
+                title={esRentable ? "Ganancia Neta" : "Perdida Neta"}
                 value={Math.abs(ganancia)}
                 formatter={(v) => formatoCOP(Number(v))}
                 prefix={esRentable ? <TrophyOutlined /> : <WarningOutlined />}
@@ -258,7 +412,7 @@ export default function RentabilidadPage() {
                 }}
               />
               <Text type="secondary" style={{ fontSize: 11 }}>
-                Resultado neto del mes
+                Resultado neto del periodo
               </Text>
             </Card>
           </Col>
@@ -276,7 +430,7 @@ export default function RentabilidadPage() {
                 }}
               />
               <Text type="secondary" style={{ fontSize: 11 }}>
-                {esRentable ? "Margen de ganancia" : "Margen de pÃ©rdida"}
+                {esRentable ? "Margen de ganancia" : "Margen de perdida"}
               </Text>
             </Card>
           </Col>
@@ -295,12 +449,12 @@ export default function RentabilidadPage() {
             <Row gutter={16} style={{ marginTop: 4 }}>
               <Col>
                 <Text type="secondary" style={{ fontSize: 11 }}>
-                  0% â€” Sin egresos
+                  0% — Sin egresos
                 </Text>
               </Col>
               <Col flex="auto" style={{ textAlign: "right" }}>
                 <Text type="secondary" style={{ fontSize: 11 }}>
-                  100% â€” Punto de equilibrio
+                  100% — Punto de equilibrio
                 </Text>
               </Col>
             </Row>
@@ -310,8 +464,8 @@ export default function RentabilidadPage() {
         {/* Alerta resumen */}
         {totalIngresos === 0 && !loading ? (
           <Alert
-            message="Sin datos en este perÃ­odo"
-            description="No hay pagos registrados de estudiantes en el mes seleccionado"
+            message="Sin datos en este periodo"
+            description="No hay pagos registrados de estudiantes en el periodo seleccionado"
             type="info"
             showIcon
             style={{ marginBottom: 24 }}
@@ -320,8 +474,8 @@ export default function RentabilidadPage() {
           <Alert
             message={
               esRentable
-                ? `âœ… Mes rentable â€” Ganancia: ${formatoCOP(ganancia)}`
-                : `âŒ Mes en pÃ©rdida â€” DÃ©ficit: ${formatoCOP(Math.abs(ganancia))}`
+                ? `Periodo rentable — Ganancia: ${formatoCOP(ganancia)}`
+                : `Periodo en perdida — Deficit: ${formatoCOP(Math.abs(ganancia))}`
             }
             description={`Margen: ${margen.toFixed(1)}% | Ingresos: ${formatoCOP(totalIngresos)} | Egresos profesoras: ${formatoCOP(totalEgresos)}`}
             type={esRentable ? "success" : "error"}
@@ -336,13 +490,87 @@ export default function RentabilidadPage() {
           {/* Ingresos por curso */}
           <Col xs={24} lg={14}>
             <Card
-              title={`ðŸ’° Ingresos por Curso â€” ${formatoCOP(totalIngresos)}`}
-                          >
+              title={`Ingresos por Curso — ${formatoCOP(totalIngresos)}`}
+              extra={
+                <Space size="small" wrap>
+                  <Tag color="green">Inscripciones: {formatoCOP(totalInscripciones)}</Tag>
+                  <Tag color="blue">Mensualidades: {formatoCOP(totalMensualidades)}</Tag>
+                </Space>
+              }
+            >
+              <Table<ResumenCurso>
+                dataSource={ingresosPorCurso}
+                rowKey="curso"
+                size="small"
+                pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                columns={[
+                  {
+                    title: "Curso",
+                    dataIndex: "curso",
+                    key: "curso",
+                    ellipsis: true,
+                  },
+                  {
+                    title: "Inscripciones",
+                    dataIndex: "inscripciones",
+                    key: "inscripciones",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: "#52c41a" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Mensualidades",
+                    dataIndex: "mensualidades",
+                    key: "mensualidades",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: "#1677ff" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Total",
+                    dataIndex: "total",
+                    key: "total",
+                    align: "right",
+                    render: (v: number) => <Text strong>{formatoCOP(v)}</Text>,
+                  },
+                ]}
+                locale={{ emptyText: "Sin ingresos en este periodo" }}
+                summary={() =>
+                  ingresosPorCurso.length > 1 ? (
+                    <Table.Summary.Row>
+                      <Table.Summary.Cell index={0}>
+                        <Text strong>Total</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={1} align="right">
+                        <Text strong style={{ color: "#52c41a" }}>
+                          {formatoCOP(totalInscripciones)}
+                        </Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={2} align="right">
+                        <Text strong style={{ color: "#1677ff" }}>
+                          {formatoCOP(totalMensualidades)}
+                        </Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={3} align="right">
+                        <Text strong>{formatoCOP(totalIngresos)}</Text>
+                      </Table.Summary.Cell>
+                    </Table.Summary.Row>
+                  ) : null
+                }
+              />
+            </Card>
+          </Col>
+
+          {/* Egresos por profesora */}
+          <Col xs={24} lg={10}>
+            <Card title={`Egresos Profesoras — ${formatoCOP(totalEgresos)}`}>
               <Table<ResumenProfesor>
                 dataSource={egresosPorProfesor}
                 rowKey="nombre"
                 size="small"
-                pagination={false}
+                pagination={{ pageSize: 10, hideOnSinglePage: true }}
                 columns={[
                   {
                     title: "Profesora",
@@ -364,34 +592,18 @@ export default function RentabilidadPage() {
                     render: (v: number) => <Tag color="blue">{v}h</Tag>,
                   },
                   {
-                    title: "Pagado",
-                    dataIndex: "pagado",
-                    key: "pagado",
-                    align: "right",
-                    render: (v: number) => (
-                      <Text style={{ color: v > 0 ? "#ff4d4f" : "#999" }}>{formatoCOP(v)}</Text>
-                    ),
-                  },
-                  {
-                    title: "Pendiente",
-                    dataIndex: "pendiente",
-                    key: "pendiente",
-                    align: "right",
-                    render: (v: number) => (
-                      <Text style={{ color: v > 0 ? "#fa8c16" : "#999" }}>{formatoCOP(v)}</Text>
-                    ),
-                  },
-                  {
                     title: "Total",
                     dataIndex: "total",
                     key: "total",
                     align: "right",
                     render: (v: number) => (
-                      <Text strong style={{ color: "#ff4d4f" }}>{formatoCOP(v)}</Text>
+                      <Text strong style={{ color: "#ff4d4f" }}>
+                        {formatoCOP(v)}
+                      </Text>
                     ),
                   },
                 ]}
-                locale={{ emptyText: "Sin clases dictadas en este periodo" }}
+                locale={{ emptyText: "Sin pagos a profesoras en este periodo" }}
                 summary={() =>
                   egresosPorProfesor.length > 1 ? (
                     <Table.Summary.Row>
@@ -402,13 +614,9 @@ export default function RentabilidadPage() {
                         <Tag color="blue">{totalHorasPagadas}h</Tag>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={2} align="right">
-                        <Text strong style={{ color: "#ff4d4f" }}>{formatoCOP(totalEgresos)}</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={3} align="right">
-                        <Text strong style={{ color: "#fa8c16" }}>{formatoCOP(0)}</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={4} align="right">
-                        <Text strong>{formatoCOP(totalEgresos)}</Text>
+                        <Text strong style={{ color: "#ff4d4f" }}>
+                          {formatoCOP(totalEgresos)}
+                        </Text>
                       </Table.Summary.Cell>
                     </Table.Summary.Row>
                   ) : null
