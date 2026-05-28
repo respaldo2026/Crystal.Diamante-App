@@ -121,7 +121,6 @@ export default function TesoreriaPage() {
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [registrando, setRegistrando] = useState(false);
     const [ejecutandoLiquidacion, setEjecutandoLiquidacion] = useState(false);
-    const [periodoAnalisis, setPeriodoAnalisis] = useState<string>("mes_actual");
     const [form] = Form.useForm();
 
     const role = (user?.rol || "").toLowerCase();
@@ -391,6 +390,20 @@ export default function TesoreriaPage() {
                 } else if (filtroPeriodo === "anio_actual") {
                     inicio = hoy.startOf("year");
                     fin = hoy.endOf("year");
+                } else if (filtroPeriodo === "trimestre_actual") {
+                    const q = Math.floor(hoy.month() / 3);
+                    inicio = hoy.month(q * 3).startOf("month");
+                    fin = hoy.month(q * 3 + 2).endOf("month");
+                } else if (filtroPeriodo === "semestre_1") {
+                    inicio = hoy.startOf("year");
+                    fin = hoy.month(5).endOf("month");
+                } else if (filtroPeriodo === "semestre_2") {
+                    inicio = hoy.month(6).startOf("month");
+                    fin = hoy.endOf("year");
+                } else if (filtroPeriodo === "anio_anterior") {
+                    const ant = hoy.subtract(1, "year");
+                    inicio = ant.startOf("year");
+                    fin = ant.endOf("year");
                 }
 
                 if (inicio && fin && !fechaMov.isBetween(inicio, fin.add(1, "day"), "day", "[)")) {
@@ -454,50 +467,11 @@ export default function TesoreriaPage() {
 
     const saldoCajaEfectivo = useMemo(() => totalIngresosEfectivo - totalSalidasEfectivo, [totalIngresosEfectivo, totalSalidasEfectivo]);
 
-    const movimientosAnalisis = useMemo(() => {
-        const hoy = dayjs();
-        let inicio: dayjs.Dayjs;
-        let fin: dayjs.Dayjs;
-        switch (periodoAnalisis) {
-            case "trimestre_actual": {
-                const q = Math.floor(hoy.month() / 3);
-                inicio = hoy.month(q * 3).startOf("month");
-                fin = hoy.month(q * 3 + 2).endOf("month");
-                break;
-            }
-            case "semestre_1":
-                inicio = hoy.startOf("year");
-                fin = hoy.month(5).endOf("month");
-                break;
-            case "semestre_2":
-                inicio = hoy.month(6).startOf("month");
-                fin = hoy.endOf("year");
-                break;
-            case "anio_actual":
-                inicio = hoy.startOf("year");
-                fin = hoy.endOf("year");
-                break;
-            case "anio_anterior": {
-                const ant = hoy.subtract(1, "year");
-                inicio = ant.startOf("year");
-                fin = ant.endOf("year");
-                break;
-            }
-            default: // mes_actual
-                inicio = hoy.startOf("month");
-                fin = hoy.endOf("month");
-        }
-        return movimientos.filter((m) => {
-            const f = dayjs(m.fecha);
-            return f.isBetween(inicio, fin.add(1, "day"), "day", "[)");
-        });
-    }, [movimientos, periodoAnalisis]);
-
     const analisisFinanciero = useMemo(() => {
-        const ingresos = movimientosAnalisis
+        const ingresos = movimientosFiltrados
             .filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO)
             .reduce((acc, m) => acc + Number(m.monto || 0), 0);
-        const egresos = movimientosAnalisis
+        const egresos = movimientosFiltrados
             .filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO)
             .reduce((acc, m) => acc + Number(m.monto || 0), 0);
         const ganancia = ingresos - egresos;
@@ -508,20 +482,27 @@ export default function TesoreriaPage() {
         const margen = ingresos > 0 ? Math.round((ganancia / ingresos) * 100) : 0;
         const superoPE = ingresos >= egresos;
         return { ingresos, egresos, ganancia, pctIngresos, pctEgresos, cobertura, margen, superoPE };
-    }, [movimientosAnalisis]);
+    }, [movimientosFiltrados]);
 
     const etiquetaPeriodo = useMemo(() => {
         const hoy = dayjs();
+        if (filtroRango && filtroRango[0] && filtroRango[1]) {
+            return `${filtroRango[0].format("DD/MM/YYYY")} — ${filtroRango[1].format("DD/MM/YYYY")}`;
+        }
+        if (filtroMes) return filtroMes.format("MMMM YYYY");
         const labels: Record<string, string> = {
+            hoy: "Hoy",
+            semana_actual: "Esta semana",
             mes_actual: hoy.format("MMMM YYYY"),
+            mes_anterior: hoy.subtract(1, "month").format("MMMM YYYY"),
             trimestre_actual: `T${Math.floor(hoy.month() / 3) + 1} ${hoy.year()}`,
             semestre_1: `1er Semestre ${hoy.year()}`,
             semestre_2: `2do Semestre ${hoy.year()}`,
             anio_actual: String(hoy.year()),
             anio_anterior: String(hoy.year() - 1),
         };
-        return labels[periodoAnalisis] ?? periodoAnalisis;
-    }, [periodoAnalisis]);
+        return filtroPeriodo ? (labels[filtroPeriodo] ?? filtroPeriodo) : "Sin filtro de período";
+    }, [filtroRango, filtroMes, filtroPeriodo]);
 
     const handleRegistrarMovimiento = useCallback(async () => {
         try {
@@ -889,22 +870,6 @@ export default function TesoreriaPage() {
                         <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 400 }}>— {etiquetaPeriodo}</span>
                     </Space>
                 }
-                extra={
-                    <Select
-                        value={periodoAnalisis}
-                        onChange={setPeriodoAnalisis}
-                        size="small"
-                        style={{ minWidth: isMobile ? 140 : 180 }}
-                        options={[
-                            { label: "Este mes", value: "mes_actual" },
-                            { label: "Trimestre actual", value: "trimestre_actual" },
-                            { label: "Semestre 1 (Ene–Jun)", value: "semestre_1" },
-                            { label: "Semestre 2 (Jul–Dic)", value: "semestre_2" },
-                            { label: "Este año", value: "anio_actual" },
-                            { label: "Año anterior", value: "anio_anterior" },
-                        ]}
-                    />
-                }
             >
                 {/* Tarjetas de métricas */}
                 <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
@@ -1181,7 +1146,11 @@ export default function TesoreriaPage() {
                                 { label: "Semana actual", value: "semana_actual" },
                                 { label: "Mes actual", value: "mes_actual" },
                                 { label: "Mes anterior", value: "mes_anterior" },
-                                { label: "Año actual", value: "anio_actual" },
+                                { label: "Trimestre actual", value: "trimestre_actual" },
+                                { label: "Semestre 1 (Ene–Jun)", value: "semestre_1" },
+                                { label: "Semestre 2 (Jul–Dic)", value: "semestre_2" },
+                                { label: "Este año", value: "anio_actual" },
+                                { label: "Año anterior", value: "anio_anterior" },
                             ]}
                         />
                     </Col>
