@@ -49,11 +49,15 @@ type PagoEstudiante = {
   curso_nombre: string;
 };
 
-type PagoNomina = {
+type SesionEgreso = {
   id: string;
-  fecha_pago: string;
-  total_pagado: number;
+  fecha: string;
   profesor_nombre: string;
+  valor_hora: number;
+  horas_dictadas: number;
+  costo: number;
+  estado_pago: "pendiente" | "pagado";
+  curso_nombre: string;
 };
 
 type ResumenCurso = {
@@ -65,7 +69,11 @@ type ResumenCurso = {
 
 type ResumenProfesor = {
   nombre: string;
+  horas: number;
+  valor_hora: number;
   total: number;
+  pagado: number;
+  pendiente: number;
 };
 
 export default function RentabilidadPage() {
@@ -75,7 +83,7 @@ export default function RentabilidadPage() {
   const [mesFiltro, setMesFiltro] = useState<dayjs.Dayjs>(dayjs());
   const [loading, setLoading] = useState(false);
   const [pagosEstudiantes, setPagosEstudiantes] = useState<PagoEstudiante[]>([]);
-  const [pagosNomina, setPagosNomina] = useState<PagoNomina[]>([]);
+  const [sesionesClase, setSesionesClase] = useState<SesionEgreso[]>([]);
 
   const cargarDatos = async () => {
     setLoading(true);
@@ -105,20 +113,30 @@ export default function RentabilidadPage() {
     }));
     setPagosEstudiantes(parsed);
 
-    // Egresos: pagos de nÃ³mina a profesoras
-    const { data: nominaData } = await supabaseBrowserClient
-      .from("pagos_nomina")
-      .select("id, fecha_pago, total_pagado, perfiles(nombre_completo)")
-      .gte("fecha_pago", inicio)
-      .lte("fecha_pago", fin);
+    // Egresos: horas dictadas por profesores (pagadas o pendientes)
+    const { data: sesionesData } = await supabaseBrowserClient
+      .from("sesiones_clase")
+      .select(
+        "id, fecha, horas_dictadas, estado_pago, perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora), cursos(nombre)"
+      )
+      .gte("fecha", inicio)
+      .lte("fecha", fin);
 
-    const nominaParsed: PagoNomina[] = ((nominaData as any[]) || []).map((n) => ({
-      id: n.id,
-      fecha_pago: n.fecha_pago,
-      total_pagado: Number(n.total_pagado) || 0,
-      profesor_nombre: n.perfiles?.nombre_completo || "Sin nombre",
-    }));
-    setPagosNomina(nominaParsed);
+    const sesionesParsed: SesionEgreso[] = ((sesionesData as any[]) || []).map((s) => {
+      const valorHora = Number(s.perfiles?.valor_hora) || 0;
+      const horas = Number(s.horas_dictadas) || 0;
+      return {
+        id: s.id,
+        fecha: s.fecha,
+        profesor_nombre: s.perfiles?.nombre_completo || "Sin nombre",
+        valor_hora: valorHora,
+        horas_dictadas: horas,
+        costo: horas * valorHora,
+        estado_pago: s.estado_pago === "pagado" ? "pagado" : "pendiente",
+        curso_nombre: s.cursos?.nombre || "Sin curso",
+      };
+    });
+    setSesionesClase(sesionesParsed);
 
     setLoading(false);
   };
@@ -147,8 +165,20 @@ export default function RentabilidadPage() {
     [pagosEstudiantes]
   );
   const totalEgresos = useMemo(
-    () => pagosNomina.reduce((s, p) => s + p.total_pagado, 0),
-    [pagosNomina]
+    () => sesionesClase.reduce((s, p) => s + p.costo, 0),
+    [sesionesClase]
+  );
+  const totalEgresosPagado = useMemo(
+    () => sesionesClase.filter((s) => s.estado_pago === "pagado").reduce((s, p) => s + p.costo, 0),
+    [sesionesClase]
+  );
+  const totalEgresosPendiente = useMemo(
+    () => sesionesClase.filter((s) => s.estado_pago === "pendiente").reduce((s, p) => s + p.costo, 0),
+    [sesionesClase]
+  );
+  const totalHorasDictadas = useMemo(
+    () => sesionesClase.reduce((s, p) => s + p.horas_dictadas, 0),
+    [sesionesClase]
   );
 
   const ganancia = totalIngresos - totalEgresos;
@@ -170,13 +200,24 @@ export default function RentabilidadPage() {
 
   const egresosPorProfesor = useMemo<ResumenProfesor[]>(() => {
     const map: Record<string, ResumenProfesor> = {};
-    pagosNomina.forEach((p) => {
-      if (!map[p.profesor_nombre])
-        map[p.profesor_nombre] = { nombre: p.profesor_nombre, total: 0 };
-      map[p.profesor_nombre]!.total += p.total_pagado;
+    sesionesClase.forEach((s) => {
+      if (!map[s.profesor_nombre])
+        map[s.profesor_nombre] = {
+          nombre: s.profesor_nombre,
+          horas: 0,
+          valor_hora: s.valor_hora,
+          total: 0,
+          pagado: 0,
+          pendiente: 0,
+        };
+      const entry = map[s.profesor_nombre]!;
+      entry.horas += s.horas_dictadas;
+      entry.total += s.costo;
+      if (s.estado_pago === "pagado") entry.pagado += s.costo;
+      else entry.pendiente += s.costo;
     });
     return Object.values(map).sort((a, b) => b.total - a.total);
-  }, [pagosNomina]);
+  }, [sesionesClase]);
 
   const coberturaEgresos =
     totalIngresos > 0 ? Math.round((totalEgresos / totalIngresos) * 100) : 0;
@@ -232,7 +273,7 @@ export default function RentabilidadPage() {
                 valueStyle={{ color: "#ff4d4f", fontSize: isMobile ? 16 : 20 }}
               />
               <Text type="secondary" style={{ fontSize: 11 }}>
-                Pagos a profesoras
+                {totalHorasDictadas}h dictadas &bull; Pag: {formatoCOP(totalEgresosPagado)} &bull; Pend: {formatoCOP(totalEgresosPendiente)}
               </Text>
             </Card>
           </Col>
@@ -402,7 +443,15 @@ export default function RentabilidadPage() {
 
           {/* Egresos por profesora */}
           <Col xs={24} lg={10}>
-            <Card title={`ðŸ‘©â€ðŸ« Egresos a Profesoras â€” ${formatoCOP(totalEgresos)}`}>
+            <Card
+              title={`Egresos Profesoras - ${formatoCOP(totalEgresos)}`}
+              extra={
+                <Space size="small" wrap>
+                  <Tag color="red">Pagado: {formatoCOP(totalEgresosPagado)}</Tag>
+                  <Tag color="orange">Pendiente: {formatoCOP(totalEgresosPendiente)}</Tag>
+                </Space>
+              }
+            >
               <Table<ResumenProfesor>
                 dataSource={egresosPorProfesor}
                 rowKey="nombre"
@@ -422,16 +471,41 @@ export default function RentabilidadPage() {
                     ),
                   },
                   {
+                    title: "Horas",
+                    dataIndex: "horas",
+                    key: "horas",
+                    align: "right",
+                    render: (v: number) => <Tag color="blue">{v}h</Tag>,
+                  },
+                  {
                     title: "Pagado",
+                    dataIndex: "pagado",
+                    key: "pagado",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: v > 0 ? "#ff4d4f" : "#999" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Pendiente",
+                    dataIndex: "pendiente",
+                    key: "pendiente",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: v > 0 ? "#fa8c16" : "#999" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Total",
                     dataIndex: "total",
                     key: "total",
                     align: "right",
                     render: (v: number) => (
-                      <Text style={{ color: "#ff4d4f" }}>{formatoCOP(v)}</Text>
+                      <Text strong style={{ color: "#ff4d4f" }}>{formatoCOP(v)}</Text>
                     ),
                   },
                 ]}
-                locale={{ emptyText: "Sin pagos a profesoras en este perÃ­odo" }}
+                locale={{ emptyText: "Sin clases dictadas en este periodo" }}
                 summary={() =>
                   egresosPorProfesor.length > 1 ? (
                     <Table.Summary.Row>
@@ -439,17 +513,24 @@ export default function RentabilidadPage() {
                         <Text strong>Total</Text>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={1} align="right">
-                        <Text strong style={{ color: "#ff4d4f" }}>
-                          {formatoCOP(totalEgresos)}
-                        </Text>
+                        <Tag color="blue">{totalHorasDictadas}h</Tag>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={2} align="right">
+                        <Text strong style={{ color: "#ff4d4f" }}>{formatoCOP(totalEgresosPagado)}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={3} align="right">
+                        <Text strong style={{ color: "#fa8c16" }}>{formatoCOP(totalEgresosPendiente)}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={4} align="right">
+                        <Text strong>{formatoCOP(totalEgresos)}</Text>
                       </Table.Summary.Cell>
                     </Table.Summary.Row>
                   ) : null
                 }
               />
-              {totalEgresos === 0 && !loading && (
+              {sesionesClase.length === 0 && !loading && (
                 <Alert
-                  message="No se han registrado pagos a profesoras este mes"
+                  message="No hay clases registradas en este periodo"
                   type="warning"
                   showIcon
                   style={{ marginTop: 8 }}
