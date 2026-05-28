@@ -59,7 +59,7 @@ import {
     crearMovimiento,
     eliminarMovimiento,
     sincronizarIngresosDesdePagos,
-    sincronizarEgresosDesdePagosNomina,
+    sincronizarEgresosDesdeSesionesClase,
     type MovimientoFinanciero,
 } from "@modules/finanzas/movimientos.service";
 import { MOVIMIENTO_CATEGORIAS, MOVIMIENTO_TIPO, MOVIMIENTO_TIPO_COLOR, MOVIMIENTO_TIPO_LABEL } from "@constants/movimientos";
@@ -268,9 +268,9 @@ export default function TesoreriaPage() {
             }
 
             try {
-                await sincronizarEgresosDesdePagosNomina(user?.id || null);
+                await sincronizarEgresosDesdeSesionesClase(user?.id || null);
             } catch (syncError) {
-                console.warn("No se pudo sincronizar egresos de nómina", syncError);
+                console.warn("No se pudo sincronizar egresos de sesiones clase", syncError);
             }
 
             // Limpiar duplicados automáticamente (solo si es admin)
@@ -624,14 +624,14 @@ export default function TesoreriaPage() {
 
             message.success(`Liquidación ${periodo}: enviados ${enviados}, omitidos ${omitidos}, fallidos ${fallidos}`);
 
-            // Sincronizar egresos de nómina al movimientos_financieros
+            // Sincronizar egresos desde sesiones dictadas
             try {
-                const { sincronizados } = await sincronizarEgresosDesdePagosNomina(user?.id || null);
+                const { sincronizados } = await sincronizarEgresosDesdeSesionesClase(user?.id || null);
                 if (sincronizados > 0) {
-                    message.info(`${sincronizados} pagos de nómina registrados como egresos en tesorería`);
+                    message.info(`${sincronizados} clases dictadas registradas como egresos en tesorería`);
                 }
             } catch (syncErr) {
-                console.warn("No se pudo sincronizar egresos de nómina", syncErr);
+                console.warn("No se pudo sincronizar egresos de sesiones", syncErr);
             }
 
             await cargarMovimientos();

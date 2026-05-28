@@ -118,6 +118,29 @@ export async function POST() {
       }
     }
 
+    // ── 4. Egresos viejos de pagos_nomina (categoría 'nomina_profesoras') ────
+    // Ahora los egresos de profesoras se generan desde sesiones_clase
+    // (referencia = 'sesion_clase_XXX'). Los antiguos no tienen ese prefijo.
+    const { data: egresosViejosNomina } = await supabase
+      .from("movimientos_financieros")
+      .select("id, referencia")
+      .eq("tipo", "egreso")
+      .eq("categoria", "nomina_profesoras");
+
+    if (egresosViejosNomina && egresosViejosNomina.length > 0) {
+      const idsViejos = egresosViejosNomina
+        .filter((r) => !String(r.referencia || "").startsWith("sesion_clase_"))
+        .map((r) => r.id);
+      if (idsViejos.length > 0) {
+        const { error } = await supabase
+          .from("movimientos_financieros")
+          .delete()
+          .in("id", idsViejos);
+        if (error) throw error;
+        totalEliminados += idsViejos.length;
+      }
+    }
+
     return NextResponse.json({ success: true, eliminados: totalEliminados });
   } catch (error: any) {
     console.error("Error limpiando duplicados:", error);

@@ -322,3 +322,55 @@ export async function sincronizarEgresosDesdePagosNomina(createdBy?: string | nu
 
     return { total: nomina.length, sincronizados };
 }
+
+/**
+ * Sincroniza egresos desde sesiones_clase (clases efectivamente dictadas).
+ * Cada sesión con horas > 0 genera un egreso independiente de si el pago
+ * de nómina fue procesado o no. Usa referencia = 'sesion_clase_<id>' para
+ * evitar duplicados. Reemplaza a sincronizarEgresosDesdePagosNomina en
+ * el flujo de carga de Tesorería.
+ */
+export async function sincronizarEgresosDesdeSesionesClase(createdBy?: string | null) {
+    const { data: sesiones, error } = await supabaseBrowserClient
+        .from("sesiones_clase")
+        .select("id, fecha, horas_dictadas, profesor_id, perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora)")
+        .not("fecha", "is", null)
+        .gt("horas_dictadas", 0);
+
+    if (error) throw error;
+    if (!sesiones || sesiones.length === 0) return { total: 0, sincronizados: 0 };
+
+    let sincronizados = 0;
+    for (const sesion of sesiones as any[]) {
+        const valorHora = Number(sesion.perfiles?.valor_hora || 0);
+        const horas = Number(sesion.horas_dictadas || 0);
+        const monto = horas * valorHora;
+        if (monto <= 0) continue;
+
+        const refClave = `sesion_clase_${sesion.id}`;
+
+        const { data: existingRows } = await supabaseBrowserClient
+            .from("movimientos_financieros")
+            .select("id")
+            .eq("referencia", refClave)
+            .limit(1);
+
+        if (existingRows && existingRows.length > 0) continue; // ya sincronizado
+
+        const nombre = sesion.perfiles?.nombre_completo || "Profesora";
+        await supabaseBrowserClient.from("movimientos_financieros").insert({
+            fecha: String(sesion.fecha).slice(0, 10),
+            tipo: "egreso" as MovimientoTipo,
+            monto,
+            concepto: `Clase dictada - ${nombre} (${horas}h)`,
+            categoria: "nomina" as MovimientoCategoria,
+            referencia: refClave,
+            proveedor_id: sesion.profesor_id || null,
+            conciliado: false,
+            created_by: createdBy || null,
+        });
+        sincronizados++;
+    }
+
+    return { total: sesiones.length, sincronizados };
+}
