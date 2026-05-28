@@ -78,6 +78,22 @@ type ResumenProfesor = {
 
 type ModoFiltro = "mes" | "rango" | "todo";
 
+type RentabilidadCurso = {
+  curso: string;
+  ingresos: number;
+  egresosAsignados: number;
+  ganancia: number;
+  margen: number;
+};
+
+type ResumenMes = {
+  mesKey: string;
+  mesLabel: string;
+  ingresos: number;
+  egresos: number;
+  ganancia: number;
+};
+
 export default function RentabilidadPage() {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -217,6 +233,54 @@ export default function RentabilidadPage() {
 
   const coberturaEgresos =
     totalIngresos > 0 ? Math.round((totalEgresos / totalIngresos) * 100) : 0;
+
+  // Rentabilidad por curso (egresos distribuidos proporcionalmente)
+  const rentabilidadPorCurso = useMemo<RentabilidadCurso[]>(() => {
+    return ingresosPorCurso.map((c) => {
+      const egresosAsignados =
+        totalIngresos > 0 ? (c.total / totalIngresos) * totalEgresos : 0;
+      const ganCurso = c.total - egresosAsignados;
+      return {
+        curso: c.curso,
+        ingresos: c.total,
+        egresosAsignados: Math.round(egresosAsignados),
+        ganancia: Math.round(ganCurso),
+        margen: c.total > 0 ? (ganCurso / c.total) * 100 : 0,
+      };
+    });
+  }, [ingresosPorCurso, totalIngresos, totalEgresos]);
+
+  // Resumen mes a mes (solo relevante en modo rango o todo)
+  const resumenPorMes = useMemo<ResumenMes[]>(() => {
+    const map: Record<string, ResumenMes> = {};
+    pagosEstudiantes.forEach((p) => {
+      const key = p.fecha_pago.slice(0, 7); // YYYY-MM
+      if (!map[key])
+        map[key] = {
+          mesKey: key,
+          mesLabel: dayjs(key + "-01").format("MMMM YYYY"),
+          ingresos: 0,
+          egresos: 0,
+          ganancia: 0,
+        };
+      map[key]!.ingresos += p.monto;
+    });
+    pagosNomina.forEach((p) => {
+      const key = p.fecha_pago.slice(0, 7);
+      if (!map[key])
+        map[key] = {
+          mesKey: key,
+          mesLabel: dayjs(key + "-01").format("MMMM YYYY"),
+          ingresos: 0,
+          egresos: 0,
+          ganancia: 0,
+        };
+      map[key]!.egresos += p.total_pagado;
+    });
+    return Object.values(map)
+      .map((m) => ({ ...m, ganancia: m.ingresos - m.egresos }))
+      .sort((a, b) => a.mesKey.localeCompare(b.mesKey));
+  }, [pagosEstudiantes, pagosNomina]);
 
   const datosReporte = useMemo<DatosReporteRentabilidad>(
     () => ({
@@ -633,6 +697,162 @@ export default function RentabilidadPage() {
             </Card>
           </Col>
         </Row>
+
+        {/* Rentabilidad por Grupo / Curso */}
+        {rentabilidadPorCurso.length > 0 && (
+          <>
+            <Divider />
+            <Card
+              title="Rentabilidad por Grupo"
+              extra={
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Egresos distribuidos proporcionalmente
+                </Text>
+              }
+              style={{ marginBottom: 24 }}
+            >
+              <Table<RentabilidadCurso>
+                dataSource={rentabilidadPorCurso}
+                rowKey="curso"
+                size="small"
+                pagination={{ pageSize: 15, hideOnSinglePage: true }}
+                rowClassName={(r) => (r.ganancia >= 0 ? "" : "row-perdida")}
+                columns={[
+                  {
+                    title: "Grupo / Curso",
+                    dataIndex: "curso",
+                    key: "curso",
+                    ellipsis: true,
+                  },
+                  {
+                    title: "Ingresos",
+                    dataIndex: "ingresos",
+                    key: "ingresos",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: "#52c41a" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Egresos (prop.)",
+                    dataIndex: "egresosAsignados",
+                    key: "egresosAsignados",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: "#ff4d4f" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Ganancia / Perdida",
+                    dataIndex: "ganancia",
+                    key: "ganancia",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text strong style={{ color: v >= 0 ? "#52c41a" : "#ff4d4f" }}>
+                        {v >= 0 ? "+" : ""}{formatoCOP(v)}
+                      </Text>
+                    ),
+                    sorter: (a, b) => a.ganancia - b.ganancia,
+                  },
+                  {
+                    title: "Margen %",
+                    dataIndex: "margen",
+                    key: "margen",
+                    align: "right",
+                    render: (v: number) => (
+                      <Tag color={v >= 0 ? "green" : "red"}>
+                        {v.toFixed(1)}%
+                      </Tag>
+                    ),
+                    sorter: (a, b) => a.margen - b.margen,
+                  },
+                ]}
+              />
+            </Card>
+          </>
+        )}
+
+        {/* Evolucion mensual — solo en modo rango o todo */}
+        {modoFiltro !== "mes" && resumenPorMes.length > 1 && (
+          <>
+            <Divider />
+            <Card title="Evolucion Mensual" style={{ marginBottom: 24 }}>
+              <Table<ResumenMes>
+                dataSource={resumenPorMes}
+                rowKey="mesKey"
+                size="small"
+                pagination={{ pageSize: 12, hideOnSinglePage: true }}
+                columns={[
+                  {
+                    title: "Mes",
+                    dataIndex: "mesLabel",
+                    key: "mesLabel",
+                    render: (v: string) => <Text strong>{v}</Text>,
+                  },
+                  {
+                    title: "Ingresos",
+                    dataIndex: "ingresos",
+                    key: "ingresos",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: "#52c41a" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Egresos",
+                    dataIndex: "egresos",
+                    key: "egresos",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: "#ff4d4f" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Ganancia / Perdida",
+                    dataIndex: "ganancia",
+                    key: "ganancia",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text strong style={{ color: v >= 0 ? "#52c41a" : "#ff4d4f" }}>
+                        {v >= 0 ? "+" : ""}{formatoCOP(v)}
+                      </Text>
+                    ),
+                  },
+                  {
+                    title: "Estado",
+                    key: "estado",
+                    align: "center",
+                    render: (_: unknown, r: ResumenMes) =>
+                      r.ganancia >= 0 ? (
+                        <Tag color="green" icon={<RiseOutlined />}>Ganancia</Tag>
+                      ) : (
+                        <Tag color="red" icon={<FallOutlined />}>Perdida</Tag>
+                      ),
+                  },
+                ]}
+                summary={() => (
+                  <Table.Summary.Row>
+                    <Table.Summary.Cell index={0}>
+                      <Text strong>Total</Text>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={1} align="right">
+                      <Text strong style={{ color: "#52c41a" }}>{formatoCOP(totalIngresos)}</Text>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={2} align="right">
+                      <Text strong style={{ color: "#ff4d4f" }}>{formatoCOP(totalEgresos)}</Text>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={3} align="right">
+                      <Text strong style={{ color: ganancia >= 0 ? "#52c41a" : "#ff4d4f" }}>
+                        {ganancia >= 0 ? "+" : ""}{formatoCOP(ganancia)}
+                      </Text>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={4} />
+                  </Table.Summary.Row>
+                )}
+              />
+            </Card>
+          </>
+        )}
       </Spin>
     </div>
   );
