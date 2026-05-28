@@ -554,7 +554,7 @@ export default function TesoreriaPage() {
         setBusqueda("");
         setFiltroRango(null);
         setFiltroMes(null);
-        setFiltroPeriodo(null);
+        setFiltroPeriodo("mes_actual");
         setFiltroTipo(null);
         setFiltroCategoria(null);
         setFiltroMetodo(null);
@@ -803,15 +803,6 @@ export default function TesoreriaPage() {
             title={isMobile ? "💰 Tesorería" : "💰 Tesorería - Movimientos Financieros"}
             headerButtons={
                 <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? "100%" : "auto" }}>
-                    <Input
-                        placeholder={isMobile ? "Buscar..." : "Buscar por concepto, referencia o persona"}
-                        allowClear
-                        prefix={<SearchOutlined />}
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
-                        style={{ width: isMobile ? "100%" : 320 }}
-                        size={isMobile ? "middle" : "large"}
-                    />
                     <Button 
                         icon={<ReloadOutlined />} 
                         onClick={() => void cargarMovimientos()} 
@@ -858,6 +849,109 @@ export default function TesoreriaPage() {
                     style={{ marginBottom: 20 }}
                 />
             )}
+
+            {/* ── FILTROS ── */}
+            <Card size="small" style={{ marginBottom: 16, borderRadius: 10 }} bodyStyle={{ padding: isMobile ? 10 : 16 }}>
+                <Row gutter={[8, 8]} align="middle" wrap>
+                    <Col xs={24} sm={10} md={6} lg={5}>
+                        <Select
+                            allowClear
+                            placeholder="Período rápido"
+                            value={filtroPeriodo ?? undefined}
+                            onChange={(val) => {
+                                setFiltroPeriodo(val ?? null);
+                                if (val) { setFiltroRango(null); setFiltroMes(null); }
+                            }}
+                            style={{ width: "100%" }}
+                            size="middle"
+                            options={[
+                                { label: "Hoy", value: "hoy" },
+                                { label: "Semana actual", value: "semana_actual" },
+                                { label: "Mes actual", value: "mes_actual" },
+                                { label: "Mes anterior", value: "mes_anterior" },
+                                { label: "Trimestre actual", value: "trimestre_actual" },
+                                { label: "Semestre 1 (Ene\u2013Jun)", value: "semestre_1" },
+                                { label: "Semestre 2 (Jul\u2013Dic)", value: "semestre_2" },
+                                { label: "Este año", value: "anio_actual" },
+                                { label: "Año anterior", value: "anio_anterior" },
+                            ]}
+                        />
+                    </Col>
+                    <Col xs={12} sm={5} md={3} lg={3}>
+                        <DatePicker
+                            picker="month"
+                            placeholder="Mes"
+                            style={{ width: "100%" }}
+                            value={filtroMes}
+                            onChange={(value) => {
+                                setFiltroMes(value);
+                                if (value) { setFiltroRango(null); setFiltroPeriodo(null); }
+                            }}
+                            allowClear
+                            size="middle"
+                            format="MMM YYYY"
+                        />
+                    </Col>
+                    <Col xs={12} sm={9} md={7} lg={6}>
+                        <RangePicker
+                            style={{ width: "100%" }}
+                            value={filtroRango as any}
+                            onChange={(value) => {
+                                setFiltroRango(value as any);
+                                if (value && (value[0] || value[1])) { setFiltroMes(null); setFiltroPeriodo(null); }
+                            }}
+                            size="middle"
+                            format="DD/MM/YY"
+                            placeholder={["Desde", "Hasta"]}
+                        />
+                    </Col>
+                    <Col xs={12} sm={4} md={3} lg={2}>
+                        <Select
+                            allowClear
+                            placeholder="Tipo"
+                            value={filtroTipo ?? undefined}
+                            onChange={(val) => setFiltroTipo(val ?? null)}
+                            style={{ width: "100%" }}
+                            size="middle"
+                            options={[
+                                { label: MOVIMIENTO_TIPO_LABEL[MOVIMIENTO_TIPO.INGRESO], value: MOVIMIENTO_TIPO.INGRESO },
+                                { label: MOVIMIENTO_TIPO_LABEL[MOVIMIENTO_TIPO.EGRESO], value: MOVIMIENTO_TIPO.EGRESO },
+                            ]}
+                        />
+                    </Col>
+                    <Col xs={12} sm={4} md={3} lg={3}>
+                        <Select
+                            allowClear
+                            placeholder="Categoría"
+                            value={filtroCategoria ?? undefined}
+                            onChange={(val) => setFiltroCategoria(val ?? null)}
+                            style={{ width: "100%" }}
+                            size="middle"
+                            options={categoriasDisponibles.map((cat) => ({ label: cat, value: cat }))}
+                        />
+                    </Col>
+                    <Col xs={16} sm={8} md={6} lg={4}>
+                        <Input
+                            placeholder="Buscar concepto..."
+                            prefix={<SearchOutlined />}
+                            value={busqueda}
+                            onChange={(e) => setBusqueda(e.target.value)}
+                            allowClear
+                            size="middle"
+                        />
+                    </Col>
+                    <Col xs={8} sm={3} md={2} lg={1}>
+                        <Button onClick={resetFiltros} style={{ width: "100%" }} size="middle" title="Limpiar filtros">
+                            ✕
+                        </Button>
+                    </Col>
+                </Row>
+                {(filtroPeriodo || filtroMes || filtroRango?.[0] || filtroRango?.[1]) && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: "#6b7280" }}>
+                        Mostrando: <strong>{etiquetaPeriodo}</strong>
+                    </div>
+                )}
+            </Card>
 
             {/* ── ANÁLISIS FINANCIERO ── */}
             <Card
@@ -993,240 +1087,8 @@ export default function TesoreriaPage() {
                 </div>
             </Card>
 
-            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-                <Col xs={24} sm={8}>
-                    <Card 
-                        variant="borderless" 
-                        style={{ background: "#f6ffed", borderColor: "#b7eb8f" }}
-                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
-                    >
-                        <Statistic
-                            title={isMobile ? "Ingresos" : "Ingresos filtrados"}
-                            value={formatoCOP(totalIngresos)}
-                            valueStyle={{ color: "#3f8600", fontSize: isMobile ? 18 : 24 }}
-                            prefix={<DollarCircleOutlined />}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={24} sm={8}>
-                    <Card 
-                        variant="borderless" 
-                        style={{ background: "#fff1f0", borderColor: "#ffa39e" }}
-                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
-                    >
-                        <Statistic
-                            title={isMobile ? "Egresos" : "Egresos filtrados"}
-                            value={formatoCOP(totalEgresos)}
-                            valueStyle={{ color: "#cf1322", fontSize: isMobile ? 18 : 24 }}
-                            prefix={<DollarCircleOutlined />}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={24} sm={8}>
-                    <Card 
-                        variant="borderless" 
-                        style={{ background: "#e6f7ff", borderColor: "#91d5ff" }}
-                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
-                    >
-                        <Statistic
-                            title="Saldo neto"
-                            value={formatoCOP(saldoNeto)}
-                            valueStyle={{ color: saldoNeto >= 0 ? "#1890ff" : "#cf1322", fontSize: isMobile ? 18 : 24 }}
-                            prefix={<BankOutlined />}
-                        />
-                    </Card>
-                </Col>
-            </Row>
 
-            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-                <Col xs={24} md={8}>
-                    <Card
-                        variant="borderless"
-                        style={{ background: "#f6ffed", borderColor: "#b7eb8f" }}
-                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
-                    >
-                        <Statistic
-                            title="Ingresos de caja (matrículas + mensualidades)"
-                            value={formatoCOP(totalIngresosCaja)}
-                            valueStyle={{ color: "#3f8600", fontSize: isMobile ? 16 : 22 }}
-                            prefix={<DollarCircleOutlined />}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={24} md={8}>
-                    <Card
-                        variant="borderless"
-                        style={{ background: "#fff1f0", borderColor: "#ffa39e" }}
-                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
-                    >
-                        <Statistic
-                            title="Salidas reales (profesores + gastos)"
-                            value={formatoCOP(totalSalidasReales)}
-                            valueStyle={{ color: "#cf1322", fontSize: isMobile ? 16 : 22 }}
-                            prefix={<DollarCircleOutlined />}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={24} md={8}>
-                    <Card
-                        variant="borderless"
-                        style={{ background: "#e6f7ff", borderColor: "#91d5ff" }}
-                        bodyStyle={{ padding: isMobile ? 12 : 24 }}
-                    >
-                        <Statistic
-                            title="Saldo caja efectivo"
-                            value={formatoCOP(saldoCajaEfectivo)}
-                            valueStyle={{ color: saldoCajaEfectivo >= 0 ? "#1890ff" : "#cf1322", fontSize: isMobile ? 16 : 22 }}
-                            prefix={<BankOutlined />}
-                        />
-                    </Card>
-                </Col>
-            </Row>
 
-            <Card 
-                style={{ marginBottom: 16 }} 
-                title={
-                    <Space>
-                        <FilterOutlined />
-                        <span>{isMobile ? "Filtros" : "Filtros de búsqueda"}</span>
-                    </Space>
-                }
-                bodyStyle={{ padding: isMobile ? 12 : 24 }}
-            >
-                <Row gutter={[12, 12]}>
-                    <Col xs={24} md={12} lg={8}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Rango de fechas</label>
-                        <RangePicker
-                            style={{ width: "100%" }}
-                            value={filtroRango as any}
-                            onChange={(value) => {
-                                setFiltroRango(value as any);
-                                if (value && (value[0] || value[1])) {
-                                    setFiltroMes(null);
-                                    setFiltroPeriodo(null);
-                                }
-                            }}
-                            size="middle"
-                        />
-                    </Col>
-                    <Col xs={12} sm={6} md={6} lg={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Mes</label>
-                        <DatePicker
-                            picker="month"
-                            style={{ width: "100%" }}
-                            value={filtroMes as any}
-                            onChange={(value) => {
-                                setFiltroMes(value);
-                                if (value) {
-                                    setFiltroRango(null);
-                                    setFiltroPeriodo(null);
-                                }
-                            }}
-                            allowClear
-                            size="middle"
-                        />
-                    </Col>
-                    <Col xs={12} sm={6} md={6} lg={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Período</label>
-                        <Select
-                            allowClear
-                            placeholder="Selecciona"
-                            value={filtroPeriodo ?? undefined}
-                            onChange={(val) => {
-                                setFiltroPeriodo(val ?? null);
-                                if (val) {
-                                    setFiltroRango(null);
-                                    setFiltroMes(null);
-                                }
-                            }}
-                            style={{ width: "100%" }}
-                            size="middle"
-                            options={[
-                                { label: "Hoy", value: "hoy" },
-                                { label: "Semana actual", value: "semana_actual" },
-                                { label: "Mes actual", value: "mes_actual" },
-                                { label: "Mes anterior", value: "mes_anterior" },
-                                { label: "Trimestre actual", value: "trimestre_actual" },
-                                { label: "Semestre 1 (Ene–Jun)", value: "semestre_1" },
-                                { label: "Semestre 2 (Jul–Dic)", value: "semestre_2" },
-                                { label: "Este año", value: "anio_actual" },
-                                { label: "Año anterior", value: "anio_anterior" },
-                            ]}
-                        />
-                    </Col>
-                    <Col xs={12} sm={6} md={6} lg={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Tipo</label>
-                        <Select
-                            allowClear
-                            placeholder="Todos"
-                            value={filtroTipo ?? undefined}
-                            onChange={(val) => setFiltroTipo(val ?? null)}
-                            style={{ width: "100%" }}
-                            size="middle"
-                            options={[
-                                { label: MOVIMIENTO_TIPO_LABEL[MOVIMIENTO_TIPO.INGRESO], value: MOVIMIENTO_TIPO.INGRESO },
-                                { label: MOVIMIENTO_TIPO_LABEL[MOVIMIENTO_TIPO.EGRESO], value: MOVIMIENTO_TIPO.EGRESO },
-                            ]}
-                        />
-                    </Col>
-                    <Col xs={12} sm={6} md={6} lg={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Categoría</label>
-                        <Select
-                            allowClear
-                            placeholder="Todas"
-                            value={filtroCategoria ?? undefined}
-                            onChange={(val) => setFiltroCategoria(val ?? null)}
-                            style={{ width: "100%" }}
-                            size="middle"
-                            options={categoriasDisponibles.map((cat) => ({ label: cat, value: cat }))}
-                        />
-                    </Col>
-                    <Col xs={12} sm={6} md={6} lg={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Método</label>
-                        <Select
-                            allowClear
-                            placeholder="Todos"
-                            value={filtroMetodo ?? undefined}
-                            onChange={(val) => setFiltroMetodo(val ?? null)}
-                            style={{ width: "100%" }}
-                            size="middle"
-                            options={metodosDisponibles.map((met) => ({ label: met, value: met }))}
-                        />
-                    </Col>
-                    <Col xs={12} sm={6} md={6} lg={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Conciliación</label>
-                        <Select
-                            allowClear
-                            placeholder="Todos"
-                            value={filtroConciliado ?? undefined}
-                            onChange={(val) => setFiltroConciliado(val ?? null)}
-                            style={{ width: "100%" }}
-                            size="middle"
-                            options={[
-                                { label: "Conciliados", value: "conciliado" },
-                                { label: "Pendientes", value: "pendiente" },
-                            ]}
-                        />
-                    </Col>
-                    <Col xs={24} sm={12} md={12} lg={8}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4 }}>Buscar</label>
-                        <Input
-                            placeholder="Buscar por concepto..."
-                            prefix={<SearchOutlined />}
-                            value={busqueda}
-                            onChange={(e) => setBusqueda(e.target.value)}
-                            allowClear
-                            size="middle"
-                        />
-                    </Col>
-                    <Col xs={12} sm={6} md={6} lg={4}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", display: "block", marginBottom: 4, opacity: 0 }}>.</label>
-                        <Button onClick={resetFiltros} style={{ width: "100%" }} size="middle">
-                            {isMobile ? "Limpiar" : "Limpiar filtros"}
-                        </Button>
-                    </Col>
-                </Row>
-            </Card>
 
             {loading ? (
                 <div style={{ display: "flex", justifyContent: "center", padding: 40 }}>
