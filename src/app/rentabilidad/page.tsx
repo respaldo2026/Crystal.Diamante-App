@@ -160,9 +160,10 @@ export default function RentabilidadPage() {
     pagosEstudiantes.forEach((p) => {
       if (!map[p.curso_nombre])
         map[p.curso_nombre] = { curso: p.curso_nombre, inscripciones: 0, mensualidades: 0, total: 0 };
-      map[p.curso_nombre].total += p.monto;
-      if (p.tipo === "inscripcion") map[p.curso_nombre].inscripciones += p.monto;
-      else map[p.curso_nombre].mensualidades += p.monto;
+      const entry = map[p.curso_nombre]!;
+      entry.total += p.monto;
+      if (p.tipo === "inscripcion") entry.inscripciones += p.monto;
+      else entry.mensualidades += p.monto;
     });
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [pagosEstudiantes]);
@@ -172,7 +173,7 @@ export default function RentabilidadPage() {
     pagosNomina.forEach((p) => {
       if (!map[p.profesor_nombre])
         map[p.profesor_nombre] = { nombre: p.profesor_nombre, total: 0 };
-      map[p.profesor_nombre].total += p.total_pagado;
+      map[p.profesor_nombre]!.total += p.total_pagado;
     });
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [pagosNomina]);
