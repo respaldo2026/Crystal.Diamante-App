@@ -279,3 +279,46 @@ export async function sincronizarIngresosDesdePagos(createdBy?: string | null) {
 
     return { totalPagos: pagosPagados.length, sincronizados: registros.length };
 }
+
+export async function sincronizarEgresosDesdePagosNomina(createdBy?: string | null) {
+    const { data: nomina, error } = await supabaseBrowserClient
+        .from("pagos_nomina")
+        .select("id, fecha_pago, total_pagado, total_horas, profesor_id, perfiles(nombre_completo)")
+        .not("fecha_pago", "is", null);
+
+    if (error) throw error;
+    if (!nomina || nomina.length === 0) return { total: 0, sincronizados: 0 };
+
+    let sincronizados = 0;
+    for (const pago of nomina as any[]) {
+        const monto = Number(pago.total_pagado || 0);
+        if (monto <= 0) continue;
+
+        // Verificar si ya existe un movimiento ligado a este pago_nomina
+        const { data: existing } = await supabaseBrowserClient
+            .from("movimientos_financieros")
+            .select("id")
+            .eq("referencia", pago.id)
+            .eq("tipo", "egreso")
+            .maybeSingle();
+
+        if (existing?.id) continue; // ya sincronizado
+
+        const nombre = pago.perfiles?.nombre_completo || "Profesora";
+        const horas = Number(pago.total_horas || 0);
+        await supabaseBrowserClient.from("movimientos_financieros").insert({
+            fecha: String(pago.fecha_pago).slice(0, 10),
+            tipo: "egreso" as MovimientoTipo,
+            monto,
+            concepto: `Nómina - ${nombre}${horas > 0 ? ` (${horas}h)` : ""}`,
+            categoria: "nomina_profesoras",
+            referencia: pago.id,
+            proveedor_id: pago.profesor_id || null,
+            conciliado: false,
+            created_by: createdBy || null,
+        });
+        sincronizados++;
+    }
+
+    return { total: nomina.length, sincronizados };
+}

@@ -59,6 +59,7 @@ import {
     crearMovimiento,
     eliminarMovimiento,
     sincronizarIngresosDesdePagos,
+    sincronizarEgresosDesdePagosNomina,
     type MovimientoFinanciero,
 } from "@modules/finanzas/movimientos.service";
 import { MOVIMIENTO_CATEGORIAS, MOVIMIENTO_TIPO, MOVIMIENTO_TIPO_COLOR, MOVIMIENTO_TIPO_LABEL } from "@constants/movimientos";
@@ -265,6 +266,12 @@ export default function TesoreriaPage() {
                 await sincronizarIngresosDesdePagos(user?.id || null);
             } catch (syncError) {
                 console.warn("No se pudo sincronizar ingresos desde pagos al cargar tesorería", syncError);
+            }
+
+            try {
+                await sincronizarEgresosDesdePagosNomina(user?.id || null);
+            } catch (syncError) {
+                console.warn("No se pudo sincronizar egresos de nómina", syncError);
             }
 
             try {
@@ -622,6 +629,18 @@ export default function TesoreriaPage() {
             const periodo = String(result?.periodo?.periodoTexto || "periodo actual");
 
             message.success(`Liquidación ${periodo}: enviados ${enviados}, omitidos ${omitidos}, fallidos ${fallidos}`);
+
+            // Sincronizar egresos de nómina al movimientos_financieros
+            try {
+                const { sincronizados } = await sincronizarEgresosDesdePagosNomina(user?.id || null);
+                if (sincronizados > 0) {
+                    message.info(`${sincronizados} pagos de nómina registrados como egresos en tesorería`);
+                }
+            } catch (syncErr) {
+                console.warn("No se pudo sincronizar egresos de nómina", syncErr);
+            }
+
+            await cargarMovimientos();
         } catch (error: any) {
             console.error("Error ejecutando liquidación manual:", error);
             message.error(error?.message || "No se pudo ejecutar la liquidación ahora");

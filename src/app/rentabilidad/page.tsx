@@ -49,15 +49,12 @@ type PagoEstudiante = {
   curso_nombre: string;
 };
 
-type SesionEgreso = {
+type PagoNomina = {
   id: string;
-  fecha: string;
+  fecha_pago: string;
+  total_pagado: number;
+  total_horas: number;
   profesor_nombre: string;
-  valor_hora: number;
-  horas_dictadas: number;
-  costo: number;
-  estado_pago: "pendiente" | "pagado";
-  curso_nombre: string;
 };
 
 type ResumenCurso = {
@@ -70,10 +67,7 @@ type ResumenCurso = {
 type ResumenProfesor = {
   nombre: string;
   horas: number;
-  valor_hora: number;
   total: number;
-  pagado: number;
-  pendiente: number;
 };
 
 export default function RentabilidadPage() {
@@ -83,7 +77,7 @@ export default function RentabilidadPage() {
   const [mesFiltro, setMesFiltro] = useState<dayjs.Dayjs>(dayjs());
   const [loading, setLoading] = useState(false);
   const [pagosEstudiantes, setPagosEstudiantes] = useState<PagoEstudiante[]>([]);
-  const [sesionesClase, setSesionesClase] = useState<SesionEgreso[]>([]);
+  const [pagosNomina, setPagosNomina] = useState<PagoNomina[]>([]);
 
   const cargarDatos = async () => {
     setLoading(true);
@@ -113,30 +107,21 @@ export default function RentabilidadPage() {
     }));
     setPagosEstudiantes(parsed);
 
-    // Egresos: horas dictadas por profesores (pagadas o pendientes)
-    const { data: sesionesData } = await supabaseBrowserClient
-      .from("sesiones_clase")
-      .select(
-        "id, fecha, horas_dictadas, estado_pago, perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora), cursos(nombre)"
-      )
-      .gte("fecha", inicio)
-      .lte("fecha", fin);
+    // Egresos: pagos reales a profesoras (pagos_nomina)
+    const { data: nominaData } = await supabaseBrowserClient
+      .from("pagos_nomina")
+      .select("id, fecha_pago, total_pagado, total_horas, perfiles(nombre_completo)")
+      .gte("fecha_pago", inicio)
+      .lte("fecha_pago", fin);
 
-    const sesionesParsed: SesionEgreso[] = ((sesionesData as any[]) || []).map((s) => {
-      const valorHora = Number(s.perfiles?.valor_hora) || 0;
-      const horas = Number(s.horas_dictadas) || 0;
-      return {
-        id: s.id,
-        fecha: s.fecha,
-        profesor_nombre: s.perfiles?.nombre_completo || "Sin nombre",
-        valor_hora: valorHora,
-        horas_dictadas: horas,
-        costo: horas * valorHora,
-        estado_pago: s.estado_pago === "pagado" ? "pagado" : "pendiente",
-        curso_nombre: s.cursos?.nombre || "Sin curso",
-      };
-    });
-    setSesionesClase(sesionesParsed);
+    const nominaParsed: PagoNomina[] = ((nominaData as any[]) || []).map((n) => ({
+      id: n.id,
+      fecha_pago: n.fecha_pago,
+      total_pagado: Number(n.total_pagado) || 0,
+      total_horas: Number(n.total_horas) || 0,
+      profesor_nombre: n.perfiles?.nombre_completo || "Sin nombre",
+    }));
+    setPagosNomina(nominaParsed);
 
     setLoading(false);
   };
@@ -165,20 +150,12 @@ export default function RentabilidadPage() {
     [pagosEstudiantes]
   );
   const totalEgresos = useMemo(
-    () => sesionesClase.reduce((s, p) => s + p.costo, 0),
-    [sesionesClase]
+    () => pagosNomina.reduce((s, p) => s + p.total_pagado, 0),
+    [pagosNomina]
   );
-  const totalEgresosPagado = useMemo(
-    () => sesionesClase.filter((s) => s.estado_pago === "pagado").reduce((s, p) => s + p.costo, 0),
-    [sesionesClase]
-  );
-  const totalEgresosPendiente = useMemo(
-    () => sesionesClase.filter((s) => s.estado_pago === "pendiente").reduce((s, p) => s + p.costo, 0),
-    [sesionesClase]
-  );
-  const totalHorasDictadas = useMemo(
-    () => sesionesClase.reduce((s, p) => s + p.horas_dictadas, 0),
-    [sesionesClase]
+  const totalHorasPagadas = useMemo(
+    () => pagosNomina.reduce((s, p) => s + p.total_horas, 0),
+    [pagosNomina]
   );
 
   const ganancia = totalIngresos - totalEgresos;
@@ -200,24 +177,15 @@ export default function RentabilidadPage() {
 
   const egresosPorProfesor = useMemo<ResumenProfesor[]>(() => {
     const map: Record<string, ResumenProfesor> = {};
-    sesionesClase.forEach((s) => {
-      if (!map[s.profesor_nombre])
-        map[s.profesor_nombre] = {
-          nombre: s.profesor_nombre,
-          horas: 0,
-          valor_hora: s.valor_hora,
-          total: 0,
-          pagado: 0,
-          pendiente: 0,
-        };
-      const entry = map[s.profesor_nombre]!;
-      entry.horas += s.horas_dictadas;
-      entry.total += s.costo;
-      if (s.estado_pago === "pagado") entry.pagado += s.costo;
-      else entry.pendiente += s.costo;
+    pagosNomina.forEach((p) => {
+      if (!map[p.profesor_nombre])
+        map[p.profesor_nombre] = { nombre: p.profesor_nombre, horas: 0, total: 0 };
+      const entry = map[p.profesor_nombre]!;
+      entry.horas += p.total_horas;
+      entry.total += p.total_pagado;
     });
     return Object.values(map).sort((a, b) => b.total - a.total);
-  }, [sesionesClase]);
+  }, [pagosNomina]);
 
   const coberturaEgresos =
     totalIngresos > 0 ? Math.round((totalEgresos / totalIngresos) * 100) : 0;
@@ -273,7 +241,7 @@ export default function RentabilidadPage() {
                 valueStyle={{ color: "#ff4d4f", fontSize: isMobile ? 16 : 20 }}
               />
               <Text type="secondary" style={{ fontSize: 11 }}>
-                {totalHorasDictadas}h dictadas &bull; Pag: {formatoCOP(totalEgresosPagado)} &bull; Pend: {formatoCOP(totalEgresosPendiente)}
+                {totalHorasPagadas}h liquidadas
               </Text>
             </Card>
           </Col>
@@ -369,89 +337,7 @@ export default function RentabilidadPage() {
           <Col xs={24} lg={14}>
             <Card
               title={`ðŸ’° Ingresos por Curso â€” ${formatoCOP(totalIngresos)}`}
-              extra={
-                <Space size="small" wrap>
-                  <Tag color="green">Inscripciones: {formatoCOP(totalInscripciones)}</Tag>
-                  <Tag color="blue">Mensualidades: {formatoCOP(totalMensualidades)}</Tag>
-                </Space>
-              }
-            >
-              <Table<ResumenCurso>
-                dataSource={ingresosPorCurso}
-                rowKey="curso"
-                size="small"
-                pagination={false}
-                columns={[
-                  {
-                    title: "Curso",
-                    dataIndex: "curso",
-                    key: "curso",
-                    ellipsis: true,
-                  },
-                  {
-                    title: "Inscripciones",
-                    dataIndex: "inscripciones",
-                    key: "inscripciones",
-                    align: "right",
-                    render: (v: number) => (
-                      <Text style={{ color: "#52c41a" }}>{formatoCOP(v)}</Text>
-                    ),
-                  },
-                  {
-                    title: "Mensualidades",
-                    dataIndex: "mensualidades",
-                    key: "mensualidades",
-                    align: "right",
-                    render: (v: number) => (
-                      <Text style={{ color: "#1677ff" }}>{formatoCOP(v)}</Text>
-                    ),
-                  },
-                  {
-                    title: "Total",
-                    dataIndex: "total",
-                    key: "total",
-                    align: "right",
-                    render: (v: number) => <Text strong>{formatoCOP(v)}</Text>,
-                  },
-                ]}
-                locale={{ emptyText: "Sin ingresos en este perÃ­odo" }}
-                summary={() =>
-                  ingresosPorCurso.length > 1 ? (
-                    <Table.Summary.Row>
-                      <Table.Summary.Cell index={0}>
-                        <Text strong>Total</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={1} align="right">
-                        <Text strong style={{ color: "#52c41a" }}>
-                          {formatoCOP(totalInscripciones)}
-                        </Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={2} align="right">
-                        <Text strong style={{ color: "#1677ff" }}>
-                          {formatoCOP(totalMensualidades)}
-                        </Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={3} align="right">
-                        <Text strong>{formatoCOP(totalIngresos)}</Text>
-                      </Table.Summary.Cell>
-                    </Table.Summary.Row>
-                  ) : null
-                }
-              />
-            </Card>
-          </Col>
-
-          {/* Egresos por profesora */}
-          <Col xs={24} lg={10}>
-            <Card
-              title={`Egresos Profesoras - ${formatoCOP(totalEgresos)}`}
-              extra={
-                <Space size="small" wrap>
-                  <Tag color="red">Pagado: {formatoCOP(totalEgresosPagado)}</Tag>
-                  <Tag color="orange">Pendiente: {formatoCOP(totalEgresosPendiente)}</Tag>
-                </Space>
-              }
-            >
+                          >
               <Table<ResumenProfesor>
                 dataSource={egresosPorProfesor}
                 rowKey="nombre"
@@ -513,13 +399,13 @@ export default function RentabilidadPage() {
                         <Text strong>Total</Text>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={1} align="right">
-                        <Tag color="blue">{totalHorasDictadas}h</Tag>
+                        <Tag color="blue">{totalHorasPagadas}h</Tag>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={2} align="right">
-                        <Text strong style={{ color: "#ff4d4f" }}>{formatoCOP(totalEgresosPagado)}</Text>
+                        <Text strong style={{ color: "#ff4d4f" }}>{formatoCOP(totalEgresos)}</Text>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={3} align="right">
-                        <Text strong style={{ color: "#fa8c16" }}>{formatoCOP(totalEgresosPendiente)}</Text>
+                        <Text strong style={{ color: "#fa8c16" }}>{formatoCOP(0)}</Text>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={4} align="right">
                         <Text strong>{formatoCOP(totalEgresos)}</Text>
@@ -528,9 +414,9 @@ export default function RentabilidadPage() {
                   ) : null
                 }
               />
-              {sesionesClase.length === 0 && !loading && (
+              {pagosNomina.length === 0 && !loading && (
                 <Alert
-                  message="No hay clases registradas en este periodo"
+                  message="Sin pagos a profesoras en este periodo"
                   type="warning"
                   showIcon
                   style={{ marginTop: 8 }}
