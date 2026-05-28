@@ -1,73 +1,467 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Card,
-  Form,
-  Input,
-  InputNumber,
-  Row,
-  Col,
-  Statistic,
   Alert,
+  Button,
+  Card,
+  Col,
+  DatePicker,
   Divider,
+  Progress,
+  Row,
   Space,
+  Spin,
+  Statistic,
+  Table,
+  Tag,
   Typography,
   Grid,
-  Button,
-  Table,
-  Modal,
-  message,
-  Tag,
-  Tooltip,
-  Popconfirm,
-  Dropdown,
 } from "antd";
 import {
-  DollarOutlined,
-  RiseOutlined,
   FallOutlined,
-  TeamOutlined,
-  WarningOutlined,
-  CheckCircleOutlined,
-  SaveOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
   ReloadOutlined,
-  EllipsisOutlined,
+  RiseOutlined,
+  TeamOutlined,
   TrophyOutlined,
-  ThunderboltOutlined,
-  SearchOutlined,
-  FilterOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
-import type { DatosCurso, EscenarioRentabilidad, ResultadosRentabilidad } from "@utils/rentabilidad-calculator";
-import {
-  calcularRentabilidad,
-  formatearMoneda,
-  formatearPorcentaje,
-  determinarNivelRentabilidad,
-  obtenerColorRentabilidad,
-  obtenerEtiquetaRentabilidad,
-} from "@utils/rentabilidad-calculator";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import "dayjs/locale/es";
+dayjs.locale("es");
 
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
 
-const TABLE_NAME = "escenarios_rentabilidad";
+const formatoCOP = (valor: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(valor);
 
-type EscenarioDbRow = {
+type PagoEstudiante = {
   id: string;
+  fecha_pago: string;
+  monto: number;
+  tipo: "inscripcion" | "mensualidad";
+  curso_nombre: string;
+};
+
+type PagoNomina = {
+  id: string;
+  fecha_pago: string;
+  total_pagado: number;
+  profesor_nombre: string;
+};
+
+type ResumenCurso = {
+  curso: string;
+  inscripciones: number;
+  mensualidades: number;
+  total: number;
+};
+
+type ResumenProfesor = {
   nombre: string;
-  datos: DatosCurso;
-  resultados: ResultadosRentabilidad;
-  created_at: string;
+  total: number;
 };
 
 export default function RentabilidadPage() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
+  const [mesFiltro, setMesFiltro] = useState<dayjs.Dayjs>(dayjs());
+  const [loading, setLoading] = useState(false);
+  const [pagosEstudiantes, setPagosEstudiantes] = useState<PagoEstudiante[]>([]);
+  const [pagosNomina, setPagosNomina] = useState<PagoNomina[]>([]);
+
+  const cargarDatos = async () => {
+    setLoading(true);
+    const inicio = mesFiltro.startOf("month").format("YYYY-MM-DD");
+    const fin = mesFiltro.endOf("month").format("YYYY-MM-DD");
+
+    // Ingresos: pagos de estudiantes (mensualidades + inscripciones)
+    const { data: pagosData } = await supabaseBrowserClient
+      .from("pagos")
+      .select(
+        "id, fecha_pago, monto, numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre))"
+      )
+      .eq("estado", "pagado")
+      .gte("fecha_pago", inicio)
+      .lte("fecha_pago", fin);
+
+    const parsed: PagoEstudiante[] = ((pagosData as any[]) || []).map((p) => ({
+      id: p.id,
+      fecha_pago: p.fecha_pago,
+      monto: Number(p.monto) || 0,
+      tipo:
+        p.numero_cuota === 0 ||
+        String(p.tipo_cuota || "").toLowerCase().includes("inscripcion")
+          ? "inscripcion"
+          : "mensualidad",
+      curso_nombre: p.matriculas?.cursos?.nombre || "Sin curso",
+    }));
+    setPagosEstudiantes(parsed);
+
+    // Egresos: pagos de nómina a profesoras
+    const { data: nominaData } = await supabaseBrowserClient
+      .from("pagos_nomina")
+      .select("id, fecha_pago, total_pagado, perfiles(nombre_completo)")
+      .gte("fecha_pago", inicio)
+      .lte("fecha_pago", fin);
+
+    const nominaParsed: PagoNomina[] = ((nominaData as any[]) || []).map((n) => ({
+      id: n.id,
+      fecha_pago: n.fecha_pago,
+      total_pagado: Number(n.total_pagado) || 0,
+      profesor_nombre: n.perfiles?.nombre_completo || "Sin nombre",
+    }));
+    setPagosNomina(nominaParsed);
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void cargarDatos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesFiltro]);
+
+  const totalIngresos = useMemo(
+    () => pagosEstudiantes.reduce((s, p) => s + p.monto, 0),
+    [pagosEstudiantes]
+  );
+  const totalInscripciones = useMemo(
+    () =>
+      pagosEstudiantes
+        .filter((p) => p.tipo === "inscripcion")
+        .reduce((s, p) => s + p.monto, 0),
+    [pagosEstudiantes]
+  );
+  const totalMensualidades = useMemo(
+    () =>
+      pagosEstudiantes
+        .filter((p) => p.tipo === "mensualidad")
+        .reduce((s, p) => s + p.monto, 0),
+    [pagosEstudiantes]
+  );
+  const totalEgresos = useMemo(
+    () => pagosNomina.reduce((s, p) => s + p.total_pagado, 0),
+    [pagosNomina]
+  );
+
+  const ganancia = totalIngresos - totalEgresos;
+  const margen = totalIngresos > 0 ? (ganancia / totalIngresos) * 100 : 0;
+  const esRentable = ganancia >= 0;
+
+  const ingresosPorCurso = useMemo<ResumenCurso[]>(() => {
+    const map: Record<string, ResumenCurso> = {};
+    pagosEstudiantes.forEach((p) => {
+      if (!map[p.curso_nombre])
+        map[p.curso_nombre] = { curso: p.curso_nombre, inscripciones: 0, mensualidades: 0, total: 0 };
+      map[p.curso_nombre].total += p.monto;
+      if (p.tipo === "inscripcion") map[p.curso_nombre].inscripciones += p.monto;
+      else map[p.curso_nombre].mensualidades += p.monto;
+    });
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [pagosEstudiantes]);
+
+  const egresosPorProfesor = useMemo<ResumenProfesor[]>(() => {
+    const map: Record<string, ResumenProfesor> = {};
+    pagosNomina.forEach((p) => {
+      if (!map[p.profesor_nombre])
+        map[p.profesor_nombre] = { nombre: p.profesor_nombre, total: 0 };
+      map[p.profesor_nombre].total += p.total_pagado;
+    });
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [pagosNomina]);
+
+  const coberturaEgresos =
+    totalIngresos > 0 ? Math.round((totalEgresos / totalIngresos) * 100) : 0;
+
+  return (
+    <div style={{ padding: isMobile ? 16 : 24 }}>
+      <Space direction="vertical" size={8} style={{ width: "100%", marginBottom: 16 }}>
+        <Title level={2} style={{ margin: 0 }}>
+          📊 Análisis de Rentabilidad — P&G
+        </Title>
+        <Text type="secondary">
+          Ingresos reales (mensualidades + inscripciones) vs pagos a profesoras
+        </Text>
+      </Space>
+
+      <Space style={{ marginBottom: 24 }} wrap>
+        <DatePicker
+          picker="month"
+          value={mesFiltro}
+          onChange={(v) => v && setMesFiltro(v)}
+          format="MMMM YYYY"
+          allowClear={false}
+        />
+        <Button icon={<ReloadOutlined />} onClick={() => void cargarDatos()} loading={loading}>
+          Actualizar
+        </Button>
+      </Space>
+
+      <Spin spinning={loading}>
+        {/* KPI Cards */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={12} sm={12} lg={6}>
+            <Card>
+              <Statistic
+                title="Total Ingresos"
+                value={totalIngresos}
+                formatter={(v) => formatoCOP(Number(v))}
+                prefix={<RiseOutlined />}
+                valueStyle={{ color: "#52c41a", fontSize: isMobile ? 16 : 20 }}
+              />
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                Inscripciones + Mensualidades
+              </Text>
+            </Card>
+          </Col>
+          <Col xs={12} sm={12} lg={6}>
+            <Card>
+              <Statistic
+                title="Total Egresos"
+                value={totalEgresos}
+                formatter={(v) => formatoCOP(Number(v))}
+                prefix={<FallOutlined />}
+                valueStyle={{ color: "#ff4d4f", fontSize: isMobile ? 16 : 20 }}
+              />
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                Pagos a profesoras
+              </Text>
+            </Card>
+          </Col>
+          <Col xs={12} sm={12} lg={6}>
+            <Card>
+              <Statistic
+                title={esRentable ? "Ganancia Neta" : "Pérdida Neta"}
+                value={Math.abs(ganancia)}
+                formatter={(v) => formatoCOP(Number(v))}
+                prefix={esRentable ? <TrophyOutlined /> : <WarningOutlined />}
+                valueStyle={{
+                  color: esRentable ? "#52c41a" : "#ff4d4f",
+                  fontSize: isMobile ? 16 : 20,
+                }}
+              />
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                Resultado neto del mes
+              </Text>
+            </Card>
+          </Col>
+          <Col xs={12} sm={12} lg={6}>
+            <Card>
+              <Statistic
+                title="Margen"
+                value={Math.abs(margen)}
+                precision={1}
+                suffix="%"
+                prefix={esRentable ? <RiseOutlined /> : <FallOutlined />}
+                valueStyle={{
+                  color: esRentable ? "#52c41a" : "#ff4d4f",
+                  fontSize: isMobile ? 16 : 20,
+                }}
+              />
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {esRentable ? "Margen de ganancia" : "Margen de pérdida"}
+              </Text>
+            </Card>
+          </Col>
+        </Row>
+
+        {/* Cobertura */}
+        {totalIngresos > 0 && (
+          <Card style={{ marginBottom: 24 }}>
+            <Text strong>Cobertura de egresos sobre ingresos</Text>
+            <Progress
+              percent={Math.min(100, coberturaEgresos)}
+              status={coberturaEgresos <= 100 ? "success" : "exception"}
+              format={(p) => `${p}%`}
+              style={{ marginTop: 8 }}
+            />
+            <Row gutter={16} style={{ marginTop: 4 }}>
+              <Col>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  0% — Sin egresos
+                </Text>
+              </Col>
+              <Col flex="auto" style={{ textAlign: "right" }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  100% — Punto de equilibrio
+                </Text>
+              </Col>
+            </Row>
+          </Card>
+        )}
+
+        {/* Alerta resumen */}
+        {totalIngresos === 0 && !loading ? (
+          <Alert
+            message="Sin datos en este período"
+            description="No hay pagos registrados de estudiantes en el mes seleccionado"
+            type="info"
+            showIcon
+            style={{ marginBottom: 24 }}
+          />
+        ) : (
+          <Alert
+            message={
+              esRentable
+                ? `✅ Mes rentable — Ganancia: ${formatoCOP(ganancia)}`
+                : `❌ Mes en pérdida — Déficit: ${formatoCOP(Math.abs(ganancia))}`
+            }
+            description={`Margen: ${margen.toFixed(1)}% | Ingresos: ${formatoCOP(totalIngresos)} | Egresos profesoras: ${formatoCOP(totalEgresos)}`}
+            type={esRentable ? "success" : "error"}
+            showIcon
+            style={{ marginBottom: 24 }}
+          />
+        )}
+
+        <Divider />
+
+        <Row gutter={[24, 24]}>
+          {/* Ingresos por curso */}
+          <Col xs={24} lg={14}>
+            <Card
+              title={`💰 Ingresos por Curso — ${formatoCOP(totalIngresos)}`}
+              extra={
+                <Space size="small" wrap>
+                  <Tag color="green">Inscripciones: {formatoCOP(totalInscripciones)}</Tag>
+                  <Tag color="blue">Mensualidades: {formatoCOP(totalMensualidades)}</Tag>
+                </Space>
+              }
+            >
+              <Table<ResumenCurso>
+                dataSource={ingresosPorCurso}
+                rowKey="curso"
+                size="small"
+                pagination={false}
+                columns={[
+                  {
+                    title: "Curso",
+                    dataIndex: "curso",
+                    key: "curso",
+                    ellipsis: true,
+                  },
+                  {
+                    title: "Inscripciones",
+                    dataIndex: "inscripciones",
+                    key: "inscripciones",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: "#52c41a" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Mensualidades",
+                    dataIndex: "mensualidades",
+                    key: "mensualidades",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: "#1677ff" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                  {
+                    title: "Total",
+                    dataIndex: "total",
+                    key: "total",
+                    align: "right",
+                    render: (v: number) => <Text strong>{formatoCOP(v)}</Text>,
+                  },
+                ]}
+                locale={{ emptyText: "Sin ingresos en este período" }}
+                summary={() =>
+                  ingresosPorCurso.length > 1 ? (
+                    <Table.Summary.Row>
+                      <Table.Summary.Cell index={0}>
+                        <Text strong>Total</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={1} align="right">
+                        <Text strong style={{ color: "#52c41a" }}>
+                          {formatoCOP(totalInscripciones)}
+                        </Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={2} align="right">
+                        <Text strong style={{ color: "#1677ff" }}>
+                          {formatoCOP(totalMensualidades)}
+                        </Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={3} align="right">
+                        <Text strong>{formatoCOP(totalIngresos)}</Text>
+                      </Table.Summary.Cell>
+                    </Table.Summary.Row>
+                  ) : null
+                }
+              />
+            </Card>
+          </Col>
+
+          {/* Egresos por profesora */}
+          <Col xs={24} lg={10}>
+            <Card title={`👩‍🏫 Egresos a Profesoras — ${formatoCOP(totalEgresos)}`}>
+              <Table<ResumenProfesor>
+                dataSource={egresosPorProfesor}
+                rowKey="nombre"
+                size="small"
+                pagination={false}
+                columns={[
+                  {
+                    title: "Profesora",
+                    dataIndex: "nombre",
+                    key: "nombre",
+                    ellipsis: true,
+                    render: (nombre: string) => (
+                      <Space>
+                        <TeamOutlined style={{ color: "#722ed1" }} />
+                        <Text>{nombre}</Text>
+                      </Space>
+                    ),
+                  },
+                  {
+                    title: "Pagado",
+                    dataIndex: "total",
+                    key: "total",
+                    align: "right",
+                    render: (v: number) => (
+                      <Text style={{ color: "#ff4d4f" }}>{formatoCOP(v)}</Text>
+                    ),
+                  },
+                ]}
+                locale={{ emptyText: "Sin pagos a profesoras en este período" }}
+                summary={() =>
+                  egresosPorProfesor.length > 1 ? (
+                    <Table.Summary.Row>
+                      <Table.Summary.Cell index={0}>
+                        <Text strong>Total</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={1} align="right">
+                        <Text strong style={{ color: "#ff4d4f" }}>
+                          {formatoCOP(totalEgresos)}
+                        </Text>
+                      </Table.Summary.Cell>
+                    </Table.Summary.Row>
+                  ) : null
+                }
+              />
+              {totalEgresos === 0 && !loading && (
+                <Alert
+                  message="No se han registrado pagos a profesoras este mes"
+                  type="warning"
+                  showIcon
+                  style={{ marginTop: 8 }}
+                />
+              )}
+            </Card>
+          </Col>
+        </Row>
+      </Spin>
+    </div>
+  );
+}
+
   const [form] = Form.useForm<DatosCurso>();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
