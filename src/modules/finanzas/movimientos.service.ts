@@ -187,13 +187,13 @@ export async function registrarIngresoDesdePago(payload: {
     };
 
     if (payload.pago_abono_id) {
-        const { data: existing, error: existingError } = await supabaseBrowserClient
+        const { data: existingRows } = await supabaseBrowserClient
             .from("movimientos_financieros")
             .select("id")
             .eq("pago_abono_id", payload.pago_abono_id)
-            .maybeSingle();
+            .limit(1);
 
-        if (existingError) throw existingError;
+        const existing = existingRows?.[0] ?? null;
 
         if (existing?.id) {
             return actualizarMovimiento(existing.id, record);
@@ -203,14 +203,14 @@ export async function registrarIngresoDesdePago(payload: {
     }
 
     if (payload.pago_id) {
-        const { data: existing, error: existingError } = await supabaseBrowserClient
+        const { data: existingRows } = await supabaseBrowserClient
             .from("movimientos_financieros")
             .select("id")
             .eq("pago_id", payload.pago_id)
             .is("pago_abono_id", null)
-            .maybeSingle();
+            .limit(1);
 
-        if (existingError) throw existingError;
+        const existing = existingRows?.[0] ?? null;
 
         if (existing?.id) {
             return actualizarMovimiento(existing.id, record);
@@ -295,14 +295,14 @@ export async function sincronizarEgresosDesdePagosNomina(createdBy?: string | nu
         if (monto <= 0) continue;
 
         // Verificar si ya existe un movimiento ligado a este pago_nomina
-        const { data: existing } = await supabaseBrowserClient
+        const { data: existingRows } = await supabaseBrowserClient
             .from("movimientos_financieros")
             .select("id")
             .eq("referencia", pago.id)
             .eq("tipo", "egreso")
-            .maybeSingle();
+            .limit(1);
 
-        if (existing?.id) continue; // ya sincronizado
+        if (existingRows && existingRows.length > 0) continue; // ya sincronizado
 
         const nombre = pago.perfiles?.nombre_completo || "Profesora";
         const horas = Number(pago.total_horas || 0);

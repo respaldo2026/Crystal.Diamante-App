@@ -274,6 +274,19 @@ export default function TesoreriaPage() {
                 console.warn("No se pudo sincronizar egresos de nómina", syncError);
             }
 
+            // Limpiar duplicados automáticamente (solo si es admin)
+            if (puedeVerTodo) {
+                try {
+                    const resLimpieza = await fetch("/api/tesoreria/limpiar-duplicados", { method: "POST" });
+                    const jsonLimpieza = await resLimpieza.json();
+                    if (jsonLimpieza?.eliminados > 0) {
+                        message.info(`Se eliminaron ${jsonLimpieza.eliminados} movimientos duplicados`);
+                    }
+                } catch {
+                    // silencioso
+                }
+            }
+
             try {
                 const totalGenerados = await generarTicketsFaltantes();
                 if (totalGenerados > 0) {
