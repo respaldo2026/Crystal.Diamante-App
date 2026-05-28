@@ -19,6 +19,7 @@ import {
   Typography,
   Grid,
   Radio,
+  message,
 } from "antd";
 import {
   FallOutlined,
@@ -30,8 +31,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { pdf } from "@react-pdf/renderer";
-import { ReporteCompleto, ReporteIngresos, ReporteEgresos, type DatosReporteRentabilidad } from "@components/pdf/ReporteRentabilidadPDF";
+import type { DatosReporteRentabilidad } from "@components/pdf/ReporteRentabilidadPDF";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 dayjs.locale("es");
@@ -313,25 +313,32 @@ export default function RentabilidadPage() {
   const descargarPdf = async (tipo: "completo" | "ingresos" | "egresos") => {
     setGenerandoPdf(true);
     try {
+      const { pdf } = await import("@react-pdf/renderer");
+      const { ReporteCompleto, ReporteIngresos, ReporteEgresos } = await import(
+        "@components/pdf/ReporteRentabilidadPDF"
+      );
       let documento;
       let nombre: string;
       if (tipo === "ingresos") {
-        documento = <ReporteIngresos {...datosReporte} />;
+        documento = React.createElement(ReporteIngresos, datosReporte);
         nombre = `Ingresos-${periodoLabel}`;
       } else if (tipo === "egresos") {
-        documento = <ReporteEgresos {...datosReporte} />;
+        documento = React.createElement(ReporteEgresos, datosReporte);
         nombre = `Egresos-${periodoLabel}`;
       } else {
-        documento = <ReporteCompleto {...datosReporte} />;
+        documento = React.createElement(ReporteCompleto, datosReporte);
         nombre = `PYG-${periodoLabel}`;
       }
-      const blob = await pdf(documento).toBlob();
+      const blob = await pdf(documento as any).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${nombre}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error generando PDF:", err);
+      message.error("No se pudo generar el PDF. Intenta de nuevo.");
     } finally {
       setGenerandoPdf(false);
     }

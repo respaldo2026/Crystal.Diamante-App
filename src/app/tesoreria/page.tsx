@@ -113,7 +113,7 @@ export default function TesoreriaPage() {
     const [busqueda, setBusqueda] = useState("");
     const [filtroRango, setFiltroRango] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
     const [filtroMes, setFiltroMes] = useState<dayjs.Dayjs | null>(null);
-    const [filtroPeriodo, setFiltroPeriodo] = useState<string | null>(null);
+    const [filtroPeriodo, setFiltroPeriodo] = useState<string | null>("mes_actual");
     const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
     const [filtroCategoria, setFiltroCategoria] = useState<string | null>(null);
     const [filtroMetodo, setFiltroMetodo] = useState<string | null>(null);
