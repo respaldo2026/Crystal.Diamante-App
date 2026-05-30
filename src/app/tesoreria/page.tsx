@@ -73,6 +73,41 @@ const { RangePicker } = DatePicker;
 const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
+const CATEGORIA_FILTRO_NEGOCIO = {
+    MATRICULA: "matricula",
+    MENSUALIDAD_PAGO_CLASE: "mensualidad_pago_clase",
+    NOMINA: "nomina",
+    OTROS: "otros",
+} as const;
+
+type CategoriaFiltroNegocio = typeof CATEGORIA_FILTRO_NEGOCIO[keyof typeof CATEGORIA_FILTRO_NEGOCIO];
+
+const FILTRO_CATEGORIA_OPTIONS: Array<{ label: string; value: CategoriaFiltroNegocio }> = [
+    { label: "Matrícula / Inscripción", value: CATEGORIA_FILTRO_NEGOCIO.MATRICULA },
+    { label: "Mensualidades / Pago clase", value: CATEGORIA_FILTRO_NEGOCIO.MENSUALIDAD_PAGO_CLASE },
+    { label: "Nómina", value: CATEGORIA_FILTRO_NEGOCIO.NOMINA },
+    { label: "Otros", value: CATEGORIA_FILTRO_NEGOCIO.OTROS },
+];
+
+const clasificarCategoriaNegocio = (mov: Pick<MovimientoFinanciero, "tipo" | "categoria" | "concepto" | "descripcion">): CategoriaFiltroNegocio => {
+    const categoria = String(mov.categoria || "").toLowerCase().trim();
+    const texto = `${String(mov.concepto || "")} ${String(mov.descripcion || "")}`.toLowerCase();
+
+    if (mov.tipo === MOVIMIENTO_TIPO.EGRESO) {
+        if (categoria.includes("nomina")) return CATEGORIA_FILTRO_NEGOCIO.NOMINA;
+        return CATEGORIA_FILTRO_NEGOCIO.OTROS;
+    }
+
+    const esMatricula = /inscrip|matric/.test(categoria) || /inscrip|matric/.test(texto);
+    const esMensualidadPagoClase = /mensual|cuota|ciclo\s*mensual|clase\s*#|pago\s*clase|por\s*clase/.test(texto);
+
+    if (esMensualidadPagoClase) return CATEGORIA_FILTRO_NEGOCIO.MENSUALIDAD_PAGO_CLASE;
+    if (esMatricula) return CATEGORIA_FILTRO_NEGOCIO.MATRICULA;
+    if (categoria.includes("nomina")) return CATEGORIA_FILTRO_NEGOCIO.NOMINA;
+
+    return CATEGORIA_FILTRO_NEGOCIO.OTROS;
+};
+
 const getPeriodoPagoLegible = (pago: {
     periodo_pagado?: string | null;
     numero_cuota?: number | null;
@@ -121,6 +156,16 @@ export default function TesoreriaPage() {
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [registrando, setRegistrando] = useState(false);
     const [ejecutandoLiquidacion, setEjecutandoLiquidacion] = useState(false);
+    const [cursosDisponibles, setCursosDisponibles] = useState<Array<{ id: string; nombre: string }>>([]);
+    const [filtroGrupoRentabilidad, setFiltroGrupoRentabilidad] = useState<string | null>(null);
+    const [loadingRentabilidadGrupo, setLoadingRentabilidadGrupo] = useState(false);
+    const [rentabilidadGrupo, setRentabilidadGrupo] = useState({
+        ingresos: 0,
+        egresosNomina: 0,
+        ganancia: 0,
+        margen: 0,
+        cobertura: 0,
+    });
     const [form] = Form.useForm();
 
     const role = (user?.rol || "").toLowerCase();
@@ -325,6 +370,131 @@ export default function TesoreriaPage() {
         return Array.from(set).sort();
     }, [movimientos]);
 
+    const rangoPeriodoSeleccionado = useMemo(() => {
+        if (filtroRango && filtroRango[0] && filtroRango[1]) {
+            return {
+                inicio: filtroRango[0].startOf("day"),
+                fin: filtroRango[1].endOf("day"),
+            };
+        }
+
+        if (filtroMes) {
+            return {
+                inicio: filtroMes.startOf("month"),
+                fin: filtroMes.endOf("month"),
+            };
+        }
+
+        const hoy = dayjs();
+        const periodo = filtroPeriodo || "mes_actual";
+        if (periodo === "hoy") {
+            return { inicio: hoy.startOf("day"), fin: hoy.endOf("day") };
+        }
+        if (periodo === "semana_actual") {
+            return { inicio: hoy.startOf("week"), fin: hoy.endOf("week") };
+        }
+        if (periodo === "mes_actual") {
+            return { inicio: hoy.startOf("month"), fin: hoy.endOf("month") };
+        }
+        if (periodo === "mes_anterior") {
+            const mesAnterior = hoy.subtract(1, "month");
+            return { inicio: mesAnterior.startOf("month"), fin: mesAnterior.endOf("month") };
+        }
+        if (periodo === "trimestre_actual") {
+            const q = Math.floor(hoy.month() / 3);
+            return { inicio: hoy.month(q * 3).startOf("month"), fin: hoy.month(q * 3 + 2).endOf("month") };
+        }
+        if (periodo === "semestre_1") {
+            return { inicio: hoy.startOf("year"), fin: hoy.month(5).endOf("month") };
+        }
+        if (periodo === "semestre_2") {
+            return { inicio: hoy.month(6).startOf("month"), fin: hoy.endOf("year") };
+        }
+        if (periodo === "anio_actual") {
+            return { inicio: hoy.startOf("year"), fin: hoy.endOf("year") };
+        }
+
+        const ant = hoy.subtract(1, "year");
+        return { inicio: ant.startOf("year"), fin: ant.endOf("year") };
+    }, [filtroMes, filtroPeriodo, filtroRango]);
+
+    useEffect(() => {
+        const cargarCursos = async () => {
+            const { data, error } = await supabaseBrowserClient
+                .from("cursos")
+                .select("id, nombre")
+                .order("nombre", { ascending: true });
+
+            if (error) {
+                console.warn("No se pudieron cargar cursos para rentabilidad por grupo", error);
+                return;
+            }
+
+            const cursos = (data || []).map((c: any) => ({ id: String(c.id), nombre: String(c.nombre || "Sin nombre") }));
+            setCursosDisponibles(cursos);
+            if (!filtroGrupoRentabilidad && cursos.length > 0) {
+                setFiltroGrupoRentabilidad(cursos[0].id);
+            }
+        };
+
+        void cargarCursos();
+    }, [filtroGrupoRentabilidad]);
+
+    useEffect(() => {
+        const calcularRentabilidadGrupo = async () => {
+            if (!filtroGrupoRentabilidad) {
+                setRentabilidadGrupo({ ingresos: 0, egresosNomina: 0, ganancia: 0, margen: 0, cobertura: 0 });
+                return;
+            }
+
+            try {
+                setLoadingRentabilidadGrupo(true);
+                const inicio = rangoPeriodoSeleccionado.inicio.format("YYYY-MM-DD");
+                const fin = rangoPeriodoSeleccionado.fin.format("YYYY-MM-DD");
+
+                const { data: ingresosData, error: ingresosError } = await supabaseBrowserClient
+                    .from("pagos")
+                    .select("monto, fecha_pago, matriculas!inner(curso_id)")
+                    .eq("estado", "pagado")
+                    .eq("matriculas.curso_id", filtroGrupoRentabilidad)
+                    .gte("fecha_pago", inicio)
+                    .lte("fecha_pago", fin);
+
+                if (ingresosError) throw ingresosError;
+
+                const { data: sesionesData, error: sesionesError } = await supabaseBrowserClient
+                    .from("sesiones_clase")
+                    .select("fecha, horas_dictadas, perfiles!sesiones_clase_profesor_id_fkey(valor_hora)")
+                    .eq("curso_id", filtroGrupoRentabilidad)
+                    .gte("fecha", inicio)
+                    .lte("fecha", fin)
+                    .gt("horas_dictadas", 0);
+
+                if (sesionesError) throw sesionesError;
+
+                const ingresos = (ingresosData || []).reduce((sum: number, p: any) => sum + Number(p?.monto || 0), 0);
+                const egresosNomina = (sesionesData || []).reduce((sum: number, s: any) => {
+                    const horas = Number(s?.horas_dictadas || 0);
+                    const valorHora = Number(s?.perfiles?.valor_hora || 0);
+                    return sum + (horas * valorHora);
+                }, 0);
+
+                const ganancia = ingresos - egresosNomina;
+                const margen = ingresos > 0 ? Math.round((ganancia / ingresos) * 100) : 0;
+                const cobertura = egresosNomina > 0 ? Math.round((ingresos / egresosNomina) * 100) : 100;
+
+                setRentabilidadGrupo({ ingresos, egresosNomina, ganancia, margen, cobertura });
+            } catch (rentErr) {
+                console.warn("No se pudo calcular rentabilidad por grupo", rentErr);
+                setRentabilidadGrupo({ ingresos: 0, egresosNomina: 0, ganancia: 0, margen: 0, cobertura: 0 });
+            } finally {
+                setLoadingRentabilidadGrupo(false);
+            }
+        };
+
+        void calcularRentabilidadGrupo();
+    }, [filtroGrupoRentabilidad, rangoPeriodoSeleccionado]);
+
     const movimientosFiltrados = useMemo(() => {
         return movimientos.filter((mov) => {
             const matchTexto = (() => {
@@ -348,7 +518,10 @@ export default function TesoreriaPage() {
 
             if (filtroTipo && mov.tipo !== filtroTipo) return false;
 
-            if (filtroCategoria && (mov.categoria ?? "") !== filtroCategoria) return false;
+            if (filtroCategoria) {
+                const categoriaNegocio = clasificarCategoriaNegocio(mov);
+                if (categoriaNegocio !== filtroCategoria) return false;
+            }
 
             if (filtroMetodo && (mov.metodo_pago ?? "") !== filtroMetodo) return false;
 
@@ -927,7 +1100,7 @@ export default function TesoreriaPage() {
                             onChange={(val) => setFiltroCategoria(val ?? null)}
                             style={{ width: "100%" }}
                             size="middle"
-                            options={categoriasDisponibles.map((cat) => ({ label: cat, value: cat }))}
+                            options={FILTRO_CATEGORIA_OPTIONS}
                         />
                     </Col>
                     <Col xs={16} sm={8} md={6} lg={4}>
@@ -1085,6 +1258,84 @@ export default function TesoreriaPage() {
                         <Text type="secondary" style={{ fontSize: 11 }}>100% — Punto de equilibrio</Text>
                     </div>
                 </div>
+            </Card>
+
+            <Card
+                style={{ marginBottom: 20, borderRadius: 14, border: "1px solid #dbeafe" }}
+                bodyStyle={{ padding: isMobile ? 14 : 22 }}
+                title={
+                    <Space>
+                        <RiseOutlined style={{ color: "#2563eb" }} />
+                        <span style={{ fontWeight: 700 }}>Rentabilidad por Grupo</span>
+                        <span style={{ fontSize: 12, color: "#64748b", fontWeight: 400 }}>— {etiquetaPeriodo}</span>
+                    </Space>
+                }
+            >
+                <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+                    <Col xs={24} md={12} lg={10}>
+                        <Select
+                            allowClear
+                            placeholder="Selecciona grupo/curso"
+                            value={filtroGrupoRentabilidad ?? undefined}
+                            onChange={(val) => setFiltroGrupoRentabilidad(val ?? null)}
+                            options={cursosDisponibles.map((curso) => ({ value: curso.id, label: curso.nombre }))}
+                            style={{ width: "100%" }}
+                        />
+                    </Col>
+                    <Col xs={24} md={12} lg={14}>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                            Este cuadro usa el mismo filtro de tiempo de Tesorería y compara Ingresos pagados del grupo vs Egresos de nómina por clases dictadas del grupo.
+                        </Text>
+                    </Col>
+                </Row>
+
+                {loadingRentabilidadGrupo ? (
+                    <div style={{ display: "flex", justifyContent: "center", padding: 18 }}>
+                        <Spin />
+                    </div>
+                ) : (
+                    <>
+                        <Row gutter={[12, 12]}>
+                            <Col xs={24} sm={8}>
+                                <Card size="small" bordered style={{ background: "#f0fdf4" }}>
+                                    <Text type="secondary">Ingresos grupo</Text>
+                                    <div style={{ color: "#15803d", fontWeight: 700, fontSize: 22 }}>{formatoCOP(rentabilidadGrupo.ingresos)}</div>
+                                </Card>
+                            </Col>
+                            <Col xs={24} sm={8}>
+                                <Card size="small" bordered style={{ background: "#fff1f2" }}>
+                                    <Text type="secondary">Egresos nómina grupo</Text>
+                                    <div style={{ color: "#b91c1c", fontWeight: 700, fontSize: 22 }}>{formatoCOP(rentabilidadGrupo.egresosNomina)}</div>
+                                </Card>
+                            </Col>
+                            <Col xs={24} sm={8}>
+                                <Card size="small" bordered style={{ background: rentabilidadGrupo.ganancia >= 0 ? "#eff6ff" : "#fff7ed" }}>
+                                    <Text type="secondary">Rentabilidad grupo</Text>
+                                    <div style={{ color: rentabilidadGrupo.ganancia >= 0 ? "#1d4ed8" : "#c2410c", fontWeight: 700, fontSize: 22 }}>
+                                        {formatoCOP(rentabilidadGrupo.ganancia)}
+                                    </div>
+                                    <Text type="secondary">Margen {rentabilidadGrupo.margen}%</Text>
+                                </Card>
+                            </Col>
+                        </Row>
+
+                        <div style={{ marginTop: 14 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                                <Text style={{ fontSize: 12 }}>Cobertura (ingresos / egresos nómina)</Text>
+                                <Text strong style={{ fontSize: 12, color: rentabilidadGrupo.cobertura >= 100 ? "#15803d" : "#b45309" }}>
+                                    {rentabilidadGrupo.cobertura}% {rentabilidadGrupo.cobertura >= 100 ? "✓" : "↓"}
+                                </Text>
+                            </div>
+                            <Progress
+                                percent={Math.max(0, Math.min(rentabilidadGrupo.cobertura, 100))}
+                                showInfo={false}
+                                strokeColor={rentabilidadGrupo.cobertura >= 100 ? "#16a34a" : "#f59e0b"}
+                                trailColor="#e5e7eb"
+                                size={["100%", 14]}
+                            />
+                        </div>
+                    </>
+                )}
             </Card>
 
 
