@@ -432,8 +432,9 @@ export default function TesoreriaPage() {
 
             const cursos = (data || []).map((c: any) => ({ id: String(c.id), nombre: String(c.nombre || "Sin nombre") }));
             setCursosDisponibles(cursos);
-            if (!filtroGrupoRentabilidad && cursos.length > 0) {
-                setFiltroGrupoRentabilidad(cursos[0].id);
+            const primerCurso = cursos[0];
+            if (!filtroGrupoRentabilidad && primerCurso) {
+                setFiltroGrupoRentabilidad(primerCurso.id);
             }
         };
 
