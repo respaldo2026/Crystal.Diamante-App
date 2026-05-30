@@ -439,7 +439,7 @@ export default function TesoreriaPage() {
         };
 
         void cargarCursos();
-    }, [filtroGrupoRentabilidad]);
+    }, []);
 
     useEffect(() => {
         const calcularRentabilidadGrupo = async () => {
@@ -455,38 +455,82 @@ export default function TesoreriaPage() {
 
                 const { data: ingresosData, error: ingresosError } = await supabaseBrowserClient
                     .from("pagos")
-                    .select("monto, fecha_pago, matriculas!inner(curso_id)")
+                    .select("monto, fecha_pago, matriculas!pagos_matricula_id_fkey(curso_id)")
                     .eq("estado", "pagado")
-                    .eq("matriculas.curso_id", filtroGrupoRentabilidad)
                     .gte("fecha_pago", inicio)
                     .lte("fecha_pago", fin);
 
                 if (ingresosError) throw ingresosError;
 
-                const { data: sesionesData, error: sesionesError } = await supabaseBrowserClient
+                const ingresos = (ingresosData || []).reduce((sum: number, p: any) => {
+                    const cursoIdPago = String(p?.matriculas?.curso_id || "");
+                    if (cursoIdPago !== String(filtroGrupoRentabilidad)) return sum;
+                    return sum + Number(p?.monto || 0);
+                }, 0);
+
+                let egresosNomina = 0;
+                const { data: sesionesConPerfil, error: sesionesPerfilError } = await supabaseBrowserClient
                     .from("sesiones_clase")
-                    .select("fecha, horas_dictadas, perfiles!sesiones_clase_profesor_id_fkey(valor_hora)")
+                    .select("fecha, horas_dictadas, profesor_id, perfiles!sesiones_clase_profesor_id_fkey(valor_hora)")
                     .eq("curso_id", filtroGrupoRentabilidad)
                     .gte("fecha", inicio)
                     .lte("fecha", fin)
                     .gt("horas_dictadas", 0);
 
-                if (sesionesError) throw sesionesError;
+                if (!sesionesPerfilError) {
+                    egresosNomina = (sesionesConPerfil || []).reduce((sum: number, s: any) => {
+                        const horas = Number(s?.horas_dictadas || 0);
+                        const valorHora = Number(s?.perfiles?.valor_hora || 0);
+                        return sum + (horas * valorHora);
+                    }, 0);
+                } else {
+                    const { data: sesionesBase, error: sesionesBaseError } = await supabaseBrowserClient
+                        .from("sesiones_clase")
+                        .select("profesor_id, horas_dictadas")
+                        .eq("curso_id", filtroGrupoRentabilidad)
+                        .gte("fecha", inicio)
+                        .lte("fecha", fin)
+                        .gt("horas_dictadas", 0);
 
-                const ingresos = (ingresosData || []).reduce((sum: number, p: any) => sum + Number(p?.monto || 0), 0);
-                const egresosNomina = (sesionesData || []).reduce((sum: number, s: any) => {
-                    const horas = Number(s?.horas_dictadas || 0);
-                    const valorHora = Number(s?.perfiles?.valor_hora || 0);
-                    return sum + (horas * valorHora);
-                }, 0);
+                    if (sesionesBaseError) throw sesionesBaseError;
+
+                    const profesorIds = Array.from(
+                        new Set((sesionesBase || []).map((s: any) => String(s?.profesor_id || "")).filter(Boolean))
+                    );
+
+                    let valorHoraPorProfesor = new Map<string, number>();
+                    if (profesorIds.length > 0) {
+                        const { data: perfilesData, error: perfilesError } = await supabaseBrowserClient
+                            .from("perfiles")
+                            .select("id, valor_hora")
+                            .in("id", profesorIds);
+
+                        if (perfilesError) throw perfilesError;
+
+                        valorHoraPorProfesor = new Map(
+                            (perfilesData || []).map((p: any) => [String(p.id), Number(p.valor_hora || 0)])
+                        );
+                    }
+
+                    egresosNomina = (sesionesBase || []).reduce((sum: number, s: any) => {
+                        const horas = Number(s?.horas_dictadas || 0);
+                        const valorHora = valorHoraPorProfesor.get(String(s?.profesor_id || "")) || 0;
+                        return sum + (horas * valorHora);
+                    }, 0);
+                }
 
                 const ganancia = ingresos - egresosNomina;
                 const margen = ingresos > 0 ? Math.round((ganancia / ingresos) * 100) : 0;
                 const cobertura = egresosNomina > 0 ? Math.round((ingresos / egresosNomina) * 100) : 100;
 
                 setRentabilidadGrupo({ ingresos, egresosNomina, ganancia, margen, cobertura });
-            } catch (rentErr) {
-                console.warn("No se pudo calcular rentabilidad por grupo", rentErr);
+            } catch (rentErr: any) {
+                console.warn("No se pudo calcular rentabilidad por grupo", {
+                    message: rentErr?.message,
+                    code: rentErr?.code,
+                    details: rentErr?.details,
+                    hint: rentErr?.hint,
+                });
                 setRentabilidadGrupo({ ingresos: 0, egresosNomina: 0, ganancia: 0, margen: 0, cobertura: 0 });
             } finally {
                 setLoadingRentabilidadGrupo(false);
