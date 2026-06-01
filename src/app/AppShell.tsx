@@ -54,6 +54,7 @@ import {
   NotificationOutlined,
   ShoppingCartOutlined,
   WhatsAppOutlined,
+  GiftOutlined,
 } from "@ant-design/icons";
 import routerProvider from "@refinedev/nextjs-router";
 import { dataProvider } from "@/providers/data-provider";
@@ -166,6 +167,15 @@ const allResources = [
     meta: {
       label: "Matrículas",
       icon: <FileTextOutlined />,
+    },
+  },
+  {
+    key: "matriculas",
+    name: "kit-mensual",
+    list: "/kit-mensual",
+    meta: {
+      label: "Control Kit Mensual",
+      icon: <GiftOutlined />,
     },
   },
   {
