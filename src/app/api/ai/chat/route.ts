@@ -6112,6 +6112,17 @@ async function generateResponse(apiKey: string, prompt: string, timeoutMs: numbe
   throw lastError || new Error("No disponible Gemini model for chat");
 }
 
+function isGeminiAccessDeniedError(error: any): boolean {
+  const raw = String(error?.message || error || "").toLowerCase();
+  return (
+    raw.includes("403") ||
+    raw.includes("forbidden") ||
+    raw.includes("denied access") ||
+    raw.includes("permission") ||
+    raw.includes("api key not valid")
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!validateRequest(req)) {
@@ -6780,11 +6791,13 @@ export async function POST(req: NextRequest) {
     );
 
     // Generar respuesta
-    let response = await generateResponse(geminiKey, prompt);
+    let response = "";
+    try {
+      response = await generateResponse(geminiKey, prompt);
 
-    if (isRepetitiveResponse(response, history, effectiveMessage)) {
-      console.warn("[anti-repeat] Respuesta muy parecida a la anterior. Regenerando...");
-      const antiRepeatPrompt = `${prompt}
+      if (isRepetitiveResponse(response, history, effectiveMessage)) {
+        console.warn("[anti-repeat] Respuesta muy parecida a la anterior. Regenerando...");
+        const antiRepeatPrompt = `${prompt}
 
 # ANTI-REPETICIÓN (OBLIGATORIO)
 - Tu última respuesta fue muy parecida a una previa y eso NO está permitido.
@@ -6792,7 +6805,35 @@ export async function POST(req: NextRequest) {
 - NO repitas frases de cierre ni texto genérico ya usado.
 - Mantén el formato, pero cambia el contenido con datos concretos del contexto actual.`;
 
-      response = await generateResponse(geminiKey, antiRepeatPrompt);
+        response = await generateResponse(geminiKey, antiRepeatPrompt);
+      }
+    } catch (llmError: any) {
+      console.error("[chat] Error generando respuesta con Gemini:", llmError);
+
+      const fallbackResponseRaw = settings?.fallback_response || "Estoy presentando una intermitencia técnica. Te respondo en breve.";
+      const supportHint = isGeminiAccessDeniedError(llmError)
+        ? `Mientras lo restablecemos, si deseas continuar de inmediato escríbenos a Admisiones: ${admissionsContact}.`
+        : "";
+
+      const gracefulResponse = truncateResponse(
+        `${fallbackResponseRaw}${supportHint ? `\n\n${supportHint}` : ""}`,
+        1000,
+      );
+
+      await persistConversation(message, gracefulResponse);
+
+      const sanitizedResponse = sanitizeForJSON(gracefulResponse);
+      const whatsappResponse = formatFinalWhatsAppResponse(sanitizedResponse);
+
+      return NextResponse.json(addCommentMeta(withDeliveryMeta(withMediaSuggestion({
+        ok: true,
+        response: whatsappResponse || "",
+        agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
+        knowledgeUsed: false,
+        historyLength: Number(history.length) || 0,
+        programDetected: detectedProgram ? sanitizeForJSON(detectedProgram.nombre) : null,
+        rateLimitRemaining: Number(rateLimit.remaining) || 0,
+      }, null)), commentEvent));
     }
 
     const fallbackResponse = settings?.fallback_response || "Déjame confirmarlo y te respondo en breve.";
