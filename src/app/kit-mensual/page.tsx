@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import {
   Alert,
+  Button,
   Card,
   Col,
   DatePicker,
@@ -37,10 +38,13 @@ type FiltroPeriodo = "mes_actual" | "mes_anterior" | "trimestre_actual" | "perso
 
 type KitRow = {
   key: string;
+  programaId: string;
+  programaNombre: string;
   estudianteNombre: string;
   estudianteTelefono: string;
   grupoNombre: string;
   planLabel: string;
+  cicloKit: string;
   ultimoPagoFecha: string | null;
   ultimoPagoPeriodo: string;
   ultimoPagoMonto: number;
@@ -54,6 +58,26 @@ type KitRow = {
   vencido: boolean;
 };
 
+type PensumRow = {
+  id: string;
+  programa_id: number | string;
+  numero_ciclo?: number | null;
+  nombre_ciclo?: string | null;
+  orden?: number | null;
+};
+
+type MaterialCicloRow = {
+  id: string;
+  programa_id: number | string;
+  pensum_id: string;
+  nombre: string;
+  cantidad?: string | null;
+  cobertura_material?: string | null;
+  incluido_kit?: boolean | null;
+  orden?: number | null;
+  activo?: boolean | null;
+};
+
 const formatoCOP = (valor: number) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(valor || 0);
 
@@ -61,6 +85,14 @@ const esPagoInscripcion = (pago: any) => {
   const numero = Number(pago?.numero_cuota || 0);
   const periodo = String(pago?.periodo_pagado || "").toLowerCase();
   return numero === 0 || periodo.includes("inscrip") || periodo.includes("matric");
+};
+
+const parseNumeroDesdeTexto = (value?: string | null): number | null => {
+  const raw = String(value || "");
+  const match = raw.match(/\d+/);
+  if (!match) return null;
+  const numero = Number(match[0]);
+  return Number.isFinite(numero) && numero > 0 ? numero : null;
 };
 
 const obtenerRangoPeriodo = (
@@ -116,6 +148,10 @@ export default function KitMensualPage() {
 
   const [gruposDisponibles, setGruposDisponibles] = useState<Array<{ value: string; label: string }>>([]);
   const [rows, setRows] = useState<KitRow[]>([]);
+  const [pensumRows, setPensumRows] = useState<PensumRow[]>([]);
+  const [materialesCicloRows, setMaterialesCicloRows] = useState<MaterialCicloRow[]>([]);
+  const [cicloImpresion, setCicloImpresion] = useState<string>("todos");
+  const [alcanceImpresion, setAlcanceImpresion] = useState<"entregables" | "todos">("entregables");
 
   const periodo = useMemo(() => obtenerRangoPeriodo(filtroPeriodo, rangoPersonalizado), [filtroPeriodo, rangoPersonalizado]);
 
@@ -150,7 +186,7 @@ export default function KitMensualPage() {
 
         let queryMatriculas = supabaseBrowserClient
           .from("matriculas")
-          .select("id, estado, fecha_inicio, modalidad_pago, porcentaje_productos, estudiante_id, curso_id, perfiles!matriculas_estudiante_id_fkey(id, nombre_completo, telefono), cursos(id, nombre, dias_semana, hora_inicio, programas(nombre))")
+          .select("id, estado, fecha_inicio, modalidad_pago, porcentaje_productos, estudiante_id, curso_id, perfiles!matriculas_estudiante_id_fkey(id, nombre_completo, telefono), cursos(id, nombre, programa_id, dias_semana, hora_inicio, programas(id, nombre))")
           .order("fecha_inicio", { ascending: false });
 
         if (filtroGrupo) {
@@ -169,10 +205,62 @@ export default function KitMensualPage() {
 
         if (matriculasMensuales.length === 0) {
           setRows([]);
+          setPensumRows([]);
+          setMaterialesCicloRows([]);
           return;
         }
 
         const matriculaIds = matriculasMensuales.map((m: any) => String(m.id));
+        const programaIds = Array.from(
+          new Set(
+            matriculasMensuales
+              .map((m: any) => {
+                const curso = Array.isArray(m?.cursos) ? m.cursos[0] : m?.cursos;
+                const programaId = curso?.programa_id ?? (Array.isArray(curso?.programas) ? curso.programas[0]?.id : curso?.programas?.id);
+                return programaId ? String(programaId) : "";
+              })
+              .filter(Boolean),
+          ),
+        );
+
+        let pensumData: PensumRow[] = [];
+        let materialesCicloData: MaterialCicloRow[] = [];
+
+        if (programaIds.length > 0) {
+          const { data: pensumRes, error: pensumError } = await supabaseBrowserClient
+            .from("pensum")
+            .select("id, programa_id, numero_ciclo, nombre_ciclo, orden")
+            .in("programa_id", programaIds)
+            .order("programa_id", { ascending: true })
+            .order("orden", { ascending: true, nullsFirst: false })
+            .order("numero_ciclo", { ascending: true, nullsFirst: false });
+
+          if (pensumError) {
+            console.warn("No se pudo cargar pensum para materiales por ciclo", pensumError);
+          } else {
+            pensumData = (pensumRes || []) as PensumRow[];
+          }
+
+          const pensumIds = pensumData.map((p) => String(p.id)).filter(Boolean);
+          if (pensumIds.length > 0) {
+            const { data: materialesRes, error: materialesError } = await supabaseBrowserClient
+              .from("materiales_ciclo")
+              .select("id, programa_id, pensum_id, nombre, cantidad, cobertura_material, incluido_kit, orden, activo")
+              .in("pensum_id", pensumIds)
+              .order("programa_id", { ascending: true })
+              .order("pensum_id", { ascending: true })
+              .order("orden", { ascending: true, nullsFirst: false });
+
+            if (materialesError) {
+              console.warn("No se pudo cargar materiales_ciclo", materialesError);
+            } else {
+              materialesCicloData = ((materialesRes || []) as MaterialCicloRow[]).filter((m) => m?.activo !== false);
+            }
+          }
+        }
+
+        setPensumRows(pensumData);
+        setMaterialesCicloRows(materialesCicloData);
 
         const { data: pagosData, error: pagosError } = await supabaseBrowserClient
           .from("pagos")
@@ -198,6 +286,7 @@ export default function KitMensualPage() {
         const dataRows: KitRow[] = matriculasMensuales.map((m: any) => {
           const perfil = Array.isArray(m?.perfiles) ? m.perfiles[0] : m?.perfiles;
           const curso = Array.isArray(m?.cursos) ? m.cursos[0] : m?.cursos;
+          const programa = Array.isArray(curso?.programas) ? curso.programas[0] : curso?.programas;
           const modalidad = normalizeModalidadPago(m?.modalidad_pago);
           const planLabel = modalidad === "MENSUAL_100" ? "Mensual 100" : "Mensual 70";
 
@@ -245,10 +334,17 @@ export default function KitMensualPage() {
 
           return {
             key: String(m.id),
+            programaId: String(curso?.programa_id ?? programa?.id ?? ""),
+            programaNombre: String(programa?.nombre || "Programa"),
             estudianteNombre: String(perfil?.nombre_completo || "Estudiante"),
             estudianteTelefono: String(perfil?.telefono || ""),
             grupoNombre: construirNombreGrupo(curso),
             planLabel,
+            cicloKit: String(
+              (pagoEnPeriodo
+                ? (ultimoPago?.periodo_pagado || (Number.isFinite(Number(ultimoPago?.numero_cuota)) ? `Cuota ${ultimoPago?.numero_cuota}` : "-"))
+                : (proximoPago?.periodo_pagado || (Number.isFinite(Number(proximoPago?.numero_cuota)) ? `Cuota ${proximoPago?.numero_cuota}` : "-"))) || "-"
+            ),
             ultimoPagoFecha: ultimoPago?.fecha_pago || null,
             ultimoPagoPeriodo: String(
               ultimoPago?.periodo_pagado ||
@@ -286,8 +382,136 @@ export default function KitMensualPage() {
   const bloqueados = rows.filter((r) => !r.puedeRecibirKit).length;
   const vencidos = rows.filter((r) => r.vencido).length;
 
+  const ciclosDisponiblesImpresion = useMemo(() => {
+    const items = Array.from(new Set(rows.map((r) => String(r.cicloKit || "-")).filter((c) => c && c !== "-")));
+    return items.sort((a, b) => {
+      const na = Number((a.match(/\d+/) || ["9999"])[0]);
+      const nb = Number((b.match(/\d+/) || ["9999"])[0]);
+      if (na !== nb) return na - nb;
+      return a.localeCompare(b, "es");
+    });
+  }, [rows]);
+
+  const rowsParaImpresion = useMemo(() => {
+    return rows.filter((r) => {
+      if (alcanceImpresion === "entregables" && !r.puedeRecibirKit) return false;
+      if (cicloImpresion !== "todos" && r.cicloKit !== cicloImpresion) return false;
+      return true;
+    });
+  }, [alcanceImpresion, cicloImpresion, rows]);
+
+  const materialesPorBloqueImpresion = useMemo(() => {
+    type Bloque = {
+      key: string;
+      ciclo: string;
+      programaId: string;
+      programaNombre: string;
+      kits: number;
+      materiales: MaterialCicloRow[];
+    };
+
+    const byKey = new Map<string, Bloque>();
+
+    rowsParaImpresion.forEach((row) => {
+      const ciclo = String(row.cicloKit || "-");
+      if (!ciclo || ciclo === "-") return;
+
+      const numeroCiclo = parseNumeroDesdeTexto(ciclo);
+      if (!numeroCiclo) return;
+
+      const pensum = (pensumRows || []).find((p) => {
+        const samePrograma = String(p?.programa_id || "") === String(row.programaId || "");
+        if (!samePrograma) return false;
+        const nCiclo = Number(p?.numero_ciclo || 0);
+        const orden = Number(p?.orden || 0);
+        return nCiclo === numeroCiclo || orden === numeroCiclo;
+      });
+
+      if (!pensum?.id) return;
+
+      const key = `${row.programaId}|${ciclo}`;
+      const existing = byKey.get(key);
+
+      const materiales = (materialesCicloRows || [])
+        .filter((m) => String(m?.pensum_id || "") === String(pensum.id))
+        .sort((a, b) => Number(a?.orden || 9999) - Number(b?.orden || 9999));
+
+      if (!existing) {
+        byKey.set(key, {
+          key,
+          ciclo,
+          programaId: String(row.programaId || ""),
+          programaNombre: String(row.programaNombre || "Programa"),
+          kits: 1,
+          materiales,
+        });
+      } else {
+        existing.kits += 1;
+      }
+    });
+
+    return Array.from(byKey.values()).sort((a, b) => {
+      const pa = a.programaNombre.localeCompare(b.programaNombre, "es");
+      if (pa !== 0) return pa;
+      const na = Number((a.ciclo.match(/\d+/) || ["9999"])[0]);
+      const nb = Number((b.ciclo.match(/\d+/) || ["9999"])[0]);
+      if (na !== nb) return na - nb;
+      return a.ciclo.localeCompare(b.ciclo, "es");
+    });
+  }, [materialesCicloRows, pensumRows, rowsParaImpresion]);
+
+  const imprimirChecklist = () => {
+    window.print();
+  };
+
   return (
     <div style={{ padding: isMobile ? 12 : 20 }}>
+      <style>{`
+        .print-only { display: none; }
+
+        @media print {
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+
+          body {
+            background: #fff !important;
+          }
+
+          .print-checklist {
+            color: #111;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+          }
+
+          .print-checklist h1 {
+            margin: 0 0 6px 0;
+            font-size: 20px;
+          }
+
+          .print-checklist .meta {
+            margin-bottom: 12px;
+          }
+
+          .print-checklist table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+
+          .print-checklist th,
+          .print-checklist td {
+            border: 1px solid #999;
+            padding: 6px;
+            vertical-align: top;
+          }
+
+          .print-checklist th {
+            background: #f2f2f2;
+            font-weight: 700;
+          }
+        }
+      `}</style>
+
+      <div className="no-print">
       <Card
         title={
           <Space>
@@ -298,7 +522,7 @@ export default function KitMensualPage() {
         style={{ marginBottom: 16 }}
       >
         <Text type="secondary">
-          Esta vista solo muestra estudiantes con plan mensual (Mensual 70/100). Si pagó en el período seleccionado, puede recibir kit.
+          Esta vista solo muestra estudiantes con plan mensual (Mensual 70/100). Puedes imprimir el listado de materiales por ciclo y el checklist de empaque.
         </Text>
 
         <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
@@ -339,6 +563,36 @@ export default function KitMensualPage() {
         <div style={{ marginTop: 8 }}>
           <Text type="secondary">Período aplicado: <strong>{periodo.etiqueta}</strong></Text>
         </div>
+
+        <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
+          <Col xs={24} md={8}>
+            <Select
+              style={{ width: "100%" }}
+              value={alcanceImpresion}
+              onChange={(value) => setAlcanceImpresion(value)}
+              options={[
+                { label: "Imprimir solo entregables", value: "entregables" },
+                { label: "Imprimir todos los estudiantes", value: "todos" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={10}>
+            <Select
+              style={{ width: "100%" }}
+              value={cicloImpresion}
+              onChange={(value) => setCicloImpresion(value)}
+              options={[
+                { label: "Todos los ciclos visibles", value: "todos" },
+                ...ciclosDisponiblesImpresion.map((c) => ({ label: c, value: c })),
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={6}>
+            <Button type="primary" style={{ width: "100%" }} onClick={imprimirChecklist}>
+              Imprimir materiales + checklist
+            </Button>
+          </Col>
+        </Row>
       </Card>
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
@@ -392,6 +646,7 @@ export default function KitMensualPage() {
             />
             <Table.Column title="Grupo" dataIndex="grupoNombre" />
             <Table.Column title="Plan" dataIndex="planLabel" render={(value: string) => <Tag color="blue">{value}</Tag>} />
+            <Table.Column title="Ciclo kit" dataIndex="cicloKit" render={(value: string) => <Text>{value || "-"}</Text>} />
             <Table.Column
               title="Último pago"
               render={(_, record: KitRow) => (
@@ -429,6 +684,95 @@ export default function KitMensualPage() {
           </Table>
         </Card>
       )}
+      </div>
+
+      <div className="print-only print-checklist">
+        <h1>Checklist Kit Mensual</h1>
+        <div className="meta">
+          <div>Período aplicado: {periodo.etiqueta}</div>
+          <div>Ciclo: {cicloImpresion === "todos" ? "Todos los ciclos visibles" : cicloImpresion}</div>
+          <div>Alcance: {alcanceImpresion === "entregables" ? "Solo entregables" : "Todos"}</div>
+          <div>Generado: {dayjs().format("DD/MM/YYYY HH:mm")}</div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Checklist</th>
+              <th>Estudiante</th>
+              <th>Teléfono</th>
+              <th>Grupo</th>
+              <th>Plan</th>
+              <th>Ciclo</th>
+              <th>Estado</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rowsParaImpresion.length === 0 ? (
+              <tr>
+                <td colSpan={9}>No hay filas para imprimir con los filtros actuales.</td>
+              </tr>
+            ) : rowsParaImpresion.map((r, idx) => (
+              <tr key={`print-${r.key}`}>
+                <td>{idx + 1}</td>
+                <td>[ ]</td>
+                <td>{r.estudianteNombre}</td>
+                <td>{r.estudianteTelefono || "-"}</td>
+                <td>{r.grupoNombre}</td>
+                <td>{r.planLabel}</td>
+                <td>{r.cicloKit || "-"}</td>
+                <td>{r.puedeRecibirKit ? "Entregar kit" : "No entregar"}</td>
+                <td>____________________</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div style={{ marginTop: 18 }}>
+          <h1 style={{ fontSize: 18, marginBottom: 8 }}>Listado de Materiales por Ciclo</h1>
+          {materialesPorBloqueImpresion.length === 0 ? (
+            <div>No hay materiales de ciclo configurados para los filtros actuales.</div>
+          ) : (
+            materialesPorBloqueImpresion.map((bloque) => (
+              <div key={`mat-${bloque.key}`} style={{ marginBottom: 16, breakInside: "avoid" }}>
+                <div style={{ marginBottom: 6, fontWeight: 700 }}>
+                  {bloque.programaNombre} | {bloque.ciclo} | Kits a empacar: {bloque.kits}
+                </div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Checklist</th>
+                      <th>Material</th>
+                      <th>Cantidad por kit</th>
+                      <th>Cobertura</th>
+                      <th>Observaciones empaque</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bloque.materiales.length === 0 ? (
+                      <tr>
+                        <td colSpan={6}>No hay materiales cargados para este ciclo.</td>
+                      </tr>
+                    ) : bloque.materiales.map((m, idx) => (
+                      <tr key={`${bloque.key}-${m.id}`}>
+                        <td>{idx + 1}</td>
+                        <td>[ ]</td>
+                        <td>{m.nombre || "Material"}</td>
+                        <td>{m.cantidad || "-"}</td>
+                        <td>{m.cobertura_material || (m.incluido_kit ? "MENSUAL_70" : "NINGUNO")}</td>
+                        <td>____________________</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
