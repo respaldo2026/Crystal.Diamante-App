@@ -382,27 +382,41 @@ export default function KitMensualPage() {
   const bloqueados = rows.filter((r) => !r.puedeRecibirKit).length;
   const vencidos = rows.filter((r) => r.vencido).length;
 
+  const rowsBaseImpresion = useMemo(() => {
+    return rows.filter((r) => {
+      if (alcanceImpresion === "entregables" && !r.puedeRecibirKit) return false;
+      return true;
+    });
+  }, [alcanceImpresion, rows]);
+
   const ciclosDisponiblesImpresion = useMemo(() => {
     const items = Array.from(
       new Set(
-        rows
+        rowsBaseImpresion
           .map((r) => parseNumeroDesdeTexto(r.cicloKit))
           .filter((n): n is number => Number.isFinite(n as number) && Number(n) > 0),
       ),
     );
     return items.sort((a, b) => a - b);
-  }, [rows]);
+  }, [rowsBaseImpresion]);
+
+  useEffect(() => {
+    if (cicloImpresion === "todos") return;
+    const existe = ciclosDisponiblesImpresion.includes(Number(cicloImpresion));
+    if (!existe) {
+      setCicloImpresion("todos");
+    }
+  }, [cicloImpresion, ciclosDisponiblesImpresion]);
 
   const rowsParaImpresion = useMemo(() => {
-    return rows.filter((r) => {
-      if (alcanceImpresion === "entregables" && !r.puedeRecibirKit) return false;
+    return rowsBaseImpresion.filter((r) => {
       if (cicloImpresion !== "todos") {
         const numeroCiclo = parseNumeroDesdeTexto(r.cicloKit);
         if (numeroCiclo !== Number(cicloImpresion)) return false;
       }
       return true;
     });
-  }, [alcanceImpresion, cicloImpresion, rows]);
+  }, [cicloImpresion, rowsBaseImpresion]);
 
   const materialesPorBloqueImpresion = useMemo(() => {
     type Bloque = {
