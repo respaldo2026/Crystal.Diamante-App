@@ -95,6 +95,18 @@ const parseNumeroDesdeTexto = (value?: string | null): number | null => {
   return Number.isFinite(numero) && numero > 0 ? numero : null;
 };
 
+const parseCantidadNumerica = (value?: string | null): number | null => {
+  if (!value) return null;
+  const normalized = String(value)
+    .replace(/,/g, ".")
+    .replace(/\s+/g, " ")
+    .trim();
+  const match = normalized.match(/\d+(\.\d+)?/);
+  if (!match) return null;
+  const numero = Number(match[0]);
+  return Number.isFinite(numero) && numero > 0 ? numero : null;
+};
+
 const obtenerRangoPeriodo = (
   filtroPeriodo: FiltroPeriodo,
   rangoPersonalizado: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null,
@@ -407,7 +419,7 @@ export default function KitMensualPage() {
       programaId: string;
       programaNombre: string;
       kits: number;
-      materiales: MaterialCicloRow[];
+      materiales: Array<MaterialCicloRow & { totalEmpacar: string }>;
     };
 
     const byKey = new Map<string, Bloque>();
@@ -434,7 +446,15 @@ export default function KitMensualPage() {
 
       const materiales = (materialesCicloRows || [])
         .filter((m) => String(m?.pensum_id || "") === String(pensum.id))
-        .sort((a, b) => Number(a?.orden || 9999) - Number(b?.orden || 9999));
+        .sort((a, b) => Number(a?.orden || 9999) - Number(b?.orden || 9999))
+        .map((m) => {
+          const cantidadNumerica = parseCantidadNumerica(m?.cantidad);
+          const totalEmpacar = cantidadNumerica ? `${cantidadNumerica * 1} x ${1} kit` : "-";
+          return {
+            ...m,
+            totalEmpacar,
+          };
+        });
 
       if (!existing) {
         byKey.set(key, {
@@ -447,6 +467,17 @@ export default function KitMensualPage() {
         });
       } else {
         existing.kits += 1;
+        existing.materiales = existing.materiales.map((m) => {
+          const cantidadNumerica = parseCantidadNumerica(m?.cantidad);
+          if (!cantidadNumerica) {
+            return m;
+          }
+
+          return {
+            ...m,
+            totalEmpacar: `${cantidadNumerica * existing.kits} x ${existing.kits} kits`,
+          };
+        });
       }
     });
 
@@ -589,7 +620,7 @@ export default function KitMensualPage() {
           </Col>
           <Col xs={24} md={6}>
             <Button type="primary" style={{ width: "100%" }} onClick={imprimirChecklist}>
-              Imprimir materiales + checklist
+              Imprimir materiales por ciclo
             </Button>
           </Col>
         </Row>
@@ -687,48 +718,13 @@ export default function KitMensualPage() {
       </div>
 
       <div className="print-only print-checklist">
-        <h1>Checklist Kit Mensual</h1>
+        <h1>Materiales por Ciclo</h1>
         <div className="meta">
           <div>Período aplicado: {periodo.etiqueta}</div>
           <div>Ciclo: {cicloImpresion === "todos" ? "Todos los ciclos visibles" : cicloImpresion}</div>
           <div>Alcance: {alcanceImpresion === "entregables" ? "Solo entregables" : "Todos"}</div>
           <div>Generado: {dayjs().format("DD/MM/YYYY HH:mm")}</div>
         </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Checklist</th>
-              <th>Estudiante</th>
-              <th>Teléfono</th>
-              <th>Grupo</th>
-              <th>Plan</th>
-              <th>Ciclo</th>
-              <th>Estado</th>
-              <th>Observaciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rowsParaImpresion.length === 0 ? (
-              <tr>
-                <td colSpan={9}>No hay filas para imprimir con los filtros actuales.</td>
-              </tr>
-            ) : rowsParaImpresion.map((r, idx) => (
-              <tr key={`print-${r.key}`}>
-                <td>{idx + 1}</td>
-                <td>[ ]</td>
-                <td>{r.estudianteNombre}</td>
-                <td>{r.estudianteTelefono || "-"}</td>
-                <td>{r.grupoNombre}</td>
-                <td>{r.planLabel}</td>
-                <td>{r.cicloKit || "-"}</td>
-                <td>{r.puedeRecibirKit ? "Entregar kit" : "No entregar"}</td>
-                <td>____________________</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
 
         <div style={{ marginTop: 18 }}>
           <h1 style={{ fontSize: 18, marginBottom: 8 }}>Listado de Materiales por Ciclo</h1>
@@ -747,6 +743,7 @@ export default function KitMensualPage() {
                       <th>Checklist</th>
                       <th>Material</th>
                       <th>Cantidad por kit</th>
+                      <th>Total a empacar</th>
                       <th>Cobertura</th>
                       <th>Observaciones empaque</th>
                     </tr>
@@ -754,7 +751,7 @@ export default function KitMensualPage() {
                   <tbody>
                     {bloque.materiales.length === 0 ? (
                       <tr>
-                        <td colSpan={6}>No hay materiales cargados para este ciclo.</td>
+                        <td colSpan={7}>No hay materiales cargados para este ciclo.</td>
                       </tr>
                     ) : bloque.materiales.map((m, idx) => (
                       <tr key={`${bloque.key}-${m.id}`}>
@@ -762,6 +759,7 @@ export default function KitMensualPage() {
                         <td>[ ]</td>
                         <td>{m.nombre || "Material"}</td>
                         <td>{m.cantidad || "-"}</td>
+                        <td>{m.totalEmpacar}</td>
                         <td>{m.cobertura_material || (m.incluido_kit ? "MENSUAL_70" : "NINGUNO")}</td>
                         <td>____________________</td>
                       </tr>
