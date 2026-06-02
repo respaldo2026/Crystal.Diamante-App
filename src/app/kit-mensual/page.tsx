@@ -419,7 +419,7 @@ export default function KitMensualPage() {
       programaId: string;
       programaNombre: string;
       kits: number;
-      materiales: Array<MaterialCicloRow & { totalEmpacar: string }>;
+      materiales: MaterialCicloRow[];
     };
 
     const byKey = new Map<string, Bloque>();
@@ -446,15 +446,7 @@ export default function KitMensualPage() {
 
       const materiales = (materialesCicloRows || [])
         .filter((m) => String(m?.pensum_id || "") === String(pensum.id))
-        .sort((a, b) => Number(a?.orden || 9999) - Number(b?.orden || 9999))
-        .map((m) => {
-          const cantidadNumerica = parseCantidadNumerica(m?.cantidad);
-          const totalEmpacar = cantidadNumerica ? `${cantidadNumerica * 1} x ${1} kit` : "-";
-          return {
-            ...m,
-            totalEmpacar,
-          };
-        });
+        .sort((a, b) => Number(a?.orden || 9999) - Number(b?.orden || 9999));
 
       if (!existing) {
         byKey.set(key, {
@@ -467,17 +459,6 @@ export default function KitMensualPage() {
         });
       } else {
         existing.kits += 1;
-        existing.materiales = existing.materiales.map((m) => {
-          const cantidadNumerica = parseCantidadNumerica(m?.cantidad);
-          if (!cantidadNumerica) {
-            return m;
-          }
-
-          return {
-            ...m,
-            totalEmpacar: `${cantidadNumerica * existing.kits} x ${existing.kits} kits`,
-          };
-        });
       }
     });
 
@@ -501,26 +482,54 @@ export default function KitMensualPage() {
         .print-only { display: none; }
 
         @media print {
-          .no-print { display: none !important; }
-          .print-only { display: block !important; }
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
 
+          html,
           body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 80mm;
             background: #fff !important;
+          }
+
+          body * {
+            visibility: hidden;
+          }
+
+          .print-only,
+          .print-only * {
+            visibility: visible;
+          }
+
+          .no-print { display: none !important; }
+          .print-only {
+            display: block !important;
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 80mm;
+            padding: 3mm;
+            box-sizing: border-box;
           }
 
           .print-checklist {
             color: #111;
             font-family: Arial, sans-serif;
-            font-size: 12px;
+            font-size: 11px;
+            line-height: 1.25;
           }
 
           .print-checklist h1 {
-            margin: 0 0 6px 0;
-            font-size: 20px;
+            margin: 0 0 4px 0;
+            font-size: 14px;
           }
 
           .print-checklist .meta {
-            margin-bottom: 12px;
+            margin-bottom: 8px;
+            font-size: 10px;
           }
 
           .print-checklist table {
@@ -531,8 +540,9 @@ export default function KitMensualPage() {
           .print-checklist th,
           .print-checklist td {
             border: 1px solid #999;
-            padding: 6px;
+            padding: 3px;
             vertical-align: top;
+            word-break: break-word;
           }
 
           .print-checklist th {
@@ -620,7 +630,7 @@ export default function KitMensualPage() {
           </Col>
           <Col xs={24} md={6}>
             <Button type="primary" style={{ width: "100%" }} onClick={imprimirChecklist}>
-              Imprimir materiales por ciclo
+              Imprimir ticket materiales (80mm)
             </Button>
           </Col>
         </Row>
@@ -720,48 +730,42 @@ export default function KitMensualPage() {
       <div className="print-only print-checklist">
         <h1>Materiales por Ciclo</h1>
         <div className="meta">
-          <div>Período aplicado: {periodo.etiqueta}</div>
-          <div>Ciclo: {cicloImpresion === "todos" ? "Todos los ciclos visibles" : cicloImpresion}</div>
-          <div>Alcance: {alcanceImpresion === "entregables" ? "Solo entregables" : "Todos"}</div>
           <div>Generado: {dayjs().format("DD/MM/YYYY HH:mm")}</div>
         </div>
 
-        <div style={{ marginTop: 18 }}>
-          <h1 style={{ fontSize: 18, marginBottom: 8 }}>Listado de Materiales por Ciclo</h1>
+        <div style={{ marginTop: 8 }}>
           {materialesPorBloqueImpresion.length === 0 ? (
             <div>No hay materiales de ciclo configurados para los filtros actuales.</div>
           ) : (
             materialesPorBloqueImpresion.map((bloque) => (
-              <div key={`mat-${bloque.key}`} style={{ marginBottom: 16, breakInside: "avoid" }}>
-                <div style={{ marginBottom: 6, fontWeight: 700 }}>
-                  {bloque.programaNombre} | {bloque.ciclo} | Kits a empacar: {bloque.kits}
+              <div key={`mat-${bloque.key}`} style={{ marginBottom: 12, breakInside: "avoid" }}>
+                <div style={{ marginBottom: 4, fontWeight: 700, fontSize: 11 }}>
+                  {bloque.programaNombre} - {bloque.ciclo}
                 </div>
                 <table>
                   <thead>
                     <tr>
-                      <th>#</th>
-                      <th>Checklist</th>
-                      <th>Material</th>
-                      <th>Cantidad por kit</th>
-                      <th>Total a empacar</th>
-                      <th>Cobertura</th>
-                      <th>Observaciones empaque</th>
+                      <th>Descripcion material</th>
+                      <th style={{ width: "28mm" }}>Cantidad</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bloque.materiales.length === 0 ? (
                       <tr>
-                        <td colSpan={7}>No hay materiales cargados para este ciclo.</td>
+                        <td colSpan={2}>No hay materiales cargados para este ciclo.</td>
                       </tr>
                     ) : bloque.materiales.map((m, idx) => (
                       <tr key={`${bloque.key}-${m.id}`}>
-                        <td>{idx + 1}</td>
-                        <td>[ ]</td>
-                        <td>{m.nombre || "Material"}</td>
-                        <td>{m.cantidad || "-"}</td>
-                        <td>{m.totalEmpacar}</td>
-                        <td>{m.cobertura_material || (m.incluido_kit ? "MENSUAL_70" : "NINGUNO")}</td>
-                        <td>____________________</td>
+                        <td>{m.nombre || `Material ${idx + 1}`}</td>
+                        <td>
+                          {(() => {
+                            const cantidadNumerica = parseCantidadNumerica(m?.cantidad);
+                            if (!cantidadNumerica) {
+                              return m?.cantidad || "-";
+                            }
+                            return String(cantidadNumerica * bloque.kits);
+                          })()}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
