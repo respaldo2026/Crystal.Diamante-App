@@ -147,14 +147,31 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
   const numeroClase = Number(grupo.ultima_clase_numero || 0);
   const fecha = grupo.ultima_clase_fecha ? dayjs(grupo.ultima_clase_fecha).format("DD MMM YYYY") : null;
   const tema = String(grupo.ultima_clase_tema || "").trim();
-  const proximaClase = calcularProximaClase(grupo);
+  const proximaClaseHorario = calcularProximaClase(grupo);
+  const proximaClaseNumeroDetectada = Number(grupo.siguiente_clase_numero || 0);
+  const proximaClaseNumero =
+    Number.isFinite(proximaClaseNumeroDetectada) && proximaClaseNumeroDetectada > 0
+      ? proximaClaseNumeroDetectada
+      : numeroClase > 0
+        ? numeroClase + 1
+        : 1;
+  const proximaClaseNombre = String(grupo.siguiente_clase_nombre || "").trim() || null;
+
+  const cicloActualNombre = String(grupo.ciclo_actual_nombre || "").trim();
+  const cicloActualNumeroRaw = Number(grupo.ciclo_actual_numero || 0);
+  const cicloActualNumero =
+    Number.isFinite(cicloActualNumeroRaw) && cicloActualNumeroRaw > 0 ? cicloActualNumeroRaw : null;
+  const cicloActual = cicloActualNombre || (cicloActualNumero ? `Ciclo ${cicloActualNumero}` : null);
 
   if (numeroClase > 0) {
     return {
       titulo: `Van en clase #${numeroClase}`,
       detalle: fecha ? `Último registro: ${fecha}` : "Último registro confirmado",
       tema: tema || null,
-      proximaClase,
+      proximaClaseHorario,
+      proximaClaseNumero,
+      proximaClaseNombre,
+      cicloActual,
       color: "#7C3AED",
       fondo: "#F5F3FF",
       borde: "#DDD6FE",
@@ -165,7 +182,10 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     titulo: "Aún no registran clase",
     detalle: "Todavía no hay una sesión tomada en el sistema",
     tema: null,
-    proximaClase,
+    proximaClaseHorario,
+    proximaClaseNumero,
+    proximaClaseNombre,
+    cicloActual,
     color: "#475569",
     fondo: "#F8FAFC",
     borde: "#E2E8F0",
@@ -443,8 +463,13 @@ export default function CursosList() {
                     {avanceGrupo.tema}
                   </Text>
                 ) : null}
+                {avanceGrupo.cicloActual ? (
+                  <Text type="secondary" style={{ display: "block", marginTop: 6 }}>
+                    {`Ciclo actual: ${avanceGrupo.cicloActual}`}
+                  </Text>
+                ) : null}
               </div>
-              {avanceGrupo.proximaClase ? (
+              {avanceGrupo.proximaClaseHorario ? (
                 <div
                   style={{
                     background: "linear-gradient(135deg, #FF6B35 0%, #F59E0B 100%)",
@@ -478,7 +503,33 @@ export default function CursosList() {
                       marginTop: 2,
                     }}
                   >
-                    {avanceGrupo.proximaClase}
+                    {`Clase #${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""}`}
+                  </Text>
+                  {avanceGrupo.cicloActual ? (
+                    <Text
+                      style={{
+                        display: "block",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: "rgba(255,255,255,0.92)",
+                        lineHeight: 1.3,
+                        marginTop: 1,
+                      }}
+                    >
+                      {avanceGrupo.cicloActual}
+                    </Text>
+                  ) : null}
+                  <Text
+                    style={{
+                      display: "block",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: "rgba(255,255,255,0.88)",
+                      lineHeight: 1.3,
+                      marginTop: 1,
+                    }}
+                  >
+                    {avanceGrupo.proximaClaseHorario}
                   </Text>
                 </div>
               ) : null}

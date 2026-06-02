@@ -27,6 +27,10 @@ export interface GrupoAcademico {
   ultima_clase_numero?: number | null;
   ultima_clase_tema?: string | null;
   ultima_clase_fecha?: string | null;
+  siguiente_clase_numero?: number | null;
+  siguiente_clase_nombre?: string | null;
+  ciclo_actual_numero?: number | null;
+  ciclo_actual_nombre?: string | null;
 }
 
 export async function crearCurso(curso: {
@@ -82,6 +86,93 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
   const cursoIds = normalizadosBase
     .map((item: any) => Number(item.id))
     .filter((id) => Number.isFinite(id));
+
+  const programaIds = Array.from(
+    new Set(
+      normalizadosBase
+        .map((item: any) => Number(item.programa_id))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )
+  );
+
+  const rutaPorPrograma = new Map<
+    number,
+    Array<{
+      numeroClase: number;
+      nombreClase: string;
+      cicloNumero: number | null;
+      cicloNombre: string | null;
+    }>
+  >();
+
+  if (programaIds.length > 0) {
+    const { data: pensumData, error: pensumError } = await supabaseBrowserClient
+      .from("pensum")
+      .select("id, programa_id, numero_ciclo, nombre_ciclo, orden, pensum_cursos(id, nombre_curso, orden)")
+      .in("programa_id", programaIds)
+      .eq("activo", true)
+      .order("programa_id", { ascending: true })
+      .order("orden", { ascending: true, nullsFirst: false })
+      .order("numero_ciclo", { ascending: true, nullsFirst: false });
+
+    if (pensumError) throw pensumError;
+
+    const pensumPorPrograma = new Map<number, any[]>();
+    (pensumData || []).forEach((ciclo: any) => {
+      const programaId = Number(ciclo?.programa_id);
+      if (!Number.isFinite(programaId) || programaId <= 0) return;
+      if (!pensumPorPrograma.has(programaId)) {
+        pensumPorPrograma.set(programaId, []);
+      }
+      pensumPorPrograma.get(programaId)?.push(ciclo);
+    });
+
+    pensumPorPrograma.forEach((ciclos, programaId) => {
+      const ciclosOrdenados = [...ciclos].sort((a: any, b: any) => {
+        const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 0);
+        const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 0);
+        if (ordenA !== ordenB) return ordenA - ordenB;
+        return Number(a?.id || 0) - Number(b?.id || 0);
+      });
+
+      const ruta: Array<{
+        numeroClase: number;
+        nombreClase: string;
+        cicloNumero: number | null;
+        cicloNombre: string | null;
+      }> = [];
+
+      ciclosOrdenados.forEach((ciclo: any) => {
+        const temasOrdenados = (Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [])
+          .slice()
+          .sort((a: any, b: any) => {
+            const ordenA = Number(a?.orden ?? 0);
+            const ordenB = Number(b?.orden ?? 0);
+            if (ordenA !== ordenB) return ordenA - ordenB;
+            return Number(a?.id || 0) - Number(b?.id || 0);
+          });
+
+        temasOrdenados.forEach((tema: any) => {
+          const numeroClase = ruta.length + 1;
+          const nombreTema = String(tema?.nombre_curso || "").trim() || `Clase ${numeroClase}`;
+          const cicloNumeroRaw = Number(ciclo?.numero_ciclo);
+          const cicloNumero = Number.isFinite(cicloNumeroRaw) && cicloNumeroRaw > 0 ? cicloNumeroRaw : null;
+          const cicloNombre = String(ciclo?.nombre_ciclo || "").trim() || null;
+
+          ruta.push({
+            numeroClase,
+            nombreClase: nombreTema,
+            cicloNumero,
+            cicloNombre,
+          });
+        });
+      });
+
+      if (ruta.length > 0) {
+        rutaPorPrograma.set(programaId, ruta);
+      }
+    });
+  }
 
   const ultimaSesionPorCurso = new Map<number, { numero: number | null; tema: string | null; fecha: string | null }>();
   const totalSesionesPorCurso = new Map<number, number>();
@@ -171,11 +262,30 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
       return totalSesiones > 0 ? totalSesiones : null;
     })();
 
+    const programaId = Number(item.programa_id || 0);
+    const rutaPrograma = rutaPorPrograma.get(programaId) || [];
+    const claseActualInfo =
+      Number.isFinite(Number(numeroClase)) && Number(numeroClase) > 0
+        ? rutaPrograma[Number(numeroClase) - 1] || null
+        : null;
+
+    const proximaNumeroBase =
+      Number.isFinite(Number(numeroClase)) && Number(numeroClase) > 0
+        ? Number(numeroClase) + 1
+        : 1;
+
+    const proximaInfo = rutaPrograma[proximaNumeroBase - 1] || null;
+    const cicloActualInfo = claseActualInfo || rutaPrograma[0] || null;
+
     return {
       ...item,
       ultima_clase_numero: numeroClase,
       ultima_clase_tema: ultimaSesion?.tema ?? null,
       ultima_clase_fecha: ultimaSesion?.fecha ?? null,
+      siguiente_clase_numero: proximaInfo?.numeroClase ?? null,
+      siguiente_clase_nombre: proximaInfo?.nombreClase ?? null,
+      ciclo_actual_numero: cicloActualInfo?.cicloNumero ?? null,
+      ciclo_actual_nombre: cicloActualInfo?.cicloNombre ?? null,
     };
   });
 
