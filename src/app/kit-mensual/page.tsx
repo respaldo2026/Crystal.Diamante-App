@@ -95,18 +95,6 @@ const parseNumeroDesdeTexto = (value?: string | null): number | null => {
   return Number.isFinite(numero) && numero > 0 ? numero : null;
 };
 
-const parseCantidadNumerica = (value?: string | null): number | null => {
-  if (!value) return null;
-  const normalized = String(value)
-    .replace(/,/g, ".")
-    .replace(/\s+/g, " ")
-    .trim();
-  const match = normalized.match(/\d+(\.\d+)?/);
-  if (!match) return null;
-  const numero = Number(match[0]);
-  return Number.isFinite(numero) && numero > 0 ? numero : null;
-};
-
 const obtenerRangoPeriodo = (
   filtroPeriodo: FiltroPeriodo,
   rangoPersonalizado: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null,
@@ -395,19 +383,23 @@ export default function KitMensualPage() {
   const vencidos = rows.filter((r) => r.vencido).length;
 
   const ciclosDisponiblesImpresion = useMemo(() => {
-    const items = Array.from(new Set(rows.map((r) => String(r.cicloKit || "-")).filter((c) => c && c !== "-")));
-    return items.sort((a, b) => {
-      const na = Number((a.match(/\d+/) || ["9999"])[0]);
-      const nb = Number((b.match(/\d+/) || ["9999"])[0]);
-      if (na !== nb) return na - nb;
-      return a.localeCompare(b, "es");
-    });
+    const items = Array.from(
+      new Set(
+        rows
+          .map((r) => parseNumeroDesdeTexto(r.cicloKit))
+          .filter((n): n is number => Number.isFinite(n as number) && Number(n) > 0),
+      ),
+    );
+    return items.sort((a, b) => a - b);
   }, [rows]);
 
   const rowsParaImpresion = useMemo(() => {
     return rows.filter((r) => {
       if (alcanceImpresion === "entregables" && !r.puedeRecibirKit) return false;
-      if (cicloImpresion !== "todos" && r.cicloKit !== cicloImpresion) return false;
+      if (cicloImpresion !== "todos") {
+        const numeroCiclo = parseNumeroDesdeTexto(r.cicloKit);
+        if (numeroCiclo !== Number(cicloImpresion)) return false;
+      }
       return true;
     });
   }, [alcanceImpresion, cicloImpresion, rows]);
@@ -425,11 +417,10 @@ export default function KitMensualPage() {
     const byKey = new Map<string, Bloque>();
 
     rowsParaImpresion.forEach((row) => {
-      const ciclo = String(row.cicloKit || "-");
-      if (!ciclo || ciclo === "-") return;
-
-      const numeroCiclo = parseNumeroDesdeTexto(ciclo);
+      const numeroCiclo = parseNumeroDesdeTexto(row.cicloKit);
       if (!numeroCiclo) return;
+
+      const ciclo = `Ciclo ${numeroCiclo}`;
 
       const pensum = (pensumRows || []).find((p) => {
         const samePrograma = String(p?.programa_id || "") === String(row.programaId || "");
@@ -563,7 +554,7 @@ export default function KitMensualPage() {
         style={{ marginBottom: 16 }}
       >
         <Text type="secondary">
-          Esta vista solo muestra estudiantes con plan mensual (Mensual 70/100). Puedes imprimir el listado de materiales por ciclo y el checklist de empaque.
+          Esta vista solo muestra estudiantes con plan mensual (Mensual 70/100). Puedes imprimir el listado de materiales por ciclo en formato ticket 80mm.
         </Text>
 
         <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
@@ -622,9 +613,10 @@ export default function KitMensualPage() {
               style={{ width: "100%" }}
               value={cicloImpresion}
               onChange={(value) => setCicloImpresion(value)}
+              placeholder="Filtrar ciclo a imprimir"
               options={[
-                { label: "Todos los ciclos visibles", value: "todos" },
-                ...ciclosDisponiblesImpresion.map((c) => ({ label: c, value: c })),
+                { label: "Todos los ciclos", value: "todos" },
+                ...ciclosDisponiblesImpresion.map((c) => ({ label: `Ciclo ${c}`, value: String(c) })),
               ]}
             />
           </Col>
@@ -730,6 +722,7 @@ export default function KitMensualPage() {
       <div className="print-only print-checklist">
         <h1>Materiales por Ciclo</h1>
         <div className="meta">
+          <div>Ciclo: {cicloImpresion === "todos" ? "Todos" : `Ciclo ${cicloImpresion}`}</div>
           <div>Generado: {dayjs().format("DD/MM/YYYY HH:mm")}</div>
         </div>
 
@@ -757,15 +750,7 @@ export default function KitMensualPage() {
                     ) : bloque.materiales.map((m, idx) => (
                       <tr key={`${bloque.key}-${m.id}`}>
                         <td>{m.nombre || `Material ${idx + 1}`}</td>
-                        <td>
-                          {(() => {
-                            const cantidadNumerica = parseCantidadNumerica(m?.cantidad);
-                            if (!cantidadNumerica) {
-                              return m?.cantidad || "-";
-                            }
-                            return String(cantidadNumerica * bloque.kits);
-                          })()}
-                        </td>
+                        <td>{m?.cantidad || "-"}</td>
                       </tr>
                     ))}
                   </tbody>
