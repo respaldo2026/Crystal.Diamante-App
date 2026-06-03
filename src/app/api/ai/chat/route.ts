@@ -5175,7 +5175,7 @@ ${catalogReply}`;
     const men100Text = priceOptions.mensual100Text;
     const porClaseText = priceOptions.porClaseText;
 
-    const inscriptionIncludes = "Incluye: Camiseta, Certificado, Ceremonia de grado y alquiler de toga";
+    const inscriptionIncludes = "UNIFORME GRATIS";
     const monthlyIncludes = "Incluye: kit mensual según la modalidad que elijas";
     const promoHeadline = priceOptions.inscripcionPromoHeadline ? `${priceOptions.inscripcionPromoHeadline}\n\n` : "";
     const urgencyLine = priceOptions.inscripcionUrgencyLine ? `\n${priceOptions.inscripcionUrgencyLine}` : "";
