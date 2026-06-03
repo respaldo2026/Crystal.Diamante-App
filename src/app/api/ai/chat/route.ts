@@ -1835,7 +1835,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   if (hasScheduleIntent) {
     return "horario";
   }
-  if (/\b(temario|contenido|que\s+aprendo|que\s+ven|modulos|ciclos|materias)\b/i.test(text)) {
+  if (/\b(temario|contenido|que\s+aprendo|que\s+ven|que\s+me\s+van\s+a\s+ensenar|que\s+van\s+a\s+ensenar|que\s+ensenan|que\s+aprendere|que\s+aprendemos|modulos|ciclos|materias)\b/i.test(text)) {
     return "temario";
   }
   if (/\b(inscrib|matricul|admisiones|contacto|numero|whatsapp|separar\s+cupo|reservar\s+cupo)\b/i.test(text)) {
@@ -2339,6 +2339,10 @@ function buildShortAckContinuationReply(
   }
 
   const normalizedLastAgent = normalizeForMatch(lastAgentMessage || "");
+
+  if (/\b(dejame\s+revisarlo|te\s+confirmo\s+apenas|te\s+respondo\s+en\s+breve|estoy\s+presentando\s+una\s+intermitencia|voy\s+a\s+consultar|voy\s+a\s+revisar|te\s+confirmo\s+en\s+breve)\b/i.test(normalizedLastAgent)) {
+    return null;
+  }
 
   // Si el último mensaje del agente era sobre revisar ESTADO DE CUENTA (no inscripción),
   // un "sí" del estudiante debe redirigir a soporte, no enviar proceso de inscripción.
