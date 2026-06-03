@@ -2873,10 +2873,8 @@ function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) 
 function buildHumanPaymentModalitiesBlock(detectedProgram: any, primaryCourse: any): string {
   const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
   return [
-    `🎁 *UNIFORME GRATIS*`,
+    `👕 *UNIFORME GRATIS*`,
     `🧴 *MATERIALES MENSUALES INCLUIDOS*`,
-    ``,
-    `✅ *2 modalidades de pago:*`,
     `• *Por Clase:* ${options.porClaseText} por clase (no incluye materiales).`,
     `• *Mensual:* ${options.mensual100Text}/mes (incluye 100% de materiales del mes).`,
   ].join("\n");
@@ -5175,8 +5173,7 @@ ${catalogReply}`;
     const men100Text = priceOptions.mensual100Text;
     const porClaseText = priceOptions.porClaseText;
 
-    const inscriptionIncludes = "UNIFORME GRATIS";
-    const monthlyIncludes = "Incluye: kit mensual según la modalidad que elijas";
+    const inscriptionIncludes = "Incluye: Certificado, ceremonia de grado y alquiler de toga";
     const promoHeadline = priceOptions.inscripcionPromoHeadline ? `${priceOptions.inscripcionPromoHeadline}\n\n` : "";
     const urgencyLine = priceOptions.inscripcionUrgencyLine ? `\n${priceOptions.inscripcionUrgencyLine}` : "";
 
@@ -5284,7 +5281,7 @@ ${catalogReply}`;
       }
     }
 
-    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n${promoHeadline}💰 *Inscripción:* ${insText}\n🎁 ${inscriptionIncludes}${urgencyLine}\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n🧴 ${monthlyIncludes}\n\n${nextStepPrompt}`;
+    return `💸 *Inversión de ${detectedProgram.nombre}:*\n\n${promoHeadline}💰 *Inscripción:* ${insText}\n🎓 ${inscriptionIncludes}${urgencyLine}\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n${nextStepPrompt}`;
   }
 
   if (intent === "horario") {
