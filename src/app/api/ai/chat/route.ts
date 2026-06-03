@@ -1844,6 +1844,19 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   return "general";
 }
 
+function shouldPrioritizeCurrentQuestion(message: string): boolean {
+  const raw = String(message || "").trim();
+  if (!raw) return false;
+
+  const intent = detectUserIntent(raw);
+  if (intent !== "general") return true;
+
+  const text = normalizeForMatch(raw);
+  if (/[?¿]/.test(raw)) return true;
+
+  return /\b(que|cual|cuales|como|cuando|donde|cuanto|cuantos|cuantas|por\s+que|para\s+que)\b/i.test(text);
+}
+
 function normalizeForMatch(value: string): string {
   return (value || "")
     .toLowerCase()
@@ -6667,9 +6680,10 @@ export async function POST(req: NextRequest) {
       knownTeacherByPhone,
       phoneProfileName || studentContext?.estudianteNombre || null
     );
+    const prioritizeCurrentQuestion = shouldPrioritizeCurrentQuestion(effectiveMessage);
     if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage)) {
       const pendingTopic = inferPendingTopicFromHistory(history);
-      if (pendingTopic) {
+      if (pendingTopic && !prioritizeCurrentQuestion) {
         const retriedDirectResponse = buildIntentFocusedDirectResponse(
           `${effectiveMessage}. ${pendingTopic}.`,
           detectedProgram,
