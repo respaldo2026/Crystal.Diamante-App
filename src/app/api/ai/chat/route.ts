@@ -3209,7 +3209,7 @@ function shouldAttachMediaSuggestion(userMessage: string, responseText: string):
 
 function isCourseInfoRequest(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(informacion del curso|quiero informacion|quiero info|dame informacion|cuentame del curso|sobre el curso|curso de)\b/i.test(text);
+  return /\b(informacion del curso|quiero(?:\s+mas)?\s+informacion|quiero\s+mas\s+info|quiero\s+info|dame\s+informacion|dame\s+mas\s+informacion|cuentame\s+del\s+curso|sobre\s+el\s+curso|curso\s+de)\b/i.test(text);
 }
 
 function isKitPurchaseQuestion(message: string): boolean {
@@ -4985,14 +4985,17 @@ Si quieres, te confirmo en una línea cuál te aplica en tu caso.`;
     }
 
     if (asksGeneralInfo) {
-      // En lugar de forzar la ficha general, dejamos que Gemini responda si no hay programa detectado
-      return null;
+      const catalogReply = buildCatalogReply(programs);
+      return `¡Claro! 😊 Te ayudo con toda la información.
+
+${catalogReply}`;
     }
     if (intent === "temario") {
       return "¡Claro! Te comparto el temario en versión resumida. ¿De cuál curso quieres el contenido exacto?";
     }
     if (asksDuration || intent === "precio" || intent === "horario") {
-      return "¡Claro! Te ayudo con eso. ¿De cuál curso quieres el dato exacto?";
+      const availablePrograms = buildAvailableProgramsPrompt(programs, 4);
+      return `¡Claro! Te ayudo con eso. ¿De cuál curso quieres el dato exacto?${availablePrograms ? `\n\n${availablePrograms}` : ""}`;
     }
     return null;
   }
