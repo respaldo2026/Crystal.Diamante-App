@@ -1659,7 +1659,7 @@ function buildAgentPrompt(
   const bio = settings?.persona_bio || "Asesor experto masculino de la Academia de Belleza Crystal Diamante en Cali.";
   const style = settings?.speaking_style || "";
   const greeting = settings?.greeting || "";
-  const fallback = settings?.fallback_response || "Para darte el dato exacto, voy a consultar con el Director y te confirmo de inmediato";
+  const fallback = settings?.fallback_response || "Déjame revisarlo y te confirmo apenas tenga el dato.";
   
   // Detectar si ya hay un saludo previo
   const alreadyGreeted = hasGreetingInHistory(conversationHistory);
@@ -1787,6 +1787,7 @@ NO inventes horarios, precios ni fechas que no estén en el contexto.
 4) Máximo 2 bloques cortos y una sola pregunta de seguimiento.
 5) No metas información no pedida ni invitaciones comerciales si no aportan a la pregunta actual.
 6) Si no hay dato exacto, dilo directo y ofrece el siguiente paso más útil en una frase.
+7) Cuando falte un dato, evita repetir la misma muletilla en todas las respuestas. No uses "Para darte el dato exacto, voy a consultar con el Director..." como frase por defecto; reformúlalo de manera breve y humana.
 `;
 
   prompt += `\n# Mensaje del usuario:\n${userMessage}\n\n# Tu respuesta (como ${persona}):`;

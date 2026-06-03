@@ -148,6 +148,10 @@ const isSystemTemplateConversation = (conv: Pick<Conversation, "user_message" | 
   return user.startsWith("[SISTEMA]") && /📤\s*Plantilla enviada:/i.test(agent);
 };
 
+const isSystemConversation = (conv: Pick<Conversation, "user_message">) => {
+  return String(conv.user_message || "").trim().startsWith("[SISTEMA]");
+};
+
 const getTemplateNameFromAudit = (agentText: string): string => {
   const match = String(agentText || "").match(/📤\s*Plantilla enviada:\s*([^\n]+)/i);
   return (match?.[1] || "Mensaje de plantilla").trim();
@@ -855,7 +859,7 @@ export default function ConversacionesPage() {
       const items: ChatBubbleItem[] = [];
       const isTemplateAudit = isSystemTemplateConversation(conv);
 
-      if ((conv.user_message || "").trim() && !isTemplateAudit) {
+      if ((conv.user_message || "").trim() && !isTemplateAudit && !isSystemConversation(conv)) {
         items.push({
           key: `${conv.id}-user`,
           role: "user",
@@ -1547,7 +1551,7 @@ export default function ConversacionesPage() {
                   )
                 : "";
 
-              if (conv.user_message && !isTemplateAudit) {
+              if (conv.user_message && !isTemplateAudit && !isSystemConversation(conv)) {
                 items.push({
                   key: `${conv.id}-user`,
                   dot: <PhoneOutlined style={{ color: "#1890ff" }} />,
