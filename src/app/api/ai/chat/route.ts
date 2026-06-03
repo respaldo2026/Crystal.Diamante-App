@@ -2367,7 +2367,7 @@ function buildShortAckContinuationReply(
   }
 
   if (pendingTopic === "__clarificacion_opcion__") {
-    return "¡Súper! 😊 Para seguir, ¿qué prefieres que te cuente primero: *horarios*, *precios* o *inscripción*?";
+    return "¡Claro! 😊 ¿Qué prefieres que te cuente primero: *horarios*, *precios* o *inscripción*?";
   }
 
   if (/medios\s+de\s+pago|formas\s+de\s+pago|metodo\s+de\s+pago/.test(normalizedPending)) {
@@ -2458,6 +2458,18 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
   // y el usuario responde "sí" sin especificar cuál, se necesita clarificación.
   // Ejemplos: "¿horarios e inversión o separar cupo?", "¿te cuento el precio o avanzamos?"
   if (normalizedQuestion) {
+    const offersSchedule = /\b(horarios?|fecha|inicio|dias|dia|hora)\b/i.test(normalizedQuestion);
+    const offersPrice = /\b(inversion|precio|inscripcion|mensualidad|valor)\b/i.test(normalizedQuestion);
+    const offersEnrollment = /\b(separar\s+cupo|reservar|inscribir|avanzar|cupo|matricular)\b/i.test(normalizedQuestion);
+    const offersTemario = /\b(temario|contenido|modulo|ciclo|que\s+aprend|que\s+ver|que\s+ensenan?)\b/i.test(normalizedQuestion);
+    const offersMaterials = /\b(material|materiales|insumo|kit)\b/i.test(normalizedQuestion);
+    const optionBuckets = [offersSchedule, offersPrice, offersEnrollment, offersTemario, offersMaterials].filter(Boolean).length;
+    const hasOptionConnector = /\b(o|u|o\s+prefieres|que\s+prefieres|cual\s+prefieres|te\s+cuento)\b/i.test(normalizedQuestion);
+
+    if (optionBuckets >= 2 && hasOptionConnector) {
+      return "__clarificacion_opcion__";
+    }
+
     const hasScheduleOrPrice = /\b(horarios?|inversion|precio|mensualidad|informacion)\b/i.test(normalizedQuestion);
     const hasEnrollment = /\b(separar\s+cupo|reservar|inscribir|avanzar|cupo|matricular)\b/i.test(normalizedQuestion);
     const isOrQuestion = /\b(o\s+prefieres|o\s+vas|o\s+te|o\s+ir|o\s+avanzar|o\s+directo)\b/i.test(normalizedQuestion);
