@@ -2848,6 +2848,9 @@ function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) 
 function buildHumanPaymentModalitiesBlock(detectedProgram: any, primaryCourse: any): string {
   const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
   return [
+    `🎁 *UNIFORME GRATIS*`,
+    `🧴 *MATERIALES MENSUALES INCLUIDOS*`,
+    ``,
     `✅ *2 modalidades de pago:*`,
     `• *Por Clase:* ${options.porClaseText} por clase (no incluye materiales).`,
     `• *Mensual:* ${options.mensual100Text}/mes (incluye 100% de materiales del mes).`,
