@@ -3239,7 +3239,7 @@ function shouldAttachMediaSuggestion(userMessage: string, responseText: string):
 
 function isCourseInfoRequest(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(informacion del curso|quiero(?:\s+mas)?\s+informacion|quiero\s+mas\s+info|quiero\s+info|dame\s+informacion|dame\s+mas\s+informacion|cuentame\s+del\s+curso|sobre\s+el\s+curso|curso\s+de)\b/i.test(text);
+  return /\b(informacion\s+del\s+curso|(?:quiero|quisiera|me\s+gustaria|busco|necesito|conseguir)\s+(?:mas\s+)?(?:informacion|info)|quiero\s+conseguir\s+(?:mas\s+)?(?:informacion|info)|quiero\s+mas\s+info|quiero\s+info|dame\s+(?:mas\s+)?informacion|me\s+compartes\s+informacion|cuentame\s+del\s+curso|informacion\s+sobre\s+(?:esto|eso)|sobre\s+esto|sobre\s+el\s+curso|curso\s+de)\b/i.test(text);
 }
 
 function isKitPurchaseQuestion(message: string): boolean {
