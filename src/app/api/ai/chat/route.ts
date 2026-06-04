@@ -2525,8 +2525,19 @@ function inferPendingTopicFromHistory(history: Array<{ user: string; agent: stri
 function isPureGreeting(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
-  // Solo saludos solos, sin contenido adicional
-  return /^(hola|hola\s+de\s+nuevo|hola\s+buenas?|hola\s+buenas?\s*(d[ií]as?|tardes?|noches?)?|buenas?\s*(d[ií]as?|tardes?|noches?)?|buen\s*d[ií]a|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|saludos|qué\s+tal|que\s+tal)$/.test(text.trim());
+  const normalized = text.trim();
+
+  // Si trae intención concreta, no es saludo puro.
+  if (/\b(precio|cost[oa]|valor|inversion|horario|fecha|inicio|inscrip|matricul|temario|contenido|material|pago|pagos|cuota|cuotas|ubicacion|direccion|curso|programa|informacion|info|duda|pregunta)\b/i.test(normalized)) {
+    return false;
+  }
+
+  // Saludo corto natural (incluye "hola buenos dias").
+  const hasGreeting = /\b(hola|hey|saludos|que\s+tal|buen\s+dia|buenos\s+dias|buenas\s+tardes|buenas\s+noches|buenas)\b/i.test(normalized);
+  if (!hasGreeting) return false;
+
+  const words = normalized.split(" ").filter(Boolean);
+  return words.length <= 5;
 }
 
 /**
