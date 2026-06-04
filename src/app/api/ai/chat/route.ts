@@ -4182,7 +4182,8 @@ function buildPaymentMethodsAndDatesReply(
   return `¡Claro! Te respondo puntual 🙌\n\n${methodsBlock}${modalidadesBlock}\n\nLa *matrícula* se paga anticipada para separar cupo y la *mensualidad* se puede pagar hasta la segunda clase.\n\n¿Quieres que te recomiende la modalidad según tu presupuesto?`;
 }
 
-function buildStudentPaymentSupportReply(mediosPago: any[] = []): string {
+function buildStudentPaymentSupportReply(message: string, mediosPago: any[] = []): string {
+  const text = normalizeForMatch(message);
   const methods = Array.isArray(mediosPago)
     ? mediosPago
         .filter((medio) => medio?.activo !== false)
@@ -4200,7 +4201,28 @@ function buildStudentPaymentSupportReply(mediosPago: any[] = []): string {
     ? `💳 *Medios de pago disponibles:*\n${methods.join("\n")}`
     : "💳 *Medios de pago:* te los confirma Admisiones según el canal que prefieras.";
 
-  return `Sí, correcto ✅\n\nLa *mensualidad* se puede pagar hasta la *segunda clase* del mes correspondiente.\n\n${methodsBlock}\n\nSi quieres, te confirmo el valor pendiente exacto de este mes.`;
+  const dayMatch = text.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/i);
+  const mentionedDay = dayMatch?.[1] || "";
+  const dayLine = mentionedDay
+    ? `Sí, te sirve pagar el *${mentionedDay}* ✅\n\n`
+    : "Sí, está bien ✅\n\n";
+
+  return `${dayLine}La *mensualidad* se puede pagar hasta la *segunda clase* del mes correspondiente.\n\n${methodsBlock}\n\nSi quieres, te confirmo el valor pendiente exacto de este mes.`;
+}
+
+function isStudentPaymentSupportQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  if (isPaymentDatesOnlyQuestion(message) || isPaymentMethodsOrDatesQuestion(message)) {
+    return true;
+  }
+
+  const hasPaymentWord = /\b(pago|pagos|pagar|abono|abonar|cuota|cuotas|mensualidad|saldo|debo)\b/i.test(text);
+  const hasDateOrDay = /\b(hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|proximo|este|fecha|cuando)\b/i.test(text);
+  const hasConfirmationTone = /\b(si|entonces|es|seria|hago|haria|puedo|pueda|confirmo)\b/i.test(text);
+
+  return hasPaymentWord && (hasDateOrDay || hasConfirmationTone);
 }
 
 function isPaymentDatesOnlyQuestion(message: string): boolean {
@@ -4450,8 +4472,8 @@ function buildIntentFocusedDirectResponse(
       return `Como ya eres estudiante, para cualquier gestión de matrícula o cuenta escríbele directamente a Admisiones:\n📲 *${wa}* 😊`;
     }
 
-    if (isPaymentDatesOnlyQuestion(message) || isPaymentMethodsOrDatesQuestion(message)) {
-      return buildStudentPaymentSupportReply(mediosPago);
+    if (isStudentPaymentSupportQuestion(message)) {
+      return buildStudentPaymentSupportReply(message, mediosPago);
     }
   }
 
@@ -4468,6 +4490,11 @@ function buildIntentFocusedDirectResponse(
   if (hasPaymentReminderContext && isPaymentAlreadyDoneClaim(message)) {
     return buildPaymentAlreadyDoneReply(academy);
   }
+
+  if (hasPaymentReminderContext && !hasPaymentConfirmedContext && isStudentPaymentSupportQuestion(message)) {
+    return buildStudentPaymentSupportReply(message, mediosPago);
+  }
+
   if (hasPaymentReminderContext && !hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
     // Si el usuario dice "ya sé" / "si ya sé" → no repetir el recordatorio
     if (isAlreadyKnowsReply(message)) {
