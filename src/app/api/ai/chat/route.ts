@@ -1802,8 +1802,8 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia|dias son de|dias de ensenanza|dias de clase|cuando son las clases|en que dias|que dia es|dia de clases)\b/i.test(text);
   const hasPaymentMethodsIntent = /\b(nequi|bancolombia|sistecredito|daviplata|medios\s+de\s+pago|formas?\s+de\s+pago|metodos?\s+de\s+pago|como\s+se\s+paga|donde\s+pago|numero\s+de\s+pago|a\s+que\s+numero\s+pago)\b/i.test(text);
-  const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta|abono|abonar|pago parcial|cuota inicial)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
-  const hasEnrollmentIntent = /\b(inscrib|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
+  const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta|abono|abonar|pago parcial|cuota inicial|total para comenzar|total para iniciar|cuanto seria total|cuanto seria para comenzar)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
+  const hasEnrollmentIntent = /\b(inscrib|inscrip\w*|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
   const hasScheduleIntent = /\b(horarios?|horas?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|manana\s+hay\s+clase|hay\s+clase\s+manana|tengo\s+clase\s+manana|me\s+toca\s+clase|toca\s+clase|clase\s+manana|todos\s+los\s+dias|cuantos\s+dias|que\s+dias|dias\s+de\s+clase)\b/i.test(text);
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horarios?|horas?)\b/i.test(text);
   const hasMaterialsKeyword = /\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|cuaderno|libreta|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text);
@@ -4249,6 +4249,30 @@ function buildPaymentDatesOnlyReply(): string {
   return "¡Claro! 🙌 Te confirmo las fechas de pago:\n\n• La *matrícula* se paga anticipada para separar el cupo.\n• La *mensualidad* la puedes pagar hasta la *segunda clase*.\n• Si eliges *Por Clase*, vas pagando cada clase que asistas.\n\nSi quieres, también te paso los *medios de pago*.";
 }
 
+function isEnrollmentTimingQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(cuando\s+debo\s+inscrib|cuando\s+me\s+inscrib|en\s+que\s+momento\s+me\s+inscrib|hasta\s+cuando\s+puedo\s+inscrib|cuando\s+puedo\s+inscrib|desde\s+cuando\s+me\s+puedo\s+inscrib)\b/i.test(text);
+}
+
+function isTotalToStartQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const asksTotal = /\b(total|cuanto\s+seria|cuanto\s+es|cuanto\s+queda|con\s+cuanto)\b/i.test(text);
+  const asksStart = /\b(para\s+comenzar|para\s+iniciar|para\s+arrancar|para\s+empezar|de\s+entrada|hoy\s+para\s+iniciar)\b/i.test(text);
+  return asksTotal && asksStart;
+}
+
+function isEnrollmentClarificationRequest(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(necesito\s+entender|no\s+entiendo|explicame|expliqueme|aclarame|aclarame\s+por\s+favor|tema\s+de\s+la\s+inscrip|como\s+es\s+la\s+inscrip|como\s+funciona\s+la\s+inscrip)\b/i.test(text)
+    && /\b(inscrip|inscrib|matricul|cupo)\b/i.test(text);
+}
+
 function extractDurationMonths(program: any): number | null {
   const direct = Number(program?.duracion_meses ?? 0);
   if (Number.isFinite(direct) && direct > 0) return direct;
@@ -4760,6 +4784,9 @@ function buildIntentFocusedDirectResponse(
   const asksMonthlyClassLoad = isMonthlyClassLoadQuestion(message);
   const asksCertification = isCertificationQuestion(message);
   const asksPaymentMethodsOrDates = isPaymentMethodsOrDatesQuestion(message);
+  const asksEnrollmentTiming = isEnrollmentTimingQuestion(message);
+  const asksTotalToStart = isTotalToStartQuestion(message);
+  const asksEnrollmentClarification = isEnrollmentClarificationRequest(message);
   const asksStepOne = isStepOneSelection(message);
   const asksPrice = /\b(precio|cuanto|costo|valor|inscripcion|mensualidad|inversion)\b/i.test(normalizedMessage);
   const asksMonthlyVsBiweekly = isMonthlyOrBiweeklyQuestion(message);
@@ -4848,6 +4875,40 @@ function buildIntentFocusedDirectResponse(
   if (isPresentialPaymentQuestion(message)) {
     const primaryCourse = detectedProgram ? pickPrimaryCourseForProgram(detectedProgram, courses) : null;
     return buildPresentialPaymentReply(detectedProgram, primaryCourse, academy);
+  }
+
+  if (asksEnrollmentTiming) {
+    if (!detectedProgram) {
+      return "Te puedes inscribir *desde ya* para separar cupo ✅\n\nSi me dices el curso, te confirmo fecha de inicio, valor de inscripción y el mejor momento para hacerlo.";
+    }
+
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const nextStart = primaryCourse?.fecha_inicio ? (formatDateLong(primaryCourse.fecha_inicio) || formatDateShort(primaryCourse.fecha_inicio)) : "Por confirmar";
+    return `Puedes inscribirte *desde ya* para asegurar tu cupo en *${detectedProgram.nombre}* ✅\n\n📅 *Próximo inicio:* ${nextStart}\n\nSi quieres, te paso ahora mismo los pasos y medios de pago.`;
+  }
+
+  if (asksTotalToStart) {
+    if (!detectedProgram) {
+      return "¡Claro! 🙌 Te calculo el total exacto para comenzar. Solo dime el curso y te digo cuánto iniciarías pagando hoy.";
+    }
+
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+    const totalMensual = options.inscripcion > 0 && options.mensual100 > 0
+      ? formatCurrencyCOP(options.inscripcion + options.mensual100)
+      : "Por confirmar";
+
+    return `Para comenzar en *${detectedProgram.nombre}* te queda así 👇\n\n• *Inscripción:* ${options.inscripcionText}\n• *Inicio con Mensual:* ${totalMensual}\n• *Inicio con Por Clase:* inscripción + ${options.porClaseText}\n\nSi quieres, te recomiendo la opción que mejor te conviene según tu presupuesto.`;
+  }
+
+  if (asksEnrollmentClarification) {
+    if (!detectedProgram) {
+      return "¡Claro! Te explico fácil cómo funciona la inscripción 👌\n\n1) Pagas la inscripción para separar cupo.\n2) Eliges modalidad de pago (por clase o mensual).\n3) Te confirmamos grupo y horario.\n\nSi me dices el curso, te lo dejo con valores exactos.";
+    }
+
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+    return `¡Claro! Te explico fácil la inscripción de *${detectedProgram.nombre}* 👌\n\n1) *Inscripción:* ${options.inscripcionText} (separa tu cupo).\n2) Eliges modalidad: *Por Clase* o *Mensual*.\n3) Te confirmamos tu grupo y quedas lista para iniciar.\n\n¿Quieres que te comparta ya los pasos de pago?`;
   }
 
   const asksScheduleRescue = isScheduleRescueClarification(message, lastAgentForFlow, inferredPendingTopic);
