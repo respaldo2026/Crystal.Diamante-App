@@ -3075,7 +3075,7 @@ function isOutOfCaliConstraintMessage(message: string): boolean {
 function isSaturdayPreferenceConstraint(message: string): boolean {
   const text = normalizeForMatch(message);
   const asksSaturday = /\b(sabado|sabados|fin\s+de\s+semana|fines\s+de\s+semana)\b/i.test(text);
-  const weekdayConstraint = /\b(trabajo\s+de\s+lunes\s+a\s+viernes|trabajo\s+entre\s+semana|no\s+puedo\s+entre\s+semana|solo\s+puedo\s+los\s+sabados|busco\s+un\s+curso\s+los\s+sabados|necesito\s+sabado)\b/i.test(text);
+  const weekdayConstraint = /\b(trabajo\s+de\s+lunes\s+a\s+viernes|trabajo\s+entre\s+semana|no\s+puedo\s+entre\s+semana|en\s+semana\s+no\s+puedo|no\s+puedo\s+en\s+semana|trabajo\s+y\s+no\s+puedo\s+entre\s+semana|porque\s+trabajo\s+entre\s+semana|solo\s+puedo\s+los\s+sabados|busco\s+un\s+curso\s+los\s+sabados|necesito\s+sabado|no\s+puedo\s+de\s+lunes\s+a\s+viernes)\b/i.test(text);
   return asksSaturday || weekdayConstraint;
 }
 
