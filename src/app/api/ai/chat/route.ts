@@ -4182,11 +4182,32 @@ function buildPaymentMethodsAndDatesReply(
   return `¡Claro! Te respondo puntual 🙌\n\n${methodsBlock}${modalidadesBlock}\n\nLa *matrícula* se paga anticipada para separar cupo y la *mensualidad* se puede pagar hasta la segunda clase.\n\n¿Quieres que te recomiende la modalidad según tu presupuesto?`;
 }
 
+function buildStudentPaymentSupportReply(mediosPago: any[] = []): string {
+  const methods = Array.isArray(mediosPago)
+    ? mediosPago
+        .filter((medio) => medio?.activo !== false)
+        .slice(0, 8)
+        .map((medio) => {
+          const label = String(medio?.nombre || "").trim();
+          const description = String(medio?.descripcion || "").trim();
+          if (!label) return "";
+          return `• *${label}*${description ? `: ${description}` : ""}`;
+        })
+        .filter(Boolean)
+    : [];
+
+  const methodsBlock = methods.length
+    ? `💳 *Medios de pago disponibles:*\n${methods.join("\n")}`
+    : "💳 *Medios de pago:* te los confirma Admisiones según el canal que prefieras.";
+
+  return `Sí, correcto ✅\n\nLa *mensualidad* se puede pagar hasta la *segunda clase* del mes correspondiente.\n\n${methodsBlock}\n\nSi quieres, te confirmo el valor pendiente exacto de este mes.`;
+}
+
 function isPaymentDatesOnlyQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
 
-  const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|vence|vencimiento|plazo\s+de\s+pago|hasta\s+cuando\s+pago|segunda\s+clase|dia\s+de\s+la\s+clase|el\s+dia\s+de\s+clase)\b/i.test(text);
+  const asksDates = /\b(fecha\s+de\s+pago|fechas\s+de\s+pago|cuando\s+se\s+paga|cuando\s+debo\s+pagar|vence|vencimiento|plazo\s+de\s+pago|hasta\s+cuando\s+pago|segunda\s+clase|dia\s+de\s+la\s+clase|el\s+dia\s+de\s+clase|proximo\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|este\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|el\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|se\s+paga\s+el\s+proximo|se\s+paga\s+el\s+este|se\s+paga\s+el\s+martes|se\s+paga\s+el\s+miercoles|se\s+paga\s+el\s+jueves|se\s+paga\s+el\s+viernes)\b/i.test(text);
   const asksMethods = /\b(medios\s+de\s+pago|formas\s+de\s+pago|metodos?\s+de\s+pago|nequi|bancolombia|sistecredito|daviplata|tarjeta|efectivo|transferencia)\b/i.test(text);
   return asksDates && !asksMethods;
 }
@@ -4427,6 +4448,10 @@ function buildIntentFocusedDirectResponse(
     if (isEnrollmentQuery) {
       const wa = academy?.whatsapp_admisiones || ADMISSIONS_NUMBER;
       return `Como ya eres estudiante, para cualquier gestión de matrícula o cuenta escríbele directamente a Admisiones:\n📲 *${wa}* 😊`;
+    }
+
+    if (isPaymentDatesOnlyQuestion(message) || isPaymentMethodsOrDatesQuestion(message)) {
+      return buildStudentPaymentSupportReply(mediosPago);
     }
   }
 
