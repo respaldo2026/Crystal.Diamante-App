@@ -1808,7 +1808,10 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horarios?|horas?)\b/i.test(text);
   const hasMaterialsKeyword = /\b(material|materiales|insumo|insumos|herramienta|herramientas|kit|kits|implementos|cuaderno|libreta|lista\s+de\s+materiales|que\s+traer|que\s+llevar|que\s+tienen\s+los)\b/i.test(text);
   // "llevar" solo cuenta como requisito si NO hay keyword de materiales (evitar que "llevar materiales" sea requisito)
-  const hasRequirementsIntent = /\b(requisito|requisitos|edad|anos|menor|mayor|cedula|documento|necesito|experiencia|conocimiento)\b/i.test(text)
+  const hasRequirementsKeyword = /\b(requisito|requisitos|edad|anos|menor|mayor|cedula|documento|experiencia|conocimiento)\b/i.test(text);
+  const hasNeedRequirementsPattern = /\b(necesito|quiero|debo\s+tener|me\s+piden)\b.*\b(requisito|requisitos|cedula|documento|experiencia|edad|permiso)\b/i.test(text);
+  const hasRequirementsIntent = hasRequirementsKeyword
+    || hasNeedRequirementsPattern
     || (!hasMaterialsKeyword && /\b(llevar)\b/i.test(text));
 
   if (hasRequirementsIntent && !hasMaterialsKeyword) {
@@ -1910,7 +1913,7 @@ function isShortAffirmativeReply(message: string): boolean {
   if (/^s+i+$/i.test(text)) return true;
   if (/^s+i+p+$/i.test(text)) return true;
 
-  return /^(si|dale|ok|okay|okey|claro|listo|perfecto|de una|por favor|porfavor|porfa|porfis|si por favor|si porfavor|claro que si|esta bien|ta bien|todo bien|entendido|clase|ciclo|ambos|los dos)$/i.test(text);
+  return /^(si|dale|ok|okay|okey|claro|listo|perfecto|de una|por favor|porfavor|porfa|porfis|si por favor|si porfavor|si porfa|si porfis|claro que si|esta bien|ta bien|todo bien|entendido|clase|ciclo|ambos|los dos)$/i.test(text);
 }
 
 function isAllInfoSelection(message: string): boolean {
@@ -2371,6 +2374,10 @@ function buildShortAckContinuationReply(
     /\b(pasos\s+para\s+inscribirte|pasos\s+de\s+inscripcion|te\s+comparta\s+los\s+pasos\s+para\s+inscribirte|separar\s+tu\s+cupo)\b/i.test(normalizedLastAgent)
   ) {
     return buildSeparaCupoPaymentReply(detectedProgram, academy, courses);
+  }
+  
+  if (/\b(referencia|forma\s+mas\s+facil\s+de\s+llegar|llegar|ubicacion|direccion|maps)\b/i.test(normalizedLastAgent)) {
+    return buildLocationReferenceReply(academy);
   }
 
   const pendingTopic = inferPendingTopicFromHistory(history);
@@ -4970,7 +4977,13 @@ Si quieres, te confirmo en una línea cuál te aplica en tu caso.`;
   }
 
   if (intent === "requisitos") {
-    return null; // Dejar que Gemini responda sobre requisitos, edad, etc.
+    const asksAge = /\b(edad|anos|menor|mayor)\b/i.test(normalizedMessage);
+    const programLabel = detectedProgram?.nombre ? ` de *${detectedProgram.nombre}*` : "";
+    if (asksAge) {
+      return `¡Claro! 😊 Sobre la edad y requisitos${programLabel}:\n\n• No necesitas experiencia previa para iniciar.\n• Al momento de inscripción se valida documento de identidad.\n\nSi me dices tu edad, te confirmo de una cómo aplicar en tu caso.`;
+    }
+
+    return `¡Claro! 😊 Te explico los requisitos${programLabel}:\n\n• Documento de identidad para la matrícula.\n• Ganas de aprender (no se exige experiencia previa).\n\nSi quieres, te digo ahora mismo los pasos para inscribirte.`;
   }
 
   const confirmsStepOneFlow = asksStepOne
