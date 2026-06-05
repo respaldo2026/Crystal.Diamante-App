@@ -1802,6 +1802,7 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia|dias son de|dias de ensenanza|dias de clase|cuando son las clases|en que dias|que dia es|dia de clases)\b/i.test(text);
   const hasPaymentMethodsIntent = /\b(nequi|bancolombia|sistecredito|daviplata|medios\s+de\s+pago|formas?\s+de\s+pago|metodos?\s+de\s+pago|como\s+se\s+paga|donde\s+pago|numero\s+de\s+pago|a\s+que\s+numero\s+pago)\b/i.test(text);
+  const hasPaymentDateIntent = /\b(cuando\s+se\s+paga|cuando\s+debo\s+pagar|se\s+paga\s+el|se\s+paga\s+los|fecha\s+de\s+pago|fechas\s+de\s+pago|proximo\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|este\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|el\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|segunda\s+clase|vence|vencimiento)\b/i.test(text);
   const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta|abono|abonar|pago parcial|cuota inicial|total para comenzar|total para iniciar|cuanto seria total|cuanto seria para comenzar)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|inscrip\w*|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
   const hasScheduleIntent = /\b(horarios?|horas?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|manana\s+hay\s+clase|hay\s+clase\s+manana|tengo\s+clase\s+manana|me\s+toca\s+clase|toca\s+clase|clase\s+manana|todos\s+los\s+dias|cuantos\s+dias|que\s+dias|dias\s+de\s+clase)\b/i.test(text);
@@ -1828,6 +1829,9 @@ function detectUserIntent(message: string): "precio" | "horario" | "temario" | "
   }
   if (hasScheduleIntent && hasStrongScheduleIntent) {
     return "horario";
+  }
+  if (hasPaymentDateIntent) {
+    return "pago";
   }
   if (hasPaymentMethodsIntent) {
     return "pago";
@@ -2011,7 +2015,7 @@ function hasRecentPaymentReminderContext(history: Array<{ user: string; agent: s
 
   return recentAgentMessages.some((msg) => {
     const hasPaymentTopic = /\b(mensualidad|cuota|cuotas|pago|pagos|saldo|vencimiento|vence|fecha\s+de\s+pago|recordatorio\s+de\s+pago|abono|deuda|pendiente)\b/i.test(msg);
-    const hasReminderTone = /\b(recordatorio|te\s+recordamos|recuerda|por\s+favor\s+realizar|pendiente\s+de\s+pago|vence\s+el|fecha\s+limite|fecha\s+l[ií]mite|evita\s+intereses?)\b/i.test(msg);
+    const hasReminderTone = /\b(recordatorio|recordatorio_pago_v3|recordatoriopagov3|te\s+recordamos|recuerda|por\s+favor\s+realizar|pendiente\s+de\s+pago|vence\s+el|fecha\s+limite|fecha\s+l[ií]mite|evita\s+intereses?|mensaje\s+de\s+plantilla\s+enviado\s*\(\s*recordatorio)\b/i.test(msg);
     return hasPaymentTopic && hasReminderTone;
   });
 }
@@ -4582,6 +4586,26 @@ function buildIntentFocusedDirectResponse(
 
   const lastAgentForFlow = history[history.length - 1]?.agent || "";
   const inferredPendingTopic = inferPendingTopicFromHistory(history);
+  const isExplicitConfirmRequest = /\b(confirmame|confirmane|confirmar|me\s+confirmas?)\b/i.test(normalizeForMatch(message));
+  if (isExplicitConfirmRequest) {
+    const pendingNorm = normalizeForMatch(inferredPendingTopic || "");
+    const lastNorm = normalizeForMatch(lastAgentForFlow || "");
+    const pricingContext = /\b(precio|inversion|inscripcion|mensualidad|modalidades\s+de\s+pago|por\s+clase)\b/i.test(`${pendingNorm} ${lastNorm}`);
+    const reminderOrPaymentContext = /\b(recordatorio|pago|fecha\s+de\s+pago|mensualidad|cuota|cuotas|vencimiento|vence)\b/i.test(`${pendingNorm} ${lastNorm}`);
+
+    if (reminderOrPaymentContext) {
+      return buildStudentPaymentSupportReply(message, mediosPago);
+    }
+
+    if (pricingContext && detectedProgram) {
+      const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+      const priceOptions = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+      return `Claro 🙌 Te confirmo para *${detectedProgram.nombre}*:\n\n💰 *Inscripción:* ${priceOptions.inscripcionText}\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\nSi quieres, también te confirmo medios y fechas de pago.`;
+    }
+
+    return "Claro 😊 ¿Qué dato te confirmo exactamente: *fecha de pago*, *precio* o *horario*?";
+  }
+
   const prioritizedMaterialsResponse = buildMaterialsDirectResponse(
     message,
     detectedProgram,
@@ -5316,7 +5340,8 @@ ${catalogReply}`;
     const urgencyLine = priceOptions.inscripcionUrgencyLine ? `\n${priceOptions.inscripcionUrgencyLine}` : "";
 
     const normalizedMessage = normalizeForMatch(message);
-    const asksMonthlyConfirmation = /\b(cada mes|se paga|al mes|mensualidad|mensual)\b/i.test(normalizedMessage);
+    const asksMonthlyConfirmation = /\b(cada mes|al mes|mensualidad|mensual)\b/i.test(normalizedMessage)
+      && !/\b(proximo\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|este\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|el\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|fecha\s+de\s+pago|segunda\s+clase|vence|vencimiento)\b/i.test(normalizedMessage);
     const asksTotalToPay = /\b(por\s+todo|total|todo\s+junto|de\s+una\s+vez|de\s+una|completo|todo\s+el\s+curso)\b/i.test(normalizedMessage)
       && /\b(cuanto|cuanto\s+es|pagar|pago|se\s+paga|vale|valor|costo)\b/i.test(normalizedMessage);
     // Se detecta abono/pago parcial incluso si no menciona "inscripcion" explícitamente,
