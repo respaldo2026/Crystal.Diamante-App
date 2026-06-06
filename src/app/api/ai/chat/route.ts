@@ -6263,16 +6263,19 @@ function buildContextualDirective(
 
 async function generateResponse(apiKey: string, prompt: string, timeoutMs: number = 25000): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
+  const unsupportedModels = new Set(["gemini-1.5-pro-002"]);
   
   const modelCandidates = [
     "gemini-2.0-flash",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
     "gemini-1.5-flash-002",
-    "gemini-1.5-pro-002",
     process.env.GEMINI_MODEL_CHAT,
     process.env.GEMINI_MODEL_SUMMARY,
-  ].filter(Boolean) as string[];
+  ]
+    .filter(Boolean)
+    .map((model) => String(model).trim())
+    .filter((model) => !unsupportedModels.has(model)) as string[];
 
   let lastError: any = null;
 
