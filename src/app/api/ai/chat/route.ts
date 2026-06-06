@@ -4364,6 +4364,66 @@ function buildVisitCommitmentReply(academy: any | null): string {
   return `¡Perfecto! 🙌 Te esperamos ese día en la sede.\n\n${buildLocationReferenceReply(academy)}`;
 }
 
+function isInvoiceOrReceiptConcern(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  const mentionsInvoice = /\b(factura|facturas|facturacion|facturar|recibo|recibos|comprobante|comprobantes)\b/i.test(text);
+  const mentionsPayment = /\b(pago|pagos|pagar|mensualidad|cuota|cuotas|inscripcion|abono)\b/i.test(text);
+  return mentionsInvoice && mentionsPayment;
+}
+
+function buildInvoiceOrReceiptReply(academy: any | null): string {
+  const admissionsContact = String(academy?.whatsapp_admisiones || ADMISSIONS_NUMBER).trim();
+  return `Claro, te entiendo ✅\n\nLos pagos se registran y el soporte de *facturación/comprobantes* te lo confirma Admisiones para que quede todo formal.\n📱 *${admissionsContact}*\n\nSi quieres, te dejo el paso exacto para enviarlo y que te respondan más rápido.`;
+}
+
+function isAskToBeNotifiedLater(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(me\s+puede\s+avisar|me\s+puedes\s+avisar|me\s+avisas|avisame|av[síi]same|avisar\s+mas\s+tarde|avisar\s+luego|escribeme\s+luego|me\s+escribes\s+luego|despues\s+me\s+avisas?)\b/i.test(text);
+}
+
+function isScheduleOptionSelection(message: string, lastAgentMessage: string): boolean {
+  const text = normalizeForMatch(message);
+  const last = normalizeForMatch(lastAgentMessage || "");
+  if (!text || !last) return false;
+
+  const hasTimeRange = /\b\d{1,2}(:\d{2})?\s*(am|pm)?\s*(a|-|hasta)\s*\d{1,2}(:\d{2})?\s*(am|pm)?\b/i.test(text);
+  const asksPickSchedule = /\b(cual\s+te\s+queda\s+mejor|otro\s+horario|otros\s+horarios|opciones\s+de\s+horario|grupos\s+disponibles|te\s+funciona\s+ese\s+grupo)\b/i.test(last);
+  return hasTimeRange && asksPickSchedule;
+}
+
+function buildScheduleSelectionReply(message: string, detectedProgram: any | null, courses: any[]): string {
+  const selectedRangeRaw = (message.match(/\b\d{1,2}(:\d{2})?\s*(am|pm)?\s*(a|-|hasta)\s*\d{1,2}(:\d{2})?\s*(am|pm)?\b/i)?.[0] || "").trim();
+  const selectedRange = selectedRangeRaw || String(message || "").trim();
+
+  if (!detectedProgram) {
+    return `Perfecto 🙌 Tomo como preferencia *${selectedRange}*. Si me confirmas el curso, te dejo reservado el grupo correcto.`;
+  }
+
+  const relatedCourses = (courses || []).filter((course) => {
+    const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+    const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizeForMatch(detectedProgram.nombre || ""));
+    return Boolean(sameProgramId || sameProgramName);
+  });
+
+  const selectedNorm = normalizeForMatch(selectedRange).replace(/\s+/g, "");
+  const matched = relatedCourses.find((course) =>
+    normalizeForMatch(String(course?.horario || "")).replace(/\s+/g, "").includes(selectedNorm)
+  );
+
+  const confirmedSchedule = String(matched?.horario || selectedRange).trim();
+  return `¡Súper! 🙌 Te funciona el horario *${confirmedSchedule}* para *${detectedProgram.nombre}*.\n\nSi quieres, seguimos de una con los pasos para separar tu cupo.`;
+}
+
+function isPriceBreakdownClarification(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  return /\b(que\s+parte\s+es|cual\s+parte\s+es|maso\s+menos|mas\s+o\s+menos|aprox|aproximado|como\s+queda\s+eso)\b/i.test(text);
+}
+
 function pickPrimaryCourseForProgram(detectedProgram: any | null, courses: any[]): any | null {
   if (!courses?.length) return null;
 
@@ -4578,6 +4638,17 @@ function buildIntentFocusedDirectResponse(
     const greeting = getTimeSlotGreeting(hour);
     const alreadyGreeted = history.length > 0;
     if (alreadyGreeted) {
+      const pendingTopic = inferPendingTopicFromHistory(history);
+      const normalizedPending = normalizeForMatch(pendingTopic || "");
+      if (/medios\s+de\s+pago|formas\s+de\s+pago|fecha\s+de\s+pago|mensualidad|cuota/.test(normalizedPending)) {
+        return `${greeting} 😊 Seguimos con tu duda de pagos: ¿quieres que te confirme *fechas de pago* o *medios de pago*?`;
+      }
+      if (/horario|inicio|fecha|grupo|dias/.test(normalizedPending) && detectedProgram) {
+        const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+        const nextStart = formatDateLong(primaryCourse?.fecha_inicio) || formatDateShort(primaryCourse?.fecha_inicio) || "Por confirmar";
+        const schedule = primaryCourse?.horario || "Por confirmar";
+        return `${greeting} 😊 Retomemos donde íbamos:\n\n📚 *${detectedProgram.nombre}*\n📅 *Próximo inicio:* ${nextStart}\n🕓 *Horario:* ${schedule}`;
+      }
       return `${greeting} 😊 ¿Qué te gustaría saber: *horarios*, *precios* o *inscripción*?`;
     }
     const academyName = academy?.nombre || "Academia Crystal Diamante";
@@ -4868,6 +4939,28 @@ function buildIntentFocusedDirectResponse(
 
   const hasRecentPricingContext = /\b(modalidades?|mensual\s+opcion|por\s+clase|inscripci[oó]n|mensualidad|presupuesto|inversion|precio)\b/i
     .test(`${normalizeForMatch(lastAgentForFlow)} ${normalizeForMatch(inferredPendingTopic || "")}`);
+
+  if (isInvoiceOrReceiptConcern(message)) {
+    return buildInvoiceOrReceiptReply(academy);
+  }
+
+  if (isAskToBeNotifiedLater(message)) {
+    return "Claro que sí 😊 Te aviso más adelante sin problema. Si quieres, te escribo cuando tengamos nueva fecha/grupo o para recordarte el paso de inscripción.";
+  }
+
+  if (isScheduleOptionSelection(message, lastAgentForFlow)) {
+    return buildScheduleSelectionReply(message, detectedProgram, courses);
+  }
+
+  if (isPriceBreakdownClarification(message) && (hasRecentPricingContext || intent === "precio")) {
+    if (!detectedProgram) {
+      return "Claro 😊 Te lo resumo rápido: *inscripción* por un lado y *mensualidad/por clase* por otro. Si me dices el curso, te doy los valores exactos.";
+    }
+
+    const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
+    const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
+    return `Te lo explico simple 🙌\n\n• *Inscripción:* ${options.inscripcionText}\n• *Por Clase:* ${options.porClaseText} por clase (no incluye materiales)\n• *Mensual:* ${options.mensual100Text}/mes (incluye 100% de materiales)\n\nSi quieres, te recomiendo en una línea cuál te conviene más.`;
+  }
 
   if (isLateArrivalConcern(message) && detectedProgram) {
     const primaryCourse = pickPrimaryCourseForProgram(detectedProgram, courses);
