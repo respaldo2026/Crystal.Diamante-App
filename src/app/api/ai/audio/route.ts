@@ -502,7 +502,7 @@ async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string
   const modelCandidates = Array.from(new Set([
     "gemini-2.0-flash",
     "gemini-1.5-pro",
-    "gemini-1.5-flash-002",
+    "gemini-1.5-flash",
     process.env.GEMINI_MODEL_SUMMARY,
   ]
     .filter(Boolean)
@@ -2684,7 +2684,6 @@ async function generateResponse(apiKey: string, prompt: string): Promise<string>
     "gemini-2.0-flash",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
-    "gemini-1.5-flash-002",
     process.env.GEMINI_MODEL_CHAT,
     process.env.GEMINI_MODEL_SUMMARY,
   ]

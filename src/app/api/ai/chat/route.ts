@@ -6397,7 +6397,6 @@ async function generateResponse(apiKey: string, prompt: string, timeoutMs: numbe
     "gemini-2.0-flash",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
-    "gemini-1.5-flash-002",
     process.env.GEMINI_MODEL_CHAT,
     process.env.GEMINI_MODEL_SUMMARY,
   ]

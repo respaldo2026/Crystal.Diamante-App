@@ -35,7 +35,6 @@ ${text.slice(0, 12000)}`;
   const modelCandidates = [
     "gemini-2.0-flash",
     "gemini-1.5-flash",
-    "gemini-1.5-flash-002",
     "gemini-1.5-pro",
     process.env.GEMINI_MODEL_SUMMARY,
   ]
