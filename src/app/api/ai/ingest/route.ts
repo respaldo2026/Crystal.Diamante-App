@@ -26,17 +26,22 @@ const fetchDocxText = async (url: string) => {
 
 const summarize = async (apiKey: string, text: string) => {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const unsupportedModels = new Set(["gemini-1.5-pro-002", "gemini-1.5-flash-002"]);
+  const unsupportedModels = new Set([
+    "gemini-1.5-pro-002",
+    "gemini-1.5-flash-002",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+  ]);
   const prompt = `Resume en 3 viñetas breves y devuelve keywords (máx 10, minúsculas). Devuelve solo JSON: {"summary": string, "keywords": string[]}
 Texto:
 ${text.slice(0, 12000)}`;
 
   // Lista de modelos válidos en orden de preferencia
   const modelCandidates = [
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
     process.env.GEMINI_MODEL_SUMMARY,
+    process.env.GEMINI_MODEL_CHAT,
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
   ]
     .filter(Boolean)
     .map((model) => String(model).trim())

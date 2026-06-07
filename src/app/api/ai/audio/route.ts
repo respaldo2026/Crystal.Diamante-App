@@ -496,14 +496,19 @@ function getGeminiBackoffMs(attemptIndex: number): number {
  */
 async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const unsupportedModels = new Set(["gemini-1.5-pro-002", "gemini-1.5-flash-002"]);
+  const unsupportedModels = new Set([
+    "gemini-1.5-pro-002",
+    "gemini-1.5-flash-002",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+  ]);
   
   // Usar la misma lista de modelos que funciona en el endpoint de chat
   const modelCandidates = Array.from(new Set([
-    "gemini-2.0-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
+    process.env.GEMINI_MODEL_CHAT,
     process.env.GEMINI_MODEL_SUMMARY,
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
   ]
     .filter(Boolean)
     .map((model) => String(model).trim())
@@ -2678,14 +2683,18 @@ function buildContextualDirective(userMessage: string, detectedProgram: any | nu
  */
 async function generateResponse(apiKey: string, prompt: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const unsupportedModels = new Set(["gemini-1.5-pro-002", "gemini-1.5-flash-002"]);
-
-  const modelCandidates = Array.from(new Set([
-    "gemini-2.0-flash",
+  const unsupportedModels = new Set([
+    "gemini-1.5-pro-002",
+    "gemini-1.5-flash-002",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
+  ]);
+
+  const modelCandidates = Array.from(new Set([
     process.env.GEMINI_MODEL_CHAT,
     process.env.GEMINI_MODEL_SUMMARY,
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
   ]
     .filter(Boolean)
     .map((model) => String(model).trim())
