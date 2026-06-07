@@ -26,7 +26,7 @@ const fetchDocxText = async (url: string) => {
 
 const summarize = async (apiKey: string, text: string) => {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const unsupportedModels = new Set(["gemini-1.5-pro-002"]);
+  const unsupportedModels = new Set(["gemini-1.5-pro-002", "gemini-1.5-flash-002"]);
   const prompt = `Resume en 3 viñetas breves y devuelve keywords (máx 10, minúsculas). Devuelve solo JSON: {"summary": string, "keywords": string[]}
 Texto:
 ${text.slice(0, 12000)}`;

@@ -496,7 +496,7 @@ function getGeminiBackoffMs(attemptIndex: number): number {
  */
 async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const unsupportedModels = new Set(["gemini-1.5-pro-002"]);
+  const unsupportedModels = new Set(["gemini-1.5-pro-002", "gemini-1.5-flash-002"]);
   
   // Usar la misma lista de modelos que funciona en el endpoint de chat
   const modelCandidates = Array.from(new Set([
@@ -2678,7 +2678,7 @@ function buildContextualDirective(userMessage: string, detectedProgram: any | nu
  */
 async function generateResponse(apiKey: string, prompt: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const unsupportedModels = new Set(["gemini-1.5-pro-002"]);
+  const unsupportedModels = new Set(["gemini-1.5-pro-002", "gemini-1.5-flash-002"]);
 
   const modelCandidates = Array.from(new Set([
     "gemini-2.0-flash",
