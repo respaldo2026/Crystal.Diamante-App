@@ -1799,11 +1799,11 @@ type AgentIntent = "precio" | "horario" | "temario" | "materiales" | "inscripcio
 
 function detectUserIntent(message: string): "precio" | "horario" | "temario" | "materiales" | "inscripcion" | "requisitos" | "pago" | "general" {
   const text = normalizeForMatch(message);
-  const hasDurationIntent = /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
+  const hasDurationIntent = /\b(cuanto dura|cuanto tiempo dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso)\b/i.test(text);
   const hasClassFrequencyIntent = /\b(cada cuanto|cuantas veces|cada semana|semanal|que dias son clases|cada cuantos dias|con que frecuencia|dias son de|dias de ensenanza|dias de clase|cuando son las clases|en que dias|que dia es|dia de clases)\b/i.test(text);
   const hasPaymentMethodsIntent = /\b(nequi|bancolombia|sistecredito|daviplata|medios\s+de\s+pago|formas?\s+de\s+pago|metodos?\s+de\s+pago|como\s+se\s+paga|donde\s+pago|numero\s+de\s+pago|a\s+que\s+numero\s+pago)\b/i.test(text);
   const hasPaymentDateIntent = /\b(cuando\s+se\s+paga|cuando\s+debo\s+pagar|se\s+paga\s+el|se\s+paga\s+los|fecha\s+de\s+pago|fechas\s+de\s+pago|proximo\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|este\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|el\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)|segunda\s+clase|vence|vencimiento)\b/i.test(text);
-  const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta|abono|abonar|pago parcial|cuota inicial|total para comenzar|total para iniciar|cuanto seria total|cuanto seria para comenzar)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
+  const hasPriceIntent = /\b(precio|precios|costo|costos|vale|valor|valores|mensualidad|mensualidades|inscripcion|inscripciones|cuota|cuotas|inversion|invercion|inversiion|cuanto vale|cuanto es|cuanto cuesta|cuanto seria|abono|abonar|pago parcial|cuota inicial|total para comenzar|total para iniciar|cuanto seria total|cuanto seria para comenzar)\b/i.test(text) || /\b(se paga|cada mes|al mes|mes a mes|paga)\b/i.test(text);
   const hasEnrollmentIntent = /\b(inscrib|inscrip\w*|matricul|admisiones|contacto|whatsapp|separar\s+cupo|reservar\s+cupo|reservame|quiero\s+inscribirme)\b/i.test(text);
   const hasScheduleIntent = /\b(horarios?|horas?|fecha|cuando\s+inicia|inicio|arranca|empieza|grupo|cupo|cupos|disponible|hoy\s+hay\s+clase|hay\s+clase\s+hoy|tengo\s+clase\s+hoy|manana\s+hay\s+clase|hay\s+clase\s+manana|tengo\s+clase\s+manana|me\s+toca\s+clase|toca\s+clase|clase\s+manana|todos\s+los\s+dias|cuantos\s+dias|que\s+dias|dias\s+de\s+clase)\b/i.test(text);
   const hasStrongScheduleIntent = /\b(cuando|inicio|arranca|empieza|fecha|horarios?|horas?)\b/i.test(text);
@@ -2945,7 +2945,7 @@ function ensurePaymentModalitiesInResponse(
 
 function isDurationQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
-  return /\b(cuanto dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso|cuando termina|cuando finaliza|fecha de finalizacion|fecha final|hasta cuando va|cuando se acaba)\b/i.test(text);
+  return /\b(cuanto dura|cuanto tiempo dura|duracion|duracion del curso|meses|cuantas clases|cuantas sesiones|tiempo del curso|cuando termina|cuando finaliza|fecha de finalizacion|fecha final|hasta cuando va|cuando se acaba)\b/i.test(text);
 }
 
 function isClassFrequencyQuestion(message: string): boolean {
@@ -2957,7 +2957,7 @@ function isOfficeHoursQuestion(message: string): boolean {
   const text = normalizeForMatch(message);
   if (!text) return false;
 
-  return /\b(horario de atencion|horario de atencion presencial|horarios de atencion|a que hora atienden|en que horario atienden|que horario manejan|horario de la sede|horario para ir|hora atienden|cuando atienden presencial|horario de oficina|en horario atienden|que horario de atencion tienen)\b/i.test(text);
+  return /\b(horario de atencion|horario de atencion presencial|horarios de atencion|a que hora atienden|a q hora atienden|a que horas atienden|a q horas atienden|en que horario atienden|que horario manejan|horario de la sede|horario para ir|hora atienden|cuando atienden presencial|horario de oficina|en horario atienden|que horario de atencion tienen|a que horas puedo ir|a q horas puedo ir|a que hora puedo ir|a q hora puedo ir)\b/i.test(text);
 }
 
 function buildOfficeHoursReply(academy: any): string {
@@ -2965,7 +2965,34 @@ function buildOfficeHoursReply(academy: any): string {
   const mapsUrl = String(academy?.maps_url || "").trim();
   const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
 
-  return `Claro. Nuestro horario de atención presencial es en la sede y te ayudamos a coordinar la visita.\n\n📍 *${direccion}*${mapsLine}\n\nSi quieres, te indico también cómo llegar o te digo si puedes acercarte hoy.`;
+  return `¡Claro! 🙌 Para visita presencial te ayudamos a coordinar antes de que vengas a la sede.\n\n📍 *${direccion}*${mapsLine}\n\nSi quieres venir hoy, te recomiendo escribirme y te confirmo de una el mejor momento para atenderte sin espera.`;
+}
+
+function isCityOrZoneQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(que ciudad|en que ciudad|de que ciudad|estan en que ciudad|estan en cali|eso es en cali|son de cali|quedan en cali|en que parte de cali|que parte de cali|en que zona estan|en que barrio estan|por que sector estan|donde en cali|en que parte se encuentran|en que parte estan)\b/i.test(text);
+}
+
+function buildCityOrZoneReply(academy: any | null): string {
+  const direccion = String(academy?.direccion || "Calle 53 #30a 101 - Barrio Comuneros 1").trim();
+  const mapsUrl = String(academy?.maps_url || "").trim();
+  const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
+  return `Sí 😊 Estamos en *Cali*, en el *barrio Comuneros 1*, cerca de la *panadería Pablos Pan*, en *La Cosmetiquera, segundo piso*.\n\n📍 *${direccion}*${mapsLine}`;
+}
+
+function isVisitTimingFollowup(message: string, lastAgentMessage: string, pendingTopic: string): boolean {
+  const text = normalizeForMatch(message);
+  const last = normalizeForMatch(lastAgentMessage || "");
+  const pending = normalizeForMatch(pendingTopic || "");
+  if (!text) return false;
+
+  const asksTime = /\b(a\s+que\s+horas?|a\s+q\s+horas?|horario\s+para\s+ir|hora\s+para\s+ir|cuando\s+puedo\s+ir|puedo\s+ir\s+hoy|que\s+hora\s+puedo\s+ir)\b/i.test(text);
+  const hasVisitContext = /\b(puedes\s+venir|puedes\s+pasar|venir\s+directamente\s+a\s+nuestra\s+sede|te\s+esperamos\s+ese\s+dia|coordinamos\s+para\s+que\s+te\s+atiendan|forma\s+mas\s+facil\s+de\s+llegar)\b/i.test(last)
+    || /\b(ubicacion|direccion|referencia|llegar|visita|venir\s+a\s+la\s+sede)\b/i.test(pending);
+
+  return asksTime && hasVisitContext;
 }
 
 function isHumanAdvisorRequest(message: string): boolean {
@@ -4734,6 +4761,10 @@ function buildIntentFocusedDirectResponse(
     return buildOfficeHoursReply(academy);
   }
 
+  if (isCityOrZoneQuestion(message)) {
+    return buildCityOrZoneReply(academy);
+  }
+
   // Pregunta directa de visita presencial → responder SÍ primero, luego dirección
   const asksPresencialVisit = /\b(puedo\s+ir|puedo\s+pasar|puedo\s+ir\s+presencial|puedo\s+ir\s+personal|ir\s+presencial|ir\s+en\s+persona|voy\s+a\s+ir|voy\s+presencial|puedo\s+visitar|puedo\s+ir\s+a\s+la\s+sede)\b/i.test(normalizeForMatch(message));
   if (asksPresencialVisit && !isPaymentMethodQuestion(message)) {
@@ -4741,6 +4772,10 @@ function buildIntentFocusedDirectResponse(
     const mapsUrl = String(academy?.maps_url || "").trim();
     const mapsLine = mapsUrl ? `\n🗺️ Mapa: ${mapsUrl}` : "";
     return `¡Sí, claro! 🙌 Puedes venir directamente a nuestra sede:\n\n📍 *${direccion}*${mapsLine}\n\n¿Cuándo puedes venir? Así coordinamos para que te atiendan de inmediato 😊`;
+  }
+
+  if (isVisitTimingFollowup(message, lastAgentForFlow, inferredPendingTopic)) {
+    return buildOfficeHoursReply(academy);
   }
 
   // Pregunta sobre clases virtuales → respuesta directa (NO enviar ficha comercial)
@@ -5126,7 +5161,7 @@ Si quieres, te confirmo en una línea cuál te aplica en tu caso.`;
   }
 
   // Contacto/número de admisiones → responder ANTES que el flujo de inscripción
-  if (asksSocialMedia) {
+  if (asksSocialMedia && !asksLocation && !asksDuration && !asksPrice && !isCityOrZoneQuestion(message)) {
     return buildSocialMediaReply(academy, message);
   }
 
