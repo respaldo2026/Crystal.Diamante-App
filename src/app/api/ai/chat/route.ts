@@ -2273,25 +2273,27 @@ function buildScheduleDayAvailabilityReply(
   const dayNames = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
   const mentionedDayLabel = mentionedDayIndex !== null ? dayNames[mentionedDayIndex] : null;
 
-    function isGenericScheduleConstraintMessage(message: string): boolean {
-      const text = normalizeForMatch(message);
-      if (!text) return false;
+function isGenericScheduleConstraintMessage(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
 
-      return /(
-        no\s+me\s+sirve(?:n)?|
-        no\s+le\s+sirve(?:n)?|
-        no\s+me\s+queda(?:n)?|
-        no\s+le\s+queda(?:n)?|
-        no\s+puedo\s+en\s+ese\s+horario|
-        no\s+puedo\s+por\s+horario|
-        ese\s+horario\s+no\s+me\s+sirve|
-        ese\s+horario\s+no\s+le\s+sirve|
-        esos\s+horarios\s+no\s+me\s+sirven|
-        esos\s+horarios\s+no\s+le\s+sirven|
-        no\s+me\s+sirven\s+los\s+horarios|
-        no\s+le\s+sirven\s+los\s+horarios
-      )/ix.test(text);
-    }
+  const patterns = [
+    /\bno\s+me\s+sirve(?:n)?\b/i,
+    /\bno\s+le\s+sirve(?:n)?\b/i,
+    /\bno\s+me\s+queda(?:n)?\b/i,
+    /\bno\s+le\s+queda(?:n)?\b/i,
+    /\bno\s+puedo\s+en\s+ese\s+horario\b/i,
+    /\bno\s+puedo\s+por\s+horario\b/i,
+    /\bese\s+horario\s+no\s+me\s+sirve\b/i,
+    /\bese\s+horario\s+no\s+le\s+sirve\b/i,
+    /\besos\s+horarios\s+no\s+me\s+sirven\b/i,
+    /\besos\s+horarios\s+no\s+le\s+sirven\b/i,
+    /\bno\s+me\s+sirven\s+los\s+horarios\b/i,
+    /\bno\s+le\s+sirven\s+los\s+horarios\b/i,
+  ];
+
+  return patterns.some((pattern) => pattern.test(text));
+}
 
     function buildGenericScheduleConstraintReply(
       message: string,
