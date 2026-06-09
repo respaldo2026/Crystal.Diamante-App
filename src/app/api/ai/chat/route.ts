@@ -2272,65 +2272,6 @@ function buildScheduleDayAvailabilityReply(
 
   const dayNames = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
   const mentionedDayLabel = mentionedDayIndex !== null ? dayNames[mentionedDayIndex] : null;
-
-function isGenericScheduleConstraintMessage(message: string): boolean {
-  const text = normalizeForMatch(message);
-  if (!text) return false;
-
-  const patterns = [
-    /\bno\s+me\s+sirve(?:n)?\b/i,
-    /\bno\s+le\s+sirve(?:n)?\b/i,
-    /\bno\s+me\s+queda(?:n)?\b/i,
-    /\bno\s+le\s+queda(?:n)?\b/i,
-    /\bno\s+puedo\s+en\s+ese\s+horario\b/i,
-    /\bno\s+puedo\s+por\s+horario\b/i,
-    /\bese\s+horario\s+no\s+me\s+sirve\b/i,
-    /\bese\s+horario\s+no\s+le\s+sirve\b/i,
-    /\besos\s+horarios\s+no\s+me\s+sirven\b/i,
-    /\besos\s+horarios\s+no\s+le\s+sirven\b/i,
-    /\bno\s+me\s+sirven\s+los\s+horarios\b/i,
-    /\bno\s+le\s+sirven\s+los\s+horarios\b/i,
-  ];
-
-  return patterns.some((pattern) => pattern.test(text));
-}
-
-    function buildGenericScheduleConstraintReply(
-      message: string,
-      detectedProgram: any | null,
-      courses: any[]
-    ): string | null {
-      if (!isGenericScheduleConstraintMessage(message)) {
-        return null;
-      }
-
-      if (!detectedProgram) {
-        return "Entiendo 🙌 Para revisarte una alternativa real, dime el *curso* y qué *día u horario* te quedaría mejor.";
-      }
-
-      const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
-      const relatedCourses = (courses || []).filter((course) => {
-        const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
-        const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
-        return Boolean(sameProgramId || sameProgramName);
-      });
-
-      const scheduleOptions = Array.from(
-        new Set(
-          relatedCourses
-            .map((course) => String(course?.horario || "").trim())
-            .filter(Boolean)
-        )
-      );
-
-      if (scheduleOptions.length > 1) {
-        const options = scheduleOptions.slice(0, 3).map((item) => `• ${item}`).join("\n");
-        return `Entiendo 🙌 Si ese horario no te funciona, para *${detectedProgram.nombre}* también tengo estas opciones:\n${options}\n\n¿Cuál te queda mejor?`;
-      }
-
-      const currentSchedule = scheduleOptions[0] || "Por confirmar";
-      return `Entiendo 🙌 Si ese horario no te funciona, por ahora el grupo confirmado de *${detectedProgram.nombre}* es *${currentSchedule}*.\n\nSi quieres, te dejo en *lista de espera* para avisarte cuando abramos otro horario, o dime qué día te quedaría mejor y lo revisamos.`;
-    }
   const referenceDate = new Date();
 
   if (!alternativeCourses.length) {
@@ -2433,6 +2374,65 @@ function buildShortAckContinuationReply(
 
   // Si acabamos de preguntar por pasos de inscripción y responde afirmativo,
   // avanzar directo al proceso para evitar repetir el mismo bloque anterior.
+
+  function isGenericScheduleConstraintMessage(message: string): boolean {
+    const text = normalizeForMatch(message);
+    if (!text) return false;
+
+    const patterns = [
+      /\bno\s+me\s+sirve(?:n)?\b/i,
+      /\bno\s+le\s+sirve(?:n)?\b/i,
+      /\bno\s+me\s+queda(?:n)?\b/i,
+      /\bno\s+le\s+queda(?:n)?\b/i,
+      /\bno\s+puedo\s+en\s+ese\s+horario\b/i,
+      /\bno\s+puedo\s+por\s+horario\b/i,
+      /\bese\s+horario\s+no\s+me\s+sirve\b/i,
+      /\bese\s+horario\s+no\s+le\s+sirve\b/i,
+      /\besos\s+horarios\s+no\s+me\s+sirven\b/i,
+      /\besos\s+horarios\s+no\s+le\s+sirven\b/i,
+      /\bno\s+me\s+sirven\s+los\s+horarios\b/i,
+      /\bno\s+le\s+sirven\s+los\s+horarios\b/i,
+    ];
+
+    return patterns.some((pattern) => pattern.test(text));
+  }
+
+  function buildGenericScheduleConstraintReply(
+    message: string,
+    detectedProgram: any | null,
+    courses: any[]
+  ): string | null {
+    if (!isGenericScheduleConstraintMessage(message)) {
+      return null;
+    }
+
+    if (!detectedProgram) {
+      return "Entiendo 🙌 Para revisarte una alternativa real, dime el *curso* y qué *día u horario* te quedaría mejor.";
+    }
+
+    const normalizedProgram = normalizeForMatch(detectedProgram.nombre || "");
+    const relatedCourses = (courses || []).filter((course) => {
+      const sameProgramId = course?.programa_id && Number(course.programa_id) === Number(detectedProgram.id);
+      const sameProgramName = normalizeForMatch(course?.programa_nombre || "").includes(normalizedProgram);
+      return Boolean(sameProgramId || sameProgramName);
+    });
+
+    const scheduleOptions = Array.from(
+      new Set(
+        relatedCourses
+          .map((course) => String(course?.horario || "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    if (scheduleOptions.length > 1) {
+      const options = scheduleOptions.slice(0, 3).map((item) => `• ${item}`).join("\n");
+      return `Entiendo 🙌 Si ese horario no te funciona, para *${detectedProgram.nombre}* también tengo estas opciones:\n${options}\n\n¿Cuál te queda mejor?`;
+    }
+
+    const currentSchedule = scheduleOptions[0] || "Por confirmar";
+    return `Entiendo 🙌 Si ese horario no te funciona, por ahora el grupo confirmado de *${detectedProgram.nombre}* es *${currentSchedule}*.\n\nSi quieres, te dejo en *lista de espera* para avisarte cuando abramos otro horario, o dime qué día te quedaría mejor y lo revisamos.`;
+  }
   if (
     /\b(pasos\s+para\s+inscribirte|pasos\s+de\s+inscripcion|te\s+comparta\s+los\s+pasos\s+para\s+inscribirte|separar\s+tu\s+cupo)\b/i.test(normalizedLastAgent)
   ) {
