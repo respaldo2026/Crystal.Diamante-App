@@ -159,6 +159,7 @@ export default function TesoreriaPage() {
     const [cursosDisponibles, setCursosDisponibles] = useState<Array<{ id: string; nombre: string }>>([]);
     const [filtroGrupoRentabilidad, setFiltroGrupoRentabilidad] = useState<string | null>(null);
     const [loadingRentabilidadGrupo, setLoadingRentabilidadGrupo] = useState(false);
+    const [rentabilidadRefreshTick, setRentabilidadRefreshTick] = useState(0);
     const [rentabilidadGrupo, setRentabilidadGrupo] = useState({
         ingresos: 0,
         egresosNomina: 0,
@@ -354,6 +355,27 @@ export default function TesoreriaPage() {
         void cargarMovimientos();
     }, [cargarMovimientos]);
 
+    useEffect(() => {
+        const channel = supabaseBrowserClient
+            .channel("tesoreria-live-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "sesiones_clase" }, () => {
+                void cargarMovimientos();
+                setRentabilidadRefreshTick((prev) => prev + 1);
+            })
+            .on("postgres_changes", { event: "*", schema: "public", table: "pagos" }, () => {
+                void cargarMovimientos();
+                setRentabilidadRefreshTick((prev) => prev + 1);
+            })
+            .on("postgres_changes", { event: "*", schema: "public", table: "perfiles" }, () => {
+                setRentabilidadRefreshTick((prev) => prev + 1);
+            })
+            .subscribe();
+
+        return () => {
+            supabaseBrowserClient.removeChannel(channel);
+        };
+    }, [cargarMovimientos]);
+
     const metodosDisponibles = useMemo(() => {
         const set = new Set<string>();
         movimientos.forEach((mov) => {
@@ -538,7 +560,7 @@ export default function TesoreriaPage() {
         };
 
         void calcularRentabilidadGrupo();
-    }, [filtroGrupoRentabilidad, rangoPeriodoSeleccionado]);
+    }, [filtroGrupoRentabilidad, rangoPeriodoSeleccionado, rentabilidadRefreshTick]);
 
     const movimientosFiltrados = useMemo(() => {
         return movimientos.filter((mov) => {

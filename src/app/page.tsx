@@ -124,6 +124,7 @@ export default function DashboardPage() {
         pagosMes,
         pagosMesAnterior,
         nomina,
+        sesionesConPerfil,
         matriculasActivas,
         cursosActivosCount,
         profesoresCount,
@@ -153,6 +154,14 @@ export default function DashboardPage() {
           .select("total_pagado")
           .gte("fecha_pago", inicioPeriodo)
           .lte("fecha_pago", finPeriodo),
+
+        // 3.1. EGRESO DEVENGADO DOCENTE (segun sesiones registradas)
+        supabaseBrowserClient
+          .from("sesiones_clase")
+          .select("fecha, horas_dictadas, profesor_id, perfiles!sesiones_clase_profesor_id_fkey(valor_hora)")
+          .gte("fecha", inicioPeriodo)
+          .lte("fecha", finPeriodo)
+          .gt("horas_dictadas", 0),
         
         // 4. ESTUDIANTES ACTIVOS
         supabaseBrowserClient
@@ -201,7 +210,51 @@ export default function DashboardPage() {
 
       const totalIngresos = pagosMes.data?.reduce((sum, p) => sum + Number(p.monto || 0), 0) || 0;
       const ingresosMesAnterior = pagosMesAnterior.data?.reduce((sum, p) => sum + Number(p.monto || 0), 0) || 0;
-      const totalEgresos = nomina.data?.reduce((sum, n) => sum + Number(n.total_pagado || 0), 0) || 0;
+      const totalEgresosPagados = nomina.data?.reduce((sum, n) => sum + Number(n.total_pagado || 0), 0) || 0;
+
+      let totalEgresosDevengados = 0;
+      if (!sesionesConPerfil.error) {
+        totalEgresosDevengados = (sesionesConPerfil.data || []).reduce((sum: number, sesion: any) => {
+          const horas = Number(sesion?.horas_dictadas || 0);
+          const valorHora = Number(sesion?.perfiles?.valor_hora || 0);
+          return sum + (horas * valorHora);
+        }, 0);
+      } else {
+        const { data: sesionesBase, error: sesionesBaseError } = await supabaseBrowserClient
+          .from("sesiones_clase")
+          .select("profesor_id, horas_dictadas")
+          .gte("fecha", inicioPeriodo)
+          .lte("fecha", finPeriodo)
+          .gt("horas_dictadas", 0);
+
+        if (!sesionesBaseError) {
+          const profesorIds = Array.from(
+            new Set((sesionesBase || []).map((s: any) => String(s?.profesor_id || "")).filter(Boolean))
+          );
+
+          let valorHoraPorProfesor = new Map<string, number>();
+          if (profesorIds.length > 0) {
+            const { data: perfilesData, error: perfilesError } = await supabaseBrowserClient
+              .from("perfiles")
+              .select("id, valor_hora")
+              .in("id", profesorIds);
+
+            if (!perfilesError) {
+              valorHoraPorProfesor = new Map(
+                (perfilesData || []).map((p: any) => [String(p.id), Number(p.valor_hora || 0)])
+              );
+            }
+          }
+
+          totalEgresosDevengados = (sesionesBase || []).reduce((sum: number, sesion: any) => {
+            const horas = Number(sesion?.horas_dictadas || 0);
+            const valorHora = valorHoraPorProfesor.get(String(sesion?.profesor_id || "")) || 0;
+            return sum + (horas * valorHora);
+          }, 0);
+        }
+      }
+
+      const totalEgresos = totalEgresosDevengados > 0 ? totalEgresosDevengados : totalEgresosPagados;
 
       const estudiantesUnicos = new Set(matriculasActivas.data?.map(m => m.estudiante_id) || []);
       const estudiantesNuevosMes = matriculasActivas.data?.filter(m => 
@@ -323,6 +376,8 @@ export default function DashboardPage() {
       .channel('dashboard-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pagos' }, () => cargarDashboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculas' }, () => cargarDashboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sesiones_clase' }, () => cargarDashboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pagos_nomina' }, () => cargarDashboard())
       .subscribe();
 
     return () => {
@@ -471,7 +526,7 @@ export default function DashboardPage() {
               valueStyle={{ color: '#fff', fontWeight: 'bold' }}
               prefix={<WalletOutlined style={{ color: '#fff' }} />}
             />
-            <Text style={{ color: '#ffe4e6', fontSize: 11 }}>Nómina y gastos</Text>
+            <Text style={{ color: '#ffe4e6', fontSize: 11 }}>Nómina devengada (según sesiones)</Text>
           </Card>
         </Col>
 
