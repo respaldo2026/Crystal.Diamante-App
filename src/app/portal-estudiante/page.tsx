@@ -990,6 +990,9 @@ export default function PortalEstudiante() {
         return (Number(a?.numero_cuota || 0) - Number(b?.numero_cuota || 0));
       });
     const realizados = pagosConPendientes.filter((p) => getVisiblePaymentStatusWithGrace(p) === "pagado");
+    const totalPendiente = pendientes.reduce((sum, pago: any) => sum + Number(getSaldoPendiente(pago) || 0), 0);
+    const totalPagado = realizados.reduce((sum, pago: any) => sum + Number(getTotalAbonado(pago) || pago?.monto || 0), 0);
+    const pagosVencidos = pendientes.filter((p: any) => getVisiblePaymentStatusWithGrace(p) === "vencido").length;
 
     // Función auxiliar para determinar si está vencido (estrictamente anterior a hoy)
     const isVencido = (pago: any) => {
@@ -998,9 +1001,51 @@ export default function PortalEstudiante() {
     };
 
     return (
-      <Row gutter={[16, 16]}>
+      <Space direction="vertical" size={16} style={{ width: "100%" }}>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} sm={8}>
+            <Card size="small" className="portal-finance-summary portal-finance-summary--pending">
+              <Statistic
+                title="Saldo pendiente"
+                value={totalPendiente}
+                precision={0}
+                prefix="$"
+                valueStyle={{ color: "#b54708", fontWeight: 800 }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Card size="small" className="portal-finance-summary portal-finance-summary--alert">
+              <Statistic
+                title="Pagos vencidos"
+                value={pagosVencidos}
+                valueStyle={{ color: pagosVencidos > 0 ? "#cf1322" : "#389e0d", fontWeight: 800 }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Card size="small" className="portal-finance-summary portal-finance-summary--paid">
+              <Statistic
+                title="Total pagado"
+                value={totalPagado}
+                precision={0}
+                prefix="$"
+                valueStyle={{ color: "#15803d", fontWeight: 800 }}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card title={<><ClockCircleOutlined /> Próximos Pagos</>} className="shadow-sm">
+          <Card
+            title={<><ClockCircleOutlined /> Próximos Pagos</>}
+            className="shadow-sm portal-finance-card portal-finance-card--pending"
+            extra={<Tag color={pagosVencidos > 0 ? "red" : "orange"}>{pendientes.length} pendientes</Tag>}
+          >
+            <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+              Aquí ves primero lo que debes cubrir y cuánto sigue pendiente en cada cuota.
+            </Text>
             {pendientes.length > 0 ? (
               isMobile ? renderMobileListCards(pendientes, (r: any) => {
                 const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
@@ -1035,6 +1080,14 @@ export default function PortalEstudiante() {
                 pagination={false} 
                 size="small"
                 scroll={{ x: 560 }}
+                rowClassName={(record: any) => {
+                  const visibleStatus = getVisiblePaymentStatusWithGrace(record);
+                  return visibleStatus === "vencido"
+                    ? "portal-finance-row portal-finance-row--overdue"
+                    : visibleStatus === "abono_parcial"
+                    ? "portal-finance-row portal-finance-row--partial"
+                    : "portal-finance-row portal-finance-row--pending";
+                }}
                 columns={[
                   { 
                     title: 'Concepto', 
@@ -1106,7 +1159,14 @@ export default function PortalEstudiante() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title={<><CheckCircleOutlined /> Historial de Pagos</>} className="shadow-sm">
+          <Card
+            title={<><CheckCircleOutlined /> Historial de Pagos</>}
+            className="shadow-sm portal-finance-card portal-finance-card--paid"
+            extra={<Tag color="green">{realizados.length} pagos registrados</Tag>}
+          >
+            <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+              Este bloque resalta claramente lo que ya quedó pagado y confirmado.
+            </Text>
              {isMobile ? renderMobileListCards(realizados, (r: any) => {
                 const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
                 const plan = getPaymentPlanDisplay({
@@ -1134,7 +1194,8 @@ export default function PortalEstudiante() {
                 rowKey="id" 
                 pagination={{ pageSize: 5 }} 
                 size="small"
-               scroll={{ x: 520 }}
+                scroll={{ x: 520 }}
+                rowClassName={() => "portal-finance-row portal-finance-row--paid"}
                 columns={[
                   { title: 'Concepto', dataIndex: 'periodo_pagado', render: (_, r: any) => getConceptoPago(r) },
                   {
@@ -1160,7 +1221,8 @@ export default function PortalEstudiante() {
               />}
           </Card>
         </Col>
-      </Row>
+        </Row>
+      </Space>
     );
   };
 
@@ -2673,6 +2735,58 @@ export default function PortalEstudiante() {
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 10px 12px;
         }
+        .portal-estudiante .portal-finance-summary {
+          border-radius: 16px;
+          border: 1px solid transparent;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        }
+        .portal-estudiante .portal-finance-summary--pending {
+          background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+          border-color: #fdba74;
+        }
+        .portal-estudiante .portal-finance-summary--alert {
+          background: linear-gradient(180deg, #fff1f2 0%, #ffffff 100%);
+          border-color: #fda4af;
+        }
+        .portal-estudiante .portal-finance-summary--paid {
+          background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+          border-color: #86efac;
+        }
+        .portal-estudiante .portal-finance-card {
+          border-radius: 18px;
+          overflow: hidden;
+        }
+        .portal-estudiante .portal-finance-card .ant-card-head {
+          border-bottom-width: 1px;
+        }
+        .portal-estudiante .portal-finance-card--pending .ant-card-head {
+          background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+          border-bottom-color: #fed7aa;
+        }
+        .portal-estudiante .portal-finance-card--paid .ant-card-head {
+          background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+          border-bottom-color: #bbf7d0;
+        }
+        .portal-estudiante .portal-finance-card--pending .portal-mobile-data-card {
+          border-left: 4px solid #f59e0b;
+          background: linear-gradient(180deg, #fffdf8 0%, #ffffff 100%);
+        }
+        .portal-estudiante .portal-finance-card--paid .portal-mobile-data-card {
+          border-left: 4px solid #22c55e;
+          background: linear-gradient(180deg, #f8fff9 0%, #ffffff 100%);
+        }
+        .portal-estudiante .portal-finance-row--pending .ant-table-cell {
+          background: #fffaf0;
+        }
+        .portal-estudiante .portal-finance-row--partial .ant-table-cell {
+          background: #fffbeb;
+        }
+        .portal-estudiante .portal-finance-row--overdue .ant-table-cell {
+          background: #fff1f2;
+        }
+        .portal-estudiante .portal-finance-row--paid .ant-table-cell {
+          background: #f6ffed;
+        }
         @media (min-width: 576px) {
           .portal-section-wrap {
             padding: 0 4px 24px;
@@ -2903,6 +3017,9 @@ export default function PortalEstudiante() {
           .portal-estudiante .portal-mobile-data-card__header {
             align-items: stretch;
             flex-direction: column;
+          }
+          .portal-estudiante .portal-finance-card .ant-card-head {
+            padding-inline: 12px;
           }
           .portal-estudiante .course-card .ant-card-body {
             display: flex;
