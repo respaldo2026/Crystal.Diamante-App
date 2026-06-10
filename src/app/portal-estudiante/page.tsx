@@ -117,6 +117,93 @@ dayjs.locale("es");
 
 const { Title, Text } = Typography;
 
+type TemaVisualConfig = {
+  palette: [string, string];
+  accent: string;
+  label: string;
+};
+
+const TEMA_VISUAL_PRESETS: Array<{ matchers: RegExp[]; config: TemaVisualConfig }> = [
+  {
+    matchers: [/uñas|unas|acrilic|manicure|pedicure/i],
+    config: { palette: ["#ff8fb1", "#ffd6e0"], accent: "#a61e4d", label: "NAILS" },
+  },
+  {
+    matchers: [/cejas|brow|laminad|micro/i],
+    config: { palette: ["#c8b6ff", "#efe7ff"], accent: "#5b3cc4", label: "BROWS" },
+  },
+  {
+    matchers: [/pestañ|lash|volumen/i],
+    config: { palette: ["#9ad0f5", "#e8f6ff"], accent: "#0b6aa2", label: "LASHES" },
+  },
+  {
+    matchers: [/maquill|makeup|visag/i],
+    config: { palette: ["#ffb86b", "#fff0d9"], accent: "#a24a00", label: "MAKEUP" },
+  },
+  {
+    matchers: [/bioseg|higien|seguridad|esteriliz/i],
+    config: { palette: ["#7dd3a7", "#e8fff3"], accent: "#166534", label: "CARE" },
+  },
+  {
+    matchers: [/color|mecha|balayage|decolor/i],
+    config: { palette: ["#f9a8d4", "#fff1f8"], accent: "#9d174d", label: "COLOR" },
+  },
+  {
+    matchers: [/facial|piel|skin|limpieza/i],
+    config: { palette: ["#8be9fd", "#eefcff"], accent: "#0f766e", label: "SKIN" },
+  },
+  {
+    matchers: [/masaje|spa|relaja/i],
+    config: { palette: ["#b7e4c7", "#f1fff5"], accent: "#2d6a4f", label: "SPA" },
+  },
+  {
+    matchers: [/barber|corte|fade|cabello|peinad/i],
+    config: { palette: ["#94a3b8", "#f8fafc"], accent: "#334155", label: "STYLE" },
+  },
+];
+
+const DEFAULT_TEMA_VISUAL: TemaVisualConfig = {
+  palette: ["#f472b6", "#fdf2f8"],
+  accent: "#9d174d",
+  label: "TEMA",
+};
+
+const resolveTemaVisual = (tema: any): TemaVisualConfig => {
+  const text = `${String(tema?.nombre_curso || tema?.titulo || "")} ${String(tema?.descripcion || "")}`;
+  return TEMA_VISUAL_PRESETS.find((preset) => preset.matchers.some((matcher) => matcher.test(text)))?.config || DEFAULT_TEMA_VISUAL;
+};
+
+const getTemaInitials = (tema: any) => {
+  const source = String(tema?.nombre_curso || tema?.titulo || "Tema").trim();
+  const words = source.split(/\s+/).filter(Boolean).slice(0, 2);
+  const initials = words.map((word) => word.charAt(0).toUpperCase()).join("");
+  return initials || "TM";
+};
+
+const buildTemaImageDataUri = (tema: any) => {
+  const visual = resolveTemaVisual(tema);
+  const initials = getTemaInitials(tema);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" viewBox="0 0 160 120" fill="none">
+      <defs>
+        <linearGradient id="bg" x1="18" y1="12" x2="144" y2="108" gradientUnits="userSpaceOnUse">
+          <stop stop-color="${visual.palette[0]}"/>
+          <stop offset="1" stop-color="${visual.palette[1]}"/>
+        </linearGradient>
+      </defs>
+      <rect width="160" height="120" rx="20" fill="url(#bg)"/>
+      <circle cx="126" cy="30" r="28" fill="white" fill-opacity="0.26"/>
+      <circle cx="34" cy="92" r="36" fill="white" fill-opacity="0.18"/>
+      <rect x="14" y="14" width="62" height="22" rx="11" fill="white" fill-opacity="0.92"/>
+      <text x="45" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="${visual.accent}">${visual.label}</text>
+      <text x="18" y="88" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="${visual.accent}">${initials}</text>
+      <path d="M108 72C118 60 132 61 140 72" stroke="${visual.accent}" stroke-width="6" stroke-linecap="round" opacity="0.28"/>
+      <path d="M98 84C112 68 132 68 146 84" stroke="${visual.accent}" stroke-width="4" stroke-linecap="round" opacity="0.2"/>
+    </svg>`;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
+
 export default function PortalEstudiante() {
   const portalMobileUiV1 = useFeatureFlag("portal_mobile_ui_v1", true);
   const portalDelayedLoaderV1 = useFeatureFlag("portal_delayed_loader_v1", true);
@@ -1539,6 +1626,8 @@ export default function PortalEstudiante() {
                     const notaQuizTema = getNotaByTemaId(temaId);
                     const notaActividadTema = actividadPorTemaMatricula.get(`${matriculaSeleccionada?.id || ""}-${temaId}`) ?? null;
                     const colorAvatarTema = temaBloqueado ? "#bfbfbf" : temaCompletado ? "#16a34a" : colorNumeroTema;
+                    const temaVisual = resolveTemaVisual(tema);
+                    const temaImageSrc = buildTemaImageDataUri(tema);
                     const insumosMarcados = insumosTema.filter((insumo: any) => {
                       const key = buildChecklistKey(
                         String(matriculaSeleccionada.id),
@@ -1559,7 +1648,27 @@ export default function PortalEstudiante() {
                         className={temaBloqueado ? "tema-bloqueado" : temaCompletado ? "tema-completado" : "tema-activo"}
                       >
                         <List.Item.Meta
-                          avatar={<span style={{ fontSize: 20, fontWeight: 700, color: colorAvatarTema }}>{tema.orden || temaIndex + 1}</span>}
+                          avatar={
+                            <div className="tema-cover-wrap">
+                              <img
+                                src={temaImageSrc}
+                                alt={tema?.nombre_curso || tema?.titulo || `Tema ${temaIndex + 1}`}
+                                className="tema-cover-image"
+                              />
+                              <span
+                                className="tema-cover-order"
+                                style={{ background: colorAvatarTema, color: "#fff" }}
+                              >
+                                {tema.orden || temaIndex + 1}
+                              </span>
+                              <span
+                                className="tema-cover-chip"
+                                style={{ color: temaVisual.accent }}
+                              >
+                                {temaVisual.label}
+                              </span>
+                            </div>
+                          }
                           title={<Text strong>{tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}</Text>}
                           description={
                             <Space direction="vertical" size={4}>
@@ -2912,6 +3021,53 @@ export default function PortalEstudiante() {
         .portal-estudiante .course-card .ant-progress-dashboard-trail {
           stroke: #e3e8f1;
         }
+        .portal-estudiante .tema-cover-wrap {
+          position: relative;
+          width: 84px;
+          min-width: 84px;
+          height: 84px;
+          border-radius: 18px;
+          overflow: hidden;
+          box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+          background: #fff;
+        }
+        .portal-estudiante .tema-cover-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .portal-estudiante .tema-cover-order {
+          position: absolute;
+          top: 8px;
+          left: 8px;
+          min-width: 28px;
+          height: 28px;
+          padding: 0 8px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: 800;
+          box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+        }
+        .portal-estudiante .tema-cover-chip {
+          position: absolute;
+          left: 8px;
+          right: 8px;
+          bottom: 8px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.94);
+          padding: 4px 8px;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.6px;
+          text-align: center;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
         /* ── Pensum: contenedor de material + botones ── */
         .portal-estudiante .tema-material-row {
           width: 100%;
@@ -3025,6 +3181,15 @@ export default function PortalEstudiante() {
             display: flex;
             flex-direction: column;
             align-items: center;
+          }
+          .portal-estudiante .tema-cover-wrap {
+            width: 72px;
+            min-width: 72px;
+            height: 72px;
+            border-radius: 16px;
+          }
+          .portal-estudiante .tema-cover-chip {
+            font-size: 9px;
           }
           .portal-estudiante .ant-table {
             font-size: 12px;
