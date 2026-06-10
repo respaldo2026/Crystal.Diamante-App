@@ -914,6 +914,55 @@ export default function PortalEstudiante() {
   // El bloqueo global de contenidos aplica solo a planes mensuales en mora.
   const enMoraBloqueante = enMora && hasMonthlyEnrollment;
 
+  type MobileDetailRow = {
+    label: string;
+    value: React.ReactNode;
+  };
+
+  const renderMobileDetailRows = (rows: MobileDetailRow[]) => {
+    const visibleRows = rows.filter((row) => row.value !== undefined && row.value !== null && row.value !== "");
+
+    return (
+      <div style={{ display: "grid", gap: 10 }}>
+        {visibleRows.map((row) => (
+          <div key={row.label} style={{ minWidth: 0 }}>
+            <Text type="secondary" style={{ display: "block", fontSize: 12, marginBottom: 2 }}>
+              {row.label}
+            </Text>
+            <div style={{ minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>{row.value}</div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderMobileListCards = <T,>(
+    items: T[],
+    getCard: (item: T) => {
+      key: React.Key;
+      title: React.ReactNode;
+      extra?: React.ReactNode;
+      rows: MobileDetailRow[];
+      footer?: React.ReactNode;
+    },
+    emptyText: string = "No hay información disponible"
+  ) => (
+    items.length === 0 ? <Empty description={emptyText} /> :
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      {items.map((item) => {
+        const card = getCard(item);
+        return (
+          <Card key={card.key} size="small" title={card.title} extra={card.extra} className="portal-mobile-data-card">
+            <Space direction="vertical" size={10} style={{ width: "100%" }}>
+              {renderMobileDetailRows(card.rows)}
+              {card.footer ? <div>{card.footer}</div> : null}
+            </Space>
+          </Card>
+        );
+      })}
+    </Space>
+  );
+
   const renderFinanciero = () => {
     const formatPagoCOP = (valor?: number | null) => `$ ${Number(valor || 0).toLocaleString()}`;
     const getConceptoPago = (pago: any) => {
@@ -953,7 +1002,34 @@ export default function PortalEstudiante() {
         <Col xs={24} lg={12}>
           <Card title={<><ClockCircleOutlined /> Próximos Pagos</>} className="shadow-sm">
             {pendientes.length > 0 ? (
-              <Table 
+              isMobile ? renderMobileListCards(pendientes, (r: any) => {
+                const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
+                const plan = getPaymentPlanDisplay({
+                  modalidadPago: matricula?.modalidad_pago,
+                  valorMensualPlan: matricula?.valor_mensual_plan,
+                  montoPorClase: matricula?.valor_por_clase,
+                  porcentajeProductos: matricula?.porcentaje_productos,
+                });
+                const visibleStatus = getVisiblePaymentStatusWithGrace(r);
+                const fechaEfectiva = getFechaVencimientoEfectiva(r);
+
+                return {
+                  key: String(r.id),
+                  title: getConceptoPago(r),
+                  extra:
+                    visibleStatus === "vencido" ? <Tag color="red">VENCIDO</Tag>
+                    : visibleStatus === "abono_parcial" ? <Tag color="gold">ABONO PARCIAL</Tag>
+                    : <Tag style={{ color: '#8c8c8c', borderColor: '#d9d9d9', fontSize: '11px' }}>PENDIENTE</Tag>,
+                  rows: [
+                    { label: "Plan", value: <Tag color={plan.color}>{plan.label}</Tag> },
+                    { label: "Vence", value: fechaEfectiva ? fechaEfectiva.format("DD/MM/YYYY") : "-" },
+                    { label: "Monto programado", value: formatPagoCOP(getMontoProgramado(r) || r?.monto) },
+                    { label: "Abonado", value: formatPagoCOP(getTotalAbonado(r)) },
+                    { label: "Descuento", value: formatPagoCOP(getDescuentoAplicado(r)) },
+                    { label: "Saldo", value: formatPagoCOP(getSaldoPendiente(r)) },
+                  ],
+                };
+              }) : <Table 
                 dataSource={pendientes} 
                 rowKey="id" 
                 pagination={false} 
@@ -1031,7 +1107,29 @@ export default function PortalEstudiante() {
         </Col>
         <Col xs={24} lg={12}>
           <Card title={<><CheckCircleOutlined /> Historial de Pagos</>} className="shadow-sm">
-             <Table 
+             {isMobile ? renderMobileListCards(realizados, (r: any) => {
+                const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
+                const plan = getPaymentPlanDisplay({
+                  modalidadPago: matricula?.modalidad_pago,
+                  valorMensualPlan: matricula?.valor_mensual_plan,
+                  montoPorClase: matricula?.valor_por_clase,
+                  porcentajeProductos: matricula?.porcentaje_productos,
+                });
+
+                return {
+                  key: String(r.id),
+                  title: getConceptoPago(r),
+                  extra: <Tag color="green">PAGADO</Tag>,
+                  rows: [
+                    { label: "Plan", value: <Tag color={plan.color}>{plan.label}</Tag> },
+                    { label: "Fecha", value: r?.fecha_pago ? dayjs(r.fecha_pago).format("DD/MM/YYYY") : "-" },
+                    { label: "Programado", value: formatPagoCOP(getMontoProgramado(r)) },
+                    { label: "Abonado", value: formatPagoCOP(getTotalAbonado(r)) },
+                    { label: "Descuento", value: formatPagoCOP(getDescuentoAplicado(r)) },
+                    { label: "Monto", value: formatPagoCOP(r?.monto) },
+                  ],
+                };
+              }) : <Table 
                 dataSource={realizados} 
                 rowKey="id" 
                 pagination={{ pageSize: 5 }} 
@@ -1059,7 +1157,7 @@ export default function PortalEstudiante() {
                   { title: 'Monto', dataIndex: 'monto', render: (v) => formatPagoCOP(v) },
                   { title: 'Estado', render: () => <Tag color="green">PAGADO</Tag> }
                 ]}
-              />
+              />}
           </Card>
         </Col>
       </Row>
@@ -1282,7 +1380,7 @@ export default function PortalEstudiante() {
               collapsible: cicloBloqueado ? "disabled" : undefined,
               className: cicloBloqueado ? "ciclo-bloqueado" : "",
               label: (
-                <Space size={16} align="center" style={{ opacity: cicloBloqueado ? 0.4 : 1, filter: cicloBloqueado ? "grayscale(0.7)" : undefined }}>
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 16, opacity: cicloBloqueado ? 0.4 : 1, filter: cicloBloqueado ? "grayscale(0.7)" : undefined, minWidth: 0 }}>
                   <div
                     className="ciclo-avatar"
                     style={{
@@ -1300,19 +1398,26 @@ export default function PortalEstudiante() {
                   >
                     {cicloNumero}
                   </div>
-                  <div>
-                    <Text strong style={{ fontSize: 16, color: cicloBloqueado ? "#bfbfbf" : undefined }}>{cicloNombre}</Text>
+                  <div style={{ minWidth: 0 }}>
+                    <Text strong style={{ fontSize: isMobile ? 14 : 16, color: cicloBloqueado ? "#bfbfbf" : undefined, whiteSpace: "normal" }}>{cicloNombre}</Text>
                     {vista === "kits" ? (
                       <div><Text type="secondary">Materiales por tema</Text></div>
                     ) : ciclo?.descripcion ? (
                       <div><Text type="secondary">{ciclo.descripcion}</Text></div>
                     ) : null}
                   </div>
-                </Space>
+                </div>
               ),
               children: vista === "ciclo" ? (
                 materialesGenerales.length ? (
-                  <Table
+                  isMobile ? renderMobileListCards(materialesGenerales, (record: any) => ({
+                    key: String(record?.id || record?.nombre),
+                    title: <Text strong>{record?.nombre || "Producto"}</Text>,
+                    extra: renderCoverageTagForStudent(record, true),
+                    rows: [
+                      { label: "Cantidad", value: record?.cantidad || "Cantidad por definir" },
+                    ],
+                  })) : <Table
                     dataSource={materialesGenerales}
                     rowKey={(record) => String(record?.id || record?.nombre)}
                     size="small"
@@ -1452,7 +1557,7 @@ export default function PortalEstudiante() {
                                               <div
                                                 style={{
                                                   display: "grid",
-                                                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                                                  gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(0, 1fr) auto",
                                                   alignItems: "center",
                                                   gap: 8,
                                                   width: "100%",
@@ -1471,7 +1576,7 @@ export default function PortalEstudiante() {
                                                     {etiquetaInsumo}
                                                   </Text>
                                                 </Checkbox>
-                                                <span style={{ width: isMobile ? 108 : 120, display: "flex", justifyContent: "flex-end" }}>
+                                                <span style={{ width: isMobile ? "100%" : 120, display: "flex", justifyContent: isMobile ? "flex-start" : "flex-end" }}>
                                                   {renderCoverageTagForStudent(insumo, true)}
                                                 </span>
                                               </div>
@@ -1508,7 +1613,15 @@ export default function PortalEstudiante() {
       {renderRutaAcademica("plan")}
 
       <Card size="small" title="Certificados">
-        <Table
+        {isMobile ? renderMobileListCards(certificados, (r: any) => ({
+          key: String(r?.id || Math.random()),
+          title: construirNombreGrupo(r.cursos),
+          extra: <Tag color="green">Disponible</Tag>,
+          rows: [
+            { label: "Nota Final", value: String(r?.nota_final ?? "-") },
+          ],
+          footer: <Button block icon={<DownloadOutlined />} onClick={() => descargarCertificado(r)}>Descargar certificado</Button>,
+        }), "No hay certificados disponibles") : <Table
           dataSource={certificados}
           rowKey="id"
           size="small"
@@ -1520,7 +1633,7 @@ export default function PortalEstudiante() {
             { title: "Nota Final", dataIndex: "nota_final" },
             { title: "Acción", render: (_, r) => <Button icon={<DownloadOutlined />} onClick={() => descargarCertificado(r)}>Descargar</Button> },
           ]}
-        />
+        />}
       </Card>
     </Space>
   );
@@ -1820,7 +1933,24 @@ export default function PortalEstudiante() {
             title="Asistencia"
             style={{ marginTop: 16 }}
           >
-            <Table
+            {isMobile ? renderMobileListCards(asistencias, (r: any) => {
+              const tema = temaSincronizadoAsistenciaById.get(String(r?.id || "")) || r?.tema_visto || "-";
+              const registro = String(r?.registro_clase || "").trim();
+              const estadoCalendario = estadoCalendarioAsistenciaById.get(String(r?.id || ""));
+
+              return {
+                key: String(r?.id || Math.random()),
+                title: formatDate(r?.fecha),
+                extra: <Tag color={r?.estado === "presente" ? "green" : "red"}>{String(r?.estado || "-").toUpperCase()}</Tag>,
+                rows: [
+                  { label: "Curso", value: construirNombreGrupo(r?.matriculas?.cursos) },
+                  { label: "Clase #", value: r?.clase_numero || "-" },
+                  { label: "Tema visto", value: tema },
+                  { label: "Registro de clase", value: registro && registro !== tema ? registro : undefined },
+                  { label: "Calendario", value: estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : undefined },
+                ],
+              };
+            }, "No hay registros de asistencia") : <Table
               dataSource={asistencias}
               rowKey="id"
               size="small"
@@ -1880,7 +2010,7 @@ export default function PortalEstudiante() {
                   : []),
                 { title: "Estado", dataIndex: "estado", render: (e) => <Tag color={e === "presente" ? "green" : "red"}>{e?.toUpperCase()}</Tag> },
               ]}
-            />
+            />}
           </Card>
 
           {calificaciones.length > 0 && (
@@ -1889,7 +2019,33 @@ export default function PortalEstudiante() {
               title={<><TrophyOutlined /> Calificaciones</>}
               style={{ marginTop: 16 }}
             >
-              <Table
+              {isMobile ? renderMobileListCards(calificaciones, (r: any) => {
+                const mat = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
+                const nota = Number(r.calificacion ?? r.nota);
+                const esEscala5 = nota <= 5;
+                const aprobado = esEscala5 ? nota >= 3.0 : nota >= 60;
+                const display = Number.isFinite(nota) ? (esEscala5 ? nota.toFixed(1) : `${nota}/100`) : "-";
+                const tipo = String(r?.tipo_evaluacion || "otro");
+                const colores: Record<string, string> = {
+                  examen: "blue",
+                  quiz: "purple",
+                  taller: "cyan",
+                  participacion: "green",
+                  otro: "default",
+                };
+
+                return {
+                  key: String(r?.id || Math.random()),
+                  title: r?.concepto || "Calificación",
+                  extra: <Tag color={colores[tipo] || "default"}>{tipo.toUpperCase()}</Tag>,
+                  rows: [
+                    { label: "Curso", value: construirNombreGrupo(mat?.cursos) || "-" },
+                    { label: "Nota", value: <Text strong style={{ color: aprobado ? "#52c41a" : "#ff4d4f" }}>{display}</Text> },
+                    { label: "Fecha", value: r?.fecha_evaluacion ? dayjs(r.fecha_evaluacion).format("DD/MM/YYYY") : "-" },
+                    { label: "Observaciones", value: r?.observaciones || undefined },
+                  ],
+                };
+              }, "No hay calificaciones registradas") : <Table
                 dataSource={calificaciones}
                 rowKey="id"
                 size="small"
@@ -1954,7 +2110,7 @@ export default function PortalEstudiante() {
                       ]
                     : []),
                 ]}
-              />
+              />}
             </Card>
           )}
         </>
@@ -2493,6 +2649,30 @@ export default function PortalEstudiante() {
           overflow-wrap: anywhere;
           word-break: break-word;
         }
+        .portal-estudiante .portal-mobile-data-card {
+          border-radius: 14px;
+          border: 1px solid #eceff5;
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+        }
+        .portal-estudiante .portal-mobile-data-card .ant-card-head {
+          min-height: auto;
+          padding: 12px 14px 0;
+          border-bottom: none;
+        }
+        .portal-estudiante .portal-mobile-data-card .ant-card-body {
+          padding: 12px 14px 14px;
+        }
+        .portal-estudiante .portal-mobile-data-card__header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 8px;
+        }
+        .portal-estudiante .portal-mobile-data-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px 12px;
+        }
         @media (min-width: 576px) {
           .portal-section-wrap {
             padding: 0 4px 24px;
@@ -2709,6 +2889,20 @@ export default function PortalEstudiante() {
             height: auto;
             min-height: 34px;
             padding: 6px 10px;
+          }
+          .portal-estudiante .portal-mobile-data-card .ant-card-head {
+            padding: 10px 10px 0;
+          }
+          .portal-estudiante .portal-mobile-data-card .ant-card-body {
+            padding: 10px;
+          }
+          .portal-estudiante .portal-mobile-data-grid {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 8px;
+          }
+          .portal-estudiante .portal-mobile-data-card__header {
+            align-items: stretch;
+            flex-direction: column;
           }
           .portal-estudiante .course-card .ant-card-body {
             display: flex;
