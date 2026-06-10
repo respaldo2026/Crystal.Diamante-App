@@ -281,6 +281,10 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
   const nombreCurso = curso ? truncarTexto(construirNombreGrupo(curso), 70) : "";
   const metodo = truncarTexto(pago.metodo, 28);
   const referencia = truncarTexto(pago.referencia, 32);
+  const detallePago = truncarTexto(
+    pago.periodo && pago.periodo !== pago.concepto ? pago.periodo : "",
+    100
+  );
 
   return (
     <Document>
@@ -355,7 +359,7 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
         ) : null}
 
         {/* ── PAGO DETAILS ── */}
-        {(metodo || referencia) ? (
+        {(metodo || referencia || detallePago) ? (
           <View style={[styles.sectionPad, { paddingTop: 4 }]}>
             {metodo ? (
               <View style={styles.detailRow}>
@@ -367,6 +371,12 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Referencia</Text>
                 <Text style={styles.detailValueNormal}>{referencia}</Text>
+              </View>
+            ) : null}
+            {detallePago ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Detalle</Text>
+                <Text style={styles.detailValueNormal}>{detallePago}</Text>
               </View>
             ) : null}
           </View>

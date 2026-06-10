@@ -226,6 +226,114 @@ const getPeriodoPagoLegible = (
   return periodoActual || `Cuota ${numeroCuota}`.trim();
 };
 
+const uniqueStrings = (values: Array<string | null | undefined>) =>
+  Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
+
+const resumirItemsTicket = (items: string[], maxItems: number = 6) => {
+  const limpios = uniqueStrings(items);
+  if (limpios.length === 0) return "";
+  if (limpios.length <= maxItems) return limpios.join(" · ");
+  return `${limpios.slice(0, maxItems).join(" · ")} · +${limpios.length - maxItems} más`;
+};
+
+type TicketDescriptorOptions = {
+  esAbonoParcial?: boolean;
+  baseNote?: string | null;
+  detailNote?: string | null;
+  esVistaPrevia?: boolean;
+};
+
+const buildTicketDescriptor = (
+  cuotasPago: Array<Pick<Cuota, "matricula_id" | "numero_cuota" | "tipo_cuota" | "periodo_pagado">>,
+  matriculas: Matricula[],
+  cuotasDisponibles: Array<Pick<Cuota, "matricula_id">>,
+  options: TicketDescriptorOptions = {},
+) => {
+  const detalles = cuotasPago.map((cuota) => {
+    const matricula = matriculas.find((item) => String(item.id) === String(cuota.matricula_id));
+    const modalidad = normalizeModalidadPago(matricula?.modalidad_pago);
+    const periodo = getPeriodoPagoLegible(cuota, matricula?.modalidad_pago);
+    const esInscripcion = Number(cuota.numero_cuota || 0) === 0 || /inscrip/i.test(periodo);
+
+    return {
+      matriculaId: String(cuota.matricula_id || ""),
+      cursoNombre: String(matricula?.curso_nombre || "Curso").trim(),
+      modalidad,
+      periodo,
+      esInscripcion,
+      numeroCuota: Number(cuota.numero_cuota || 0),
+    };
+  });
+
+  const matriculaIds = uniqueStrings(detalles.map((item) => item.matriculaId));
+  const cursos = uniqueStrings(detalles.map((item) => item.cursoNombre));
+  const periodos = uniqueStrings(detalles.map((item) => item.periodo));
+  const mismaMatricula = matriculaIds.length === 1;
+  const mismaMatriculaId = mismaMatricula ? matriculaIds[0] : "";
+  const totalCuotasPendientesMismaMatricula = mismaMatriculaId
+    ? cuotasDisponibles.filter((cuota) => String(cuota.matricula_id || "") === mismaMatriculaId).length
+    : 0;
+  const esPagoTotalCurso = Boolean(
+    mismaMatriculaId && cuotasPago.length > 1 && totalCuotasPendientesMismaMatricula > 0 && cuotasPago.length === totalCuotasPendientesMismaMatricula
+  );
+
+  const cursoLabel =
+    cursos.length === 0
+      ? "Curso"
+      : cursos.length === 1
+      ? cursos[0]
+      : cursos.length === 2
+      ? cursos.join(" / ")
+      : "Varios cursos";
+
+  const detalleCompacto = resumirItemsTicket(periodos);
+  let tituloBase = "RECIBO DE PAGO";
+
+  if (options.esAbonoParcial) {
+    tituloBase = "COMPROBANTE DE ABONO";
+  } else if (detalles.length === 1 && detalles[0]?.esInscripcion) {
+    tituloBase = "FACTURA DE MATRICULA";
+  } else if (esPagoTotalCurso) {
+    tituloBase = "FACTURA PAGO TOTAL DEL CURSO";
+  } else if (detalles.length === 1 && detalles[0]?.modalidad === "POR_CLASE") {
+    tituloBase = "RECIBO DE PAGO POR CLASE";
+  } else if (detalles.length === 1) {
+    tituloBase = "FACTURA DE MENSUALIDAD";
+  } else {
+    tituloBase = "RECIBO DE PAGO MULTIPLE";
+  }
+
+  const titulo = options.esVistaPrevia ? `VISTA PREVIA - ${tituloBase}` : tituloBase;
+
+  let concepto = `${detalleCompacto || "Pago"} - ${cursoLabel}`;
+  if (options.esAbonoParcial && detalles.length === 1) {
+    concepto = `Abono a ${detalles[0]?.periodo || "pago"} - ${cursoLabel}`;
+  } else if (esPagoTotalCurso) {
+    concepto = `Pago total del curso - ${cursoLabel}`;
+  } else if (detalles.length > 1) {
+    concepto = `${periodos.length} conceptos pagados - ${cursoLabel}`;
+  }
+
+  const notaPartes = [
+    options.detailNote,
+    esPagoTotalCurso
+      ? `Incluye el total pendiente del curso: ${detalleCompacto}`
+      : detalles.length > 1
+      ? `Conceptos incluidos: ${detalleCompacto}`
+      : null,
+    options.baseNote,
+  ].map((item) => String(item || "").trim()).filter(Boolean);
+
+  return {
+    titulo,
+    concepto,
+    periodo: detalleCompacto,
+    nota: notaPartes.join("\n"),
+    cursoNombre: cursoLabel,
+    esPagoTotalCurso,
+  };
+};
+
 export default function CajaPage() {
   const { message: messageApi } = App.useApp();
   const [form] = Form.useForm();
@@ -838,9 +946,6 @@ export default function CajaPage() {
         }
 
         const periodoPagoLegible = getPeriodoPagoLegible(cuota, matriculaCuota?.modalidad_pago);
-        const conceptoTicket = ajuste.saldo_pendiente > 0
-          ? `Abono a ${periodoPagoLegible}`
-          : `${periodoPagoLegible}`;
         const detalleOperacion = [
           descuento > 0 ? `Descuento aplicado: ${formatCurrency(descuento)}` : null,
           ajuste.saldo_pendiente > 0 ? `Saldo pendiente: ${formatCurrency(ajuste.saldo_pendiente)}` : "Cuota saldada",
@@ -855,6 +960,16 @@ export default function CajaPage() {
           .maybeSingle();
 
         const configTicket = configActual || configuracion;
+        const ticketDescriptor = buildTicketDescriptor(
+          [cuota],
+          matriculas,
+          cuotas,
+          {
+            esAbonoParcial: ajuste.saldo_pendiente > 0,
+            baseNote: configTicket?.ticket_nota || "",
+            detailNote: detalleOperacion,
+          }
+        );
 
         if (montoAbono > 0) {
           const ticketData = {
@@ -865,8 +980,8 @@ export default function CajaPage() {
               telefono: configTicket?.telefono || "",
               direccion: configTicket?.direccion || "",
               email: configTicket?.email || "",
-              ticketTitulo: configTicket?.ticket_titulo || "RECIBO DE PAGO",
-              ticketNota: detalleOperacion || configTicket?.ticket_nota || "",
+              ticketTitulo: ticketDescriptor.titulo,
+              ticketNota: ticketDescriptor.nota,
               ticketPie: configTicket?.ticket_pie || "Gracias por su pago",
               ticketCampos: configTicket?.ticket_campos || undefined,
             },
@@ -879,11 +994,14 @@ export default function CajaPage() {
               metodo: metodoPagoLabels[metodoPago],
               fecha: dayjs().format("DD/MM/YYYY HH:mm"),
               referencia: referenciaPago,
-              concepto: `${conceptoTicket} - ${matriculaCuota?.curso_nombre || "Curso"}`,
+              concepto: ticketDescriptor.concepto,
               numeroCuota: cuota.numero_cuota,
-              periodo: detalleOperacion || cuota.periodo_pagado,
+              periodo: ticketDescriptor.periodo,
               valorEntregado: valorEntregado || undefined,
               cambio: cambio || undefined,
+            },
+            curso: {
+              nombre: ticketDescriptor.cursoNombre,
             },
           };
 
@@ -913,7 +1031,7 @@ export default function CajaPage() {
             await registrarIngresoDesdePago({
               fecha: dayjs().format("YYYY-MM-DD"),
               monto: montoAbono,
-              concepto: `${conceptoTicket} - ${matriculaCuota?.curso_nombre || "Curso"}`,
+              concepto: ticketDescriptor.concepto,
               categoria: "inscripciones",
               metodo_pago: metodoPago,
               referencia: referenciaPago,
@@ -939,7 +1057,7 @@ export default function CajaPage() {
               referenciaPago,
               monto: montoAbono,
               fechaPago: dayjs().format("DD/MM/YYYY"),
-              concepto: conceptoTicket,
+              concepto: ticketDescriptor.concepto,
               nombreCurso: matriculaCuota?.curso_nombre || "Curso",
               fechaVigencia: dayjs().add(1, "month").format("DD/MM/YYYY"),
               fechaProximaClase: cuota.fecha_vencimiento ? dayjs(cuota.fecha_vencimiento).format("DD/MM/YYYY") : "Por confirmar",
@@ -1035,6 +1153,9 @@ export default function CajaPage() {
         .maybeSingle();
 
       const configTicket = configActual || configuracion;
+      const ticketDescriptor = buildTicketDescriptor(cuotasAPagar, matriculas, cuotas, {
+        baseNote: configTicket?.ticket_nota || "",
+      });
 
       const ticketData = {
         academia: {
@@ -1044,8 +1165,8 @@ export default function CajaPage() {
           telefono: configTicket?.telefono || "",
           direccion: configTicket?.direccion || "",
           email: configTicket?.email || "",
-          ticketTitulo: configTicket?.ticket_titulo || "RECIBO DE PAGO",
-          ticketNota: configTicket?.ticket_nota || "",
+          ticketTitulo: ticketDescriptor.titulo,
+          ticketNota: ticketDescriptor.nota,
           ticketPie: configTicket?.ticket_pie || "Gracias por su pago",
           ticketCampos: configTicket?.ticket_campos || undefined,
         },
@@ -1058,15 +1179,14 @@ export default function CajaPage() {
           metodo: metodoPagoLabels[metodoPago],
           fecha: dayjs().format("DD/MM/YYYY HH:mm"),
           referencia: referenciaPago,
-          concepto: cuotasAPagar
-            .map((c) => getPeriodoPagoLegible(c, matriculas.find((m) => String(m.id) === String(c.matricula_id))?.modalidad_pago))
-            .join(", "),
+          concepto: ticketDescriptor.concepto,
           numeroCuota: cuotasAPagar.length === 1 ? cuotasAPagar[0]?.numero_cuota : undefined,
-          periodo: cuotasAPagar
-            .map((c) => getPeriodoPagoLegible(c, matriculas.find((m) => String(m.id) === String(c.matricula_id))?.modalidad_pago))
-            .join(", "),
+          periodo: ticketDescriptor.periodo,
           valorEntregado: valorEntregado || undefined,
           cambio: cambio || undefined,
+        },
+        curso: {
+          nombre: ticketDescriptor.cursoNombre,
         },
       };
 
@@ -1559,6 +1679,10 @@ export default function CajaPage() {
                       .maybeSingle();
 
                     const configTicket = configActual || configuracion;
+                    const previewDescriptor = buildTicketDescriptor(cuotasAPagar, matriculas, cuotas, {
+                      baseNote: configTicket?.ticket_nota || "",
+                      esVistaPrevia: true,
+                    });
                     
                     const ticketData = {
                       academia: {
@@ -1568,8 +1692,8 @@ export default function CajaPage() {
                         telefono: configTicket?.telefono || "",
                         direccion: configTicket?.direccion || "",
                         email: configTicket?.email || "",
-                        ticketTitulo: "PRE-RECIBO (NO VÁLIDO COMO COMPROBANTE)",
-                        ticketNota: configTicket?.ticket_nota || "",
+                        ticketTitulo: previewDescriptor.titulo,
+                        ticketNota: previewDescriptor.nota,
                         ticketPie: configTicket?.ticket_pie || "Gracias",
                         ticketCampos: configTicket?.ticket_campos || undefined,
                       },
@@ -1582,15 +1706,14 @@ export default function CajaPage() {
                         metodo: metodoPagoLabels[metodoPago],
                         fecha: dayjs().format("DD/MM/YYYY HH:mm"),
                         referencia: values.referencia || `FAC-${generarNumeroFactura()}`,
-                        concepto: cuotasAPagar
-                          .map((c) => getPeriodoPagoLegible(c, matriculas.find((m) => String(m.id) === String(c.matricula_id))?.modalidad_pago))
-                          .join(", "),
+                        concepto: previewDescriptor.concepto,
                         numeroCuota: cuotasAPagar.length === 1 ? cuotasAPagar[0]?.numero_cuota : undefined,
-                        periodo: cuotasAPagar
-                          .map((c) => getPeriodoPagoLegible(c, matriculas.find((m) => String(m.id) === String(c.matricula_id))?.modalidad_pago))
-                          .join(", "),
+                        periodo: previewDescriptor.periodo,
                         valorEntregado: valorEntregado || undefined,
                         cambio: cambio || undefined,
+                      },
+                      curso: {
+                        nombre: previewDescriptor.cursoNombre,
                       },
                     };
 

@@ -198,6 +198,12 @@ export const generarTicketTermicoHtml = async (data: TicketPagoData): Promise<st
   const metodo = truncarTexto(dataPreparada.pago.metodo, 28);
   const referencia = truncarTexto(dataPreparada.pago.referencia, 32);
   const curso = truncarTexto(dataPreparada.curso?.nombre, 64);
+  const detallePago = truncarTexto(
+    dataPreparada.pago.periodo && dataPreparada.pago.periodo !== dataPreparada.pago.concepto
+      ? dataPreparada.pago.periodo
+      : "",
+    96
+  );
 
   return `<!doctype html>
 <html>
@@ -251,6 +257,7 @@ export const generarTicketTermicoHtml = async (data: TicketPagoData): Promise<st
       ${curso ? `<div class="block-label">Curso</div><div class="block-value">${escapeHtml(curso)}</div>` : ""}
       ${metodo ? `<div class="block-label">Método</div><div class="block-value">${escapeHtml(metodo)}</div>` : ""}
       ${referencia ? `<div class="block-label">Referencia</div><div class="block-value">${escapeHtml(referencia)}</div>` : ""}
+      ${detallePago ? `<div class="block-label">Detalle</div><div class="block-value">${escapeHtml(detallePago)}</div>` : ""}
       ${valorEntregado > 0 ? `<div class="row"><span class="label">Valor entregado</span><span class="value">${escapeHtml(formatCop(valorEntregado))}</span></div>` : ""}
       ${dataPreparada.pago.cambio !== undefined && dataPreparada.pago.cambio !== null ? `<div class="row"><span class="label">Cambio</span><span class="value">${escapeHtml(formatCop(cambio))}</span></div>` : ""}
       ${dataPreparada.estudiante.telefono ? `<div class="muted">Contacto estudiante: ${escapeHtml(dataPreparada.estudiante.telefono)}</div>` : ""}
