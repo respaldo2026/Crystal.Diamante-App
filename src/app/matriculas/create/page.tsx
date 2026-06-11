@@ -10,7 +10,7 @@ import dayjs from "dayjs";
 import { formatDate } from "@utils/date";
 import { useRouter } from "next/navigation";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
-import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { abrirTicketPagoDesdeBlob, buildEnrollmentTicketData, formatTicketReference, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, getPaymentPlan, normalizeModalidadPago, resolvePaymentPlanAmounts, type ModalidadPago, type ProgramaPaymentConfig } from "@/types/payment-plans";
 
@@ -735,6 +735,7 @@ export default function MatriculaCreate() {
             const montoNumero = Number(monto ?? 0) || 0;
             const fechaPagoISO = fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
             const fechaPagoLegible = dayjs(fechaPagoISO).format("DD/MM/YYYY");
+            const referenciaPago = formatTicketReference(referencia || pagoInscripcionData?.id, "MAT");
 
             // Actualizar el pago de inscripción
             const { error: errUpdate } = await supabaseBrowserClient
@@ -743,7 +744,7 @@ export default function MatriculaCreate() {
                     estado: "pagado",
                     monto: montoNumero,
                     metodo_pago: metodo_pago,
-                    referencia: referencia || null,
+                    referencia: referenciaPago,
                     fecha_pago: fechaPagoISO,
                     observaciones: `Pago registrado el ${dayjs().format("DD/MM/YYYY HH:mm")}`
                 })
@@ -770,37 +771,15 @@ export default function MatriculaCreate() {
                     .limit(1)
                     .maybeSingle();
 
-                const ticketData = {
-                    academia: {
-                        nombre: configAcademia?.nombre_academia || "Academia Crystal Diamante",
-                        ruc: configAcademia?.ruc || undefined,
-                        logoUrl: configAcademia?.logo_url || undefined,
-                        telefono: configAcademia?.telefono || configAcademia?.whatsapp || undefined,
-                        direccion: configAcademia?.direccion || undefined,
-                        email: configAcademia?.email || undefined,
-                        ticketTitulo: configAcademia?.ticket_titulo || undefined,
-                        ticketNota: configAcademia?.ticket_nota || undefined,
-                        ticketPie: configAcademia?.ticket_pie || undefined,
-                        ticketCampos: configAcademia?.ticket_campos || undefined,
-                    },
-                    estudiante: {
-                        nombre: estudianteData?.nombre_completo || "Estudiante",
-                        identificacion: estudianteData?.identificacion || undefined,
-                        telefono: estudianteData?.telefono || undefined,
-                    },
-                    pago: {
-                        referencia: referencia || pagoInscripcionData.id,
-                        metodo: metodo_pago || "efectivo",
-                        monto: montoNumero,
-                        fecha: fechaPagoLegible,
-                        concepto: `Inscripción - ${cursoData?.nombre ?? "Curso"}`,
-                        periodo: "Inscripción",
-                        numeroCuota: 0,
-                    },
-                    curso: {
-                        nombre: cursoData?.nombre ?? "Curso",
-                    },
-                } as const;
+                const ticketData = buildEnrollmentTicketData({
+                    configAcademia,
+                    estudiante: estudianteData,
+                    cursoNombre: cursoData?.nombre,
+                    monto: montoNumero,
+                    metodoPago: metodo_pago,
+                    fechaPagoLegible,
+                    referencia: referenciaPago,
+                });
 
                 const blob = await generarTicketPagoBlob(ticketData);
                 const placeholder = window.open("", "_blank");
@@ -834,7 +813,7 @@ export default function MatriculaCreate() {
                     concepto: `Pago de inscripción - ${cursoData?.nombre ?? "Curso"}`,
                     categoria: "inscripciones",
                     metodo_pago: metodo_pago || null,
-                    referencia: referencia || pagoInscripcionData.id,
+                    referencia: referenciaPago,
                     descripcion: `Pago de inscripción de matrícula ${matriculaData?.id ?? ""}`,
                     estudiante_id: estudianteData?.id ?? null,
                     ticket_url: ticketUrl,

@@ -76,6 +76,92 @@ const truncarTexto = (valor: string | null | undefined, max: number) => {
   return `${texto.slice(0, Math.max(0, max - 1)).trim()}…`;
 };
 
+const sanitizeReferenceChunk = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+
+export const generateShortTicketReference = (prefix: string = "FAC") => {
+  const normalizedPrefix = sanitizeReferenceChunk(prefix).slice(0, 4) || "FAC";
+  const now = new Date();
+  const yymmdd = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const random = Math.floor(Math.random() * 9000) + 1000;
+  return `${normalizedPrefix}-${yymmdd}-${random}`;
+};
+
+export const formatTicketReference = (rawReference?: string | null, prefix: string = "FAC") => {
+  const raw = String(rawReference || "").trim();
+  if (!raw) return generateShortTicketReference(prefix);
+
+  if (/^[A-Z]{2,6}-[A-Z0-9-]{3,}$/i.test(raw)) {
+    return raw.toUpperCase();
+  }
+
+  const compact = sanitizeReferenceChunk(raw);
+  if (!compact) return generateShortTicketReference(prefix);
+
+  if (compact.length <= 10) {
+    return `${sanitizeReferenceChunk(prefix).slice(0, 4) || "FAC"}-${compact}`;
+  }
+
+  return `${sanitizeReferenceChunk(prefix).slice(0, 4) || "FAC"}-${compact.slice(-8)}`;
+};
+
+type EnrollmentTicketParams = {
+  configAcademia: any;
+  estudiante: { nombre_completo?: string | null; identificacion?: string | null; telefono?: string | null; id?: string | null } | null | undefined;
+  cursoNombre?: string | null;
+  monto: number;
+  metodoPago?: string | null;
+  fechaPagoLegible: string;
+  referencia?: string | null;
+};
+
+export const buildEnrollmentTicketData = ({
+  configAcademia,
+  estudiante,
+  cursoNombre,
+  monto,
+  metodoPago,
+  fechaPagoLegible,
+  referencia,
+}: EnrollmentTicketParams): TicketPagoData => {
+  const curso = String(cursoNombre || "Curso").trim() || "Curso";
+  return {
+    academia: {
+      nombre: configAcademia?.nombre_academia || "Academia Crystal Diamante",
+      ruc: configAcademia?.ruc || undefined,
+      logoUrl: configAcademia?.logo_url || undefined,
+      telefono: configAcademia?.telefono || configAcademia?.whatsapp || undefined,
+      direccion: configAcademia?.direccion || undefined,
+      email: configAcademia?.email || undefined,
+      ticketTitulo: "FACTURA DE MATRICULA",
+      ticketNota: configAcademia?.ticket_nota || undefined,
+      ticketPie: configAcademia?.ticket_pie || undefined,
+      ticketCampos: configAcademia?.ticket_campos || undefined,
+    },
+    estudiante: {
+      nombre: estudiante?.nombre_completo || "Estudiante",
+      identificacion: estudiante?.identificacion || undefined,
+      telefono: estudiante?.telefono || undefined,
+    },
+    pago: {
+      referencia: formatTicketReference(referencia, "MAT"),
+      metodo: metodoPago || "efectivo",
+      monto: Number(monto || 0),
+      fecha: fechaPagoLegible,
+      concepto: `Inscripción - ${curso}`,
+      periodo: "Inscripción",
+      numeroCuota: 0,
+    },
+    curso: {
+      nombre: curso,
+    },
+  };
+};
+
 export const generarTicketPagoBlob = async (data: TicketPagoData) => {
   const dataPreparada = await prepararTicketData(data);
   const doc = crearDocumento(dataPreparada);

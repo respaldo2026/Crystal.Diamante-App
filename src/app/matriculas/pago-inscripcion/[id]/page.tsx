@@ -8,7 +8,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
-import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { abrirTicketPagoDesdeBlob, buildEnrollmentTicketData, formatTicketReference, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 
 const { Title, Text } = Typography;
@@ -171,6 +171,7 @@ export default function PagoInscripcionPage() {
             const montoNumero = Number(monto ?? 0) || Number(pagoInscripcion?.monto ?? 0);
             const fechaPagoISO = fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
             const fechaPagoLegible = dayjs(fechaPagoISO).format("DD/MM/YYYY");
+            const referenciaPago = formatTicketReference(referencia || pagoInscripcion?.id, "MAT");
 
             // Actualizar el pago de inscripción
             const { error: errUpdate } = await supabaseBrowserClient
@@ -179,7 +180,7 @@ export default function PagoInscripcionPage() {
                     estado: "pagado",
                     monto: montoNumero,
                     metodo_pago: metodo_pago,
-                    referencia: referencia || null,
+                    referencia: referenciaPago,
                     fecha_pago: fechaPagoISO,
                     observaciones: `Pago registrado el ${dayjs().format("DD/MM/YYYY HH:mm")}`
                 })
@@ -206,37 +207,15 @@ export default function PagoInscripcionPage() {
                     .limit(1)
                     .maybeSingle();
 
-                const ticketData = {
-                    academia: {
-                        nombre: configAcademia?.nombre_academia || "Academia Crystal Diamante",
-                        ruc: configAcademia?.ruc || undefined,
-                        logoUrl: configAcademia?.logo_url || undefined,
-                        telefono: configAcademia?.telefono || configAcademia?.whatsapp || undefined,
-                        direccion: configAcademia?.direccion || undefined,
-                        email: configAcademia?.email || undefined,
-                        ticketTitulo: configAcademia?.ticket_titulo || undefined,
-                        ticketNota: configAcademia?.ticket_nota || undefined,
-                        ticketPie: configAcademia?.ticket_pie || undefined,
-                        ticketCampos: configAcademia?.ticket_campos || undefined,
-                    },
-                    estudiante: {
-                        nombre: estudiante?.nombre_completo || "Estudiante",
-                        identificacion: estudiante?.identificacion || undefined,
-                        telefono: estudiante?.telefono || undefined,
-                    },
-                    pago: {
-                        referencia: referencia || pagoInscripcion.id,
-                        metodo: metodo_pago || "efectivo",
-                        monto: montoNumero,
-                        fecha: fechaPagoLegible,
-                        concepto: `Inscripción - ${curso?.nombre ?? "Curso"}`,
-                        periodo: "Inscripción",
-                        numeroCuota: 0,
-                    },
-                    curso: {
-                        nombre: curso?.nombre ?? "Curso",
-                    },
-                } as const;
+                const ticketData = buildEnrollmentTicketData({
+                    configAcademia,
+                    estudiante,
+                    cursoNombre: curso?.nombre,
+                    monto: montoNumero,
+                    metodoPago: metodo_pago,
+                    fechaPagoLegible,
+                    referencia: referenciaPago,
+                });
 
                 const blob = await generarTicketPagoBlob(ticketData);
                 const placeholder = window.open("", "_blank");
@@ -270,7 +249,7 @@ export default function PagoInscripcionPage() {
                     concepto: `Pago de inscripción - ${curso?.nombre ?? "Curso"}`,
                     categoria: "inscripciones",
                     metodo_pago: metodo_pago || null,
-                    referencia: referencia || pagoInscripcion.id,
+                    referencia: referenciaPago,
                     descripcion: `Pago de inscripción de matrícula ${matriculaId}`,
                     estudiante_id: estudiante?.id ?? null,
                     ticket_url: ticketUrl,

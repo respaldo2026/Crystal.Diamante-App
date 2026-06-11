@@ -6,12 +6,9 @@ import { construirNombreGrupo } from "@utils/grupos";
 
 const { Page, Text, View, Document, StyleSheet, Image } = ReactPDF;
 
-const BRAND = "#c0306e";
-const BRAND_LIGHT = "#fdf0f6";
-const BRAND_DARK = "#8a1f4c";
-const GRAY = "#6b7280";
-const DARK = "#1c1c2e";
-const BORDER = "#e5e7eb";
+const GRAY = "#5b5b5b";
+const DARK = "#111111";
+const BORDER = "#d6d6d6";
 
 const styles = StyleSheet.create({
   page: {
@@ -25,12 +22,14 @@ const styles = StyleSheet.create({
   },
   /* ── HEADER ── */
   header: {
-    backgroundColor: BRAND,
     paddingTop: 14,
     paddingBottom: 12,
     paddingLeft: 12,
     paddingRight: 12,
     alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    borderBottomStyle: "solid",
   },
   logo: {
     width: 100,
@@ -41,18 +40,17 @@ const styles = StyleSheet.create({
   academiaName: {
     fontSize: 11,
     fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
+    color: DARK,
     textAlign: "center",
     marginBottom: 2,
   },
   academiaSubtitle: {
     fontSize: 7.5,
-    color: "rgba(255,255,255,0.82)",
+    color: GRAY,
     textAlign: "center",
   },
-  /* ── TITLE BAND ── */
+  /* ── TITLE ROW ── */
   titleBand: {
-    backgroundColor: BRAND_DARK,
     paddingTop: 6,
     paddingBottom: 6,
     paddingLeft: 12,
@@ -60,20 +58,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    borderBottomStyle: "solid",
   },
   titleText: {
     fontSize: 10,
     fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
+    color: DARK,
     letterSpacing: 0.5,
   },
   fechaText: {
     fontSize: 8,
-    color: "rgba(255,255,255,0.85)",
+    color: GRAY,
   },
   /* ── AMOUNT BOX ── */
   amountBox: {
-    backgroundColor: BRAND_LIGHT,
     paddingTop: 12,
     paddingBottom: 12,
     paddingLeft: 14,
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   amountValue: {
     fontSize: 22,
     fontFamily: "Helvetica-Bold",
-    color: BRAND,
+    color: DARK,
   },
   /* ── DETAILS SECTION ── */
   sectionPad: {
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: 7.5,
     fontFamily: "Helvetica-Bold",
-    color: BRAND,
+    color: DARK,
     textTransform: "uppercase",
     letterSpacing: 0.8,
     marginBottom: 7,
@@ -137,16 +137,15 @@ const styles = StyleSheet.create({
   },
   /* ── CONCEPT HIGHLIGHT ── */
   conceptoBox: {
-    backgroundColor: "#f9fafb",
     borderRadius: 4,
     paddingTop: 7,
     paddingBottom: 7,
     paddingLeft: 10,
     paddingRight: 10,
     marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: BRAND,
-    borderLeftStyle: "solid",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderStyle: "solid",
   },
   conceptoLabel: {
     fontSize: 7.5,
@@ -168,12 +167,14 @@ const styles = StyleSheet.create({
   },
   /* ── FOOTER ── */
   footer: {
-    backgroundColor: "#f9fafb",
     paddingTop: 10,
     paddingBottom: 10,
     paddingLeft: 14,
     paddingRight: 14,
     alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    borderTopStyle: "solid",
   },
   footerText: {
     fontSize: 8,
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
   },
   footerBrand: {
     fontSize: 7.5,
-    color: BRAND,
+    color: DARK,
     textAlign: "center",
     marginTop: 4,
     fontFamily: "Helvetica-Bold",
@@ -317,18 +318,12 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
         </View>
 
         {/* ── TITLE BAND ── */}
-        {campos.titulo ? (
+        {(campos.titulo || campos.fecha) ? (
           <View style={styles.titleBand}>
             <Text style={styles.titleText}>
-              {academia.ticketTitulo || "RECIBO DE PAGO"}
+              {campos.titulo ? academia.ticketTitulo || "RECIBO DE PAGO" : "RECIBO"}
             </Text>
-            {campos.fecha ? (
-              <Text style={styles.fechaText}>{pago.fecha}</Text>
-            ) : null}
-          </View>
-        ) : campos.fecha ? (
-          <View style={styles.titleBand}>
-            <Text style={styles.fechaText}>Fecha: {pago.fecha}</Text>
+            {campos.fecha ? <Text style={styles.fechaText}>{pago.fecha}</Text> : null}
           </View>
         ) : null}
 
@@ -411,8 +406,8 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
 
         {/* ── NOTA ── */}
         {campos.nota && academia.ticketNota ? (
-          <View style={[styles.sectionPad, { backgroundColor: BRAND_LIGHT }]}>
-            <Text style={[styles.detailValueNormal, { textAlign: "center", color: BRAND_DARK }]}>
+          <View style={styles.sectionPad}>
+            <Text style={[styles.detailValueNormal, { textAlign: "center" }]}>
               {academia.ticketNota}
             </Text>
           </View>
