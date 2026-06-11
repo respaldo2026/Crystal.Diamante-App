@@ -2097,6 +2097,18 @@ export default function PortalEstudiante() {
     return map;
   }, [calificaciones]);
 
+  const cantidadCalificacionesPorMatricula = React.useMemo(() => {
+    const map = new Map<string, number>();
+
+    (calificaciones || []).forEach((item: any) => {
+      const matriculaId = String(item?.matricula_id || "");
+      if (!matriculaId) return;
+      map.set(matriculaId, (map.get(matriculaId) || 0) + 1);
+    });
+
+    return map;
+  }, [calificaciones]);
+
   const misCursosResumen = React.useMemo(() => {
     return (matriculas || []).map((matricula: any) => {
       const matriculaId = String(matricula?.id || "");
@@ -2115,11 +2127,14 @@ export default function PortalEstudiante() {
 
       const notaMatricula = Number(matricula?.nota_final);
       const notaPromedio = notaPromedioPorMatricula.get(matriculaId);
+      const cantidadCalificaciones = cantidadCalificacionesPorMatricula.get(matriculaId) || 0;
       const notaReal = Number.isFinite(notaMatricula)
         ? notaMatricula
         : Number.isFinite(notaPromedio)
         ? Number(notaPromedio)
         : 0;
+      const tieneNotaRegistrada = (Number.isFinite(notaMatricula) && notaMatricula > 0) || (Number.isFinite(notaPromedio) && Number(notaPromedio) > 0);
+      const tieneRegistrosAcademicos = resumenAsistencia.dictadas > 0 || cantidadCalificaciones > 0 || tieneNotaRegistrada;
 
       const escalaCinco = notaReal > 0 && notaReal <= 5;
       const umbralAprobacion = escalaCinco ? 3.0 : 70;
@@ -2142,6 +2157,8 @@ export default function PortalEstudiante() {
           estadoReal = "cancelado";
         } else if (totalClases > 0 && resumenAsistencia.dictadas >= totalClases) {
           estadoReal = notaReal >= umbralAprobacion ? "aprobado" : "finalizado";
+        } else if (!tieneRegistrosAcademicos && estadoMatricula === "activo") {
+          estadoReal = "por iniciar";
         } else if (estadoMatricula === "activo" || resumenAsistencia.dictadas > 0) {
           estadoReal = "en curso";
         }
@@ -2157,14 +2174,16 @@ export default function PortalEstudiante() {
         horaFin: matricula?.cursos?.hora_fin || null,
         horario: matricula?.cursos?.horario || null,
         nota: notaReal,
-        notaDisplay: escalaCinco ? `${notaReal.toFixed(1)}/5.0` : `${Math.round(notaReal)}/100`,
+        notaDisplay: tieneNotaRegistrada ? (escalaCinco ? `${notaReal.toFixed(1)}/5.0` : `${Math.round(notaReal)}/100`) : "Sin nota",
         notaPercent: Math.max(0, Math.min(100, porcentajeNota)),
         metaPercent: Math.max(0, Math.min(100, metaAprobatoria)),
         umbralAprobacion,
         escalaCinco,
+        tieneRegistrosAcademicos,
         estado: estadoReal,
         estadoColor:
           estadoReal === "aprobado" ? "green" :
+          estadoReal === "por iniciar" ? "gold" :
           estadoReal === "reprobado" || estadoReal === "cancelado" ? "red" :
           estadoReal === "en curso" || estadoReal === "activo" ? "blue" : "orange",
         asistencias: resumenAsistencia.presentes,
@@ -2176,7 +2195,7 @@ export default function PortalEstudiante() {
         ultimaFechaClase: resumenAsistencia.ultimaFecha,
       };
     });
-  }, [matriculas, notaPromedioPorMatricula, resumenAsistenciaPorMatricula, totalClasesPorPrograma]);
+  }, [matriculas, notaPromedioPorMatricula, cantidadCalificacionesPorMatricula, resumenAsistenciaPorMatricula, totalClasesPorPrograma]);
 
   const renderSeccionActiva = () => {
     if (activeTab === "1") {
@@ -2209,8 +2228,8 @@ export default function PortalEstudiante() {
                             type="dashboard"
                             percent={curso.metaPercent}
                             width={isMobile ? 94 : 108}
-                            format={(percent) => `${percent}%`}
-                            status={curso.nota >= curso.umbralAprobacion ? "success" : "active"}
+                            format={(percent) => curso.tieneRegistrosAcademicos ? `${percent}%` : "Pend."}
+                            status={curso.tieneRegistrosAcademicos && curso.nota >= curso.umbralAprobacion ? "success" : "active"}
                           />
                           <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
                             Meta aprobatoria
@@ -2223,20 +2242,29 @@ export default function PortalEstudiante() {
                     </div>
 
                     <div style={{ marginTop: 12 }}>
-                      <Row gutter={[8, 8]}>
-                        <Col span={12}>
-                          <Statistic title="Asistencias" value={curso.asistencias} valueStyle={{ fontSize: 18 }} />
-                        </Col>
-                        <Col span={12}>
-                          <Statistic title="Faltas" value={curso.faltas} valueStyle={{ fontSize: 18, color: curso.faltas > 0 ? "#cf1322" : undefined }} />
-                        </Col>
-                        <Col span={12}>
-                          <Statistic title="Clases dictadas" value={curso.clasesDictadas} suffix={curso.totalClases ? `/ ${curso.totalClases}` : undefined} valueStyle={{ fontSize: 18 }} />
-                        </Col>
-                        <Col span={12}>
-                          <Statistic title="Asistencia" value={curso.porcentajeAsistencia} suffix="%" valueStyle={{ fontSize: 18 }} />
-                        </Col>
-                      </Row>
+                      {curso.tieneRegistrosAcademicos ? (
+                        <Row gutter={[8, 8]}>
+                          <Col span={12}>
+                            <Statistic title="Asistencias" value={curso.asistencias} valueStyle={{ fontSize: 18 }} />
+                          </Col>
+                          <Col span={12}>
+                            <Statistic title="Faltas" value={curso.faltas} valueStyle={{ fontSize: 18, color: curso.faltas > 0 ? "#cf1322" : undefined }} />
+                          </Col>
+                          <Col span={12}>
+                            <Statistic title="Clases dictadas" value={curso.clasesDictadas} suffix={curso.totalClases ? `/ ${curso.totalClases}` : undefined} valueStyle={{ fontSize: 18 }} />
+                          </Col>
+                          <Col span={12}>
+                            <Statistic title="Asistencia" value={curso.porcentajeAsistencia} suffix="%" valueStyle={{ fontSize: 18 }} />
+                          </Col>
+                        </Row>
+                      ) : (
+                        <Alert
+                          type="info"
+                          showIcon
+                          message="Aún no hay asistencias ni calificaciones registradas"
+                          description={curso.totalClases ? `Este curso tiene ${curso.totalClases} clases programadas. La información aparecerá cuando se registren las primeras asistencias o notas.` : "La información aparecerá cuando se registren las primeras asistencias o notas."}
+                        />
+                      )}
                     </div>
 
                     {(() => {
