@@ -1401,6 +1401,7 @@ export default function PortalEstudiante() {
     });
 
     const modalidadMateriales = normalizeModalidadPago(matriculaSeleccionada?.modalidad_pago);
+    const esPlanMensualSeleccionado = modalidadMateriales !== "POR_CLASE";
     const porClaseTieneMoraMatriculaSeleccionada = modalidadMateriales === "POR_CLASE"
       && pagosConPendientes.some((p: any) => {
         if (String(p?.matricula_id || "") !== String(matriculaSeleccionada?.id || "")) return false;
@@ -1408,6 +1409,30 @@ export default function PortalEstudiante() {
         const fecha = getFechaVencimientoEfectiva(p);
         return Boolean(fecha && dayjs().startOf("day").isAfter(fecha));
       });
+
+    const ciclosMensualesPagados = esPlanMensualSeleccionado
+      ? (() => {
+          const cuotasPagadas = new Set<number>();
+
+          (pagosConPendientes || []).forEach((pago: any) => {
+            if (String(pago?.matricula_id || "") !== String(matriculaSeleccionada?.id || "")) return;
+
+            const numeroCuota = parseNumeroCuota(pago);
+            if (!numeroCuota || numeroCuota <= 0) return;
+
+            if (getVisiblePaymentStatusWithGrace(pago) === "pagado") {
+              cuotasPagadas.add(numeroCuota);
+            }
+          });
+
+          let consecutivas = 0;
+          while (cuotasPagadas.has(consecutivas + 1)) {
+            consecutivas += 1;
+          }
+
+          return consecutivas;
+        })()
+      : 0;
 
     const resumenPlanMateriales =
       modalidadMateriales === "POR_CLASE"
@@ -1553,8 +1578,11 @@ export default function PortalEstudiante() {
             const temasCiclo = obtenerTemasCiclo(ciclo);
             const materialesGenerales = obtenerMaterialesCiclo(cicloId);
 
-            // Estado en cascada de este ciclo: bloqueado si hay un ciclo previo incompleto
-            const cicloBloqueado = index > primerCicloIncompletoIndex;
+            // Para planes mensuales, los ciclos visibles deben corresponder a los ciclos ya pagados.
+            // Para pago por clase, se mantiene la cascada académica por progreso.
+            const cicloBloqueado = esPlanMensualSeleccionado
+              ? index >= ciclosMensualesPagados
+              : index > primerCicloIncompletoIndex;
             // Índice de la primera clase no completada (= clase "actual"); todas las posteriores bloqueadas
             const primerIndexActual = cicloBloqueado ? 0 : getPrimerTemaPendienteIndex(temasCiclo);
 
@@ -1655,7 +1683,7 @@ export default function PortalEstudiante() {
                     // - vistas de materiales/kits: solo por módulo, nunca por clase
                     const temaBloqueado = vista === "plan"
                       ? (cicloBloqueado || temaIndex > primerIndexActual || bloqueoTemaActualPorPagoPorClase)
-                      : (cicloBloqueado || bloqueoTemaActualPorPagoPorClase);
+                      : cicloBloqueado;
                     const quizTema = getQuizByTemaId(temaId);
                     const notaQuizTema = getNotaByTemaId(temaId);
                     const notaActividadTema = actividadPorTemaMatricula.get(`${matriculaSeleccionada?.id || ""}-${temaId}`) ?? null;
