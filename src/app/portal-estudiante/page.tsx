@@ -1074,6 +1074,16 @@ export default function PortalEstudiante() {
     return texto;
   };
 
+  const textoAportaInformacion = (valor?: string | null, referencia?: string | null) => {
+    const texto = String(valor || "").replace(/\s+/g, " ").trim();
+    const base = String(referencia || "").replace(/\s+/g, " ").trim();
+
+    if (!texto) return false;
+    if (!base) return true;
+
+    return normalizarTexto(texto) !== normalizarTexto(base);
+  };
+
   const renderFinanciero = () => {
     const formatPagoCOP = (valor?: number | null) => `$ ${Number(valor || 0).toLocaleString()}`;
     const getConceptoPago = (pago: any) => {
@@ -2338,7 +2348,6 @@ export default function PortalEstudiante() {
                 title: formatDate(r?.fecha),
                 extra: <Tag color={r?.estado === "presente" ? "green" : "red"}>{String(r?.estado || "-").toUpperCase()}</Tag>,
                 rows: [
-                  { label: "Curso", value: construirNombreGrupo(r?.matriculas?.cursos) },
                   { label: "Clase #", value: claseNumero || "-" },
                   { label: "Tema visto", value: tema },
                   { label: "Calendario", value: estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : undefined },
@@ -2353,7 +2362,6 @@ export default function PortalEstudiante() {
               locale={{ emptyText: "No hay registros de asistencia" }}
               columns={[
                 { title: "Fecha", dataIndex: "fecha", render: (f) => formatDate(f) },
-                { title: "Curso", render: (_, r: any) => construirNombreGrupo(r.matriculas?.cursos) },
                 { title: "Clase #", dataIndex: "clase_numero", width: 90, render: (n) => n || "-" },
                 {
                   title: "Tema visto",
@@ -2391,6 +2399,7 @@ export default function PortalEstudiante() {
                 const aprobado = esEscala5 ? nota >= 3.0 : nota >= 60;
                 const display = Number.isFinite(nota) ? (esEscala5 ? nota.toFixed(1) : `${nota}/100`) : "-";
                 const tipo = String(r?.tipo_evaluacion || "otro");
+                const observaciones = textoAportaInformacion(r?.observaciones, r?.concepto) ? r?.observaciones : undefined;
                 const colores: Record<string, string> = {
                   examen: "blue",
                   quiz: "purple",
@@ -2404,10 +2413,9 @@ export default function PortalEstudiante() {
                   title: r?.concepto || "Calificación",
                   extra: <Tag color={colores[tipo] || "default"}>{tipo.toUpperCase()}</Tag>,
                   rows: [
-                    { label: "Curso", value: construirNombreGrupo(mat?.cursos) || "-" },
                     { label: "Nota", value: <Text strong style={{ color: aprobado ? "#52c41a" : "#ff4d4f" }}>{display}</Text> },
                     { label: "Fecha", value: r?.fecha_evaluacion ? dayjs(r.fecha_evaluacion).format("DD/MM/YYYY") : "-" },
-                    { label: "Observaciones", value: r?.observaciones || undefined },
+                    { label: "Observaciones", value: observaciones },
                   ],
                 };
               }, "No hay calificaciones registradas") : <Table
@@ -2470,7 +2478,7 @@ export default function PortalEstudiante() {
                         {
                           title: "Observaciones",
                           dataIndex: "observaciones",
-                          render: (v: string) => v || "-",
+                          render: (v: string, r: any) => (textoAportaInformacion(v, r?.concepto) ? v : "-"),
                         },
                       ]
                     : []),
