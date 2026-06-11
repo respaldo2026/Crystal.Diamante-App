@@ -1086,6 +1086,28 @@ export default function PortalEstudiante() {
 
   const renderFinanciero = () => {
     const formatPagoCOP = (valor?: number | null) => `$ ${Number(valor || 0).toLocaleString()}`;
+    const renderPlanTag = (pago: any) => {
+      const matricula = matriculas.find((m: any) => String(m.id) === String(pago.matricula_id));
+      const plan = getPaymentPlanDisplay({
+        modalidadPago: matricula?.modalidad_pago,
+        valorMensualPlan: matricula?.valor_mensual_plan,
+        montoPorClase: matricula?.valor_por_clase,
+        porcentajeProductos: matricula?.porcentaje_productos,
+      });
+
+      return <Tag color={plan.color}>{plan.label}</Tag>;
+    };
+
+    const renderEstadoPagoTag = (pago: any) => {
+      const visibleStatus = getVisiblePaymentStatusWithGrace(pago);
+
+      if (visibleStatus === "vencido") return <Tag color="red">VENCIDO</Tag>;
+      if (visibleStatus === "abono_parcial") return <Tag color="gold">ABONO PARCIAL</Tag>;
+      if (visibleStatus === "pagado") return <Tag color="green">PAGADO</Tag>;
+
+      return <Tag style={{ color: "#8c8c8c", borderColor: "#d9d9d9", fontSize: "11px" }}>PENDIENTE</Tag>;
+    };
+
     const getConceptoPago = (pago: any) => {
       const matricula = matriculas.find((m: any) => String(m?.id) === String(pago?.matricula_id));
       const modalidad = normalizeModalidadPago(matricula?.modalidad_pago);
@@ -1164,35 +1186,34 @@ export default function PortalEstudiante() {
             className="shadow-sm portal-finance-card portal-finance-card--pending"
             extra={<Tag color={pagosVencidos > 0 ? "red" : "orange"}>{pendientes.length} pendientes</Tag>}
           >
-            <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-              Aquí ves primero lo que debes cubrir y cuánto sigue pendiente en cada cuota.
-            </Text>
+            {!isMobile ? (
+              <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+                Aquí ves primero lo que debes cubrir y cuánto sigue pendiente en cada cuota.
+              </Text>
+            ) : null}
             {pendientes.length > 0 ? (
               isMobile ? renderMobileListCards(pendientes, (r: any) => {
-                const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
-                const plan = getPaymentPlanDisplay({
-                  modalidadPago: matricula?.modalidad_pago,
-                  valorMensualPlan: matricula?.valor_mensual_plan,
-                  montoPorClase: matricula?.valor_por_clase,
-                  porcentajeProductos: matricula?.porcentaje_productos,
-                });
-                const visibleStatus = getVisiblePaymentStatusWithGrace(r);
                 const fechaEfectiva = getFechaVencimientoEfectiva(r);
+                const descuento = Number(getDescuentoAplicado(r) || 0);
+                const abonado = Number(getTotalAbonado(r) || 0);
+                const programado = Number(getMontoProgramado(r) || r?.monto || 0);
+                const saldo = Number(getSaldoPendiente(r) || 0);
 
                 return {
                   key: String(r.id),
-                  title: getConceptoPago(r),
-                  extra:
-                    visibleStatus === "vencido" ? <Tag color="red">VENCIDO</Tag>
-                    : visibleStatus === "abono_parcial" ? <Tag color="gold">ABONO PARCIAL</Tag>
-                    : <Tag style={{ color: '#8c8c8c', borderColor: '#d9d9d9', fontSize: '11px' }}>PENDIENTE</Tag>,
+                  title: (
+                    <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                      <Text strong>{getConceptoPago(r)}</Text>
+                      {renderPlanTag(r)}
+                    </Space>
+                  ),
+                  extra: renderEstadoPagoTag(r),
                   rows: [
-                    { label: "Plan", value: <Tag color={plan.color}>{plan.label}</Tag> },
                     { label: "Vence", value: fechaEfectiva ? fechaEfectiva.format("DD/MM/YYYY") : "-" },
-                    { label: "Monto programado", value: formatPagoCOP(getMontoProgramado(r) || r?.monto) },
-                    { label: "Abonado", value: formatPagoCOP(getTotalAbonado(r)) },
-                    { label: "Descuento", value: formatPagoCOP(getDescuentoAplicado(r)) },
-                    { label: "Saldo", value: formatPagoCOP(getSaldoPendiente(r)) },
+                    { label: "Programado", value: formatPagoCOP(programado) },
+                    { label: "Abonado", value: abonado > 0 ? formatPagoCOP(abonado) : undefined },
+                    { label: "Descuento", value: descuento > 0 ? formatPagoCOP(descuento) : undefined },
+                    { label: "Saldo", value: formatPagoCOP(saldo) },
                   ],
                 };
               }) : <Table 
@@ -1221,16 +1242,7 @@ export default function PortalEstudiante() {
                   },
                   {
                     title: 'Plan',
-                    render: (_, r: any) => {
-                      const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
-                      const plan = getPaymentPlanDisplay({
-                        modalidadPago: matricula?.modalidad_pago,
-                        valorMensualPlan: matricula?.valor_mensual_plan,
-                        montoPorClase: matricula?.valor_por_clase,
-                        porcentajeProductos: matricula?.porcentaje_productos,
-                      });
-                      return <Tag color={plan.color}>{plan.label}</Tag>;
-                    },
+                    render: (_, r: any) => renderPlanTag(r),
                   },
                   { 
                     title: 'Vence', 
@@ -1265,12 +1277,7 @@ export default function PortalEstudiante() {
                   },
                   { 
                     title: 'Estado', 
-                    render: (_, r: any) => {
-                      const visibleStatus = getVisiblePaymentStatusWithGrace(r);
-                      if (visibleStatus === "vencido") return <Tag color="red">VENCIDO</Tag>;
-                      if (visibleStatus === "abono_parcial") return <Tag color="gold">ABONO PARCIAL</Tag>;
-                      return <Tag style={{ color: '#8c8c8c', borderColor: '#d9d9d9', fontSize: '11px' }}>PENDIENTE</Tag>;
-                    } 
+                    render: (_, r: any) => renderEstadoPagoTag(r)
                   }
                 ]}
               />
@@ -1285,29 +1292,30 @@ export default function PortalEstudiante() {
             className="shadow-sm portal-finance-card portal-finance-card--paid"
             extra={<Tag color="green">{realizados.length} pagos registrados</Tag>}
           >
-            <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-              Este bloque resalta claramente lo que ya quedó pagado y confirmado.
-            </Text>
+            {!isMobile ? (
+              <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+                Este bloque resalta claramente lo que ya quedó pagado y confirmado.
+              </Text>
+            ) : null}
              {isMobile ? renderMobileListCards(realizados, (r: any) => {
-                const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
-                const plan = getPaymentPlanDisplay({
-                  modalidadPago: matricula?.modalidad_pago,
-                  valorMensualPlan: matricula?.valor_mensual_plan,
-                  montoPorClase: matricula?.valor_por_clase,
-                  porcentajeProductos: matricula?.porcentaje_productos,
-                });
+                const descuento = Number(getDescuentoAplicado(r) || 0);
+                const abonado = Number(getTotalAbonado(r) || 0);
+                const programado = Number(getMontoProgramado(r) || 0);
 
                 return {
                   key: String(r.id),
-                  title: getConceptoPago(r),
-                  extra: <Tag color="green">PAGADO</Tag>,
+                  title: (
+                    <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                      <Text strong>{getConceptoPago(r)}</Text>
+                      {renderPlanTag(r)}
+                    </Space>
+                  ),
+                  extra: renderEstadoPagoTag(r),
                   rows: [
-                    { label: "Plan", value: <Tag color={plan.color}>{plan.label}</Tag> },
                     { label: "Fecha", value: r?.fecha_pago ? dayjs(r.fecha_pago).format("DD/MM/YYYY") : "-" },
-                    { label: "Programado", value: formatPagoCOP(getMontoProgramado(r)) },
-                    { label: "Abonado", value: formatPagoCOP(getTotalAbonado(r)) },
-                    { label: "Descuento", value: formatPagoCOP(getDescuentoAplicado(r)) },
-                    { label: "Monto", value: formatPagoCOP(r?.monto) },
+                    { label: "Pagado", value: formatPagoCOP(abonado || r?.monto) },
+                    { label: "Programado", value: programado > 0 && programado !== Number(r?.monto || 0) ? formatPagoCOP(programado) : undefined },
+                    { label: "Descuento", value: descuento > 0 ? formatPagoCOP(descuento) : undefined },
                   ],
                 };
               }) : <Table 
@@ -1321,16 +1329,7 @@ export default function PortalEstudiante() {
                   { title: 'Concepto', dataIndex: 'periodo_pagado', render: (_, r: any) => getConceptoPago(r) },
                   {
                     title: 'Plan',
-                    render: (_, r: any) => {
-                      const matricula = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
-                      const plan = getPaymentPlanDisplay({
-                        modalidadPago: matricula?.modalidad_pago,
-                        valorMensualPlan: matricula?.valor_mensual_plan,
-                        montoPorClase: matricula?.valor_por_clase,
-                        porcentajeProductos: matricula?.porcentaje_productos,
-                      });
-                      return <Tag color={plan.color}>{plan.label}</Tag>;
-                    },
+                    render: (_, r: any) => renderPlanTag(r),
                   },
                   { title: 'Fecha', dataIndex: 'fecha_pago', render: (d) => d ? dayjs(d).format("DD/MM/YYYY") : '-' },
                   { title: 'Programado', render: (_, r: any) => formatPagoCOP(getMontoProgramado(r)) },
