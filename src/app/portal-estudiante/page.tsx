@@ -124,6 +124,27 @@ type TemaVisualConfig = {
   label: string;
 };
 
+const CURSO_UNAS_MATCHERS = [/uñas|unas|manicur|pedicur|semipermanent|esmalt|acril|gel|nail/i];
+
+const TEMA_VISUAL_PRESETS_UNAS: Array<{ matchers: RegExp[]; config: TemaVisualConfig }> = [
+  {
+    matchers: [/bioseg|higien|seguridad|esteriliz|anatom/i],
+    config: { palette: ["#86efac", "#f0fdf4"], accent: "#166534", label: "CARE" },
+  },
+  {
+    matchers: [/pedi|pie|spa|duraz|masaje|relaja|hidrat/i],
+    config: { palette: ["#99f6e4", "#f0fdfa"], accent: "#0f766e", label: "PEDI" },
+  },
+  {
+    matchers: [/maquill|frances|decor|art|color/i],
+    config: { palette: ["#f9a8d4", "#fdf2f8"], accent: "#9d174d", label: "ART" },
+  },
+  {
+    matchers: [/manicur|esmalt|acril|gel|soft gel|polygel|tradicional|semi/i],
+    config: { palette: ["#fda4af", "#fff1f2"], accent: "#be185d", label: "NAILS" },
+  },
+];
+
 const TEMA_VISUAL_PRESETS: Array<{ matchers: RegExp[]; config: TemaVisualConfig }> = [
   {
     matchers: [/uñas|unas|acrilic|manicure|pedicure/i],
@@ -169,8 +190,21 @@ const DEFAULT_TEMA_VISUAL: TemaVisualConfig = {
   label: "TEMA",
 };
 
-const resolveTemaVisual = (tema: any): TemaVisualConfig => {
+const DEFAULT_TEMA_VISUAL_UNAS: TemaVisualConfig = {
+  palette: ["#fda4af", "#fff1f2"],
+  accent: "#be185d",
+  label: "NAILS",
+};
+
+const resolveTemaVisual = (tema: any, cursoContext?: any): TemaVisualConfig => {
   const text = `${String(tema?.nombre_curso || tema?.titulo || "")} ${String(tema?.descripcion || "")}`;
+  const cursoText = `${String(cursoContext?.nombre || "")} ${String(cursoContext?.nombre_curso || "")} ${String(cursoContext?.nombre_grupo || "")} ${String(cursoContext?.programas?.nombre || "")} ${String(cursoContext?.programa?.nombre || "")}`;
+  const esCursoUnas = CURSO_UNAS_MATCHERS.some((matcher) => matcher.test(cursoText));
+
+  if (esCursoUnas) {
+    return TEMA_VISUAL_PRESETS_UNAS.find((preset) => preset.matchers.some((matcher) => matcher.test(text)))?.config || DEFAULT_TEMA_VISUAL_UNAS;
+  }
+
   return TEMA_VISUAL_PRESETS.find((preset) => preset.matchers.some((matcher) => matcher.test(text)))?.config || DEFAULT_TEMA_VISUAL;
 };
 
@@ -181,8 +215,8 @@ const getTemaInitials = (tema: any) => {
   return initials || "TM";
 };
 
-const buildTemaImageDataUri = (tema: any) => {
-  const visual = resolveTemaVisual(tema);
+const buildTemaImageDataUri = (tema: any, cursoContext?: any) => {
+  const visual = resolveTemaVisual(tema, cursoContext);
   const initials = getTemaInitials(tema);
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" viewBox="0 0 160 120" fill="none">
@@ -1658,8 +1692,8 @@ export default function PortalEstudiante() {
                     const notaQuizTema = getNotaByTemaId(temaId);
                     const notaActividadTema = actividadPorTemaMatricula.get(`${matriculaSeleccionada?.id || ""}-${temaId}`) ?? null;
                     const colorAvatarTema = temaBloqueado ? "#bfbfbf" : temaCompletado ? "#16a34a" : colorNumeroTema;
-                    const temaVisual = resolveTemaVisual(tema);
-                    const temaImageSrc = buildTemaImageDataUri(tema);
+                    const temaVisual = resolveTemaVisual(tema, matriculaSeleccionada?.cursos);
+                    const temaImageSrc = buildTemaImageDataUri(tema, matriculaSeleccionada?.cursos);
                     const insumosMarcados = insumosTema.filter((insumo: any) => {
                       const key = buildChecklistKey(
                         String(matriculaSeleccionada.id),
