@@ -305,6 +305,8 @@ export default function PortalEstudiante() {
   const [iframePromptVisible, setIframePromptVisible] = useState(false);
   const [iframeTrackingSupported, setIframeTrackingSupported] = useState(true);
   const academicContentRequestedRef = useRef(false);
+  const [academicContentLoading, setAcademicContentLoading] = useState(false);
+  const [academicContentReady, setAcademicContentReady] = useState(false);
   const iframeEmbedRef = useRef<HTMLIFrameElement>(null);
 
   const applyPortalPayload = useCallback((payload: any) => {
@@ -750,12 +752,21 @@ export default function PortalEstudiante() {
   }, [loadPortalData]);
 
   useEffect(() => {
+    if (loading) return;
+    void import("@/modules/portal-estudiante/components/PortalRutaAcademicaSection");
+  }, [loading]);
+
+  useEffect(() => {
     const needsAcademicContent = activeTab === "3" || activeTab === "5";
     if (!needsAcademicContent || academicContentRequestedRef.current) return;
     if (loading) return;
 
     academicContentRequestedRef.current = true;
-    loadPortalData({ includeAcademicContent: true });
+    setAcademicContentLoading(true);
+    void loadPortalData({ includeAcademicContent: true }).finally(() => {
+      setAcademicContentLoading(false);
+      setAcademicContentReady(true);
+    });
   }, [activeTab, loading, loadPortalData]);
 
   useEffect(() => {
@@ -1875,6 +1886,14 @@ export default function PortalEstudiante() {
     }
 
     if (activeTab === "2") return renderFinanciero();
+
+    if ((activeTab === "3" || activeTab === "5") && academicContentLoading && !academicContentReady) {
+      return (
+        <Card size="small">
+          <Skeleton active paragraph={{ rows: 6 }} />
+        </Card>
+      );
+    }
 
     // ── Bloqueo por mora ───────────────────────────────────────────
     if (enMoraBloqueante && (activeTab === "3" || activeTab === "5")) {
