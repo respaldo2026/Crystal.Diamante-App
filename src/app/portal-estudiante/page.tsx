@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { logger } from "@utils/logger";
 import {
   Card,
@@ -205,6 +206,7 @@ const buildTemaImageDataUri = (tema: any) => {
 };
 
 export default function PortalEstudiante() {
+  const router = useRouter();
   const portalMobileUiV1 = useFeatureFlag("portal_mobile_ui_v1", true);
   const portalDelayedLoaderV1 = useFeatureFlag("portal_delayed_loader_v1", true);
   const isMobileDetected = useIsMobile("md");
@@ -263,12 +265,19 @@ export default function PortalEstudiante() {
   }, []);
 
   const handlePortalAuthError = useCallback(() => {
-    message.error("No autenticado");
-  }, []);
+    message.error("Tu sesión expiró. Inicia sesión nuevamente.");
+    router.replace("/login");
+  }, [router]);
 
   const handlePortalProfileError = useCallback(() => {
     message.error("Perfil no encontrado. Contacta a la administración.");
-  }, []);
+    router.replace("/login?error=email-no-registrado");
+  }, [router]);
+
+  const handlePortalAccessDenied = useCallback(() => {
+    message.error("Esta cuenta no tiene acceso al panel de estudiante.");
+    router.replace("/");
+  }, [router]);
 
   const handlePortalUnknownError = useCallback((error: unknown) => {
     logger.error("Error:", error);
@@ -287,6 +296,7 @@ export default function PortalEstudiante() {
     onSuccessAction: applyPortalPayload,
     onAuthErrorAction: handlePortalAuthError,
     onProfileErrorAction: handlePortalProfileError,
+    onAccessDeniedAction: handlePortalAccessDenied,
     onUnknownErrorAction: handlePortalUnknownError,
   });
 

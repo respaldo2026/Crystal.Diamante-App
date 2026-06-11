@@ -9,7 +9,7 @@ import {
 import { extractClassNumber, getMaterialCanonicalKey } from "@/modules/portal-estudiante/utils";
 import { construirNombreGrupo } from "@utils/grupos";
 
-type PortalDataErrorCode = "NOT_AUTHENTICATED" | "PROFILE_NOT_FOUND" | "UNKNOWN";
+type PortalDataErrorCode = "NOT_AUTHENTICATED" | "PROFILE_NOT_FOUND" | "ACCESS_DENIED" | "UNKNOWN";
 
 export type PortalDataResult =
   | {
@@ -116,6 +116,10 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
 
     if (errPerfil || !perfil) {
       return { ok: false, code: "PROFILE_NOT_FOUND", error: errPerfil };
+    }
+
+    if (String(perfil?.rol || "").toLowerCase() !== "estudiante") {
+      return { ok: false, code: "ACCESS_DENIED", error: new Error("El perfil autenticado no pertenece a un estudiante") };
     }
 
     const whatsappAgente = normalizarTelefonoWhatsapp((config as any)?.whatsapp_agente || (config as any)?.whatsapp || null);

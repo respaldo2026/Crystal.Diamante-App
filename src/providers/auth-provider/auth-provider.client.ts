@@ -50,8 +50,9 @@ export const authProvider: AuthProvider = {
 
         const perfilEmail = (perfil?.email || "").toLowerCase();
         const authEmail = (data.user.email || "").toLowerCase();
+        const sameIdentity = String(perfil?.id || "") === String(data.user.id || "");
 
-        if (perfilError || !perfil || !perfilEmail || perfilEmail !== authEmail) {
+        if (perfilError || !perfil || !perfilEmail || perfilEmail !== authEmail || !sameIdentity) {
           await supabaseBrowserClient.auth.signOut();
           return {
             success: false,

@@ -27,6 +27,7 @@ type UsePortalDataParams = {
   onSuccessAction: (payload: PortalPayload) => void;
   onAuthErrorAction: () => void;
   onProfileErrorAction: () => void;
+  onAccessDeniedAction: () => void;
   onUnknownErrorAction: (error: unknown) => void;
 };
 
@@ -34,6 +35,7 @@ export const usePortalData = ({
   onSuccessAction,
   onAuthErrorAction,
   onProfileErrorAction,
+  onAccessDeniedAction,
   onUnknownErrorAction,
 }: UsePortalDataParams) => {
   const [loading, setLoading] = useState(true);
@@ -42,6 +44,7 @@ export const usePortalData = ({
   const onSuccessRef = useRef(onSuccessAction);
   const onAuthErrorRef = useRef(onAuthErrorAction);
   const onProfileErrorRef = useRef(onProfileErrorAction);
+  const onAccessDeniedRef = useRef(onAccessDeniedAction);
   const onUnknownErrorRef = useRef(onUnknownErrorAction);
 
   useEffect(() => {
@@ -55,6 +58,10 @@ export const usePortalData = ({
   useEffect(() => {
     onProfileErrorRef.current = onProfileErrorAction;
   }, [onProfileErrorAction]);
+
+  useEffect(() => {
+    onAccessDeniedRef.current = onAccessDeniedAction;
+  }, [onAccessDeniedAction]);
 
   useEffect(() => {
     onUnknownErrorRef.current = onUnknownErrorAction;
@@ -79,6 +86,11 @@ export const usePortalData = ({
 
         if (result.code === "PROFILE_NOT_FOUND") {
           onProfileErrorRef.current();
+          return;
+        }
+
+        if (result.code === "ACCESS_DENIED") {
+          onAccessDeniedRef.current();
           return;
         }
 
