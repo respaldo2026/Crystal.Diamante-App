@@ -1060,6 +1060,20 @@ export default function PortalEstudiante() {
     </Space>
   );
 
+  const limpiarTemaAsistencia = (valor?: string | null, claseNumero?: number | string | null) => {
+    const texto = String(valor || "").replace(/\s+/g, " ").trim();
+    if (!texto) return "-";
+
+    const numero = Number(claseNumero || 0);
+    if (Number.isFinite(numero) && numero > 0) {
+      return texto
+        .replace(new RegExp(`^(?:Clase\\s*#?\\s*${numero}\\s*[-:–]\\s*)+`, "i"), "")
+        .trim() || texto;
+    }
+
+    return texto;
+  };
+
   const renderFinanciero = () => {
     const formatPagoCOP = (valor?: number | null) => `$ ${Number(valor || 0).toLocaleString()}`;
     const getConceptoPago = (pago: any) => {
@@ -2313,8 +2327,10 @@ export default function PortalEstudiante() {
             style={{ marginTop: 16 }}
           >
             {isMobile ? renderMobileListCards(asistencias, (r: any) => {
-              const tema = temaSincronizadoAsistenciaById.get(String(r?.id || "")) || r?.tema_visto || "-";
-              const registro = String(r?.registro_clase || "").trim();
+              const asistenciaId = String(r?.id || "");
+              const claseNumero = claseNumeroAsistenciaCanonicoById.get(asistenciaId) || r?.clase_numero || null;
+              const temaRaw = temaSincronizadoAsistenciaById.get(asistenciaId) || r?.tema_visto || r?.registro_clase || "-";
+              const tema = limpiarTemaAsistencia(temaRaw, claseNumero);
               const estadoCalendario = estadoCalendarioAsistenciaById.get(String(r?.id || ""));
 
               return {
@@ -2323,9 +2339,8 @@ export default function PortalEstudiante() {
                 extra: <Tag color={r?.estado === "presente" ? "green" : "red"}>{String(r?.estado || "-").toUpperCase()}</Tag>,
                 rows: [
                   { label: "Curso", value: construirNombreGrupo(r?.matriculas?.cursos) },
-                  { label: "Clase #", value: r?.clase_numero || "-" },
+                  { label: "Clase #", value: claseNumero || "-" },
                   { label: "Tema visto", value: tema },
-                  { label: "Registro de clase", value: registro && registro !== tema ? registro : undefined },
                   { label: "Calendario", value: estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : undefined },
                 ],
               };
@@ -2344,49 +2359,20 @@ export default function PortalEstudiante() {
                   title: "Tema visto",
                   dataIndex: "tema_visto",
                   render: (t, r: any) => {
-                    const tema = temaSincronizadoAsistenciaById.get(String(r?.id || "")) || t || "-";
-                    const registro = String(r?.registro_clase || "").trim();
-                    const estadoCalendario = estadoCalendarioAsistenciaById.get(String(r?.id || ""));
-
-                    if (!isMobile) {
-                      return (
-                        <Space direction="vertical" size={2}>
-                          <span>{tema}</span>
-                          {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
-                        </Space>
-                      );
-                    }
-
-                    if (!registro || registro === tema) {
-                      return (
-                        <Space direction="vertical" size={2}>
-                          <span>{tema}</span>
-                          {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
-                        </Space>
-                      );
-                    }
+                    const asistenciaId = String(r?.id || "");
+                    const claseNumero = claseNumeroAsistenciaCanonicoById.get(asistenciaId) || r?.clase_numero || null;
+                    const temaRaw = temaSincronizadoAsistenciaById.get(asistenciaId) || t || r?.registro_clase || "-";
+                    const tema = limpiarTemaAsistencia(temaRaw, claseNumero);
+                    const estadoCalendario = estadoCalendarioAsistenciaById.get(asistenciaId);
 
                     return (
                       <Space direction="vertical" size={2}>
                         <span>{tema}</span>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {registro}
-                        </Text>
                         {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
                       </Space>
                     );
                   },
                 },
-                ...(!isMobile
-                  ? [
-                      {
-                        title: "Registro de clase",
-                        dataIndex: "registro_clase",
-                        width: 260,
-                        render: (v: string) => v || "-",
-                      },
-                    ]
-                  : []),
                 { title: "Estado", dataIndex: "estado", render: (e) => <Tag color={e === "presente" ? "green" : "red"}>{e?.toUpperCase()}</Tag> },
               ]}
             />}
