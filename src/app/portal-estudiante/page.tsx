@@ -1709,8 +1709,8 @@ export default function PortalEstudiante() {
                         key={temaId}
                         className={temaBloqueado ? "tema-bloqueado" : temaCompletado ? "tema-completado" : "tema-activo"}
                       >
-                        <List.Item.Meta
-                          avatar={
+                        <div className="tema-card-layout">
+                          <div className="tema-card-header">
                             <div className="tema-cover-wrap">
                               <img
                                 src={temaImageSrc}
@@ -1730,103 +1730,101 @@ export default function PortalEstudiante() {
                                 {temaVisual.label}
                               </span>
                             </div>
-                          }
-                          title={<Text strong>{tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}</Text>}
-                          description={
-                            <Space direction="vertical" size={4}>
-                              {tema.descripcion ? (
-                                <div>
-                                  <Text type="secondary">{tema.descripcion}</Text>
-                                </div>
-                              ) : null}
 
-                              {temaBloqueado ? null : vista === "plan" ? (
-                                <TemaMaterialActions
-                                  temaId={temaId}
-                                  temaNombre={tema?.nombre_curso || "Tema"}
-                                  recursoPrincipalTema={recursoPrincipalTema}
-                                  tituloRecursoPrincipal={tituloRecursoPrincipal}
-                                  presentacionesTema={presentacionesTema}
-                                  quizTema={quizTema}
-                                  notaQuizTema={notaQuizTema}
-                                  notaActividadTema={notaActividadTema}
-                                  materialIcon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FilePdfOutlined />}
-                                  onWarnAction={(warnMessage) => message.warning(warnMessage)}
-                                  onOpenMaterialAction={abrirMaterialDidactico}
-                                  onOpenQuizAction={abrirQuiz}
-                                />
-                              ) : insumosTema.length ? (
-                                <Collapse
-                                  ghost
-                                  size="small"
-                                  style={{ marginTop: 4 }}
-                                  items={[{
-                                    key: temaId,
-                                    label: (
-                                      <Space size={8}>
-                                        <Text type="secondary" style={{ fontSize: 12 }}>
-                                          {`${insumosTema.length} material${insumosTema.length !== 1 ? "es" : ""}`}
-                                        </Text>
-                                        {insumosMarcados > 0 && (
-                                          <Tag color="green" style={{ fontSize: 11, padding: "0 5px" }}>
-                                            {`${insumosMarcados}/${insumosTema.length} listos`}
-                                          </Tag>
-                                        )}
-                                      </Space>
-                                    ),
-                                    children: (
-                                      <Space direction="vertical" size={4} style={{ width: "100%", paddingLeft: 4 }}>
-                                        {insumosTema.map((insumo: any, itemIndex: number) => {
-                                          const key = buildChecklistKey(
-                                            String(matriculaSeleccionada.id),
-                                            temaId,
-                                            String(insumo.id || normalizarTexto(insumo.nombre_material))
-                                          );
-                                          const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
-                                          const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
-                                          const etiquetaInsumo = `${nombreInsumo}${cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}`;
-                                          return (
-                                            <div key={`${temaId}-insumo-${itemIndex}`} style={{ width: "100%" }}>
-                                              <div
-                                                style={{
-                                                  display: "grid",
-                                                  gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(0, 1fr) auto",
-                                                  alignItems: "center",
-                                                  gap: 8,
-                                                  width: "100%",
+                            <div className="tema-card-header-content">
+                              <Text strong>{tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}</Text>
+                              {tema.descripcion ? (
+                                <Text type="secondary">{tema.descripcion}</Text>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="tema-card-body">
+                            {temaBloqueado ? null : vista === "plan" ? (
+                              <TemaMaterialActions
+                                temaId={temaId}
+                                temaNombre={tema?.nombre_curso || "Tema"}
+                                recursoPrincipalTema={recursoPrincipalTema}
+                                tituloRecursoPrincipal={tituloRecursoPrincipal}
+                                presentacionesTema={presentacionesTema}
+                                quizTema={quizTema}
+                                notaQuizTema={notaQuizTema}
+                                notaActividadTema={notaActividadTema}
+                                materialIcon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FilePdfOutlined />}
+                                onWarnAction={(warnMessage) => message.warning(warnMessage)}
+                                onOpenMaterialAction={abrirMaterialDidactico}
+                                onOpenQuizAction={abrirQuiz}
+                              />
+                            ) : insumosTema.length ? (
+                              <Collapse
+                                ghost
+                                size="small"
+                                style={{ marginTop: 4 }}
+                                items={[{
+                                  key: temaId,
+                                  label: (
+                                    <Space size={8}>
+                                      <Text type="secondary" style={{ fontSize: 12 }}>
+                                        {`${insumosTema.length} material${insumosTema.length !== 1 ? "es" : ""}`}
+                                      </Text>
+                                      {insumosMarcados > 0 && (
+                                        <Tag color="green" style={{ fontSize: 11, padding: "0 5px" }}>
+                                          {`${insumosMarcados}/${insumosTema.length} listos`}
+                                        </Tag>
+                                      )}
+                                    </Space>
+                                  ),
+                                  children: (
+                                    <Space direction="vertical" size={4} style={{ width: "100%", paddingLeft: 4 }}>
+                                      {insumosTema.map((insumo: any, itemIndex: number) => {
+                                        const key = buildChecklistKey(
+                                          String(matriculaSeleccionada.id),
+                                          temaId,
+                                          String(insumo.id || normalizarTexto(insumo.nombre_material))
+                                        );
+                                        const nombreInsumo = insumo.materiales_ciclo?.nombre || insumo.nombre_material;
+                                        const cantidadInsumo = insumo.materiales_ciclo?.cantidad || insumo.cantidad;
+                                        const etiquetaInsumo = `${nombreInsumo}${cantidadInsumo ? ` (${cantidadInsumo}${insumo.unidad ? ` ${insumo.unidad}` : ""})` : ""}`;
+                                        return (
+                                          <div key={`${temaId}-insumo-${itemIndex}`} style={{ width: "100%" }}>
+                                            <div
+                                              style={{
+                                                display: "grid",
+                                                gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(0, 1fr) auto",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                width: "100%",
+                                              }}
+                                            >
+                                              <Checkbox
+                                                checked={isChecklistItemChecked(key)}
+                                                onChange={(event) => {
+                                                  setChecklistItemChecked(key, event.target.checked);
+                                                  setTemaRutaId(temaId);
+                                                  setCicloRutaId(cicloId);
                                                 }}
+                                                style={{ width: "100%" }}
                                               >
-                                                <Checkbox
-                                                  checked={isChecklistItemChecked(key)}
-                                                  onChange={(event) => {
-                                                    setChecklistItemChecked(key, event.target.checked);
-                                                    setTemaRutaId(temaId);
-                                                    setCicloRutaId(cicloId);
-                                                  }}
-                                                  style={{ width: "100%" }}
-                                                >
-                                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                                    {etiquetaInsumo}
-                                                  </Text>
-                                                </Checkbox>
-                                                <span style={{ width: isMobile ? "100%" : 120, display: "flex", justifyContent: isMobile ? "flex-start" : "flex-end" }}>
-                                                  {renderCoverageTagForStudent(insumo, true)}
-                                                </span>
-                                              </div>
+                                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                                  {etiquetaInsumo}
+                                                </Text>
+                                              </Checkbox>
+                                              <span style={{ width: isMobile ? "100%" : 120, display: "flex", justifyContent: isMobile ? "flex-start" : "flex-end" }}>
+                                                {renderCoverageTagForStudent(insumo, true)}
+                                              </span>
                                             </div>
-                                          );
-                                        })}
-                                      </Space>
-                                    ),
-                                  }]}
-                                />
-                              ) : (
-                                <Text type="secondary" style={{ fontSize: 12 }}>Sin materiales registrados</Text>
-                              )}
-                              {vista === "kits" && insumosTema.length > 0 ? null : null}
-                            </Space>
-                          }
-                        />
+                                          </div>
+                                        );
+                                      })}
+                                    </Space>
+                                  ),
+                                }]}
+                              />
+                            ) : (
+                              <Text type="secondary" style={{ fontSize: 12 }}>Sin materiales registrados</Text>
+                            )}
+                          </div>
+                        </div>
                       </List.Item>
                     );
                   }}
@@ -3193,6 +3191,29 @@ export default function PortalEstudiante() {
           border-left: 3px solid #d81b87;
           padding: 6px 0 6px 8px;
         }
+        .portal-estudiante .tema-card-layout {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .portal-estudiante .tema-card-header {
+          display: grid;
+          grid-template-columns: 84px minmax(0, 1fr);
+          align-items: start;
+          gap: 12px;
+          width: 100%;
+        }
+        .portal-estudiante .tema-card-header-content {
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          padding-top: 2px;
+        }
+        .portal-estudiante .tema-card-body {
+          width: 100%;
+        }
         .portal-estudiante .student-menu-btn {
           border-radius: 12px;
           display: flex;
@@ -3417,6 +3438,13 @@ export default function PortalEstudiante() {
             min-width: 72px;
             height: 72px;
             border-radius: 16px;
+          }
+          .portal-estudiante .tema-card-header {
+            grid-template-columns: 72px minmax(0, 1fr);
+            gap: 10px;
+          }
+          .portal-estudiante .tema-card-layout {
+            gap: 8px;
           }
           .portal-estudiante .tema-cover-chip {
             font-size: 9px;
