@@ -2028,15 +2028,158 @@ export default function PortalEstudiante() {
     return map;
   }, [asistencias, programaIdPorCursoId, temaPorProgramaClase, claseNumeroAsistenciaCanonicoById]);
 
+  const resumenAsistenciaPorMatricula = React.useMemo(() => {
+    const map = new Map<string, {
+      dictadas: number;
+      presentes: number;
+      ausentes: number;
+      ultimaClaseNumero: number;
+      ultimaFecha: string | null;
+    }>();
+
+    (asistencias || []).forEach((item: any) => {
+      const matriculaId = String(item?.matricula_id || "");
+      if (!matriculaId) return;
+
+      const current = map.get(matriculaId) || {
+        dictadas: 0,
+        presentes: 0,
+        ausentes: 0,
+        ultimaClaseNumero: 0,
+        ultimaFecha: null,
+      };
+
+      const estado = String(item?.estado || "").trim().toLowerCase();
+      const claseNumero = Number(claseNumeroAsistenciaCanonicoById.get(String(item?.id || "")) || 0);
+      const fecha = String(item?.fecha || "").trim() || null;
+
+      current.dictadas += 1;
+      if (estado === "presente") {
+        current.presentes += 1;
+      } else if (estado === "ausente" || estado === "falta") {
+        current.ausentes += 1;
+      }
+
+      if (Number.isFinite(claseNumero) && claseNumero > current.ultimaClaseNumero) {
+        current.ultimaClaseNumero = claseNumero;
+      }
+
+      if (fecha && (!current.ultimaFecha || dayjs(fecha).isAfter(dayjs(current.ultimaFecha)))) {
+        current.ultimaFecha = fecha;
+      }
+
+      map.set(matriculaId, current);
+    });
+
+    return map;
+  }, [asistencias, claseNumeroAsistenciaCanonicoById]);
+
+  const notaPromedioPorMatricula = React.useMemo(() => {
+    const acumulados = new Map<string, { total: number; cantidad: number }>();
+
+    (calificaciones || []).forEach((item: any) => {
+      const matriculaId = String(item?.matricula_id || "");
+      const nota = Number(item?.calificacion ?? item?.nota);
+      if (!matriculaId || !Number.isFinite(nota)) return;
+
+      const actual = acumulados.get(matriculaId) || { total: 0, cantidad: 0 };
+      actual.total += nota;
+      actual.cantidad += 1;
+      acumulados.set(matriculaId, actual);
+    });
+
+    const map = new Map<string, number>();
+    acumulados.forEach((value, key) => {
+      if (!value.cantidad) return;
+      map.set(key, value.total / value.cantidad);
+    });
+
+    return map;
+  }, [calificaciones]);
+
+  const misCursosResumen = React.useMemo(() => {
+    return (matriculas || []).map((matricula: any) => {
+      const matriculaId = String(matricula?.id || "");
+      const programaId = String(matricula?.cursos?.programa_id || "");
+      const totalClases = totalClasesPorPrograma.get(programaId) || 0;
+      const resumenAsistencia = resumenAsistenciaPorMatricula.get(matriculaId) || {
+        dictadas: 0,
+        presentes: 0,
+        ausentes: 0,
+        ultimaClaseNumero: 0,
+        ultimaFecha: null,
+      };
+
+      const notaMatricula = Number(matricula?.nota_final);
+      const notaPromedio = notaPromedioPorMatricula.get(matriculaId);
+      const notaReal = Number.isFinite(notaMatricula)
+        ? notaMatricula
+        : Number.isFinite(notaPromedio)
+        ? Number(notaPromedio)
+        : 0;
+
+      const escalaCinco = notaReal > 0 && notaReal <= 5;
+      const umbralAprobacion = escalaCinco ? 3.0 : 70;
+      const porcentajeNota = escalaCinco
+        ? Math.round((notaReal / 5) * 100)
+        : Math.round(notaReal);
+      const metaAprobatoria = escalaCinco
+        ? Math.round((notaReal / umbralAprobacion) * 100)
+        : Math.round((notaReal / umbralAprobacion) * 100);
+      const porcentajeAsistencia = resumenAsistencia.dictadas > 0
+        ? Math.round((resumenAsistencia.presentes / resumenAsistencia.dictadas) * 100)
+        : 0;
+
+      const estadoAcademico = String(matricula?.estado_academico || "").trim().toLowerCase();
+      const estadoMatricula = String(matricula?.estado || "").trim().toLowerCase();
+      let estadoReal = estadoAcademico || estadoMatricula || "pendiente";
+
+      if (!estadoAcademico) {
+        if (estadoMatricula === "cancelado") {
+          estadoReal = "cancelado";
+        } else if (totalClases > 0 && resumenAsistencia.dictadas >= totalClases) {
+          estadoReal = notaReal >= umbralAprobacion ? "aprobado" : "finalizado";
+        } else if (estadoMatricula === "activo" || resumenAsistencia.dictadas > 0) {
+          estadoReal = "en curso";
+        }
+      }
+
+      return {
+        matriculaId,
+        curso: construirNombreGrupo(matricula?.cursos),
+        programa: matricula?.cursos?.programas?.nombre,
+        programaId,
+        nota: notaReal,
+        notaDisplay: escalaCinco ? `${notaReal.toFixed(1)}/5.0` : `${Math.round(notaReal)}/100`,
+        notaPercent: Math.max(0, Math.min(100, porcentajeNota)),
+        metaPercent: Math.max(0, Math.min(100, metaAprobatoria)),
+        umbralAprobacion,
+        escalaCinco,
+        estado: estadoReal,
+        estadoColor:
+          estadoReal === "aprobado" ? "green" :
+          estadoReal === "reprobado" || estadoReal === "cancelado" ? "red" :
+          estadoReal === "en curso" || estadoReal === "activo" ? "blue" : "orange",
+        asistencias: resumenAsistencia.presentes,
+        faltas: resumenAsistencia.ausentes,
+        clasesDictadas: resumenAsistencia.dictadas,
+        porcentajeAsistencia,
+        totalClases,
+        ultimaClaseNumero: resumenAsistencia.ultimaClaseNumero,
+        ultimaFechaClase: resumenAsistencia.ultimaFecha,
+      };
+    });
+  }, [matriculas, notaPromedioPorMatricula, resumenAsistenciaPorMatricula, totalClasesPorPrograma]);
+
   const renderSeccionActiva = () => {
     if (activeTab === "1") {
       return (
         <>
-          {avancePorCurso.length === 0 ? (
+          {misCursosResumen.length === 0 ? (
             <Empty description="No estás inscrito en ningún curso activo" />
           ) : (
             <Row gutter={16}>
-              {avancePorCurso.map((curso: any, idx: number) => (
+              {misCursosResumen.map((curso: any, idx: number) => (
                 <Col xs={24} sm={12} lg={8} key={idx}>
                   <Card className="course-card" title={curso.curso}>
                     <Row gutter={12}>
@@ -2044,9 +2187,9 @@ export default function PortalEstudiante() {
                         <div style={{ textAlign: "center" }}>
                           <Progress
                             type="circle"
-                            percent={Math.max(0, Math.min(100, Number(curso.nota || 0)))}
+                            percent={curso.notaPercent}
                             width={isMobile ? 94 : 108}
-                            format={() => `${Number(curso.nota || 0)}/100`}
+                            format={() => curso.notaDisplay}
                           />
                           <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
                             Nota actual
@@ -2057,10 +2200,10 @@ export default function PortalEstudiante() {
                         <div style={{ textAlign: "center" }}>
                           <Progress
                             type="dashboard"
-                            percent={Math.max(0, Math.min(100, Math.round((Number(curso.nota || 0) / 70) * 100)))}
+                            percent={curso.metaPercent}
                             width={isMobile ? 94 : 108}
                             format={(percent) => `${percent}%`}
-                            status={Number(curso.nota || 0) >= 70 ? "success" : "active"}
+                            status={curso.nota >= curso.umbralAprobacion ? "success" : "active"}
                           />
                           <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
                             Meta aprobatoria
@@ -2069,7 +2212,24 @@ export default function PortalEstudiante() {
                       </Col>
                     </Row>
                     <div style={{ marginTop: 10, textAlign: 'center' }}>
-                      <Tag color={curso.nota >= 70 ? "green" : "orange"}>{curso.estado?.toUpperCase()}</Tag>
+                      <Tag color={curso.estadoColor}>{String(curso.estado || "pendiente").toUpperCase()}</Tag>
+                    </div>
+
+                    <div style={{ marginTop: 12 }}>
+                      <Row gutter={[8, 8]}>
+                        <Col span={12}>
+                          <Statistic title="Asistencias" value={curso.asistencias} valueStyle={{ fontSize: 18 }} />
+                        </Col>
+                        <Col span={12}>
+                          <Statistic title="Faltas" value={curso.faltas} valueStyle={{ fontSize: 18, color: curso.faltas > 0 ? "#cf1322" : undefined }} />
+                        </Col>
+                        <Col span={12}>
+                          <Statistic title="Clases dictadas" value={curso.clasesDictadas} suffix={curso.totalClases ? `/ ${curso.totalClases}` : undefined} valueStyle={{ fontSize: 18 }} />
+                        </Col>
+                        <Col span={12}>
+                          <Statistic title="Asistencia" value={curso.porcentajeAsistencia} suffix="%" valueStyle={{ fontSize: 18 }} />
+                        </Col>
+                      </Row>
                     </div>
 
                     {(() => {
@@ -2415,21 +2575,21 @@ export default function PortalEstudiante() {
     const ruta = obtenerRutaTemasPrograma(curso?.programaId);
     if (!ruta.length) return null;
 
-    const temasVistos = new Set(
+    const clasesVistas = new Set(
       (asistencias || [])
         .filter((asistencia: any) => String(asistencia?.matricula_id) === String(curso?.matriculaId))
-        .map((asistencia: any) => asistencia?.tema_id)
-        .filter(Boolean)
-        .map((id: any) => String(id))
+        .map((asistencia: any) => claseNumeroAsistenciaCanonicoById.get(String(asistencia?.id || "")))
+        .filter((numero: any) => Number.isFinite(numero) && Number(numero) > 0)
+        .map((numero: any) => Number(numero))
     );
 
-    const siguiente = ruta.find((item) => !temasVistos.has(String(item.tema?.id)));
+    const siguiente = ruta.find((_item, index) => !clasesVistas.has(index + 1));
     if (siguiente) {
       return {
         ...siguiente,
         completado: false,
         total: ruta.length,
-        vistos: temasVistos.size,
+        vistos: clasesVistas.size,
       };
     }
 
