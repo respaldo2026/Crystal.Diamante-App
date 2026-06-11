@@ -1392,13 +1392,6 @@ export default function PortalEstudiante() {
         ? String(cicloRutaId)
         : String(ciclosPrograma[0]?.id || "");
 
-    const planMateriales = getPaymentPlanDisplay({
-      modalidadPago: matriculaSeleccionada?.modalidad_pago,
-      valorMensualPlan: matriculaSeleccionada?.valor_mensual_plan,
-      montoPorClase: matriculaSeleccionada?.valor_por_clase,
-      porcentajeProductos: matriculaSeleccionada?.porcentaje_productos,
-    });
-
     const modalidadMateriales = normalizeModalidadPago(matriculaSeleccionada?.modalidad_pago);
     const esPlanMensualSeleccionado = modalidadMateriales !== "POR_CLASE";
     const porClaseTieneMoraMatriculaSeleccionada = modalidadMateriales === "POR_CLASE"
@@ -1432,13 +1425,6 @@ export default function PortalEstudiante() {
           return consecutivas;
         })()
       : 0;
-
-    const resumenPlanMateriales =
-      modalidadMateriales === "POR_CLASE"
-        ? "Tu plan no incluye materiales. Aquí verás claramente cuáles no están incluidos y cuáles solo vienen en planes mensuales."
-        : modalidadMateriales === "MENSUAL_100"
-          ? "Tu plan cubre los materiales base y también los materiales exclusivos del Plan 100."
-          : "Tu plan cubre los materiales base. Los marcados como 'Solo Plan 100' no están incluidos en tu mensualidad actual.";
 
     const renderCoverageTagForStudent = (materialRef: any, compact = false) => {
       const display = getMaterialCoverageDisplay({
@@ -1536,29 +1522,14 @@ export default function PortalEstudiante() {
           </Row>
         </Space>
 
-        {vista !== "plan" ? (
+        {vista !== "plan" && porClaseTieneMoraMatriculaSeleccionada ? (
           <div style={{ marginBottom: 16 }}>
             <Alert
-              type="info"
+              type="warning"
               showIcon
-              style={{ marginBottom: 10 }}
-              message={
-                <Space wrap>
-                  <span>Tu cobertura de materiales</span>
-                  <Tag color={planMateriales.color}>{planMateriales.label}</Tag>
-                </Space>
-              }
-              description={resumenPlanMateriales}
+              message="Pago por clase pendiente"
+              description="Tienes una clase vencida por pagar. Se bloquea solo la siguiente clase hasta que registremos tu pago."
             />
-            {porClaseTieneMoraMatriculaSeleccionada ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginTop: 10 }}
-                message="Pago por clase pendiente"
-                description="Tienes una clase vencida por pagar. Se bloquea solo la siguiente clase hasta que registremos tu pago."
-              />
-            ) : null}
           </div>
         ) : null}
 
