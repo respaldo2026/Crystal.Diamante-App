@@ -2101,7 +2101,10 @@ export default function PortalEstudiante() {
     return (matriculas || []).map((matricula: any) => {
       const matriculaId = String(matricula?.id || "");
       const programaId = String(matricula?.cursos?.programa_id || "");
-      const totalClases = totalClasesPorPrograma.get(programaId) || 0;
+      const totalClasesCurso = Number(matricula?.cursos?.total_clases || 0);
+      const totalClasesPrograma = Number(matricula?.cursos?.programas?.total_clases || 0);
+      const totalClasesPensum = totalClasesPorPrograma.get(programaId) || 0;
+      const totalClases = totalClasesCurso || totalClasesPrograma || totalClasesPensum || 0;
       const resumenAsistencia = resumenAsistenciaPorMatricula.get(matriculaId) || {
         dictadas: 0,
         presentes: 0,
@@ -2149,6 +2152,10 @@ export default function PortalEstudiante() {
         curso: construirNombreGrupo(matricula?.cursos),
         programa: matricula?.cursos?.programas?.nombre,
         programaId,
+        diasSemana: matricula?.cursos?.dias_semana || null,
+        horaInicio: matricula?.cursos?.hora_inicio || null,
+        horaFin: matricula?.cursos?.hora_fin || null,
+        horario: matricula?.cursos?.horario || null,
         nota: notaReal,
         notaDisplay: escalaCinco ? `${notaReal.toFixed(1)}/5.0` : `${Math.round(notaReal)}/100`,
         notaPercent: Math.max(0, Math.min(100, porcentajeNota)),
@@ -2237,6 +2244,7 @@ export default function PortalEstudiante() {
                       const nombreTema = siguiente?.tema?.nombre_curso || "Tema por definir";
                       const nombreCiclo = siguiente?.ciclo?.nombre_ciclo || "Ciclo por definir";
                       const descripcionTema = siguiente?.tema?.descripcion || "Introducción al ciclo";
+                      const horarioSiguienteClase = curso.horario || [curso.diasSemana, curso.horaInicio].filter(Boolean).join(" ");
 
                       return (
                         <div style={{ marginTop: 12 }}>
@@ -2247,7 +2255,9 @@ export default function PortalEstudiante() {
                               </>
                             ) : (
                               <>
-                                <strong>Siguiente Clase:</strong> {nombreTema} del {nombreCiclo}: {descripcionTema}. Verifica la lista de materiales para esta clase.
+                                <strong>Siguiente Clase:</strong> {nombreTema} del {nombreCiclo}
+                                {horarioSiguienteClase ? ` · ${horarioSiguienteClase}` : ""}
+                                {`: ${descripcionTema}`}. Verifica la lista de materiales para esta clase.
                               </>
                             )}
                           </Text>
