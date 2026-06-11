@@ -205,10 +205,17 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
     let calificaciones: any[] = [];
 
     if (matriculaIds.length > 0) {
+      const matriculaById = new Map<string, any>();
+      (matriculas || []).forEach((matricula: any) => {
+        const matriculaId = String(matricula?.id || "");
+        if (!matriculaId) return;
+        matriculaById.set(matriculaId, matricula);
+      });
+
       const [asistenciasRes, intentosQuizRes, calificacionesActividadRes] = await Promise.all([
         supabaseBrowserClient
           .from("asistencias")
-          .select("*, matriculas(id, curso_id, cursos(nombre, dias_semana, hora_inicio))")
+          .select("id, fecha, estado, observaciones, matricula_id, tema_id")
           .in("matricula_id", matriculaIds)
           .order("fecha", { ascending: false }),
         supabaseBrowserClient
@@ -223,7 +230,24 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
           .order("fecha_evaluacion", { ascending: false }),
       ]);
 
-      const dataAsistencias = asistenciasRes.data || [];
+      if (asistenciasRes.error) {
+        logger.error("Error cargando asistencias del portal:", asistenciasRes.error);
+      }
+
+      const dataAsistencias = (asistenciasRes.data || []).map((asistencia: any) => {
+        const matricula = matriculaById.get(String(asistencia?.matricula_id || ""));
+        return {
+          ...asistencia,
+          matriculas: matricula
+            ? {
+                id: matricula.id,
+                curso_id: matricula.curso_id || matricula?.cursos?.id || null,
+                cursos: matricula.cursos || null,
+              }
+            : null,
+        };
+      });
+
       asistencias = dataAsistencias;
       quizIntentos = intentosQuizRes.data || [];
       const todasCalificaciones = calificacionesActividadRes.data || [];
