@@ -36,6 +36,7 @@ export const TemaMaterialActions = ({
 }: TemaMaterialActionsProps) => {
   const mostrarEnlacePrincipal = presentacionesTema.length <= 1;
   const quizDisponible = Boolean(quizTema);
+  const quizPresentado = notaQuizTema != null;
   const quizAprobadoTema = quizAprobado(notaQuizTema);
 
   return (
@@ -112,11 +113,15 @@ export const TemaMaterialActions = ({
 
         <div
           style={{
-            border: `1px solid ${quizDisponible ? "#bfdbfe" : "#e5e7eb"}`,
+            border: `1px solid ${quizDisponible
+              ? (quizPresentado ? (quizAprobadoTema ? "#86efac" : "#d1d5db") : "#bfdbfe")
+              : "#e5e7eb"}`,
             borderRadius: 14,
             padding: 10,
             background: quizDisponible
-              ? (quizAprobadoTema ? "linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)" : "linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)")
+              ? (quizPresentado
+                ? (quizAprobadoTema ? "linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)" : "linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)")
+                : "linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)")
               : "linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)",
             display: "flex",
             flexDirection: "column",
@@ -125,20 +130,24 @@ export const TemaMaterialActions = ({
           }}
         >
           <div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: quizDisponible ? "#1d4ed8" : "#6b7280", letterSpacing: 0.4, marginBottom: 2 }}>
-              SIGUIENTE PASO
+            <div style={{ fontSize: 11, fontWeight: 800, color: quizDisponible ? (quizPresentado ? (quizAprobadoTema ? "#15803d" : "#6b7280") : "#1d4ed8") : "#6b7280", letterSpacing: 0.4, marginBottom: 2 }}>
+              {quizPresentado ? "QUIZ PRESENTADO" : "SIGUIENTE PASO"}
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", lineHeight: 1.3 }}>
               Quiz del tema
             </div>
             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-              {quizDisponible ? "Cuando termines la clase, evalúa lo aprendido." : "Este tema aún no tiene quiz activo."}
+              {quizDisponible
+                ? (quizPresentado
+                  ? (quizAprobadoTema ? "Ya presentaste este quiz y quedó aprobado." : "Este quiz ya fue presentado. Puedes revisar tu resultado.")
+                  : "Cuando termines la clase, evalúa lo aprendido.")
+                : "Este tema aún no tiene quiz activo."}
             </div>
           </div>
 
           <Button
             size="middle"
-            type={quizDisponible ? "primary" : "default"}
+            type={quizDisponible && !quizPresentado ? "primary" : "default"}
             icon={<SafetyCertificateOutlined />}
             disabled={!quizDisponible}
             onClick={() => {
@@ -147,12 +156,19 @@ export const TemaMaterialActions = ({
             }}
             style={{ width: "100%", borderRadius: 10, fontWeight: 700 }}
           >
-            {quizDisponible ? "Presentar quiz" : "Quiz no disponible"}
+            {quizDisponible
+              ? (quizPresentado ? "Ver quiz presentado" : "Presentar quiz")
+              : "Quiz no disponible"}
           </Button>
         </div>
       </div>
 
       <Space wrap size={8}>
+        {quizPresentado ? (
+          <Tag color={quizAprobadoTema ? "green" : "default"}>
+            {quizAprobadoTema ? "Quiz presentado y aprobado" : "Quiz ya presentado"}
+          </Tag>
+        ) : null}
         {presentacionesTema.length > 1 ? (
           <Space wrap size={6}>
             {presentacionesTema.map((presentacion, index) => (
