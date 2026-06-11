@@ -2201,6 +2201,9 @@ export default function PortalEstudiante() {
       const porcentajeAsistencia = resumenAsistencia.dictadas > 0
         ? Math.round((resumenAsistencia.presentes / resumenAsistencia.dictadas) * 100)
         : 0;
+      const progresoCursoPercent = totalClases > 0
+        ? Math.round((resumenAsistencia.dictadas / totalClases) * 100)
+        : 0;
 
       const estadoAcademico = String(matricula?.estado_academico || "").trim().toLowerCase();
       const estadoMatricula = String(matricula?.estado || "").trim().toLowerCase();
@@ -2244,6 +2247,7 @@ export default function PortalEstudiante() {
         faltas: resumenAsistencia.ausentes,
         clasesDictadas: resumenAsistencia.dictadas,
         porcentajeAsistencia,
+        progresoCursoPercent: Math.max(0, Math.min(100, progresoCursoPercent)),
         totalClases,
         ultimaClaseNumero: resumenAsistencia.ultimaClaseNumero,
         ultimaFechaClase: resumenAsistencia.ultimaFecha,
@@ -2262,55 +2266,58 @@ export default function PortalEstudiante() {
               {misCursosResumen.map((curso: any, idx: number) => (
                 <Col xs={24} sm={12} lg={8} key={idx}>
                   <Card className="course-card" title={curso.curso}>
-                    <Row gutter={12}>
-                      <Col xs={12}>
-                        <div style={{ textAlign: "center" }}>
-                          <Progress
-                            type="circle"
-                            percent={curso.notaPercent}
-                            width={isMobile ? 94 : 108}
-                            format={() => curso.notaDisplay}
-                          />
-                          <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
-                            Nota actual
-                          </Text>
-                        </div>
-                      </Col>
-                      <Col xs={12}>
-                        <div style={{ textAlign: "center" }}>
-                          <Progress
-                            type="dashboard"
-                            percent={curso.metaPercent}
-                            width={isMobile ? 94 : 108}
-                            format={(percent) => curso.tieneRegistrosAcademicos ? `${percent}%` : "Pend."}
-                            status={curso.tieneRegistrosAcademicos && curso.nota >= curso.umbralAprobacion ? "success" : "active"}
-                          />
-                          <Text type="secondary" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
-                            Meta aprobatoria
-                          </Text>
-                        </div>
-                      </Col>
-                    </Row>
-                    <div style={{ marginTop: 10, textAlign: 'center' }}>
-                      <Tag color={curso.estadoColor}>{String(curso.estado || "pendiente").toUpperCase()}</Tag>
+                    <div className="course-card__hero">
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+                          Progreso del curso
+                        </Text>
+                        <Text strong style={{ fontSize: isMobile ? 22 : 24, lineHeight: 1.1 }}>
+                          {curso.clasesDictadas}{curso.totalClases ? `/${curso.totalClases}` : ""}
+                        </Text>
+                        <Text type="secondary" style={{ display: "block", marginTop: 2, fontSize: 12 }}>
+                          clases registradas
+                        </Text>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <Tag color={curso.estadoColor}>{String(curso.estado || "pendiente").toUpperCase()}</Tag>
+                        <Text strong style={{ display: "block", marginTop: 8, fontSize: isMobile ? 20 : 22 }}>
+                          {curso.tieneRegistrosAcademicos ? `${curso.progresoCursoPercent}%` : "Sin avance"}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          avance actual
+                        </Text>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 10 }}>
+                      <Progress
+                        percent={curso.tieneRegistrosAcademicos ? curso.progresoCursoPercent : 0}
+                        showInfo={false}
+                        strokeColor={curso.estado === "aprobado" ? "#16a34a" : "#d81b87"}
+                        trailColor="#e5e7eb"
+                      />
                     </div>
 
                     <div style={{ marginTop: 12 }}>
                       {curso.tieneRegistrosAcademicos ? (
-                        <Row gutter={[8, 8]}>
-                          <Col span={12}>
-                            <Statistic title="Asistencias" value={curso.asistencias} valueStyle={{ fontSize: 18 }} />
-                          </Col>
-                          <Col span={12}>
-                            <Statistic title="Faltas" value={curso.faltas} valueStyle={{ fontSize: 18, color: curso.faltas > 0 ? "#cf1322" : undefined }} />
-                          </Col>
-                          <Col span={12}>
-                            <Statistic title="Clases dictadas" value={curso.clasesDictadas} suffix={curso.totalClases ? `/ ${curso.totalClases}` : undefined} valueStyle={{ fontSize: 18 }} />
-                          </Col>
-                          <Col span={12}>
-                            <Statistic title="Asistencia" value={curso.porcentajeAsistencia} suffix="%" valueStyle={{ fontSize: 18 }} />
-                          </Col>
-                        </Row>
+                        <div className="course-card__stats-grid">
+                          <div className="course-card__stat-box">
+                            <Text type="secondary">Nota</Text>
+                            <Text strong>{curso.notaDisplay}</Text>
+                          </div>
+                          <div className="course-card__stat-box">
+                            <Text type="secondary">Asistencia</Text>
+                            <Text strong>{curso.porcentajeAsistencia}%</Text>
+                          </div>
+                          <div className="course-card__stat-box">
+                            <Text type="secondary">Asistencias</Text>
+                            <Text strong>{curso.asistencias}</Text>
+                          </div>
+                          <div className="course-card__stat-box">
+                            <Text type="secondary">Faltas</Text>
+                            <Text strong style={{ color: curso.faltas > 0 ? "#cf1322" : undefined }}>{curso.faltas}</Text>
+                          </div>
+                        </div>
                       ) : (
                         <Alert
                           type="info"
@@ -2329,23 +2336,26 @@ export default function PortalEstudiante() {
                       const horarioSiguienteClase = curso.horario || [curso.diasSemana, curso.horaInicio].filter(Boolean).join(" ");
 
                       return (
-                        <div style={{ marginTop: 12 }}>
-                          <Text style={{ fontSize: 12, display: "block" }}>
-                            {siguiente?.completado ? (
-                              <>
-                                <strong>Plan completado:</strong> ya registraste asistencia en {siguiente?.vistos}/{siguiente?.total} clases del programa. Puedes repasar materiales del último tema.
-                              </>
-                            ) : (
-                              <>
-                                <strong>Siguiente Clase:</strong> {nombreTema} del {nombreCiclo}
-                                {horarioSiguienteClase ? ` · ${horarioSiguienteClase}` : ""}
-                                {`: ${descripcionTema}`}. Verifica la lista de materiales para esta clase.
-                              </>
-                            )}
+                        <div className="course-card__next-block">
+                          <Text type="secondary" style={{ fontSize: 11, display: "block", marginBottom: 4 }}>
+                            {siguiente?.completado ? "Curso completado" : "Siguiente clase"}
                           </Text>
+                          <Text strong style={{ display: "block", lineHeight: 1.35 }}>
+                            {siguiente?.completado ? "Repaso final disponible" : nombreTema}
+                          </Text>
+                          <Text type="secondary" style={{ display: "block", marginTop: 4, fontSize: 12 }}>
+                            {siguiente?.completado
+                              ? `Registraste asistencia en ${siguiente?.vistos}/${siguiente?.total} clases del programa.`
+                              : [nombreCiclo, horarioSiguienteClase].filter(Boolean).join(" · ") || "Horario por definir"}
+                          </Text>
+                          {!siguiente?.completado ? (
+                            <Text style={{ fontSize: 12, display: "block", marginTop: 6 }}>
+                              {descripcionTema}
+                            </Text>
+                          ) : null}
                           <Button
                             type="link"
-                            style={{ paddingLeft: 0, marginTop: 4, height: "auto" }}
+                            style={{ paddingLeft: 0, marginTop: 6, height: "auto" }}
                             onClick={() => irAMaterialesSiguienteClase(curso, siguiente)}
                           >
                             {siguiente?.completado
@@ -3252,29 +3262,52 @@ export default function PortalEstudiante() {
         .portal-estudiante .student-menu-btn.is-active {
           box-shadow: 0 4px 12px rgba(24, 144, 255, 0.22);
         }
-        .portal-estudiante .course-card .ant-progress {
-          filter: drop-shadow(0 8px 16px rgba(15, 23, 42, 0.12));
+        .portal-estudiante .course-card {
+          border-radius: 18px;
+          overflow: hidden;
+        }
+        .portal-estudiante .course-card .ant-card-body {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .portal-estudiante .course-card__hero {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 16px;
+          background: linear-gradient(180deg, #fff7fb 0%, #ffffff 100%);
+          border: 1px solid #f3d7e7;
+        }
+        .portal-estudiante .course-card .ant-progress-bg {
+          height: 10px !important;
+          border-radius: 999px;
         }
         .portal-estudiante .course-card .ant-progress-inner {
-          background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f3f6fb 45%, #e6ebf3 100%);
+          border-radius: 999px;
+          background: #eceff5;
         }
-        .portal-estudiante .course-card .ant-progress-circle .ant-progress-text,
-        .portal-estudiante .course-card .ant-progress-dashboard .ant-progress-text {
-          color: #1f2937;
-          font-weight: 700;
-          letter-spacing: 0.2px;
+        .portal-estudiante .course-card__stats-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
         }
-        .portal-estudiante .course-card .ant-progress-circle-path {
-          stroke: #d81b87;
-          stroke-linecap: round;
+        .portal-estudiante .course-card__stat-box {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding: 10px 12px;
+          border-radius: 14px;
+          background: #f8fafc;
+          border: 1px solid #e5e7eb;
         }
-        .portal-estudiante .course-card .ant-progress-dashboard-path {
-          stroke: #0ea5e9;
-          stroke-linecap: round;
-        }
-        .portal-estudiante .course-card .ant-progress-circle-trail,
-        .portal-estudiante .course-card .ant-progress-dashboard-trail {
-          stroke: #e3e8f1;
+        .portal-estudiante .course-card__next-block {
+          padding: 12px 14px;
+          border-radius: 16px;
+          background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+          border: 1px solid #e5e7eb;
         }
         .portal-estudiante .tema-cover-wrap {
           position: relative;
@@ -3433,9 +3466,20 @@ export default function PortalEstudiante() {
             padding-inline: 12px;
           }
           .portal-estudiante .course-card .ant-card-body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            gap: 10px;
+          }
+          .portal-estudiante .course-card__hero {
+            padding: 10px 12px;
+            align-items: stretch;
+          }
+          .portal-estudiante .course-card__stats-grid {
+            gap: 8px;
+          }
+          .portal-estudiante .course-card__stat-box {
+            padding: 8px 10px;
+          }
+          .portal-estudiante .course-card__next-block {
+            padding: 10px 12px;
           }
           .portal-estudiante .tema-cover-wrap {
             width: 72px;
