@@ -52,7 +52,7 @@ import dayjs from "dayjs";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
-import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { abrirTicketPagoDesdeBlob, formatTicketReference, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import {
     listarMovimientos,
@@ -249,7 +249,7 @@ export default function TesoreriaPage() {
                         telefono: perfil?.telefono || undefined,
                     },
                     pago: {
-                        referencia: pago?.referencia || pago?.id,
+                        referencia: formatTicketReference(pago?.referencia || pago?.id, "FAC"),
                         metodo: pago?.metodo_pago || "efectivo",
                         monto: Number(pago?.monto || 0),
                         fecha: dayjs(pago?.fecha_pago).format("DD/MM/YYYY"),
@@ -983,7 +983,7 @@ export default function TesoreriaPage() {
                     telefono: perfil?.telefono || record?.perfiles?.telefono || undefined,
                 },
                 pago: {
-                    referencia: pago?.referencia || (pago as any)?.abono_id || pago?.id,
+                    referencia: formatTicketReference(pago?.referencia || (pago as any)?.abono_id || pago?.id, "FAC"),
                     metodo: pago?.metodo_pago || "efectivo",
                     monto: Number(pago?.monto || 0),
                     fecha: fechaPagoLegible,

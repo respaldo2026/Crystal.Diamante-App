@@ -56,7 +56,7 @@ import {
   getEstudiantesActivos,
 } from "../secretaria.api";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { abrirTicketPagoDesdeBlob, formatTicketReference, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 
@@ -765,13 +765,14 @@ Formamos profesionales en belleza y estética.
           ? dayjs(values.fecha_pago).format("YYYY-MM-DD")
           : dayjs().format("YYYY-MM-DD");
         const observacionTexto = values.observaciones?.trim();
+        const referenciaPago = formatTicketReference(values.referencia?.trim() || cuotaIds[0], "FAC");
 
         const { error } = await supabaseBrowserClient
           .from("pagos")
           .update({
             estado: "pagado",
             metodo_pago: values.metodo_pago,
-            referencia: values.referencia?.trim() || null,
+            referencia: referenciaPago,
             fecha_pago: fechaPagoISO,
             observaciones: observacionTexto
               ? `${observacionTexto} · Secretaría`
@@ -843,7 +844,7 @@ Formamos profesionales en belleza y estética.
                 telefono: estudiantePerfil.telefono ?? undefined,
               },
               pago: {
-                referencia: pagoActualizado.referencia || cuotaId,
+                referencia: formatTicketReference(pagoActualizado.referencia || cuotaId, "FAC"),
                 metodo: pagoActualizado.metodo_pago ?? values.metodo_pago,
                 monto: Number(pagoActualizado.monto ?? 0),
                 fecha: dayjs(fechaTicketISO).format("DD/MM/YYYY"),

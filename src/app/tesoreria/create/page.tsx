@@ -9,7 +9,7 @@ import { formatDate } from "@utils/date";
 import { UserOutlined, DollarCircleOutlined, SolutionOutlined } from "@ant-design/icons";
 import type { DefaultOptionType } from "antd/es/select";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
-import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { abrirTicketPagoDesdeBlob, formatTicketReference, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 import { getDescuentoAplicado, getMontoProgramado, getSaldoPendiente, getTotalAbonado, isPartialPayment } from "@utils/payment-balances";
@@ -277,7 +277,7 @@ export default function PagoCreate() {
 
     const handleOnFinish = async (values: any) => {
         const { cuota_id, monto, metodo_pago, fecha_pago, referencia, descuento_aplicado, motivo_descuento } = values;
-        const referenciaPago = String(referencia || "").trim() || `FAC-${generarNumeroFactura()}`;
+        const referenciaPago = formatTicketReference(referencia, "FAC");
 
         if (!cuota_id) {
             message.error("Debes seleccionar una cuota a pagar");

@@ -59,7 +59,7 @@ import { construirNombreGrupo } from "@utils/grupos";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { HistorialEntregas } from "@components/EntregaMaterialModal";
-import { abrirTicketPagoDesdeBlob, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { abrirTicketPagoDesdeBlob, formatTicketReference, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { getPaymentPlan, getPaymentPlanDisplay, normalizeModalidadPago } from "@/types/payment-plans";
 import { getDescuentoAplicado, getMontoProgramado, getSaldoPendiente, getTotalAbonado, getVisiblePaymentStatus } from "@utils/payment-balances";
@@ -875,7 +875,7 @@ export default function StudentDetailView() {
           telefono: perfil?.telefono || undefined,
         },
         pago: {
-          referencia: record?.referencia || record?.id,
+          referencia: formatTicketReference(record?.referencia || record?.id, "FAC"),
           metodo: record?.metodo_pago || "efectivo",
           monto: Number(record?.monto || 0),
           fecha: fechaPagoLegible,

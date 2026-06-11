@@ -33,7 +33,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
-import { generarTicketPagoBlob, abrirTicketPagoDesdeBlob, imprimirTicketTermicoTM20II } from "@utils/pago-ticket";
+import { formatTicketReference, generarTicketPagoBlob, abrirTicketPagoDesdeBlob, imprimirTicketTermicoTM20II } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 import { obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
@@ -171,14 +171,6 @@ const calcularFechaVencimientoClase = (
   }
 
   return base.add((numeroClase - 1) * 7, "day").format("YYYY-MM-DD");
-};
-
-// Función para generar número de factura secuencial (1000-9999)
-const generarNumeroFactura = (): string => {
-  const min = 1000;
-  const max = 9999;
-  const numero = Math.floor(Math.random() * (max - min + 1)) + min;
-  return numero.toString();
 };
 
 const metodoPagoIcons: Record<MetodoPago, React.ReactNode> = {
@@ -447,8 +439,7 @@ export default function CajaPage() {
   // Generar número de factura cuando se selecciona una cuota
   useEffect(() => {
     if (cuotasSeleccionadas.length > 0) {
-      const numeroFactura = generarNumeroFactura();
-      form.setFieldsValue({ referencia: `FAC-${numeroFactura}` });
+      form.setFieldsValue({ referencia: formatTicketReference(undefined, "FAC") });
     }
   }, [cuotasSeleccionadas, form]);
 
@@ -865,7 +856,7 @@ export default function CajaPage() {
       const cuotasAPagar = cuotas.filter((c) => cuotasSeleccionadas.includes(c.id));
       const pagosActualizados = [];
       const metodoPago = values.metodo_pago as MetodoPago;
-      const referenciaPago = values.referencia || `FAC-${generarNumeroFactura()}`;
+      const referenciaPago = formatTicketReference(values.referencia, "FAC");
       const montoAbono = Number(values.monto_a_registrar || 0);
       const descuento = Number(values.descuento_aplicado || 0);
       const motivoDescuento = String(values.motivo_descuento || "").trim() || null;
@@ -1705,7 +1696,7 @@ export default function CajaPage() {
                         monto: totalAPagar,
                         metodo: metodoPagoLabels[metodoPago],
                         fecha: dayjs().format("DD/MM/YYYY HH:mm"),
-                        referencia: values.referencia || `FAC-${generarNumeroFactura()}`,
+                        referencia: formatTicketReference(values.referencia, "FAC"),
                         concepto: previewDescriptor.concepto,
                         numeroCuota: cuotasAPagar.length === 1 ? cuotasAPagar[0]?.numero_cuota : undefined,
                         periodo: previewDescriptor.periodo,
