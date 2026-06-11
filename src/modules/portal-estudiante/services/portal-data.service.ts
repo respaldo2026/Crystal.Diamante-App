@@ -271,7 +271,7 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
 
         const sesionesQuery = supabaseBrowserClient
           .from("sesiones_clase")
-          .select("curso_id, fecha, tema_visto, observaciones")
+          .select("curso_id, fecha, tema_visto")
           .in("curso_id", cursoIds);
 
         const { data: sesionesData } = await (fechaMin && fechaMax
@@ -285,7 +285,7 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
           const key = `${sesion?.curso_id || ""}-${sesion?.fecha || ""}`;
           if (!temaPorCursoFecha.has(key)) {
             temaPorCursoFecha.set(key, sesion?.tema_visto || "");
-            claseNumeroPorCursoFecha.set(key, extractClassNumber(sesion?.observaciones || sesion?.tema_visto));
+            claseNumeroPorCursoFecha.set(key, extractClassNumber(sesion?.tema_visto));
           }
         });
 
