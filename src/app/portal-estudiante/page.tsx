@@ -1388,7 +1388,9 @@ export default function PortalEstudiante() {
       : vista === "ciclo"
         ? "Materiales generales por ciclo"
         : "Materiales necesarios";
-    const colorDiferenciadorCiclo = vista === "plan" ? "#2563eb" : "#16a34a";
+    const coloresCiclo = vista === "plan"
+      ? ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a"]
+      : ["#16a34a", "#0f766e", "#0284c7", "#7c3aed", "#ea580c"];
     const colorNumeroTema = vista === "plan" ? "#2563eb" : "#16a34a";
 
     const StepCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -1568,6 +1570,7 @@ export default function PortalEstudiante() {
             const cicloId = String(ciclo?.id || `ciclo-${index}`);
             const cicloNumero = ciclo?.numero_ciclo ?? ciclo?.orden ?? index + 1;
             const cicloNombre = ciclo?.nombre_ciclo || ciclo?.titulo || `Ciclo ${cicloNumero}`;
+            const colorCiclo = coloresCiclo[index % coloresCiclo.length];
             const temasCiclo = obtenerTemasCiclo(ciclo);
             const materialesGenerales = obtenerMaterialesCiclo(cicloId);
 
@@ -1591,7 +1594,7 @@ export default function PortalEstudiante() {
                       width: 44,
                       height: 44,
                       borderRadius: 16,
-                      background: cicloBloqueado ? "#d9d9d9" : colorDiferenciadorCiclo,
+                      background: cicloBloqueado ? "#d9d9d9" : colorCiclo,
                       color: cicloBloqueado ? "#a0a0a0" : "#f8fafc",
                       display: "flex",
                       alignItems: "center",
