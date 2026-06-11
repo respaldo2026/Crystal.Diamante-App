@@ -196,6 +196,8 @@ const DEFAULT_TEMA_VISUAL_UNAS: TemaVisualConfig = {
   label: "NAILS",
 };
 
+const TEMA_IMAGE_CACHE = new Map<string, string>();
+
 const resolveTemaVisual = (tema: any, cursoContext?: any): TemaVisualConfig => {
   const text = `${String(tema?.nombre_curso || tema?.titulo || "")} ${String(tema?.descripcion || "")}`;
   const cursoText = `${String(cursoContext?.nombre || "")} ${String(cursoContext?.nombre_curso || "")} ${String(cursoContext?.nombre_grupo || "")} ${String(cursoContext?.programas?.nombre || "")} ${String(cursoContext?.programa?.nombre || "")}`;
@@ -216,6 +218,13 @@ const getTemaInitials = (tema: any) => {
 };
 
 const buildTemaImageDataUri = (tema: any, cursoContext?: any) => {
+  const temaId = String(tema?.id || "");
+  const cursoId = String(cursoContext?.id || cursoContext?.programa_id || cursoContext?.nombre || "");
+  const cacheKey = `${temaId}::${cursoId}`;
+
+  const cached = TEMA_IMAGE_CACHE.get(cacheKey);
+  if (cached) return cached;
+
   const visual = resolveTemaVisual(tema, cursoContext);
   const initials = getTemaInitials(tema);
   const svg = `
@@ -236,7 +245,11 @@ const buildTemaImageDataUri = (tema: any, cursoContext?: any) => {
       <path d="M98 84C112 68 132 68 146 84" stroke="${visual.accent}" stroke-width="4" stroke-linecap="round" opacity="0.2"/>
     </svg>`;
 
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  const encoded = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  if (cacheKey !== "::") {
+    TEMA_IMAGE_CACHE.set(cacheKey, encoded);
+  }
+  return encoded;
 };
 
 export default function PortalEstudiante() {
@@ -275,6 +288,7 @@ export default function PortalEstudiante() {
   });
   const [iframePromptVisible, setIframePromptVisible] = useState(false);
   const [iframeTrackingSupported, setIframeTrackingSupported] = useState(true);
+  const academicContentRequestedRef = useRef(false);
   const iframeEmbedRef = useRef<HTMLIFrameElement>(null);
 
   const applyPortalPayload = useCallback((payload: any) => {
@@ -716,8 +730,17 @@ export default function PortalEstudiante() {
   );
 
   useEffect(() => {
-    loadPortalData();
+    loadPortalData({ includeAcademicContent: false });
   }, [loadPortalData]);
+
+  useEffect(() => {
+    const needsAcademicContent = activeTab === "3" || activeTab === "5";
+    if (!needsAcademicContent || academicContentRequestedRef.current) return;
+    if (loading) return;
+
+    academicContentRequestedRef.current = true;
+    loadPortalData({ includeAcademicContent: true });
+  }, [activeTab, loading, loadPortalData]);
 
   useEffect(() => {
     if (!matriculas.length) {

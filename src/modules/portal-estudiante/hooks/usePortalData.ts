@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchPortalEstudianteData } from "@/modules/portal-estudiante/services/portal-data.service";
 
+type LoadPortalDataOptions = {
+  includeAcademicContent?: boolean;
+};
+
 type PortalPayload = {
   estudiante: any;
   whatsappAgente: string | null;
@@ -67,7 +71,7 @@ export const usePortalData = ({
     onUnknownErrorRef.current = onUnknownErrorAction;
   }, [onUnknownErrorAction]);
 
-  const loadPortalData = useCallback(async () => {
+  const loadPortalData = useCallback(async (options?: LoadPortalDataOptions) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
 
@@ -76,7 +80,7 @@ export const usePortalData = ({
         setLoading(true);
       }
 
-      const result = await fetchPortalEstudianteData();
+      const result = await fetchPortalEstudianteData(options);
 
       if (!result.ok) {
         if (result.code === "NOT_AUTHENTICATED") {

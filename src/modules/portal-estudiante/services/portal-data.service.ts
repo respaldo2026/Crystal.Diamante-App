@@ -40,6 +40,10 @@ export type PortalDataResult =
       error?: unknown;
     };
 
+type FetchPortalDataOptions = {
+  includeAcademicContent?: boolean;
+};
+
 const deduplicarLista = <T,>(items: T[], resolverClave: (item: T) => string) => {
   const vistos = new Set<string>();
   const resultado: T[] = [];
@@ -73,7 +77,9 @@ const normalizarTelefonoWhatsapp = (value?: string | null): string | null => {
   return digitos;
 };
 
-export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => {
+export const fetchPortalEstudianteData = async (options?: FetchPortalDataOptions): Promise<PortalDataResult> => {
+  const includeAcademicContent = options?.includeAcademicContent ?? true;
+
   try {
     const {
       data: { user },
@@ -311,7 +317,7 @@ export const fetchPortalEstudianteData = async (): Promise<PortalDataResult> => 
     let materialesClase: any[] = [];
     let quizzesClase: any[] = [];
 
-    if (programaIds.length > 0) {
+    if (includeAcademicContent && programaIds.length > 0) {
       pensum = await obtenerPensumPorProgramas(programaIds);
 
       const materialesData = await obtenerMaterialesPorProgramas(programaIds);
