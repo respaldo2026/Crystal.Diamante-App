@@ -1556,17 +1556,6 @@ export default function PortalEstudiante() {
           </Row>
         </Space>
 
-        {vista !== "plan" && porClaseTieneMoraMatriculaSeleccionada ? (
-          <div style={{ marginBottom: 16 }}>
-            <Alert
-              type="warning"
-              showIcon
-              message="Pago por clase pendiente"
-              description="Tienes una clase vencida por pagar. Se bloquea solo la siguiente clase hasta que registremos tu pago."
-            />
-          </div>
-        ) : null}
-
         <Collapse
           accordion
           expandIconPosition="end"
@@ -1713,8 +1702,8 @@ export default function PortalEstudiante() {
                         key={temaId}
                         className={temaBloqueado ? "tema-bloqueado" : temaCompletado ? "tema-completado" : "tema-activo"}
                       >
-                        <div className="tema-card-layout">
-                          <div className="tema-card-header">
+                        <div className={`tema-card-layout ${vista === "plan" ? "" : "tema-card-layout--compact"}`.trim()}>
+                          <div className={`tema-card-header ${vista === "plan" ? "" : "tema-card-header--compact"}`.trim()}>
                             <div className="tema-cover-wrap">
                               <img
                                 src={temaImageSrc}
@@ -3218,6 +3207,11 @@ export default function PortalEstudiante() {
           gap: 12px;
           width: 100%;
         }
+        .portal-estudiante .tema-card-header--compact {
+          grid-template-columns: 64px minmax(0, 1fr);
+          gap: 10px;
+          align-items: center;
+        }
         .portal-estudiante .tema-card-header-content {
           min-width: 0;
           display: flex;
@@ -3225,8 +3219,15 @@ export default function PortalEstudiante() {
           gap: 4px;
           padding-top: 2px;
         }
+        .portal-estudiante .tema-card-layout--compact .tema-card-header-content {
+          gap: 2px;
+          padding-top: 0;
+        }
         .portal-estudiante .tema-card-body {
           width: 100%;
+        }
+        .portal-estudiante .tema-card-layout--compact .tema-card-body {
+          margin-top: -2px;
         }
         .portal-estudiante .student-menu-btn {
           border-radius: 12px;
@@ -3355,6 +3356,28 @@ export default function PortalEstudiante() {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+        }
+        .portal-estudiante .tema-card-layout--compact .tema-cover-wrap {
+          width: 64px;
+          min-width: 64px;
+          height: 64px;
+          border-radius: 14px;
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
+        }
+        .portal-estudiante .tema-card-layout--compact .tema-cover-order {
+          top: 6px;
+          left: 6px;
+          min-width: 24px;
+          height: 24px;
+          font-size: 11px;
+          padding: 0 6px;
+        }
+        .portal-estudiante .tema-card-layout--compact .tema-cover-chip {
+          left: 6px;
+          right: 6px;
+          bottom: 6px;
+          padding: 3px 6px;
+          font-size: 8px;
         }
         /* ── Pensum: contenedor de material + botones ── */
         .portal-estudiante .tema-material-row {
@@ -3491,11 +3514,24 @@ export default function PortalEstudiante() {
             grid-template-columns: 72px minmax(0, 1fr);
             gap: 10px;
           }
+          .portal-estudiante .tema-card-header--compact {
+            grid-template-columns: 60px minmax(0, 1fr);
+            gap: 8px;
+          }
           .portal-estudiante .tema-card-layout {
             gap: 8px;
           }
           .portal-estudiante .tema-cover-chip {
             font-size: 9px;
+          }
+          .portal-estudiante .tema-card-layout--compact .tema-cover-wrap {
+            width: 60px;
+            min-width: 60px;
+            height: 60px;
+            border-radius: 12px;
+          }
+          .portal-estudiante .tema-card-layout--compact .tema-cover-chip {
+            font-size: 8px;
           }
           .portal-estudiante .ant-table {
             font-size: 12px;
