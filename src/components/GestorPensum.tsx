@@ -81,16 +81,40 @@ const hasMalformedEmbedTokens = (value?: string | null): boolean => {
   return /%_ENCODED_%|\{\"|\{"/i.test(raw);
 };
 
-const isAllowedEmbedHost = (value?: string | null): boolean => {
+type EmbedProvider = "gamma" | "google-slides";
+
+const getEmbedProvider = (value?: string | null): EmbedProvider | null => {
   const normalized = normalizeHttpUrl(value);
-  if (!normalized) return false;
+  if (!normalized) return null;
 
   try {
-    const host = new URL(normalized).hostname.toLowerCase();
-    return host === "gamma.app" || host.endsWith(".gamma.app");
+    const parsed = new URL(normalized);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+
+    if (host === "gamma.app" || host.endsWith(".gamma.app")) {
+      return "gamma";
+    }
+
+    if (host === "docs.google.com" && path.startsWith("/presentation/")) {
+      return "google-slides";
+    }
+
+    return null;
   } catch {
-    return false;
+    return null;
   }
+};
+
+const getEmbedProviderLabel = (value?: string | null): string => {
+  const provider = getEmbedProvider(value);
+  if (provider === "google-slides") return "Google Slides";
+  if (provider === "gamma") return "Gamma";
+  return "Iframe";
+};
+
+const isAllowedEmbedHost = (value?: string | null): boolean => {
+  return Boolean(getEmbedProvider(value));
 };
 
 const extractIframeSrc = (value?: string | null): string => {
@@ -102,13 +126,34 @@ const extractIframeSrc = (value?: string | null): string => {
   return normalizeHttpUrl(candidate);
 };
 
-const toGammaEmbedUrl = (value?: string | null): string => {
+const toEmbedPreviewUrl = (value?: string | null): string => {
   const normalized = normalizeHttpUrl(value);
   if (!normalized) return "";
 
   try {
     const parsed = new URL(normalized);
+    const provider = getEmbedProvider(normalized);
     const host = parsed.hostname.toLowerCase();
+
+    if (provider === "google-slides") {
+      const path = parsed.pathname;
+      const editPath = path.match(/^\/presentation\/d\/([^/]+)\/(edit|present)$/i);
+      if (editPath?.[1]) {
+        parsed.pathname = `/presentation/d/${editPath[1]}/embed`;
+        parsed.search = "";
+        parsed.hash = "";
+        return parsed.toString();
+      }
+
+      if (/^\/presentation\/d\/e\/[^/]+\/pub$/i.test(path)) {
+        parsed.pathname = path.replace(/\/pub$/i, "/embed");
+        parsed.hash = "";
+        return parsed.toString();
+      }
+
+      return parsed.toString();
+    }
+
     if (!(host === "gamma.app" || host.endsWith(".gamma.app"))) {
       return normalized;
     }
@@ -1877,10 +1922,10 @@ export default function GestorPensum({
               throw new Error("No se pudo detectar una URL válida dentro del iframe.");
             }
             if (hasMalformedEmbedTokens(iframeSrc)) {
-              throw new Error("El iframe contiene parámetros inválidos. Vuelve a copiar el código de Gamma.");
+              throw new Error("El iframe contiene parámetros inválidos. Vuelve a copiar el código de Gamma o Google Slides.");
             }
             if (!isAllowedEmbedHost(iframeSrc)) {
-              throw new Error("Solo se permiten iframes de Gamma (gamma.app).");
+              throw new Error("Solo se permiten iframes de Gamma o Google Slides (docs.google.com).");
             }
             urlArchivo = iframeSrc;
           } else {
@@ -1893,16 +1938,16 @@ export default function GestorPensum({
         } else {
           // Modo creación: validar el iframe completo
           if (!iframeCode) {
-            throw new Error("Pega el código iframe de Gamma.");
+            throw new Error("Pega el código iframe de Gamma o Google Slides.");
           }
           if (!isHttpUrl(iframeSrc)) {
             throw new Error("No se pudo detectar una URL válida dentro del iframe.");
           }
           if (hasMalformedEmbedTokens(iframeSrc)) {
-            throw new Error("El iframe contiene parámetros inválidos. Vuelve a copiar el código de Gamma.");
+            throw new Error("El iframe contiene parámetros inválidos. Vuelve a copiar el código de Gamma o Google Slides.");
           }
           if (!isAllowedEmbedHost(iframeSrc)) {
-            throw new Error("Solo se permiten iframes de Gamma (gamma.app).");
+            throw new Error("Solo se permiten iframes de Gamma o Google Slides (docs.google.com).");
           }
           urlArchivo = iframeSrc;
           nombreArchivo = "Presentación embebida";
@@ -2033,7 +2078,7 @@ export default function GestorPensum({
       setIframePreview({
         open: true,
         title: String(title || "Presentación").trim() || "Presentación",
-        src: toGammaEmbedUrl(normalizedUrl),
+        src: toEmbedPreviewUrl(normalizedUrl),
       });
       return;
     }
@@ -2892,12 +2937,13 @@ export default function GestorPensum({
                                     const descripcion = String(material.descripcion || "");
                                     const esImprimibleProfesor = descripcion.includes(MATERIAL_IMPRIMIBLE_PROFESOR_TAG);
                                     const esPdfRespaldo = esPdf && (descripcion.includes("[PDF_RESPALDO_IFRAME]") || materialesTemaOrdenados.some((item) => String(item?.mime_type || "").toLowerCase() === "iframe"));
+                                    const etiquetaIframe = getEmbedProviderLabel(material.url_archivo);
 
                                     return (
                                       <Space size={6} wrap>
                                         <Text>{tituloLimpio}</Text>
                                         {esImprimibleProfesor ? <Tag color="orange">Imprimible profesor</Tag> : null}
-                                        {esIframe ? <Tag color="blue">Gamma</Tag> : null}
+                                        {esIframe ? <Tag color="blue">{etiquetaIframe}</Tag> : null}
                                         {esPdfRespaldo ? <Tag color="purple">PDF respaldo</Tag> : null}
                                       </Space>
                                     );
@@ -3492,7 +3538,7 @@ export default function GestorPensum({
              >
                <Radio.Button value="archivo">Subir Archivo</Radio.Button>
                <Radio.Button value="enlace">Enlace (YouTube, Drive, etc.)</Radio.Button>
-               <Radio.Button value="iframe">Código iframe (Gamma)</Radio.Button>
+               <Radio.Button value="iframe">Código iframe (Gamma o Google Slides)</Radio.Button>
              </Radio.Group>
           </Form.Item>
 
@@ -3525,13 +3571,13 @@ export default function GestorPensum({
           ) : (
             <Form.Item
               name="iframe_code"
-              label="Código iframe de Gamma"
+              label="Código iframe (Gamma o Google Slides)"
               rules={[{ required: true, message: "Pega el código iframe" }]}
-              extra="Pega aquí el embed completo que te da Gamma."
+              extra="Pega aquí el embed completo que te da Gamma o Google Slides (Publicar en la web)."
             >
               <Input.TextArea
                 rows={6}
-                placeholder='<iframe src="https://gamma.app/embed/..." width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
+                placeholder='<iframe src="https://docs.google.com/presentation/d/e/.../embed?start=false&loop=false&delayms=3000" frameborder="0" width="960" height="569" allowfullscreen="true"></iframe>'
               />
             </Form.Item>
           )}
