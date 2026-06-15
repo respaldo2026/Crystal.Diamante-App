@@ -2089,33 +2089,69 @@ export default function GestorPensum({
     });
   }, [cursosPrograma, pensums, quizzesPorTemaId]);
 
+  const getTemaCompletoPorVista = useCallback((curso: PensumCurso) => {
+    const materialesTema = materialesCicloDidactico.filter((material) => {
+      const { tema: temaMaterial } = parseTemaFromTitulo(material.titulo);
+      const temaMaterialNorm = normalizarTema(temaMaterial || material.titulo);
+      const temaCursoNorm = normalizarTema(curso.nombre_curso);
+      return temaMaterialNorm === temaCursoNorm;
+    });
+
+    const materialesNecesariosTema = materialesClaseCiclo.filter(
+      (material) => material.pensum_curso_id === curso.id,
+    );
+
+    const tieneMaterialDidactico = materialesTema.length > 0;
+    const tieneMaterialNecesario = materialesNecesariosTema.length > 0;
+    const tieneQuiz = quizzesPorTemaId.has(String(curso.id));
+
+    if (vistaCicloActiva === "material") return tieneMaterialDidactico;
+    if (vistaCicloActiva === "necesarios") return tieneMaterialNecesario;
+    if (vistaCicloActiva === "quiz") return tieneQuiz;
+
+    return tieneMaterialDidactico && tieneMaterialNecesario && tieneQuiz;
+  }, [materialesCicloDidactico, materialesClaseCiclo, quizzesPorTemaId, vistaCicloActiva]);
+
+  const resumenTemasPorEstado = useMemo(() => {
+    const total = (cursosPensum || []).length;
+    const completos = (cursosPensum || []).filter((curso) => getTemaCompletoPorVista(curso)).length;
+    return {
+      total,
+      completos,
+      pendientes: Math.max(total - completos, 0),
+    };
+  }, [cursosPensum, getTemaCompletoPorVista]);
+
+  const contextoVistaActiva = useMemo(() => {
+    if (vistaCicloActiva === "material") {
+      return {
+        titulo: "Material didáctico por tema",
+        descripcion: "Sube archivos del tema. El botón principal arriba aplica para toda esta pestaña.",
+      };
+    }
+    if (vistaCicloActiva === "necesarios") {
+      return {
+        titulo: "Insumos por tema",
+        descripcion: "Primero gestiona el catálogo general del ciclo y luego asigna insumos a cada tema.",
+      };
+    }
+    if (vistaCicloActiva === "quiz") {
+      return {
+        titulo: "Quiz por tema",
+        descripcion: "Cada tema puede tener un quiz. Desde aquí ves avance y acceso rápido a edición.",
+      };
+    }
+    return {
+      titulo: "Estructura del ciclo",
+      descripcion: "Define temas y completa material didáctico, insumos y quiz para cerrar cada clase.",
+    };
+  }, [vistaCicloActiva]);
+
   const cursosPensumFiltrados = useMemo(() => {
     const lista = cursosPensum || [];
 
     return lista.filter((curso) => {
-      const materialesTema = materialesCicloDidactico.filter((material) => {
-        const { tema: temaMaterial } = parseTemaFromTitulo(material.titulo);
-        const temaMaterialNorm = normalizarTema(temaMaterial || material.titulo);
-        const temaCursoNorm = normalizarTema(curso.nombre_curso);
-        return temaMaterialNorm === temaCursoNorm;
-      });
-
-      const materialesNecesariosTema = materialesClaseCiclo.filter(
-        (material) => material.pensum_curso_id === curso.id,
-      );
-
-      const tieneMaterialDidactico = materialesTema.length > 0;
-      const tieneMaterialNecesario = materialesNecesariosTema.length > 0;
-      const tieneQuiz = quizzesPorTemaId.has(String(curso.id));
-
-      const estaCompletoSegunVista =
-        vistaCicloActiva === "material"
-          ? tieneMaterialDidactico
-          : vistaCicloActiva === "necesarios"
-            ? tieneMaterialNecesario
-            : vistaCicloActiva === "quiz"
-              ? tieneQuiz
-              : tieneMaterialDidactico && tieneMaterialNecesario && tieneQuiz;
+      const estaCompletoSegunVista = getTemaCompletoPorVista(curso);
 
       if (filtroTemas === "completos") return estaCompletoSegunVista;
       if (filtroTemas === "pendientes") return !estaCompletoSegunVista;
@@ -2123,10 +2159,7 @@ export default function GestorPensum({
     });
   }, [
     cursosPensum,
-    materialesCicloDidactico,
-    materialesClaseCiclo,
-    quizzesPorTemaId,
-    vistaCicloActiva,
+    getTemaCompletoPorVista,
     filtroTemas,
   ]);
 
@@ -2368,6 +2401,20 @@ export default function GestorPensum({
             />
           </Card>
 
+          <Card
+            size="small"
+            style={{
+              marginBottom: 16,
+              border: "1px solid #e6f4ff",
+              background: "linear-gradient(135deg, #f8fbff 0%, #eef7ff 100%)",
+            }}
+          >
+            <Space direction="vertical" size={2}>
+              <Text strong>{contextoVistaActiva.titulo}</Text>
+              <Text type="secondary">{contextoVistaActiva.descripcion}</Text>
+            </Space>
+          </Card>
+
           <div style={{ marginBottom: 16 }}>
             <Space wrap>
               {vistaCicloActiva === "temas" && (
@@ -2417,7 +2464,7 @@ export default function GestorPensum({
                       setModalMaterialClaseVisible(true);
                     }}
                   >
-                    Agregar insumo
+                    Agregar insumo a tema
                   </Button>
                   <Button onClick={() => setMostrarListaCompletaNecesarios((prev) => !prev)}>
                     {mostrarListaCompletaNecesarios ? "Ver insumos resumidos" : "Ver lista completa de insumos"}
@@ -2428,6 +2475,14 @@ export default function GestorPensum({
           </div>
 
           {vistaCicloActiva === "necesarios" && (
+            <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message="Orden recomendado"
+              description="1) Gestiona primero la lista general de materiales del ciclo. 2) Luego asigna los insumos necesarios por tema en las tarjetas de abajo."
+            />
             <Card
               size="small"
               title="Materiales del ciclo (lista general)"
@@ -2525,21 +2580,25 @@ export default function GestorPensum({
                             width: 120,
                             render: (_: any, record: MaterialCiclo) => (
                               <Space size={4}>
-                                <Button
-                                  key={`editar-ciclo-${record.id}`}
-                                  type="link"
-                                  icon={<EditOutlined />}
-                                  onClick={() => abrirModalMaterialCiclo(record)}
-                                  style={{ padding: 0, height: "auto" }}
-                                />
-                                <Button
-                                  key={`eliminar-ciclo-${record.id}`}
-                                  type="link"
-                                  danger
-                                  icon={<DeleteOutlined />}
-                                  onClick={() => handleEliminarMaterialCiclo(record.id)}
-                                  style={{ padding: 0, height: "auto" }}
-                                />
+                                <Tooltip title="Editar material del ciclo">
+                                  <Button
+                                    key={`editar-ciclo-${record.id}`}
+                                    type="link"
+                                    icon={<EditOutlined />}
+                                    onClick={() => abrirModalMaterialCiclo(record)}
+                                    style={{ padding: 0, height: "auto" }}
+                                  />
+                                </Tooltip>
+                                <Tooltip title="Eliminar material del ciclo">
+                                  <Button
+                                    key={`eliminar-ciclo-${record.id}`}
+                                    type="link"
+                                    danger
+                                    icon={<DeleteOutlined />}
+                                    onClick={() => handleEliminarMaterialCiclo(record.id)}
+                                    style={{ padding: 0, height: "auto" }}
+                                  />
+                                </Tooltip>
                               </Space>
                             ),
                           },
@@ -2549,12 +2608,13 @@ export default function GestorPensum({
                 />
               )}
             </Card>
+            </>
           )}
 
           {cursosPensum.length > 0 && (
             <Card size="small" style={{ marginBottom: 16 }}>
               <Space wrap>
-                <Text type="secondary">Mostrar:</Text>
+                <Text type="secondary">Estado de temas:</Text>
                 <Radio.Group
                   size="small"
                   value={filtroTemas}
@@ -2562,9 +2622,9 @@ export default function GestorPensum({
                   optionType="button"
                   buttonStyle="solid"
                   options={[
-                    { label: "Todos", value: "todos" },
-                    { label: "Pendientes", value: "pendientes" },
-                    { label: "Completos", value: "completos" },
+                    { label: `Todos (${resumenTemasPorEstado.total})`, value: "todos" },
+                    { label: `Pendientes (${resumenTemasPorEstado.pendientes})`, value: "pendientes" },
+                    { label: `Completos (${resumenTemasPorEstado.completos})`, value: "completos" },
                   ]}
                 />
                 <Text type="secondary">
@@ -2609,6 +2669,7 @@ export default function GestorPensum({
                 const tieneMaterialDidactico = materialesTemaOrdenados.length > 0;
                 const tieneMaterialNecesario = materialesNecesariosTema.length > 0;
                 const tieneQuiz = Boolean(quizTema);
+                const completitudTema = [tieneMaterialDidactico, tieneMaterialNecesario, tieneQuiz].filter(Boolean).length;
 
                 return (
                   <Card
@@ -2705,39 +2766,16 @@ export default function GestorPensum({
                     </div>
 
                     <Space size={6} wrap style={{ marginBottom: 10 }}>
-                      <Tag color={tieneMaterialDidactico ? "green" : "default"}>
-                        Material {tieneMaterialDidactico ? "listo" : "pendiente"}
+                      <Tag color={completitudTema === 3 ? "green" : completitudTema === 0 ? "default" : "gold"}>
+                        Completitud {completitudTema}/3
                       </Tag>
-                      <Tag color={tieneMaterialNecesario ? "green" : "default"}>
-                        Insumos {tieneMaterialNecesario ? "listos" : "pendientes"}
-                      </Tag>
-                      <Tag color={tieneQuiz ? "green" : "default"}>
-                        Quiz {tieneQuiz ? "listo" : "pendiente"}
-                      </Tag>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {`Material ${tieneMaterialDidactico ? "OK" : "-"} · Insumos ${tieneMaterialNecesario ? "OK" : "-"} · Quiz ${tieneQuiz ? "OK" : "-"}`}
+                      </Text>
                     </Space>
 
                     <div style={{ marginBottom: 10 }}>
                       <Space wrap size={8}>
-                        {canManageMateriales ? (
-                          <>
-                            <Button
-                              size="small"
-                              type="primary"
-                              ghost
-                              onClick={() => abrirDrawerMaterialParaTema(curso.nombre_curso)}
-                            >
-                              + Material
-                            </Button>
-                            <Button
-                              size="small"
-                              type="default"
-                              onClick={() => abrirModalMaterialClase(curso.id)}
-                            >
-                              + Insumo
-                            </Button>
-                          </>
-                        ) : null}
-
                         {vistaCicloActiva === "temas" && (
                           <Button
                             size="small"
@@ -2749,6 +2787,26 @@ export default function GestorPensum({
                             }}
                           >
                             Editar tema
+                          </Button>
+                        )}
+
+                        {canManageMateriales && vistaCicloActiva === "material" && (
+                          <Button
+                            size="small"
+                            type="default"
+                            onClick={() => abrirDrawerMaterialParaTema(curso.nombre_curso)}
+                          >
+                            Subir material de este tema
+                          </Button>
+                        )}
+
+                        {canManageMateriales && vistaCicloActiva === "necesarios" && (
+                          <Button
+                            size="small"
+                            type="default"
+                            onClick={() => abrirModalMaterialClase(curso.id)}
+                          >
+                            Agregar insumo a este tema
                           </Button>
                         )}
 
@@ -2779,30 +2837,39 @@ export default function GestorPensum({
                             renderItem={(material: MaterialDidactico) => (
                               <List.Item
                                 actions={[
-                                  <Button
-                                    key={`ver-${material.id}`}
-                                    type="link"
-                                    onClick={() => handleAbrirMaterial(material.url_archivo, parseTemaFromTitulo(material.titulo).tituloLimpio || material.titulo)}
-                                    icon={material.mime_type === 'link' ? <LinkOutlined /> : <EyeOutlined />}
-                                    style={{ fontWeight: 500, padding: 0, height: 'auto' }}
-                                  />,
+                                  <Tooltip
+                                    key={`tooltip-ver-${material.id}`}
+                                    title={material.mime_type === 'link' ? "Abrir enlace" : "Previsualizar"}
+                                  >
+                                    <Button
+                                      key={`ver-${material.id}`}
+                                      type="link"
+                                      onClick={() => handleAbrirMaterial(material.url_archivo, parseTemaFromTitulo(material.titulo).tituloLimpio || material.titulo)}
+                                      icon={material.mime_type === 'link' ? <LinkOutlined /> : <EyeOutlined />}
+                                      style={{ fontWeight: 500, padding: 0, height: 'auto' }}
+                                    />
+                                  </Tooltip>,
                                   ...(canManageMateriales
                                     ? [
-                                        <Button
-                                          key={`editar-${material.id}`}
-                                          type="link"
-                                          icon={<EditOutlined />}
-                                          onClick={() => editarMaterial(material, curso.nombre_curso)}
-                                          style={{ padding: 0, height: "auto" }}
-                                        />,
-                                        <Button
-                                          key={`eliminar-${material.id}`}
-                                          type="link"
-                                          danger
-                                          icon={<DeleteOutlined />}
-                                          onClick={() => handleEliminarMaterial(material.id)}
-                                          style={{ padding: 0, height: "auto" }}
-                                        />,
+                                        <Tooltip key={`tooltip-editar-${material.id}`} title="Editar material">
+                                          <Button
+                                            key={`editar-${material.id}`}
+                                            type="link"
+                                            icon={<EditOutlined />}
+                                            onClick={() => editarMaterial(material, curso.nombre_curso)}
+                                            style={{ padding: 0, height: "auto" }}
+                                          />
+                                        </Tooltip>,
+                                        <Tooltip key={`tooltip-eliminar-${material.id}`} title="Eliminar material">
+                                          <Button
+                                            key={`eliminar-${material.id}`}
+                                            type="link"
+                                            danger
+                                            icon={<DeleteOutlined />}
+                                            onClick={() => handleEliminarMaterial(material.id)}
+                                            style={{ padding: 0, height: "auto" }}
+                                          />
+                                        </Tooltip>,
                                       ]
                                     : []),
                                 ]}
@@ -2945,21 +3012,25 @@ export default function GestorPensum({
                                       width: 120,
                                       render: (_: any, record: MaterialClase) => (
                                         <Space size={4}>
-                                          <Button
-                                            key={`editar-necesario-${record.id}`}
-                                            type="link"
-                                            icon={<EditOutlined />}
-                                            onClick={() => abrirModalMaterialClase(curso.id, record)}
-                                            style={{ padding: 0, height: "auto" }}
-                                          />
-                                          <Button
-                                            key={`eliminar-necesario-${record.id}`}
-                                            type="link"
-                                            danger
-                                            icon={<DeleteOutlined />}
-                                            onClick={() => handleEliminarMaterialClase(record.id)}
-                                            style={{ padding: 0, height: "auto" }}
-                                          />
+                                          <Tooltip title="Editar insumo del tema">
+                                            <Button
+                                              key={`editar-necesario-${record.id}`}
+                                              type="link"
+                                              icon={<EditOutlined />}
+                                              onClick={() => abrirModalMaterialClase(curso.id, record)}
+                                              style={{ padding: 0, height: "auto" }}
+                                            />
+                                          </Tooltip>
+                                          <Tooltip title="Eliminar insumo del tema">
+                                            <Button
+                                              key={`eliminar-necesario-${record.id}`}
+                                              type="link"
+                                              danger
+                                              icon={<DeleteOutlined />}
+                                              onClick={() => handleEliminarMaterialClase(record.id)}
+                                              style={{ padding: 0, height: "auto" }}
+                                            />
+                                          </Tooltip>
                                         </Space>
                                       ),
                                     },
