@@ -82,6 +82,10 @@ function buildAlertKey(item: GrupoConPensum): string {
   return `grupo:${item.grupo_id}|pensum:${item.pensum_id}|fecha:${item.fecha_inicio}`;
 }
 
+function buildNoGroupsAlertKey(targetDate: string, daysAhead: number): string {
+  return `sin-grupos|fecha:${targetDate}|dias:${daysAhead}`;
+}
+
 function buildAlertMessage(item: GrupoConPensum, materiales: MaterialCiclo[], daysAhead: number): string {
   const cicloLabel = item.nombre_ciclo || (item.numero_ciclo ? `Ciclo ${item.numero_ciclo}` : "Ciclo sin nombre");
   const fechaInicio = formatDateEs(item.fecha_inicio);
@@ -114,6 +118,31 @@ function buildAlertMessage(item: GrupoConPensum, materiales: MaterialCiclo[], da
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function buildNoGroupsMessage(input: {
+  targetDate: string;
+  daysAhead: number;
+  totalRegistrosFecha: number;
+  totalElegibles: number;
+}): string {
+  const fechaObjetivo = formatDateEs(input.targetDate);
+  const noHayRegistros = input.totalRegistrosFecha === 0;
+  const key = buildNoGroupsAlertKey(input.targetDate, input.daysAhead);
+
+  return [
+    `ℹ️ *Resumen abastecimiento* (${input.daysAhead} días)`,
+    "",
+    `• *Fecha objetivo:* ${fechaObjetivo}`,
+    `• *Registros en fecha:* ${input.totalRegistrosFecha}`,
+    `• *Grupos elegibles:* ${input.totalElegibles}`,
+    "",
+    noHayRegistros
+      ? "No hay grupos programados para iniciar en esta fecha."
+      : "Hay grupos en la fecha, pero ninguno es elegible para alerta (sin pensum o datos incompletos).",
+    "",
+    `Clave alerta: ${key}`,
+  ].join("\n");
 }
 
 function buildTemplateVariables(item: GrupoConPensum, materiales: MaterialCiclo[], daysAhead: number): string[] {
@@ -220,14 +249,6 @@ async function runAlertaMaterialesCiclo() {
     if (gruposError) throw gruposError;
 
     const grupos = (gruposRaw || []) as GrupoConPensum[];
-    if (grupos.length === 0) {
-      return NextResponse.json({
-        success: true,
-        mensaje: `Sin ciclos por iniciar el ${targetDate}`,
-        targetDate,
-        enviados: 0,
-      });
-    }
 
     const gruposUnicos = Array.from(
       new Map(
@@ -236,6 +257,58 @@ async function runAlertaMaterialesCiclo() {
           .map((item) => [`${item.grupo_id}|${item.pensum_id}|${item.fecha_inicio}`, item]),
       ).values(),
     );
+
+    if (grupos.length === 0 || gruposUnicos.length === 0) {
+      const noGroupsMessage = buildNoGroupsMessage({
+        targetDate,
+        daysAhead,
+        totalRegistrosFecha: grupos.length,
+        totalElegibles: gruposUnicos.length,
+      });
+
+      const noGroupsKey = buildNoGroupsAlertKey(targetDate, daysAhead);
+      const alreadySent = await wasAlreadySent(supabase, noGroupsKey);
+      if (alreadySent) {
+        return NextResponse.json({
+          success: true,
+          mensaje: `Ya se había enviado resumen sin grupos para ${targetDate}`,
+          targetDate,
+          enviados: 0,
+          resumen: {
+            totalDetectados: gruposUnicos.length,
+            enviados: 0,
+            enviadosConPlantilla: 0,
+            enviadosConTexto: 0,
+            omitidos: 1,
+            fallidos: 0,
+          },
+          errores: [],
+        });
+      }
+
+      const response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+      await saveAudit(supabase, {
+        phone: alertPhone,
+        message: `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
+        messageId: response?.messages?.[0]?.id,
+      });
+
+      return NextResponse.json({
+        success: true,
+        mensaje: `Resumen sin grupos enviado para ${targetDate}`,
+        targetDate,
+        enviados: 1,
+        resumen: {
+          totalDetectados: gruposUnicos.length,
+          enviados: 1,
+          enviadosConPlantilla: 0,
+          enviadosConTexto: 1,
+          omitidos: 0,
+          fallidos: 0,
+        },
+        errores: [],
+      });
+    }
 
     const pensumIds = Array.from(new Set(gruposUnicos.map((item) => String(item.pensum_id)).filter(Boolean)));
 
