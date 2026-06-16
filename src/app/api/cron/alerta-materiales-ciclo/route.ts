@@ -9,6 +9,9 @@ const DEFAULT_ALERT_PHONE = "3006402575";
 const DEFAULT_DAYS_AHEAD = 7;
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_ALERTA_MAX_GRUPOS_POR_CORRIDA || 20);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_ALERTA_DELAY_MS || 900);
+const TEMPLATE_NAME = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES || "").trim();
+const TEMPLATE_LANG = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES_LANG || "es_CO").trim();
+const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALERTA_ALLOW_TEXT_FALLBACK || "true").toLowerCase() === "true";
 
 type GrupoConPensum = {
   grupo_id: number;
@@ -111,6 +114,29 @@ function buildAlertMessage(item: GrupoConPensum, materiales: MaterialCiclo[], da
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function buildTemplateVariables(item: GrupoConPensum, materiales: MaterialCiclo[], daysAhead: number): string[] {
+  const cicloLabel = item.nombre_ciclo || (item.numero_ciclo ? `Ciclo ${item.numero_ciclo}` : "Ciclo sin nombre");
+  const fechaInicio = formatDateEs(item.fecha_inicio);
+  const materialesTexto = materiales.length
+    ? materiales
+        .slice(0, 40)
+        .map((mat, idx) => {
+          const cantidad = String(mat.cantidad || "").trim();
+          return `${idx + 1}. ${mat.nombre}${cantidad ? ` (${cantidad})` : ""}`;
+        })
+        .join("; ")
+    : "Sin materiales configurados en este ciclo.";
+
+  return [
+    String(daysAhead),
+    item.grupo_nombre || `Grupo ${item.grupo_id}`,
+    item.programa_nombre || `Programa ${item.programa_id}`,
+    cicloLabel,
+    fechaInicio,
+    materialesTexto,
+  ];
 }
 
 async function wasAlreadySent(supabase: any, alertKey: string): Promise<boolean> {
@@ -236,6 +262,8 @@ async function runAlertaMaterialesCiclo() {
     let omitidos = 0;
     let fallidos = 0;
     const errores: string[] = [];
+    let enviadosConPlantilla = 0;
+    let enviadosConTexto = 0;
 
     for (const item of gruposUnicos.slice(0, Math.max(1, MAX_SENDS_PER_RUN))) {
       const key = buildAlertKey(item);
@@ -249,11 +277,39 @@ async function runAlertaMaterialesCiclo() {
       const message = buildAlertMessage(item, mats, daysAhead);
 
       try {
-        const response = await WhatsAppService.sendText(alertPhone, message);
+        let response: any = null;
+        let envioUsado: "template" | "text" = "text";
+
+        if (TEMPLATE_NAME) {
+          const variables = buildTemplateVariables(item, mats, daysAhead);
+          try {
+            response = await WhatsAppService.sendTemplate(alertPhone, TEMPLATE_NAME, variables, TEMPLATE_LANG);
+            envioUsado = "template";
+          } catch (templateError) {
+            if (!ALLOW_TEXT_FALLBACK) {
+              throw templateError;
+            }
+            console.warn("[Cron Alerta Materiales] Falló plantilla, usando fallback texto:", templateError);
+            response = await WhatsAppService.sendText(alertPhone, message);
+            envioUsado = "text";
+          }
+        } else {
+          response = await WhatsAppService.sendText(alertPhone, message);
+          envioUsado = "text";
+        }
+
         enviados += 1;
+        if (envioUsado === "template") {
+          enviadosConPlantilla += 1;
+        } else {
+          enviadosConTexto += 1;
+        }
         await saveAudit(supabase, {
           phone: alertPhone,
-          message,
+          message:
+            envioUsado === "template"
+              ? `${message}\n\n[ENVIO_USADO] template:${TEMPLATE_NAME} lang:${TEMPLATE_LANG}`
+              : `${message}\n\n[ENVIO_USADO] text`,
           messageId: response?.messages?.[0]?.id,
         });
       } catch (error: any) {
@@ -272,6 +328,8 @@ async function runAlertaMaterialesCiclo() {
       resumen: {
         totalDetectados: gruposUnicos.length,
         enviados,
+        enviadosConPlantilla,
+        enviadosConTexto,
         omitidos,
         fallidos,
       },
