@@ -283,9 +283,12 @@ export const PortalRutaAcademicaSection = ({
           const temasCiclo = obtenerTemasCicloAction(ciclo);
           const materialesGenerales = obtenerMaterialesCicloAction(cicloId);
 
-          const cicloBloqueado = esPlanMensualSeleccionado
+          const cicloBloqueadoPorPlan = esPlanMensualSeleccionado
             ? index >= ciclosMensualesPagados
             : index > primerCicloIncompletoIndex;
+          // Excepción solicitada: permitir revisar el módulo 1 para habilitar su primer quiz aunque exista mora.
+          const permitirPrimerQuizModuloUno = vista === "plan" && index === 0;
+          const cicloBloqueado = cicloBloqueadoPorPlan && !permitirPrimerQuizModuloUno;
           const primerIndexActual = cicloBloqueado ? 0 : getPrimerTemaPendienteIndexAction(temasCiclo);
 
           return {
@@ -377,9 +380,11 @@ export const PortalRutaAcademicaSection = ({
                     }));
                   const insumosTema = obtenerInsumosTemaAction(tema, cicloId);
                   const temaCompletado = isTemaCompletadoByTemaIdAction(temaId);
+                  const esPrimerTemaModuloUno = vista === "plan" && index === 0 && temaIndex === 0;
                   const bloqueoTemaActualPorPagoPorClase = porClaseTieneMoraMatriculaSeleccionada
                     && temaIndex === primerIndexActual
-                    && !temaCompletado;
+                    && !temaCompletado
+                    && !esPrimerTemaModuloUno;
                   const temaBloqueado = vista === "plan"
                     ? (cicloBloqueado || temaIndex > primerIndexActual || bloqueoTemaActualPorPagoPorClase)
                     : cicloBloqueado;
