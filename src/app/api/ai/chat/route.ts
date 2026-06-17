@@ -320,6 +320,21 @@ function validateUserInput(message: string, maxLength: number = 2000): { valid: 
   return { valid: true, message: trimmed };
 }
 
+function isAutomatedOutboundMessage(message: string): boolean {
+  const normalized = normalizeForMatch(message);
+  if (!normalized) return false;
+
+  return (
+    normalized.startsWith("sistema") ||
+    normalized.includes("alerta de abastecimiento") ||
+    normalized.includes("resumen abastecimiento") ||
+    normalized.includes("follow up automatico") ||
+    normalized.includes("recordatorio de pago") ||
+    normalized.includes("liquidacion de profesores") ||
+    normalized.includes("clave alerta")
+  );
+}
+
 /**
  * Rate limiting simple por teléfono (máx 20 mensajes por minuto)
  */
@@ -6673,6 +6688,21 @@ export async function POST(req: NextRequest) {
         ok: false,
         error: String(inputValidation.error || "Entrada inválida")
       }, { status: 400 });
+    }
+
+    if (isAutomatedOutboundMessage(inputValidation.message || message)) {
+      console.warn("[chat] Mensaje automático ignorado para evitar consumo de Gemini", {
+        phone,
+        channel,
+        messagePreview: (inputValidation.message || message).slice(0, 120),
+      });
+
+      return NextResponse.json({
+        ok: true,
+        ignored: true,
+        reason: "automated_outbound_message",
+        response: "",
+      });
     }
 
     // Verificar rate limit
