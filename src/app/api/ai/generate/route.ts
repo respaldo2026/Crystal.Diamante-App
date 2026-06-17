@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { shouldSkipGeminiRequest } from "@/utils/ai-request-guards";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,9 @@ const cleanKeywords = (value: any) => {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    if (shouldSkipGeminiRequest(body?.titulo, body?.tipo, body?.publico, body?.oferta, body?.beneficios)) {
+      return NextResponse.json({ ok: true, ignored: true, reason: "automated_outbound_message" });
+    }
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -40,9 +44,10 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const modelName =
+      process.env.GEMINI_MODEL_ECONOMY ||
       process.env.GEMINI_MODEL_CHAT ||
       process.env.GEMINI_MODEL_SUMMARY ||
-      "gemini-2.5-flash";
+      "gemini-2.5-flash-lite";
     const model = genAI.getGenerativeModel({ model: modelName });
 
     const {

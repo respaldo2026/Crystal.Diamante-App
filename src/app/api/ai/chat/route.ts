@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
 import { getAgentImageSuggestion, withMediaSuggestion } from "@/utils/agent-media-suggestions";
+import { shouldSkipGeminiRequest } from "@/utils/ai-request-guards";
 import { 
   getProgramsForAgent, 
   getCoursesForQuery, 
@@ -321,18 +322,7 @@ function validateUserInput(message: string, maxLength: number = 2000): { valid: 
 }
 
 function isAutomatedOutboundMessage(message: string): boolean {
-  const normalized = normalizeForMatch(message);
-  if (!normalized) return false;
-
-  return (
-    normalized.startsWith("sistema") ||
-    normalized.includes("alerta de abastecimiento") ||
-    normalized.includes("resumen abastecimiento") ||
-    normalized.includes("follow up automatico") ||
-    normalized.includes("recordatorio de pago") ||
-    normalized.includes("liquidacion de profesores") ||
-    normalized.includes("clave alerta")
-  );
+  return shouldSkipGeminiRequest(message);
 }
 
 /**
@@ -6470,6 +6460,7 @@ function buildContextualDirective(
 
 async function generateResponse(apiKey: string, prompt: string, timeoutMs: number = 25000): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
+  const economyModel = String(process.env.GEMINI_MODEL_ECONOMY || "gemini-2.5-flash-lite").trim();
   const unsupportedModels = new Set([
     "gemini-1.5-pro-002",
     "gemini-1.5-flash-002",
@@ -6478,10 +6469,12 @@ async function generateResponse(apiKey: string, prompt: string, timeoutMs: numbe
   ]);
   
   const modelCandidates = [
+    economyModel,
     process.env.GEMINI_MODEL_CHAT,
     process.env.GEMINI_MODEL_SUMMARY,
+    "gemini-1.5-flash-002",
+    "gemini-1.5-flash",
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
   ]
     .filter(Boolean)
     .map((model) => String(model).trim())

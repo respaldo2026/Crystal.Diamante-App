@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 import { createClient } from "@supabase/supabase-js";
+import { shouldSkipGeminiRequest } from "@/utils/ai-request-guards";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ const fetchDocxText = async (url: string) => {
 
 const summarize = async (apiKey: string, text: string) => {
   const genAI = new GoogleGenerativeAI(apiKey);
+  const economyModel = String(process.env.GEMINI_MODEL_ECONOMY || "gemini-2.5-flash-lite").trim();
   const unsupportedModels = new Set([
     "gemini-1.5-pro-002",
     "gemini-1.5-flash-002",
@@ -37,15 +39,17 @@ Texto:
 ${text.slice(0, 12000)}`;
 
   // Lista de modelos válidos en orden de preferencia
-  const modelCandidates = [
+  const modelCandidates = Array.from(new Set([
+    economyModel,
     process.env.GEMINI_MODEL_SUMMARY,
     process.env.GEMINI_MODEL_CHAT,
+    "gemini-1.5-flash-002",
+    "gemini-1.5-flash",
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
   ]
     .filter(Boolean)
     .map((model) => String(model).trim())
-    .filter((model) => !unsupportedModels.has(model)) as string[];
+    .filter((model) => !unsupportedModels.has(model)))) as string[];
 
   let lastError: any = null;
 
@@ -105,6 +109,10 @@ export async function POST(req: Request) {
     const { title, url, raw_text, mime_type } = body || {};
     if (!title) return NextResponse.json({ error: "Falta título" }, { status: 400 });
     if (!url && !raw_text) return NextResponse.json({ error: "Proporciona un PDF o texto" }, { status: 400 });
+
+    if (shouldSkipGeminiRequest(title, url, raw_text, mime_type)) {
+      return NextResponse.json({ ok: true, ignored: true, reason: "automated_outbound_message" });
+    }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

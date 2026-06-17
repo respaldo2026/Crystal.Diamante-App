@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
 import { getAgentImageSuggestion, withMediaSuggestion } from "@/utils/agent-media-suggestions";
+import { shouldSkipGeminiRequest } from "@/utils/ai-request-guards";
 import { 
   getProgramsForAgent, 
   getCoursesForQuery, 
@@ -496,6 +497,7 @@ function getGeminiBackoffMs(attemptIndex: number): number {
  */
 async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
+  const economyModel = String(process.env.GEMINI_MODEL_ECONOMY || "gemini-2.5-flash-lite").trim();
   const unsupportedModels = new Set([
     "gemini-1.5-pro-002",
     "gemini-1.5-flash-002",
@@ -505,10 +507,12 @@ async function speechToText(apiKey: string, audioBuffer: Buffer): Promise<string
   
   // Usar la misma lista de modelos que funciona en el endpoint de chat
   const modelCandidates = Array.from(new Set([
+    economyModel,
     process.env.GEMINI_MODEL_CHAT,
     process.env.GEMINI_MODEL_SUMMARY,
+    "gemini-1.5-flash-002",
+    "gemini-1.5-flash",
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
   ]
     .filter(Boolean)
     .map((model) => String(model).trim())
@@ -2683,6 +2687,7 @@ function buildContextualDirective(userMessage: string, detectedProgram: any | nu
  */
 async function generateResponse(apiKey: string, prompt: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
+  const economyModel = String(process.env.GEMINI_MODEL_ECONOMY || "gemini-2.5-flash-lite").trim();
   const unsupportedModels = new Set([
     "gemini-1.5-pro-002",
     "gemini-1.5-flash-002",
@@ -2691,10 +2696,12 @@ async function generateResponse(apiKey: string, prompt: string): Promise<string>
   ]);
 
   const modelCandidates = Array.from(new Set([
+    economyModel,
     process.env.GEMINI_MODEL_CHAT,
     process.env.GEMINI_MODEL_SUMMARY,
+    "gemini-1.5-flash-002",
+    "gemini-1.5-flash",
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
   ]
     .filter(Boolean)
     .map((model) => String(model).trim())
@@ -3349,6 +3356,16 @@ export async function POST(req: NextRequest) {
     const audio_url = extractedAudioInputs.audioUrl;
     const resolvedPhone = extractPhoneFromAudioBody(body || {});
 
+    if (shouldSkipGeminiRequest(body?.message, body?.text, body?.mensaje_whatsapp)) {
+      return NextResponse.json({
+        ok: true,
+        ignored: true,
+        reason: "automated_outbound_message",
+        transcription: "",
+        agent_response: "",
+      });
+    }
+
     // Aceptar tanto media_id como audio_url para flexibilidad
     if (!media_id && !audio_url) {
       return NextResponse.json(
@@ -3409,6 +3426,16 @@ export async function POST(req: NextRequest) {
     // 5. STT: Convertir audio a texto
     console.log("[POST /api/ai/audio] Convirtiendo audio a texto (STT)...");
     const transcription = await speechToText(geminiKey, audioBuffer);
+
+    if (shouldSkipGeminiRequest(transcription, body?.message, body?.text, body?.mensaje_whatsapp)) {
+      return NextResponse.json({
+        ok: true,
+        ignored: true,
+        reason: "automated_outbound_message",
+        transcription: transcription || "",
+        agent_response: "",
+      });
+    }
 
     // 6. Leer configuración del agente
     const { data: settings } = await supabase

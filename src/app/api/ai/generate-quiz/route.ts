@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { shouldSkipGeminiRequest } from "@/utils/ai-request-guards";
 
 export const dynamic = "force-dynamic";
 
@@ -128,6 +129,10 @@ export async function POST(req: NextRequest) {
     ];
     const urlsPdf = Array.from(new Set(urlsEntrada.map(normalizarUrl).filter(Boolean)));
 
+    if (shouldSkipGeminiRequest(titulo_clase, pensum_curso_id, urlsPdf.join(" "))) {
+      return NextResponse.json({ ok: true, ignored: true, reason: "automated_outbound_message" });
+    }
+
     if (urlsPdf.length === 0) {
       return NextResponse.json(
         { error: "Se requiere al menos un PDF (pdf_url o pdf_urls) para generar el quiz." },
@@ -161,7 +166,8 @@ export async function POST(req: NextRequest) {
 
     // Llamar a Gemini con el PDF
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const modelName = String(process.env.GEMINI_MODEL_ECONOMY || "gemini-2.5-flash-lite").trim();
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const promptTextoBase = titulo_clase
       ? `${PROMPT_GENERAR_QUIZ}\n\nEl tema de esta clase es: "${titulo_clase}". Enfoca las preguntas en este tema específico.`
