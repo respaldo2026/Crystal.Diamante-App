@@ -223,6 +223,39 @@ async function saveAudit(
   }
 }
 
+async function saveWhatsAppMessageRecord(
+  supabase: any,
+  input: {
+    phone: string;
+    content: string;
+    estado: "enviado" | "fallido";
+    messageId?: string;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<void> {
+  try {
+    const payload = {
+      telefono: input.phone,
+      tipo: "text",
+      contenido: input.content,
+      estado: input.estado,
+      message_id: input.messageId || null,
+      metadatos: {
+        source: "cron_alerta_materiales",
+        ...(input.metadata || {}),
+      },
+      creado_en: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from("whatsapp_mensajes").insert(payload);
+    if (error) {
+      console.warn("[Cron Alerta Materiales] No se pudo registrar whatsapp_mensajes:", error);
+    }
+  } catch (error) {
+    console.warn("[Cron Alerta Materiales] Excepción registrando whatsapp_mensajes:", error);
+  }
+}
+
 async function runAlertaMaterialesCiclo() {
   try {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -285,25 +318,23 @@ async function runAlertaMaterialesCiclo() {
           errores: [],
         });
       }
-
-      const response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
       await saveAudit(supabase, {
         phone: alertPhone,
-        message: `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
-        messageId: response?.messages?.[0]?.id,
+        message: `${noGroupsMessage}\n\n[ENVIO_USADO] none\n[MODO] no-groups`,
+        messageId: "sin-envio-no-groups",
       });
 
       return NextResponse.json({
         success: true,
-        mensaje: `Resumen sin grupos enviado para ${targetDate}`,
+        mensaje: `Resumen sin grupos registrado (sin envío WhatsApp) para ${targetDate}`,
         targetDate,
-        enviados: 1,
+        enviados: 0,
         resumen: {
           totalDetectados: gruposUnicos.length,
-          enviados: 1,
+          enviados: 0,
           enviadosConPlantilla: 0,
-          enviadosConTexto: 1,
-          omitidos: 0,
+          enviadosConTexto: 0,
+          omitidos: 1,
           fallidos: 0,
         },
         errores: [],
@@ -385,9 +416,40 @@ async function runAlertaMaterialesCiclo() {
               : `${message}\n\n[ENVIO_USADO] text`,
           messageId: response?.messages?.[0]?.id,
         });
+
+        await saveWhatsAppMessageRecord(supabase, {
+          phone: alertPhone,
+          content: message,
+          estado: "enviado",
+          messageId: response?.messages?.[0]?.id,
+          metadata: {
+            envio_usado: envioUsado,
+            template_name: envioUsado === "template" ? TEMPLATE_NAME : null,
+            template_lang: envioUsado === "template" ? TEMPLATE_LANG : null,
+            days_ahead: daysAhead,
+            target_date: targetDate,
+            alert_key: key,
+            grupo_id: item.grupo_id,
+            pensum_id: item.pensum_id,
+          },
+        });
       } catch (error: any) {
         fallidos += 1;
         errores.push(`Grupo ${item.grupo_nombre || item.grupo_id}: ${error?.message || "Error desconocido"}`);
+
+        await saveWhatsAppMessageRecord(supabase, {
+          phone: alertPhone,
+          content: message,
+          estado: "fallido",
+          metadata: {
+            days_ahead: daysAhead,
+            target_date: targetDate,
+            alert_key: key,
+            grupo_id: item.grupo_id,
+            pensum_id: item.pensum_id,
+            error: error?.message || "Error desconocido",
+          },
+        });
       }
 
       if (DELAY_BETWEEN_SENDS_MS > 0) {
