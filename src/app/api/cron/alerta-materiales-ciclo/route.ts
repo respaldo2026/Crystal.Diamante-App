@@ -503,10 +503,13 @@ async function runAlertaMaterialesCiclo() {
 
       let proximo: { fecha_inicio_ciclo: string; numero_ciclo_objetivo: number } | null = null;
       for (let index = 0; index < sesionesOrdenadas.length; index += 1) {
+        const sesion = sesionesOrdenadas[index];
+        if (!sesion?.fecha) continue;
+
         const numeroClase = index + 1;
         if ((numeroClase - 1) % classesPerCycle !== 0) continue;
 
-        const fecha = String(sesionesOrdenadas[index].fecha).slice(0, 10);
+        const fecha = String(sesion.fecha).slice(0, 10);
         if (fecha < todayDate) continue;
 
         proximo = {
