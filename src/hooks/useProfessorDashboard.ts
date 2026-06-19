@@ -7,6 +7,9 @@ import isBetween from "dayjs/plugin/isBetween";
 
 dayjs.extend(isBetween);
 
+const HOURS_PER_CLASS = 3;
+const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automaticamente para calculo de ciclos/i;
+
 export interface ProfesorDashboardCurso {
   id: string;
   nombre: string;
@@ -285,7 +288,7 @@ export const fetchProfessorDashboardData = async (
 
   const cursosData = cursosResponse.data || [];
   const cursosActivos = cursosData.filter((c) => c.estado === "activo") || [];
-  const cursoIds = cursosData.map((c) => c.id) || [];
+  const cursoIds = cursosActivos.map((c) => c.id) || [];
 
   const cursoFechaInicioMap = new Map<string, dayjs.Dayjs>();
   (cursosData || []).forEach((curso: any) => {
@@ -358,12 +361,16 @@ export const fetchProfessorDashboardData = async (
     console.error("Error obteniendo sesiones históricas", sesionesHistoricasResult.error);
   }
 
-  const matriculasData = (matriculasResult.data || []).filter((matricula: any) =>
-    isEnrollmentActiveState(matricula?.estado),
+  const matriculasData = (matriculasResult.data || []).filter((matricula: any) => isEnrollmentActiveState(matricula?.estado));
+  const sesionesMesData = (sesionesMesResult.data || []).filter(
+    (sesion: any) => !AUTO_SESSION_TOPIC_PATTERN.test(String(sesion?.tema_visto || "")),
   );
-  const sesionesMesData = sesionesMesResult.data || [];
-  const proximasSesionesData = proximasSesionesResult.data || [];
-  const sesionesHistoricas = sesionesHistoricasResult.data || [];
+  const proximasSesionesData = (proximasSesionesResult.data || []).filter(
+    (sesion: any) => !AUTO_SESSION_TOPIC_PATTERN.test(String(sesion?.tema_visto || "")),
+  );
+  const sesionesHistoricas = (sesionesHistoricasResult.data || []).filter(
+    (sesion: any) => !AUTO_SESSION_TOPIC_PATTERN.test(String(sesion?.tema_visto || "")),
+  );
 
   const matriculaIds = matriculasData.map((matricula: any) => matricula.id);
 
@@ -440,10 +447,7 @@ export const fetchProfessorDashboardData = async (
     }
   });
 
-  const horasMes = sesionesMesData.reduce(
-    (total: number, sesion: any) => total + safeNumber(Number(sesion.horas_dictadas) || 0),
-    0,
-  );
+  const horasMes = sesionesMesData.length * HOURS_PER_CLASS;
 
   const ahora = dayjs();
   const quincenaInicio = ahora.date() <= 15 ? ahora.startOf("month") : ahora.date(16).startOf("day");
@@ -452,7 +456,7 @@ export const fetchProfessorDashboardData = async (
   const horasQuincena = sesionesMesData.reduce((total: number, sesion: any) => {
     const fechaSesion = dayjs(sesion.fecha);
     if (fechaSesion.isBetween(quincenaInicio, quincenaFin, "day", "[]")) {
-      return total + safeNumber(Number(sesion.horas_dictadas) || 0);
+      return total + HOURS_PER_CLASS;
     }
     return total;
   }, 0);
@@ -621,7 +625,7 @@ export const fetchProfessorDashboardData = async (
     horaInicio: cursoHoraInicioMap.get(String(sesion.curso_id)) || null,
     tema: sesion.tema_visto,
     claseNumero: extractClassNumber(sesion.tema_visto),
-    horas: Number(sesion.horas_dictadas) || null,
+    horas: HOURS_PER_CLASS,
   }));
 
   const proximasSesionPorCurso = new Map<string, { fecha: string; tema?: string | null }>();
@@ -644,7 +648,7 @@ export const fetchProfessorDashboardData = async (
         curso: cursoNombreMap.get(String(curso.id)) || curso.nombre || "Curso",
         horaInicio: cursoHoraInicioMap.get(String(curso.id)) || curso.hora_inicio || null,
         tema: null,
-        horas: null,
+        horas: HOURS_PER_CLASS,
       } as ProfesorDashboardSesion;
     })
     .filter((item): item is ProfesorDashboardSesion => Boolean(item))

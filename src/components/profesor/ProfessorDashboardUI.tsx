@@ -316,6 +316,22 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     () => dedupeByKey(statsData.topCursos || [], (curso: any) => `${curso.id ?? curso.nombre ?? ""}`),
     [statsData.topCursos],
   );
+
+  const assignedCourseIds = useMemo(() => {
+    const ids = new Set<string>();
+    (cursos || []).forEach((curso: any) => {
+      if (curso?.id !== undefined && curso?.id !== null) {
+        ids.add(String(curso.id));
+      }
+    });
+    return ids;
+  }, [cursos]);
+
+  const proximasSesionesAsignadas = useMemo(
+    () => proximasSesionesData.filter((sesion: any) => assignedCourseIds.has(String(sesion?.cursoId || ""))),
+    [proximasSesionesData, assignedCourseIds],
+  );
+
   const cursosOrdenados = useMemo(
     () => dedupeByKey(cursos || [], (curso: any) => `${curso.id ?? curso.nombre ?? ""}`)
       .sort((a, b) => (b.estudiantesActivos || 0) - (a.estudiantesActivos || 0)),
@@ -914,7 +930,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                   bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
                 >
                   <List
-                    dataSource={proximasSesionesData}
+                    dataSource={proximasSesionesAsignadas}
                     locale={{ emptyText: "No hay sesiones programadas" }}
                     renderItem={(sesion) => (
                       <List.Item

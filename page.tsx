@@ -114,7 +114,7 @@ export default function AuditoriaPage() {
           dataIndex="changed_at"
           title="Fecha"
           width={160}
-          render={(value) => (
+          render={(value: string) => (
             <DateField value={value} format="DD/MM/YYYY HH:mm" />
           )}
           sorter
@@ -124,7 +124,7 @@ export default function AuditoriaPage() {
           dataIndex="operation"
           title="Acción"
           width={100}
-          render={(value) => {
+          render={(value: string) => {
             const colors: Record<string, string> = {
               INSERT: "green",
               UPDATE: "blue",
@@ -132,7 +132,7 @@ export default function AuditoriaPage() {
             };
             return <Tag color={colors[value]}>{value}</Tag>;
           }}
-          filterDropdown={(props) => (
+          filterDropdown={(props: any) => (
             <FilterDropdown {...props}>
               <Select
                 style={{ minWidth: 150 }}
@@ -152,19 +152,21 @@ export default function AuditoriaPage() {
           dataIndex="table_name"
           title="Módulo"
           width={120}
-          render={(value) => <Tag color="geekblue">{value.toUpperCase()}</Tag>}
+          render={(value: string) => <Tag color="geekblue">{value.toUpperCase()}</Tag>}
         />
 
         <Table.Column
           title="Usuario"
           dataIndex="perfiles"
           width={200}
-          render={(perfil) => perfil?.nombre_completo || <Text type="secondary">Sistema</Text>}
+          render={(perfil: { nombre_completo?: string } | null) =>
+            perfil?.nombre_completo || <Text type="secondary">Sistema</Text>
+          }
         />
 
         <Table.Column
           title="Detalles del Cambio"
-          render={(_, record: any) => renderDiff(record.old_data, record.new_data)}
+          render={(_: unknown, record: any) => renderDiff(record.old_data, record.new_data)}
         />
       </Table>
     </List>
