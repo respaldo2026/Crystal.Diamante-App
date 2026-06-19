@@ -160,6 +160,7 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
         ? numeroClase + 1
         : 1;
   const proximaClaseNombre = String(grupo.siguiente_clase_nombre || "").trim() || null;
+  const totalClasesPrograma = Number(grupo.programas?.total_clases || 0) || null;
 
   const cicloActualNombre = String(grupo.ciclo_actual_nombre || "").trim();
   const cicloActualNumeroRaw = Number(grupo.ciclo_actual_numero || 0);
@@ -172,17 +173,20 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
   const proximoCicloNumero =
     Number.isFinite(proximoCicloNumeroRaw) && proximoCicloNumeroRaw > 0 ? proximoCicloNumeroRaw : null;
   const proximoCiclo = proximoCicloNombre || (proximoCicloNumero ? `Ciclo ${proximoCicloNumero}` : null);
+  const maximoAlcanzado = Boolean(totalClasesPrograma && numeroClase >= totalClasesPrograma);
 
   if (numeroClase > 0) {
     return {
       titulo: `Van en clase #${numeroClase}`,
       detalle: fecha ? `Último registro: ${fecha}` : "Último registro confirmado",
       tema: tema || null,
-      proximaClaseHorario,
-      proximaClaseNumero,
-      proximaClaseNombre,
+      proximaClaseHorario: maximoAlcanzado ? null : proximaClaseHorario,
+      proximaClaseNumero: maximoAlcanzado ? null : proximaClaseNumero,
+      proximaClaseNombre: maximoAlcanzado ? null : proximaClaseNombre,
       cicloActual,
       proximoCiclo,
+      maximoAlcanzado,
+      totalClasesPrograma,
       color: "#7C3AED",
       fondo: "#F5F3FF",
       borde: "#DDD6FE",
@@ -198,6 +202,8 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     proximaClaseNombre,
     cicloActual,
     proximoCiclo,
+    maximoAlcanzado: false,
+    totalClasesPrograma,
     color: "#475569",
     fondo: "#F8FAFC",
     borde: "#E2E8F0",
@@ -536,6 +542,11 @@ export default function CursosList() {
                 >
                   Lista de materiales (próximo ciclo)
                 </Button>
+                {avanceGrupo.maximoAlcanzado ? (
+                  <Tag color="gold" style={{ marginTop: 8, borderRadius: 999 }}>
+                    {`Límite alcanzado: ${avanceGrupo.totalClasesPrograma || 0} clases`}
+                  </Tag>
+                ) : null}
               </div>
               {avanceGrupo.proximaClaseHorario ? (
                 <div
@@ -598,6 +609,55 @@ export default function CursosList() {
                     }}
                   >
                     {avanceGrupo.proximaClaseHorario}
+                  </Text>
+                </div>
+              ) : avanceGrupo.maximoAlcanzado ? (
+                <div
+                  style={{
+                    background: "linear-gradient(135deg, #16A34A 0%, #22C55E 100%)",
+                    borderRadius: 10,
+                    padding: "7px 11px",
+                    flexShrink: 0,
+                    textAlign: "center",
+                    boxShadow: "0 2px 8px rgba(34,197,94,0.24)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      display: "block",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: "rgba(255,255,255,0.90)",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    Ciclo completo
+                  </Text>
+                  <Text
+                    style={{
+                      display: "block",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#ffffff",
+                      lineHeight: 1.4,
+                      marginTop: 2,
+                    }}
+                  >
+                    {`Clase #${avanceGrupo.totalClasesPrograma || 0}`}
+                  </Text>
+                  <Text
+                    style={{
+                      display: "block",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: "rgba(255,255,255,0.88)",
+                      lineHeight: 1.3,
+                      marginTop: 1,
+                    }}
+                  >
+                    Sin próxima clase
                   </Text>
                 </div>
               ) : null}

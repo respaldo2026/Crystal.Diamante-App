@@ -18,6 +18,7 @@ export interface GrupoAcademico {
   programas?: {
     id: number;
     nombre: string | null;
+    total_clases?: number | null;
   } | null;
   profesor?: {
     id: string;
@@ -65,7 +66,7 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
         cupos,
         programa_id,
         profesor_id,
-        programas:programa_id ( id, nombre ),
+        programas:programa_id ( id, nombre, total_clases ),
         profesor:profesor_id ( id, nombre_completo ),
         matriculas:matriculas ( count )
       `
@@ -300,7 +301,7 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
     const programaId = Number(item.programa_id || 0);
     const rutaPrograma = rutaPorPrograma.get(programaId) || [];
     const ciclosPrograma = ciclosPorPrograma.get(programaId) || [];
-    const totalClasesPrograma = rutaPrograma.length;
+    const totalClasesPrograma = Number(item?.programas?.total_clases || 0) || rutaPrograma.length;
     const numeroClase = (() => {
       const detectada = Number(numeroClaseDetectada || 0);
       if (!Number.isFinite(detectada) || detectada <= 0) return null;
