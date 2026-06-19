@@ -289,7 +289,7 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
   const normalizados = normalizadosBase.map((item: any) => {
     const ultimaSesion = ultimaSesionPorCurso.get(Number(item.id));
     const totalSesiones = totalSesionesPorCurso.get(Number(item.id)) || 0;
-    const numeroClase = (() => {
+    const numeroClaseDetectada = (() => {
       const numeroDetectado = Number(ultimaSesion?.numero || 0);
       if (Number.isFinite(numeroDetectado) && numeroDetectado > 0) {
         return numeroDetectado;
@@ -300,6 +300,15 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
     const programaId = Number(item.programa_id || 0);
     const rutaPrograma = rutaPorPrograma.get(programaId) || [];
     const ciclosPrograma = ciclosPorPrograma.get(programaId) || [];
+    const totalClasesPrograma = rutaPrograma.length;
+    const numeroClase = (() => {
+      const detectada = Number(numeroClaseDetectada || 0);
+      if (!Number.isFinite(detectada) || detectada <= 0) return null;
+      if (totalClasesPrograma > 0) {
+        return Math.min(detectada, totalClasesPrograma);
+      }
+      return detectada;
+    })();
     const claseActualInfo =
       Number.isFinite(Number(numeroClase)) && Number(numeroClase) > 0
         ? rutaPrograma[Number(numeroClase) - 1] || null
@@ -307,15 +316,17 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
 
     const proximaNumeroBase =
       Number.isFinite(Number(numeroClase)) && Number(numeroClase) > 0
-        ? Number(numeroClase) + 1
+        ? totalClasesPrograma > 0 && Number(numeroClase) >= totalClasesPrograma
+          ? null
+          : Number(numeroClase) + 1
         : 1;
 
-    const proximaInfo = rutaPrograma[proximaNumeroBase - 1] || null;
+    const proximaInfo = proximaNumeroBase ? rutaPrograma[proximaNumeroBase - 1] || null : null;
     const cicloActualInfo = claseActualInfo || rutaPrograma[0] || null;
     const cicloActualPensumId = String(cicloActualInfo?.cicloPensumId || "").trim();
     const indiceCicloActual = ciclosPrograma.findIndex((ciclo) => ciclo.id === cicloActualPensumId);
     const proximoCicloInfo =
-      indiceCicloActual >= 0
+      indiceCicloActual >= 0 && totalClasesPrograma > 0 && Number(numeroClase || 0) < totalClasesPrograma
         ? ciclosPrograma[indiceCicloActual + 1] || null
         : ciclosPrograma.length > 1
           ? ciclosPrograma[1]
