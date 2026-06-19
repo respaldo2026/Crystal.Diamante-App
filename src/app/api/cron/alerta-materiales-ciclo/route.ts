@@ -8,6 +8,8 @@ const AUDIT_MARKER = "[SISTEMA] Alerta materiales ciclo (7d)";
 const DEFAULT_ALERT_PHONE = "3006402575";
 const DEFAULT_DAYS_AHEAD = 7;
 const DEFAULT_CLASSES_PER_CYCLE = 4;
+const SEND_NO_GROUPS_WHATSAPP =
+  String(process.env.WHATSAPP_ALERTA_ENVIAR_RESUMEN_SIN_GRUPOS || "true").toLowerCase() === "true";
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_ALERTA_MAX_GRUPOS_POR_CORRIDA || 20);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_ALERTA_DELAY_MS || 900);
 const TEMPLATE_NAME = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES || "").trim();
@@ -273,7 +275,26 @@ async function saveWhatsAppMessageRecord(
       creado_en: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from("whatsapp_mensajes").insert(payload);
+    let { error } = await supabase.from("whatsapp_mensajes").insert(payload);
+
+    if (error && /Could not find the 'contenido' column/i.test(String(error.message || ""))) {
+      const fallbackPayload = {
+        telefono: input.phone,
+        tipo: "text",
+        mensaje_texto: input.content,
+        estado: input.estado,
+        message_id: input.messageId || null,
+        metadatos: {
+          source: "cron_alerta_materiales",
+          ...(input.metadata || {}),
+        },
+        creado_en: new Date().toISOString(),
+      };
+
+      const retry = await supabase.from("whatsapp_mensajes").insert(fallbackPayload);
+      error = retry.error;
+    }
+
     if (error) {
       console.warn("[Cron Alerta Materiales] No se pudo registrar whatsapp_mensajes:", error);
     }
@@ -361,26 +382,82 @@ async function runAlertaMaterialesCiclo() {
           errores: [],
         });
       }
-      await saveAudit(supabase, {
-        phone: alertPhone,
-        message: `${noGroupsMessage}\n\n[ENVIO_USADO] none\n[MODO] no-groups`,
-        messageId: "sin-envio-no-groups",
-      });
+
+      let envioResumenExitoso = false;
+      let errorEnvioResumen: string | null = null;
+      let noGroupsMessageId: string | undefined;
+
+      if (SEND_NO_GROUPS_WHATSAPP) {
+        try {
+          const response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+          noGroupsMessageId = response?.messages?.[0]?.id;
+          envioResumenExitoso = true;
+
+          await saveWhatsAppMessageRecord(supabase, {
+            phone: alertPhone,
+            content: noGroupsMessage,
+            estado: "enviado",
+            messageId: noGroupsMessageId,
+            metadata: {
+              mode: "no-groups-summary",
+              days_ahead: daysAhead,
+              classes_per_cycle: classesPerCycle,
+              target_date: targetDate,
+              alert_key: noGroupsKey,
+            },
+          });
+
+          await saveAudit(supabase, {
+            phone: alertPhone,
+            message: `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
+            messageId: noGroupsMessageId,
+          });
+        } catch (error: any) {
+          errorEnvioResumen = error?.message || "Error enviando resumen no-groups";
+
+          await saveWhatsAppMessageRecord(supabase, {
+            phone: alertPhone,
+            content: noGroupsMessage,
+            estado: "fallido",
+            metadata: {
+              mode: "no-groups-summary",
+              days_ahead: daysAhead,
+              classes_per_cycle: classesPerCycle,
+              target_date: targetDate,
+              alert_key: noGroupsKey,
+              error: errorEnvioResumen,
+            },
+          });
+        }
+      }
+
+      if (!SEND_NO_GROUPS_WHATSAPP) {
+        await saveAudit(supabase, {
+          phone: alertPhone,
+          message: `${noGroupsMessage}\n\n[ENVIO_USADO] none\n[MODO] no-groups`,
+          messageId: "sin-envio-no-groups",
+        });
+      }
 
       return NextResponse.json({
-        success: true,
-        mensaje: `Resumen sin grupos registrado (sin envío WhatsApp) para ${targetDate}`,
+        success: SEND_NO_GROUPS_WHATSAPP ? envioResumenExitoso : true,
+        mensaje: SEND_NO_GROUPS_WHATSAPP
+          ? envioResumenExitoso
+            ? `Resumen sin grupos enviado por WhatsApp para ${targetDate}`
+            : `Falló envío WhatsApp del resumen sin grupos para ${targetDate}`
+          : `Resumen sin grupos registrado (sin envío WhatsApp) para ${targetDate}`,
         targetDate,
         enviados: 0,
+        enviadosNoGroupsWhatsapp: envioResumenExitoso ? 1 : 0,
         resumen: {
           totalDetectados: 0,
           enviados: 0,
           enviadosConPlantilla: 0,
           enviadosConTexto: 0,
           omitidos: 1,
-          fallidos: 0,
+          fallidos: envioResumenExitoso ? 0 : SEND_NO_GROUPS_WHATSAPP ? 1 : 0,
         },
-        errores: [],
+        errores: errorEnvioResumen ? [errorEnvioResumen] : [],
       });
     }
 
@@ -522,26 +599,82 @@ async function runAlertaMaterialesCiclo() {
           errores: [],
         });
       }
-      await saveAudit(supabase, {
-        phone: alertPhone,
-        message: `${noGroupsMessage}\n\n[ENVIO_USADO] none\n[MODO] no-groups`,
-        messageId: "sin-envio-no-groups",
-      });
+
+      let envioResumenExitoso = false;
+      let errorEnvioResumen: string | null = null;
+      let noGroupsMessageId: string | undefined;
+
+      if (SEND_NO_GROUPS_WHATSAPP) {
+        try {
+          const response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+          noGroupsMessageId = response?.messages?.[0]?.id;
+          envioResumenExitoso = true;
+
+          await saveWhatsAppMessageRecord(supabase, {
+            phone: alertPhone,
+            content: noGroupsMessage,
+            estado: "enviado",
+            messageId: noGroupsMessageId,
+            metadata: {
+              mode: "no-groups-summary",
+              days_ahead: daysAhead,
+              classes_per_cycle: classesPerCycle,
+              target_date: targetDate,
+              alert_key: noGroupsKey,
+            },
+          });
+
+          await saveAudit(supabase, {
+            phone: alertPhone,
+            message: `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
+            messageId: noGroupsMessageId,
+          });
+        } catch (error: any) {
+          errorEnvioResumen = error?.message || "Error enviando resumen no-groups";
+
+          await saveWhatsAppMessageRecord(supabase, {
+            phone: alertPhone,
+            content: noGroupsMessage,
+            estado: "fallido",
+            metadata: {
+              mode: "no-groups-summary",
+              days_ahead: daysAhead,
+              classes_per_cycle: classesPerCycle,
+              target_date: targetDate,
+              alert_key: noGroupsKey,
+              error: errorEnvioResumen,
+            },
+          });
+        }
+      }
+
+      if (!SEND_NO_GROUPS_WHATSAPP) {
+        await saveAudit(supabase, {
+          phone: alertPhone,
+          message: `${noGroupsMessage}\n\n[ENVIO_USADO] none\n[MODO] no-groups`,
+          messageId: "sin-envio-no-groups",
+        });
+      }
 
       return NextResponse.json({
-        success: true,
-        mensaje: `Resumen sin grupos registrado (sin envío WhatsApp) para ${targetDate}`,
+        success: SEND_NO_GROUPS_WHATSAPP ? envioResumenExitoso : true,
+        mensaje: SEND_NO_GROUPS_WHATSAPP
+          ? envioResumenExitoso
+            ? `Resumen sin grupos enviado por WhatsApp para ${targetDate}`
+            : `Falló envío WhatsApp del resumen sin grupos para ${targetDate}`
+          : `Resumen sin grupos registrado (sin envío WhatsApp) para ${targetDate}`,
         targetDate,
         enviados: 0,
+        enviadosNoGroupsWhatsapp: envioResumenExitoso ? 1 : 0,
         resumen: {
           totalDetectados: gruposUnicos.length,
           enviados: 0,
           enviadosConPlantilla: 0,
           enviadosConTexto: 0,
           omitidos: 1,
-          fallidos: 0,
+          fallidos: envioResumenExitoso ? 0 : SEND_NO_GROUPS_WHATSAPP ? 1 : 0,
         },
-        errores: [],
+        errores: errorEnvioResumen ? [errorEnvioResumen] : [],
       });
     }
 
