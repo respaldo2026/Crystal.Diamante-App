@@ -970,12 +970,18 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           const temaSincronizado = numeroClase && nombreOficial
             ? `Clase #${numeroClase} - ${nombreOficial}`
             : (tema || "-");
+          const cicloNumero = numeroClase ? Math.floor((numeroClase - 1) / 4) + 1 : null;
+          const posicionEnCiclo = numeroClase ? ((numeroClase - 1) % 4) + 1 : null;
+          const colorCiclo = cicloNumero ? (cicloNumero % 2 === 0 ? "geekblue" : "purple") : "default";
 
           const estadoCalendario = estadoCalendarioSesionPorId.get(String(record?.id || ""));
           if (!temaSincronizado && !estadoCalendario) return <Text type="secondary">-</Text>;
 
           return (
             <Space direction="vertical" size={4}>
+              {cicloNumero && posicionEnCiclo ? (
+                <Tag color={colorCiclo}>{`Ciclo ${cicloNumero} · Clase ${posicionEnCiclo}/4`}</Tag>
+              ) : null}
               {temaSincronizado ? <Tag>{temaSincronizado}</Tag> : <Text type="secondary">-</Text>}
               {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
             </Space>
@@ -3021,6 +3027,18 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   rowKey="id"
                   pagination={{ pageSize: 15 }}
                   columns={columnasSesiones}
+                  onRow={(record: any) => {
+                    const numeroClase = Number(numeroClaseSesionPorId.get(String(record?.id || "")) || 0);
+                    const cicloNumero = numeroClase > 0 ? Math.floor((numeroClase - 1) / 4) + 1 : 0;
+                    const iniciaCiclo = numeroClase > 1 && ((numeroClase - 1) % 4 === 0);
+
+                    return {
+                      style: {
+                        background: cicloNumero > 0 && cicloNumero % 2 === 0 ? "#fafaff" : undefined,
+                        boxShadow: iniciaCiclo ? "inset 0 2px 0 #d8b4fe" : undefined,
+                      },
+                    };
+                  }}
                   size={isMobile ? "small" : "middle"}
                   tableLayout="fixed"
                   scroll={{ x: "max-content" }}
