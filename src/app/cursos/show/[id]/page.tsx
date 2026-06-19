@@ -211,6 +211,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const searchParams = useSearchParams();
   const isAdminView = searchParams?.get("admin") === "1";
   const returnTo = isAdminView ? "/cursos" : "/mi-oficina";
+  const HORAS_POR_CLASE = 3;
 
   const materialesUnicos = useMemo(
     () =>
@@ -986,7 +987,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         dataIndex: "horas_dictadas",
         width: 140,
         align: "center" as const,
-        render: (horas: number) => <Tag color="blue">{horas}h</Tag>,
+        render: () => <Tag color="blue">{HORAS_POR_CLASE}h</Tag>,
       },
       {
         title: "Observaciones",
@@ -1695,11 +1696,14 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       // Sesiones de clase
       const { data: sesionesData } = await supabaseBrowserClient
         .from("sesiones_clase")
-        .select("*")
+        .select("id, fecha, tema_visto, observaciones, horas_dictadas, created_at")
         .eq("curso_id", cursoIdNumerico)
-        .order("fecha", { ascending: false });
+        .order("fecha", { ascending: true });
 
-      const sesionesRaw = sesionesData || [];
+      const sesionesRaw = (sesionesData || []).filter((sesion: any) => {
+        const temaNormalizado = normalizarTema(String(sesion?.tema_visto || sesion?.observaciones || ""));
+        return temaNormalizado !== normalizarTema("Sesión programada automáticamente para cálculo de ciclos");
+      });
       const temasOrdenadosGlobal = (temasDataCurso || [])
         .slice()
         .sort((a: any, b: any) => {
@@ -1792,6 +1796,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         return {
           ...sesion,
           tema_visto: temaCanonico,
+          horas_dictadas: HORAS_POR_CLASE,
         };
       });
 
@@ -2260,11 +2265,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     const fechaSesion = dayjs(sesion.fecha);
     return fechaSesion.isValid() && fechaSesion.isSame(hoy, "month") && fechaSesion.isSame(hoy, "year");
   });
-  const horasMesActual = Number(
-    sesionesMesActual
-      .reduce((acc: number, sesion: any) => acc + Number(sesion?.horas_dictadas || 0), 0)
-      .toFixed(1)
-  );
+  const horasMesActual = Number((sesionesMesActual.length * HORAS_POR_CLASE).toFixed(1));
   const estudiantesEvaluables = estudiantes.filter((est) => est.estado !== "pendiente_pago");
   const totalEstudiantesEvaluables = estudiantesEvaluables.length;
 
