@@ -21,7 +21,7 @@ type GrupoConPensum = {
   grupo_nombre: string;
   programa_id: number;
   programa_nombre: string;
-  pensum_id: string;
+  pensum_id: string | null;
   numero_ciclo: number | null;
   nombre_ciclo: string | null;
   fecha_inicio_ciclo: string;
@@ -106,8 +106,15 @@ function getTodayDateIso(): string {
   return getTargetDateIso(0);
 }
 
+function getDiffDays(fromIso: string, toIso: string): number {
+  const from = new Date(`${fromIso}T00:00:00`);
+  const to = new Date(`${toIso}T00:00:00`);
+  const diffMs = to.getTime() - from.getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+}
+
 function buildAlertKey(item: GrupoConPensum): string {
-  return `grupo:${item.grupo_id}|pensum:${item.pensum_id}|fecha:${item.fecha_inicio_ciclo}`;
+  return `grupo:${item.grupo_id}|pensum:${item.pensum_id || "sin-pensum"}|ciclo:${item.numero_ciclo || "na"}|fecha:${item.fecha_inicio_ciclo}`;
 }
 
 function buildNoGroupsAlertKey(targetDate: string, daysAhead: number): string {
@@ -115,6 +122,7 @@ function buildNoGroupsAlertKey(targetDate: string, daysAhead: number): string {
 }
 
 function buildAlertMessage(item: GrupoConPensum, materiales: MaterialCiclo[], daysAhead: number): string {
+  const daysToStart = getDiffDays(getTodayDateIso(), item.fecha_inicio_ciclo);
   const cicloLabel = item.nombre_ciclo || (item.numero_ciclo ? `Ciclo ${item.numero_ciclo}` : "Ciclo sin nombre");
   const fechaInicio = formatDateEs(item.fecha_inicio_ciclo);
   const materialesTexto = materiales.length
@@ -132,12 +140,14 @@ function buildAlertMessage(item: GrupoConPensum, materiales: MaterialCiclo[], da
   return [
     `🚨 *Alerta de abastecimiento* (${daysAhead} días)`,
     "",
-    `En *${daysAhead} días* inicia un nuevo ciclo:`,
+    `El próximo ciclo inicia en *${daysToStart} días*:`,
     `• *Grupo:* ${item.grupo_nombre || `Grupo ${item.grupo_id}`}`,
     `• *Programa:* ${item.programa_nombre || `Programa ${item.programa_id}`}`,
     `• *Ciclo:* ${cicloLabel}`,
     `• *Fecha de inicio:* ${fechaInicio}`,
     item.estado ? `• *Estado del grupo:* ${item.estado}` : "",
+    !item.pensum_id ? "⚠️ *Sin pensum configurado para este ciclo; no hay materiales enlazados.*" : "",
+    item.pensum_id && materiales.length === 0 ? "⚠️ *Este ciclo no tiene materiales configurados.*" : "",
     "",
     `🧰 *Materiales requeridos (${materiales.length})*`,
     materialesTexto,
@@ -174,6 +184,7 @@ function buildNoGroupsMessage(input: {
 }
 
 function buildTemplateVariables(item: GrupoConPensum, materiales: MaterialCiclo[], daysAhead: number): string[] {
+  const daysToStart = getDiffDays(getTodayDateIso(), item.fecha_inicio_ciclo);
   const cicloLabel = item.nombre_ciclo || (item.numero_ciclo ? `Ciclo ${item.numero_ciclo}` : "Ciclo sin nombre");
   const fechaInicio = formatDateEs(item.fecha_inicio_ciclo);
   const materialesTexto = materiales.length
@@ -187,7 +198,7 @@ function buildTemplateVariables(item: GrupoConPensum, materiales: MaterialCiclo[
     : "Sin materiales configurados en este ciclo.";
 
   return [
-    String(daysAhead),
+    String(daysToStart || daysAhead),
     item.grupo_nombre || `Grupo ${item.grupo_id}`,
     item.programa_nombre || `Programa ${item.programa_id}`,
     cicloLabel,
@@ -514,7 +525,9 @@ async function runAlertaMaterialesCiclo() {
       }
     }
 
-    const candidatosFecha = proximosCiclosPorGrupo.filter((item) => item.fecha_inicio_ciclo === targetDate);
+    const candidatosFecha = proximosCiclosPorGrupo.filter(
+      (item) => item.fecha_inicio_ciclo >= todayDate && item.fecha_inicio_ciclo <= targetDate,
+    );
     const programaIds = Array.from(
       new Set(
         candidatosFecha
@@ -548,16 +561,14 @@ async function runAlertaMaterialesCiclo() {
         if (!curso?.programa_id) return null;
 
         const pensum = pensumByProgramaYCiclo.get(`${curso.programa_id}|${item.numero_ciclo_objetivo}`);
-        if (!pensum?.id) return null;
-
         return {
           grupo_id: curso.id,
           grupo_nombre: curso.nombre,
           programa_id: curso.programa_id,
           programa_nombre: programaNombreById.get(curso.programa_id) || `Programa ${curso.programa_id}`,
-          pensum_id: pensum.id,
+          pensum_id: pensum?.id || null,
           numero_ciclo: item.numero_ciclo_objetivo,
-          nombre_ciclo: pensum.nombre_ciclo || null,
+          nombre_ciclo: pensum?.nombre_ciclo || `Ciclo ${item.numero_ciclo_objetivo}`,
           fecha_inicio_ciclo: item.fecha_inicio_ciclo,
           estado: curso.estado || null,
         };
@@ -567,8 +578,8 @@ async function runAlertaMaterialesCiclo() {
     const gruposUnicos = Array.from(
       new Map(
         grupos
-          .filter((item) => item?.grupo_id && item?.pensum_id)
-          .map((item) => [`${item.grupo_id}|${item.pensum_id}|${item.fecha_inicio_ciclo}`, item]),
+          .filter((item) => item?.grupo_id)
+          .map((item) => [`${item.grupo_id}|${item.numero_ciclo || "na"}|${item.fecha_inicio_ciclo}`, item]),
       ).values(),
     );
 
@@ -678,7 +689,7 @@ async function runAlertaMaterialesCiclo() {
       });
     }
 
-    const pensumIds = Array.from(new Set(gruposUnicos.map((item) => String(item.pensum_id)).filter(Boolean)));
+    const pensumIds = Array.from(new Set(gruposUnicos.map((item) => String(item.pensum_id || "")).filter(Boolean)));
 
     const { data: materialesRaw, error: materialesError } = await supabase
       .from("materiales_ciclo")
