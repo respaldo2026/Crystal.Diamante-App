@@ -21,6 +21,8 @@ const { useBreakpoint } = Grid;
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
+const HOURS_PER_CLASS = 3;
+const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automatic[ae]mente para calculo de ciclos/i;
 
 const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
@@ -98,6 +100,7 @@ export default function NominaPage() {
 
     const inicio = rangoFechas[0].format("YYYY-MM-DD");
     const fin = rangoFechas[1].format("YYYY-MM-DD");
+    const hoy = dayjs().format("YYYY-MM-DD");
 
     try {
         // 1. Obtener profesores y su valor hora
@@ -121,12 +124,25 @@ export default function NominaPage() {
             .lte("fecha", fin)
             .order("fecha", { ascending: true });
 
+                const sesionesValidas = (sesiones || [])
+                    .filter((s: any) => {
+                        const fecha = String(s?.fecha || "").slice(0, 10);
+                        if (!fecha || fecha > hoy) return false;
+                        const tema = String(s?.tema_visto || "").toLowerCase();
+                        if (AUTO_SESSION_TOPIC_PATTERN.test(tema)) return false;
+                        return true;
+                    })
+                    .map((s: any) => ({
+                        ...s,
+                        horas_dictadas: HOURS_PER_CLASS,
+                    }));
+
                 // 3. Cruzar información (Matemática de Nómina)
                 // IMPORTANTE: Los profesores solo ven clases PENDIENTES para pagar
-                const sesionesPendientes = sesiones?.filter((s: any) => s.estado_pago === 'pendiente') || [];
+                const sesionesPendientes = sesionesValidas.filter((s: any) => s.estado_pago === 'pendiente');
                 const reporte = dataProfes?.map((prof: any) => {
                         const susClases = sesionesPendientes.filter((s: any) => s.profesor_id === prof.id) || [];
-                        const totalHoras = susClases.reduce((sum: number, item: any) => sum + Number(item.horas_dictadas || 0), 0);
+                        const totalHoras = susClases.length * HOURS_PER_CLASS;
                         const aPagar = totalHoras * (prof.valor_hora || 0);
 
                         return {
@@ -138,15 +154,16 @@ export default function NominaPage() {
                 }).filter((p: any) => p.total_horas > 0 || true);
 
                 // Enriquecer TODAS las sesiones (pendientes Y pagadas) para la tabla detallada
-                const sesionesEnriquecidas = (sesiones || []).map((s: any) => {
+                const sesionesEnriquecidas = sesionesValidas.map((s: any) => {
                     const valorHora = Number(
                         s?.perfiles?.valor_hora ??
                         dataProfes?.find((p: any) => p.id === s.profesor_id)?.valor_hora ??
                         0
                     );
-                    const totalEstimado = Number(s.horas_dictadas || 0) * (valorHora || 0);
+                    const totalEstimado = HOURS_PER_CLASS * (valorHora || 0);
                     return {
                         ...s,
+                        horas_dictadas: HOURS_PER_CLASS,
                         valor_hora: valorHora,
                         total_estimado: totalEstimado,
                     };
@@ -246,7 +263,7 @@ export default function NominaPage() {
                 try {
                     setPagandoClaseId(clase.id);
                     const valorHora = Number(clase.valor_hora || 0);
-                    const monto = Number(clase.horas_dictadas || 0) * (valorHora || 0);
+                    const monto = HOURS_PER_CLASS * (valorHora || 0);
 
                     const { data: pagoData, error: errPago } = await supabaseBrowserClient
                         .from("pagos_nomina")
@@ -254,7 +271,7 @@ export default function NominaPage() {
                             profesor_id: clase.profesor_id,
                             fecha_pago: dayjs().format("YYYY-MM-DD"),
                             total_pagado: monto,
-                            total_horas: clase.horas_dictadas,
+                            total_horas: HOURS_PER_CLASS,
                             fecha_inicio_periodo: clase.fecha,
                             fecha_fin_periodo: clase.fecha,
                             observaciones: `Pago clase individual - ${clase.cursos?.nombre || 'Clase'} (${metodoNomina})`
@@ -321,7 +338,7 @@ export default function NominaPage() {
             {
                 title: 'Horas',
                 dataIndex: 'horas_dictadas',
-                render: (val: number) => <Tag color="blue">{val} hrs</Tag>,
+                render: () => <Tag color="blue">{HOURS_PER_CLASS} hrs</Tag>,
             },
             {
                 title: 'Estado',
