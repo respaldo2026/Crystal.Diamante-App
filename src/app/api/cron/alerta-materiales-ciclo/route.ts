@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 const AUDIT_MARKER = "[SISTEMA] Alerta materiales ciclo (7d)";
 const DEFAULT_ALERT_PHONE = "3006402575";
 const DEFAULT_DAYS_AHEAD = 7;
+const DEFAULT_CLASSES_PER_CYCLE = 4;
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_ALERTA_MAX_GRUPOS_POR_CORRIDA || 20);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_ALERTA_DELAY_MS || 900);
 const TEMPLATE_NAME = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES || "").trim();
@@ -21,8 +22,29 @@ type GrupoConPensum = {
   pensum_id: string;
   numero_ciclo: number | null;
   nombre_ciclo: string | null;
-  fecha_inicio: string;
+  fecha_inicio_ciclo: string;
   estado: string | null;
+};
+
+type CursoBase = {
+  id: number;
+  nombre: string;
+  programa_id: number | null;
+  estado: string | null;
+};
+
+type SesionClase = {
+  id: string;
+  curso_id: number;
+  fecha: string;
+};
+
+type Pensum = {
+  id: string;
+  programa_id: number;
+  numero_ciclo: number;
+  nombre_ciclo: string | null;
+  activo: boolean;
 };
 
 type MaterialCiclo = {
@@ -78,8 +100,12 @@ function getTargetDateIso(daysAhead: number): string {
   return `${y}-${m}-${d}`;
 }
 
+function getTodayDateIso(): string {
+  return getTargetDateIso(0);
+}
+
 function buildAlertKey(item: GrupoConPensum): string {
-  return `grupo:${item.grupo_id}|pensum:${item.pensum_id}|fecha:${item.fecha_inicio}`;
+  return `grupo:${item.grupo_id}|pensum:${item.pensum_id}|fecha:${item.fecha_inicio_ciclo}`;
 }
 
 function buildNoGroupsAlertKey(targetDate: string, daysAhead: number): string {
@@ -88,7 +114,7 @@ function buildNoGroupsAlertKey(targetDate: string, daysAhead: number): string {
 
 function buildAlertMessage(item: GrupoConPensum, materiales: MaterialCiclo[], daysAhead: number): string {
   const cicloLabel = item.nombre_ciclo || (item.numero_ciclo ? `Ciclo ${item.numero_ciclo}` : "Ciclo sin nombre");
-  const fechaInicio = formatDateEs(item.fecha_inicio);
+  const fechaInicio = formatDateEs(item.fecha_inicio_ciclo);
   const materialesTexto = materiales.length
     ? materiales
         .slice(0, 40)
@@ -147,7 +173,7 @@ function buildNoGroupsMessage(input: {
 
 function buildTemplateVariables(item: GrupoConPensum, materiales: MaterialCiclo[], daysAhead: number): string[] {
   const cicloLabel = item.nombre_ciclo || (item.numero_ciclo ? `Ciclo ${item.numero_ciclo}` : "Ciclo sin nombre");
-  const fechaInicio = formatDateEs(item.fecha_inicio);
+  const fechaInicio = formatDateEs(item.fecha_inicio_ciclo);
   const materialesTexto = materiales.length
     ? materiales
         .slice(0, 40)
@@ -269,33 +295,211 @@ async function runAlertaMaterialesCiclo() {
     );
 
     const daysAhead = Number(process.env.WHATSAPP_ALERTA_DIAS_ANTICIPACION || DEFAULT_DAYS_AHEAD);
+    const classesPerCycle = Number(process.env.WHATSAPP_ALERTA_CLASES_POR_CICLO || DEFAULT_CLASSES_PER_CYCLE);
+    if (!Number.isFinite(classesPerCycle) || classesPerCycle <= 0) {
+      throw new Error("WHATSAPP_ALERTA_CLASES_POR_CICLO debe ser un entero mayor a 0");
+    }
+
+    const todayDate = getTodayDateIso();
     const targetDate = getTargetDateIso(daysAhead);
     const alertPhone = String(process.env.WHATSAPP_ALERTA_MATERIALES_PHONE || DEFAULT_ALERT_PHONE).trim();
 
-    const { data: gruposRaw, error: gruposError } = await supabase
-      .from("v_grupos_con_pensum")
-      .select("grupo_id, grupo_nombre, programa_id, programa_nombre, pensum_id, numero_ciclo, nombre_ciclo, fecha_inicio, estado")
-      .eq("fecha_inicio", targetDate)
-      .order("programa_nombre", { ascending: true })
-      .order("grupo_nombre", { ascending: true });
+    const { data: cursosRaw, error: cursosError } = await supabase
+      .from("cursos")
+      .select("id, nombre, programa_id, estado")
+      .not("programa_id", "is", null);
 
-    if (gruposError) throw gruposError;
+    if (cursosError) throw cursosError;
 
-    const grupos = (gruposRaw || []) as GrupoConPensum[];
+    const cursos = ((cursosRaw || []) as CursoBase[]).filter((item) => item?.id && item?.programa_id);
+    const cursoIds = cursos.map((item) => item.id);
+    const programaIdsCursos = Array.from(
+      new Set(cursos.map((item) => item.programa_id).filter((value): value is number => typeof value === "number")),
+    );
+
+    const programaNombreById = new Map<number, string>();
+    if (programaIdsCursos.length > 0) {
+      const { data: programasRaw, error: programasError } = await supabase
+        .from("programas")
+        .select("id, nombre")
+        .in("id", programaIdsCursos);
+      if (programasError) throw programasError;
+
+      for (const programa of programasRaw || []) {
+        const id = Number((programa as { id?: number }).id);
+        const nombre = String((programa as { nombre?: string }).nombre || "").trim();
+        if (Number.isFinite(id)) {
+          programaNombreById.set(id, nombre || `Programa ${id}`);
+        }
+      }
+    }
+
+    if (cursoIds.length === 0) {
+      const noGroupsMessage = buildNoGroupsMessage({
+        targetDate,
+        daysAhead,
+        totalRegistrosFecha: 0,
+        totalElegibles: 0,
+      });
+
+      const noGroupsKey = buildNoGroupsAlertKey(targetDate, daysAhead);
+      const alreadySent = await wasAlreadySent(supabase, noGroupsKey);
+      if (alreadySent) {
+        return NextResponse.json({
+          success: true,
+          mensaje: `Ya se había enviado resumen sin grupos para ${targetDate}`,
+          targetDate,
+          enviados: 0,
+          resumen: {
+            totalDetectados: 0,
+            enviados: 0,
+            enviadosConPlantilla: 0,
+            enviadosConTexto: 0,
+            omitidos: 1,
+            fallidos: 0,
+          },
+          errores: [],
+        });
+      }
+      await saveAudit(supabase, {
+        phone: alertPhone,
+        message: `${noGroupsMessage}\n\n[ENVIO_USADO] none\n[MODO] no-groups`,
+        messageId: "sin-envio-no-groups",
+      });
+
+      return NextResponse.json({
+        success: true,
+        mensaje: `Resumen sin grupos registrado (sin envío WhatsApp) para ${targetDate}`,
+        targetDate,
+        enviados: 0,
+        resumen: {
+          totalDetectados: 0,
+          enviados: 0,
+          enviadosConPlantilla: 0,
+          enviadosConTexto: 0,
+          omitidos: 1,
+          fallidos: 0,
+        },
+        errores: [],
+      });
+    }
+
+    const { data: sesionesRaw, error: sesionesError } = await supabase
+      .from("sesiones_clase")
+      .select("id, curso_id, fecha")
+      .in("curso_id", cursoIds)
+      .order("fecha", { ascending: true });
+
+    if (sesionesError) throw sesionesError;
+
+    const sesiones = (sesionesRaw || []) as SesionClase[];
+    const sesionesByCurso = new Map<number, SesionClase[]>();
+    for (const sesion of sesiones) {
+      if (!sesion?.curso_id || !sesion?.fecha) continue;
+      const current = sesionesByCurso.get(sesion.curso_id) || [];
+      current.push(sesion);
+      sesionesByCurso.set(sesion.curso_id, current);
+    }
+
+    const cursoById = new Map<number, CursoBase>();
+    for (const curso of cursos) {
+      cursoById.set(curso.id, curso);
+    }
+
+    const proximosCiclosPorGrupo: Array<{ curso_id: number; fecha_inicio_ciclo: string; numero_ciclo_objetivo: number }> = [];
+    for (const [cursoId, sesionesCurso] of sesionesByCurso.entries()) {
+      const sesionesOrdenadas = [...sesionesCurso].sort((a, b) => {
+        if (a.fecha === b.fecha) return String(a.id).localeCompare(String(b.id));
+        return a.fecha.localeCompare(b.fecha);
+      });
+
+      let proximo: { fecha_inicio_ciclo: string; numero_ciclo_objetivo: number } | null = null;
+      for (let index = 0; index < sesionesOrdenadas.length; index += 1) {
+        const numeroClase = index + 1;
+        if ((numeroClase - 1) % classesPerCycle !== 0) continue;
+
+        const fecha = String(sesionesOrdenadas[index].fecha).slice(0, 10);
+        if (fecha < todayDate) continue;
+
+        proximo = {
+          fecha_inicio_ciclo: fecha,
+          numero_ciclo_objetivo: Math.floor((numeroClase - 1) / classesPerCycle) + 1,
+        };
+        break;
+      }
+
+      if (proximo) {
+        proximosCiclosPorGrupo.push({
+          curso_id: cursoId,
+          fecha_inicio_ciclo: proximo.fecha_inicio_ciclo,
+          numero_ciclo_objetivo: proximo.numero_ciclo_objetivo,
+        });
+      }
+    }
+
+    const candidatosFecha = proximosCiclosPorGrupo.filter((item) => item.fecha_inicio_ciclo === targetDate);
+    const programaIds = Array.from(
+      new Set(
+        candidatosFecha
+          .map((item) => cursoById.get(item.curso_id)?.programa_id)
+          .filter((value): value is number => typeof value === "number"),
+      ),
+    );
+    const ciclosObjetivo = Array.from(new Set(candidatosFecha.map((item) => item.numero_ciclo_objetivo)));
+
+    let pensumRows: Pensum[] = [];
+    if (programaIds.length > 0 && ciclosObjetivo.length > 0) {
+      const { data: pensumRaw, error: pensumError } = await supabase
+        .from("pensum")
+        .select("id, programa_id, numero_ciclo, nombre_ciclo, activo")
+        .in("programa_id", programaIds)
+        .in("numero_ciclo", ciclosObjetivo)
+        .eq("activo", true);
+
+      if (pensumError) throw pensumError;
+      pensumRows = (pensumRaw || []) as Pensum[];
+    }
+
+    const pensumByProgramaYCiclo = new Map<string, Pensum>();
+    for (const row of pensumRows) {
+      pensumByProgramaYCiclo.set(`${row.programa_id}|${row.numero_ciclo}`, row);
+    }
+
+    const grupos = candidatosFecha
+      .map((item): GrupoConPensum | null => {
+        const curso = cursoById.get(item.curso_id);
+        if (!curso?.programa_id) return null;
+
+        const pensum = pensumByProgramaYCiclo.get(`${curso.programa_id}|${item.numero_ciclo_objetivo}`);
+        if (!pensum?.id) return null;
+
+        return {
+          grupo_id: curso.id,
+          grupo_nombre: curso.nombre,
+          programa_id: curso.programa_id,
+          programa_nombre: programaNombreById.get(curso.programa_id) || `Programa ${curso.programa_id}`,
+          pensum_id: pensum.id,
+          numero_ciclo: item.numero_ciclo_objetivo,
+          nombre_ciclo: pensum.nombre_ciclo || null,
+          fecha_inicio_ciclo: item.fecha_inicio_ciclo,
+          estado: curso.estado || null,
+        };
+      })
+      .filter((item): item is GrupoConPensum => Boolean(item));
 
     const gruposUnicos = Array.from(
       new Map(
         grupos
           .filter((item) => item?.grupo_id && item?.pensum_id)
-          .map((item) => [`${item.grupo_id}|${item.pensum_id}|${item.fecha_inicio}`, item]),
+          .map((item) => [`${item.grupo_id}|${item.pensum_id}|${item.fecha_inicio_ciclo}`, item]),
       ).values(),
     );
 
-    if (grupos.length === 0 || gruposUnicos.length === 0) {
+    if (candidatosFecha.length === 0 || gruposUnicos.length === 0) {
       const noGroupsMessage = buildNoGroupsMessage({
         targetDate,
         daysAhead,
-        totalRegistrosFecha: grupos.length,
+        totalRegistrosFecha: candidatosFecha.length,
         totalElegibles: gruposUnicos.length,
       });
 
@@ -427,10 +631,13 @@ async function runAlertaMaterialesCiclo() {
             template_name: envioUsado === "template" ? TEMPLATE_NAME : null,
             template_lang: envioUsado === "template" ? TEMPLATE_LANG : null,
             days_ahead: daysAhead,
+            classes_per_cycle: classesPerCycle,
             target_date: targetDate,
             alert_key: key,
             grupo_id: item.grupo_id,
             pensum_id: item.pensum_id,
+            numero_ciclo: item.numero_ciclo,
+            fecha_inicio_ciclo: item.fecha_inicio_ciclo,
           },
         });
       } catch (error: any) {
@@ -443,10 +650,13 @@ async function runAlertaMaterialesCiclo() {
           estado: "fallido",
           metadata: {
             days_ahead: daysAhead,
+            classes_per_cycle: classesPerCycle,
             target_date: targetDate,
             alert_key: key,
             grupo_id: item.grupo_id,
             pensum_id: item.pensum_id,
+            numero_ciclo: item.numero_ciclo,
+            fecha_inicio_ciclo: item.fecha_inicio_ciclo,
             error: error?.message || "Error desconocido",
           },
         });
