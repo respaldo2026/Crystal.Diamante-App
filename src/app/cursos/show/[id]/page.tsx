@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, Tabs, Table, Tag, Row, Col, Statistic, Button, Space, Typography, Alert, Modal, Form, Input, InputNumber, DatePicker, Upload, List, Empty, App, Select, Collapse, Grid, Radio, Popover, Skeleton } from "antd";
-import type { Breakpoint } from "antd/es/_util/responsiveObserver";
+type Breakpoint = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
 import {
   UserOutlined,
   CheckCircleOutlined,

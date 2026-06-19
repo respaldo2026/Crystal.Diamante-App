@@ -578,7 +578,16 @@ export default function GestorPensum({
     }
 
     const ciclosQueExisten = new Set(ciclosExistentes?.map(c => c.numero_ciclo) || []);
-    const ciclosFaltantes = [];
+    const ciclosFaltantes: Array<{
+      programa_id: string;
+      numero_ciclo: number;
+      nombre_ciclo: string;
+      descripcion: string;
+      duracion_semanas: number;
+      total_horas: number;
+      orden: number;
+      activo: boolean;
+    }> = [];
 
     // Crear los ciclos que faltan
     for (let i = 1; i <= numeroCiclos; i++) {

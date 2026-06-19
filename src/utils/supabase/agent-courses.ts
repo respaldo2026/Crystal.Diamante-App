@@ -1480,7 +1480,7 @@ export function formatAcademyInfo(academy: AcademyInfo | null): string {
   }
 
   // Datos de contacto
-  const contactInfo = []
+  const contactInfo: string[] = []
   if (academy.direccion) contactInfo.push(`📍 Dirección: ${academy.direccion}`)
   if (academy.maps_url) contactInfo.push(`🗺️ Google Maps: ${academy.maps_url}`)
   if (academy.telefono) contactInfo.push(`📞 Teléfono: ${academy.telefono}`)
@@ -1494,7 +1494,7 @@ export function formatAcademyInfo(academy: AcademyInfo | null): string {
   }
 
   // Redes sociales (URLs cortas y amigables)
-  const socialMedia = []
+  const socialMedia: string[] = []
   if (academy.instagram) {
     const shortUrl = shortenSocialUrl(academy.instagram, 'instagram')
     socialMedia.push(`📸 Instagram: ${shortUrl}`)

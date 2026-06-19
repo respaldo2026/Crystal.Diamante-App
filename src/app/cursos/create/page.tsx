@@ -393,7 +393,7 @@ export default function CursoCreate() {
                                         return [0, 1, 2, 3, 4, 5, 6, 7, 8, 20, 21, 22, 23];
                                     },
                                     disabledMinutes: () => {
-                                        const disabled = [];
+                                        const disabled: number[] = [];
                                         for (let i = 1; i < 60; i++) disabled.push(i);
                                         return disabled;
                                     }
@@ -417,7 +417,7 @@ export default function CursoCreate() {
                                         return [0, 1, 2, 3, 4, 5, 6, 7, 8, 20, 21, 22, 23];
                                     },
                                     disabledMinutes: () => {
-                                        const disabled = [];
+                                        const disabled: number[] = [];
                                         for (let i = 1; i < 60; i++) disabled.push(i);
                                         return disabled;
                                     }

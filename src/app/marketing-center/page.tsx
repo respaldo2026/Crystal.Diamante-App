@@ -41,7 +41,7 @@ import {
   SaveOutlined,
   MoreOutlined,
 } from "@ant-design/icons";
-import type { UploadFile, UploadProps } from "antd/es/upload/interface";
+import type { UploadFile, UploadProps } from "antd";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
 import { useFeatureFlag } from "@/hooks/useFeatureFlag";

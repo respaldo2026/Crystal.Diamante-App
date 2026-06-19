@@ -511,7 +511,7 @@ const CustomSider: React.FC<CustomSiderProps> = ({
         style={siderStyles}
         collapsible
         collapsed={siderCollapsed}
-        onCollapse={(collapsed, type) => {
+        onCollapse={(collapsed: boolean, type: "clickTrigger" | "responsive") => {
           if (type === "clickTrigger") {
             setSiderCollapsed(collapsed);
           }
@@ -676,7 +676,7 @@ const PortalTopHeader: React.FC<PortalHeaderProps> = ({
           trigger={["click"]}
           menu={{
             items: whatsappItems,
-            onClick: ({ key }) => {
+            onClick: ({ key }: { key: React.Key }) => {
               const messageText = "Hola, soy estudiante del portal y necesito apoyo.";
               if (key === "agente") {
                 openWhatsapp(whatsappAgente || null, messageText);
@@ -779,9 +779,6 @@ const AppInner = ({ children }: { children: React.ReactNode }) => {
           paddingSM: 12,
           paddingLG: 16,
           bodyPadding: 14,
-        },
-        Tag: {
-          borderRadiusSM: 6,
         },
         Table: {
           headerBg: "#F9FAFB",

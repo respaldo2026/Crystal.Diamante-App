@@ -1,0 +1,46 @@
+
+> academia-crystal@0.1.0 build
+> refine build
+
+
+                                Update Available                                
+
+- Current: The version of the package that is currently installed
+- Wanted: The maximum version of the package that satisfies the semver range specified in `package.json`
+- Latest: The latest version of the package available on npm
+[90m┌──────────────────────────[39m[90m┬─────────[39m[90m┬─────────[39m[90m┬─────────[39m[90m┬─────────────────────┐[39m
+[90m│[39m[34m name                     [39m[90m│[39m[34m current [39m[90m│[39m[34m wanted  [39m[90m│[39m[34m latest  [39m[90m│[39m[34m changelog           [39m[90m│[39m
+[90m├──────────────────────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────────────────┤[39m
+[90m│[39m @refinedev/cli           [90m│[39m 2.16.50 [90m│[39m 2.16.52 [90m│[39m 2.16.52 [90m│[39m https://c.refine.d… [90m│[39m
+[90m├──────────────────────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────────────────┤[39m
+[90m│[39m @refinedev/core          [90m│[39m 5.0.8   [90m│[39m 5.0.12  [90m│[39m 5.0.12  [90m│[39m https://c.refine.d… [90m│[39m
+[90m├──────────────────────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────────────────┤[39m
+[90m│[39m @refinedev/devtools      [90m│[39m 2.0.3   [90m│[39m 2.0.5   [90m│[39m 2.0.5   [90m│[39m https://c.refine.d… [90m│[39m
+[90m├──────────────────────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────────────────┤[39m
+[90m│[39m @refinedev/inferencer    [90m│[39m 6.0.2   [90m│[39m 6.0.2   [90m│[39m 7.0.0   [90m│[39m https://c.refine.d… [90m│[39m
+[90m├──────────────────────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────────────────┤[39m
+[90m│[39m @refinedev/nextjs-router [90m│[39m 7.0.4   [90m│[39m 7.0.5   [90m│[39m 7.0.5   [90m│[39m https://c.refine.d… [90m│[39m
+[90m├──────────────────────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────[39m[90m┼─────────────────────┤[39m
+[90m│[39m @refinedev/supabase      [90m│[39m 6.0.1   [90m│[39m 6.0.2   [90m│[39m 6.0.2   [90m│[39m https://c.refine.d… [90m│[39m
+[90m└──────────────────────────[39m[90m┴─────────[39m[90m┴─────────[39m[90m┴─────────[39m[90m┴─────────────────────┘[39m
+                To update `Refine` packages with wanted version                
+- Getting package manager...
+                Run the following command: npm run refine update               
+
+
+
+   [1m[38;2;173;127;168m▲ Next.js 15.5.12[39m[22m
+   - Environments: .env.local
+
+ [37m[1m [22m[39m Creating an optimized production build ...
+ [32m[1m✓[22m[39m Compiled successfully in 56s
+ [37m[1m [22m[39m Linting and checking validity of types ...
+ [37m[1m [22m[39m Collecting page data ...
+
+> Build error occurred
+[Error: ENOENT: no such file or directory, open 'G:\Desktop\academia-crystal\.next\server\pages-manifest.json'] {
+  errno: [33m-4058[39m,
+  code: [32m'ENOENT'[39m,
+  syscall: [32m'open'[39m,
+  path: [32m'G:\\Desktop\\academia-crystal\\.next\\server\\pages-manifest.json'[39m
+}

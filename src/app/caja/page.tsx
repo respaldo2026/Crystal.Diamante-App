@@ -854,7 +854,7 @@ export default function CajaPage() {
 
     try {
       const cuotasAPagar = cuotas.filter((c) => cuotasSeleccionadas.includes(c.id));
-      const pagosActualizados = [];
+      const pagosActualizados: any[] = [];
       const metodoPago = values.metodo_pago as MetodoPago;
       const referenciaPago = formatTicketReference(values.referencia, "FAC");
       const montoAbono = Number(values.monto_a_registrar || 0);
@@ -1188,9 +1188,14 @@ export default function CajaPage() {
       // Subir ticket a storage y asociarlo a todos los pagos del lote
       if (pagosActualizados.length > 0) {
         try {
+          const primerPago = pagosActualizados[0];
+          if (!primerPago?.id) {
+            throw new Error("No se pudo identificar el pago principal para generar ticket");
+          }
+
           const { publicUrl } = await subirTicketPago({
             blob,
-            pagoId: pagosActualizados[0].id,
+            pagoId: primerPago.id,
             estudianteId: estudianteSeleccionado?.id,
           });
 

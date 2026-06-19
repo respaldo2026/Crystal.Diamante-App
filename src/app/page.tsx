@@ -265,7 +265,7 @@ export default function DashboardPage() {
       const cumples: any[] = []; // Desactivado temporalmente para mejor rendimiento
 
       // 10. DATOS PARA GRÁFICO DE INGRESOS (dinámico según período)
-      const chartData = [];
+      const chartData: Array<{ fecha: string; monto: number; cantidad: number }> = [];
       let iteraciones = 7;
       let unidad: 'day' | 'week' | 'month' = 'day';
       let formato = 'DD MMM';
