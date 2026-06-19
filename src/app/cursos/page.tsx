@@ -17,6 +17,8 @@ import {
   App,
   Grid,
   Flex,
+  Modal,
+  List,
 } from "antd";
 import {
   PlusOutlined,
@@ -25,6 +27,7 @@ import {
   CalendarOutlined,
   ClockCircleOutlined,
   TeamOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import updateLocale from "dayjs/plugin/updateLocale";
@@ -32,6 +35,7 @@ import "dayjs/locale/es";
 import { useNavigation } from "@refinedev/core";
 import { obtenerCursos, type GrupoAcademico } from "../../modules/academico/cursos.service";
 import { construirNombreGrupo } from "@utils/grupos";
+import { supabaseBrowserClient } from "@utils/supabase/client";
 
 dayjs.extend(updateLocale);
 dayjs.updateLocale("es", { weekStart: 1 });
@@ -163,6 +167,12 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     Number.isFinite(cicloActualNumeroRaw) && cicloActualNumeroRaw > 0 ? cicloActualNumeroRaw : null;
   const cicloActual = cicloActualNombre || (cicloActualNumero ? `Ciclo ${cicloActualNumero}` : null);
 
+  const proximoCicloNombre = String(grupo.proximo_ciclo_nombre || "").trim();
+  const proximoCicloNumeroRaw = Number(grupo.proximo_ciclo_numero || 0);
+  const proximoCicloNumero =
+    Number.isFinite(proximoCicloNumeroRaw) && proximoCicloNumeroRaw > 0 ? proximoCicloNumeroRaw : null;
+  const proximoCiclo = proximoCicloNombre || (proximoCicloNumero ? `Ciclo ${proximoCicloNumero}` : null);
+
   if (numeroClase > 0) {
     return {
       titulo: `Van en clase #${numeroClase}`,
@@ -172,6 +182,7 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
       proximaClaseNumero,
       proximaClaseNombre,
       cicloActual,
+      proximoCiclo,
       color: "#7C3AED",
       fondo: "#F5F3FF",
       borde: "#DDD6FE",
@@ -186,6 +197,7 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     proximaClaseNumero,
     proximaClaseNombre,
     cicloActual,
+    proximoCiclo,
     color: "#475569",
     fondo: "#F8FAFC",
     borde: "#E2E8F0",
@@ -201,6 +213,10 @@ export default function CursosList() {
   const [grupos, setGrupos] = useState<GrupoAcademico[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [materialesModalVisible, setMaterialesModalVisible] = useState(false);
+  const [materialesModalLoading, setMaterialesModalLoading] = useState(false);
+  const [materialesModalGrupo, setMaterialesModalGrupo] = useState<GrupoAcademico | null>(null);
+  const [materialesProximoCiclo, setMaterialesProximoCiclo] = useState<any[]>([]);
 
   const cargarGrupos = useCallback(async () => {
     try {
@@ -276,6 +292,43 @@ export default function CursosList() {
     [gruposActivos]
   );
   const cuposDisponibles = Math.max(totalCuposActivos - totalInscritosActivos, 0);
+
+  const abrirMaterialesProximoCiclo = useCallback(
+    async (grupo: GrupoAcademico) => {
+      const pensumId = String(grupo.proximo_ciclo_pensum_id || "").trim();
+      const programaId = Number(grupo.programa_id || 0);
+
+      if (!pensumId || !programaId) {
+        message.warning("Este grupo no tiene próximo ciclo definido todavía.");
+        return;
+      }
+
+      setMaterialesModalGrupo(grupo);
+      setMaterialesModalVisible(true);
+      setMaterialesModalLoading(true);
+
+      try {
+        const { data, error } = await supabaseBrowserClient
+          .from("materiales_ciclo")
+          .select("id, nombre, cantidad, cobertura_material, incluido_kit, orden")
+          .eq("programa_id", programaId)
+          .eq("pensum_id", pensumId)
+          .eq("activo", true)
+          .order("orden", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true });
+
+        if (error) throw error;
+        setMaterialesProximoCiclo(data || []);
+      } catch (error) {
+        console.error("Error cargando materiales del próximo ciclo:", error);
+        message.error("No se pudieron cargar los materiales del próximo ciclo");
+        setMaterialesProximoCiclo([]);
+      } finally {
+        setMaterialesModalLoading(false);
+      }
+    },
+    [message]
+  );
 
   const renderGrupo = (grupo: GrupoAcademico) => {
     const estado = obtenerEstado(grupo);
@@ -468,6 +521,21 @@ export default function CursosList() {
                     {`Ciclo actual: ${avanceGrupo.cicloActual}`}
                   </Text>
                 ) : null}
+                {avanceGrupo.proximoCiclo ? (
+                  <Text type="secondary" style={{ display: "block", marginTop: 2 }}>
+                    {`Próximo ciclo: ${avanceGrupo.proximoCiclo}`}
+                  </Text>
+                ) : null}
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  style={{ paddingInline: 0, marginTop: 6, fontWeight: 600 }}
+                  disabled={!grupo.proximo_ciclo_pensum_id}
+                  onClick={() => void abrirMaterialesProximoCiclo(grupo)}
+                >
+                  Lista de materiales (próximo ciclo)
+                </Button>
               </div>
               {avanceGrupo.proximaClaseHorario ? (
                 <div
@@ -652,6 +720,49 @@ export default function CursosList() {
           </section>
         )}
       </Space>
+
+      <Modal
+        title={
+          materialesModalGrupo
+            ? `Materiales - ${construirNombreGrupo(materialesModalGrupo)} (${String(materialesModalGrupo.proximo_ciclo_nombre || materialesModalGrupo.proximo_ciclo_numero || "Próximo ciclo")})`
+            : "Materiales del próximo ciclo"
+        }
+        open={materialesModalVisible}
+        onCancel={() => {
+          setMaterialesModalVisible(false);
+          setMaterialesModalGrupo(null);
+          setMaterialesProximoCiclo([]);
+        }}
+        footer={null}
+        width={isMobile ? "95%" : 680}
+      >
+        {materialesModalLoading ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <Spin />
+          </div>
+        ) : materialesProximoCiclo.length === 0 ? (
+          <Empty description="No hay materiales cargados para el próximo ciclo" />
+        ) : (
+          <List
+            dataSource={materialesProximoCiclo}
+            rowKey="id"
+            renderItem={(item: any) => (
+              <List.Item>
+                <List.Item.Meta
+                  title={item.nombre || "Material"}
+                  description={
+                    <Space size={8} wrap>
+                      {item.cantidad ? <Tag color="blue">Cantidad: {item.cantidad}</Tag> : null}
+                      {item.incluido_kit ? <Tag color="green">Incluido en kit</Tag> : null}
+                      {item.cobertura_material ? <Tag>{item.cobertura_material}</Tag> : null}
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        )}
+      </Modal>
     </Card>
   );
 }

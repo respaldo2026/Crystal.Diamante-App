@@ -31,6 +31,9 @@ export interface GrupoAcademico {
   siguiente_clase_nombre?: string | null;
   ciclo_actual_numero?: number | null;
   ciclo_actual_nombre?: string | null;
+  proximo_ciclo_pensum_id?: string | null;
+  proximo_ciclo_numero?: number | null;
+  proximo_ciclo_nombre?: string | null;
 }
 
 export async function crearCurso(curso: {
@@ -100,8 +103,19 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
     Array<{
       numeroClase: number;
       nombreClase: string;
+      cicloPensumId: string | null;
       cicloNumero: number | null;
       cicloNombre: string | null;
+    }>
+  >();
+
+  const ciclosPorPrograma = new Map<
+    number,
+    Array<{
+      id: string;
+      numero: number | null;
+      nombre: string | null;
+      orden: number;
     }>
   >();
 
@@ -135,9 +149,29 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
         return Number(a?.id || 0) - Number(b?.id || 0);
       });
 
+      const ciclosMeta = ciclosOrdenados.map((ciclo: any) => {
+        const cicloNumeroRaw = Number(ciclo?.numero_ciclo);
+        const cicloNumero = Number.isFinite(cicloNumeroRaw) && cicloNumeroRaw > 0 ? cicloNumeroRaw : null;
+        const cicloNombre = String(ciclo?.nombre_ciclo || "").trim() || null;
+        const ordenRaw = Number(ciclo?.orden ?? ciclo?.numero_ciclo ?? 0);
+        const orden = Number.isFinite(ordenRaw) ? ordenRaw : 0;
+
+        return {
+          id: String(ciclo?.id || ""),
+          numero: cicloNumero,
+          nombre: cicloNombre,
+          orden,
+        };
+      }).filter((ciclo) => ciclo.id);
+
+      if (ciclosMeta.length > 0) {
+        ciclosPorPrograma.set(programaId, ciclosMeta);
+      }
+
       const ruta: Array<{
         numeroClase: number;
         nombreClase: string;
+        cicloPensumId: string | null;
         cicloNumero: number | null;
         cicloNombre: string | null;
       }> = [];
@@ -162,6 +196,7 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
           ruta.push({
             numeroClase,
             nombreClase: nombreTema,
+            cicloPensumId: String(ciclo?.id || "") || null,
             cicloNumero,
             cicloNombre,
           });
@@ -264,6 +299,7 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
 
     const programaId = Number(item.programa_id || 0);
     const rutaPrograma = rutaPorPrograma.get(programaId) || [];
+    const ciclosPrograma = ciclosPorPrograma.get(programaId) || [];
     const claseActualInfo =
       Number.isFinite(Number(numeroClase)) && Number(numeroClase) > 0
         ? rutaPrograma[Number(numeroClase) - 1] || null
@@ -276,6 +312,14 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
 
     const proximaInfo = rutaPrograma[proximaNumeroBase - 1] || null;
     const cicloActualInfo = claseActualInfo || rutaPrograma[0] || null;
+    const cicloActualPensumId = String(cicloActualInfo?.cicloPensumId || "").trim();
+    const indiceCicloActual = ciclosPrograma.findIndex((ciclo) => ciclo.id === cicloActualPensumId);
+    const proximoCicloInfo =
+      indiceCicloActual >= 0
+        ? ciclosPrograma[indiceCicloActual + 1] || null
+        : ciclosPrograma.length > 1
+          ? ciclosPrograma[1]
+          : null;
 
     return {
       ...item,
@@ -286,6 +330,9 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
       siguiente_clase_nombre: proximaInfo?.nombreClase ?? null,
       ciclo_actual_numero: cicloActualInfo?.cicloNumero ?? null,
       ciclo_actual_nombre: cicloActualInfo?.cicloNombre ?? null,
+      proximo_ciclo_pensum_id: proximoCicloInfo?.id ?? null,
+      proximo_ciclo_numero: proximoCicloInfo?.numero ?? null,
+      proximo_ciclo_nombre: proximoCicloInfo?.nombre ?? null,
     };
   });
 
