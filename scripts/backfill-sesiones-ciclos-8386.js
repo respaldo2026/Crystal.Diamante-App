@@ -21,6 +21,7 @@ const SESSIONS_TO_GENERATE = 20;
 const DEFAULT_HOURS = 2;
 const DEFAULT_TOPIC = "Sesion programada automaticamente para calculo de ciclos";
 const DEFAULT_PAY_STATUS = "pendiente";
+const CONFIRM_FLAG = process.env.ALLOW_AUTO_SESSIONS_BACKFILL;
 
 function getBogotaTodayIso() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -44,6 +45,12 @@ function addDaysIso(isoDate, days) {
 }
 
 async function main() {
+  if (CONFIRM_FLAG !== "YES") {
+    console.log("Backfill bloqueado por seguridad.");
+    console.log("Para ejecutarlo de forma intencional usa: ALLOW_AUTO_SESSIONS_BACKFILL=YES node scripts/backfill-sesiones-ciclos-8386.js");
+    return;
+  }
+
   const todayIso = getBogotaTodayIso();
 
   const { data: cursos, error: cursosError } = await supabase

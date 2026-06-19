@@ -15,6 +15,7 @@ const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_ALERTA_DELAY_MS || 90
 const TEMPLATE_NAME = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES || "").trim();
 const TEMPLATE_LANG = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES_LANG || "es_CO").trim();
 const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALERTA_ALLOW_TEXT_FALLBACK || "true").toLowerCase() === "true";
+const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automaticamente para calculo de ciclos/i;
 
 type GrupoConPensum = {
   grupo_id: number;
@@ -33,12 +34,14 @@ type CursoBase = {
   nombre: string;
   programa_id: number | null;
   estado: string | null;
+  total_clases?: number | null;
 };
 
 type SesionClase = {
   id: string;
   curso_id: number;
   fecha: string;
+  tema_visto?: string | null;
 };
 
 type Pensum = {
@@ -338,7 +341,7 @@ async function runAlertaMaterialesCiclo() {
 
     const { data: cursosRaw, error: cursosError } = await supabase
       .from("cursos")
-      .select("id, nombre, programa_id, estado")
+      .select("id, nombre, programa_id, estado, total_clases")
       .not("programa_id", "is", null);
 
     if (cursosError) throw cursosError;
@@ -474,13 +477,16 @@ async function runAlertaMaterialesCiclo() {
 
     const { data: sesionesRaw, error: sesionesError } = await supabase
       .from("sesiones_clase")
-      .select("id, curso_id, fecha")
+      .select("id, curso_id, fecha, tema_visto")
       .in("curso_id", cursoIds)
       .order("fecha", { ascending: true });
 
     if (sesionesError) throw sesionesError;
 
-    const sesiones = (sesionesRaw || []) as SesionClase[];
+    const sesiones = ((sesionesRaw || []) as SesionClase[]).filter((sesion) => {
+      const tema = String(sesion?.tema_visto || "");
+      return !AUTO_SESSION_TOPIC_PATTERN.test(tema);
+    });
     const sesionesByCurso = new Map<number, SesionClase[]>();
     for (const sesion of sesiones) {
       if (!sesion?.curso_id || !sesion?.fecha) continue;
@@ -501,8 +507,13 @@ async function runAlertaMaterialesCiclo() {
         return a.fecha.localeCompare(b.fecha);
       });
 
+      const curso = cursoById.get(cursoId);
+      const totalClasesCurso = Number(curso?.total_clases || 0);
+      const maxIteraciones =
+        totalClasesCurso > 0 ? Math.min(sesionesOrdenadas.length, totalClasesCurso) : sesionesOrdenadas.length;
+
       let proximo: { fecha_inicio_ciclo: string; numero_ciclo_objetivo: number } | null = null;
-      for (let index = 0; index < sesionesOrdenadas.length; index += 1) {
+      for (let index = 0; index < maxIteraciones; index += 1) {
         const sesion = sesionesOrdenadas[index];
         if (!sesion?.fecha) continue;
 
