@@ -2,6 +2,8 @@
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { extractClassNumber } from "@/modules/portal-estudiante/utils";
 
+const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automatic[ae]mente para calculo de ciclos/i;
+
 export interface GrupoAcademico {
   id: number;
   nombre: string | null;
@@ -212,12 +214,14 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
 
   const ultimaSesionPorCurso = new Map<number, { numero: number | null; tema: string | null; fecha: string | null }>();
   const totalSesionesPorCurso = new Map<number, number>();
+  const hoyISO = new Date().toISOString().slice(0, 10);
 
   if (cursoIds.length > 0) {
     const { data: sesiones, error: sesionesError } = await supabaseBrowserClient
       .from("sesiones_clase")
       .select("curso_id, fecha, tema_visto")
       .in("curso_id", cursoIds)
+      .lte("fecha", hoyISO)
       .order("fecha", { ascending: false });
 
     if (sesionesError) throw sesionesError;
@@ -225,6 +229,9 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
     (sesiones || []).forEach((sesion: any) => {
       const cursoId = Number(sesion?.curso_id);
       if (!Number.isFinite(cursoId)) return;
+
+      const tema = String(sesion?.tema_visto || "");
+      if (AUTO_SESSION_TOPIC_PATTERN.test(tema)) return;
 
       totalSesionesPorCurso.set(cursoId, (totalSesionesPorCurso.get(cursoId) || 0) + 1);
 
@@ -249,6 +256,7 @@ export async function obtenerCursos(): Promise<GrupoAcademico[]> {
         .from("asistencias")
         .select("fecha, observaciones, matriculas:matriculas!asistencias_matricula_id_fkey!inner(curso_id)")
         .in("matriculas.curso_id", cursosSinNumero)
+        .lte("fecha", hoyISO)
         .order("fecha", { ascending: false });
 
       if (asistenciasError) throw asistenciasError;

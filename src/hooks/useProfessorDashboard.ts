@@ -689,13 +689,14 @@ export const fetchProfessorDashboardData = async (
     }));
 
   const cursosEnriquecidos: ProfesorDashboardCurso[] = (cursosData || []).map((curso: any) => {
-    const asistencia = asistenciaPorCurso.get(curso.id);
-    const promedioCurso = calificacionesPorCurso.get(curso.id);
-    const ultimaSesion = ultimaSesionPorCurso.get(curso.id);
-    const proximaSesion = proximasSesionPorCurso.get(curso.id) || null;
+    const cursoId = String(curso.id);
+    const asistencia = asistenciaPorCurso.get(cursoId);
+    const promedioCurso = calificacionesPorCurso.get(cursoId);
+    const ultimaSesion = ultimaSesionPorCurso.get(cursoId);
+    const proximaSesion = proximasSesionPorCurso.get(cursoId) || null;
     return {
       id: curso.id,
-      nombre: cursoNombreMap.get(curso.id) || curso.nombre,
+      nombre: cursoNombreMap.get(cursoId) || curso.nombre,
       estado: curso.estado,
       programas: curso.programas ?? null,
       programaId: curso.programa_id ?? null,
@@ -704,7 +705,7 @@ export const fetchProfessorDashboardData = async (
       horaFin: curso.hora_fin ?? null,
       horario: curso.horario ?? null,
       fechaInicio: curso.fecha_inicio ?? null,
-      estudiantesActivos: estudiantesPorCurso.get(curso.id) || 0,
+      estudiantesActivos: estudiantesPorCurso.get(cursoId) || 0,
       asistenciaPromedio:
         asistencia && asistencia.total > 0
           ? Math.round((asistencia.presentes / asistencia.total) * 100)
