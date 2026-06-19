@@ -58,14 +58,46 @@ export default function TomarAsistencia() {
   // Cargar cursos al inicio
   useEffect(() => {
     const cargarCursos = async () => {
-      const { data } = await supabaseBrowserClient
-        .from("cursos")
-        .select("id, nombre, profesor_id, total_clases, duracion_horas, programa_id, programas(id, nombre, total_clases, duracion)")
-        .eq("estado", "activo");
-      setCursos(data || []);
+      try {
+        const {
+          data: { user },
+        } = await supabaseBrowserClient.auth.getUser();
+
+        let rol = "";
+        if (user?.id) {
+          const { data: perfil } = await supabaseBrowserClient
+            .from("perfiles")
+            .select("rol")
+            .eq("id", user.id)
+            .maybeSingle();
+          rol = String(perfil?.rol || "").toLowerCase();
+        }
+
+        let cursosQuery = supabaseBrowserClient
+          .from("cursos")
+          .select("id, nombre, profesor_id, total_clases, duracion_horas, programa_id, programas(id, nombre, total_clases, duracion)")
+          .eq("estado", "activo");
+
+        if (rol === "profesor" && user?.id) {
+          cursosQuery = cursosQuery.eq("profesor_id", user.id);
+        }
+
+        const { data, error } = await cursosQuery;
+        if (error) {
+          message.error("No se pudieron cargar los cursos");
+          setCursos([]);
+          return;
+        }
+
+        setCursos(data || []);
+      } catch (error) {
+        console.error(error);
+        message.error("Error cargando cursos");
+        setCursos([]);
+      }
     };
     cargarCursos();
-  }, []);
+  }, [message]);
 
   // Preseleccionar curso desde la URL (dentro del grupo)
   useEffect(() => {
