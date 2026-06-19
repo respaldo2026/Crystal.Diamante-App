@@ -1837,34 +1837,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     resolveParams();
   }, [params, cargarDatos]);
 
-  const bitacora = useMemo(() => {
-    const asistPorFechaMatricula = new Map<string, Map<number, any>>();
-    asistenciasRaw.forEach((a: any) => {
-      const fecha = String(a?.fecha || "");
-      if (!asistPorFechaMatricula.has(fecha)) asistPorFechaMatricula.set(fecha, new Map());
-      asistPorFechaMatricula.get(fecha)!.set(Number(a.matricula_id), a);
-    });
-    return sesiones.map((sesion) => {
-      const fechaMap = asistPorFechaMatricula.get(String(sesion.fecha)) || new Map();
-      const lista = estudiantes.map((est) => {
-        const a = fechaMap.get(est.id);
-        return {
-          key: String(est.id),
-          matricula_id: est.id,
-          nombre_completo: est.nombre_completo,
-          identificacion: est.identificacion,
-          estado: a?.estado || "sin_registro",
-          observaciones: a?.observaciones || null,
-        };
-      }).sort((a, b) => {
-        const ord: Record<string, number> = { presente: 0, ausente: 1, justificada: 2, sin_registro: 3 };
-        return (ord[a.estado] ?? 3) - (ord[b.estado] ?? 3);
-      });
-      const presentes = lista.filter((l) => l.estado === "presente").length;
-      return { ...sesion, key: sesion.id, lista, presentes, totalEsperados: estudiantes.length };
-    });
-  }, [sesiones, asistenciasRaw, estudiantes]);
-
   const columnasEstudiantes = useMemo(
     () => [
       {
@@ -2252,6 +2224,55 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     );
   }
 
+  const sesionesAgrupadasDesdeAsistencias = (() => {
+    const asistPorFecha = new Map<string, Map<number, any>>();
+
+    (asistenciasRaw || []).forEach((asistencia: any) => {
+      const fecha = String(asistencia?.fecha || "").slice(0, 10);
+      if (!fecha) return;
+      if (!asistPorFecha.has(fecha)) {
+        asistPorFecha.set(fecha, new Map());
+      }
+      asistPorFecha.get(fecha)!.set(Number(asistencia?.matricula_id), asistencia);
+    });
+
+    return Array.from(asistPorFecha.entries())
+      .map(([fecha, fechaMap]) => {
+        const lista = estudiantes.map((est) => {
+          const asistencia = fechaMap.get(est.id);
+          return {
+            key: String(est.id),
+            matricula_id: est.id,
+            nombre_completo: est.nombre_completo,
+            identificacion: est.identificacion,
+            estado: asistencia?.estado || "sin_registro",
+            observaciones: asistencia?.observaciones || null,
+          };
+        }).sort((a, b) => {
+          const orden: Record<string, number> = { presente: 0, ausente: 1, justificada: 2, sin_registro: 3 };
+          return (orden[a.estado] ?? 3) - (orden[b.estado] ?? 3);
+        });
+
+        const presentes = lista.filter((item) => item.estado === "presente").length;
+        const observacionPrincipal =
+          lista.find((item) => item.observaciones)?.observaciones || "Clase registrada";
+
+        return {
+          id: `fallback-${fecha}`,
+          fecha,
+          horas_dictadas: HORAS_POR_CLASE,
+          tema_visto: String(observacionPrincipal || "Clase registrada"),
+          lista,
+          presentes,
+          totalEsperados: estudiantes.length,
+        };
+      })
+      .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  })();
+
+  const sesionesVisibles = sesiones.length > 0 ? sesiones : sesionesAgrupadasDesdeAsistencias;
+  const bitacora = sesionesVisibles;
+
   const totalEstudiantes = estudiantes.length;
   const estudiantesActivos = estudiantes.filter(e => e.estado === "activo").length;
   const estudiantesEnMora = estudiantes.filter((e) => e.enMora).length;
@@ -2260,7 +2281,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     : 0;
   const estudiantesEnRiesgo = estudiantes.filter(e => e.asistencia_porcentaje < (curso.porcentaje_minimo || 80)).length;
   const hoy = dayjs();
-  const sesionesMesActual = (sesiones || []).filter((sesion: any) => {
+  const sesionesMesActual = sesionesVisibles.filter((sesion: any) => {
     if (!sesion?.fecha) return false;
     const fechaSesion = dayjs(sesion.fecha);
     return fechaSesion.isValid() && fechaSesion.isSame(hoy, "month") && fechaSesion.isSame(hoy, "year");
@@ -2961,7 +2982,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           },
           {
             key: "3",
-            label: <span><ClockCircleOutlined /> Sesiones de Clase ({sesiones.length})</span>,
+            label: <span><ClockCircleOutlined /> Sesiones de Clase ({sesionesVisibles.length})</span>,
             children: (
               <Card
                 title="Registro de Sesiones y Clases Dictadas"
@@ -2996,7 +3017,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 }
               >
                 <Table
-                  dataSource={sesiones}
+                  dataSource={sesionesVisibles}
                   rowKey="id"
                   pagination={{ pageSize: 15 }}
                   columns={columnasSesiones}
@@ -3324,7 +3345,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           },
           {
             key: "6",
-            label: <span><CalendarOutlined /> Bitácora ({sesiones.length})</span>,
+            label: <span><CalendarOutlined /> Bitácora ({bitacora.length})</span>,
             children: (
               <Table
                 dataSource={bitacora}
