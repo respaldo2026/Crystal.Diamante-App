@@ -67,6 +67,14 @@ function formatDateISO(year: number, month: number, day: number): string {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
+function shiftYearMonth(year: number, month: number, monthDelta: number): { year: number; month: number } {
+  const base = new Date(Date.UTC(year, month - 1 + monthDelta, 1));
+  return {
+    year: base.getUTCFullYear(),
+    month: base.getUTCMonth() + 1,
+  };
+}
+
 function buildPeriodLabel(startISO: string, endISO: string): string {
   const format = (value: string) => {
     const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -84,6 +92,25 @@ function buildPeriodLabel(startISO: string, endISO: string): string {
   };
 
   return `${format(startISO)} a ${format(endISO)}`;
+}
+
+function buildPeriodoConPagoLabel(startISO: string, endISO: string, fechaPagoISO: string): string {
+  const periodo = buildPeriodLabel(startISO, endISO);
+
+  const match = fechaPagoISO.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return `${periodo} (pago: ${fechaPagoISO})`;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const pago = new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("es-CO", {
+    day: "numeric",
+    month: "long",
+    timeZone: BOGOTA_TIMEZONE,
+  });
+
+  return `${periodo} (pago: ${pago})`;
 }
 
 function buildFallbackText(nombre: string, periodoTexto: string, horasTexto: string, valorTexto: string): string {
@@ -171,16 +198,16 @@ async function runLiquidacionJob() {
 
   const { year, month, day } = parseBogotaDateParts();
   const lastDay = getLastDayOfMonth(year, month);
-  // Se envía 1 día ANTES del pago: día 14 anticipa el pago del 15,
-  // y el penúltimo día anticipa el pago del último día del mes.
-  const esQuincena = day === 14;
-  const esFinMes = day === lastDay - 1;
+  // Se envía 1 día ANTES del pago: día 15 anticipa pago el 16,
+  // y el último día del mes anticipa pago el 1 del siguiente mes.
+  const esQuincena = day === 15;
+  const esFinMes = day === lastDay;
 
   if (!esQuincena && !esFinMes) {
     return {
       success: true,
       skipped: true,
-      reason: "Hoy no es día previo a liquidación (14 o penúltimo día del mes)",
+      reason: "Hoy no es día previo a liquidación (15 o último día del mes)",
       today: `${year}-${pad(month)}-${pad(day)}`,
     };
   }
@@ -190,7 +217,13 @@ async function runLiquidacionJob() {
   const endDay = esQuincena ? 15 : lastDay;
   const startISO = formatDateISO(year, month, startDay);
   const endISO = formatDateISO(year, month, endDay);
-  const periodoTexto = buildPeriodLabel(startISO, endISO);
+  const fechaPagoISO = esQuincena
+    ? formatDateISO(year, month, 16)
+    : (() => {
+        const next = shiftYearMonth(year, month, 1);
+        return formatDateISO(next.year, next.month, 1);
+      })();
+  const periodoTexto = buildPeriodoConPagoLabel(startISO, endISO, fechaPagoISO);
 
   const { data: sesiones, error: sesionesError } = await supabase
     .from("sesiones_clase")
@@ -366,9 +399,20 @@ async function runLiquidacionJob() {
   }
 
   // ── Notificación al director ─────────────────────────────────────────
-  const fechaPago = new Date(
-    Date.UTC(year, month - 1, endDay),
-  ).toLocaleDateString("es-CO", { day: "numeric", month: "long", timeZone: BOGOTA_TIMEZONE });
+  const fechaPago = (() => {
+    const match = fechaPagoISO.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return fechaPagoISO;
+
+    const pagoYear = Number(match[1]);
+    const pagoMonth = Number(match[2]);
+    const pagoDay = Number(match[3]);
+
+    return new Date(Date.UTC(pagoYear, pagoMonth - 1, pagoDay)).toLocaleDateString("es-CO", {
+      day: "numeric",
+      month: "long",
+      timeZone: BOGOTA_TIMEZONE,
+    });
+  })();
 
   let directorNotificado = false;
   let directorError: string | undefined;
