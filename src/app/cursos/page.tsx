@@ -463,6 +463,9 @@ export default function CursosList() {
     const metaCapacidad = obtenerMetaCapacidad(inscritos, capacidad);
     const avanceGrupo = construirAvanceGrupo(grupo);
     const urgenciaCiclo = getCycleUrgency(avanceGrupo.diasParaProximoCiclo);
+    const temaUltimaClase = String(avanceGrupo.tema || "")
+      .replace(/^Clase\s*#?\d+\s*[-:.·]?\s*/i, "")
+      .trim();
 
     return (
       <Card
@@ -640,7 +643,7 @@ export default function CursosList() {
                 }}
               >
                 <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 6, fontSize: 14 }}>
-                  {avanceGrupo.titulo}
+                  Actividad reciente
                 </Text>
                 <Row gutter={[10, 8]}>
                   <Col xs={24} sm={12}>
@@ -653,10 +656,10 @@ export default function CursosList() {
                   </Col>
                   <Col xs={24} sm={12}>
                     <Text type="secondary" style={{ display: "block", fontSize: 12 }}>
-                      Clase actual
+                      Tema de la última clase
                     </Text>
                     <Text style={{ display: "block", color: "#0F172A", fontWeight: 700, fontSize: 13 }}>
-                      {avanceGrupo.tema || "Sin tema registrado"}
+                      {temaUltimaClase || "Sin tema registrado"}
                     </Text>
                   </Col>
                 </Row>
