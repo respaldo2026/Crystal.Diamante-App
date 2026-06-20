@@ -521,26 +521,6 @@ export default function CursosList() {
                     {avanceGrupo.tema}
                   </Text>
                 ) : null}
-                {avanceGrupo.cicloActual ? (
-                  <Text type="secondary" style={{ display: "block", marginTop: 6 }}>
-                    {`Ciclo actual: ${avanceGrupo.cicloActual}`}
-                  </Text>
-                ) : null}
-                {avanceGrupo.proximoCiclo ? (
-                  <Text type="secondary" style={{ display: "block", marginTop: 2 }}>
-                    {`Próximo ciclo: ${avanceGrupo.proximoCiclo}`}
-                  </Text>
-                ) : null}
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<FileTextOutlined />}
-                  style={{ paddingInline: 0, marginTop: 6, fontWeight: 600 }}
-                  disabled={!grupo.proximo_ciclo_pensum_id}
-                  onClick={() => void abrirMaterialesProximoCiclo(grupo)}
-                >
-                  Lista de materiales (próximo ciclo)
-                </Button>
                 {avanceGrupo.maximoAlcanzado ? (
                   <Tag color="gold" style={{ marginTop: 8, borderRadius: 999 }}>
                     {`Límite alcanzado: ${avanceGrupo.totalClasesPrograma || 0} clases`}
@@ -550,114 +530,76 @@ export default function CursosList() {
               {avanceGrupo.proximaClaseHorario ? (
                 <div
                   style={{
-                    background: "linear-gradient(135deg, #FF6B35 0%, #F59E0B 100%)",
-                    borderRadius: 10,
-                    padding: "7px 11px",
+                    background: "linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)",
+                    border: "1px solid #cfe0ff",
+                    borderRadius: 14,
+                    padding: isMobile ? "10px 12px" : "12px 14px",
                     flexShrink: 0,
-                    textAlign: "center",
-                    boxShadow: "0 2px 8px rgba(245,158,11,0.30)",
+                    minWidth: isMobile ? "100%" : 250,
+                    boxShadow: "0 8px 24px rgba(59, 130, 246, 0.10)",
                   }}
                 >
-                  <Text
-                    style={{
-                      display: "block",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      color: "rgba(255,255,255,0.90)",
-                      textTransform: "uppercase",
-                      letterSpacing: 0.5,
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    Próxima clase
+                  <Text type="secondary" style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                    Siguiente paso del grupo
                   </Text>
-                  <Text
-                    style={{
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "#ffffff",
-                      lineHeight: 1.4,
-                      marginTop: 2,
-                    }}
-                  >
+                  <Text style={{ display: "block", fontSize: 14, fontWeight: 700, color: "#0F172A", marginTop: 4, lineHeight: 1.4 }}>
                     {`Clase #${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""}`}
                   </Text>
-                  {avanceGrupo.cicloActual ? (
-                    <Text
-                      style={{
-                        display: "block",
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: "rgba(255,255,255,0.92)",
-                        lineHeight: 1.3,
-                        marginTop: 1,
-                      }}
-                    >
-                      {avanceGrupo.cicloActual}
-                    </Text>
-                  ) : null}
-                  <Text
-                    style={{
-                      display: "block",
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: "rgba(255,255,255,0.88)",
-                      lineHeight: 1.3,
-                      marginTop: 1,
-                    }}
-                  >
+                  <Text type="secondary" style={{ display: "block", marginTop: 2, lineHeight: 1.4 }}>
                     {avanceGrupo.proximaClaseHorario}
                   </Text>
+                  {avanceGrupo.proximoCiclo ? (
+                    <Text style={{ display: "block", marginTop: 8, color: "#334155", fontWeight: 600, lineHeight: 1.4 }}>
+                      {`Próximo ciclo: ${avanceGrupo.proximoCiclo}`}
+                    </Text>
+                  ) : null}
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<FileTextOutlined />}
+                    style={{ paddingInline: 0, marginTop: 8, fontWeight: 600 }}
+                    disabled={!grupo.proximo_ciclo_pensum_id}
+                    onClick={() => void abrirMaterialesProximoCiclo(grupo)}
+                  >
+                    Lista de materiales visible
+                  </Button>
                 </div>
               ) : avanceGrupo.maximoAlcanzado ? (
                 <div
                   style={{
-                    background: "linear-gradient(135deg, #16A34A 0%, #22C55E 100%)",
-                    borderRadius: 10,
-                    padding: "7px 11px",
+                    background: "linear-gradient(180deg, #ffffff 0%, #f7fff9 100%)",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: 14,
+                    padding: isMobile ? "10px 12px" : "12px 14px",
                     flexShrink: 0,
-                    textAlign: "center",
-                    boxShadow: "0 2px 8px rgba(34,197,94,0.24)",
+                    minWidth: isMobile ? "100%" : 250,
+                    boxShadow: "0 8px 24px rgba(34, 197, 94, 0.10)",
                   }}
                 >
-                  <Text
-                    style={{
-                      display: "block",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      color: "rgba(255,255,255,0.90)",
-                      textTransform: "uppercase",
-                      letterSpacing: 0.5,
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    Ciclo completo
+                  <Text type="secondary" style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                    Estado del grupo
                   </Text>
-                  <Text
-                    style={{
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "#ffffff",
-                      lineHeight: 1.4,
-                      marginTop: 2,
-                    }}
-                  >
-                    {`Clase #${avanceGrupo.totalClasesPrograma || 0}`}
+                  <Text style={{ display: "block", fontSize: 14, fontWeight: 700, color: "#166534", marginTop: 4 }}>
+                    Plan completado
                   </Text>
-                  <Text
-                    style={{
-                      display: "block",
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: "rgba(255,255,255,0.88)",
-                      lineHeight: 1.3,
-                      marginTop: 1,
-                    }}
-                  >
-                    Sin próxima clase
+                  <Text type="secondary" style={{ display: "block", marginTop: 2, lineHeight: 1.4 }}>
+                    {`Clase final registrada: #${avanceGrupo.totalClasesPrograma || 0}`}
                   </Text>
+                  {avanceGrupo.proximoCiclo ? (
+                    <Text style={{ display: "block", marginTop: 8, color: "#334155", fontWeight: 600, lineHeight: 1.4 }}>
+                      {`Siguiente ciclo sugerido: ${avanceGrupo.proximoCiclo}`}
+                    </Text>
+                  ) : null}
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<FileTextOutlined />}
+                    style={{ paddingInline: 0, marginTop: 8, fontWeight: 600 }}
+                    disabled={!grupo.proximo_ciclo_pensum_id}
+                    onClick={() => void abrirMaterialesProximoCiclo(grupo)}
+                  >
+                    Lista de materiales visible
+                  </Button>
                 </div>
               ) : null}
             </Flex>
