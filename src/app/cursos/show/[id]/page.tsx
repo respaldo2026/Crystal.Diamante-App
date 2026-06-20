@@ -990,19 +990,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           const temaSincronizado = numeroClase && nombreOficial
             ? `Clase #${numeroClase} - ${nombreOficial}`
             : (tema || "-");
-          const cicloMeta = getCycleMeta(numeroClase);
-          const cicloNumero = cicloMeta?.ciclo || null;
-          const posicionEnCiclo = cicloMeta?.posicion || null;
-          const colorCiclo = cicloNumero ? (cicloNumero % 2 === 0 ? "geekblue" : "purple") : "default";
 
           const estadoCalendario = estadoCalendarioSesionPorId.get(String(record?.id || ""));
           if (!temaSincronizado && !estadoCalendario) return <Text type="secondary">-</Text>;
 
           return (
             <Space direction="vertical" size={4}>
-              {cicloNumero && posicionEnCiclo ? (
-                <Tag color={colorCiclo}>{`Ciclo ${cicloNumero} · Clase ${posicionEnCiclo}/4`}</Tag>
-              ) : null}
               {temaSincronizado ? <Tag>{temaSincronizado}</Tag> : <Text type="secondary">-</Text>}
               {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
             </Space>
@@ -3441,18 +3434,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     dataIndex: "tema_visto",
                     key: "tema",
                     ellipsis: true,
-                    render: (v: string) => {
-                      const numeroClase = extractClassNumber(String(v || ""));
-                      const cicloMeta = getCycleMeta(numeroClase);
-                      return (
-                        <Space direction="vertical" size={4}>
-                          {cicloMeta ? (
-                            <Tag color={cicloMeta.ciclo % 2 === 0 ? "geekblue" : "purple"}>{`Ciclo ${cicloMeta.ciclo} · Clase ${cicloMeta.posicion}/4`}</Tag>
-                          ) : null}
-                          <Text>{v || "-"}</Text>
-                        </Space>
-                      );
-                    },
+                    render: (v: string) => v || "-",
                   },
                   {
                     title: "Fecha",
