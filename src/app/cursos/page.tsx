@@ -628,7 +628,7 @@ export default function CursosList() {
               border: `1px solid ${avanceGrupo.borde}`,
             }}
           >
-            <Flex justify="space-between" align="stretch" gap={isMobile ? 12 : 18} wrap="wrap">
+            <Flex justify="space-between" align="stretch" gap={isMobile ? 12 : 16} wrap="wrap">
               <div
                 style={{
                   flex: 1,
@@ -636,20 +636,30 @@ export default function CursosList() {
                   background: "rgba(255,255,255,0.72)",
                   border: "1px solid #e2e8f0",
                   borderRadius: 12,
-                  padding: isMobile ? "10px 12px" : "12px 14px",
+                  padding: isMobile ? "10px 12px" : "11px 13px",
                 }}
               >
-                <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 6, fontSize: 15 }}>
+                <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 6, fontSize: 14 }}>
                   {avanceGrupo.titulo}
                 </Text>
-                <Text type="secondary" style={{ display: "block", fontSize: 13 }}>
-                  {avanceGrupo.detalle}
-                </Text>
-                {avanceGrupo.tema ? (
-                  <Text style={{ display: "block", marginTop: 10, color: "#0F172A", fontWeight: 600, fontSize: 14 }}>
-                    {avanceGrupo.tema}
-                  </Text>
-                ) : null}
+                <Row gutter={[10, 8]}>
+                  <Col xs={24} sm={12}>
+                    <Text type="secondary" style={{ display: "block", fontSize: 12 }}>
+                      Último registro
+                    </Text>
+                    <Text style={{ display: "block", color: "#334155", fontWeight: 600, fontSize: 13 }}>
+                      {avanceGrupo.detalle.replace(/^Último registro:\s*/i, "")}
+                    </Text>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Text type="secondary" style={{ display: "block", fontSize: 12 }}>
+                      Clase actual
+                    </Text>
+                    <Text style={{ display: "block", color: "#0F172A", fontWeight: 700, fontSize: 13 }}>
+                      {avanceGrupo.tema || "Sin tema registrado"}
+                    </Text>
+                  </Col>
+                </Row>
                 {avanceGrupo.maximoAlcanzado ? (
                   <Tag color="gold" style={{ marginTop: 8, borderRadius: 999 }}>
                     {`Límite alcanzado: ${avanceGrupo.totalClasesPrograma || 0} clases`}
@@ -664,7 +674,7 @@ export default function CursosList() {
                     borderRadius: 14,
                     padding: isMobile ? "12px 13px" : "14px 16px",
                     flexShrink: 0,
-                    width: isMobile ? "100%" : 400,
+                    width: isMobile ? "100%" : 380,
                     boxShadow: `0 12px 26px ${urgenciaCiclo.shadow}`,
                     display: "flex",
                     flexDirection: "column",
