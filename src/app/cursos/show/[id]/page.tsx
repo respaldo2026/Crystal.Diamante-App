@@ -295,6 +295,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return { ciclo, posicion };
   };
 
+  const getCycleRowStyle = (classNumber?: number | null) => {
+    const cycleMeta = getCycleMeta(classNumber);
+    if (!cycleMeta) return {};
+
+    return {
+      background: cycleMeta.ciclo % 2 === 0 ? "#fcfaff" : "#fffefe",
+      boxShadow: cycleMeta.posicion === 1 && cycleMeta.ciclo > 1 ? "inset 0 1px 0 #d8b4fe" : undefined,
+    };
+  };
+
   const normalizeHttpUrl = (value?: string | null) => {
     const raw = String(value || "").trim().replace(/&amp;/gi, "&");
     if (!raw) return "";
@@ -966,20 +976,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         width: 120,
         render: (fecha: string) => dayjs(fecha).format("DD MMM YYYY"),
         sorter: (a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
-      },
-      {
-        title: "Ciclo",
-        key: "ciclo_visual",
-        width: 120,
-        align: "center" as const,
-        render: (_: any, record: any) => {
-          const numeroClaseMap = numeroClaseSesionPorId.get(String(record?.id || ""));
-          const numeroClaseTema = extractClassNumber(String(record?.tema_visto || record?.observaciones || ""));
-          const numeroClase = numeroClaseMap || numeroClaseTema;
-          const cicloMeta = getCycleMeta(numeroClase);
-          if (!cicloMeta) return <Text type="secondary">-</Text>;
-          return <Tag color={cicloMeta.ciclo % 2 === 0 ? "geekblue" : "purple"}>{`C${cicloMeta.ciclo}`}</Tag>;
-        },
       },
       {
         title: "Tema",
@@ -3053,15 +3049,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   pagination={{ pageSize: 15 }}
                   columns={columnasSesiones}
                   onRow={(record: any) => {
-                    const numeroClase = Number(numeroClaseSesionPorId.get(String(record?.id || "")) || 0);
-                    const cicloNumero = numeroClase > 0 ? Math.floor((numeroClase - 1) / 4) + 1 : 0;
-                    const iniciaCiclo = numeroClase > 1 && ((numeroClase - 1) % 4 === 0);
+                    const numeroClase = Number(numeroClaseSesionPorId.get(String(record?.id || "")) || extractClassNumber(String(record?.tema_visto || "")) || 0);
 
                     return {
-                      style: {
-                        background: cicloNumero > 0 && cicloNumero % 2 === 0 ? "#fafaff" : undefined,
-                        boxShadow: iniciaCiclo ? "inset 0 2px 0 #d8b4fe" : undefined,
-                      },
+                      style: getCycleRowStyle(numeroClase),
                     };
                   }}
                   size={isMobile ? "small" : "middle"}
@@ -3446,22 +3437,22 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 }}
                 columns={[
                   {
-                    title: "Ciclo",
-                    key: "ciclo",
-                    width: 90,
-                    render: (_: any, record: any) => {
-                      const numeroClase = extractClassNumber(String(record?.tema_visto || ""));
-                      const cicloMeta = getCycleMeta(numeroClase);
-                      if (!cicloMeta) return <Text type="secondary">-</Text>;
-                      return <Tag color={cicloMeta.ciclo % 2 === 0 ? "geekblue" : "purple"}>{`C${cicloMeta.ciclo}`}</Tag>;
-                    },
-                  },
-                  {
                     title: "Clase",
                     dataIndex: "tema_visto",
                     key: "tema",
                     ellipsis: true,
-                    render: (v: string) => v || "-",
+                    render: (v: string) => {
+                      const numeroClase = extractClassNumber(String(v || ""));
+                      const cicloMeta = getCycleMeta(numeroClase);
+                      return (
+                        <Space direction="vertical" size={4}>
+                          {cicloMeta ? (
+                            <Tag color={cicloMeta.ciclo % 2 === 0 ? "geekblue" : "purple"}>{`Ciclo ${cicloMeta.ciclo} · Clase ${cicloMeta.posicion}/4`}</Tag>
+                          ) : null}
+                          <Text>{v || "-"}</Text>
+                        </Space>
+                      );
+                    },
                   },
                   {
                     title: "Fecha",
@@ -3488,6 +3479,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     },
                   },
                 ]}
+                onRow={(record: any) => {
+                  const numeroClase = extractClassNumber(String(record?.tema_visto || ""));
+                  return { style: getCycleRowStyle(numeroClase) };
+                }}
               />
             ),
           },
