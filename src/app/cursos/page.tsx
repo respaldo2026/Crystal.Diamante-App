@@ -174,6 +174,8 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     Number.isFinite(proximoCicloNumeroRaw) && proximoCicloNumeroRaw > 0 ? proximoCicloNumeroRaw : null;
   const proximoCiclo = proximoCicloNombre || (proximoCicloNumero ? `Ciclo ${proximoCicloNumero}` : null);
   const maximoAlcanzado = Boolean(totalClasesPrograma && numeroClase >= totalClasesPrograma);
+  const cicloVisual = numeroClase > 0 ? Math.floor((numeroClase - 1) / 4) + 1 : null;
+  const posicionCicloVisual = numeroClase > 0 ? ((numeroClase - 1) % 4) + 1 : null;
 
   if (numeroClase > 0) {
     return {
@@ -187,6 +189,8 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
       proximoCiclo,
       maximoAlcanzado,
       totalClasesPrograma,
+      cicloVisual,
+      posicionCicloVisual,
       color: "#7C3AED",
       fondo: "#F5F3FF",
       borde: "#DDD6FE",
@@ -204,6 +208,8 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     proximoCiclo,
     maximoAlcanzado: false,
     totalClasesPrograma,
+    cicloVisual,
+    posicionCicloVisual,
     color: "#475569",
     fondo: "#F8FAFC",
     borde: "#E2E8F0",
@@ -531,6 +537,11 @@ export default function CursosList() {
                   <Text type="secondary" style={{ display: "block", marginTop: 2 }}>
                     {`Próximo ciclo: ${avanceGrupo.proximoCiclo}`}
                   </Text>
+                ) : null}
+                {avanceGrupo.cicloVisual && avanceGrupo.posicionCicloVisual ? (
+                  <Tag color={avanceGrupo.cicloVisual % 2 === 0 ? "geekblue" : "purple"} style={{ marginTop: 8, borderRadius: 999 }}>
+                    {`Ciclo ${avanceGrupo.cicloVisual} · Clase ${avanceGrupo.posicionCicloVisual}/4`}
+                  </Tag>
                 ) : null}
                 <Button
                   type="link"

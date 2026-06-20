@@ -287,6 +287,14 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return null;
   };
 
+  const getCycleMeta = (classNumber?: number | null) => {
+    const numero = Number(classNumber || 0);
+    if (!Number.isFinite(numero) || numero <= 0) return null;
+    const ciclo = Math.floor((numero - 1) / 4) + 1;
+    const posicion = ((numero - 1) % 4) + 1;
+    return { ciclo, posicion };
+  };
+
   const normalizeHttpUrl = (value?: string | null) => {
     const raw = String(value || "").trim().replace(/&amp;/gi, "&");
     if (!raw) return "";
@@ -960,18 +968,35 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         sorter: (a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
       },
       {
+        title: "Ciclo",
+        key: "ciclo_visual",
+        width: 120,
+        align: "center" as const,
+        render: (_: any, record: any) => {
+          const numeroClaseMap = numeroClaseSesionPorId.get(String(record?.id || ""));
+          const numeroClaseTema = extractClassNumber(String(record?.tema_visto || record?.observaciones || ""));
+          const numeroClase = numeroClaseMap || numeroClaseTema;
+          const cicloMeta = getCycleMeta(numeroClase);
+          if (!cicloMeta) return <Text type="secondary">-</Text>;
+          return <Tag color={cicloMeta.ciclo % 2 === 0 ? "geekblue" : "purple"}>{`C${cicloMeta.ciclo}`}</Tag>;
+        },
+      },
+      {
         title: "Tema",
         dataIndex: "tema_visto",
         ellipsis: true,
         width: isMobile ? 200 : undefined,
         render: (tema: string, record: any) => {
-          const numeroClase = numeroClaseSesionPorId.get(String(record?.id || ""));
+          const numeroClaseMap = numeroClaseSesionPorId.get(String(record?.id || ""));
+          const numeroClaseTema = extractClassNumber(String(tema || record?.observaciones || ""));
+          const numeroClase = numeroClaseMap || numeroClaseTema;
           const nombreOficial = numeroClase ? nombreOficialClasePorNumero.get(numeroClase) : null;
           const temaSincronizado = numeroClase && nombreOficial
             ? `Clase #${numeroClase} - ${nombreOficial}`
             : (tema || "-");
-          const cicloNumero = numeroClase ? Math.floor((numeroClase - 1) / 4) + 1 : null;
-          const posicionEnCiclo = numeroClase ? ((numeroClase - 1) % 4) + 1 : null;
+          const cicloMeta = getCycleMeta(numeroClase);
+          const cicloNumero = cicloMeta?.ciclo || null;
+          const posicionEnCiclo = cicloMeta?.posicion || null;
           const colorCiclo = cicloNumero ? (cicloNumero % 2 === 0 ? "geekblue" : "purple") : "default";
 
           const estadoCalendario = estadoCalendarioSesionPorId.get(String(record?.id || ""));
@@ -3420,6 +3445,17 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   rowExpandable: (record: any) => (record.lista || []).length > 0,
                 }}
                 columns={[
+                  {
+                    title: "Ciclo",
+                    key: "ciclo",
+                    width: 90,
+                    render: (_: any, record: any) => {
+                      const numeroClase = extractClassNumber(String(record?.tema_visto || ""));
+                      const cicloMeta = getCycleMeta(numeroClase);
+                      if (!cicloMeta) return <Text type="secondary">-</Text>;
+                      return <Tag color={cicloMeta.ciclo % 2 === 0 ? "geekblue" : "purple"}>{`C${cicloMeta.ciclo}`}</Tag>;
+                    },
+                  },
                   {
                     title: "Clase",
                     dataIndex: "tema_visto",
