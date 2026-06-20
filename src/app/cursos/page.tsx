@@ -628,16 +628,25 @@ export default function CursosList() {
               border: `1px solid ${avanceGrupo.borde}`,
             }}
           >
-            <Flex justify="space-between" align="stretch" gap={isMobile ? 10 : 14} wrap="wrap">
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 4 }}>
+            <Flex justify="space-between" align="stretch" gap={isMobile ? 12 : 18} wrap="wrap">
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: "rgba(255,255,255,0.72)",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 12,
+                  padding: isMobile ? "10px 12px" : "12px 14px",
+                }}
+              >
+                <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 6, fontSize: 15 }}>
                   {avanceGrupo.titulo}
                 </Text>
-                <Text type="secondary" style={{ display: "block" }}>
+                <Text type="secondary" style={{ display: "block", fontSize: 13 }}>
                   {avanceGrupo.detalle}
                 </Text>
                 {avanceGrupo.tema ? (
-                  <Text style={{ display: "block", marginTop: 6, color: "#0F172A" }}>
+                  <Text style={{ display: "block", marginTop: 10, color: "#0F172A", fontWeight: 600, fontSize: 14 }}>
                     {avanceGrupo.tema}
                   </Text>
                 ) : null}
@@ -655,8 +664,11 @@ export default function CursosList() {
                     borderRadius: 14,
                     padding: isMobile ? "12px 13px" : "14px 16px",
                     flexShrink: 0,
-                    width: isMobile ? "100%" : 360,
+                    width: isMobile ? "100%" : 400,
                     boxShadow: `0 12px 26px ${urgenciaCiclo.shadow}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
                   }}
                 >
                   <Text style={{ display: "block", fontSize: 12, fontWeight: 800, color: urgenciaCiclo.title, textTransform: "uppercase", letterSpacing: 0.45 }}>
@@ -693,14 +705,14 @@ export default function CursosList() {
                       ) : null}
                     </div>
                   ) : null}
-                  <Text style={{ display: "block", marginTop: 6, color: "#166534", fontWeight: 700, fontSize: 12 }}>
+                  <Text style={{ display: "block", marginTop: 8, color: "#166534", fontWeight: 800, fontSize: 13 }}>
                     Preparar materiales desde ahora
                   </Text>
                   <Button
                     type="link"
                     size="small"
                     icon={<FileTextOutlined />}
-                    style={{ paddingInline: 0, marginTop: 8, fontWeight: 600 }}
+                    style={{ paddingInline: 0, marginTop: 8, fontWeight: 700, alignSelf: "flex-start" }}
                     disabled={!grupo.proximo_ciclo_pensum_id}
                     onClick={() => void abrirMaterialesProximoCiclo(grupo)}
                   >
