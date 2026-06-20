@@ -72,6 +72,8 @@ interface CursoOcupacion {
 interface DashboardMetrics {
   ingresosPeriodo: number;
   variacionIngresos: number | null;
+  egresosNominaPeriodo: number;
+  balanceNetoPeriodo: number;
   carteraVencida: number;
   pagosPendientes: number;
   estudiantesActivos: number;
@@ -119,6 +121,8 @@ export default function AdminDashboard() {
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     ingresosPeriodo: 0,
     variacionIngresos: null,
+    egresosNominaPeriodo: 0,
+    balanceNetoPeriodo: 0,
     carteraVencida: 0,
     pagosPendientes: 0,
     estudiantesActivos: 0,
@@ -186,8 +190,12 @@ export default function AdminDashboard() {
       const finAnteriorStr = finAnterior.format("YYYY-MM-DD");
 
       const [
-        pagosPeriodoResp,
-        pagosAnteriorResp,
+        pagosConAbonosResp,
+        pagosAbonosPeriodoResp,
+        pagosAbonosAnteriorResp,
+        pagosPagadosPeriodoResp,
+        pagosPagadosAnteriorResp,
+        nominaPeriodoResp,
         pagosPendientesResp,
         matriculasActivasResp,
         matriculasPeriodoResp,
@@ -196,8 +204,26 @@ export default function AdminDashboard() {
         matriculasActivasDetalleResp
       ] = await Promise.all([
         supabase
+          .from("pagos_abonos")
+          .select("pago_id")
+          .not("pago_id", "is", null),
+        supabase
+          .from("pagos_abonos")
+          .select("pago_id, monto_abono, fecha_pago, metodo_pago")
+          .gt("monto_abono", 0)
+          .not("fecha_pago", "is", null)
+          .gte("fecha_pago", inicioActualStr)
+          .lte("fecha_pago", finActualStr),
+        supabase
+          .from("pagos_abonos")
+          .select("pago_id, monto_abono, fecha_pago")
+          .gt("monto_abono", 0)
+          .not("fecha_pago", "is", null)
+          .gte("fecha_pago", inicioAnteriorStr)
+          .lte("fecha_pago", finAnteriorStr),
+        supabase
           .from("pagos")
-          .select("monto, fecha_pago, metodo_pago, estado")
+          .select("id, monto, fecha_pago, metodo_pago, estado")
           .eq("estado", "pagado")
           .not("fecha_pago", "is", null)
           .gt("monto", 0)
@@ -205,12 +231,18 @@ export default function AdminDashboard() {
           .lte("fecha_pago", finActualStr),
         supabase
           .from("pagos")
-          .select("monto, fecha_pago, estado")
+          .select("id, monto, fecha_pago, estado")
           .eq("estado", "pagado")
           .not("fecha_pago", "is", null)
           .gt("monto", 0)
           .gte("fecha_pago", inicioAnteriorStr)
           .lte("fecha_pago", finAnteriorStr),
+        supabase
+          .from("pagos_nomina")
+          .select("total_pagado")
+          .not("fecha_pago", "is", null)
+          .gte("fecha_pago", inicioActualStr)
+          .lte("fecha_pago", finActualStr),
         supabase
           .from("pagos")
           .select("id, monto, fecha_vencimiento, periodo_pagado, estudiante:perfiles!pagos_estudiante_id_fkey(nombre_completo)")
@@ -247,11 +279,29 @@ export default function AdminDashboard() {
 
       const errors: string[] = [];
 
-      const pagosPeriodo = pagosPeriodoResp.error ? [] : pagosPeriodoResp.data || [];
-      if (pagosPeriodoResp.error) errors.push(`Pagos pagados: ${pagosPeriodoResp.error.message}`);
+      const pagosConAbonos = pagosConAbonosResp.error ? [] : pagosConAbonosResp.data || [];
+      if (pagosConAbonosResp.error) errors.push(`Pagos con abonos: ${pagosConAbonosResp.error.message}`);
 
-      const pagosAnterior = pagosAnteriorResp.error ? [] : pagosAnteriorResp.data || [];
-      if (pagosAnteriorResp.error) errors.push(`Comparativo ingresos: ${pagosAnteriorResp.error.message}`);
+      const pagosAbonosPeriodo = pagosAbonosPeriodoResp.error ? [] : pagosAbonosPeriodoResp.data || [];
+      if (pagosAbonosPeriodoResp.error) errors.push(`Abonos del período: ${pagosAbonosPeriodoResp.error.message}`);
+
+      const pagosAbonosAnterior = pagosAbonosAnteriorResp.error ? [] : pagosAbonosAnteriorResp.data || [];
+      if (pagosAbonosAnteriorResp.error) errors.push(`Abonos período anterior: ${pagosAbonosAnteriorResp.error.message}`);
+
+      const pagosPagadosPeriodo = pagosPagadosPeriodoResp.error ? [] : pagosPagadosPeriodoResp.data || [];
+      if (pagosPagadosPeriodoResp.error) errors.push(`Pagos pagados: ${pagosPagadosPeriodoResp.error.message}`);
+
+      const pagosPagadosAnterior = pagosPagadosAnteriorResp.error ? [] : pagosPagadosAnteriorResp.data || [];
+      if (pagosPagadosAnteriorResp.error) errors.push(`Comparativo ingresos: ${pagosPagadosAnteriorResp.error.message}`);
+
+      const nominaPeriodo = nominaPeriodoResp.error ? [] : nominaPeriodoResp.data || [];
+      if (nominaPeriodoResp.error) errors.push(`Egresos nómina: ${nominaPeriodoResp.error.message}`);
+
+      const pagosConAbonosSet = new Set(
+        (pagosConAbonos as any[])
+          .map((row: any) => String(row?.pago_id || ""))
+          .filter(Boolean)
+      );
 
       const pendientesData = pagosPendientesResp.error ? [] : (pagosPendientesResp.data as PagoPendiente[]) || [];
       if (pagosPendientesResp.error) errors.push(`Pagos pendientes: ${pagosPendientesResp.error.message}`);
@@ -305,14 +355,59 @@ export default function AdminDashboard() {
         return !fechaPago.isBefore(inicioRef, "day") && !fechaPago.isAfter(finRef, "day");
       };
 
-      const pagosPeriodoReales = pagosPeriodo.filter((pago: any) => esPagoRealDelPeriodo(pago, inicio, fin));
-      const pagosAnteriorReales = pagosAnterior.filter((pago: any) => esPagoRealDelPeriodo(pago, inicioAnterior, finAnterior));
+      const pagosPeriodoSinAbonos = (pagosPagadosPeriodo as any[])
+        .filter((pago: any) => esPagoRealDelPeriodo(pago, inicio, fin))
+        .filter((pago: any) => !pagosConAbonosSet.has(String(pago?.id || "")));
+
+      const pagosAnteriorSinAbonos = (pagosPagadosAnterior as any[])
+        .filter((pago: any) => esPagoRealDelPeriodo(pago, inicioAnterior, finAnterior))
+        .filter((pago: any) => !pagosConAbonosSet.has(String(pago?.id || "")));
+
+      const abonosPeriodoReales = (pagosAbonosPeriodo as any[])
+        .filter((abono: any) => {
+          const monto = Number(abono?.monto_abono || 0);
+          const fechaPago = abono?.fecha_pago ? dayjs(abono.fecha_pago) : null;
+          if (!Number.isFinite(monto) || monto <= 0) return false;
+          if (!fechaPago || !fechaPago.isValid()) return false;
+          return !fechaPago.isBefore(inicio, "day") && !fechaPago.isAfter(fin, "day");
+        })
+        .map((abono: any) => ({
+          monto: Number(abono?.monto_abono || 0),
+          fecha_pago: abono?.fecha_pago,
+          metodo_pago: abono?.metodo_pago || "Sin método",
+        }));
+
+      const abonosAnteriorReales = (pagosAbonosAnterior as any[])
+        .filter((abono: any) => {
+          const monto = Number(abono?.monto_abono || 0);
+          const fechaPago = abono?.fecha_pago ? dayjs(abono.fecha_pago) : null;
+          if (!Number.isFinite(monto) || monto <= 0) return false;
+          if (!fechaPago || !fechaPago.isValid()) return false;
+          return !fechaPago.isBefore(inicioAnterior, "day") && !fechaPago.isAfter(finAnterior, "day");
+        })
+        .map((abono: any) => ({
+          monto: Number(abono?.monto_abono || 0),
+          fecha_pago: abono?.fecha_pago,
+          metodo_pago: abono?.metodo_pago || "Sin método",
+        }));
+
+      const pagosPeriodoReales = [
+        ...pagosPeriodoSinAbonos,
+        ...abonosPeriodoReales,
+      ];
+
+      const pagosAnteriorReales = [
+        ...pagosAnteriorSinAbonos,
+        ...abonosAnteriorReales,
+      ];
 
       const totalIngresosActual = pagosPeriodoReales.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
       const totalIngresosAnterior = pagosAnteriorReales.reduce((acc, pago) => acc + Number(pago.monto || 0), 0);
       const variacionIngresos = totalIngresosAnterior > 0
         ? ((totalIngresosActual - totalIngresosAnterior) / totalIngresosAnterior) * 100
         : null;
+      const totalEgresosNomina = (nominaPeriodo as any[]).reduce((acc, item: any) => acc + Number(item?.total_pagado || 0), 0);
+      const balanceNetoPeriodo = totalIngresosActual - totalEgresosNomina;
 
       const hoyInicioDia = dayjs().startOf("day");
 
@@ -545,6 +640,8 @@ export default function AdminDashboard() {
       setMetrics({
         ingresosPeriodo: totalIngresosActual,
         variacionIngresos,
+        egresosNominaPeriodo: totalEgresosNomina,
+        balanceNetoPeriodo,
         carteraVencida: totalVencido,
         pagosPendientes: integrantesConDeuda.length,
         estudiantesActivos,
@@ -614,7 +711,7 @@ export default function AdminDashboard() {
   const metricCards = [
     {
       key: "ingresos",
-      title: "Ingresos del período",
+      title: "Ingresos de caja",
       value: metrics.ingresosPeriodo,
       prefix: "$",
       precision: 0,
@@ -635,6 +732,23 @@ export default function AdminDashboard() {
       icon: <WarningOutlined style={{ color: "#fa8c16" }} />,
       extra: <Tag color="default">{metrics.pagosPendientes} con deuda</Tag>,
       valueStyle: { color: "#fa541c", fontWeight: 600 }
+    },
+    {
+      key: "nomina",
+      title: "Egresos nómina",
+      value: metrics.egresosNominaPeriodo,
+      prefix: "$",
+      icon: <BankOutlined style={{ color: "#cf1322" }} />,
+      valueStyle: { color: "#cf1322", fontWeight: 600 }
+    },
+    {
+      key: "balance",
+      title: "Balance neto",
+      value: metrics.balanceNetoPeriodo,
+      prefix: "$",
+      icon: <CheckCircleOutlined style={{ color: metrics.balanceNetoPeriodo >= 0 ? "#52c41a" : "#cf1322" }} />,
+      extra: <Tag color={metrics.balanceNetoPeriodo >= 0 ? "green" : "red"}>{metrics.balanceNetoPeriodo >= 0 ? "Positivo" : "Negativo"}</Tag>,
+      valueStyle: { color: metrics.balanceNetoPeriodo >= 0 ? "#389e0d" : "#cf1322", fontWeight: 700 }
     },
     {
       key: "activos",
@@ -811,7 +925,7 @@ export default function AdminDashboard() {
                 <RiseOutlined style={{ color: "#1677ff", fontSize: isMobile ? "16px" : "20px" }} />
                 <span style={{
                   fontSize: isMobile ? "14px" : "16px",
-                }}>Evolución de ingresos</span>
+                }}>Evolución de caja</span>
               </Space>
             } style={{
               marginBottom: isMobile ? "12px" : "0px",
