@@ -275,6 +275,59 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
   };
 }
 
+function getCycleUrgency(days?: number | null) {
+  const d = Number(days);
+  if (!Number.isFinite(d)) {
+    return {
+      bg: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
+      border: "#93c5fd",
+      shadow: "rgba(37, 99, 235, 0.18)",
+      title: "#1e3a8a",
+      accent: "#1d4ed8",
+      chipBg: "#dbeafe",
+      chipColor: "#1e3a8a",
+      level: "normal",
+    };
+  }
+
+  if (d <= 3) {
+    return {
+      bg: "linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)",
+      border: "#fb7185",
+      shadow: "rgba(225, 29, 72, 0.20)",
+      title: "#9f1239",
+      accent: "#be123c",
+      chipBg: "#fecdd3",
+      chipColor: "#9f1239",
+      level: "urgente",
+    };
+  }
+
+  if (d <= 7) {
+    return {
+      bg: "linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)",
+      border: "#f59e0b",
+      shadow: "rgba(217, 119, 6, 0.18)",
+      title: "#92400e",
+      accent: "#b45309",
+      chipBg: "#fde68a",
+      chipColor: "#92400e",
+      level: "proximo",
+    };
+  }
+
+  return {
+    bg: "linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%)",
+    border: "#34d399",
+    shadow: "rgba(5, 150, 105, 0.16)",
+    title: "#065f46",
+    accent: "#047857",
+    chipBg: "#a7f3d0",
+    chipColor: "#065f46",
+    level: "planificable",
+  };
+}
+
 export default function CursosList() {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -409,6 +462,7 @@ export default function CursosList() {
     const mensajeInicio = construirMensajeInicio(grupo.fecha_inicio);
     const metaCapacidad = obtenerMetaCapacidad(inscritos, capacidad);
     const avanceGrupo = construirAvanceGrupo(grupo);
+    const urgenciaCiclo = getCycleUrgency(avanceGrupo.diasParaProximoCiclo);
 
     return (
       <Card
@@ -574,7 +628,7 @@ export default function CursosList() {
               border: `1px solid ${avanceGrupo.borde}`,
             }}
           >
-            <Flex justify="space-between" align="flex-start" gap={8} wrap="wrap">
+            <Flex justify="space-between" align="stretch" gap={isMobile ? 10 : 14} wrap="wrap">
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 4 }}>
                   {avanceGrupo.titulo}
@@ -596,33 +650,48 @@ export default function CursosList() {
               {avanceGrupo.proximaClaseHorario ? (
                 <div
                   style={{
-                    background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
-                    border: "1px solid #93c5fd",
+                    background: urgenciaCiclo.bg,
+                    border: `1px solid ${urgenciaCiclo.border}`,
                     borderRadius: 14,
-                    padding: isMobile ? "10px 12px" : "12px 14px",
+                    padding: isMobile ? "12px 13px" : "14px 16px",
                     flexShrink: 0,
-                    minWidth: isMobile ? "100%" : 250,
-                    boxShadow: "0 10px 26px rgba(37, 99, 235, 0.18)",
+                    width: isMobile ? "100%" : 360,
+                    boxShadow: `0 12px 26px ${urgenciaCiclo.shadow}`,
                   }}
                 >
-                  <Text style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#1e3a8a", textTransform: "uppercase", letterSpacing: 0.45 }}>
+                  <Text style={{ display: "block", fontSize: 12, fontWeight: 800, color: urgenciaCiclo.title, textTransform: "uppercase", letterSpacing: 0.45 }}>
                     Siguiente paso del grupo
                   </Text>
-                  <Text style={{ display: "block", fontSize: isMobile ? 15 : 16, fontWeight: 800, color: "#0f172a", marginTop: 6, lineHeight: 1.4 }}>
+                  <Text style={{ display: "block", fontSize: isMobile ? 16 : 18, fontWeight: 800, color: "#0f172a", marginTop: 6, lineHeight: 1.35 }}>
                     {`Clase #${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""}`}
                   </Text>
-                  <Text style={{ display: "block", marginTop: 4, lineHeight: 1.4, color: "#1e3a8a", fontWeight: 600, fontSize: 13 }}>
+                  <Text style={{ display: "block", marginTop: 4, lineHeight: 1.4, color: urgenciaCiclo.accent, fontWeight: 700, fontSize: 14 }}>
                     {avanceGrupo.proximaClaseHorario}
                   </Text>
                   {avanceGrupo.proximoCiclo ? (
-                    <Text style={{ display: "block", marginTop: 8, color: "#334155", fontWeight: 700, lineHeight: 1.45, fontSize: 13 }}>
+                    <Text style={{ display: "block", marginTop: 8, color: "#334155", fontWeight: 700, lineHeight: 1.45, fontSize: 14 }}>
                       {`Próximo ciclo: ${avanceGrupo.proximoCiclo}`}
                     </Text>
                   ) : null}
                   {avanceGrupo.fechaProximoCicloTexto ? (
-                    <Text style={{ display: "block", marginTop: 4, color: "#0f172a", fontWeight: 700, lineHeight: 1.45, fontSize: 13 }}>
-                      {`Inicio estimado: ${avanceGrupo.fechaProximoCicloTexto}${typeof avanceGrupo.diasParaProximoCiclo === "number" ? ` (en ${avanceGrupo.diasParaProximoCiclo} días)` : ""}`}
-                    </Text>
+                    <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 10, background: "rgba(255,255,255,0.62)", border: `1px solid ${urgenciaCiclo.border}` }}>
+                      <Text style={{ display: "block", color: "#0f172a", fontWeight: 700, lineHeight: 1.4, fontSize: 13 }}>
+                        {`Inicio estimado: ${avanceGrupo.fechaProximoCicloTexto}`}
+                      </Text>
+                      {typeof avanceGrupo.diasParaProximoCiclo === "number" ? (
+                        <div style={{ marginTop: 4, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                          <Text style={{ fontSize: isMobile ? 22 : 26, lineHeight: 1, fontWeight: 900, color: urgenciaCiclo.accent }}>
+                            {avanceGrupo.diasParaProximoCiclo}
+                          </Text>
+                          <Text style={{ fontSize: 14, fontWeight: 800, color: urgenciaCiclo.title }}>
+                            días restantes
+                          </Text>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: urgenciaCiclo.chipColor, background: urgenciaCiclo.chipBg, borderRadius: 999, padding: "2px 8px", textTransform: "uppercase" }}>
+                            {urgenciaCiclo.level}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                   <Text style={{ display: "block", marginTop: 6, color: "#166534", fontWeight: 700, fontSize: 12 }}>
                     Preparar materiales desde ahora
