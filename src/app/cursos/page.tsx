@@ -116,34 +116,73 @@ const DIA_MAP: Record<string, number> = {
   sábado: 6, sabado: 6,
 };
 
-function calcularProximaClase(grupo: GrupoAcademico): string | null {
-  const { dias_semana, hora_inicio } = grupo;
-  if (!dias_semana) return null;
-
-  const numeroDias = dias_semana
+function parseDays(diasSemana?: string | null): number[] {
+  if (!diasSemana) return [];
+  const dias = diasSemana
     .split(",")
     .map((d) => DIA_MAP[d.trim().toLowerCase()])
     .filter((d): d is number => d !== undefined);
+  return Array.from(new Set(dias));
+}
 
+function applyHourToDate(base: dayjs.Dayjs, horaInicio?: string | null): dayjs.Dayjs {
+  if (!horaInicio) return base.startOf("day");
+  const partes = String(horaInicio).split(":");
+  const hhRaw = Number(partes[0] ?? 0);
+  const mmRaw = Number(partes[1] ?? 0);
+  const hh = Number.isFinite(hhRaw) ? hhRaw : 0;
+  const mm = Number.isFinite(mmRaw) ? mmRaw : 0;
+  return base.hour(hh).minute(mm).second(0).millisecond(0);
+}
+
+function calcularProximaClaseInfo(grupo: GrupoAcademico): { label: string; date: dayjs.Dayjs } | null {
+  const { dias_semana, hora_inicio } = grupo;
+  const numeroDias = parseDays(dias_semana || null);
   if (numeroDias.length === 0) return null;
 
-  const hoy = dayjs();
-  for (let i = 0; i <= 7; i++) {
-    const candidato = hoy.add(i, "day");
-    if (!numeroDias.includes(candidato.day())) continue;
-    if (i === 0 && hora_inicio) {
-      const partes = hora_inicio.split(":").map(Number);
-      const horaClase = hoy.hour(partes[0] ?? 0).minute(partes[1] ?? 0).second(0);
-      if (hoy.isAfter(horaClase)) continue;
-    }
-    const horaFmt = hora_inicio
-      ? dayjs(hora_inicio, "HH:mm:ss").format("hh:mm A")
-      : null;
+  const ahora = dayjs();
+  for (let i = 0; i <= 14; i += 1) {
+    const candidatoDia = ahora.add(i, "day");
+    if (!numeroDias.includes(candidatoDia.day())) continue;
+
+    const candidato = applyHourToDate(candidatoDia, hora_inicio || null);
+    if (candidato.isBefore(ahora)) continue;
+
+    const horaFmt = hora_inicio ? dayjs(hora_inicio, "HH:mm:ss").format("hh:mm A") : null;
     const sufijo = horaFmt ? ` · ${horaFmt}` : "";
-    if (i === 0) return `Hoy${sufijo}`;
-    if (i === 1) return `Mañana${sufijo}`;
-    return `${candidato.format("ddd DD MMM")}${sufijo}`;
+    const label = i === 0 ? `Hoy${sufijo}` : i === 1 ? `Mañana${sufijo}` : `${candidatoDia.format("ddd DD MMM")}${sufijo}`;
+
+    return { label, date: candidato };
   }
+
+  return null;
+}
+
+function sumarClasesProgramadas(
+  desde: dayjs.Dayjs,
+  diasSemana?: string | null,
+  horaInicio?: string | null,
+  clasesPorAvanzar: number = 0,
+): dayjs.Dayjs | null {
+  if (clasesPorAvanzar <= 0) return desde;
+  const dias = parseDays(diasSemana || null);
+  if (!dias.length) return null;
+
+  let restantes = clasesPorAvanzar;
+  let cursor = desde.startOf("day").add(1, "day");
+  let intentos = 0;
+
+  while (restantes > 0 && intentos < 400) {
+    if (dias.includes(cursor.day())) {
+      restantes -= 1;
+      if (restantes === 0) {
+        return applyHourToDate(cursor, horaInicio || null);
+      }
+    }
+    cursor = cursor.add(1, "day");
+    intentos += 1;
+  }
+
   return null;
 }
 
@@ -151,7 +190,8 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
   const numeroClase = Number(grupo.ultima_clase_numero || 0);
   const fecha = grupo.ultima_clase_fecha ? dayjs(grupo.ultima_clase_fecha).format("DD MMM YYYY") : null;
   const tema = String(grupo.ultima_clase_tema || "").trim();
-  const proximaClaseHorario = calcularProximaClase(grupo);
+  const proximaClaseInfo = calcularProximaClaseInfo(grupo);
+  const proximaClaseHorario = proximaClaseInfo?.label || null;
   const proximaClaseNumeroDetectada = Number(grupo.siguiente_clase_numero || 0);
   const proximaClaseNumero =
     Number.isFinite(proximaClaseNumeroDetectada) && proximaClaseNumeroDetectada > 0
@@ -174,6 +214,28 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     Number.isFinite(proximoCicloNumeroRaw) && proximoCicloNumeroRaw > 0 ? proximoCicloNumeroRaw : null;
   const proximoCiclo = proximoCicloNombre || (proximoCicloNumero ? `Ciclo ${proximoCicloNumero}` : null);
   const maximoAlcanzado = Boolean(totalClasesPrograma && numeroClase >= totalClasesPrograma);
+
+  const siguienteInicioCicloClase = numeroClase > 0 ? (Math.floor((numeroClase - 1) / 4) * 4) + 5 : null;
+  const clasesParaProximoCiclo =
+    !proximaClaseInfo || !siguienteInicioCicloClase || !proximaClaseNumero
+      ? null
+      : Math.max(siguienteInicioCicloClase - proximaClaseNumero, 0);
+  const fechaInicioProximoCiclo =
+    proximaClaseInfo && clasesParaProximoCiclo !== null
+      ? sumarClasesProgramadas(
+          proximaClaseInfo.date,
+          grupo.dias_semana || null,
+          grupo.hora_inicio || null,
+          clasesParaProximoCiclo,
+        )
+      : null;
+  const diasParaProximoCiclo = fechaInicioProximoCiclo
+    ? fechaInicioProximoCiclo.startOf("day").diff(dayjs().startOf("day"), "day")
+    : null;
+  const fechaProximoCicloTexto = fechaInicioProximoCiclo
+    ? fechaInicioProximoCiclo.format("ddd DD MMM YYYY")
+    : null;
+
   if (numeroClase > 0) {
     return {
       titulo: `Van en clase #${numeroClase}`,
@@ -184,6 +246,8 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
       proximaClaseNombre: maximoAlcanzado ? null : proximaClaseNombre,
       cicloActual,
       proximoCiclo,
+      fechaProximoCicloTexto,
+      diasParaProximoCiclo,
       maximoAlcanzado,
       totalClasesPrograma,
       color: "#7C3AED",
@@ -201,6 +265,8 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     proximaClaseNombre,
     cicloActual,
     proximoCiclo,
+    fechaProximoCicloTexto,
+    diasParaProximoCiclo,
     maximoAlcanzado: false,
     totalClasesPrograma,
     color: "#475569",
@@ -530,29 +596,37 @@ export default function CursosList() {
               {avanceGrupo.proximaClaseHorario ? (
                 <div
                   style={{
-                    background: "linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)",
-                    border: "1px solid #cfe0ff",
+                    background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
+                    border: "1px solid #93c5fd",
                     borderRadius: 14,
                     padding: isMobile ? "10px 12px" : "12px 14px",
                     flexShrink: 0,
                     minWidth: isMobile ? "100%" : 250,
-                    boxShadow: "0 8px 24px rgba(59, 130, 246, 0.10)",
+                    boxShadow: "0 10px 26px rgba(37, 99, 235, 0.18)",
                   }}
                 >
-                  <Text type="secondary" style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  <Text style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#1e3a8a", textTransform: "uppercase", letterSpacing: 0.45 }}>
                     Siguiente paso del grupo
                   </Text>
-                  <Text style={{ display: "block", fontSize: 14, fontWeight: 700, color: "#0F172A", marginTop: 4, lineHeight: 1.4 }}>
+                  <Text style={{ display: "block", fontSize: isMobile ? 15 : 16, fontWeight: 800, color: "#0f172a", marginTop: 6, lineHeight: 1.4 }}>
                     {`Clase #${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""}`}
                   </Text>
-                  <Text type="secondary" style={{ display: "block", marginTop: 2, lineHeight: 1.4 }}>
+                  <Text style={{ display: "block", marginTop: 4, lineHeight: 1.4, color: "#1e3a8a", fontWeight: 600, fontSize: 13 }}>
                     {avanceGrupo.proximaClaseHorario}
                   </Text>
                   {avanceGrupo.proximoCiclo ? (
-                    <Text style={{ display: "block", marginTop: 8, color: "#334155", fontWeight: 600, lineHeight: 1.4 }}>
+                    <Text style={{ display: "block", marginTop: 8, color: "#334155", fontWeight: 700, lineHeight: 1.45, fontSize: 13 }}>
                       {`Próximo ciclo: ${avanceGrupo.proximoCiclo}`}
                     </Text>
                   ) : null}
+                  {avanceGrupo.fechaProximoCicloTexto ? (
+                    <Text style={{ display: "block", marginTop: 4, color: "#0f172a", fontWeight: 700, lineHeight: 1.45, fontSize: 13 }}>
+                      {`Inicio estimado: ${avanceGrupo.fechaProximoCicloTexto}${typeof avanceGrupo.diasParaProximoCiclo === "number" ? ` (en ${avanceGrupo.diasParaProximoCiclo} días)` : ""}`}
+                    </Text>
+                  ) : null}
+                  <Text style={{ display: "block", marginTop: 6, color: "#166534", fontWeight: 700, fontSize: 12 }}>
+                    Preparar materiales desde ahora
+                  </Text>
                   <Button
                     type="link"
                     size="small"
