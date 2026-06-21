@@ -6,7 +6,7 @@ import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOu
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { useRouter } from "next/navigation";
-import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
+import { enviarWhatsapp } from "@/modules/comunicacion/whatsapp.service";
 import { useSearchParams } from "next/navigation";
 import { formatDate } from "@utils/date";
 
@@ -53,6 +53,24 @@ export default function TomarAsistencia() {
 
     const parsed = Number(match[1]);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, []);
+
+  const esMatriculaHabilitada = useCallback((matricula: any) => {
+    const estado = String(matricula?.estado || "").toLowerCase();
+    return estado === "activo" || estado === "en curso";
+  }, []);
+
+  const estaDentroCicloCincoMeses = useCallback((matricula: any) => {
+    const baseDate = String(matricula?.fecha_inicio || matricula?.created_at || "").slice(0, 10);
+    if (!baseDate) return false;
+
+    const inicio = dayjs(baseDate).startOf("day");
+    const hoy = dayjs().startOf("day");
+    if (!inicio.isValid()) return false;
+    if (inicio.isAfter(hoy, "day")) return false;
+
+    const limiteInferior = hoy.subtract(5, "month").startOf("day");
+    return !inicio.isBefore(limiteInferior, "day");
   }, []);
 
   // Cargar cursos al inicio
@@ -133,7 +151,7 @@ export default function TomarAsistencia() {
         // Buscamos matriculas ACTIVAS de este curso
         const { data, error } = await supabaseBrowserClient
           .from("matriculas")
-          .select(`id, estudiante_id, estado, perfiles(nombre_completo, email, telefono, notif_whatsapp)`) 
+          .select(`id, estudiante_id, estado, fecha_inicio, created_at, perfiles(nombre_completo, email, telefono, notif_whatsapp)`) 
           .eq("curso_id", cursoSeleccionado)
           .order("perfiles(nombre_completo)");
 
@@ -144,7 +162,7 @@ export default function TomarAsistencia() {
           // Pre-llenar solo los habilitados con "presente"; deshabilitados quedan sin valor
           const inicial: any = {};
           data?.forEach((m: any) => {
-            const habilitado = m.estado === "activo" || m.estado === "en curso";
+            const habilitado = esMatriculaHabilitada(m);
             inicial[m.id] = habilitado ? "presente" : undefined;
           });
           setAsistenciasMap(inicial);
@@ -158,7 +176,7 @@ export default function TomarAsistencia() {
     };
 
     cargarClase();
-  }, [cursoSeleccionado, message]);
+  }, [cursoSeleccionado, message, esMatriculaHabilitada]);
 
   useEffect(() => {
     if (!cursoSeleccionado) {
@@ -352,7 +370,9 @@ export default function TomarAsistencia() {
   // Marcar todos como presentes
   const marcarTodoPresente = () => {
     const inicial: any = {};
-    alumnos.forEach((m: any) => (inicial[m.id] = "presente"));
+    alumnos.forEach((m: any) => {
+      inicial[m.id] = esMatriculaHabilitada(m) ? "presente" : undefined;
+    });
     setAsistenciasMap(inicial);
     message.success("Todos marcados como presentes");
   };
@@ -360,7 +380,9 @@ export default function TomarAsistencia() {
   // Marcar todos como ausentes
   const marcarTodoAusente = () => {
     const inicial: any = {};
-    alumnos.forEach((m: any) => (inicial[m.id] = "ausente"));
+    alumnos.forEach((m: any) => {
+      inicial[m.id] = esMatriculaHabilitada(m) ? "ausente" : undefined;
+    });
     setAsistenciasMap(inicial);
     message.success("Todos marcados como ausentes");
   };
@@ -527,50 +549,68 @@ export default function TomarAsistencia() {
         .from("asistencias")
         .insert(registros);
 
+      let asistenciaExistenteActualizada = false;
+
       if (error) {
         if (error.code === "23505" || error.message.includes("duplicate") || error.message.includes("unique")) {
           try {
             await actualizarAsistenciaExistente();
             await guardarTemaSesion();
+            asistenciaExistenteActualizada = true;
           } catch (sesionError: any) {
             console.error(sesionError);
             message.warning("⚠️ La asistencia ya existía y no se pudo actualizar completamente.");
             return;
           }
-          message.success(nombreClase
-            ? "✅ La asistencia de esta fecha ya existía y fue actualizada con la sección/clase seleccionada."
-            : "✅ La asistencia de esta fecha ya existía y fue actualizada.");
+        }
+        if (!asistenciaExistenteActualizada) {
+          message.error("Error guardando: " + error.message);
           return;
         }
-        message.error("Error guardando: " + error.message);
-        return;
       }
 
-      try {
-        await guardarTemaSesion();
-      } catch (sesionError: any) {
-        console.error(sesionError);
-        message.warning("Asistencia guardada, pero no se pudo guardar el tema del día.");
+      if (!asistenciaExistenteActualizada) {
+        try {
+          await guardarTemaSesion();
+        } catch (sesionError: any) {
+          console.error(sesionError);
+          message.warning("Asistencia guardada, pero no se pudo guardar el tema del día.");
+        }
       }
 
-      // Notificar automáticamente a ausentes
-      const ausentesInfo = alumnos.filter((alumno) => asistenciasMap[alumno.id] === "ausente");
+      // Notificar automáticamente a ausentes habilitadas en ciclo activo y enviar WhatsApp al cerrar lista.
+      const ausentesInfo = alumnos.filter((alumno) => {
+        const estaAusente = asistenciasMap[alumno.id] === "ausente";
+        const habilitada = esMatriculaHabilitada(alumno);
+        const enCiclo = estaDentroCicloCincoMeses(alumno);
+        const tieneTelefono = Boolean(alumno?.perfiles?.telefono);
+        const notificacionActiva = alumno?.perfiles?.notif_whatsapp ?? true;
+        return estaAusente && habilitada && enCiclo && tieneTelefono && notificacionActiva;
+      });
+
+      let enviadosWhatsapp = 0;
       if (ausentesInfo.length > 0) {
         const fechaTexto = formatDate(fecha);
         await Promise.all(
           ausentesInfo.map(async (alumno) => {
             const nombre = alumno.perfiles?.nombre_completo || "Estudiante";
-            const telefono = alumno.perfiles?.telefono;
-            const variables = {
-              nombre_estudiante: nombre,
-              nombre_curso: cursoNombre || "curso",
-              fecha_clase: fechaTexto,
-            };
-            const mensaje =
-              buildWhatsappFallbackMessage("asistencia_inasistencia_registrada", variables) ??
-              `Hola ${nombre}, se registró una inasistencia en ${cursoNombre} el ${fechaTexto}. Si es un error o necesitas apoyo, responde este mensaje.`;
+            const telefono = String(alumno?.perfiles?.telefono || "");
+            const mensaje = [
+              `Hola ${nombre}, notamos tu ausencia en ${cursoNombre || "tu curso"} el ${fechaTexto}.`,
+              "",
+              "Queremos motivarte a seguir firme: cada clase cuenta y estamos para apoyarte.",
+              "",
+              "No faltes a la próxima clase. Si necesitas ayuda para ponerte al día, responde este mensaje.",
+              "",
+              "Academia Crystal Diamante",
+            ].join("\n");
 
-            // Se omite el envío de WhatsApp para ausencias
+            try {
+              await enviarWhatsapp(telefono, mensaje);
+              enviadosWhatsapp += 1;
+            } catch (whatsappError) {
+              console.error("Error enviando WhatsApp por inasistencia:", whatsappError);
+            }
 
             await supabaseBrowserClient.from("notificaciones").insert({
               user_id: alumno.estudiante_id,
@@ -583,7 +623,17 @@ export default function TomarAsistencia() {
         );
       }
 
-      message.success(`✅ ¡Asistencia y sesión guardadas correctamente! Se registraron ${HORAS_POR_SESION} horas para ${referenciaClase}.`);
+      const mensajeGuardadoBase = asistenciaExistenteActualizada
+        ? (nombreClase
+            ? "✅ Asistencia existente actualizada y sesión registrada correctamente."
+            : "✅ Asistencia existente actualizada correctamente.")
+        : `✅ ¡Asistencia y sesión guardadas correctamente! Se registraron ${HORAS_POR_SESION} horas para ${referenciaClase}.`;
+
+      if (ausentesInfo.length > 0) {
+        message.success(`${mensajeGuardadoBase} WhatsApp enviados a ausentes: ${enviadosWhatsapp}/${ausentesInfo.length}.`);
+      } else {
+        message.success(mensajeGuardadoBase);
+      }
       setTimeout(() => router.push(returnTo), 800);
     } catch (error) {
       console.error(error);
@@ -600,7 +650,7 @@ export default function TomarAsistencia() {
   const ausentes = Object.values(asistenciasMap).filter(
     (v) => v === "ausente"
   ).length;
-  const totalHabilitados = alumnos.filter((a) => a.estado === "activo" || a.estado === "en curso").length;
+  const totalHabilitados = alumnos.filter((a) => esMatriculaHabilitada(a)).length;
   const claseSeleccionadaValida = Boolean(numeroClase && Number(numeroClase) > 0);
   const cursoActual = cursos.find((c) => Number(c.id) === Number(cursoSeleccionado));
   const cursoSinProfesor = cursoSeleccionado && !cursoActual?.profesor_id;
