@@ -76,6 +76,13 @@ const definitions = {
         fallback:
             "Hola {{nombre_estudiante}}, registramos una inasistencia en {{nombre_curso}} el {{fecha_clase}}. Si ya justificaste o fue un error, por favor respóndenos.",
     },
+    inasistencia_motivacion: {
+        nombre: "inasistencia_motivacion",
+        descripcion: "Mensaje motivacional anti-deserción para estudiantes ausentes: les recuerda la importancia de asistir y ofrece apoyo.",
+        variables: ["nombre", "curso", "fecha_clase"],
+        fallback:
+            "Hola {{nombre}}, notamos tu ausencia en {{curso}} el {{fecha_clase}}. Queremos motivarte a seguir firme: cada clase suma a tu meta. Te esperamos en la próxima clase. Si necesitas apoyo, responde este mensaje. Academia Crystal.",
+    },
 } satisfies Record<string, WhatsappTemplateDefinition>;
 
 export type WhatsappTemplateName = keyof typeof definitions;

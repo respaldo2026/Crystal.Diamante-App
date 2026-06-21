@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { enviarWhatsapp } from "@/modules/comunicacion/whatsapp.service";
 import { useSearchParams } from "next/navigation";
 import { formatDate } from "@utils/date";
+import { buildWhatsappFallbackMessage, WHATSAPP_TEMPLATES } from "@/constants/whatsappTemplates";
 
 const { Title, Text } = Typography;
 
@@ -595,21 +596,51 @@ export default function TomarAsistencia() {
           ausentesInfo.map(async (alumno) => {
             const nombre = alumno.perfiles?.nombre_completo || "Estudiante";
             const telefono = String(alumno?.perfiles?.telefono || "");
-            const mensaje = [
-              `Hola ${nombre}, notamos tu ausencia en ${cursoNombre || "tu curso"} el ${fechaTexto}.`,
-              "",
-              "Queremos motivarte a seguir firme: cada clase cuenta y estamos para apoyarte.",
-              "",
-              "No faltes a la próxima clase. Si necesitas ayuda para ponerte al día, responde este mensaje.",
-              "",
-              "Academia Crystal Diamante",
-            ].join("\n");
+            
+            // Intentar enviar por plantilla de Meta con fallback de texto
+            const templateName = "inasistencia_motivacion";
+            const templateDef = WHATSAPP_TEMPLATES[templateName as keyof typeof WHATSAPP_TEMPLATES];
+            const templateFallback = buildWhatsappFallbackMessage(templateName, {
+              nombre,
+              curso: cursoNombre || "tu curso",
+              fecha_clase: fechaTexto,
+            }) || "Notamos tu ausencia. Te esperamos en la próxima clase.";
 
             try {
-              await enviarWhatsapp(telefono, mensaje);
-              enviadosWhatsapp += 1;
+              // Intenta enviar como template de Meta primero
+              const response = await fetch("/api/whatsapp/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  phone: telefono,
+                  type: "template",
+                  template: templateName,
+                  templateVariables: [nombre, cursoNombre || "tu curso", fechaTexto],
+                  templateLanguage: "es_CO",
+                }),
+              });
+              const result = await response.json();
+              
+              if (result.success) {
+                enviadosWhatsapp += 1;
+              } else {
+                // Fallback a texto si falla la plantilla
+                const textResponse = await enviarWhatsapp(telefono, templateFallback);
+                if (textResponse?.success) {
+                  enviadosWhatsapp += 1;
+                }
+              }
             } catch (whatsappError) {
               console.error("Error enviando WhatsApp por inasistencia:", whatsappError);
+              // Intenta fallback de texto en caso de error
+              try {
+                const textFallback = await enviarWhatsapp(telefono, templateFallback);
+                if (textFallback?.success) {
+                  enviadosWhatsapp += 1;
+                }
+              } catch (fallbackError) {
+                console.error("Error en fallback de texto:", fallbackError);
+              }
             }
 
             await supabaseBrowserClient.from("notificaciones").insert({
