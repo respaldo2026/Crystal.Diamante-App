@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { enviarWhatsapp } from "@/modules/comunicacion/whatsapp.service";
 import { useSearchParams } from "next/navigation";
 import { formatDate } from "@utils/date";
-import { buildWhatsappFallbackMessage, WHATSAPP_TEMPLATES } from "@/constants/whatsappTemplates";
+import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
 
 const { Title, Text } = Typography;
 
@@ -599,7 +599,6 @@ export default function TomarAsistencia() {
             
             // Intentar enviar por plantilla de Meta con fallback de texto
             const templateName = "inasistencia_motivacion";
-            const templateDef = WHATSAPP_TEMPLATES[templateName as keyof typeof WHATSAPP_TEMPLATES];
             const templateFallback = buildWhatsappFallbackMessage(templateName, {
               nombre,
               curso: cursoNombre || "tu curso",
@@ -646,7 +645,7 @@ export default function TomarAsistencia() {
             await supabaseBrowserClient.from("notificaciones").insert({
               user_id: alumno.estudiante_id,
               titulo: "Inasistencia registrada",
-              mensaje,
+              mensaje: templateFallback,
               tipo: "asistencia",
               leido: false,
             });
