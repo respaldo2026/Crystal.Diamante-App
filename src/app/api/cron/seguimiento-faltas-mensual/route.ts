@@ -117,20 +117,31 @@ async function saveAuditConversation(
   },
 ): Promise<void> {
   try {
+    // No grabar si es dry-run (solo es para validación)
+    if (input.dryRun) {
+      console.log('[SeguimientoFaltas] Auditoría no grabada (dry-run)');
+      return;
+    }
+
+    // Mensaje amigable que representa lo que se envió al cliente
+    const agentResponse =
+      `💬 Mensaje de seguimiento por faltas\n` +
+      `Estudiante: ${input.profileName || 'N/A'}\n` +
+      `Curso: ${input.cursoNombre}\n` +
+      `Faltas registradas: ${input.faltas}\n` +
+      `\n` +
+      `Mensaje enviado:\n` +
+      `"${input.templateVariables[0]}, vimos que en ${input.templateVariables[1]} acumulas ${input.templateVariables[2]} faltas. ` +
+      `Queremos saber que ha pasado y como podemos apoyarte para que sigas y termines con exito. ` +
+      `Tu continuidad es muy importante para lograr tu meta. Academia Crystal."\n` +
+      `\n` +
+      `Meta Message ID: ${input.messageId || 'sin ID'}\n` +
+      `Período: ${input.monthKey}`;
+
     const payload = {
       phone_number: input.phone,
       user_message: AUDIT_MARKER,
-      agent_response:
-        `📤 Seguimiento de faltas enviado\n` +
-        `month:${input.monthKey}\n` +
-        `matricula:${input.matriculaId}\n` +
-        `curso:${input.cursoNombre}\n` +
-        `faltas:${input.faltas}\n` +
-        `template:${input.templateName}\n` +
-        `lang:${input.templateLanguage}\n` +
-        `variables:${input.templateVariables.join(' | ')}\n` +
-        `dry_run:${input.dryRun ? 'si' : 'no'}\n` +
-        `Meta Message ID: ${input.messageId || 'sin ID'}`,
+      agent_response: agentResponse,
       transcription: null,
       channel: 'whatsapp',
       profile_name: input.profileName || null,
@@ -151,6 +162,8 @@ async function saveAuditConversation(
 
     if (error) {
       console.warn('[SeguimientoFaltas] Error guardando auditoria:', error);
+    } else {
+      console.log('[SeguimientoFaltas] Auditoría grabada correctamente para matrícula:', input.matriculaId);
     }
   } catch (error) {
     console.warn('[SeguimientoFaltas] Excepcion guardando auditoria:', error);
