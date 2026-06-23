@@ -42,6 +42,8 @@ import { getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
 
 const { Title, Text } = Typography;
 
+const MATRICULA_ESTADOS_ACTIVOS = ["activo", "en curso", "pendiente", "inscrito", "preinscrito", "matriculado"];
+
 type MetodoPago = "efectivo" | "transferencia" | "tarjeta" | "nequi" | "sistecredito" | "qr";
 
 interface Estudiante {
@@ -491,7 +493,7 @@ export default function CajaPage() {
           .from("matriculas")
           .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, programa_id, numero_cuotas, duracion, dias_semana, precio_mensualidad, programas ( duracion, precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase ) )")
           .eq("estudiante_id", estudianteId)
-          .eq("estado", "activo");
+          .in("estado", MATRICULA_ESTADOS_ACTIVOS);
 
         if (matriculasError) throw matriculasError;
 
