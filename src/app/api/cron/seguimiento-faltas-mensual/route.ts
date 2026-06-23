@@ -74,9 +74,9 @@ function countAusenciasEnVentana(
   return fechasAusencias.filter((fecha) => fecha >= inicio && fecha <= fin).length;
 }
 
-async function getMonthlySendsForMatricula(
+async function getMonthlySendsForPhone(
   supabase: any,
-  matriculaId: string,
+  phone: string,
   monthKey: string,
 ): Promise<number> {
   try {
@@ -85,7 +85,7 @@ async function getMonthlySendsForMatricula(
       .select('id')
       .eq('user_message', AUDIT_MARKER)
       .ilike('agent_response', `%month:${monthKey}%`)
-      .ilike('agent_response', `%matricula:${matriculaId}%`)
+      .eq('phone_number', phone)
       .limit(10);
 
     if (error) {
@@ -97,6 +97,33 @@ async function getMonthlySendsForMatricula(
   } catch (error) {
     console.warn('[SeguimientoFaltas] Excepcion consultando envios mensuales:', error);
     return 0;
+  }
+}
+
+async function hasSentTodayForPhone(
+  supabase: any,
+  phone: string,
+  todayIso: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('agent_conversations')
+      .select('id')
+      .eq('user_message', AUDIT_MARKER)
+      .eq('phone_number', phone)
+      .gte('created_at', `${todayIso}T00:00:00`)
+      .lt('created_at', `${todayIso}T23:59:59.999Z`)
+      .limit(1);
+
+    if (error) {
+      console.warn('[SeguimientoFaltas] Error consultando envios de hoy:', error);
+      return false;
+    }
+
+    return Boolean((data || []).length);
+  } catch (error) {
+    console.warn('[SeguimientoFaltas] Excepcion consultando envios de hoy:', error);
+    return false;
   }
 }
 
@@ -297,8 +324,14 @@ async function runSeguimientoFaltasJob(request: NextRequest): Promise<NextRespon
       continue;
     }
 
-    const sendsThisMonth = await getMonthlySendsForMatricula(supabase, matriculaId, monthKey);
+    const sendsThisMonth = await getMonthlySendsForPhone(supabase, telefono, monthKey);
     if (sendsThisMonth >= MAX_SENDS_PER_MONTH) {
+      omitidos++;
+      continue;
+    }
+
+    const sentToday = await hasSentTodayForPhone(supabase, telefono, hoy);
+    if (sentToday) {
       omitidos++;
       continue;
     }
