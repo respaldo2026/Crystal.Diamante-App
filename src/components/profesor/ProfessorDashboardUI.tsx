@@ -373,7 +373,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             .slice()
             .sort((a: any, b: any) => Number(a?.orden ?? 9999) - Number(b?.orden ?? 9999));
 
-          if (!meta[programId]) meta[programId] = {};
+          const programMeta = meta[programId] || (meta[programId] = {});
 
           const cicloNumero = Number(ciclo?.numero_ciclo || cycleIndex + 1) || cycleIndex + 1;
           const cicloNombre = String(ciclo?.nombre_ciclo || `Ciclo ${cicloNumero}`).trim() || `Ciclo ${cicloNumero}`;
@@ -381,7 +381,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           temas.forEach(() => {
             const nextNumber = Number(counters.get(programId) || 0) + 1;
             counters.set(programId, nextNumber);
-            meta[programId][nextNumber] = { cicloNumero, cicloNombre };
+            programMeta[nextNumber] = { cicloNumero, cicloNombre };
           });
         });
 
