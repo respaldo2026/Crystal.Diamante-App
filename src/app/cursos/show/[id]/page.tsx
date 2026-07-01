@@ -2003,27 +2003,47 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       _created: sesion?.created_at ? dayjs(String(sesion?.created_at || "")) : null,
     }));
 
-    const fallbackDesdeAsistencias = sesionesBase.length
-      ? []
-      : Array.from(asistenciasDetallePorFecha.entries()).map(([fecha, detalle]) => {
-          const observacionPrincipal =
-            detalle.lista.find((item) => String(item?.observaciones || "").trim())?.observaciones || "Clase registrada";
+    const clasesRegistradasEnSesiones = new Set<number>();
+    const fechasRegistradasEnSesiones = new Set<string>();
+    sesionesBase.forEach((sesion: any) => {
+      const claseNumero = Number(sesion?.clase_numero || 0);
+      const fecha = String(sesion?.fecha || "").slice(0, 10);
+      if (Number.isFinite(claseNumero) && claseNumero > 0) {
+        clasesRegistradasEnSesiones.add(claseNumero);
+      }
+      if (fecha) {
+        fechasRegistradasEnSesiones.add(fecha);
+      }
+    });
 
-          return {
-            id: `fallback-${fecha}`,
-            key: `fallback-${fecha}`,
-            fecha,
-            horas_dictadas: HORAS_POR_CLASE,
-            observaciones: observacionPrincipal,
-            tema_visto: String(observacionPrincipal || "Clase registrada"),
-            created_at: null,
-            clase_numero: extractClassNumber(String(observacionPrincipal || "")),
-            _fecha: dayjs(fecha),
-            _created: null,
-          };
-        });
+    const fallbackDesdeAsistencias = Array.from(asistenciasDetallePorFecha.entries())
+      .map(([fecha, detalle]) => {
+        const observacionPrincipal =
+          detalle.lista.find((item) => String(item?.observaciones || "").trim())?.observaciones || "Clase registrada";
+        const claseNumero = extractClassNumber(String(observacionPrincipal || ""));
 
-    const sourceRows = (sesionesBase.length ? sesionesBase : fallbackDesdeAsistencias)
+        return {
+          id: `fallback-${fecha}`,
+          key: `fallback-${fecha}`,
+          fecha,
+          horas_dictadas: HORAS_POR_CLASE,
+          observaciones: observacionPrincipal,
+          tema_visto: String(observacionPrincipal || "Clase registrada"),
+          created_at: null,
+          clase_numero: claseNumero,
+          _fecha: dayjs(fecha),
+          _created: null,
+        };
+      })
+      .filter((sesion: any) => {
+        const fecha = String(sesion?.fecha || "").slice(0, 10);
+        const claseNumero = Number(sesion?.clase_numero || 0);
+        const claseYaExiste = Number.isFinite(claseNumero) && claseNumero > 0 && clasesRegistradasEnSesiones.has(claseNumero);
+        const fechaYaExiste = fecha ? fechasRegistradasEnSesiones.has(fecha) : false;
+        return !claseYaExiste && !fechaYaExiste;
+      });
+
+    const sourceRows = [...sesionesBase, ...fallbackDesdeAsistencias]
       .filter((sesion: any) => sesion?._fecha?.isValid?.())
       .sort((a: any, b: any) => {
         const diffFecha = a._fecha.valueOf() - b._fecha.valueOf();
