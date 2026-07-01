@@ -22,7 +22,7 @@ const { useBreakpoint } = Grid;
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 const HOURS_PER_CLASS = 3;
-const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automatic[ae]mente para calculo de ciclos/i;
+const AUTO_SESSION_TOPIC_PATTERN = /sesi[oó]n programada autom[aá]tic[ae]mente para c[aá]lculo de ciclos/i;
 
 const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
@@ -137,19 +137,23 @@ export default function NominaPage() {
                         horas_dictadas: HOURS_PER_CLASS,
                     }));
 
-                // 3. Cruzar información (Matemática de Nómina)
-                // IMPORTANTE: Los profesores solo ven clases PENDIENTES para pagar
-                const sesionesPendientes = sesionesValidas.filter((s: any) => s.estado_pago === 'pendiente');
+                // 3. Cruzar información del período.
+                // Horas trabajadas = todas las clases válidas del rango.
+                // A pagar = solo clases pendientes.
                 const reporte = dataProfes?.map((prof: any) => {
-                        const susClases = sesionesPendientes.filter((s: any) => s.profesor_id === prof.id) || [];
-                        const totalHoras = susClases.length * HOURS_PER_CLASS;
-                        const aPagar = totalHoras * (prof.valor_hora || 0);
+                    const susClases = sesionesValidas.filter((s: any) => s.profesor_id === prof.id) || [];
+                    const clasesPendientesProfesor = susClases.filter((s: any) => s.estado_pago === 'pendiente');
+                    const totalHoras = susClases.length * HOURS_PER_CLASS;
+                    const horasPendientes = clasesPendientesProfesor.length * HOURS_PER_CLASS;
+                    const aPagar = horasPendientes * (prof.valor_hora || 0);
 
                         return {
                                 ...prof,
                                 total_horas: totalHoras,
+                        horas_pendientes: horasPendientes,
                                 total_pagado: aPagar,
-                                detalles: susClases
+                        detalles: susClases,
+                        detalles_pendientes: clasesPendientesProfesor,
                         };
                 }).filter((p: any) => p.total_horas > 0 || true);
 
@@ -197,10 +201,10 @@ export default function NominaPage() {
             profesor_id: profesorSeleccionado.id,
             fecha_pago: dayjs().format("YYYY-MM-DD"),
             total_pagado: profesorSeleccionado.total_pagado,
-            total_horas: profesorSeleccionado.total_horas,
+            total_horas: profesorSeleccionado.horas_pendientes,
             fecha_inicio_periodo: rangoFechas[0].format("YYYY-MM-DD"),
             fecha_fin_periodo: rangoFechas[1].format("YYYY-MM-DD"),
-            observaciones: `Pago por ${profesorSeleccionado.total_horas} horas trabajadas del ${formatDate(rangoFechas[0])} al ${formatDate(rangoFechas[1])} - Método: ${metodoNomina}`
+            observaciones: `Pago por ${profesorSeleccionado.horas_pendientes} horas pendientes del ${formatDate(rangoFechas[0])} al ${formatDate(rangoFechas[1])} - Método: ${metodoNomina}`
         }).select().single();
         if (errPago) throw errPago;
 
@@ -478,7 +482,8 @@ export default function NominaPage() {
                     <p>Vas a registrar el pago para: <b>{profesorSeleccionado.nombre_completo}</b></p>
                     <ul>
                         <li>Periodo: {formatDate(rangoFechas[0])} al {formatDate(rangoFechas[1])}</li>
-                        <li>Horas: {profesorSeleccionado.total_horas}</li>
+                        <li>Horas trabajadas: {profesorSeleccionado.total_horas}</li>
+                        <li>Horas pendientes por pagar: {profesorSeleccionado.horas_pendientes}</li>
                         <li>Total: <b>$ {Number(profesorSeleccionado.total_pagado).toLocaleString()}</b></li>
                     </ul>
                     <div style={{marginTop: 16}}>
