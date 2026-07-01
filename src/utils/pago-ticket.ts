@@ -139,8 +139,8 @@ const calcularAvisoPagosMatricula = (cursoFechaInicio?: string | null) => {
   }));
 
   return {
-    titulo: "Fechas de pago de ciclos",
-    mensaje: "Ten presentes estas fechas para evitar retrasos en tu proceso.",
+    titulo: "Cronograma de proximos pagos por ciclo",
+    mensaje: "Las siguientes fechas han sido calculadas con base en la fecha de inicio del curso. Se recomienda realizar cada pago dentro del ciclo correspondiente.",
     fechas,
   };
 };
@@ -388,7 +388,7 @@ export const generarTicketTermicoHtml = async (data: TicketPagoData): Promise<st
         </div>
         ${dataPreparada.avisoPagosMatricula.fechas
           .map(
-            (item) => `<div class="row"><span class="label">${escapeHtml(item.ciclo)} · Clase ${escapeHtml(String(item.claseNumero))}</span><span class="value">${escapeHtml(item.fecha)}</span></div>`
+            (item) => `<div class="row"><span class="label">${escapeHtml(`Proximo pago ${item.ciclo}`)} (${escapeHtml(`clase ${String(item.claseNumero)}`)})</span><span class="value">${escapeHtml(item.fecha)}</span></div>`
           )
           .join("")}
       </div>
