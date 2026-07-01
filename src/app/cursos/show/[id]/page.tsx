@@ -1787,7 +1787,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       // Sesiones de clase
       const cargarSesionesClase = async () => {
         const intentos = [
-          "id, fecha, tema_visto, observaciones, horas_dictadas, created_at",
           "id, fecha, tema_visto, created_at",
           "id, fecha, tema_visto",
         ];
@@ -1802,14 +1801,14 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           if (!error) {
             return (data || []).map((sesion: any) => ({
               ...sesion,
-              observaciones: sesion?.observaciones ?? null,
+              observaciones: null,
               horas_dictadas: sesion?.horas_dictadas ?? null,
               created_at: sesion?.created_at ?? null,
             }));
           }
-
-          console.warn(`Consulta sesiones_clase falló con select: ${selectFields}`, error);
         }
+
+        console.warn("No se pudo cargar sesiones_clase con el esquema disponible en este entorno.");
 
         return [] as any[];
       };
