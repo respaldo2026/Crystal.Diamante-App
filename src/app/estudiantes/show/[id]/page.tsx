@@ -125,7 +125,7 @@ type Estadisticas = {
   deudaTotal: number;
 };
 
-const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automatic[ae]mente para calculo de ciclos/i;
+const AUTO_SESSION_TOPIC_PATTERN = /sesi[oó]n programada autom[aá]tic[ae]mente para c[aá]lculo de ciclos/i;
 
 type AsistenciaEstudiante = {
   id: string;
@@ -141,6 +141,9 @@ type AsistenciaEstudiante = {
   es_placeholder?: boolean;
   curso_nombre?: string | null;
   registros_duplicados?: number;
+  es_divisor_ciclo?: boolean;
+  ciclo_numero?: number | null;
+  ciclo_nombre?: string | null;
 };
 
 const { Title, Text } = Typography;
@@ -171,6 +174,7 @@ export default function StudentDetailView() {
     deudaTotal: 0,
   });
   const [totalClasesPorPrograma, setTotalClasesPorPrograma] = useState<Record<string, number>>({});
+  const [metaCiclosPorPrograma, setMetaCiclosPorPrograma] = useState<Record<string, Record<number, { cicloNumero: number | null; cicloNombre: string | null }>>>({});
   const [ciclosPorMatricula, setCiclosPorMatricula] = useState<Record<number, { total: number; pagados: number; faltantes: number; periodos: string[]; inscripcionPagada: boolean }>>({});
 
   const parseDuracionMeses = (valor?: string | number | null) => {
@@ -434,16 +438,32 @@ export default function StudentDetailView() {
 
       const temaPorProgramaClase = new Map<string, string>();
       const totalTemasPorPrograma = new Map<string, number>();
+      const metaClasePorPrograma = new Map<string, Map<number, { cicloNumero: number | null; cicloNombre: string | null }>>();
       if (programaIds.length > 0) {
         const pensumData = await obtenerPensumPorProgramas(programaIds);
-        (pensumData || []).forEach((ciclo: any) => {
+        const pensumOrdenado = [...(pensumData || [])].sort((a: any, b: any) => {
+          const programaA = String(a?.programa_id || "");
+          const programaB = String(b?.programa_id || "");
+          if (programaA !== programaB) return programaA.localeCompare(programaB);
+          const ordenA = Number(a?.orden ?? a?.numero_ciclo ?? 9999);
+          const ordenB = Number(b?.orden ?? b?.numero_ciclo ?? 9999);
+          return ordenA - ordenB;
+        });
+
+        const contadorClasesPorPrograma = new Map<string, number>();
+        pensumOrdenado.forEach((ciclo: any) => {
           const programaId = String(ciclo?.programa_id || "");
           if (!programaId) return;
-          const temasCiclo = Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [];
+          const temasCiclo = (Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [])
+            .slice()
+            .sort((a: any, b: any) => Number(a?.orden ?? 9999) - Number(b?.orden ?? 9999));
           totalTemasPorPrograma.set(
             programaId,
             Number(totalTemasPorPrograma.get(programaId) || 0) + temasCiclo.length
           );
+          if (!metaClasePorPrograma.has(programaId)) {
+            metaClasePorPrograma.set(programaId, new Map<number, { cicloNumero: number | null; cicloNombre: string | null }>());
+          }
           temasCiclo.forEach((tema: any) => {
             const orden = Number(tema?.orden ?? 0);
             if (!Number.isFinite(orden) || orden <= 0) return;
@@ -451,6 +471,13 @@ export default function StudentDetailView() {
             const key = `${programaId}-${cicloId}-${orden}`;
             if (temaPorProgramaClase.has(key)) return;
             temaPorProgramaClase.set(key, String(tema?.nombre_curso || tema?.titulo || `Clase ${orden}`));
+
+            const consecutivo = Number(contadorClasesPorPrograma.get(programaId) || 0) + 1;
+            contadorClasesPorPrograma.set(programaId, consecutivo);
+            metaClasePorPrograma.get(programaId)?.set(consecutivo, {
+              cicloNumero: Number.isFinite(Number(ciclo?.numero_ciclo)) ? Number(ciclo?.numero_ciclo) : null,
+              cicloNombre: String(ciclo?.nombre_ciclo || "").trim() || null,
+            });
           });
         });
       }
@@ -460,6 +487,14 @@ export default function StudentDetailView() {
         clasesPorProgramaObj[programaId] = totalTemas;
       });
       setTotalClasesPorPrograma(clasesPorProgramaObj);
+      const metaCiclosObj: Record<string, Record<number, { cicloNumero: number | null; cicloNombre: string | null }>> = {};
+      metaClasePorPrograma.forEach((clasesMap, programaId) => {
+        metaCiclosObj[programaId] = {};
+        clasesMap.forEach((value, claseNumero) => {
+          metaCiclosObj[programaId][claseNumero] = value;
+        });
+      });
+      setMetaCiclosPorPrograma(metaCiclosObj);
 
       if (matriculaIds.length > 0) {
         const { data: dataAsistencias, error: errAsistencias } = await supabaseBrowserClient
@@ -1666,12 +1701,39 @@ export default function StudentDetailView() {
       if (!Number.isFinite(matriculaId) || matriculaId <= 0) return;
 
       const totalPrograma = Math.max(obtenerTotalClasesPrograma(matricula), 0);
+      const programaId = String(matricula?.cursos?.programa_id || "");
+      const metaPrograma = metaCiclosPorPrograma[programaId] || {};
       const porClase = registrosPorMatricula.get(matriculaId) || new Map<number, AsistenciaEstudiante[]>();
       const maxRegistrada = Math.max(0, ...Array.from(porClase.keys()));
       const totalClases = Math.max(totalPrograma, maxRegistrada);
       const cursoNombre = construirNombreGrupo(matricula?.cursos) || matricula?.cursos?.nombre || null;
+      let cicloActual: number | null = null;
 
       for (let clase = 1; clase <= totalClases; clase += 1) {
+        const metaCiclo = metaPrograma[clase] || null;
+        const cicloNumero = metaCiclo?.cicloNumero ?? (Math.floor((clase - 1) / 4) + 1);
+        const cicloNombre = metaCiclo?.cicloNombre || `Ciclo ${cicloNumero}`;
+
+        if (cicloNumero && cicloNumero !== cicloActual) {
+          filas.push({
+            id: `divisor-${matriculaId}-${clase}`,
+            fecha: null,
+            estado: null,
+            observaciones: null,
+            matricula_id: matriculaId,
+            clase_numero: clase,
+            tema_visto: null,
+            pago_id: null,
+            estado_pago: null,
+            monto_pago: null,
+            curso_nombre: cursoNombre,
+            es_divisor_ciclo: true,
+            ciclo_numero: cicloNumero,
+            ciclo_nombre: cicloNombre,
+          });
+          cicloActual = cicloNumero;
+        }
+
         const registros = (porClase.get(clase) || [])
           .slice()
           .sort((a, b) => {
@@ -1687,6 +1749,8 @@ export default function StudentDetailView() {
             ...principal,
             curso_nombre: cursoNombre,
             registros_duplicados: registros.length,
+            ciclo_numero: cicloNumero,
+            ciclo_nombre: cicloNombre,
           });
           continue;
         }
@@ -1705,12 +1769,14 @@ export default function StudentDetailView() {
           es_placeholder: true,
           curso_nombre: cursoNombre,
           registros_duplicados: 0,
+          ciclo_numero: cicloNumero,
+          ciclo_nombre: cicloNombre,
         });
       }
     });
 
     return [...filas, ...extrasSinClase];
-  }, [asistenciasHistorial, matriculas, obtenerTotalClasesPrograma]);
+  }, [asistenciasHistorial, matriculas, metaCiclosPorPrograma, obtenerTotalClasesPrograma]);
 
   if (loading) {
     return (
@@ -2103,15 +2169,25 @@ export default function StudentDetailView() {
                     pagination={asistenciasHistorialCompleto.length > 20 ? { pageSize: 20 } : false}
                     locale={{ emptyText: "No hay asistencias registradas" }}
                     onRow={(record: AsistenciaEstudiante) => {
+                      if (record?.es_divisor_ciclo) {
+                        const cicloNumero = Number(record?.ciclo_numero || 0);
+                        const colores = ["#fff7e6", "#f6ffed", "#e6f4ff", "#f9f0ff", "#fff1f0"];
+                        const color = colores[(Math.max(cicloNumero, 1) - 1) % colores.length];
+                        return {
+                          style: {
+                            background: color,
+                            borderTop: "2px solid #d9d9d9",
+                          },
+                        };
+                      }
+
                       const numeroClase = Number(record?.clase_numero || 0);
-                      const ciclo = numeroClase > 0 ? Math.floor((numeroClase - 1) / 4) + 1 : 0;
-                      const iniciaCiclo = numeroClase > 1 && (numeroClase - 1) % 4 === 0;
+                      const ciclo = Number(record?.ciclo_numero || (numeroClase > 0 ? Math.floor((numeroClase - 1) / 4) + 1 : 0));
                       const fondoCiclo = ciclo > 0
                         ? (ciclo % 2 === 0 ? "#fcfaff" : "#fffefe")
                         : undefined;
                       return {
                         style: {
-                          borderTop: iniciaCiclo ? "2px solid #d8b4fe" : undefined,
                           background: record?.es_placeholder
                             ? (ciclo % 2 === 0 ? "#f7f4fb" : "#fafafa")
                             : fondoCiclo,
@@ -2123,25 +2199,42 @@ export default function StudentDetailView() {
                         title: "Fecha",
                         dataIndex: "fecha",
                         width: 130,
-                        render: (val: string | null, record: AsistenciaEstudiante) => (
-                          val
+                        render: (val: string | null, record: AsistenciaEstudiante) => {
+                          if (record?.es_divisor_ciclo) {
+                            const cicloNumero = Number(record?.ciclo_numero || 0);
+                            const colores = ["#d46b08", "#389e0d", "#0958d9", "#7a3db8", "#cf1322"];
+                            const color = colores[(Math.max(cicloNumero, 1) - 1) % colores.length];
+                            return {
+                              children: (
+                                <div style={{ padding: "6px 4px", fontWeight: 700, color }}>
+                                  {`Ciclo ${record?.ciclo_numero || ""}${record?.ciclo_nombre ? ` · ${record.ciclo_nombre}` : ""}`}
+                                </div>
+                              ),
+                              props: { colSpan: 6 },
+                            };
+                          }
+
+                          return val
                             ? formatDate(val)
                             : record?.es_placeholder
                               ? <Text type="secondary">Pendiente</Text>
-                              : "-"
-                        ),
+                              : "-";
+                        },
                       },
                       {
                         title: "N° Clase",
                         dataIndex: "clase_numero",
                         width: 90,
-                        render: (val: number | null) =>
-                          val ? <Text strong>{val}</Text> : <Text type="secondary">-</Text>,
+                        render: (val: number | null, record: AsistenciaEstudiante) => {
+                          if (record?.es_divisor_ciclo) return { children: null, props: { colSpan: 0 } };
+                          return val ? <Text strong>{val}</Text> : <Text type="secondary">-</Text>;
+                        },
                       },
                       {
                         title: "Tema visto",
                         dataIndex: "tema_visto",
                         render: (val: string | null, record: AsistenciaEstudiante) => {
+                          if (record?.es_divisor_ciclo) return { children: null, props: { colSpan: 0 } };
                           const estadoCalendario = estadoCalendarioAsistenciaById.get(String(record?.id || ""));
                           if (!val && !estadoCalendario && !record?.es_placeholder) return <Text type="secondary">-</Text>;
 
@@ -2159,7 +2252,9 @@ export default function StudentDetailView() {
                         title: "Estado",
                         dataIndex: "estado",
                         width: 120,
-                        render: (estado: string | null) => (
+                        render: (estado: string | null, record: AsistenciaEstudiante) => {
+                          if (record?.es_divisor_ciclo) return { children: null, props: { colSpan: 0 } };
+                          return (
                           estado ? (
                             <Tag color={estado === "presente" ? "green" : estado === "tardanza" ? "orange" : "red"}>
                               {String(estado || "-").toUpperCase()}
@@ -2167,13 +2262,15 @@ export default function StudentDetailView() {
                           ) : (
                             <Tag>POR DICTAR</Tag>
                           )
-                        ),
+                        );
+                        },
                       },
                       {
                         title: "Cobro Clase",
                         key: "estado_pago",
                         width: 150,
                         render: (_: any, record: AsistenciaEstudiante) => {
+                          if (record?.es_divisor_ciclo) return { children: null, props: { colSpan: 0 } };
                           if (!record.pago_id) {
                             return record.estado === "presente" ? (
                               <Tag color="default">Sin cobro</Tag>
@@ -2200,7 +2297,10 @@ export default function StudentDetailView() {
                         title: "Acciones",
                         key: "acciones",
                         width: 110,
-                        render: (_: any, record: AsistenciaEstudiante) => (
+                        render: (_: any, record: AsistenciaEstudiante) => {
+                          if (record?.es_divisor_ciclo) return { children: null, props: { colSpan: 0 } };
+                          if (record?.es_placeholder) return <Text type="secondary">-</Text>;
+                          return (
                           <Popconfirm
                             title="¿Eliminar asistencia?"
                             description="Este cambio impacta panel profesor, panel estudiante y este perfil."
@@ -2218,7 +2318,8 @@ export default function StudentDetailView() {
                               Borrar
                             </Button>
                           </Popconfirm>
-                        ),
+                          );
+                        },
                       },
                     ]}
                   />
