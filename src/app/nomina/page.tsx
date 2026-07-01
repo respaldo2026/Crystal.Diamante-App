@@ -27,6 +27,19 @@ const AUTO_SESSION_TOPIC_PATTERN = /sesi[oó]n programada autom[aá]tic[ae]mente
 const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
 
+const formatearHorarioCurso = (horaInicio?: string | null, horaFin?: string | null) => {
+    const inicio = String(horaInicio || '').trim();
+    const fin = String(horaFin || '').trim();
+
+    const inicioValido = inicio ? dayjs(inicio, 'HH:mm:ss').format('h:mm A') : '';
+    const finValido = fin ? dayjs(fin, 'HH:mm:ss').format('h:mm A') : '';
+
+    if (inicioValido && finValido) return `${inicioValido} - ${finValido}`;
+    if (inicioValido) return inicioValido;
+    if (finValido) return finValido;
+    return '-';
+};
+
 export default function NominaPage() {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -210,7 +223,7 @@ export default function NominaPage() {
         // 2. Obtener sesiones trabajadas en ese rango (AMBAS: pendiente y pagado)
         const { data: sesiones } = await supabaseBrowserClient
             .from("sesiones_clase")
-            .select("id, profesor_id, curso_id, fecha, horas_dictadas, tema_visto, estado_pago, created_at, cursos(nombre), perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora, telefono)")
+            .select("id, profesor_id, curso_id, fecha, horas_dictadas, tema_visto, estado_pago, created_at, cursos(nombre, hora_inicio, hora_fin), perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora, telefono)")
             .gte("fecha", inicio)
             .lte("fecha", fin)
             .order("fecha", { ascending: true });
@@ -261,6 +274,7 @@ export default function NominaPage() {
                         horas_dictadas: HOURS_PER_CLASS,
                         valor_hora: valorHora,
                         total_estimado: totalEstimado,
+                        horario_curso: formatearHorarioCurso(s?.cursos?.hora_inicio, s?.cursos?.hora_fin),
                     };
                 });
 
@@ -417,7 +431,7 @@ export default function NominaPage() {
                     <Space direction="vertical" size={0}>
                         <span>{formatDate(val)}</span>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                            {record?.created_at ? `Registro: ${dayjs(record.created_at).format("h:mm A")}` : 'Registro: -'}
+                            {`Horario: ${record?.horario_curso || '-'}`}
                         </Text>
                     </Space>
                 ),
@@ -540,7 +554,7 @@ export default function NominaPage() {
                         {!isMobile && (
                           <Alert
                               message="Este es el registro DIARIO DETALLADO de cada clase dictada"
-                              description="Cada fila representa una clase trabajada con fecha específica, profesor, curso, horas y tema. La segunda línea bajo la fecha muestra la hora en que se registró la sesión, no el horario del curso. Este historial permanece incluso después de pagar."
+                              description="Cada fila representa una clase trabajada con fecha específica, profesor, curso, horas y tema. La segunda línea bajo la fecha muestra el horario real del curso en formato 12 horas. Este historial permanece incluso después de pagar."
                               type="info"
                               showIcon
                               style={{ marginBottom: 16 }}
