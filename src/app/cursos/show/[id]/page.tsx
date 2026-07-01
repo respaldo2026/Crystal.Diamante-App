@@ -3703,8 +3703,21 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     title: "Fecha",
                     dataIndex: "fecha",
                     key: "fecha",
-                    width: 120,
-                    render: (v: string, record: any) => record?.es_divisor_ciclo ? { children: null, props: { colSpan: 0 } } : (v ? dayjs(v).format("DD/MM/YYYY") : "-"),
+                    width: 165,
+                    render: (v: string, record: any) => {
+                      if (record?.es_divisor_ciclo) {
+                        return { children: null, props: { colSpan: 0 } };
+                      }
+
+                      return (
+                        <Space direction="vertical" size={0}>
+                          <span>{v ? dayjs(v).format("DD/MM/YYYY") : "-"}</span>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {record?.created_at ? `Hora: ${dayjs(record.created_at).format("h:mm A")}` : "Hora: -"}
+                          </Text>
+                        </Space>
+                      );
+                    },
                   },
                   {
                     title: "Horas",

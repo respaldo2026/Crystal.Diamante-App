@@ -119,7 +119,7 @@ export default function NominaPage() {
         // 2. Obtener sesiones trabajadas en ese rango (AMBAS: pendiente y pagado)
         const { data: sesiones } = await supabaseBrowserClient
             .from("sesiones_clase")
-            .select("id, profesor_id, curso_id, fecha, horas_dictadas, tema_visto, estado_pago, cursos(nombre), perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora, telefono)")
+            .select("id, profesor_id, curso_id, fecha, horas_dictadas, tema_visto, estado_pago, created_at, cursos(nombre), perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora, telefono)")
             .gte("fecha", inicio)
             .lte("fecha", fin)
             .order("fecha", { ascending: true });
@@ -318,7 +318,14 @@ export default function NominaPage() {
             {
                 title: 'Fecha',
                 dataIndex: 'fecha',
-                render: (val: string) => formatDate(val),
+                render: (val: string, record: any) => (
+                    <Space direction="vertical" size={0}>
+                        <span>{formatDate(val)}</span>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                            {record?.created_at ? `Hora: ${dayjs(record.created_at).format("h:mm A")}` : 'Hora: -'}
+                        </Text>
+                    </Space>
+                ),
             },
             {
                 title: 'Profesor',
