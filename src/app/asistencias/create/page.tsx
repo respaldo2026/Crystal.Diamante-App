@@ -34,6 +34,9 @@ const extractClassNumber = (value?: string | null): number | null => {
   return null;
 };
 
+type ClaseOption = { value: number; label: string; disabled: boolean };
+type ClaseOptionGroup = { label: string; options: ClaseOption[] };
+
 export default function TomarAsistencia() {
   const { message } = App.useApp();
   const [form] = Form.useForm();
@@ -347,7 +350,7 @@ export default function TomarAsistencia() {
     cargarClasesTemario();
   }, [cursoSeleccionado, fecha]);
 
-  const opcionesClase = useMemo(() => {
+  const opcionesClase = useMemo<ClaseOptionGroup[]>(() => {
     if (clasesDisponibles.length > 0) {
       const grupos = new Map<string, Array<{ value: number; label: string; disabled: boolean }>>();
 
@@ -376,7 +379,7 @@ export default function TomarAsistencia() {
     const totalDesdeDuracionPrograma = extractTotalClases(cursoActual?.programas?.duracion);
     const totalClasesPrograma = totalDesdeCurso || totalDesdePrograma || totalDesdeDuracionPrograma || 20;
 
-    return Array.from({ length: totalClasesPrograma }, (_, i) => {
+    const options = Array.from({ length: totalClasesPrograma }, (_, i) => {
       const numero = i + 1;
       return {
         value: numero,
@@ -384,6 +387,8 @@ export default function TomarAsistencia() {
         disabled: clasesRegistradas.has(numero) && numero !== claseRegistradaEnFecha,
       };
     });
+
+    return [{ label: "Clases del programa", options }];
   }, [clasesDisponibles, clasesRegistradas, claseRegistradaEnFecha, cursos, cursoSeleccionado, extractTotalClases]);
 
   // Función para cambiar estado individual
