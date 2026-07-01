@@ -2503,7 +2503,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     );
   }
 
-  const sesionesVisibles = sesionesCanonicas;
+  const hoy = dayjs();
+  const finDeHoy = hoy.endOf("day");
+  const sesionesVisibles = sesionesCanonicas.filter((sesion: any) => {
+    if (!sesion?.fecha) return false;
+    const fechaSesion = dayjs(sesion.fecha);
+    return fechaSesion.isValid() && (fechaSesion.isBefore(finDeHoy) || fechaSesion.isSame(finDeHoy, "day"));
+  });
   const bitacora = sesionesVisibles;
   const sesionesVisiblesConDivisores = injectCycleDividers(sesionesVisibles);
   const bitacoraConDivisores = injectCycleDividers(bitacora);
@@ -2515,7 +2521,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     ? Math.round(estudiantes.reduce((sum, e) => sum + e.asistencia_porcentaje, 0) / estudiantes.length)
     : 0;
   const estudiantesEnRiesgo = estudiantes.filter(e => e.asistencia_porcentaje < (curso.porcentaje_minimo || 80)).length;
-  const hoy = dayjs();
   const sesionesMesActual = sesionesVisibles.filter((sesion: any) => {
     if (!sesion?.fecha) return false;
     const fechaSesion = dayjs(sesion.fecha);
