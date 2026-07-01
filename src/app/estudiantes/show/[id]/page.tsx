@@ -138,6 +138,9 @@ type AsistenciaEstudiante = {
   pago_id?: number | null;
   estado_pago?: string | null;
   monto_pago?: number | null;
+  es_placeholder?: boolean;
+  curso_nombre?: string | null;
+  registros_duplicados?: number;
 };
 
 const { Title, Text } = Typography;
@@ -1625,6 +1628,90 @@ export default function StudentDetailView() {
     return statusMap;
   }, [asistenciasHistorial]);
 
+  const asistenciasHistorialCompleto = useMemo(() => {
+    const matriculasOrdenadas = [...matriculas].sort((a, b) => {
+      const nombreA = construirNombreGrupo(a?.cursos) || "";
+      const nombreB = construirNombreGrupo(b?.cursos) || "";
+      return nombreA.localeCompare(nombreB, "es", { sensitivity: "base" });
+    });
+
+    const registrosPorMatricula = new Map<number, Map<number, AsistenciaEstudiante[]>>();
+    const extrasSinClase: AsistenciaEstudiante[] = [];
+
+    (asistenciasHistorial || []).forEach((item) => {
+      const matriculaId = Number(item?.matricula_id);
+      const claseNumero = Number(item?.clase_numero);
+
+      if (!Number.isFinite(matriculaId) || matriculaId <= 0) return;
+
+      if (!Number.isFinite(claseNumero) || claseNumero <= 0) {
+        extrasSinClase.push(item);
+        return;
+      }
+
+      if (!registrosPorMatricula.has(matriculaId)) {
+        registrosPorMatricula.set(matriculaId, new Map<number, AsistenciaEstudiante[]>());
+      }
+
+      const porClase = registrosPorMatricula.get(matriculaId)!;
+      const actuales = porClase.get(claseNumero) || [];
+      actuales.push(item);
+      porClase.set(claseNumero, actuales);
+    });
+
+    const filas: AsistenciaEstudiante[] = [];
+
+    matriculasOrdenadas.forEach((matricula) => {
+      const matriculaId = Number(matricula?.id);
+      if (!Number.isFinite(matriculaId) || matriculaId <= 0) return;
+
+      const totalPrograma = Math.max(obtenerTotalClasesPrograma(matricula), 0);
+      const porClase = registrosPorMatricula.get(matriculaId) || new Map<number, AsistenciaEstudiante[]>();
+      const maxRegistrada = Math.max(0, ...Array.from(porClase.keys()));
+      const totalClases = Math.max(totalPrograma, maxRegistrada);
+      const cursoNombre = construirNombreGrupo(matricula?.cursos) || matricula?.cursos?.nombre || null;
+
+      for (let clase = 1; clase <= totalClases; clase += 1) {
+        const registros = (porClase.get(clase) || [])
+          .slice()
+          .sort((a, b) => {
+            const fechaA = String(a?.fecha || "9999-12-31");
+            const fechaB = String(b?.fecha || "9999-12-31");
+            if (fechaA !== fechaB) return fechaA.localeCompare(fechaB);
+            return String(a?.id || "").localeCompare(String(b?.id || ""));
+          });
+
+        const principal = registros[0];
+        if (principal) {
+          filas.push({
+            ...principal,
+            curso_nombre: cursoNombre,
+            registros_duplicados: registros.length,
+          });
+          continue;
+        }
+
+        filas.push({
+          id: `virtual-${matriculaId}-${clase}`,
+          fecha: null,
+          estado: null,
+          observaciones: null,
+          matricula_id: matriculaId,
+          clase_numero: clase,
+          tema_visto: null,
+          pago_id: null,
+          estado_pago: null,
+          monto_pago: null,
+          es_placeholder: true,
+          curso_nombre: cursoNombre,
+          registros_duplicados: 0,
+        });
+      }
+    });
+
+    return [...filas, ...extrasSinClase];
+  }, [asistenciasHistorial, matriculas, obtenerTotalClasesPrograma]);
+
   if (loading) {
     return (
       <div style={{ padding: 50, textAlign: "center" }}>
@@ -2011,35 +2098,61 @@ export default function StudentDetailView() {
                     </div>
                   )}
                   <Table
-                    dataSource={asistenciasHistorial}
+                    dataSource={asistenciasHistorialCompleto}
                     rowKey="id"
-                    pagination={{ pageSize: 10 }}
+                    pagination={asistenciasHistorialCompleto.length > 20 ? { pageSize: 20 } : false}
                     locale={{ emptyText: "No hay asistencias registradas" }}
+                    onRow={(record: AsistenciaEstudiante) => {
+                      const numeroClase = Number(record?.clase_numero || 0);
+                      const iniciaCiclo = numeroClase > 1 && (numeroClase - 1) % 4 === 0;
+                      return {
+                        style: {
+                          borderTop: iniciaCiclo ? "2px solid #d8b4fe" : undefined,
+                          background: record?.es_placeholder ? "#fafafa" : undefined,
+                        },
+                      };
+                    }}
                     columns={[
                       {
                         title: "Fecha",
                         dataIndex: "fecha",
                         width: 130,
-                        render: (val: string | null) => (val ? formatDate(val) : "-"),
+                        render: (val: string | null, record: AsistenciaEstudiante) => (
+                          val
+                            ? formatDate(val)
+                            : record?.es_placeholder
+                              ? <Text type="secondary">Pendiente</Text>
+                              : "-"
+                        ),
                       },
                       {
                         title: "N° Clase",
                         dataIndex: "clase_numero",
                         width: 90,
-                        render: (val: number | null) =>
-                          val ? <Text strong>{val}</Text> : <Text type="secondary">-</Text>,
+                        render: (val: number | null) => {
+                          if (!val) return <Text type="secondary">-</Text>;
+                          const ciclo = Math.floor((val - 1) / 4) + 1;
+                          return (
+                            <Space direction="vertical" size={0}>
+                              <Text strong>{val}</Text>
+                              <Text type="secondary" style={{ fontSize: 11 }}>{`C${ciclo}`}</Text>
+                            </Space>
+                          );
+                        },
                       },
                       {
                         title: "Tema visto",
                         dataIndex: "tema_visto",
                         render: (val: string | null, record: AsistenciaEstudiante) => {
                           const estadoCalendario = estadoCalendarioAsistenciaById.get(String(record?.id || ""));
-                          if (!val && !estadoCalendario) return <Text type="secondary">-</Text>;
+                          if (!val && !estadoCalendario && !record?.es_placeholder) return <Text type="secondary">-</Text>;
 
                           return (
                             <Space direction="vertical" size={2}>
-                              <span>{val || "-"}</span>
+                              <span>{val || (record?.es_placeholder ? "Clase pendiente por registrar" : "-")}</span>
                               {estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : null}
+                              {record?.es_placeholder ? <Tag>Sin registro</Tag> : null}
+                              {Number(record?.registros_duplicados || 0) > 1 ? <Tag color="orange">Registros multiples</Tag> : null}
                             </Space>
                           );
                         },
@@ -2049,9 +2162,13 @@ export default function StudentDetailView() {
                         dataIndex: "estado",
                         width: 120,
                         render: (estado: string | null) => (
-                          <Tag color={estado === "presente" ? "green" : estado === "tardanza" ? "orange" : "red"}>
-                            {String(estado || "-").toUpperCase()}
-                          </Tag>
+                          estado ? (
+                            <Tag color={estado === "presente" ? "green" : estado === "tardanza" ? "orange" : "red"}>
+                              {String(estado || "-").toUpperCase()}
+                            </Tag>
+                          ) : (
+                            <Tag>POR DICTAR</Tag>
+                          )
                         ),
                       },
                       {
