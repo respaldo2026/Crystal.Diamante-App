@@ -255,6 +255,12 @@ interface GestorPensumProps {
 }
 
 const HORAS_CLASE_FIJAS = 3;
+
+const inferirClasesPorCiclo = (totalClases: number, totalCiclos: number) => {
+  if (!Number.isFinite(totalClases) || totalClases <= 0) return 0;
+  if (!Number.isFinite(totalCiclos) || totalCiclos <= 0) return totalClases;
+  return Math.max(1, Math.ceil(totalClases / totalCiclos));
+};
 const MATERIAL_IMPRIMIBLE_PROFESOR_TAG = "MATERIAL_IMPRIMIBLE_PROFESOR";
 
 export default function GestorPensum({
@@ -809,41 +815,54 @@ export default function GestorPensum({
       return;
     }
 
+    const clasesPorCiclo = inferirClasesPorCiclo(totalEsperado, ciclosOrdenados.length);
     const totalActual = cursosPrograma.length;
-    if (totalActual >= totalEsperado) {
-      message.info(`La lista ya tiene ${totalActual} clases. No se agregaron nuevas.`);
-      return;
+    const getObjetivoClase = (classIndex: number) => {
+      const cicloIndex = Math.min(Math.floor(classIndex / clasesPorCiclo), ciclosOrdenados.length - 1);
+      const targetCiclo = ciclosOrdenados[cicloIndex] ?? ciclosOrdenados[0];
+      return {
+        targetCiclo,
+        orden: (classIndex % clasesPorCiclo) + 1,
+      };
+    };
+
+    const updates = (cursosPrograma || [])
+      .slice(0, totalEsperado)
+      .map((curso, index) => {
+        const { targetCiclo, orden } = getObjetivoClase(index);
+        if (!targetCiclo) return null;
+
+        const pensumActual = String(curso?.pensum_id || "");
+        const pensumObjetivo = String(targetCiclo.id || "");
+        const ordenActual = Number(curso?.orden || 0);
+
+        if (pensumActual === pensumObjetivo && ordenActual === orden) {
+          return null;
+        }
+
+        return supabaseBrowserClient
+          .from("pensum_cursos")
+          .update({
+            pensum_id: targetCiclo.id,
+            orden,
+          })
+          .eq("id", curso.id);
+      })
+      .filter(Boolean);
+
+    if (updates.length > 0) {
+      const updateResults = await Promise.all(updates);
+      const updateError = updateResults.find((result: any) => result?.error)?.error;
+      if (updateError) {
+        message.error(`No se pudo sanear la lista: ${updateError.message}`);
+        return;
+      }
     }
 
-    const porCiclo = new Map<string, PensumCurso[]>();
-    (cursosPrograma || []).forEach((curso) => {
-      const key = String(curso?.pensum_id || "");
-      const current = porCiclo.get(key) || [];
-      current.push(curso);
-      porCiclo.set(key, current);
-    });
-
-    const maxOrdenPorCiclo = new Map<string, number>();
-    ciclosOrdenados.forEach((ciclo) => {
-      const key = String(ciclo.id);
-      const maxOrden = Math.max(
-        0,
-        ...(porCiclo.get(key) || []).map((item) => Number(item?.orden || 0)).filter((n) => Number.isFinite(n))
-      );
-      maxOrdenPorCiclo.set(key, maxOrden);
-    });
-
     const inserts: Array<Record<string, any>> = [];
-    const ciclosCount = ciclosOrdenados.length;
-
     for (let classNumber = totalActual + 1; classNumber <= totalEsperado; classNumber += 1) {
-      const targetCiclo = ciclosOrdenados[(classNumber - 1) % ciclosCount] ?? ciclosOrdenados[0];
-      if (!targetCiclo) {
-        continue;
-      }
-      const cicloKey = String(targetCiclo.id);
-      const ordenActual = (maxOrdenPorCiclo.get(cicloKey) || 0) + 1;
-      maxOrdenPorCiclo.set(cicloKey, ordenActual);
+      const { targetCiclo, orden } = getObjetivoClase(classNumber - 1);
+      if (!targetCiclo) continue;
 
       inserts.push({
         pensum_id: targetCiclo.id,
@@ -852,15 +871,20 @@ export default function GestorPensum({
         horas: HORAS_CLASE_FIJAS,
         creditos: 0,
         tipo_curso: "obligatorio",
-        orden: ordenActual,
+        orden,
       });
     }
 
-    if (!inserts.length) return;
+    if (inserts.length > 0) {
+      const { error } = await supabaseBrowserClient.from("pensum_cursos").insert(inserts);
+      if (error) {
+        message.error(`No se pudo sincronizar la lista: ${error.message}`);
+        return;
+      }
+    }
 
-    const { error } = await supabaseBrowserClient.from("pensum_cursos").insert(inserts);
-    if (error) {
-      message.error(`No se pudo sincronizar la lista: ${error.message}`);
+    if (updates.length === 0 && inserts.length === 0) {
+      message.info(`La lista ya está saneada con ${clasesPorCiclo} clases por ciclo.`);
       return;
     }
 
@@ -869,7 +893,7 @@ export default function GestorPensum({
       await cargarCursosPensum(selectedCicloId);
     }
 
-    message.success(`Lista sincronizada: ${totalEsperado} clases disponibles para el programa.`);
+    message.success(`Lista saneada: ${totalEsperado} clases organizadas en ${clasesPorCiclo} por ciclo.`);
   }, [programaData, pensums, cursosPrograma, message, cargarCursosPrograma, selectedCicloId, cargarCursosPensum]);
 
   const handleGuardarCurso = async () => {
