@@ -51,14 +51,105 @@ export default function NominaPage() {
     const [pagandoClaseId, setPagandoClaseId] = useState<string | null>(null);
     const [modalReciboVisible, setModalReciboVisible] = useState(false);
     const [pagoReciente, setPagoReciente] = useState<any>(null);
+        const [filtroProfesor, setFiltroProfesor] = useState<string>('todos');
+        const [filtroCurso, setFiltroCurso] = useState<string>('todos');
+        const [ordenDetalle, setOrdenDetalle] = useState<string>('fecha-asc');
 
   // Modal Pagar
   const [modalVisible, setModalVisible] = useState(false);
   const [profesorSeleccionado, setProfesorSeleccionado] = useState<any>(null);
 
+    const profesorColorById = useMemo(() => {
+        const palette = ['magenta', 'blue', 'green', 'orange', 'purple', 'cyan', 'red', 'gold', 'lime'];
+        const map = new Map<string, string>();
+        profesores.forEach((prof: any, index: number) => {
+            map.set(String(prof?.id || index), palette[index % palette.length] || 'blue');
+        });
+        clasesPendientes.forEach((clase: any, index: number) => {
+            const profesorId = String(clase?.profesor_id || `clase-${index}`);
+            if (!map.has(profesorId)) {
+                map.set(profesorId, palette[map.size % palette.length] || 'blue');
+            }
+        });
+        return map;
+    }, [clasesPendientes, profesores]);
+
+    const opcionesProfesoresDetalle = useMemo(() => {
+        const vistos = new Map<string, string>();
+        clasesPendientes.forEach((clase: any) => {
+            const profesorId = String(clase?.profesor_id || '');
+            const nombre = String(clase?.perfiles?.nombre_completo || '').trim();
+            if (profesorId && nombre && !vistos.has(profesorId)) {
+                vistos.set(profesorId, nombre);
+            }
+        });
+        return Array.from(vistos.entries())
+            .sort((a, b) => a[1].localeCompare(b[1], 'es', { sensitivity: 'base' }))
+            .map(([value, label]) => ({ value, label }));
+    }, [clasesPendientes]);
+
+    const opcionesCursosDetalle = useMemo(() => {
+        const vistos = new Set<string>();
+        clasesPendientes.forEach((clase: any) => {
+            const nombre = String(clase?.cursos?.nombre || '').trim();
+            if (nombre) {
+                vistos.add(nombre);
+            }
+        });
+        return Array.from(vistos.values())
+            .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+            .map((value) => ({ value, label: value }));
+    }, [clasesPendientes]);
+
+    const clasesDetalleFiltradas = useMemo(() => {
+        const filtradas = (clasesPendientes || []).filter((clase: any) => {
+            const profesorId = String(clase?.profesor_id || '');
+            const cursoNombre = String(clase?.cursos?.nombre || '').trim();
+            const coincideProfesor = filtroProfesor === 'todos' || profesorId === filtroProfesor;
+            const coincideCurso = filtroCurso === 'todos' || cursoNombre === filtroCurso;
+            return coincideProfesor && coincideCurso;
+        });
+
+        const sorted = [...filtradas];
+        sorted.sort((a: any, b: any) => {
+            const fechaA = String(a?.fecha || '');
+            const fechaB = String(b?.fecha || '');
+            const profesorA = String(a?.perfiles?.nombre_completo || '');
+            const profesorB = String(b?.perfiles?.nombre_completo || '');
+            const cursoA = String(a?.cursos?.nombre || '');
+            const cursoB = String(b?.cursos?.nombre || '');
+
+            switch (ordenDetalle) {
+                case 'fecha-desc':
+                    return fechaB.localeCompare(fechaA) || profesorA.localeCompare(profesorB, 'es', { sensitivity: 'base' });
+                case 'profesor-asc':
+                    return profesorA.localeCompare(profesorB, 'es', { sensitivity: 'base' }) || fechaA.localeCompare(fechaB);
+                case 'profesor-desc':
+                    return profesorB.localeCompare(profesorA, 'es', { sensitivity: 'base' }) || fechaA.localeCompare(fechaB);
+                case 'curso-asc':
+                    return cursoA.localeCompare(cursoB, 'es', { sensitivity: 'base' }) || fechaA.localeCompare(fechaB);
+                case 'curso-desc':
+                    return cursoB.localeCompare(cursoA, 'es', { sensitivity: 'base' }) || fechaA.localeCompare(fechaB);
+                case 'fecha-asc':
+                default:
+                    return fechaA.localeCompare(fechaB) || profesorA.localeCompare(profesorB, 'es', { sensitivity: 'base' });
+            }
+        });
+
+        return sorted;
+    }, [clasesPendientes, filtroCurso, filtroProfesor, ordenDetalle]);
+
     const columnasNomina = useMemo(
         () => [
-            { title: 'Profesor', dataIndex: 'nombre_completo' },
+            {
+                title: 'Profesor',
+                dataIndex: 'nombre_completo',
+                render: (val: string, record: any) => (
+                    <Space size={8}>
+                        <Tag color={profesorColorById.get(String(record?.id || '')) || 'default'}>{val}</Tag>
+                    </Space>
+                ),
+            },
             {
                 title: 'Valor Hora',
                 dataIndex: 'valor_hora',
@@ -91,7 +182,7 @@ export default function NominaPage() {
                 ),
             },
         ],
-        []
+        [profesorColorById]
     );
 
     const calcularNomina = useCallback(async () => {
@@ -334,7 +425,11 @@ export default function NominaPage() {
             {
                 title: 'Profesor',
                 dataIndex: 'profesor_id',
-                render: (_: any, record: any) => record.perfiles?.nombre_completo || 'Sin nombre',
+                render: (_: any, record: any) => {
+                    const profesorId = String(record?.profesor_id || '');
+                    const nombre = record.perfiles?.nombre_completo || 'Sin nombre';
+                    return <Tag color={profesorColorById.get(profesorId) || 'default'}>{nombre}</Tag>;
+                },
             },
             {
                 title: 'Curso',
@@ -392,7 +487,7 @@ export default function NominaPage() {
                 },
             },
         ],
-        [pagandoClaseId, pagarClaseIndividual]
+        [pagandoClaseId, pagarClaseIndividual, profesorColorById]
     );
 
   return (
@@ -451,8 +546,50 @@ export default function NominaPage() {
                               style={{ marginBottom: 16 }}
                           />
                         )}
+                        <Row gutter={[12, 12]}>
+                            <Col xs={24} md={8}>
+                                <Text strong>Filtrar por profesor</Text>
+                                <Select
+                                    value={filtroProfesor}
+                                    onChange={setFiltroProfesor}
+                                    style={{ width: '100%', marginTop: 6 }}
+                                    options={[
+                                        { value: 'todos', label: 'Todos los profesores' },
+                                        ...opcionesProfesoresDetalle,
+                                    ]}
+                                />
+                            </Col>
+                            <Col xs={24} md={8}>
+                                <Text strong>Filtrar por curso</Text>
+                                <Select
+                                    value={filtroCurso}
+                                    onChange={setFiltroCurso}
+                                    style={{ width: '100%', marginTop: 6 }}
+                                    options={[
+                                        { value: 'todos', label: 'Todos los cursos' },
+                                        ...opcionesCursosDetalle,
+                                    ]}
+                                />
+                            </Col>
+                            <Col xs={24} md={8}>
+                                <Text strong>Ordenar por</Text>
+                                <Select
+                                    value={ordenDetalle}
+                                    onChange={setOrdenDetalle}
+                                    style={{ width: '100%', marginTop: 6 }}
+                                    options={[
+                                        { value: 'fecha-asc', label: 'Fecha: más antigua primero' },
+                                        { value: 'fecha-desc', label: 'Fecha: más reciente primero' },
+                                        { value: 'profesor-asc', label: 'Profesor: A a Z' },
+                                        { value: 'profesor-desc', label: 'Profesor: Z a A' },
+                                        { value: 'curso-asc', label: 'Curso: A a Z' },
+                                        { value: 'curso-desc', label: 'Curso: Z a A' },
+                                    ]}
+                                />
+                            </Col>
+                        </Row>
                         <Table
-                            dataSource={clasesPendientes}
+                            dataSource={clasesDetalleFiltradas}
                             rowKey="id"
                             loading={loading}
                             locale={{ emptyText: "No hay clases pendientes en este rango" }}
