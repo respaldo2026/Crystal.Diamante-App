@@ -189,6 +189,51 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontFamily: "Helvetica-Bold",
   },
+  avisoBox: {
+    marginTop: 8,
+    marginLeft: 14,
+    marginRight: 14,
+    marginBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingLeft: 10,
+    paddingRight: 10,
+    borderWidth: 1,
+    borderColor: "#f59e0b",
+    borderStyle: "solid",
+    backgroundColor: "#fff7ed",
+    borderRadius: 4,
+  },
+  avisoTitle: {
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    color: "#9a3412",
+    textAlign: "center",
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  avisoMessage: {
+    fontSize: 7.5,
+    color: "#7c2d12",
+    textAlign: "center",
+    marginBottom: 6,
+    lineHeight: 1.4,
+  },
+  avisoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4,
+    gap: 6,
+  },
+  avisoRowLabel: {
+    fontSize: 7.5,
+    color: "#7c2d12",
+  },
+  avisoRowValue: {
+    fontSize: 7.5,
+    color: "#7c2d12",
+    fontFamily: "Helvetica-Bold",
+  },
 });
 
 const truncarTexto = (valor: string | null | undefined, max: number) => {
@@ -260,6 +305,15 @@ export interface TicketPagoData {
   curso?: {
     nombre?: string | null;
   };
+  avisoPagosMatricula?: {
+    titulo: string;
+    mensaje?: string | null;
+    fechas: Array<{
+      ciclo: string;
+      claseNumero: number;
+      fecha: string;
+    }>;
+  } | null;
 }
 
 const formatearCOP = (valor: number) =>
@@ -270,7 +324,7 @@ const normalizarCampos = (campos?: Partial<TicketCamposVisibles> | null): Ticket
   ...(campos ?? {}),
 });
 
-export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, pago, curso }) => {
+export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, pago, curso, avisoPagosMatricula }) => {
   const campos = normalizarCampos(academia.ticketCampos);
   const conceptoBase =
     pago.concepto ||
@@ -403,6 +457,21 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
             </View>
           ) : null}
         </View>
+
+        {avisoPagosMatricula?.fechas?.length ? (
+          <View style={styles.avisoBox}>
+            <Text style={styles.avisoTitle}>{avisoPagosMatricula.titulo}</Text>
+            {avisoPagosMatricula.mensaje ? (
+              <Text style={styles.avisoMessage}>{avisoPagosMatricula.mensaje}</Text>
+            ) : null}
+            {avisoPagosMatricula.fechas.map((item) => (
+              <View key={`${item.ciclo}-${item.claseNumero}`} style={styles.avisoRow}>
+                <Text style={styles.avisoRowLabel}>{`${item.ciclo} · Clase ${item.claseNumero}`}</Text>
+                <Text style={styles.avisoRowValue}>{item.fecha}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {/* ── NOTA ── */}
         {campos.nota && academia.ticketNota ? (

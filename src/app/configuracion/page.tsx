@@ -1176,6 +1176,33 @@ export default function ConfiguracionPage() {
                         {previewTicketPie || "Gracias por tu preferencia"}
                       </div>
                     ) : null}
+                    <div
+                      style={{
+                        marginTop: 12,
+                        border: "1px solid #f59e0b",
+                        background: "#fff7ed",
+                        borderRadius: 6,
+                        padding: 10,
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "#9a3412", textAlign: "center", textTransform: "uppercase", marginBottom: 6 }}>
+                        Fechas de pago de ciclos
+                      </div>
+                      <div style={{ fontSize: 11, color: "#7c2d12", textAlign: "center", marginBottom: 6 }}>
+                        Aviso visible al final del ticket de matrícula.
+                      </div>
+                      {[
+                        ["Ciclo 2 · Clase 3", "18/06/2026"],
+                        ["Ciclo 3 · Clase 9", "30/07/2026"],
+                        ["Ciclo 4 · Clase 13", "27/08/2026"],
+                        ["Ciclo 5 · Clase 17", "24/09/2026"],
+                      ].map(([label, fecha]) => (
+                        <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#7c2d12", marginBottom: 4 }}>
+                          <span>{label}</span>
+                          <strong>{fecha}</strong>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

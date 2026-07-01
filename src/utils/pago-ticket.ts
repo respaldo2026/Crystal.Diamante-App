@@ -1,4 +1,5 @@
 import React from "react";
+import dayjs from "dayjs";
 import { pdf } from "@react-pdf/renderer";
 import type { DocumentProps } from "@react-pdf/renderer";
 import { TicketPagoPDF, type TicketCamposVisibles, type TicketPagoData } from "@components/pdf/TicketPagoPDF";
@@ -113,22 +114,49 @@ type EnrollmentTicketParams = {
   configAcademia: any;
   estudiante: { nombre_completo?: string | null; identificacion?: string | null; telefono?: string | null; id?: string | null } | null | undefined;
   cursoNombre?: string | null;
+  cursoFechaInicio?: string | null;
   monto: number;
   metodoPago?: string | null;
   fechaPagoLegible: string;
   referencia?: string | null;
 };
 
+const ENROLLMENT_PAYMENT_MILESTONES = [
+  { ciclo: "Ciclo 2", claseNumero: 3 },
+  { ciclo: "Ciclo 3", claseNumero: 9 },
+  { ciclo: "Ciclo 4", claseNumero: 13 },
+  { ciclo: "Ciclo 5", claseNumero: 17 },
+];
+
+const calcularAvisoPagosMatricula = (cursoFechaInicio?: string | null) => {
+  const inicio = cursoFechaInicio ? dayjs(cursoFechaInicio) : null;
+  if (!inicio || !inicio.isValid()) return null;
+
+  const fechas = ENROLLMENT_PAYMENT_MILESTONES.map((item) => ({
+    ciclo: item.ciclo,
+    claseNumero: item.claseNumero,
+    fecha: inicio.add(item.claseNumero - 1, "week").format("DD/MM/YYYY"),
+  }));
+
+  return {
+    titulo: "Fechas de pago de ciclos",
+    mensaje: "Ten presentes estas fechas para evitar retrasos en tu proceso.",
+    fechas,
+  };
+};
+
 export const buildEnrollmentTicketData = ({
   configAcademia,
   estudiante,
   cursoNombre,
+  cursoFechaInicio,
   monto,
   metodoPago,
   fechaPagoLegible,
   referencia,
 }: EnrollmentTicketParams): TicketPagoData => {
   const curso = String(cursoNombre || "Curso").trim() || "Curso";
+  const avisoPagosMatricula = calcularAvisoPagosMatricula(cursoFechaInicio);
   return {
     academia: {
       nombre: configAcademia?.nombre_academia || "Academia Crystal Diamante",
@@ -159,6 +187,7 @@ export const buildEnrollmentTicketData = ({
     curso: {
       nombre: curso,
     },
+    avisoPagosMatricula,
   };
 };
 
@@ -348,6 +377,22 @@ export const generarTicketTermicoHtml = async (data: TicketPagoData): Promise<st
       ${dataPreparada.pago.cambio !== undefined && dataPreparada.pago.cambio !== null ? `<div class="row"><span class="label">Cambio</span><span class="value">${escapeHtml(formatCop(cambio))}</span></div>` : ""}
       ${dataPreparada.estudiante.telefono ? `<div class="muted">Contacto estudiante: ${escapeHtml(dataPreparada.estudiante.telefono)}</div>` : ""}
     </div>
+
+    ${dataPreparada.avisoPagosMatricula ? `
+      <div class="section" style="border: 1px solid #f59e0b; background: #fff7ed; border-radius: 6px; padding: 8px; margin-top: 6px;">
+        <div style="font-weight: 800; text-align: center; margin-bottom: 6px; color: #9a3412; text-transform: uppercase; font-size: 10px;">
+          ${escapeHtml(dataPreparada.avisoPagosMatricula.titulo)}
+        </div>
+        <div style="font-size: 10px; line-height: 1.4; color: #7c2d12; text-align: center; margin-bottom: 6px;">
+          ${escapeHtml(dataPreparada.avisoPagosMatricula.mensaje || "")}
+        </div>
+        ${dataPreparada.avisoPagosMatricula.fechas
+          .map(
+            (item) => `<div class="row"><span class="label">${escapeHtml(item.ciclo)} · Clase ${escapeHtml(String(item.claseNumero))}</span><span class="value">${escapeHtml(item.fecha)}</span></div>`
+          )
+          .join("")}
+      </div>
+    ` : ""}
 
     ${campos.nota && dataPreparada.academia.ticketNota ? `<div class="section"><div class="note">${escapeHtml(dataPreparada.academia.ticketNota)}</div></div>` : ""}
     ${campos.pie ? `<div class="footer">${escapeHtml(dataPreparada.academia.ticketPie || "Gracias por su pago. Conserva este comprobante.")}</div>` : ""}

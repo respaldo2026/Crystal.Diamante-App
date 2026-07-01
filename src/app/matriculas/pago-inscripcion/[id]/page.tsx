@@ -79,7 +79,7 @@ export default function PagoInscripcionPage() {
                 .from("matriculas")
                 .select(`
                     *,
-                    cursos ( id, nombre, descripcion, precio, programa_id, programas(nombre, precio_inscripcion) )
+                    cursos ( id, nombre, descripcion, precio, programa_id, fecha_inicio, programas(nombre, precio_inscripcion) )
                 `)
                 .eq("id", matriculaId)
                 .single();
@@ -211,6 +211,7 @@ export default function PagoInscripcionPage() {
                     configAcademia,
                     estudiante,
                     cursoNombre: curso?.nombre,
+                    cursoFechaInicio: curso?.fecha_inicio,
                     monto: montoNumero,
                     metodoPago: metodo_pago,
                     fechaPagoLegible,

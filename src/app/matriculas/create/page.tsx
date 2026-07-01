@@ -775,6 +775,7 @@ export default function MatriculaCreate() {
                     configAcademia,
                     estudiante: estudianteData,
                     cursoNombre: cursoData?.nombre,
+                    cursoFechaInicio: cursoData?.fecha_inicio,
                     monto: montoNumero,
                     metodoPago: metodo_pago,
                     fechaPagoLegible,
