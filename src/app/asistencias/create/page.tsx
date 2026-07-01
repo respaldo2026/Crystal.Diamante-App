@@ -13,6 +13,27 @@ import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
 
 const { Title, Text } = Typography;
 
+const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automatic[ae]mente para calculo de ciclos/i;
+
+const extractClassNumber = (value?: string | null): number | null => {
+  const text = String(value || "");
+  const patterns = [
+    /clase\s*#?\s*(\d{1,3})/i,
+    /^\s*(\d{1,3})\s*[\).:-]/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match?.[1]) continue;
+    const parsed = Number(match[1]);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
 export default function TomarAsistencia() {
   const { message } = App.useApp();
   const [form] = Form.useForm();
@@ -27,6 +48,8 @@ export default function TomarAsistencia() {
   const [temaVisto, setTemaVisto] = useState("");
   const [numeroClase, setNumeroClase] = useState<number | null>(null);
   const [clasesDisponibles, setClasesDisponibles] = useState<Array<{ numero: number; nombre: string }>>([]);
+  const [clasesRegistradas, setClasesRegistradas] = useState<Set<number>>(new Set());
+  const [claseRegistradaEnFecha, setClaseRegistradaEnFecha] = useState<number | null>(null);
   
   // Estado local para guardar la asistencia antes de enviarla
   // Formato: { "id_matricula": "presente", ... }
@@ -182,6 +205,8 @@ export default function TomarAsistencia() {
   useEffect(() => {
     if (!cursoSeleccionado) {
       setClasesDisponibles([]);
+      setClasesRegistradas(new Set());
+      setClaseRegistradaEnFecha(null);
       setNumeroClase(null);
       setTemaVisto("");
       return;
@@ -262,21 +287,59 @@ export default function TomarAsistencia() {
           new Map(base.map((item) => [item.numero, item])).values()
         ).sort((a, b) => a.numero - b.numero);
 
+        const fechaSesion = fecha.format("YYYY-MM-DD");
+        const { data: sesionesData, error: errorSesiones } = await supabaseBrowserClient
+          .from("sesiones_clase")
+          .select("id, fecha, tema_visto")
+          .eq("curso_id", cursoSeleccionado)
+          .order("fecha", { ascending: true });
+
+        if (errorSesiones) {
+          console.error(errorSesiones);
+        }
+
+        const registradas = new Set<number>();
+        let claseDeLaFecha: number | null = null;
+
+        (sesionesData || []).forEach((sesion: any) => {
+          const tema = String(sesion?.tema_visto || "").trim();
+          if (!tema || AUTO_SESSION_TOPIC_PATTERN.test(tema)) return;
+
+          const numero = extractClassNumber(tema);
+          if (!numero || !Number.isFinite(numero) || numero <= 0) return;
+
+          registradas.add(numero);
+          if (String(sesion?.fecha || "") === fechaSesion) {
+            claseDeLaFecha = numero;
+          }
+        });
+
+        setClasesRegistradas(registradas);
+        setClaseRegistradaEnFecha(claseDeLaFecha);
+
         setClasesDisponibles(uniqueByNumero);
+        if (claseDeLaFecha) {
+          setNumeroClase(claseDeLaFecha);
+          const clase = uniqueByNumero.find((item) => item.numero === claseDeLaFecha);
+          setTemaVisto(clase?.nombre || "");
+        }
       } catch (error) {
         console.error(error);
         setClasesDisponibles([]);
+        setClasesRegistradas(new Set());
+        setClaseRegistradaEnFecha(null);
       }
     };
 
     cargarClasesTemario();
-  }, [cursoSeleccionado]);
+  }, [cursoSeleccionado, fecha]);
 
   const opcionesClase = useMemo(() => {
     if (clasesDisponibles.length > 0) {
       return clasesDisponibles.map((clase) => ({
         value: clase.numero,
         label: `Clase ${clase.numero} · ${clase.nombre}`,
+        disabled: clasesRegistradas.has(clase.numero) && clase.numero !== claseRegistradaEnFecha,
       }));
     }
 
@@ -288,9 +351,13 @@ export default function TomarAsistencia() {
 
     return Array.from({ length: totalClasesPrograma }, (_, i) => {
       const numero = i + 1;
-      return { value: numero, label: `Clase ${numero}` };
+      return {
+        value: numero,
+        label: `Clase ${numero}`,
+        disabled: clasesRegistradas.has(numero) && numero !== claseRegistradaEnFecha,
+      };
     });
-  }, [clasesDisponibles, cursos, cursoSeleccionado, extractTotalClases]);
+  }, [clasesDisponibles, clasesRegistradas, claseRegistradaEnFecha, cursos, cursoSeleccionado, extractTotalClases]);
 
   // Función para cambiar estado individual
   const toggleEstado = useCallback((matriculaId: number) => {
@@ -397,6 +464,11 @@ export default function TomarAsistencia() {
 
     if (!numeroClase || Number(numeroClase) <= 0) {
       message.warning("Selecciona el número de la clase antes de guardar");
+      return;
+    }
+
+    if (clasesRegistradas.has(Number(numeroClase)) && Number(numeroClase) !== Number(claseRegistradaEnFecha || 0)) {
+      message.warning(`La clase #${numeroClase} ya fue registrada en otra fecha. Usa la clase correcta o corrige la sesión existente.`);
       return;
     }
 

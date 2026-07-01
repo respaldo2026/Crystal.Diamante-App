@@ -125,6 +125,8 @@ type Estadisticas = {
   deudaTotal: number;
 };
 
+const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automatic[ae]mente para calculo de ciclos/i;
+
 type AsistenciaEstudiante = {
   id: string;
   fecha: string | null;
@@ -478,7 +480,7 @@ export default function StudentDetailView() {
 
           const sesionesQuery = supabaseBrowserClient
             .from("sesiones_clase")
-            .select("curso_id, fecha, tema_visto")
+            .select("id, curso_id, fecha, tema_visto, created_at")
             .in("curso_id", cursoIds);
 
           const { data: sesionesData } = await (fechaMin && fechaMax
@@ -487,7 +489,24 @@ export default function StudentDetailView() {
 
           const temaPorCursoFecha = new Map<string, string>();
           const claseNumeroPorCursoFecha = new Map<string, number | null>();
-          (sesionesData || []).forEach((sesion: any) => {
+          const sesionesOrdenadas = (sesionesData || [])
+            .filter((sesion: any) => !AUTO_SESSION_TOPIC_PATTERN.test(String(sesion?.tema_visto || "")))
+            .slice()
+            .sort((a: any, b: any) => {
+              const fechaA = String(a?.fecha || "");
+              const fechaB = String(b?.fecha || "");
+              if (fechaA !== fechaB) return fechaA.localeCompare(fechaB);
+
+              const claseA = extractClassNumber(a?.tema_visto || "") || 0;
+              const claseB = extractClassNumber(b?.tema_visto || "") || 0;
+              if (claseA !== claseB) return claseA - claseB;
+
+              const createdA = String(a?.created_at || "");
+              const createdB = String(b?.created_at || "");
+              return createdA.localeCompare(createdB);
+            });
+
+          sesionesOrdenadas.forEach((sesion: any) => {
             const key = `${sesion?.curso_id || ""}-${sesion?.fecha || ""}`;
             if (!temaPorCursoFecha.has(key)) {
               temaPorCursoFecha.set(key, sesion?.tema_visto || "");
