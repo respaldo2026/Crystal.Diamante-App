@@ -70,6 +70,20 @@ interface Sesion {
   observaciones?: string;
 }
 
+type CycleDividerRow = {
+  id: string;
+  key?: string;
+  es_divisor_ciclo: true;
+  cicloNumero: number;
+  cicloNombre: string;
+  fecha?: string;
+  tema_visto?: string;
+  horas_dictadas?: number;
+  lista?: any[];
+  presentes?: number;
+  totalEsperados?: number;
+};
+
 const dedupeByKey = <T,>(items: T[] = [], keySelector: (item: T) => string): T[] => {
   const map = new Map<string, T>();
   items.forEach((item) => {
@@ -462,6 +476,60 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     });
     return map;
   }, [clasesPensum, ordenTemaPorId]);
+
+  const cycleMetaByClassNumber = useMemo(() => {
+    const map = new Map<number, { cicloNumero: number; cicloNombre: string }>();
+    let globalClassNumber = 1;
+
+    ciclosOrdenados.forEach((ciclo: any, cicloIndex: number) => {
+      const cicloId = String(ciclo?.id ?? "sin-ciclo");
+      const temasCiclo = temasPorCiclo.get(cicloId) ?? [];
+      const cicloNumero = Number(ciclo?.numero_ciclo || cicloIndex + 1) || cicloIndex + 1;
+      const cicloNombre = String(ciclo?.nombre_ciclo || `Ciclo ${cicloNumero}`).trim() || `Ciclo ${cicloNumero}`;
+
+      temasCiclo.forEach(() => {
+        map.set(globalClassNumber, { cicloNumero, cicloNombre });
+        globalClassNumber += 1;
+      });
+    });
+
+    return map;
+  }, [ciclosOrdenados, temasPorCiclo]);
+
+  const getCycleDividerPalette = useCallback((cycleNumber: number) => {
+    const backgrounds = ["#fff7e6", "#f6ffed", "#e6f4ff", "#f9f0ff", "#fff1f0"];
+    const accents = ["#d46b08", "#389e0d", "#0958d9", "#7a3db8", "#cf1322"];
+    const index = (Math.max(cycleNumber, 1) - 1) % backgrounds.length;
+    return {
+      background: backgrounds[index],
+      accent: accents[index],
+    };
+  }, []);
+
+  const injectCycleDividers = useCallback((rows: any[]) => {
+    const result: Array<any | CycleDividerRow> = [];
+    let lastCycleNumber: number | null = null;
+
+    rows.forEach((row: any) => {
+      const classNumber = Number(extractClassNumber(String(row?.tema_visto || row?.observaciones || "")) || 0);
+      const cycleMeta = cycleMetaByClassNumber.get(classNumber);
+
+      if (cycleMeta && cycleMeta.cicloNumero !== lastCycleNumber) {
+        result.push({
+          id: `cycle-divider-${cycleMeta.cicloNumero}-${result.length}`,
+          key: `cycle-divider-${cycleMeta.cicloNumero}-${result.length}`,
+          es_divisor_ciclo: true,
+          cicloNumero: cycleMeta.cicloNumero,
+          cicloNombre: cycleMeta.cicloNombre,
+        });
+        lastCycleNumber = cycleMeta.cicloNumero;
+      }
+
+      result.push(row);
+    });
+
+    return result;
+  }, [cycleMetaByClassNumber]);
 
   const claseIdPorOrden = useMemo(() => {
     const map = new Map<number, string>();
@@ -2292,6 +2360,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   const sesionesVisibles = sesiones.length > 0 ? sesiones : sesionesAgrupadasDesdeAsistencias;
   const bitacora = sesionesVisibles;
+  const sesionesVisiblesConDivisores = useMemo(() => injectCycleDividers(sesionesVisibles), [injectCycleDividers, sesionesVisibles]);
+  const bitacoraConDivisores = useMemo(() => injectCycleDividers(bitacora), [bitacora, injectCycleDividers]);
 
   const totalEstudiantes = estudiantes.length;
   const estudiantesActivos = estudiantes.filter(e => e.estado === "activo").length;
@@ -3037,11 +3107,36 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 }
               >
                 <Table
-                  dataSource={sesionesVisibles}
+                  dataSource={sesionesVisiblesConDivisores}
                   rowKey="id"
                   pagination={{ pageSize: 15 }}
-                  columns={columnasSesiones}
+                  columns={columnasSesiones.map((column: any, index: number) => {
+                    const isFirst = index === 0;
+                    return {
+                      ...column,
+                      render: (value: any, record: any, rowIndex: number) => {
+                        if (record?.es_divisor_ciclo) {
+                          if (!isFirst) return { children: null, props: { colSpan: 0 } };
+                          const palette = getCycleDividerPalette(Number(record?.cicloNumero || 1));
+                          return {
+                            children: (
+                              <div style={{ padding: "6px 4px", fontWeight: 700, color: palette.accent }}>
+                                {`Ciclo ${record?.cicloNumero} · ${record?.cicloNombre}`}
+                              </div>
+                            ),
+                            props: { colSpan: columnasSesiones.length },
+                          };
+                        }
+
+                        return column.render ? column.render(value, record, rowIndex) : value;
+                      },
+                    };
+                  })}
                   onRow={(record: any) => {
+                    if (record?.es_divisor_ciclo) {
+                      const palette = getCycleDividerPalette(Number(record?.cicloNumero || 1));
+                      return { style: { background: palette.background, borderTop: "2px solid #d9d9d9" } };
+                    }
                     const numeroClase = Number(numeroClaseSesionPorId.get(String(record?.id || "")) || extractClassNumber(String(record?.tema_visto || "")) || 0);
 
                     return {
@@ -3375,7 +3470,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             label: <span><CalendarOutlined /> Bitácora ({bitacora.length})</span>,
             children: (
               <Table
-                dataSource={bitacora}
+                dataSource={bitacoraConDivisores}
                 rowKey="key"
                 pagination={false}
                 size="middle"
@@ -3426,7 +3521,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       ]}
                     />
                   ),
-                  rowExpandable: (record: any) => (record.lista || []).length > 0,
+                  rowExpandable: (record: any) => !record?.es_divisor_ciclo && (record.lista || []).length > 0,
                 }}
                 columns={[
                   {
@@ -3434,26 +3529,41 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     dataIndex: "tema_visto",
                     key: "tema",
                     ellipsis: true,
-                    render: (v: string) => v || "-",
+                    render: (v: string, record: any) => {
+                      if (record?.es_divisor_ciclo) {
+                        const palette = getCycleDividerPalette(Number(record?.cicloNumero || 1));
+                        return {
+                          children: (
+                            <div style={{ padding: "6px 4px", fontWeight: 700, color: palette.accent }}>
+                              {`Ciclo ${record?.cicloNumero} · ${record?.cicloNombre}`}
+                            </div>
+                          ),
+                          props: { colSpan: 4 },
+                        };
+                      }
+                      return v || "-";
+                    },
                   },
                   {
                     title: "Fecha",
                     dataIndex: "fecha",
                     key: "fecha",
                     width: 120,
-                    render: (v: string) => (v ? dayjs(v).format("DD/MM/YYYY") : "-"),
+                    render: (v: string, record: any) => record?.es_divisor_ciclo ? { children: null, props: { colSpan: 0 } } : (v ? dayjs(v).format("DD/MM/YYYY") : "-"),
                   },
                   {
                     title: "Horas",
                     dataIndex: "horas_dictadas",
                     key: "horas",
                     width: 80,
+                    render: (v: any, record: any) => record?.es_divisor_ciclo ? { children: null, props: { colSpan: 0 } } : v,
                   },
                   {
                     title: "Asistencia",
                     key: "asistencia",
                     width: 150,
                     render: (_: any, record: any) => {
+                      if (record?.es_divisor_ciclo) return { children: null, props: { colSpan: 0 } };
                       const p = record.presentes as number;
                       const t = record.totalEsperados as number;
                       const color = t === 0 ? "default" : p === t ? "green" : p === 0 ? "red" : "orange";
@@ -3462,6 +3572,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   },
                 ]}
                 onRow={(record: any) => {
+                  if (record?.es_divisor_ciclo) {
+                    const palette = getCycleDividerPalette(Number(record?.cicloNumero || 1));
+                    return { style: { background: palette.background, borderTop: "2px solid #d9d9d9" } };
+                  }
                   const numeroClase = extractClassNumber(String(record?.tema_visto || ""));
                   return { style: getCycleRowStyle(numeroClase) };
                 }}

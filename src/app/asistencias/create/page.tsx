@@ -47,7 +47,7 @@ export default function TomarAsistencia() {
   const [cursos, setCursos] = useState<any[]>([]);
   const [temaVisto, setTemaVisto] = useState("");
   const [numeroClase, setNumeroClase] = useState<number | null>(null);
-  const [clasesDisponibles, setClasesDisponibles] = useState<Array<{ numero: number; nombre: string }>>([]);
+  const [clasesDisponibles, setClasesDisponibles] = useState<Array<{ numero: number; nombre: string; cicloNumero?: number | null; cicloNombre?: string | null }>>([]);
   const [clasesRegistradas, setClasesRegistradas] = useState<Set<number>>(new Set());
   const [claseRegistradaEnFecha, setClaseRegistradaEnFecha] = useState<number | null>(null);
   
@@ -229,7 +229,7 @@ export default function TomarAsistencia() {
           return;
         }
 
-        let base: Array<{ numero: number; nombre: string }> = [];
+        let base: Array<{ numero: number; nombre: string; cicloNumero?: number | null; cicloNombre?: string | null }> = [];
 
         if (cursoData?.programa_id) {
           const { data: ciclosData, error: errorCiclos } = await supabaseBrowserClient
@@ -275,10 +275,23 @@ export default function TomarAsistencia() {
                   return String(a?.nombre_curso || "").localeCompare(String(b?.nombre_curso || ""), "es", { sensitivity: "base" });
                 });
 
-              base = temasOrdenados.map((item: any, index: number) => ({
-                numero: index + 1,
-                nombre: item?.nombre_curso || `Clase ${index + 1}`,
-              }));
+              const cicloMetaByPensum = new Map<string, { cicloNumero: number | null; cicloNombre: string | null }>();
+              ciclos.forEach((c) => {
+                cicloMetaByPensum.set(String(c.id), {
+                  cicloNumero: Number.isFinite(Number(c?.numero_ciclo)) ? Number(c.numero_ciclo) : null,
+                  cicloNombre: String(c?.nombre_ciclo || "").trim() || null,
+                });
+              });
+
+              base = temasOrdenados.map((item: any, index: number) => {
+                const cicloMeta = cicloMetaByPensum.get(String(item?.pensum_id || ""));
+                return {
+                  numero: index + 1,
+                  nombre: item?.nombre_curso || `Clase ${index + 1}`,
+                  cicloNumero: cicloMeta?.cicloNumero ?? Math.floor(index / 4) + 1,
+                  cicloNombre: cicloMeta?.cicloNombre || null,
+                };
+              });
             }
           }
         }
@@ -336,10 +349,24 @@ export default function TomarAsistencia() {
 
   const opcionesClase = useMemo(() => {
     if (clasesDisponibles.length > 0) {
-      return clasesDisponibles.map((clase) => ({
-        value: clase.numero,
-        label: `Clase ${clase.numero} · ${clase.nombre}`,
-        disabled: clasesRegistradas.has(clase.numero) && clase.numero !== claseRegistradaEnFecha,
+      const grupos = new Map<string, Array<{ value: number; label: string; disabled: boolean }>>();
+
+      clasesDisponibles.forEach((clase) => {
+        const cicloNumero = Number(clase?.cicloNumero || Math.floor((clase.numero - 1) / 4) + 1);
+        const cicloNombre = String(clase?.cicloNombre || `Ciclo ${cicloNumero}`).trim();
+        const groupLabel = `Ciclo ${cicloNumero} · ${cicloNombre}`;
+        const current = grupos.get(groupLabel) || [];
+        current.push({
+          value: clase.numero,
+          label: `Clase ${clase.numero} · ${clase.nombre}`,
+          disabled: clasesRegistradas.has(clase.numero) && clase.numero !== claseRegistradaEnFecha,
+        });
+        grupos.set(groupLabel, current);
+      });
+
+      return Array.from(grupos.entries()).map(([label, options]) => ({
+        label,
+        options,
       }));
     }
 

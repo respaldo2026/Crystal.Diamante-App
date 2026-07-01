@@ -437,6 +437,7 @@ export default function StudentDetailView() {
       );
 
       const temaPorProgramaClase = new Map<string, string>();
+      const temaGlobalPorProgramaClase = new Map<string, string>();
       const totalTemasPorPrograma = new Map<string, number>();
       const metaClasePorPrograma = new Map<string, Map<number, { cicloNumero: number | null; cicloNombre: string | null }>>();
       if (programaIds.length > 0) {
@@ -474,6 +475,10 @@ export default function StudentDetailView() {
 
             const consecutivo = Number(contadorClasesPorPrograma.get(programaId) || 0) + 1;
             contadorClasesPorPrograma.set(programaId, consecutivo);
+            temaGlobalPorProgramaClase.set(
+              `${programaId}-${consecutivo}`,
+              String(tema?.nombre_curso || tema?.titulo || `Clase ${consecutivo}`),
+            );
             metaClasePorPrograma.get(programaId)?.set(consecutivo, {
               cicloNumero: Number.isFinite(Number(ciclo?.numero_ciclo)) ? Number(ciclo?.numero_ciclo) : null,
               cicloNombre: String(ciclo?.nombre_ciclo || "").trim() || null,
@@ -570,14 +575,11 @@ export default function StudentDetailView() {
               extractClassNumber(temaPorCursoFecha.get(key) || "") ??
               null;
             const temaSesion = String(temaPorCursoFecha.get(key) || "").trim();
-            const temaSesionEsGenerico = !temaSesion || /^clase\s*#?\s*\d+/i.test(temaSesion);
+            const temaSesionEsGenerico = !temaSesion || /^clase\s*#?\s*\d+/i.test(temaSesion) || /^[-–—]$/.test(temaSesion);
             const programaIdCurso = String(cursoData?.programa_id || "");
             const temaDesdePensum =
               claseNumero && programaIdCurso
-                ? (
-                    Array.from(temaPorProgramaClase.entries()).find(([k]) => k.startsWith(`${programaIdCurso}-`) && k.endsWith(`-${claseNumero}`))?.[1]
-                    || null
-                  )
+                ? (temaGlobalPorProgramaClase.get(`${programaIdCurso}-${claseNumero}`) || null)
                 : null;
             const temaFinal = temaSesionEsGenerico ? temaDesdePensum || temaSesion || null : temaSesion;
 

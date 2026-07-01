@@ -48,6 +48,15 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 
 type CourseActionContext = "attendance" | "grades" | "materials" | "default";
 
+type SessionCycleDivider = {
+  id: string;
+  es_divisor_ciclo: true;
+  cursoId: string;
+  curso: string;
+  cicloNumero: number;
+  cicloNombre: string;
+};
+
 type ProfessorDashboardUIProps = {
   dashboard: ProfessorDashboardData | null | undefined;
   onOpenCourse?: (cursoId: string, action?: CourseActionContext) => void;
@@ -255,6 +264,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   const [temaSeleccionadoId, setTemaSeleccionadoId] = useState<string | null>(null);
   const [quizzesProfesor, setQuizzesProfesor] = useState<any[]>([]);
   const [quizPreguntasProfesor, setQuizPreguntasProfesor] = useState<any[]>([]);
+  const [cycleMetaByProgram, setCycleMetaByProgram] = useState<Record<string, Record<number, { cicloNumero: number; cicloNombre: string }>>>({});
   const [iframePreview, setIframePreview] = useState<{ open: boolean; title: string; src: string }>({
     open: false,
     title: "",
@@ -327,10 +337,111 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     return ids;
   }, [cursos]);
 
+  useEffect(() => {
+    const loadCycleMeta = async () => {
+      const programIds = Array.from(
+        new Set(
+          (cursos || [])
+            .map((curso: any) => String(curso?.programId || ""))
+            .filter(Boolean),
+        ),
+      );
+
+      if (!programIds.length) {
+        setCycleMetaByProgram({});
+        return;
+      }
+
+      try {
+        const pensumData = await obtenerPensumPorProgramas(programIds);
+        const ordered = [...(pensumData || [])].sort((a: any, b: any) => {
+          const programA = String(a?.programa_id || "");
+          const programB = String(b?.programa_id || "");
+          if (programA !== programB) return programA.localeCompare(programB);
+          const orderA = Number(a?.orden ?? a?.numero_ciclo ?? 9999);
+          const orderB = Number(b?.orden ?? b?.numero_ciclo ?? 9999);
+          return orderA - orderB;
+        });
+
+        const counters = new Map<string, number>();
+        const meta: Record<string, Record<number, { cicloNumero: number; cicloNombre: string }>> = {};
+
+        ordered.forEach((ciclo: any, cycleIndex: number) => {
+          const programId = String(ciclo?.programa_id || "");
+          if (!programId) return;
+          const temas = (Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : [])
+            .slice()
+            .sort((a: any, b: any) => Number(a?.orden ?? 9999) - Number(b?.orden ?? 9999));
+
+          if (!meta[programId]) meta[programId] = {};
+
+          const cicloNumero = Number(ciclo?.numero_ciclo || cycleIndex + 1) || cycleIndex + 1;
+          const cicloNombre = String(ciclo?.nombre_ciclo || `Ciclo ${cicloNumero}`).trim() || `Ciclo ${cicloNumero}`;
+
+          temas.forEach(() => {
+            const nextNumber = Number(counters.get(programId) || 0) + 1;
+            counters.set(programId, nextNumber);
+            meta[programId][nextNumber] = { cicloNumero, cicloNombre };
+          });
+        });
+
+        setCycleMetaByProgram(meta);
+      } catch (error) {
+        console.error("Error cargando metadata de ciclos para panel profesor", error);
+        setCycleMetaByProgram({});
+      }
+    };
+
+    loadCycleMeta();
+  }, [cursos]);
+
   const proximasSesionesAsignadas = useMemo(
     () => proximasSesionesData.filter((sesion: any) => assignedCourseIds.has(String(sesion?.cursoId || ""))),
     [proximasSesionesData, assignedCourseIds],
   );
+
+  const courseProgramIdMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (cursos || []).forEach((curso: any) => {
+      const courseId = String(curso?.id || "");
+      const programId = String(curso?.programId || "");
+      if (courseId && programId) {
+        map.set(courseId, programId);
+      }
+    });
+    return map;
+  }, [cursos]);
+
+  const proximasSesionesConDivisores = useMemo(() => {
+    const rows: Array<any | SessionCycleDivider> = [];
+    let lastKey = "";
+
+    proximasSesionesAsignadas.forEach((sesion: any, index: number) => {
+      const courseId = String(sesion?.cursoId || "");
+      const classNumber = Number(sesion?.claseNumero || 0);
+      const programId = courseProgramIdMap.get(courseId) || "";
+      const cycleMeta = (programId && classNumber ? cycleMetaByProgram[programId]?.[classNumber] : null) || null;
+      const cycleNumber = cycleMeta?.cicloNumero || (classNumber > 0 ? Math.floor((classNumber - 1) / 4) + 1 : 1);
+      const cycleName = cycleMeta?.cicloNombre || `Ciclo ${cycleNumber}`;
+      const dividerKey = `${courseId}-${cycleNumber}`;
+
+      if (dividerKey !== lastKey) {
+        rows.push({
+          id: `session-divider-${courseId}-${cycleNumber}-${index}`,
+          es_divisor_ciclo: true,
+          cursoId: courseId,
+          curso: String(sesion?.curso || "Curso"),
+          cicloNumero: cycleNumber,
+          cicloNombre: cycleName,
+        });
+        lastKey = dividerKey;
+      }
+
+      rows.push(sesion);
+    });
+
+    return rows;
+  }, [courseProgramIdMap, cycleMetaByProgram, proximasSesionesAsignadas]);
 
   const cursosOrdenados = useMemo(
     () => dedupeByKey(cursos || [], (curso: any) => `${curso.id ?? curso.nombre ?? ""}`)
@@ -930,26 +1041,41 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                   bodyStyle={{ paddingTop: 10, paddingBottom: 10 }}
                 >
                   <List
-                    dataSource={proximasSesionesAsignadas}
+                    dataSource={proximasSesionesConDivisores}
                     locale={{ emptyText: "No hay sesiones programadas" }}
-                    renderItem={(sesion) => (
-                      <List.Item
-                        style={{ cursor: "pointer" }}
-                        onClick={() => onOpenCourse && onOpenCourse(sesion.cursoId, "attendance")}
-                      >
-                        <List.Item.Meta
-                          title={sesion.curso}
-                          description={
-                            <Space split={<Divider type="vertical" />}> 
-                              <span>{formatSessionStartLabel(sesion.fecha, sesion.horaInicio)}</span>
-                              {sesion.claseNumero ? <span>Clase #{sesion.claseNumero}</span> : null}
-                              {sesion.tema ? <span>{sesion.tema}</span> : null}
-                              {sesion.horas ? <span>{sesion.horas} hrs</span> : null}
-                            </Space>
-                          }
-                        />
-                      </List.Item>
-                    )}
+                    renderItem={(sesion: any) => {
+                      if (sesion?.es_divisor_ciclo) {
+                        const backgrounds = ["#fff7e6", "#f6ffed", "#e6f4ff", "#f9f0ff", "#fff1f0"];
+                        const accents = ["#d46b08", "#389e0d", "#0958d9", "#7a3db8", "#cf1322"];
+                        const index = (Math.max(Number(sesion?.cicloNumero || 1), 1) - 1) % backgrounds.length;
+                        return (
+                          <List.Item style={{ background: backgrounds[index], borderRadius: 12, padding: "10px 12px", marginBottom: 6 }}>
+                            <Typography.Text strong style={{ color: accents[index] }}>
+                              {`${sesion.curso} · Ciclo ${sesion.cicloNumero} · ${sesion.cicloNombre}`}
+                            </Typography.Text>
+                          </List.Item>
+                        );
+                      }
+
+                      return (
+                        <List.Item
+                          style={{ cursor: "pointer" }}
+                          onClick={() => onOpenCourse && onOpenCourse(sesion.cursoId, "attendance")}
+                        >
+                          <List.Item.Meta
+                            title={sesion.curso}
+                            description={
+                              <Space split={<Divider type="vertical" />}> 
+                                <span>{formatSessionStartLabel(sesion.fecha, sesion.horaInicio)}</span>
+                                {sesion.claseNumero ? <span>Clase #{sesion.claseNumero}</span> : null}
+                                {sesion.tema ? <span>{sesion.tema}</span> : null}
+                                {sesion.horas ? <span>{sesion.horas} hrs</span> : null}
+                              </Space>
+                            }
+                          />
+                        </List.Item>
+                      );
+                    }}
                   />
                 </Card>
               </div>
