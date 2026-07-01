@@ -3713,7 +3713,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                         <Space direction="vertical" size={0}>
                           <span>{v ? dayjs(v).format("DD/MM/YYYY") : "-"}</span>
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            {record?.created_at ? `Hora: ${dayjs(record.created_at).format("h:mm A")}` : "Hora: -"}
+                            {record?.created_at ? `Registro: ${dayjs(record.created_at).format("h:mm A")}` : "Registro: -"}
                           </Text>
                         </Space>
                       );
