@@ -988,11 +988,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   }, [searchParams]);
 
   const estadoCalendarioSesionPorId = useMemo(() => {
-    const sesionesConClase = (sesionesCanonicas || [])
+    const sesionesConClase = (sesiones || [])
       .map((sesion: any) => ({
         id: String(sesion?.id || ""),
         fecha: dayjs(sesion?.fecha),
-        claseNumero: Number(sesion?.clase_numero || 0) || numeroClaseSesionPorId.get(String(sesion?.id || "")),
+        claseNumero: numeroClaseSesionPorId.get(String(sesion?.id || "")),
       }))
       .filter((item) => item.id && item.fecha.isValid() && Number.isFinite(item.claseNumero));
 
@@ -1035,7 +1035,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     });
 
     return statusMap;
-  }, [numeroClaseSesionPorId, sesionesCanonicas]);
+  }, [numeroClaseSesionPorId, sesiones]);
 
   // Memoized columns to avoid re-creation on every render
   const columnasSesiones = useMemo(
