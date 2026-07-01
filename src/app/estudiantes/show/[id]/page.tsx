@@ -489,9 +489,9 @@ export default function StudentDetailView() {
       setTotalClasesPorPrograma(clasesPorProgramaObj);
       const metaCiclosObj: Record<string, Record<number, { cicloNumero: number | null; cicloNombre: string | null }>> = {};
       metaClasePorPrograma.forEach((clasesMap, programaId) => {
-        metaCiclosObj[programaId] = {};
+        const clasesPorPrograma = (metaCiclosObj[programaId] = {});
         clasesMap.forEach((value, claseNumero) => {
-          metaCiclosObj[programaId][claseNumero] = value;
+          clasesPorPrograma[claseNumero] = value;
         });
       });
       setMetaCiclosPorPrograma(metaCiclosObj);
