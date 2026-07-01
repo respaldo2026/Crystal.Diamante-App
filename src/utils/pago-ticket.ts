@@ -129,6 +129,16 @@ const ENROLLMENT_PAYMENT_MILESTONES = [
   { ciclo: "Ciclo 5", claseNumero: 17 },
 ];
 
+const MONTHS_ABBR_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+const formatearFechaTicketMesAbreviado = (fecha: dayjs.Dayjs) => {
+  const dia = String(fecha.date()).padStart(2, "0");
+  const mes = MONTHS_ABBR_ES[fecha.month()] || String(fecha.month() + 1).padStart(2, "0");
+  const anio = fecha.year();
+
+  return `${dia}/${mes}/${anio}`;
+};
+
 const calcularAvisoPagosMatricula = (cursoFechaInicio?: string | null) => {
   const inicio = cursoFechaInicio ? dayjs(cursoFechaInicio) : null;
   if (!inicio || !inicio.isValid()) return null;
@@ -136,7 +146,7 @@ const calcularAvisoPagosMatricula = (cursoFechaInicio?: string | null) => {
   const fechas = ENROLLMENT_PAYMENT_MILESTONES.map((item) => ({
     ciclo: item.ciclo,
     claseNumero: item.claseNumero,
-    fecha: inicio.add(item.claseNumero - 1, "week").format("DD/MM/YYYY"),
+    fecha: formatearFechaTicketMesAbreviado(inicio.add(item.claseNumero - 1, "week")),
   }));
 
   return {

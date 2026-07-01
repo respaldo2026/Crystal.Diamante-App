@@ -1192,11 +1192,11 @@ export default function ConfiguracionPage() {
                         Las siguientes fechas han sido calculadas con base en la fecha de inicio del curso. Se recomienda realizar cada pago dentro del ciclo correspondiente.
                       </div>
                       {[
-                        ["Ciclo 1 (clase 1)", "18/06/2026"],
-                        ["Ciclo 2 (clase 5)", "16/07/2026"],
-                        ["Ciclo 3 (clase 9)", "13/08/2026"],
-                        ["Ciclo 4 (clase 13)", "10/09/2026"],
-                        ["Ciclo 5 (clase 17)", "08/10/2026"],
+                        ["Ciclo 1 (clase 1)", "18/Jun/2026"],
+                        ["Ciclo 2 (clase 5)", "16/Jul/2026"],
+                        ["Ciclo 3 (clase 9)", "13/Ago/2026"],
+                        ["Ciclo 4 (clase 13)", "10/Sep/2026"],
+                        ["Ciclo 5 (clase 17)", "08/Oct/2026"],
                       ].map(([label, fecha]) => (
                         <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#7c2d12", marginBottom: 4 }}>
                           <span>{label}</span>
