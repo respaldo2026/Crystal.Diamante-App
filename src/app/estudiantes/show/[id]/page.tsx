@@ -2104,11 +2104,17 @@ export default function StudentDetailView() {
                     locale={{ emptyText: "No hay asistencias registradas" }}
                     onRow={(record: AsistenciaEstudiante) => {
                       const numeroClase = Number(record?.clase_numero || 0);
+                      const ciclo = numeroClase > 0 ? Math.floor((numeroClase - 1) / 4) + 1 : 0;
                       const iniciaCiclo = numeroClase > 1 && (numeroClase - 1) % 4 === 0;
+                      const fondoCiclo = ciclo > 0
+                        ? (ciclo % 2 === 0 ? "#fcfaff" : "#fffefe")
+                        : undefined;
                       return {
                         style: {
                           borderTop: iniciaCiclo ? "2px solid #d8b4fe" : undefined,
-                          background: record?.es_placeholder ? "#fafafa" : undefined,
+                          background: record?.es_placeholder
+                            ? (ciclo % 2 === 0 ? "#f7f4fb" : "#fafafa")
+                            : fondoCiclo,
                         },
                       };
                     }}
@@ -2129,16 +2135,8 @@ export default function StudentDetailView() {
                         title: "N° Clase",
                         dataIndex: "clase_numero",
                         width: 90,
-                        render: (val: number | null) => {
-                          if (!val) return <Text type="secondary">-</Text>;
-                          const ciclo = Math.floor((val - 1) / 4) + 1;
-                          return (
-                            <Space direction="vertical" size={0}>
-                              <Text strong>{val}</Text>
-                              <Text type="secondary" style={{ fontSize: 11 }}>{`C${ciclo}`}</Text>
-                            </Space>
-                          );
-                        },
+                        render: (val: number | null) =>
+                          val ? <Text strong>{val}</Text> : <Text type="secondary">-</Text>,
                       },
                       {
                         title: "Tema visto",
