@@ -2168,11 +2168,16 @@ export default function PortalEstudiante() {
       <div className="portal-header-banner">
         {/* Header Content */}
         <div className="portal-header-content">
-          <div className="portal-header-title">
-            {obtenerSaludoBienvenida(estudiante?.genero)},{" "}
-            {estudiante?.nombre_completo
-              ? estudiante.nombre_completo.split(" ")[0]
-              : "Estudiante"}
+          <div>
+            <div className="portal-header-title">
+              {obtenerSaludoBienvenida(estudiante?.genero)},{" "}
+              {estudiante?.nombre_completo
+                ? estudiante.nombre_completo.split(" ")[0]
+                : "Estudiante"}
+            </div>
+            <div className="portal-header-subtitle">
+              Al llegar hasta aqui seras una Artista en unas 💅
+            </div>
           </div>
         </div>
       </div>
@@ -2321,6 +2326,23 @@ export default function PortalEstudiante() {
           overflow: hidden;
           text-overflow: ellipsis;
           letter-spacing: 0.2px;
+        }
+
+        .portal-header-subtitle {
+          margin-top: 8px;
+          display: inline-flex;
+          align-items: center;
+          max-width: 100%;
+          padding: 6px 12px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.16);
+          border: 1px solid rgba(255,255,255,0.22);
+          color: #fff7fb;
+          font-size: 12px;
+          font-weight: 600;
+          line-height: 1.3;
+          box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+          backdrop-filter: blur(8px);
         }
 
         /* ──────────────────────────────────────
@@ -2817,6 +2839,12 @@ export default function PortalEstudiante() {
           }
           .portal-header-title {
             font-size: 14px;
+          }
+          .portal-header-subtitle {
+            margin-top: 6px;
+            font-size: 11px;
+            padding: 6px 10px;
+            white-space: normal;
           }
           .portal-nav-bar {
             margin: 8px 8px 14px;

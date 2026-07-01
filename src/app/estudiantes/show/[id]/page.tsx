@@ -2168,7 +2168,7 @@ export default function StudentDetailView() {
                   <Table
                     dataSource={asistenciasHistorialCompleto}
                     rowKey="id"
-                    pagination={asistenciasHistorialCompleto.length > 20 ? { pageSize: 20 } : false}
+                    pagination={false}
                     locale={{ emptyText: "No hay asistencias registradas" }}
                     onRow={(record: AsistenciaEstudiante) => {
                       if (record?.es_divisor_ciclo) {

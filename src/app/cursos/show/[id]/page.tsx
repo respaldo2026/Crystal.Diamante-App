@@ -3109,7 +3109,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 <Table
                   dataSource={sesionesVisiblesConDivisores}
                   rowKey="id"
-                  pagination={{ pageSize: 15 }}
+                  pagination={false}
                   columns={columnasSesiones.map((column: any, index: number) => {
                     const isFirst = index === 0;
                     return {
