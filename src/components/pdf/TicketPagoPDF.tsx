@@ -466,7 +466,7 @@ export const TicketPagoPDF: React.FC<TicketPagoData> = ({ academia, estudiante, 
             ) : null}
             {avisoPagosMatricula.fechas.map((item) => (
               <View key={`${item.ciclo}-${item.claseNumero}`} style={styles.avisoRow}>
-                <Text style={styles.avisoRowLabel}>{`Próximo pago ${item.ciclo} (clase ${item.claseNumero})`}</Text>
+                <Text style={styles.avisoRowLabel}>{`${item.ciclo} (clase ${item.claseNumero})`}</Text>
                 <Text style={styles.avisoRowValue}>{item.fecha}</Text>
               </View>
             ))}

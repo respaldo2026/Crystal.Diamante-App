@@ -122,7 +122,8 @@ type EnrollmentTicketParams = {
 };
 
 const ENROLLMENT_PAYMENT_MILESTONES = [
-  { ciclo: "Ciclo 2", claseNumero: 3 },
+  { ciclo: "Ciclo 1", claseNumero: 1 },
+  { ciclo: "Ciclo 2", claseNumero: 5 },
   { ciclo: "Ciclo 3", claseNumero: 9 },
   { ciclo: "Ciclo 4", claseNumero: 13 },
   { ciclo: "Ciclo 5", claseNumero: 17 },
@@ -139,7 +140,7 @@ const calcularAvisoPagosMatricula = (cursoFechaInicio?: string | null) => {
   }));
 
   return {
-    titulo: "Cronograma de proximos pagos por ciclo",
+    titulo: "Cronograma de pagos por ciclo",
     mensaje: "Las siguientes fechas han sido calculadas con base en la fecha de inicio del curso. Se recomienda realizar cada pago dentro del ciclo correspondiente.",
     fechas,
   };
@@ -388,7 +389,7 @@ export const generarTicketTermicoHtml = async (data: TicketPagoData): Promise<st
         </div>
         ${dataPreparada.avisoPagosMatricula.fechas
           .map(
-            (item) => `<div class="row"><span class="label">${escapeHtml(`Proximo pago ${item.ciclo}`)} (${escapeHtml(`clase ${String(item.claseNumero)}`)})</span><span class="value">${escapeHtml(item.fecha)}</span></div>`
+            (item) => `<div class="row"><span class="label">${escapeHtml(item.ciclo)} (${escapeHtml(`clase ${String(item.claseNumero)}`)})</span><span class="value">${escapeHtml(item.fecha)}</span></div>`
           )
           .join("")}
       </div>

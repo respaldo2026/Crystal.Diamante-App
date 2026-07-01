@@ -1186,16 +1186,17 @@ export default function ConfiguracionPage() {
                       }}
                     >
                       <div style={{ fontSize: 11, fontWeight: 800, color: "#9a3412", textAlign: "center", textTransform: "uppercase", marginBottom: 6 }}>
-                        Cronograma de próximos pagos por ciclo
+                        Cronograma de pagos por ciclo
                       </div>
                       <div style={{ fontSize: 11, color: "#7c2d12", textAlign: "center", marginBottom: 6 }}>
                         Las siguientes fechas han sido calculadas con base en la fecha de inicio del curso. Se recomienda realizar cada pago dentro del ciclo correspondiente.
                       </div>
                       {[
-                        ["Próximo pago Ciclo 2 (clase 3)", "18/06/2026"],
-                        ["Próximo pago Ciclo 3 (clase 9)", "30/07/2026"],
-                        ["Próximo pago Ciclo 4 (clase 13)", "27/08/2026"],
-                        ["Próximo pago Ciclo 5 (clase 17)", "24/09/2026"],
+                        ["Ciclo 1 (clase 1)", "18/06/2026"],
+                        ["Ciclo 2 (clase 5)", "16/07/2026"],
+                        ["Ciclo 3 (clase 9)", "13/08/2026"],
+                        ["Ciclo 4 (clase 13)", "10/09/2026"],
+                        ["Ciclo 5 (clase 17)", "08/10/2026"],
                       ].map(([label, fecha]) => (
                         <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#7c2d12", marginBottom: 4 }}>
                           <span>{label}</span>
