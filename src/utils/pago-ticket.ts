@@ -150,8 +150,8 @@ const calcularAvisoPagosMatricula = (cursoFechaInicio?: string | null) => {
   }));
 
   return {
-    titulo: "Cronograma de pagos por ciclo",
-    mensaje: "Las siguientes fechas han sido calculadas con base en la fecha de inicio del curso. Se recomienda realizar cada pago dentro del ciclo correspondiente.",
+    titulo: "Cronograma de pagos por ciclo y entrega de Materiales",
+    mensaje: null,
     fechas,
   };
 };
