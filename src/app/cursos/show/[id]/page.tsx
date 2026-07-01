@@ -2360,8 +2360,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   const sesionesVisibles = sesiones.length > 0 ? sesiones : sesionesAgrupadasDesdeAsistencias;
   const bitacora = sesionesVisibles;
-  const sesionesVisiblesConDivisores = useMemo(() => injectCycleDividers(sesionesVisibles), [injectCycleDividers, sesionesVisibles]);
-  const bitacoraConDivisores = useMemo(() => injectCycleDividers(bitacora), [bitacora, injectCycleDividers]);
+  const sesionesVisiblesConDivisores = injectCycleDividers(sesionesVisibles);
+  const bitacoraConDivisores = injectCycleDividers(bitacora);
 
   const totalEstudiantes = estudiantes.length;
   const estudiantesActivos = estudiantes.filter(e => e.estado === "activo").length;
