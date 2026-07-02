@@ -61,7 +61,13 @@ import { useQuizFlow } from "@/modules/portal-estudiante/hooks/useQuizFlow";
 import { useChecklistInsumos } from "@/modules/portal-estudiante/hooks/useChecklistInsumos";
 import { useCourseProgress } from "@/modules/portal-estudiante/hooks/useCourseProgress";
 import { useTemaMaterials } from "@/modules/portal-estudiante/hooks/useTemaMaterials";
+import { useGamificationMetrics } from "@/modules/portal-estudiante/hooks/useGamificationMetrics";
 import { TemaMaterialActions } from "@/modules/portal-estudiante/components/TemaMaterialActions";
+import { GamificationHeader } from "@/modules/portal-estudiante/components/GamificationHeader";
+import { WeeklyMissionsCard } from "@/modules/portal-estudiante/components/WeeklyMissionsCard";
+import { StreakCard } from "@/modules/portal-estudiante/components/StreakCard";
+import { AchievementsStrip } from "@/modules/portal-estudiante/components/AchievementsStrip";
+import { CourseFinishTrack } from "@/modules/portal-estudiante/components/CourseFinishTrack";
 import {
   extractClassNumber,
   getActividadColor,
@@ -1610,10 +1616,36 @@ export default function PortalEstudiante() {
     });
   }, [matriculas, notaPromedioPorMatricula, cantidadCalificacionesPorMatricula, resumenAsistenciaPorMatricula, totalClasesPorPrograma]);
 
+  const gamification = useGamificationMetrics({
+    misCursosResumen,
+    asistencias,
+    quizIntentos,
+  });
+
   const renderSeccionActiva = () => {
     if (activeTab === "1") {
       return (
         <>
+          <Space direction="vertical" size={12} style={{ width: "100%", marginBottom: 12 }}>
+            <GamificationHeader
+              nivel={gamification.nivel}
+              totalXp={gamification.totalXp}
+              xpNivelActual={gamification.xpNivelActual}
+              xpPorNivel={gamification.xpPorNivel}
+              misionSiguienteTitulo={gamification.misionSiguiente?.titulo || null}
+            />
+
+            <StreakCard
+              rachaActual={gamification.rachaActual}
+              mejorRacha={gamification.mejorRacha}
+              asistenciaPromedio={gamification.asistenciaPromedio}
+            />
+
+            <AchievementsStrip logros={gamification.logros} />
+
+            <WeeklyMissionsCard misiones={gamification.misiones} />
+          </Space>
+
           {misCursosResumen.length === 0 ? (
             <Empty description="No estás inscrito en ningún curso activo" />
           ) : (
@@ -1652,6 +1684,11 @@ export default function PortalEstudiante() {
                         trailColor="#e5e7eb"
                       />
                     </div>
+
+                    <CourseFinishTrack
+                      completadas={curso.clasesDictadas}
+                      total={curso.totalClases}
+                    />
 
                     <div style={{ marginTop: 12 }}>
                       {curso.tieneRegistrosAcademicos ? (
