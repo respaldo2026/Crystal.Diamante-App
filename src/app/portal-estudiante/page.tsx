@@ -1110,13 +1110,13 @@ export default function PortalEstudiante() {
     const visibleRows = rows.filter((row) => row.value !== undefined && row.value !== null && row.value !== "");
 
     return (
-      <div style={{ display: "grid", gap: 10 }}>
+      <div className="portal-mobile-rows-grid">
         {visibleRows.map((row) => (
-          <div key={row.label} style={{ minWidth: 0 }}>
-            <Text type="secondary" style={{ display: "block", fontSize: 12, marginBottom: 2 }}>
+          <div key={row.label} className="portal-mobile-row" style={{ minWidth: 0 }}>
+            <Text type="secondary" className="portal-mobile-row-label" style={{ display: "block", fontSize: 11, marginBottom: 4 }}>
               {row.label}
             </Text>
-            <div style={{ minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>{row.value}</div>
+            <div className="portal-mobile-row-value" style={{ minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>{row.value}</div>
           </div>
         ))}
       </div>
@@ -1804,14 +1804,26 @@ export default function PortalEstudiante() {
               const temaRaw = temaSincronizadoAsistenciaById.get(asistenciaId) || r?.tema_visto || r?.registro_clase || "-";
               const tema = limpiarTemaAsistencia(temaRaw, claseNumero);
               const estadoCalendario = estadoCalendarioAsistenciaById.get(String(r?.id || ""));
-              const titulo = `${formatDate(r?.fecha)}${claseNumero ? ` · Clase ${claseNumero}` : ""}`;
+              const titulo = (
+                <Space size={8} wrap>
+                  <Text strong style={{ fontSize: 14, color: "#0f172a" }}>{formatDate(r?.fecha)}</Text>
+                  {claseNumero ? <Tag color="blue" style={{ borderRadius: 999, marginInlineEnd: 0 }}>Clase {claseNumero}</Tag> : null}
+                </Space>
+              );
 
               return {
                 key: String(r?.id || Math.random()),
                 title: titulo,
-                extra: <Tag color={r?.estado === "presente" ? "green" : "red"}>{String(r?.estado || "-").toUpperCase()}</Tag>,
+                extra: (
+                  <Tag
+                    color={r?.estado === "presente" ? "green" : "red"}
+                    style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700 }}
+                  >
+                    {String(r?.estado || "-").toUpperCase()}
+                  </Tag>
+                ),
                 rows: [
-                  { label: "Tema", value: tema },
+                  { label: "Tema", value: <Text style={{ color: "#1f2937", fontWeight: 600 }}>{tema}</Text> },
                   { label: "Calendario", value: estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : undefined },
                 ],
               };
@@ -1870,15 +1882,33 @@ export default function PortalEstudiante() {
                 };
                 const titulo = limpiarConceptoCalificacion(r?.concepto);
                 const mostrarTagTipo = tipo !== "quiz";
+                const fechaDisplay = r?.fecha_evaluacion ? dayjs(r.fecha_evaluacion).format("DD/MM/YYYY") : "-";
 
                 return {
                   key: String(r?.id || Math.random()),
-                  title: titulo,
-                  extra: mostrarTagTipo ? <Tag color={colores[tipo] || "default"}>{tipo.toUpperCase()}</Tag> : undefined,
+                  title: <Text strong style={{ fontSize: 14, color: "#0f172a" }}>{titulo}</Text>,
+                  extra: mostrarTagTipo
+                    ? <Tag color={colores[tipo] || "default"} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700 }}>{tipo.toUpperCase()}</Tag>
+                    : undefined,
                   rows: [
-                    { label: "Nota", value: <Text strong style={{ color: aprobado ? "#52c41a" : "#ff4d4f" }}>{display}</Text> },
-                    { label: "Fecha", value: r?.fecha_evaluacion ? dayjs(r.fecha_evaluacion).format("DD/MM/YYYY") : "-" },
-                    { label: "Observaciones", value: observaciones },
+                    {
+                      label: "Resultado",
+                      value: (
+                        <Space size={8} wrap>
+                          <Tag
+                            color={aprobado ? "success" : "error"}
+                            style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700 }}
+                          >
+                            Nota {display}
+                          </Tag>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            <ClockCircleOutlined style={{ marginRight: 4 }} />
+                            {fechaDisplay}
+                          </Text>
+                        </Space>
+                      ),
+                    },
+                    { label: "Feedback", value: observaciones },
                   ],
                 };
               }, "No hay calificaciones registradas") : <Table
@@ -2516,23 +2546,51 @@ export default function PortalEstudiante() {
           word-break: break-word;
         }
         .portal-estudiante .portal-mobile-data-card {
-          border-radius: 14px;
-          border: 1px solid #eceff5;
-          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+          border-radius: 18px;
+          border: 1px solid #e6e9f2;
+          background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(250,251,255,0.95) 100%);
+          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+          backdrop-filter: blur(4px);
         }
         .portal-estudiante .portal-mobile-data-card .ant-card-head {
           min-height: auto;
-          padding: 12px 14px 0;
-          border-bottom: none;
+          padding: 12px 14px 8px;
+          border-bottom: 1px solid #edf0f6;
         }
         .portal-estudiante .portal-mobile-data-card .ant-card-body {
           padding: 12px 14px 14px;
+        }
+        .portal-estudiante .portal-mobile-data-card .ant-card-head-title {
+          font-weight: 700;
+          letter-spacing: 0.1px;
+          color: #0f172a;
+        }
+        .portal-estudiante .portal-mobile-data-card .ant-card-head-wrapper {
+          align-items: center;
         }
         .portal-estudiante .portal-mobile-data-card__header {
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
           gap: 8px;
+        }
+        .portal-estudiante .portal-mobile-rows-grid {
+          display: grid;
+          gap: 10px;
+        }
+        .portal-estudiante .portal-mobile-row {
+          padding: 9px 10px;
+          border-radius: 12px;
+          border: 1px solid #eef2f7;
+          background: #ffffff;
+        }
+        .portal-estudiante .portal-mobile-row-label {
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+          font-weight: 700;
+        }
+        .portal-estudiante .portal-mobile-row-value {
+          color: #1f2937;
         }
         .portal-estudiante .portal-mobile-data-grid {
           display: grid;
@@ -2942,10 +3000,14 @@ export default function PortalEstudiante() {
             padding: 6px 10px;
           }
           .portal-estudiante .portal-mobile-data-card .ant-card-head {
-            padding: 10px 10px 0;
+            padding: 10px 10px 7px;
           }
           .portal-estudiante .portal-mobile-data-card .ant-card-body {
             padding: 10px;
+          }
+          .portal-estudiante .portal-mobile-row {
+            padding: 8px 9px;
+            border-radius: 10px;
           }
           .portal-estudiante .portal-mobile-data-grid {
             grid-template-columns: minmax(0, 1fr);
