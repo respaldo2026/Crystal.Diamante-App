@@ -2530,6 +2530,86 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     }
   };
 
+  const gamificacionPorEstudiante = useMemo(() => {
+    const asistenciasPorMatricula = new Map<number, { total: number; presentes: number; weekKeys: string[] }>();
+
+    (asistenciasRaw || []).forEach((asistencia: any) => {
+      const matriculaId = Number(asistencia?.matricula_id);
+      if (!Number.isFinite(matriculaId)) return;
+
+      const current = asistenciasPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
+      current.total += 1;
+
+      const estado = String(asistencia?.estado || "").toLowerCase();
+      if (estado === "presente") {
+        current.presentes += 1;
+        const weekKey = getWeekKey(asistencia?.fecha);
+        if (weekKey) current.weekKeys.push(weekKey);
+      }
+
+      asistenciasPorMatricula.set(matriculaId, current);
+    });
+
+    const quizAprobadosPorMatricula = new Map<number, number>();
+    (resultadosQuizResumen || []).forEach((item: any) => {
+      const matriculaId = Number(item?.matricula_id);
+      const nota = Number(item?.calificacion ?? item?.nota);
+      if (!Number.isFinite(matriculaId) || !Number.isFinite(nota)) return;
+      if (!notaEsAprobada(nota)) return;
+
+      quizAprobadosPorMatricula.set(
+        matriculaId,
+        (quizAprobadosPorMatricula.get(matriculaId) || 0) + 1
+      );
+    });
+
+    return (estudiantes || [])
+      .filter((est) => est.estado !== "pendiente_pago")
+      .map((est) => {
+        const matriculaId = Number(est.id);
+        const asistencia = asistenciasPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
+        const asistenciaPercent = Number(est.asistencia_porcentaje || 0);
+        const semanasConAsistencia = Array.from(new Set(asistencia.weekKeys)).length;
+        const { actual: rachaActual } = calcularRachaSemanal(asistencia.weekKeys);
+        const quizAprobados = quizAprobadosPorMatricula.get(matriculaId) || 0;
+
+        const asistenciaScore = Math.min(100, asistenciaPercent);
+        const quizScore = Math.min(100, quizAprobados * 30);
+        const rachaScore = Math.min(100, rachaActual * 25);
+        const constanciaScore = Math.min(100, semanasConAsistencia * 12);
+
+        const score = Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(
+              (asistenciaScore * 0.45) +
+              (quizScore * 0.25) +
+              (rachaScore * 0.2) +
+              (constanciaScore * 0.1)
+            )
+          )
+        );
+
+        const nivel = Math.max(1, Math.min(5, Math.ceil(score / 20)));
+        const estadoGamificacion = score >= 80 ? "alto" : score >= 55 ? "medio" : "bajo";
+
+        return {
+          key: String(est.id),
+          id: est.id,
+          estudiante: est.nombre_completo,
+          score,
+          nivel,
+          rachaActual,
+          semanasConAsistencia,
+          asistenciaPercent,
+          quizAprobados,
+          estadoGamificacion,
+        };
+      })
+      .sort((a, b) => b.score - a.score || a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }));
+  }, [asistenciasRaw, estudiantes, resultadosQuizResumen]);
+
   if (loading) {
     return (
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
@@ -2754,86 +2834,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     const medio = libroCalificacionesUnificado.filter((item) => item.scoreRiesgo === 1).length;
     const bajo = Math.max(total - alto - medio, 0);
     return { total, alto, medio, bajo };
-  })();
-
-  const gamificacionPorEstudiante = (() => {
-    const asistenciasPorMatricula = new Map<number, { total: number; presentes: number; weekKeys: string[] }>();
-
-    (asistenciasRaw || []).forEach((asistencia: any) => {
-      const matriculaId = Number(asistencia?.matricula_id);
-      if (!Number.isFinite(matriculaId)) return;
-
-      const current = asistenciasPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
-      current.total += 1;
-
-      const estado = String(asistencia?.estado || "").toLowerCase();
-      if (estado === "presente") {
-        current.presentes += 1;
-        const weekKey = getWeekKey(asistencia?.fecha);
-        if (weekKey) current.weekKeys.push(weekKey);
-      }
-
-      asistenciasPorMatricula.set(matriculaId, current);
-    });
-
-    const quizAprobadosPorMatricula = new Map<number, number>();
-    (resultadosQuizResumen || []).forEach((item: any) => {
-      const matriculaId = Number(item?.matricula_id);
-      const nota = Number(item?.calificacion ?? item?.nota);
-      if (!Number.isFinite(matriculaId) || !Number.isFinite(nota)) return;
-      if (!notaEsAprobada(nota)) return;
-
-      quizAprobadosPorMatricula.set(
-        matriculaId,
-        (quizAprobadosPorMatricula.get(matriculaId) || 0) + 1
-      );
-    });
-
-    return (estudiantes || [])
-      .filter((est) => est.estado !== "pendiente_pago")
-      .map((est) => {
-        const matriculaId = Number(est.id);
-        const asistencia = asistenciasPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
-        const asistenciaPercent = Number(est.asistencia_porcentaje || 0);
-        const semanasConAsistencia = Array.from(new Set(asistencia.weekKeys)).length;
-        const { actual: rachaActual } = calcularRachaSemanal(asistencia.weekKeys);
-        const quizAprobados = quizAprobadosPorMatricula.get(matriculaId) || 0;
-
-        const asistenciaScore = Math.min(100, asistenciaPercent);
-        const quizScore = Math.min(100, quizAprobados * 30);
-        const rachaScore = Math.min(100, rachaActual * 25);
-        const constanciaScore = Math.min(100, semanasConAsistencia * 12);
-
-        const score = Math.max(
-          0,
-          Math.min(
-            100,
-            Math.round(
-              (asistenciaScore * 0.45) +
-              (quizScore * 0.25) +
-              (rachaScore * 0.2) +
-              (constanciaScore * 0.1)
-            )
-          )
-        );
-
-        const nivel = Math.max(1, Math.min(5, Math.ceil(score / 20)));
-        const estadoGamificacion = score >= 80 ? "alto" : score >= 55 ? "medio" : "bajo";
-
-        return {
-          key: String(est.id),
-          id: est.id,
-          estudiante: est.nombre_completo,
-          score,
-          nivel,
-          rachaActual,
-          semanasConAsistencia,
-          asistenciaPercent,
-          quizAprobados,
-          estadoGamificacion,
-        };
-      })
-      .sort((a, b) => b.score - a.score || a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }));
   })();
 
   const promedioGamificacionGrupo = gamificacionPorEstudiante.length
