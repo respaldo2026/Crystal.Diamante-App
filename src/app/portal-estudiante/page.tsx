@@ -1174,6 +1174,36 @@ export default function PortalEstudiante() {
     return normalizarTexto(texto) !== normalizarTexto(base);
   };
 
+  const limpiarConceptoCalificacion = (valor?: string | null) => {
+    const raw = String(valor || "").replace(/\s+/g, " ").trim();
+    if (!raw) return "Calificación";
+
+    const limpio = raw
+      .replace(/^quiz\s+de\s+clase\s*:\s*/i, "")
+      .replace(/^quiz\s*[-:–]\s*/i, "")
+      .replace(/^evaluaci[oó]n\s*[-:–]\s*/i, "")
+      .replace(/^calificaci[oó]n\s*[-:–]\s*/i, "")
+      .trim();
+
+    return limpio || "Calificación";
+  };
+
+  const observacionUtilCalificacion = (registro: any) => {
+    const observacion = String(registro?.observaciones || "").trim();
+    if (!observacion) return undefined;
+
+    const conceptoNormalizado = normalizarTexto(String(registro?.concepto || ""));
+    const observacionNormalizada = normalizarTexto(observacion);
+    if (!observacionNormalizada) return undefined;
+
+    // Evita repetir información cuando es un quiz y la observación solo reitera el concepto.
+    if (conceptoNormalizado && observacionNormalizada.includes(conceptoNormalizado)) {
+      return undefined;
+    }
+
+    return observacion;
+  };
+
   const renderFinanciero = () => (
     <PortalFinancieroSection
       isMobile={isMobile}
@@ -1774,14 +1804,14 @@ export default function PortalEstudiante() {
               const temaRaw = temaSincronizadoAsistenciaById.get(asistenciaId) || r?.tema_visto || r?.registro_clase || "-";
               const tema = limpiarTemaAsistencia(temaRaw, claseNumero);
               const estadoCalendario = estadoCalendarioAsistenciaById.get(String(r?.id || ""));
+              const titulo = `${formatDate(r?.fecha)}${claseNumero ? ` · Clase ${claseNumero}` : ""}`;
 
               return {
                 key: String(r?.id || Math.random()),
-                title: formatDate(r?.fecha),
+                title: titulo,
                 extra: <Tag color={r?.estado === "presente" ? "green" : "red"}>{String(r?.estado || "-").toUpperCase()}</Tag>,
                 rows: [
-                  { label: "Clase #", value: claseNumero || "-" },
-                  { label: "Tema visto", value: tema },
+                  { label: "Tema", value: tema },
                   { label: "Calendario", value: estadoCalendario ? <Tag color={estadoCalendario.color}>{estadoCalendario.label}</Tag> : undefined },
                 ],
               };
@@ -1825,13 +1855,12 @@ export default function PortalEstudiante() {
               style={{ marginTop: 16 }}
             >
               {isMobile ? renderMobileListCards(calificaciones, (r: any) => {
-                const mat = matriculas.find((m: any) => String(m.id) === String(r.matricula_id));
                 const nota = Number(r.calificacion ?? r.nota);
                 const esEscala5 = nota <= 5;
                 const aprobado = esEscala5 ? nota >= 3.0 : nota >= 60;
                 const display = Number.isFinite(nota) ? (esEscala5 ? nota.toFixed(1) : `${nota}/100`) : "-";
                 const tipo = String(r?.tipo_evaluacion || "otro");
-                const observaciones = textoAportaInformacion(r?.observaciones, r?.concepto) ? r?.observaciones : undefined;
+                const observaciones = observacionUtilCalificacion(r);
                 const colores: Record<string, string> = {
                   examen: "blue",
                   quiz: "purple",
@@ -1839,11 +1868,13 @@ export default function PortalEstudiante() {
                   participacion: "green",
                   otro: "default",
                 };
+                const titulo = limpiarConceptoCalificacion(r?.concepto);
+                const mostrarTagTipo = tipo !== "quiz";
 
                 return {
                   key: String(r?.id || Math.random()),
-                  title: r?.concepto || "Calificación",
-                  extra: <Tag color={colores[tipo] || "default"}>{tipo.toUpperCase()}</Tag>,
+                  title: titulo,
+                  extra: mostrarTagTipo ? <Tag color={colores[tipo] || "default"}>{tipo.toUpperCase()}</Tag> : undefined,
                   rows: [
                     { label: "Nota", value: <Text strong style={{ color: aprobado ? "#52c41a" : "#ff4d4f" }}>{display}</Text> },
                     { label: "Fecha", value: r?.fecha_evaluacion ? dayjs(r.fecha_evaluacion).format("DD/MM/YYYY") : "-" },
