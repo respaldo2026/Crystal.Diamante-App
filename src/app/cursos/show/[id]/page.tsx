@@ -2756,7 +2756,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return { total, alto, medio, bajo };
   })();
 
-  const gamificacionPorEstudiante = useMemo(() => {
+  const gamificacionPorEstudiante = (() => {
     const asistenciasPorMatricula = new Map<number, { total: number; presentes: number; weekKeys: string[] }>();
 
     (asistenciasRaw || []).forEach((asistencia: any) => {
@@ -2834,7 +2834,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         };
       })
       .sort((a, b) => b.score - a.score || a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }));
-  }, [asistenciasRaw, estudiantes, resultadosQuizResumen]);
+  })();
 
   const promedioGamificacionGrupo = gamificacionPorEstudiante.length
     ? Math.round(gamificacionPorEstudiante.reduce((acc, item) => acc + item.score, 0) / gamificacionPorEstudiante.length)
