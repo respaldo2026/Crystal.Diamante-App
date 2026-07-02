@@ -376,6 +376,17 @@ export default function CajaPage() {
     }
   }, [configuracion, messageApi]);
 
+  const intentarAbrirCajon = useCallback(async () => {
+    try {
+      const nombreImpresora = String(configuracion?.impresora_pos || "").trim() || undefined;
+      const { abrirCajonConQzTray } = await import("@utils/qz-tray");
+      const abierto = await abrirCajonConQzTray(nombreImpresora);
+      return abierto;
+    } catch {
+      return false;
+    }
+  }, [configuracion]);
+
   const totalAPagar = useMemo(
     () => {
       if (cuotasSeleccionadas.length === 1) {
@@ -1090,8 +1101,20 @@ export default function CajaPage() {
         }
 
         if (ajuste.saldo_pendiente === 0) {
+          if (metodoPago === "efectivo" && montoAbono > 0) {
+            const cajonAbierto = await intentarAbrirCajon();
+            if (!cajonAbierto) {
+              messageApi.warning("Pago registrado, pero no se pudo abrir el cajón.");
+            }
+          }
           messageApi.success("Pago registrado y cuota saldada correctamente");
         } else if (montoAbono > 0) {
+          if (metodoPago === "efectivo") {
+            const cajonAbierto = await intentarAbrirCajon();
+            if (!cajonAbierto) {
+              messageApi.warning("Abono registrado, pero no se pudo abrir el cajón.");
+            }
+          }
           messageApi.success(`Abono registrado. Saldo pendiente: ${formatCurrency(ajuste.saldo_pendiente)}`);
         } else {
           messageApi.success(`Descuento aplicado. Nuevo saldo: ${formatCurrency(ajuste.saldo_pendiente)}`);
@@ -1286,6 +1309,13 @@ export default function CajaPage() {
         }
       }
 
+      if (metodoPago === "efectivo" && totalAPagar > 0) {
+        const cajonAbierto = await intentarAbrirCajon();
+        if (!cajonAbierto) {
+          messageApi.warning("Pago registrado, pero no se pudo abrir el cajón.");
+        }
+      }
+
       messageApi.success(`Pago registrado exitosamente. Total: ${formatCurrency(totalAPagar)}`);
       
       // Limpiar formulario y recargar datos
@@ -1314,6 +1344,7 @@ export default function CajaPage() {
     totalAPagar,
     configuracion,
     intentarImprimirTicket,
+    intentarAbrirCajon,
     matriculas,
     valorEntregado,
     cambio,
