@@ -1,6 +1,6 @@
-export type ModalidadPago = "POR_CLASE" | "MENSUAL_70" | "MENSUAL_100";
+export type ModalidadPago = "POR_CLASE" | "MENSUAL_100";
 
-export type MaterialCoverage = "NINGUNO" | "MENSUAL_70" | "MENSUAL_100";
+export type MaterialCoverage = "NINGUNO" | "MENSUAL_100";
 
 export type PaymentPlan = {
   modalidad: ModalidadPago;
@@ -27,14 +27,6 @@ export const PLANES_PAGO: Record<ModalidadPago, PaymentPlan> = {
     montoPorClase: 40000,
     porcentajeProductos: 0,
   },
-  MENSUAL_70: {
-    modalidad: "MENSUAL_70",
-    label: "Mensual 70% productos",
-    descripcion: "$260.000 mensuales",
-    montoMensual: 260000,
-    montoPorClase: 0,
-    porcentajeProductos: 70,
-  },
   MENSUAL_100: {
     modalidad: "MENSUAL_100",
     label: "Mensual 100% productos",
@@ -45,7 +37,7 @@ export const PLANES_PAGO: Record<ModalidadPago, PaymentPlan> = {
   },
 };
 
-export const MODALIDAD_PAGO_DEFAULT: ModalidadPago = "MENSUAL_70";
+export const MODALIDAD_PAGO_DEFAULT: ModalidadPago = "MENSUAL_100";
 
 export function normalizeModalidadPago(value?: string | null): ModalidadPago {
   const normalized = String(value || "").toUpperCase().trim();
@@ -74,30 +66,12 @@ export function resolvePaymentPlanAmounts(
     };
   }
 
-  if (modalidad === "MENSUAL_100") {
-    // Guard: si precio_mensual_100 === precio_mensual_70 fue copiado erróneamente
-    // por migration-modalidades-pago-matriculas.sql (COALESCE(precio_mensual_100, precio_mensualidad)).
-    // En ese caso, precio_mensual_100 tiene el valor del plan 70% (ej. 260k) y NO representa
-    // el precio real del plan 100%. Usamos el fallback del plan en ese caso.
-    const precio100 = cfg.precio_mensual_100;
-    const precio70 = cfg.precio_mensual_70 ?? cfg.precio_mensualidad;
-    const precio100EsValido =
-      precio100 != null && precio100 > 0 && precio100 !== precio70;
-    return {
-      montoMensual: Number(
-        precio100EsValido ? precio100 : fallback.montoMensual ?? 0,
-      ),
-      montoPorClase: 0,
-      porcentajeProductos: 100,
-    };
-  }
-
   return {
     montoMensual: Number(
-      cfg.precio_mensual_70 ?? cfg.precio_mensualidad ?? fallback.montoMensual ?? 0,
+      cfg.precio_mensual_100 ?? cfg.precio_mensualidad ?? fallback.montoMensual ?? 0,
     ),
     montoPorClase: 0,
-    porcentajeProductos: 70,
+    porcentajeProductos: 100,
   };
 }
 
@@ -115,14 +89,14 @@ export function normalizeMaterialCoverage(
 ): MaterialCoverage {
   const normalized = String(value || "").toUpperCase().trim();
   if (normalized === "MENSUAL_100") return "MENSUAL_100";
-  if (normalized === "MENSUAL_70") return "MENSUAL_70";
+  if (normalized === "MENSUAL_70") return "MENSUAL_100";
   if (normalized === "NINGUNO") return "NINGUNO";
-  return includedKit ? "MENSUAL_70" : "NINGUNO";
+  return includedKit ? "MENSUAL_100" : "NINGUNO";
 }
 
 type MaterialCoverageRuleDisplay = {
   coverage: MaterialCoverage;
-  color: "default" | "blue" | "green";
+  color: "default" | "green";
   label: string;
   shortLabel: string;
   description: string;
@@ -141,16 +115,6 @@ export function getMaterialCoverageRuleDisplay(
       label: "Exclusivo de Mensual 100",
       shortLabel: "Plan 100",
       description: "Este material solo se incluye en el plan Mensual 100.",
-    };
-  }
-
-  if (coverage === "MENSUAL_70") {
-    return {
-      coverage,
-      color: "blue",
-      label: "Incluido desde Mensual 70",
-      shortLabel: "Plan base",
-      description: "Este material se incluye en los planes Mensual 70 y Mensual 100.",
     };
   }
 
@@ -183,17 +147,15 @@ type MaterialCoverageDisplay = {
 function resolvePlanMaterialRank(modalidadPago?: string | null, porcentajeProductos?: number | null): 0 | 70 | 100 {
   const porcentaje = Number(porcentajeProductos ?? 0);
   if (porcentaje === 100) return 100;
-  if (porcentaje === 70) return 70;
+  if (porcentaje >= 70) return 100;
 
   const modalidad = normalizeModalidadPago(modalidadPago);
   if (modalidad === "MENSUAL_100") return 100;
-  if (modalidad === "MENSUAL_70") return 70;
   return 0;
 }
 
 function resolveCoverageRank(coverage: MaterialCoverage): 0 | 70 | 100 {
   if (coverage === "MENSUAL_100") return 100;
-  if (coverage === "MENSUAL_70") return 70;
   return 0;
 }
 
@@ -246,7 +208,7 @@ export function getMaterialCoverageDisplay(
     color: "gold",
     label: "Requiere plan mensual",
     shortLabel: "Plan mensual",
-    description: "Este material está incluido en los planes Mensual 70 y Mensual 100.",
+    description: "Este material está incluido en la mensualidad con materiales completos.",
     isIncluded: false,
   };
 }
@@ -257,14 +219,7 @@ function isFinitePositiveNumber(value: unknown): value is number {
 
 function inferMensualModalidadByMonto(montoMensual: number): ModalidadPago | null {
   if (!isFinitePositiveNumber(montoMensual)) return null;
-
-  const monto70 = PLANES_PAGO.MENSUAL_70.montoMensual;
-  const monto100 = PLANES_PAGO.MENSUAL_100.montoMensual;
-  const diff70 = Math.abs(montoMensual - monto70);
-  const diff100 = Math.abs(montoMensual - monto100);
-
-  if (diff70 === diff100) return null;
-  return diff70 < diff100 ? "MENSUAL_70" : "MENSUAL_100";
+  return "MENSUAL_100";
 }
 
 type PaymentPlanDisplayInput = {
@@ -276,7 +231,7 @@ type PaymentPlanDisplayInput = {
 
 type PaymentPlanDisplay = {
   modalidad: ModalidadPago;
-  color: "orange" | "green" | "blue";
+  color: "orange" | "green";
   label: string;
   detail: string;
   montoMensual: number;
@@ -307,8 +262,7 @@ export function getPaymentPlanDisplay(input: PaymentPlanDisplayInput): PaymentPl
   const porcentaje = Number(input.porcentajeProductos ?? 0);
   let modalidadFinal: ModalidadPago = modalidadBase;
 
-  if (porcentaje === 100) modalidadFinal = "MENSUAL_100";
-  else if (porcentaje === 70) modalidadFinal = "MENSUAL_70";
+  if (porcentaje >= 70) modalidadFinal = "MENSUAL_100";
   else {
     const modalidadInferida = inferMensualModalidadByMonto(montoMensual);
     if (modalidadInferida && modalidadInferida !== "POR_CLASE") {
@@ -320,7 +274,7 @@ export function getPaymentPlanDisplay(input: PaymentPlanDisplayInput): PaymentPl
 
   return {
     modalidad: modalidadFinal,
-    color: modalidadFinal === "MENSUAL_100" ? "green" : "blue",
+    color: "green",
     label: plan.label,
     detail: `$${montoMensual.toLocaleString()}/mes`,
     montoMensual,

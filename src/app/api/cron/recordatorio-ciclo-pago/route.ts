@@ -281,7 +281,7 @@ async function runRecordatorioCicloPago(): Promise<NextResponse> {
     .from('matriculas')
     .select('id, estudiante_id, curso_id, modalidad_pago, valor_mensual_plan, estado')
     .in('curso_id', cursoIdsTrigger)
-    .in('modalidad_pago', ['MENSUAL_70', 'MENSUAL_100'])
+    .in('modalidad_pago', ['MENSUAL_100'])
     .in('estado', ['activa', 'activo', 'ACTIVA', 'ACTIVO']);
 
   if (matriculasError) {

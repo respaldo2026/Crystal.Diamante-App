@@ -1068,30 +1068,20 @@ function formatCurrencyCOP(value: number): string {
 
 function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) {
   const inscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
-  const mensual70 = Number(
-    detectedProgram?.precio_mensual_70
-    ?? primaryCourse?.precio_mensual_70
-    ?? detectedProgram?.precio_mensualidad
-    ?? primaryCourse?.precio_mensualidad
-    ?? 0
-  );
   const mensual100 = Number(
     detectedProgram?.precio_mensual_100
     ?? primaryCourse?.precio_mensual_100
     ?? detectedProgram?.precio_mensualidad
     ?? primaryCourse?.precio_mensualidad
-    ?? mensual70
     ?? 0
   );
   const porClase = Number(detectedProgram?.precio_por_clase ?? primaryCourse?.precio_por_clase ?? 0);
 
   return {
     inscripcion,
-    mensual70,
     mensual100,
     porClase,
     inscripcionText: inscripcion > 0 ? formatCurrencyCOP(inscripcion) : "Por confirmar",
-    mensual70Text: mensual70 > 0 ? formatCurrencyCOP(mensual70) : "Por confirmar",
     mensual100Text: mensual100 > 0 ? formatCurrencyCOP(mensual100) : "Por confirmar",
     porClaseText: porClase > 0 ? formatCurrencyCOP(porClase) : "Por confirmar",
   };
@@ -1101,8 +1091,7 @@ function buildHumanPaymentModalitiesBlock(detectedProgram: any, primaryCourse: a
   const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
   return [
     `• *POR_CLASE:* ${options.porClaseText} por clase`,
-    `• *MENSUAL_70:* ${options.mensual70Text} al mes (kit aproximado del 70%)`,
-    `• *MENSUAL_100:* ${options.mensual100Text} al mes (kit completo del mes)`,
+    `• *MENSUAL:* ${options.mensual100Text} al mes (incluye 100% de materiales del mes)`,
   ].join("\n");
 }
 
@@ -2236,14 +2225,11 @@ Si quieres, te comparto una referencia rápida para llegar más fácil 😊`;
     }
 
     if (asksTotalToPay) {
-      const totalInicio70 = (inscripcion > 0 && priceOptions.mensual70 > 0)
-        ? formatCurrencyCOP(inscripcion + priceOptions.mensual70)
-        : "Por confirmar";
       const totalInicio100 = (inscripcion > 0 && priceOptions.mensual100 > 0)
         ? formatCurrencyCOP(inscripcion + priceOptions.mensual100)
         : "Por confirmar";
 
-      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con MENSUAL_70:* ${totalInicio70}\n• *Inicio con MENSUAL_100:* ${totalInicio100}\n• *Inicio con POR_CLASE:* inscripción + ${porClaseText} por cada clase que asistas\n\n✅ Puedes pagar inscripción y escoger modalidad.\nSi te queda mejor, la mensualidad se puede completar hasta la segunda clase.`;
+      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con MENSUAL:* ${totalInicio100}\n• *Inicio con POR_CLASE:* inscripción + ${porClaseText} por cada clase que asistas\n\n✅ Puedes pagar inscripción y escoger modalidad.\nSi te queda mejor, la mensualidad se puede completar hasta la segunda clase.`;
     }
 
     if (asksPartialPayment) {

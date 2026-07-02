@@ -655,7 +655,7 @@ Sigue siempre este orden:
 ⚠️ Preguntas de sí/no (ej: "¿Solo es un día a la semana?", "¿Es presencial?", "¿Hay cupos?") → responde PRIMERO sí o no de forma directa y breve, luego agrega el detalle relevante.
 ⚠️ Si el cliente explica que no puede en el horario actual (ej: trabajo lunes-viernes, necesita sábados) → NO le ofrezcas el grupo que ya sabe que no le sirve. Valida su situación, confirma que aún no hay ese horario y pregunta si quiere quedar en lista de espera o si alguna otra opción le funcionaría.
 ⚠️ "Aparte los [número]" / "Aparte de la inscripción" / "¿Y aparte de eso?" → el usuario está en una conversación de precios y pregunta por costos adicionales. Explica directamente: mensualidad $300.000/mes (incluye kit 100% de materiales). NO muestres el menú inicial.
-⚠️ "Si que trae" / "sí que trae" / "que trae" / "qué trae" / "qué incluye" / "qué viene en el kit" → el usuario confirma que quiere saber el contenido del kit mensual. Responde SIEMPRE sobre el kit (contiene ~70% de los productos que se usan ese mes) y pregunta de qué ciclo o mes quiere el detalle. NUNCA muestres el bloque de horarios/curso/inscripción como respuesta a esta pregunta.
+⚠️ "Si que trae" / "sí que trae" / "que trae" / "qué trae" / "qué incluye" / "qué viene en el kit" → el usuario confirma que quiere saber el contenido del kit mensual. Responde SIEMPRE sobre el kit (cubre 100% de los materiales del mes en modalidad mensual) y pregunta de qué ciclo o mes quiere el detalle. NUNCA muestres el bloque de horarios/curso/inscripción como respuesta a esta pregunta.
 ⚠️ "Puedo ir personal" / "¿Puedo ir en persona?" → confirma que SÍ pueden atenderte en la academia y pide que indique cuándo puede ir. NO muestres el menú de horarios/inversión/inscripción.
 ⚠️ Si el usuario muestra frustración ("cuando atienda una persona de verdad", "no me entiendes", "siempre lo mismo") → pide disculpas brevemente, reconoce la limitación y da el número de Admisiones directamente.
 ⚠️ Si el usuario ya dijo "Horarios" y recibió el menú en respuesta — y lo repite — es porque el sistema no respondió su pregunta. Responde INMEDIATAMENTE con los horarios, sin preguntar de nuevo qué tema prefiere.
@@ -664,7 +664,7 @@ Sigue siempre este orden:
 ⚠️ Patrón "Y el X" / "Y la X" → el usuario está AGREGANDO una pregunta puntual sobre X a la conversación en curso. SIEMPRE responde primero esa pregunta concreta y luego retoma el hilo si aplica. NUNCA ignores la pregunta agregada ni la reemplaces con el bloque de curso/horarios.
 ⚠️ SALUDO SIMPLE ("hola", "hola buenas", "hola buena tarde", "buenas tardes", "buenas noches", "buenos días") → SIEMPRE responde primero el saludo con calidez ("¡Buenas tardes! 😊 Bienvenida a Crystal Diamante...") antes de retomar cualquier contexto previo. NUNCA empieces directamente con "Perfecto, te refieres a [curso]" sin saludar.
 ⚠️ "Te estoy saludando" / "solo te saludé" / "te dije hola" / "solo te digo hola" → el usuario está indicando que el bot se adelantó demasiado rápido. DEBES: 1) disculparte brevemente ("¡Perdona! 😊"), 2) saludar con calidez, 3) preguntar "¿En qué te puedo ayudar?". NUNCA continúes con información del curso cuando recibes esta respuesta.
-⚠️ "Que incluye" / "qué incluye" / "qué incluye el curso" cuando ya hay un programa identificado → responde directamente con lo que incluye EL CURSO: temario completo, kit mensual (~70% de productos), uniforme, certificado y ceremonia de grado. NUNCA devuelvas el menú de doble opción "¿horarios e inversión o separar cupo?".
+⚠️ "Que incluye" / "qué incluye" / "qué incluye el curso" cuando ya hay un programa identificado → responde directamente con lo que incluye EL CURSO: temario completo, kit mensual (100% de materiales del mes), uniforme, certificado y ceremonia de grado. NUNCA devuelvas el menú de doble opción "¿horarios e inversión o separar cupo?".
 ⚠️ "Y cuántas horas son" / "cuántas horas" / "cuántas horas dura" / "cuántas horas tiene" → responde DIRECTAMENTE con las horas por sesión. Ejemplo: "Son 3 horas por clase (de 4:00 PM a 7:00 PM), una vez a la semana. En total son 20 clases en 5 meses." NUNCA repitas el bloque completo de inicio/horario/cupo como respuesta a esta pregunta.
 ⚠️ "desde cero" / "enseñan desde cero" / "aprenden desde cero" / "es desde cero" / "se aprende desde cero" → el usuario está preguntando si el curso es para PRINCIPIANTES (sin experiencia previa). NO es el nombre de un programa. SIEMPRE confirma: "¡Sí! No necesitas ninguna experiencia previa, el programa está diseñado desde cero." NUNCA respondas que "desde cero no está disponible como programa" ni listes otros cursos como alternativa.
 ⚠️ "manicura", "pedicura", "manicuría", "pedi-spa" o errores de escritura similares (ej: "maniura") se refieren al programa de uñas. Interprétalo como *Artista Integral en Uñas* y responde con ese programa.
@@ -686,12 +686,12 @@ Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
 - Horarios (cuando ya se identificó el programa): da directamente la información de días y horarios del programa en cuestión. NO preguntes de nuevo qué quiere saber.
 - Sábados (cuando hay grupo en sábado): confirma el horario disponible y pregunta si le queda bien.
 - Sábados (cuando NO hay grupo en sábado): di claramente que por ahora no hay grupo los sábados. Valida que es una situación entendible si trabajan entre semana. Pregunta si quieren quedar en lista de espera para cuando se abra un grupo en ese horario. NO ofrezcas el grupo de martes ni ningún otro día como alternativa sin que te lo pidan.
-- Uniforme / kit primer día: la camisa uniforme ya viene incluida en el valor vigente de separación del cupo. Si la promo de abril está activa, aclara que *hasta el 30 de abril* la inscripción está en *$120.000* (antes *$190.000*). Ese valor también incluye ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. El kit de materiales se entrega al inicio de cada mes junto con el pago de mensualidad; contiene aproximadamente el 70% de los productos que se usan durante ese mes de clases. El primer día puedes venir con ropa cómoda, no necesitas llevar nada.
+- Uniforme / kit primer día: la camisa uniforme ya viene incluida en el valor vigente de separación del cupo. Si la promo de abril está activa, aclara que *hasta el 30 de abril* la inscripción está en *$120.000* (antes *$190.000*). Ese valor también incluye ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. El kit de materiales se entrega al inicio de cada mes junto con el pago de mensualidad; cubre 100% de los materiales del mes de clases. El primer día puedes venir con ropa cómoda, no necesitas llevar nada.
 - "¿Cuántas clases cubre la mensualidad?": cada mensualidad cubre 4 clases aproximadamente (el programa es de 20 clases en 5 meses). Ofrece detallar el contenido de algún mes específico.
 - "¿No le rebajan a la mensualidad?" / negociación de precio: la mensualidad tiene un precio fijo de $300.000. Sin embargo, Sistecredito permite financiar en cuotas. ¿Quieres que te explique cómo funciona esa opción?
 - Fotos del kit: di que puedes conseguirlas, pide confirmar programa/ciclo para enviar las correctas.
-- ¿Qué trae el kit?: explica que el kit incluye aproximadamente el 70% de los productos que se usan durante ese mes de clases (varía por ciclo). Pregunta si quiere el detalle del primer mes o de un ciclo específico.
-- ¿Es kit básico?: confirma que el kit cubre aproximadamente el 70% de los productos que se usan ese mes (lo esencial para practicar); aclara que los materiales específicos varían por ciclo y ofrece detallar el primer ciclo.
+- ¿Qué trae el kit?: explica que en modalidad mensual se cubre 100% de materiales del mes (varía por ciclo). Pregunta si quiere el detalle del primer mes o de un ciclo específico.
+- ¿Es kit básico?: confirma que en modalidad mensual se cubre 100% de materiales del mes; aclara que los materiales específicos varían por ciclo y ofrece detallar el primer ciclo.
 - ¿Qué enseñan?: responde con enfoque del programa (cejas/pestañas, práctico desde cero) y pregunta qué le interesa más.
 - ¿Puedo ir personal?: confirma atención personal y pide día y hora para agendar.
 - ¿Hay sede más cerca?: valida la inquietud, indica sede disponible y pide zona/barrio para sugerir la opción más conveniente.
@@ -1935,11 +1935,11 @@ function extractPaymentOptionSelection(message: string): "a" | "b" | "por_clase"
   const text = normalizeForMatch(message);
   if (!text) return null;
 
-  if (/^(a|opcion a|opciona|mensual a|mensual opcion a)$/i.test(text)) return "a";
+  if (/^(a|opcion a|opciona|mensual a|mensual opcion a)$/i.test(text)) return "b";
   if (/^(b|opcion b|opcionb|mensual b|mensual opcion b)$/i.test(text)) return "b";
   if (/^(por clase|clase|pago por clase)$/i.test(text)) return "por_clase";
 
-  if (/\b(tomare|escojo|elijo|me quedo con|prefiero|voy con)\b.*\b(opcion\s*a|mensual\s*(opcion\s*)?a|260\s*000|260000)\b/i.test(text)) return "a";
+  if (/\b(tomare|escojo|elijo|me quedo con|prefiero|voy con)\b.*\b(opcion\s*a|mensual\s*(opcion\s*)?a)\b/i.test(text)) return "b";
   if (/\b(tomare|escojo|elijo|me quedo con|prefiero|voy con)\b.*\b(opcion\s*b|mensual\s*(opcion\s*)?b|300\s*000|300000)\b/i.test(text)) return "b";
   if (/\b(tomare|escojo|elijo|me quedo con|prefiero|voy con)\b.*\b(por\s+clase|clase)\b/i.test(text)) return "por_clase";
 
@@ -2923,19 +2923,11 @@ function resolveInscriptionOffer(baseInscripcion: number) {
 function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) {
   const baseInscripcion = Number(detectedProgram?.precio_inscripcion ?? primaryCourse?.precio_inscripcion ?? 0);
   const inscriptionOffer = resolveInscriptionOffer(baseInscripcion);
-  const mensual70 = Number(
-    detectedProgram?.precio_mensual_70
-    ?? primaryCourse?.precio_mensual_70
-    ?? detectedProgram?.precio_mensualidad
-    ?? primaryCourse?.precio_mensualidad
-    ?? 0
-  );
   const mensual100 = Number(
     detectedProgram?.precio_mensual_100
     ?? primaryCourse?.precio_mensual_100
     ?? detectedProgram?.precio_mensualidad
     ?? primaryCourse?.precio_mensualidad
-    ?? mensual70
     ?? 0
   );
   const porClase = Number(detectedProgram?.precio_por_clase ?? primaryCourse?.precio_por_clase ?? 0);
@@ -2946,11 +2938,9 @@ function resolveProgramPaymentOptions(detectedProgram: any, primaryCourse: any) 
     inscripcionPromoActiva: inscriptionOffer.promoActive,
     inscripcionPromoHeadline: inscriptionOffer.promoHeadline,
     inscripcionUrgencyLine: inscriptionOffer.urgencyLine,
-    mensual70,
     mensual100,
     porClase,
     inscripcionText: inscriptionOffer.promoShortText,
-    mensual70Text: mensual70 > 0 ? formatCurrencyCOP(mensual70) : "Por confirmar",
     mensual100Text: mensual100 > 0 ? formatCurrencyCOP(mensual100) : "Por confirmar",
     porClaseText: porClase > 0 ? formatCurrencyCOP(porClase) : "Por confirmar",
   };
@@ -3434,7 +3424,7 @@ function isPaymentValidationQuestion(message: string): boolean {
   if (!text) return false;
 
   const asksConfirmation = /\b(es\s+cierto|es\s+verdad|verdad|vale|correcto|correcta|confirmame|confirmar|si\s+o\s+no)\b/i.test(text) || /[?¿]/.test(message);
-  const mentionsPaymentCase = /\b(opcion\s+a|opcion\s+b|mensualidad|300\s*000|300000|260\s*000|260000|por\s+clase|5\s+meses|durante\s+los\s+5\s+meses|cada\s+mes|todo\s+el\s+curso|inscripcion)\b/i.test(text);
+  const mentionsPaymentCase = /\b(opcion\s+b|mensualidad|300\s*000|300000|por\s+clase|5\s+meses|durante\s+los\s+5\s+meses|cada\s+mes|todo\s+el\s+curso|inscripcion)\b/i.test(text);
 
   return asksConfirmation && mentionsPaymentCase;
 }
@@ -3462,7 +3452,7 @@ function isMaterialsOwnershipQuestion(message: string): boolean {
 function buildKitContentsReply(detectedProgram: any | null): string {
   const programLabel = detectedProgram?.nombre ? ` para *${detectedProgram.nombre}*` : "";
 
-  return `¡Claro! 🙌 Te cuento qué incluye el *kit mensual*${programLabel}:\n\n✅ Limas y buffer\n✅ Palitos de naranjo y/o herramientas básicas de preparación\n✅ Base, gel de construcción y top coat\n✅ Deshidratador/prep y primer\n✅ Tips o formas (según la clase)\n✅ Decoración básica del mes\n✅ Insumos de práctica para las técnicas del ciclo\n\n📌 El kit cubre aproximadamente el *70%* de lo que se usa en ese mes.\n✅ Los materiales del kit son *totalmente tuyos* y *te los llevas*.\n\nSi quieres, te detallo exactamente qué se usa en el *primer mes*.`;
+  return `¡Claro! 🙌 Te cuento qué incluye el *kit mensual*${programLabel}:\n\n✅ Limas y buffer\n✅ Palitos de naranjo y/o herramientas básicas de preparación\n✅ Base, gel de construcción y top coat\n✅ Deshidratador/prep y primer\n✅ Tips o formas (según la clase)\n✅ Decoración básica del mes\n✅ Insumos de práctica para las técnicas del ciclo\n\n📌 En modalidad mensual se cubre el *100%* de materiales del mes.\n✅ Los materiales del kit son *totalmente tuyos* y *te los llevas*.\n\nSi quieres, te detallo exactamente qué se usa en el *primer mes*.`;
 }
 
 function buildMaterialsDirectResponse(
@@ -4906,7 +4896,7 @@ function buildIntentFocusedDirectResponse(
     }
 
     if (paymentOptionSelection === "b") {
-      return `Excelente 🙌 Quedas con *Mensual Opción B* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción separa tu cupo y la mensualidad la puedes pagar hasta la segunda clase. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
+      return `Excelente 🙌 Quedas con *Mensual* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción separa tu cupo y la mensualidad la puedes pagar hasta la segunda clase. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
     }
 
     return `Perfecto 🙌 Quedas en *Por Clase* con *${options.porClaseText}* por clase (no incluye materiales).\n\nLa inscripción separa tu cupo y luego pagas por asistencia. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
@@ -5176,11 +5166,11 @@ function buildIntentFocusedDirectResponse(
     const durationLabel = durationMonths ? `${durationMonths} meses` : "la duración del curso";
 
     if (/\b(opcion\s*b|mensual\s+opcion\s*b|300\s*000|300000)\b/i.test(normalizedValidation)) {
-      return `Sí, correcto ✅ En *Mensual Opción B* pagas *${options.mensual100Text}* cada mes durante *${durationLabel}*.
+      return `Sí, correcto ✅ En *Mensual* pagas *${options.mensual100Text}* cada mes durante *${durationLabel}*.
 La inscripción se paga una sola vez para separar cupo.`;
     }
 
-    if (/\b(opcion\s*a|mensual\s+opcion\s*a|260\s*000|260000)\b/i.test(normalizedValidation)) {
+    if (/\b(opcion\s*a|mensual\s+opcion\s*a)\b/i.test(normalizedValidation)) {
       return `Actualmente manejamos el plan *Mensual* a *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción se paga una sola vez para separar cupo. ¿Te interesa ese plan?`;
     }
 
@@ -5528,7 +5518,6 @@ ${catalogReply}`;
     const priceOptions = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
     const inscripcion = priceOptions.inscripcion;
     const insText = priceOptions.inscripcionText;
-    const men70Text = priceOptions.mensual70Text;
     const men100Text = priceOptions.mensual100Text;
     const porClaseText = priceOptions.porClaseText;
 
@@ -5556,14 +5545,11 @@ ${catalogReply}`;
     }
 
     if (asksTotalToPay) {
-      const totalInicio70 = (inscripcion > 0 && priceOptions.mensual70 > 0)
-        ? formatCurrencyCOP(inscripcion + priceOptions.mensual70)
-        : "Por confirmar";
       const totalInicio100 = (inscripcion > 0 && priceOptions.mensual100 > 0)
         ? formatCurrencyCOP(inscripcion + priceOptions.mensual100)
         : "Por confirmar";
 
-      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con Mensual Opción A:* ${totalInicio70}\n• *Inicio con Mensual Opción B:* ${totalInicio100}\n• *Inicio con Por Clase:* inscripción + ${porClaseText} por cada clase que asistas\n\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n✅ Empiezas con inscripción y eliges la modalidad que mejor te funcione.\nSi lo necesitas, la mensualidad puede completarse hasta la segunda clase.`;
+      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con Mensual:* ${totalInicio100}\n• *Inicio con Por Clase:* inscripción + ${porClaseText} por cada clase que asistas\n\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n✅ Empiezas con inscripción y eliges la modalidad que mejor te funcione.\nSi lo necesitas, la mensualidad puede completarse hasta la segunda clase.`;
     }
 
     if (asksPartialPayment) {

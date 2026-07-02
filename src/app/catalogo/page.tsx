@@ -33,7 +33,6 @@ type Programa = {
   precio_inscripcion?: number | null;
   precio_mensualidad?: number | null;
   precio_por_clase?: number | null;
-  precio_mensual_70?: number | null;
   precio_mensual_100?: number | null;
   emoji?: string | null;
   activo?: boolean | null;
@@ -83,7 +82,7 @@ export default function CatalogoCursosPage() {
         const [{ data: programasData }, { data: gruposData }] = await Promise.all([
           supabaseBrowserClient
             .from("programas")
-            .select("id, nombre, descripcion, duracion, total_clases, precio_inscripcion, precio_mensualidad, precio_por_clase, precio_mensual_70, precio_mensual_100, emoji, activo")
+            .select("id, nombre, descripcion, duracion, total_clases, precio_inscripcion, precio_mensualidad, precio_por_clase, precio_mensual_100, emoji, activo")
             .eq("activo", true)
             .order("nombre", { ascending: true }),
           supabaseBrowserClient
@@ -198,14 +197,10 @@ export default function CatalogoCursosPage() {
         : proximoTextoRaw;
 
       const precioPorClaseValue = Number(selectedPrograma.precio_por_clase ?? 0);
-      const precioMensualOpcionAValue = Number(selectedPrograma.precio_mensual_70 ?? selectedPrograma.precio_mensualidad ?? 0);
       const precioMensualOpcionBValue = Number(selectedPrograma.precio_mensual_100 ?? selectedPrograma.precio_mensualidad ?? 0);
 
       const precioPorClase = precioPorClaseValue > 0
         ? `$${precioPorClaseValue.toLocaleString("es-CO")}`
-        : "Consultar";
-      const mensualOpcionA = precioMensualOpcionAValue > 0
-        ? `$${precioMensualOpcionAValue.toLocaleString("es-CO")}`
         : "Consultar";
       const mensualOpcionB = precioMensualOpcionBValue > 0
         ? `$${precioMensualOpcionBValue.toLocaleString("es-CO")}`
@@ -224,9 +219,8 @@ export default function CatalogoCursosPage() {
         duracion,
         totalClases: selectedPrograma.total_clases ? `${selectedPrograma.total_clases} clases` : undefined,
         precioInscripcion: inscripcion,
-        precioMensualidad: mensualOpcionA,
+        precioMensualidad: mensualOpcionB,
         precioPorClase,
-        precioMensualOpcionA: mensualOpcionA,
         precioMensualOpcionB: mensualOpcionB,
       });
 
@@ -293,14 +287,10 @@ export default function CatalogoCursosPage() {
               const proximos = proximosPorPrograma[programa.id] || [];
               const emoji = (programa.emoji || "").trim() || "🎯";
               const porClaseValue = Number(programa.precio_por_clase ?? 0);
-              const opcionAValue = Number(programa.precio_mensual_70 ?? programa.precio_mensualidad ?? 0);
               const opcionBValue = Number(programa.precio_mensual_100 ?? programa.precio_mensualidad ?? 0);
 
               const porClase = porClaseValue > 0
                 ? `$${porClaseValue.toLocaleString("es-CO")}`
-                : "Consultar";
-              const mensualOpcionA = opcionAValue > 0
-                ? `$${opcionAValue.toLocaleString("es-CO")}`
                 : "Consultar";
               const mensualOpcionB = opcionBValue > 0
                 ? `$${opcionBValue.toLocaleString("es-CO")}`
@@ -353,11 +343,8 @@ export default function CatalogoCursosPage() {
                       <Tag icon={<DollarOutlined />} color="blue" style={{ width: "fit-content" }}>
                         Por Clase {porClase} · no incluye materiales
                       </Tag>
-                      <Tag color="green" style={{ width: "fit-content" }}>
-                        Mensual Opción A {mensualOpcionA} · incluye ~70% de materiales
-                      </Tag>
                       <Tag color="gold" style={{ width: "fit-content" }}>
-                        Mensual Opción B {mensualOpcionB} · incluye 100% de materiales
+                        Mensualidad {mensualOpcionB} · incluye 100% de materiales
                       </Tag>
                     </Space>
 

@@ -103,7 +103,7 @@ export default function MatriculaCreate() {
 
         const { data: cursoInfo, error: errCursoInfo } = await supabaseBrowserClient
             .from("cursos")
-            .select("id, fecha_inicio, precio_mensualidad, numero_cuotas, duracion, programas(precio_inscripcion, precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase, precio_curso, numero_cuotas)")
+            .select("id, fecha_inicio, precio_mensualidad, numero_cuotas, duracion, programas(precio_inscripcion, precio_mensualidad, precio_mensual_100, precio_por_clase, precio_curso, numero_cuotas)")
             .eq("id", cursoId)
             .single();
 
@@ -121,7 +121,6 @@ export default function MatriculaCreate() {
 
         const montosPlan = resolvePaymentPlanAmounts(modalidadPago, {
             precio_por_clase: programa?.precio_por_clase,
-            precio_mensual_70: programa?.precio_mensual_70,
             precio_mensual_100: programa?.precio_mensual_100,
             precio_mensualidad: (cursoInfo as any)?.precio_mensualidad ?? programa?.precio_mensualidad ?? programa?.precio_curso,
         });
@@ -474,7 +473,7 @@ export default function MatriculaCreate() {
         try {
             const { data: curso, error: errCurso } = await supabaseBrowserClient
                 .from("cursos")
-                .select("cupos, nombre, programa_id, fecha_inicio, precio_mensualidad, programas(precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase)")
+                .select("cupos, nombre, programa_id, fecha_inicio, precio_mensualidad, programas(precio_mensualidad, precio_mensual_100, precio_por_clase)")
                 .eq("id", cursoIdNumber)
                 .single();
 
@@ -491,7 +490,6 @@ export default function MatriculaCreate() {
 
             setProgramaPricingCurso({
                 precio_por_clase: programaRaw?.precio_por_clase,
-                precio_mensual_70: programaRaw?.precio_mensual_70,
                 precio_mensual_100: programaRaw?.precio_mensual_100,
                 precio_mensualidad: (curso as any)?.precio_mensualidad ?? programaRaw?.precio_mensualidad,
             });
@@ -527,7 +525,7 @@ export default function MatriculaCreate() {
 
         const { data: cursoConfig } = await supabaseBrowserClient
             .from("cursos")
-            .select("precio_mensualidad, programas(precio_mensualidad, precio_mensual_70, precio_mensual_100, precio_por_clase)")
+            .select("precio_mensualidad, programas(precio_mensualidad, precio_mensual_100, precio_por_clase)")
             .eq("id", curso_id)
             .maybeSingle();
 
@@ -537,7 +535,6 @@ export default function MatriculaCreate() {
 
         const planPago = resolvePaymentPlanAmounts(modalidadPago, {
             precio_por_clase: programaConfigRaw?.precio_por_clase,
-            precio_mensual_70: programaConfigRaw?.precio_mensual_70,
             precio_mensual_100: programaConfigRaw?.precio_mensual_100,
             precio_mensualidad: (cursoConfig as any)?.precio_mensualidad ?? programaConfigRaw?.precio_mensualidad,
         });

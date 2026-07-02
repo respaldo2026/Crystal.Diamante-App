@@ -99,7 +99,7 @@ export default function MatriculaEdit() {
             if (!programaId) return;
             const { data } = await supabaseBrowserClient
                 .from("programas")
-                .select("precio_por_clase, precio_mensual_70, precio_mensual_100, precio_mensualidad")
+                .select("precio_por_clase, precio_mensual_100, precio_mensualidad")
                 .eq("id", programaId)
                 .maybeSingle();
 

@@ -1088,9 +1088,9 @@ function buildMaterialsContext(
         const qty = formatMaterialQuantity(item.cantidad, item.unidad)
         const cobertura = String(item.cobertura_material || '').trim().toUpperCase()
         const kit = cobertura === 'MENSUAL_100'
-          ? ' (solo incluido en mensual 100)'
+          ? ' (incluido en mensualidad 100%)'
           : cobertura === 'MENSUAL_70' || item.incluido_kit
-            ? ' (incluido desde mensual 70)'
+            ? ' (incluido en mensualidad 100%)'
             : ''
         text += `      - ${qty} de ${nombre}${kit}\n`
       })

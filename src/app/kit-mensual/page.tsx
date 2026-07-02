@@ -288,7 +288,7 @@ export default function KitMensualPage() {
           const curso = Array.isArray(m?.cursos) ? m.cursos[0] : m?.cursos;
           const programa = Array.isArray(curso?.programas) ? curso.programas[0] : curso?.programas;
           const modalidad = normalizeModalidadPago(m?.modalidad_pago);
-          const planLabel = modalidad === "MENSUAL_100" ? "Mensual 100" : "Mensual 70";
+          const planLabel = modalidad === "MENSUAL_100" ? "Mensual 100" : "Mensual";
 
           const pagosMatricula = (pagosPorMatricula.get(String(m.id)) || []).filter((p: any) => !esPagoInscripcion(p));
 
@@ -568,7 +568,7 @@ export default function KitMensualPage() {
         style={{ marginBottom: 16 }}
       >
         <Text type="secondary">
-          Esta vista solo muestra estudiantes con plan mensual (Mensual 70/100). Puedes imprimir el listado de materiales por ciclo en formato ticket 80mm.
+          Esta vista solo muestra estudiantes con plan mensual (100% materiales). Puedes imprimir el listado de materiales por ciclo en formato ticket 80mm.
         </Text>
 
         <Row gutter={[12, 12]} style={{ marginTop: 12 }}>

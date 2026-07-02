@@ -319,25 +319,19 @@ export default function GestorPensum({
     const normalizedCoverage = normalizeMaterialCoverage(coverage, includedKit);
     return {
       porClase: normalizedCoverage === "NINGUNO",
-      mensual70: normalizedCoverage === "MENSUAL_70",
-      mensual100: normalizedCoverage === "MENSUAL_70" || normalizedCoverage === "MENSUAL_100",
+      mensual100: normalizedCoverage === "MENSUAL_100",
     };
   };
 
   const renderPlanCheck = (
     included: boolean,
-    tone: "porClase" | "mensual70" | "mensual100",
+    tone: "porClase" | "mensual100",
   ) => {
     const cellStyles = {
       porClase: {
         includedBg: "#f8fafc",
         idleBg: "#ffffff",
         border: "#e2e8f0",
-      },
-      mensual70: {
-        includedBg: "#f0f9ff",
-        idleBg: "#f8fdff",
-        border: "#e0f2fe",
       },
       mensual100: {
         includedBg: "#f0fdf4",
@@ -372,11 +366,10 @@ export default function GestorPensum({
 
   const renderPlanHeader = (
     label: string,
-    tone: "porClase" | "mensual70" | "mensual100",
+    tone: "porClase" | "mensual100",
   ) => {
     const styles = {
       porClase: { bg: "#f1f5f9", border: "#cbd5e1", color: "#475569" },
-      mensual70: { bg: "#e0f2fe", border: "#7dd3fc", color: "#0369a1" },
       mensual100: { bg: "#dcfce7", border: "#86efac", color: "#166534" },
     };
 
@@ -454,7 +447,7 @@ export default function GestorPensum({
   const [tipoOrigen, setTipoOrigen] = useState<'archivo' | 'enlace' | 'iframe'>('archivo');
   const [mostrarListaCompletaCiclo, setMostrarListaCompletaCiclo] = useState(false);
   const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
-  const [filtroCoberturaMateriales, setFiltroCoberturaMateriales] = useState<"todos" | "NINGUNO" | "MENSUAL_70" | "MENSUAL_100">("todos");
+  const [filtroCoberturaMateriales, setFiltroCoberturaMateriales] = useState<"todos" | "NINGUNO" | "MENSUAL_100">("todos");
   const [mostrarTablaMaestraClases, setMostrarTablaMaestraClases] = useState(false);
   const [vistaCicloActiva, setVistaCicloActiva] = useState<"temas" | "material" | "necesarios" | "quiz">("temas");
   const [filtroTemas, setFiltroTemas] = useState<"todos" | "pendientes" | "completos">("todos");
@@ -2580,10 +2573,6 @@ export default function GestorPensum({
                         value: "NINGUNO",
                       },
                       {
-                        label: `Plan base (${materialesCicloGeneralOrdenados.filter((item) => normalizeMaterialCoverage(item.cobertura_material, item.incluido_kit) === "MENSUAL_70").length})`,
-                        value: "MENSUAL_70",
-                      },
-                      {
                         label: `Plan 100 (${materialesCicloGeneralOrdenados.filter((item) => normalizeMaterialCoverage(item.cobertura_material, item.incluido_kit) === "MENSUAL_100").length})`,
                         value: "MENSUAL_100",
                       },
@@ -2628,16 +2617,6 @@ export default function GestorPensum({
                       dataIndex: "cantidad",
                       render: (value) => value || "Cantidad por definir",
                       width: 120,
-                    },
-                    {
-                      title: renderPlanHeader("Mensual 70", "mensual70"),
-                      key: "incluye_mensual_70",
-                      align: "center",
-                      width: 120,
-                      render: (_value, record: MaterialCiclo) => {
-                        const matrix = resolveCoverageMatrix(record?.cobertura_material, record?.incluido_kit);
-                        return renderPlanCheck(matrix.mensual70, "mensual70");
-                      },
                     },
                     {
                       title: renderPlanHeader("Mensual 100", "mensual100"),
@@ -3057,19 +3036,6 @@ export default function GestorPensum({
                                 width: 120,
                               },
                               {
-                                title: renderPlanHeader("Mensual 70", "mensual70"),
-                                key: "incluye_mensual_70",
-                                align: "center",
-                                width: 120,
-                                render: (_value, record: MaterialClase) => {
-                                  const matrix = resolveCoverageMatrix(
-                                    record.materiales_ciclo?.cobertura_material,
-                                    record.materiales_ciclo?.incluido_kit,
-                                  );
-                                  return renderPlanCheck(matrix.mensual70, "mensual70");
-                                },
-                              },
-                              {
                                 title: renderPlanHeader("Mensual 100", "mensual100"),
                                 key: "incluye_mensual_100",
                                 align: "center",
@@ -3225,8 +3191,7 @@ export default function GestorPensum({
             <Select
               options={[
                 { value: "NINGUNO", label: "No incluido en mensualidad" },
-                { value: "MENSUAL_70", label: "Incluido desde Mensual 70" },
-                { value: "MENSUAL_100", label: "Solo incluido en Mensual 100" },
+                { value: "MENSUAL_100", label: "Incluido en mensualidad 100%" },
               ]}
             />
           </Form.Item>
@@ -3236,7 +3201,7 @@ export default function GestorPensum({
             showIcon
             style={{ marginBottom: 12 }}
             message="Recomendación"
-            description="Usa 'Mensual 70' para materiales base compartidos y 'Mensual 100' para materiales premium o completos que solo recibe ese plan."
+            description="Marca como incluido en mensualidad 100% los materiales que se entregan con el plan mensual completo."
           />
 
           <Form.Item name="orden" label="Orden" initialValue={1}>

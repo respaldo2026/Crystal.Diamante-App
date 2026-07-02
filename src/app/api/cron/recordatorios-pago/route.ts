@@ -387,7 +387,7 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
         const fecha = fechaMes.charAt(0).toUpperCase() + fechaMes.slice(1);
 
         let montoNumero = Number(cuota.monto || 0);
-        if (modalidadPago === 'MENSUAL_70' || modalidadPago === 'MENSUAL_100') {
+        if (modalidadPago === 'MENSUAL_100') {
           montoNumero = Number(matricula?.valor_mensual_plan || plan.montoMensual || montoNumero || 0);
         }
         if (modalidadPago === 'POR_CLASE' && montoNumero <= 0) {

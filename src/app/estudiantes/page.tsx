@@ -185,7 +185,7 @@ export default function EstudiantesList() {
     const [groupFilter, setGroupFilter] = useState<string | undefined>(undefined);
     const [shirtSizeFilter, setShirtSizeFilter] = useState<string | undefined>(undefined);
     const [contactFilter, setContactFilter] = useState<string | undefined>(undefined);
-    const [paymentPlanFilter, setPaymentPlanFilter] = useState<'POR_CLASE' | 'MENSUAL_70' | 'MENSUAL_100' | undefined>(undefined);
+    const [paymentPlanFilter, setPaymentPlanFilter] = useState<'POR_CLASE' | 'MENSUAL_100' | undefined>(undefined);
     const [sortMode, setSortMode] = useState<'name_asc' | 'name_desc' | 'recent' | 'oldest'>('name_asc');
     const [asistStats, setAsistStats] = useState<Record<number, { total: number; present: number; porcentaje: number; minimo: number; cumple: boolean; tieneDatos: boolean }>>({});
     const [loadingAsist, setLoadingAsist] = useState(false);
@@ -500,7 +500,6 @@ export default function EstudiantesList() {
 
     const paymentPlanOptions = useMemo(() => ([
         { label: getPaymentPlan('POR_CLASE').label, value: 'POR_CLASE' },
-        { label: getPaymentPlan('MENSUAL_70').label, value: 'MENSUAL_70' },
         { label: getPaymentPlan('MENSUAL_100').label, value: 'MENSUAL_100' },
     ]), []);
 

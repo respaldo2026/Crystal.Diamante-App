@@ -1405,7 +1405,7 @@ export default function StudentDetailView() {
     const modalidadDesdePagos = modalidadRawDesdePagos
       ? normalizeModalidadPago(modalidadRawDesdePagos)
       : null;
-    const modalidadEfectiva = modalidadPago || modalidadDesdePagos || "MENSUAL_70";
+    const modalidadEfectiva = modalidadPago || modalidadDesdePagos || "MENSUAL_100";
     const esPorClase = modalidadEfectiva === "POR_CLASE";
     const cuotasRelevantes = esPorClase
       ? cuotasMatricula

@@ -25,7 +25,6 @@ type MatriculaEditable = {
         programas?: {
             nombre?: string | null;
             precio_por_clase?: number | null;
-            precio_mensual_70?: number | null;
             precio_mensual_100?: number | null;
             precio_mensualidad?: number | null;
             numero_cuotas?: number | null;
@@ -114,7 +113,6 @@ export default function EditEstudiante() {
                     programas:programa_id(
                         nombre,
                         precio_por_clase,
-                        precio_mensual_70,
                         precio_mensual_100,
                         precio_mensualidad,
                         numero_cuotas
@@ -319,7 +317,6 @@ export default function EditEstudiante() {
 
                 const programaPricing: ProgramaPaymentConfig = {
                     precio_por_clase: matricula?.cursos?.programas?.precio_por_clase,
-                    precio_mensual_70: matricula?.cursos?.programas?.precio_mensual_70,
                     precio_mensual_100: matricula?.cursos?.programas?.precio_mensual_100,
                     precio_mensualidad: matricula?.cursos?.precio_mensualidad ?? matricula?.cursos?.programas?.precio_mensualidad,
                 };
@@ -514,7 +511,6 @@ export default function EditEstudiante() {
                         const modalidadActual = normalizeModalidadPago(modalidadesMatriculaWatch[String(matricula.id)] || matricula.modalidad_pago || MODALIDAD_PAGO_DEFAULT);
                         const pricingPrograma: ProgramaPaymentConfig = {
                             precio_por_clase: matricula?.cursos?.programas?.precio_por_clase,
-                            precio_mensual_70: matricula?.cursos?.programas?.precio_mensual_70,
                             precio_mensual_100: matricula?.cursos?.programas?.precio_mensual_100,
                             precio_mensualidad: matricula?.cursos?.precio_mensualidad ?? matricula?.cursos?.programas?.precio_mensualidad,
                         };
