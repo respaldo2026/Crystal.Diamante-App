@@ -136,21 +136,31 @@ function applyHourToDate(base: dayjs.Dayjs, horaInicio?: string | null): dayjs.D
 }
 
 function calcularProximaClaseInfo(grupo: GrupoAcademico): { label: string; date: dayjs.Dayjs } | null {
-  const { dias_semana, hora_inicio } = grupo;
+  const { dias_semana, hora_inicio, fecha_inicio } = grupo;
   const numeroDias = parseDays(dias_semana || null);
   if (numeroDias.length === 0) return null;
 
   const ahora = dayjs();
+  const inicioProgramado = fecha_inicio ? applyHourToDate(dayjs(fecha_inicio), hora_inicio || null) : null;
+  const referencia = inicioProgramado && inicioProgramado.isAfter(ahora) ? inicioProgramado : ahora;
+
   for (let i = 0; i <= 14; i += 1) {
-    const candidatoDia = ahora.add(i, "day");
+    const candidatoDia = referencia.add(i, "day");
     if (!numeroDias.includes(candidatoDia.day())) continue;
 
     const candidato = applyHourToDate(candidatoDia, hora_inicio || null);
+    if (inicioProgramado && candidato.isBefore(inicioProgramado)) continue;
     if (candidato.isBefore(ahora)) continue;
 
     const horaFmt = hora_inicio ? dayjs(hora_inicio, "HH:mm:ss").format("hh:mm A") : null;
     const sufijo = horaFmt ? ` · ${horaFmt}` : "";
-    const label = i === 0 ? `Hoy${sufijo}` : i === 1 ? `Mañana${sufijo}` : `${candidatoDia.format("ddd DD MMM")}${sufijo}`;
+    const diffDias = candidato.startOf("day").diff(ahora.startOf("day"), "day");
+    const label =
+      diffDias === 0
+        ? `Hoy${sufijo}`
+        : diffDias === 1
+          ? `Mañana${sufijo}`
+          : `${candidatoDia.format("ddd DD MMM")}${sufijo}`;
 
     return { label, date: candidato };
   }
