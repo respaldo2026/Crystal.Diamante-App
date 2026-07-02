@@ -37,6 +37,10 @@ type Params = {
 };
 
 const XP_POR_NIVEL = 250;
+const OBJETIVO_ASISTENCIA_SEMANAL = 1;
+const OBJETIVO_RACHA_SEMANAL = 3;
+const OBJETIVO_SEMANAS_RECIENTES = 4;
+const OBJETIVO_SEMANAS_RECIENTES_CUMPLIDAS = 3;
 
 const getWeekKey = (fecha: dayjs.Dayjs) => fecha.startOf("week").format("YYYY-MM-DD");
 
@@ -99,10 +103,6 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
     const quizIntentosArray = Array.isArray(quizIntentos) ? quizIntentos : [];
 
     const presentes = asistenciasArray.filter((a: any) => String(a?.estado || "").toLowerCase() === "presente");
-    const ausentes = asistenciasArray.filter((a: any) => {
-      const estado = String(a?.estado || "").toLowerCase();
-      return estado === "ausente" || estado === "falta";
-    });
 
     const quizzesAprobados = quizIntentosArray.filter((item: any) => quizAprobado(item));
 
@@ -110,18 +110,21 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
       .map((a: any) => dayjs(String(a?.fecha || "")))
       .filter((d: dayjs.Dayjs) => d.isValid());
 
+    const semanasConAsistencia = new Set(presentesFechas.map(getWeekKey));
+
     const semanaActual = dayjs().startOf("week");
     const semanaActualFin = semanaActual.endOf("week");
 
     const presentesSemana = presentesFechas.filter((d) => d.isAfter(semanaActual.subtract(1, "millisecond")) && d.isBefore(semanaActualFin.add(1, "millisecond"))).length;
+    const asistenciaSemanaCumplida = presentesSemana >= OBJETIVO_ASISTENCIA_SEMANAL;
+
+    const ultimasSemanas = Array.from({ length: OBJETIVO_SEMANAS_RECIENTES }, (_, i) =>
+      semanaActual.subtract(i, "week").startOf("week")
+    );
+    const semanasCumplidasRecientes = ultimasSemanas.filter((semana) => semanasConAsistencia.has(getWeekKey(semana))).length;
 
     const quizAprobadosSemana = quizzesAprobados.filter((q: any) => {
       const fecha = dayjs(String(q?.created_at || q?.fecha_presentacion || ""));
-      return fecha.isValid() && fecha.isAfter(semanaActual.subtract(1, "millisecond")) && fecha.isBefore(semanaActualFin.add(1, "millisecond"));
-    }).length;
-
-    const faltasSemana = ausentes.filter((a: any) => {
-      const fecha = dayjs(String(a?.fecha || ""));
       return fecha.isValid() && fecha.isAfter(semanaActual.subtract(1, "millisecond")) && fecha.isBefore(semanaActualFin.add(1, "millisecond"));
     }).length;
 
@@ -149,38 +152,38 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
       {
         id: "asistencia-semanal",
         titulo: "Asistencia semanal",
-        descripcion: "Registra al menos 1 asistencia esta semana.",
-        progresoLabel: `${Math.min(presentesSemana, 1)}/1`,
-        progresoPercent: Math.min(100, presentesSemana >= 1 ? 100 : presentesSemana * 100),
-        completada: presentesSemana >= 1,
+        descripcion: "Cumple tu clase de la semana (1 asistencia).",
+        progresoLabel: `${asistenciaSemanaCumplida ? 1 : 0}/${OBJETIVO_ASISTENCIA_SEMANAL}`,
+        progresoPercent: asistenciaSemanaCumplida ? 100 : 0,
+        completada: asistenciaSemanaCumplida,
         recompensaXp: 40,
+      },
+      {
+        id: "racha-semanal",
+        titulo: "Racha activa",
+        descripcion: "Mantén 3 semanas seguidas asistiendo a tu clase.",
+        progresoLabel: `${Math.min(rachaActual, OBJETIVO_RACHA_SEMANAL)}/${OBJETIVO_RACHA_SEMANAL} sem`,
+        progresoPercent: Math.min(100, Math.round((Math.min(rachaActual, OBJETIVO_RACHA_SEMANAL) / OBJETIVO_RACHA_SEMANAL) * 100)),
+        completada: rachaActual >= OBJETIVO_RACHA_SEMANAL,
+        recompensaXp: 35,
       },
       {
         id: "quiz-semanal",
         titulo: "Quiz de la semana",
-        descripcion: "Aprueba al menos 1 quiz esta semana.",
+        descripcion: "Aprueba 1 quiz en la semana para consolidar tu avance.",
         progresoLabel: `${Math.min(quizAprobadosSemana, 1)}/1`,
         progresoPercent: Math.min(100, quizAprobadosSemana >= 1 ? 100 : quizAprobadosSemana * 100),
         completada: quizAprobadosSemana >= 1,
         recompensaXp: 30,
       },
       {
-        id: "sin-faltas",
-        titulo: "Semana impecable",
-        descripcion: "No tener faltas registradas esta semana.",
-        progresoLabel: faltasSemana === 0 ? "Completa" : `${faltasSemana} falta(s)`,
-        progresoPercent: faltasSemana === 0 ? 100 : 40,
-        completada: faltasSemana === 0,
-        recompensaXp: 20,
-      },
-      {
-        id: "asistencia-global",
-        titulo: "Meta de asistencia",
-        descripcion: "Mantén asistencia global en 80% o más.",
-        progresoLabel: `${asistenciaPromedio}%/80%`,
-        progresoPercent: Math.min(100, Math.round((asistenciaPromedio / 80) * 100)),
-        completada: asistenciaPromedio >= 80,
-        recompensaXp: 80,
+        id: "constancia-mensual",
+        titulo: "Constancia mensual",
+        descripcion: "Asiste al menos 3 de tus últimas 4 semanas.",
+        progresoLabel: `${Math.min(semanasCumplidasRecientes, OBJETIVO_SEMANAS_RECIENTES_CUMPLIDAS)}/${OBJETIVO_SEMANAS_RECIENTES_CUMPLIDAS} sem`,
+        progresoPercent: Math.min(100, Math.round((Math.min(semanasCumplidasRecientes, OBJETIVO_SEMANAS_RECIENTES_CUMPLIDAS) / OBJETIVO_SEMANAS_RECIENTES_CUMPLIDAS) * 100)),
+        completada: semanasCumplidasRecientes >= OBJETIVO_SEMANAS_RECIENTES_CUMPLIDAS,
+        recompensaXp: 50,
       },
     ];
 
@@ -188,16 +191,23 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
       {
         id: "primera-clase",
         titulo: "Primer paso",
-        descripcion: "Completaste tu primera clase.",
+        descripcion: "Cumpliste tu primera semana de clase.",
         icono: "🚀",
-        desbloqueado: presentes.length >= 1,
+        desbloqueado: semanasConAsistencia.size >= 1,
       },
       {
-        id: "ocho-clases",
+        id: "cuatro-semanas",
         titulo: "Ritmo constante",
-        descripcion: "Completaste 8 clases.",
+        descripcion: "Completaste 4 semanas con asistencia.",
         icono: "🔥",
-        desbloqueado: presentes.length >= 8,
+        desbloqueado: semanasConAsistencia.size >= 4,
+      },
+      {
+        id: "doce-semanas",
+        titulo: "Disciplina de trimestre",
+        descripcion: "Completaste 12 semanas con asistencia.",
+        icono: "📅",
+        desbloqueado: semanasConAsistencia.size >= 12,
       },
       {
         id: "quiz-master",
@@ -209,7 +219,7 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
       {
         id: "asistencia-elite",
         titulo: "Asistencia Elite",
-        descripcion: "Mantienes 85% o más de asistencia.",
+        descripcion: "Mantienes 85% o más en asistencia general.",
         icono: "🎯",
         desbloqueado: asistenciaPromedio >= 85,
       },
