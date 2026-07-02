@@ -345,9 +345,22 @@ export default function CajaPage() {
   const [valorEntregado, setValorEntregado] = useState<number | null>(null);
   const [mediosPago, setMediosPago] = useState<any[]>([]);
 
-  const intentarImprimirTicket = useCallback(async (ticketData: any) => {
+  const intentarImprimirTicket = useCallback(async (ticketData: any, preOpenedWindow?: Window | null) => {
     try {
-      const placeholder = window.open("", "_blank");
+      const nombreImpresora = String(configuracion?.impresora_pos || "").trim() || undefined;
+      try {
+        const { imprimirTicketConQzTray } = await import("@utils/qz-tray");
+        const impresoEnQz = await imprimirTicketConQzTray(ticketData, nombreImpresora);
+        if (impresoEnQz) {
+          if (preOpenedWindow && !preOpenedWindow.closed) {
+            preOpenedWindow.close();
+          }
+          return true;
+        }
+      } catch {
+      }
+
+      const placeholder = preOpenedWindow ?? window.open("", "_blank");
 
       if (placeholder) {
         await imprimirTicketTermicoTM20II(ticketData, placeholder);
@@ -361,7 +374,7 @@ export default function CajaPage() {
       messageApi.warning("El pago se registró, pero no se pudo abrir la ventana de impresión. Revisa el bloqueador de ventanas emergentes.");
       return false;
     }
-  }, [messageApi]);
+  }, [configuracion, messageApi]);
 
   const totalAPagar = useMemo(
     () => {
@@ -834,9 +847,24 @@ export default function CajaPage() {
       return;
     }
 
+    let printPlaceholder: Window | null = null;
+    let printPlaceholderUsed = false;
+    try {
+      printPlaceholder = window.open("", "_blank");
+      if (printPlaceholder && printPlaceholder.document) {
+        printPlaceholder.document.write("<html><head><title>Imprimiendo ticket...</title></head><body style=\"font-family:Arial,sans-serif;padding:16px;\">Preparando ticket...</body></html>");
+        printPlaceholder.document.close();
+      }
+    } catch {
+      printPlaceholder = null;
+    }
+
     try {
       await form.validateFields();
     } catch {
+      if (printPlaceholder && !printPlaceholder.closed) {
+        printPlaceholder.close();
+      }
       messageApi.warning("Complete todos los campos requeridos");
       return;
     }
@@ -845,6 +873,9 @@ export default function CajaPage() {
     
     // Validar que metodo_pago esté definido
     if (!values.metodo_pago) {
+      if (printPlaceholder && !printPlaceholder.closed) {
+        printPlaceholder.close();
+      }
       messageApi.warning("Seleccione un método de pago");
       return;
     }
@@ -995,7 +1026,8 @@ export default function CajaPage() {
             },
           };
 
-          await intentarImprimirTicket(ticketData);
+          printPlaceholderUsed = true;
+          await intentarImprimirTicket(ticketData, printPlaceholder);
 
           const blob = await generarTicketPagoBlob(ticketData);
 
@@ -1180,7 +1212,8 @@ export default function CajaPage() {
         },
       };
 
-      await intentarImprimirTicket(ticketData);
+      printPlaceholderUsed = true;
+      await intentarImprimirTicket(ticketData, printPlaceholder);
 
       const blob = await generarTicketPagoBlob(ticketData);
 
@@ -1267,6 +1300,9 @@ export default function CajaPage() {
       console.error("Error registrando pago:", error);
       messageApi.error("Error al registrar el pago");
     } finally {
+      if (printPlaceholder && !printPlaceholderUsed && !printPlaceholder.closed) {
+        printPlaceholder.close();
+      }
       setProcesando(false);
     }
   }, [
