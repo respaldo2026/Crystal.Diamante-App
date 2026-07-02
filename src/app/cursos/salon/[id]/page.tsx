@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { Card, Tabs, Typography, Space, Tag, Button, Table, List, Progress, Statistic, Row, Col, App, Upload } from "antd";
 import {
@@ -15,6 +15,7 @@ import {
   DownloadOutlined,
   TrophyOutlined,
   UploadOutlined,
+  StarOutlined,
 } from "@ant-design/icons";
 import { useNavigation } from "@refinedev/core";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -132,6 +133,85 @@ export default function SalonVirtualPage() {
   }, [estudiantes, asistencias]);
 
   const { totalEstudiantes, totalClases } = calcularEstadisticas();
+
+  const gamificacionProfesor = useMemo(() => {
+    const profesorAsignado = String(curso?.profesor_id || "");
+    const usuarioActual = String(user?.id || "");
+    const esProfesorDelCurso = user?.rol === "profesor" && Boolean(profesorAsignado) && profesorAsignado === usuarioActual;
+
+    if (!esProfesorDelCurso) {
+      return null;
+    }
+
+    const minimoAsistencia = Number(curso?.porcentaje_minimo || 80);
+    const totalProgramadas = Number(curso?.total_clases || 0);
+
+    const matriculas = estudiantes.map((e: any) => String(e?.id || "")).filter(Boolean);
+    const resumenPorMatricula = new Map<string, { total: number; presentes: number }>();
+
+    matriculas.forEach((id) => {
+      resumenPorMatricula.set(id, { total: 0, presentes: 0 });
+    });
+
+    asistencias.forEach((asistencia: any) => {
+      const matriculaId = String(asistencia?.matricula_id || "");
+      if (!resumenPorMatricula.has(matriculaId)) return;
+
+      const actual = resumenPorMatricula.get(matriculaId);
+      if (!actual) return;
+
+      actual.total += 1;
+      if (String(asistencia?.estado || "").toLowerCase() === "presente") {
+        actual.presentes += 1;
+      }
+      resumenPorMatricula.set(matriculaId, actual);
+    });
+
+    const totalEstudiantesGrupo = matriculas.length;
+    const hayRegistrosAsistencia = Array.from(resumenPorMatricula.values()).some((r) => r.total > 0);
+
+    const porcentajes = Array.from(resumenPorMatricula.values()).map((r) =>
+      r.total > 0 ? (r.presentes / r.total) * 100 : 0
+    );
+
+    const promedioAsistenciaGrupo = porcentajes.length
+      ? Math.round(porcentajes.reduce((acc, item) => acc + item, 0) / porcentajes.length)
+      : 0;
+
+    const estudiantesRiesgo = hayRegistrosAsistencia
+      ? porcentajes.filter((p) => p < minimoAsistencia).length
+      : 0;
+
+    const riesgoPercent = totalEstudiantesGrupo > 0
+      ? Math.round((estudiantesRiesgo / totalEstudiantesGrupo) * 100)
+      : 0;
+
+    const avanceCursoPercent = totalProgramadas > 0
+      ? Math.min(100, Math.round((totalClases / totalProgramadas) * 100))
+      : 0;
+
+    // Balancea calidad de asistencia, reducción de riesgo y avance del curso.
+    const scoreRaw =
+      (promedioAsistenciaGrupo * 0.5) +
+      ((100 - riesgoPercent) * 0.3) +
+      (avanceCursoPercent * 0.2);
+
+    const score = Math.max(0, Math.min(100, Math.round(scoreRaw)));
+    const nivel = Math.max(1, Math.min(5, Math.floor(score / 20) + 1));
+    const siguienteMeta = score < 60 ? 60 : score < 80 ? 80 : 100;
+
+    return {
+      score,
+      nivel,
+      promedioAsistenciaGrupo,
+      riesgoPercent,
+      avanceCursoPercent,
+      estudiantesRiesgo,
+      totalEstudiantesGrupo,
+      siguienteMeta,
+      hayRegistrosAsistencia,
+    };
+  }, [curso, user, estudiantes, asistencias, totalClases]);
 
   // Tabs del salón virtual
   const items = [
@@ -402,6 +482,63 @@ export default function SalonVirtualPage() {
               />
             </Col>
           </Row>
+
+          {gamificacionProfesor ? (
+            <Card
+              size="small"
+              style={{
+                borderRadius: 14,
+                border: "1px solid #dbeafe",
+                background: "linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)",
+              }}
+              title={<span><StarOutlined /> Puntuación del Profesor (Gamificación)</span>}
+            >
+              <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                <Row gutter={12}>
+                  <Col xs={24} md={8}>
+                    <Statistic title="Score del curso" value={gamificacionProfesor.score} suffix="/100" />
+                  </Col>
+                  <Col xs={24} md={8}>
+                    <Statistic title="Nivel" value={gamificacionProfesor.nivel} prefix={<TrophyOutlined style={{ color: "#ca8a04" }} />} />
+                  </Col>
+                  <Col xs={24} md={8}>
+                    <Statistic title="Estudiantes en riesgo" value={gamificacionProfesor.estudiantesRiesgo} suffix={`/ ${gamificacionProfesor.totalEstudiantesGrupo}`} />
+                  </Col>
+                </Row>
+
+                <Progress
+                  percent={gamificacionProfesor.score}
+                  strokeColor="#2563eb"
+                  trailColor="#dbeafe"
+                  format={(p) => `Score ${p}`}
+                />
+
+                <Row gutter={12}>
+                  <Col xs={24} md={8}>
+                    <Tag color="blue" style={{ marginInlineEnd: 0 }}>
+                      Asistencia grupo: {gamificacionProfesor.promedioAsistenciaGrupo}%
+                    </Tag>
+                  </Col>
+                  <Col xs={24} md={8}>
+                    <Tag color={gamificacionProfesor.riesgoPercent > 30 ? "red" : "green"} style={{ marginInlineEnd: 0 }}>
+                      Riesgo: {gamificacionProfesor.riesgoPercent}%
+                    </Tag>
+                  </Col>
+                  <Col xs={24} md={8}>
+                    <Tag color="purple" style={{ marginInlineEnd: 0 }}>
+                      Avance curso: {gamificacionProfesor.avanceCursoPercent}%
+                    </Tag>
+                  </Col>
+                </Row>
+
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {gamificacionProfesor.hayRegistrosAsistencia
+                    ? `Meta siguiente: llegar a ${gamificacionProfesor.siguienteMeta} puntos manteniendo constancia semanal y bajando el riesgo.`
+                    : "Aún no hay asistencias registradas: toma la primera asistencia para activar la gamificación del curso."}
+                </Text>
+              </Space>
+            </Card>
+          ) : null}
 
           <Card title={`Material Didáctico (${materiales.length})`}>
             {materiales.length > 0 ? (
