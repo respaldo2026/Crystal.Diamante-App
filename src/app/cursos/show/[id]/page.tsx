@@ -97,6 +97,63 @@ const dedupeByKey = <T,>(items: T[] = [], keySelector: (item: T) => string): T[]
   return Array.from(map.values());
 };
 
+const getWeekKey = (fecha?: string | null) => {
+  const parsed = dayjs(String(fecha || "")).startOf("week");
+  if (!parsed.isValid()) return "";
+  return parsed.format("YYYY-MM-DD");
+};
+
+const calcularRachaSemanal = (weekKeys: string[]) => {
+  const weeks = Array.from(new Set((weekKeys || []).filter(Boolean)))
+    .map((key) => dayjs(key).startOf("week"))
+    .filter((d) => d.isValid())
+    .sort((a, b) => a.valueOf() - b.valueOf());
+
+  if (!weeks.length) return { actual: 0, mejor: 0 };
+
+  let mejor = 1;
+  let actualCadena = 1;
+  for (let i = 1; i < weeks.length; i += 1) {
+    const prev = weeks[i - 1];
+    const curr = weeks[i];
+    if (!prev || !curr) continue;
+    if (curr.isSame(prev.add(1, "week"), "day")) {
+      actualCadena += 1;
+    } else {
+      actualCadena = 1;
+    }
+    if (actualCadena > mejor) mejor = actualCadena;
+  }
+
+  const semanaActual = dayjs().startOf("week");
+  const semanaAnterior = semanaActual.subtract(1, "week");
+  const ultima = weeks[weeks.length - 1];
+
+  if (!ultima || !(ultima.isSame(semanaActual, "day") || ultima.isSame(semanaAnterior, "day"))) {
+    return { actual: 0, mejor };
+  }
+
+  let actual = 1;
+  for (let i = weeks.length - 1; i > 0; i -= 1) {
+    const curr = weeks[i];
+    const prev = weeks[i - 1];
+    if (!curr || !prev) continue;
+    if (prev.isSame(curr.subtract(1, "week"), "day")) {
+      actual += 1;
+    } else {
+      break;
+    }
+  }
+
+  return { actual, mejor };
+};
+
+const notaEsAprobada = (value: number) => {
+  if (!Number.isFinite(value)) return false;
+  if (value <= 5) return value >= 3.75;
+  return value >= 60;
+};
+
 const getActividadColor = (nota?: number | null): string => {
   const value = Number(nota);
   if (!Number.isFinite(value)) return "default";
@@ -2699,6 +2756,148 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     return { total, alto, medio, bajo };
   })();
 
+  const gamificacionPorEstudiante = useMemo(() => {
+    const asistenciasPorMatricula = new Map<number, { total: number; presentes: number; weekKeys: string[] }>();
+
+    (asistenciasRaw || []).forEach((asistencia: any) => {
+      const matriculaId = Number(asistencia?.matricula_id);
+      if (!Number.isFinite(matriculaId)) return;
+
+      const current = asistenciasPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
+      current.total += 1;
+
+      const estado = String(asistencia?.estado || "").toLowerCase();
+      if (estado === "presente") {
+        current.presentes += 1;
+        const weekKey = getWeekKey(asistencia?.fecha);
+        if (weekKey) current.weekKeys.push(weekKey);
+      }
+
+      asistenciasPorMatricula.set(matriculaId, current);
+    });
+
+    const quizAprobadosPorMatricula = new Map<number, number>();
+    (resultadosQuizResumen || []).forEach((item: any) => {
+      const matriculaId = Number(item?.matricula_id);
+      const nota = Number(item?.calificacion ?? item?.nota);
+      if (!Number.isFinite(matriculaId) || !Number.isFinite(nota)) return;
+      if (!notaEsAprobada(nota)) return;
+
+      quizAprobadosPorMatricula.set(
+        matriculaId,
+        (quizAprobadosPorMatricula.get(matriculaId) || 0) + 1
+      );
+    });
+
+    return (estudiantes || [])
+      .filter((est) => est.estado !== "pendiente_pago")
+      .map((est) => {
+        const matriculaId = Number(est.id);
+        const asistencia = asistenciasPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
+        const asistenciaPercent = Number(est.asistencia_porcentaje || 0);
+        const semanasConAsistencia = Array.from(new Set(asistencia.weekKeys)).length;
+        const { actual: rachaActual } = calcularRachaSemanal(asistencia.weekKeys);
+        const quizAprobados = quizAprobadosPorMatricula.get(matriculaId) || 0;
+
+        const asistenciaScore = Math.min(100, asistenciaPercent);
+        const quizScore = Math.min(100, quizAprobados * 30);
+        const rachaScore = Math.min(100, rachaActual * 25);
+        const constanciaScore = Math.min(100, semanasConAsistencia * 12);
+
+        const score = Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(
+              (asistenciaScore * 0.45) +
+              (quizScore * 0.25) +
+              (rachaScore * 0.2) +
+              (constanciaScore * 0.1)
+            )
+          )
+        );
+
+        const nivel = Math.max(1, Math.min(5, Math.ceil(score / 20)));
+        const estadoGamificacion = score >= 80 ? "alto" : score >= 55 ? "medio" : "bajo";
+
+        return {
+          key: String(est.id),
+          id: est.id,
+          estudiante: est.nombre_completo,
+          score,
+          nivel,
+          rachaActual,
+          semanasConAsistencia,
+          asistenciaPercent,
+          quizAprobados,
+          estadoGamificacion,
+        };
+      })
+      .sort((a, b) => b.score - a.score || a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }));
+  }, [asistenciasRaw, estudiantes, resultadosQuizResumen]);
+
+  const promedioGamificacionGrupo = gamificacionPorEstudiante.length
+    ? Math.round(gamificacionPorEstudiante.reduce((acc, item) => acc + item.score, 0) / gamificacionPorEstudiante.length)
+    : 0;
+
+  const columnasGamificacionGrupo = [
+    {
+      title: "Estudiante",
+      dataIndex: "estudiante",
+      key: "estudiante",
+      render: (value: string) => <Text strong>{value}</Text>,
+    },
+    {
+      title: "Score",
+      dataIndex: "score",
+      key: "score",
+      width: 170,
+      render: (value: number) => (
+        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+          <Text strong>{value}/100</Text>
+          <div style={{ width: "100%", maxWidth: 140 }}>
+            <div style={{ height: 8, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" }}>
+              <div
+                style={{
+                  width: `${Math.max(0, Math.min(100, value))}%`,
+                  height: "100%",
+                  background: value >= 80 ? "#16a34a" : value >= 55 ? "#f59e0b" : "#ef4444",
+                }}
+              />
+            </div>
+          </div>
+        </Space>
+      ),
+    },
+    {
+      title: "Nivel",
+      dataIndex: "nivel",
+      key: "nivel",
+      width: 90,
+      render: (value: number) => <Tag color="purple">Nv {value}</Tag>,
+    },
+    {
+      title: "Racha",
+      dataIndex: "rachaActual",
+      key: "rachaActual",
+      width: 90,
+      render: (value: number) => `${value} sem`,
+    },
+    {
+      title: "Asistencia",
+      dataIndex: "asistenciaPercent",
+      key: "asistenciaPercent",
+      width: 115,
+      render: (value: number) => <Tag color={value >= 80 ? "green" : value >= 60 ? "gold" : "volcano"}>{value}%</Tag>,
+    },
+    {
+      title: "Quiz OK",
+      dataIndex: "quizAprobados",
+      key: "quizAprobados",
+      width: 90,
+    },
+  ];
+
   const columnasLibroUnificado = [
       {
         title: "Estudiante",
@@ -3304,38 +3503,58 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             key: "4",
             label: <span><UserOutlined /> Estudiantes ({totalEstudiantes})</span>,
             children: (
-              <Card title="Lista de Estudiantes Matriculados">
-                {(() => {
-                  const enMoraCount = estudiantes.filter((e) => e.enMora).length;
-                  return enMoraCount > 0 ? (
-                    <Alert
-                      type="error"
-                      showIcon
-                      style={{ marginBottom: 12, borderRadius: 8 }}
-                      message={
-                        <span style={{ fontWeight: 700 }}>
-                          ⚠️ {enMoraCount} estudiante{enMoraCount > 1 ? "s" : ""} con pago vencido
-                        </span>
-                      }
-                      description="Los estudiantes marcados en rojo tienen cuotas vencidas sin pagar. Aparecen resaltados en la tabla."
-                    />
-                  ) : null;
-                })()}
-                <Table
-                  dataSource={estudiantes}
-                  rowKey="id"
-                  pagination={{ pageSize: 20 }}
-                  columns={columnasEstudiantes}
-                  size={isMobile ? "small" : "middle"}
-                  tableLayout="fixed"
-                  scroll={{ x: "max-content" }}
-                  onRow={(record: Student) =>
-                    record.enMora
-                      ? { style: { background: "#fff1f0", borderLeft: "4px solid #ff4d4f" } }
-                      : {}
-                  }
-                />
-              </Card>
+              <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                <Card title="Lista de Estudiantes Matriculados">
+                  {(() => {
+                    const enMoraCount = estudiantes.filter((e) => e.enMora).length;
+                    return enMoraCount > 0 ? (
+                      <Alert
+                        type="error"
+                        showIcon
+                        style={{ marginBottom: 12, borderRadius: 8 }}
+                        message={
+                          <span style={{ fontWeight: 700 }}>
+                            ⚠️ {enMoraCount} estudiante{enMoraCount > 1 ? "s" : ""} con pago vencido
+                          </span>
+                        }
+                        description="Los estudiantes marcados en rojo tienen cuotas vencidas sin pagar. Aparecen resaltados en la tabla."
+                      />
+                    ) : null;
+                  })()}
+                  <Table
+                    dataSource={estudiantes}
+                    rowKey="id"
+                    pagination={{ pageSize: 20 }}
+                    columns={columnasEstudiantes}
+                    size={isMobile ? "small" : "middle"}
+                    tableLayout="fixed"
+                    scroll={{ x: "max-content" }}
+                    onRow={(record: Student) =>
+                      record.enMora
+                        ? { style: { background: "#fff1f0", borderLeft: "4px solid #ff4d4f" } }
+                        : {}
+                    }
+                  />
+                </Card>
+
+                <Card
+                  title="Gamificación del grupo"
+                  extra={<Tag color="blue">Score promedio: {promedioGamificacionGrupo}</Tag>}
+                >
+                  <Text type="secondary" style={{ display: "block", marginBottom: 10 }}>
+                    Ranking de motivación por estudiante dentro de este grupo, con foco en constancia semanal, asistencia y quizzes.
+                  </Text>
+                  <Table
+                    dataSource={gamificacionPorEstudiante}
+                    rowKey="key"
+                    pagination={{ pageSize: 10 }}
+                    columns={columnasGamificacionGrupo as any}
+                    size={isMobile ? "small" : "middle"}
+                    scroll={{ x: "max-content" }}
+                    locale={{ emptyText: "Sin datos suficientes para gamificación en este grupo" }}
+                  />
+                </Card>
+              </Space>
             )
           },
           {

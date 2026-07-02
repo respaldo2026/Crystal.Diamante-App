@@ -40,7 +40,7 @@ import {
   Typography,
 } from "antd";
 import dayjs from "dayjs";
-import { ProfessorDashboardData, ProfesorDashboardCalificacionUltimaClase, ProfesorDashboardCalificacionesGrupo, ProfesorDashboardGamificacionGrupo } from "@hooks/useProfessorDashboard";
+import { ProfessorDashboardData, ProfesorDashboardCalificacionUltimaClase, ProfesorDashboardCalificacionesGrupo } from "@hooks/useProfessorDashboard";
 import { construirNombreGrupo } from "@utils/grupos";
 import { obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas, obtenerMaterialesPorProgramas, obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { getMaterialCoverageRuleDisplay } from "@/types/payment-plans";
@@ -248,7 +248,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     gamificacionEstudiantesPorGrupo: [],
   };
 
-  const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre, calificacionesRecientesPorGrupo, gamificacionEstudiantesPorGrupo } = resolvedDashboard;
+  const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre, calificacionesRecientesPorGrupo } = resolvedDashboard;
   const statsData = stats ?? fallbackStats;
   const proximasSesionesData = dedupeByKey(proximasSesiones || [], (sesion: any) => `${sesion.cursoId ?? ""}-${sesion.fecha ?? ""}-${sesion.tema ?? ""}-${sesion.claseNumero ?? ""}`);
   const pendientesData = dedupeByKey(pendientes || [], (pendiente: any) => `${pendiente.cursoId ?? ""}-${pendiente.concepto ?? ""}-${pendiente.fecha ?? ""}`);
@@ -478,7 +478,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   const hasAsistenciaData = (statsData.asistenciaChart || []).length > 0;
   const hasCalificacionesRecientes = (calificacionesRecientesPorGrupo || []).length > 0;
   const hasTopCursos = (topCursos || []).length > 0;
-  const hasGamificacionEstudiantes = (gamificacionEstudiantesPorGrupo || []).some((grupo: ProfesorDashboardGamificacionGrupo) => (grupo?.estudiantes || []).length > 0);
 
   const menuProfesor = [
     { key: "cursos", label: "Cursos", icon: <BookOutlined /> },
@@ -1115,7 +1114,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           </Col>
         </Row>
 
-        {(hasAsistenciaData || hasCalificacionesRecientes || hasTopCursos || hasGamificacionEstudiantes) && (
+        {(hasAsistenciaData || hasCalificacionesRecientes || hasTopCursos) && (
           <Row ref={analiticaSectionRef} gutter={[12, 12]} style={{ marginTop: 10 }}>
             {hasAsistenciaData && (
               <Col xs={24} lg={hasCalificacionesRecientes ? 12 : 24}>
@@ -1197,91 +1196,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                         ) : (
                           <Empty description="Sin clase registrada para este grupo" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                         )}
-                      </Card>
-                    ))}
-                  </Space>
-                </Card>
-              </Col>
-            )}
-
-            {hasGamificacionEstudiantes && (
-              <Col xs={24}>
-                <Card
-                  variant="borderless"
-                  title={<span style={{ fontWeight: 600 }}>Gamificación de estudiantes</span>}
-                  extra={<Tag color="magenta">Ranking por score</Tag>}
-                  style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
-                >
-                  <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                    {(gamificacionEstudiantesPorGrupo || []).map((grupo: ProfesorDashboardGamificacionGrupo) => (
-                      <Card
-                        key={grupo.cursoId}
-                        size="small"
-                        title={grupo.curso}
-                        extra={<Tag color="blue">Score grupo: {grupo.promedioScore}</Tag>}
-                        styles={{ body: { padding: isMobile ? 8 : 12 } }}
-                      >
-                        <Table
-                          size="small"
-                          pagination={false}
-                          rowKey="matriculaId"
-                          dataSource={grupo.estudiantes || []}
-                          scroll={{ x: 560 }}
-                          locale={{ emptyText: "Sin estudiantes activos en este grupo" }}
-                          columns={[
-                            {
-                              title: "Estudiante",
-                              dataIndex: "estudiante",
-                              key: "estudiante",
-                              render: (value: string) => <Typography.Text strong>{value}</Typography.Text>,
-                            },
-                            {
-                              title: "Score",
-                              dataIndex: "score",
-                              key: "score",
-                              width: 160,
-                              render: (value: number) => (
-                                <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                                  <Typography.Text strong>{value}/100</Typography.Text>
-                                  <Progress
-                                    percent={value}
-                                    showInfo={false}
-                                    strokeColor={value >= 80 ? "#16a34a" : value >= 55 ? "#f59e0b" : "#ef4444"}
-                                    trailColor="#e5e7eb"
-                                    size="small"
-                                  />
-                                </Space>
-                              ),
-                            },
-                            {
-                              title: "Nivel",
-                              dataIndex: "nivel",
-                              key: "nivel",
-                              width: 90,
-                              render: (value: number) => <Tag color="purple">Nv {value}</Tag>,
-                            },
-                            {
-                              title: "Racha",
-                              dataIndex: "rachaActual",
-                              key: "rachaActual",
-                              width: 90,
-                              render: (value: number) => <span>{value} sem</span>,
-                            },
-                            {
-                              title: "Asistencia",
-                              dataIndex: "asistenciaPercent",
-                              key: "asistenciaPercent",
-                              width: 110,
-                              render: (value: number) => <Tag color={value >= 80 ? "green" : value >= 60 ? "gold" : "volcano"}>{value}%</Tag>,
-                            },
-                            {
-                              title: "Quiz OK",
-                              dataIndex: "quizAprobados",
-                              key: "quizAprobados",
-                              width: 90,
-                            },
-                          ]}
-                        />
                       </Card>
                     ))}
                   </Space>
