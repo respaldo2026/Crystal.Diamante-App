@@ -286,8 +286,7 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
 }
 
 function getCycleUrgency(days?: number | null) {
-  const d = Number(days);
-  if (!Number.isFinite(d)) {
+  if (days === null || days === undefined || !Number.isFinite(days)) {
     return {
       bg: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
       border: "#93c5fd",
@@ -297,8 +296,11 @@ function getCycleUrgency(days?: number | null) {
       chipBg: "#dbeafe",
       chipColor: "#1e3a8a",
       level: "normal",
+      label: "Sin fecha definida",
     };
   }
+
+  const d = days;
 
   if (d <= 3) {
     return {
@@ -310,6 +312,7 @@ function getCycleUrgency(days?: number | null) {
       chipBg: "#fecdd3",
       chipColor: "#9f1239",
       level: "urgente",
+      label: "Urgente",
     };
   }
 
@@ -323,6 +326,7 @@ function getCycleUrgency(days?: number | null) {
       chipBg: "#fde68a",
       chipColor: "#92400e",
       level: "proximo",
+      label: "Próximo",
     };
   }
 
@@ -335,6 +339,7 @@ function getCycleUrgency(days?: number | null) {
     chipBg: "#a7f3d0",
     chipColor: "#065f46",
     level: "planificable",
+    label: "Planificable",
   };
 }
 
@@ -697,6 +702,22 @@ export default function CursosList() {
                   <Text style={{ display: "block", fontSize: 12, fontWeight: 800, color: urgenciaCiclo.title, textTransform: "uppercase", letterSpacing: 0.45 }}>
                     Siguiente paso del grupo
                   </Text>
+                  <span
+                    style={{
+                      marginTop: 6,
+                      alignSelf: "flex-start",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: urgenciaCiclo.chipColor,
+                      background: urgenciaCiclo.chipBg,
+                      borderRadius: 999,
+                      padding: "3px 10px",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.35,
+                    }}
+                  >
+                    {urgenciaCiclo.label}
+                  </span>
                   <Text style={{ display: "block", fontSize: isMobile ? 16 : 18, fontWeight: 800, color: "#0f172a", marginTop: 6, lineHeight: 1.35 }}>
                     {`Clase #${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""}`}
                   </Text>
@@ -722,7 +743,7 @@ export default function CursosList() {
                             días restantes
                           </Text>
                           <span style={{ fontSize: 11, fontWeight: 800, color: urgenciaCiclo.chipColor, background: urgenciaCiclo.chipBg, borderRadius: 999, padding: "2px 8px", textTransform: "uppercase" }}>
-                            {urgenciaCiclo.level}
+                            {urgenciaCiclo.label}
                           </span>
                         </div>
                       ) : null}
