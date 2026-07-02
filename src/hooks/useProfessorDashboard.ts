@@ -94,6 +94,25 @@ export interface ProfesorDashboardCalificacionesGrupo {
   estudiantes: ProfesorDashboardCalificacionUltimaClase[];
 }
 
+export interface ProfesorDashboardGamificacionEstudiante {
+  matriculaId: number;
+  estudiante: string;
+  score: number;
+  nivel: number;
+  asistenciaPercent: number;
+  semanasConAsistencia: number;
+  rachaActual: number;
+  quizAprobados: number;
+  estado: "alto" | "medio" | "bajo";
+}
+
+export interface ProfesorDashboardGamificacionGrupo {
+  cursoId: string;
+  curso: string;
+  promedioScore: number;
+  estudiantes: ProfesorDashboardGamificacionEstudiante[];
+}
+
 export interface ProfessorDashboardData {
   loading: boolean;
   profesorNombre?: string;
@@ -103,6 +122,7 @@ export interface ProfessorDashboardData {
   pendientes: ProfesorDashboardPendiente[];
   pagos: ProfesorDashboardPago[];
   calificacionesRecientesPorGrupo: ProfesorDashboardCalificacionesGrupo[];
+  gamificacionEstudiantesPorGrupo: ProfesorDashboardGamificacionGrupo[];
 }
 
 const emptyStats: ProfesorDashboardStats = {
@@ -194,6 +214,64 @@ const extractClassNumber = (value?: string | null): number | null => {
   if (!match?.[1]) return null;
   const parsed = Number(match[1]);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getWeekKey = (value?: string | null) => {
+  const date = dayjs(String(value || "")).startOf("week");
+  if (!date.isValid()) return "";
+  return date.format("YYYY-MM-DD");
+};
+
+const calculateWeeklyStreak = (weekKeys: string[]): { actual: number; best: number } => {
+  const weeks = Array.from(new Set((weekKeys || []).filter(Boolean)))
+    .map((key) => dayjs(key).startOf("week"))
+    .filter((d) => d.isValid())
+    .sort((a, b) => a.valueOf() - b.valueOf());
+
+  if (!weeks.length) return { actual: 0, best: 0 };
+
+  let best = 1;
+  let current = 1;
+
+  for (let i = 1; i < weeks.length; i += 1) {
+    const prev = weeks[i - 1];
+    const now = weeks[i];
+    if (!prev || !now) continue;
+    if (now.isSame(prev.add(1, "week"), "day")) {
+      current += 1;
+    } else {
+      current = 1;
+    }
+    if (current > best) best = current;
+  }
+
+  const thisWeek = dayjs().startOf("week");
+  const prevWeek = thisWeek.subtract(1, "week");
+  const lastWeek = weeks[weeks.length - 1];
+
+  if (!lastWeek || !(lastWeek.isSame(thisWeek, "day") || lastWeek.isSame(prevWeek, "day"))) {
+    return { actual: 0, best };
+  }
+
+  let actual = 1;
+  for (let i = weeks.length - 1; i > 0; i -= 1) {
+    const now = weeks[i];
+    const prev = weeks[i - 1];
+    if (!now || !prev) continue;
+    if (prev.isSame(now.subtract(1, "week"), "day")) {
+      actual += 1;
+    } else {
+      break;
+    }
+  }
+
+  return { actual, best };
+};
+
+const isPassingGrade = (value: number): boolean => {
+  if (!Number.isFinite(value)) return false;
+  if (value <= 5) return value >= 3;
+  return value >= 60;
 };
 
 const normalizeDayText = (value: string): string =>
@@ -812,6 +890,107 @@ export const fetchProfessorDashboardData = async (
     };
   });
 
+  const asistenciaPorMatricula = new Map<number, { total: number; presentes: number; weekKeys: string[] }>();
+  asistenciasData.forEach((asistencia: any) => {
+    const matriculaId = Number(asistencia?.matricula_id);
+    if (!Number.isFinite(matriculaId)) return;
+
+    const current = asistenciaPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
+    current.total += 1;
+
+    if (isAsistenciaPositiva(asistencia?.estado)) {
+      current.presentes += 1;
+      const weekKey = getWeekKey(asistencia?.fecha);
+      if (weekKey) current.weekKeys.push(weekKey);
+    }
+
+    asistenciaPorMatricula.set(matriculaId, current);
+  });
+
+  const quizAprobadosPorMatricula = new Map<number, number>();
+  calificacionesData.forEach((calificacion: any) => {
+    const matriculaId = Number(calificacion?.matricula_id);
+    if (!Number.isFinite(matriculaId)) return;
+
+    const kind = resolveEvaluationKind(calificacion?.tipo_evaluacion, calificacion?.concepto);
+    if (kind !== "quiz") return;
+
+    const nota = Number(calificacion?.nota ?? calificacion?.calificacion);
+    if (!Number.isFinite(nota) || !isPassingGrade(nota)) return;
+
+    quizAprobadosPorMatricula.set(matriculaId, (quizAprobadosPorMatricula.get(matriculaId) || 0) + 1);
+  });
+
+  const gamificacionPorCurso = new Map<string, ProfesorDashboardGamificacionEstudiante[]>();
+
+  matriculasData.forEach((matricula: any) => {
+    const matriculaId = Number(matricula?.id);
+    const cursoId = String(matricula?.curso_id || "");
+    if (!Number.isFinite(matriculaId) || !cursoId) return;
+
+    const asistencia = asistenciaPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
+    const asistenciaPercent = asistencia.total > 0
+      ? Math.round((asistencia.presentes / asistencia.total) * 100)
+      : 0;
+
+    const semanasConAsistencia = Array.from(new Set(asistencia.weekKeys)).length;
+    const { actual: rachaActual } = calculateWeeklyStreak(asistencia.weekKeys);
+    const quizAprobados = quizAprobadosPorMatricula.get(matriculaId) || 0;
+
+    const asistenciaScore = Math.min(100, asistenciaPercent);
+    const quizScore = Math.min(100, quizAprobados * 30);
+    const rachaScore = Math.min(100, rachaActual * 25);
+    const constanciaScore = Math.min(100, semanasConAsistencia * 12);
+
+    const score = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          (asistenciaScore * 0.45) +
+          (quizScore * 0.25) +
+          (rachaScore * 0.2) +
+          (constanciaScore * 0.1)
+        )
+      )
+    );
+
+    const nivel = Math.max(1, Math.min(5, Math.ceil(score / 20)));
+    const estado: "alto" | "medio" | "bajo" = score >= 80 ? "alto" : score >= 55 ? "medio" : "bajo";
+
+    const payload: ProfesorDashboardGamificacionEstudiante = {
+      matriculaId,
+      estudiante: matriculaEstudianteMap.get(matriculaId) || "Estudiante",
+      score,
+      nivel,
+      asistenciaPercent,
+      semanasConAsistencia,
+      rachaActual,
+      quizAprobados,
+      estado,
+    };
+
+    const bucket = gamificacionPorCurso.get(cursoId) || [];
+    bucket.push(payload);
+    gamificacionPorCurso.set(cursoId, bucket);
+  });
+
+  const gamificacionEstudiantesPorGrupo: ProfesorDashboardGamificacionGrupo[] = cursosEnriquecidos.map((curso) => {
+    const estudiantes = (gamificacionPorCurso.get(String(curso.id)) || [])
+      .sort((a, b) => b.score - a.score || a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }));
+
+    const promedioScore = estudiantes.length
+      ? Math.round(estudiantes.reduce((acc, item) => acc + item.score, 0) / estudiantes.length)
+      : 0;
+
+    return {
+      cursoId: String(curso.id),
+      curso: curso.nombre,
+      promedioScore,
+      estudiantes,
+    };
+  });
+
   return {
     stats: statsPayload,
     cursos: cursosEnriquecidos,
@@ -819,6 +998,7 @@ export const fetchProfessorDashboardData = async (
     pendientes: pendientesList,
     pagos: pagosRecientes,
     calificacionesRecientesPorGrupo,
+    gamificacionEstudiantesPorGrupo,
   };
 };
 
@@ -832,6 +1012,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
   const [pendientes, setPendientes] = useState<ProfesorDashboardPendiente[]>([]);
   const [pagos, setPagos] = useState<ProfesorDashboardPago[]>([]);
   const [calificacionesRecientesPorGrupo, setCalificacionesRecientesPorGrupo] = useState<ProfesorDashboardCalificacionesGrupo[]>([]);
+  const [gamificacionEstudiantesPorGrupo, setGamificacionEstudiantesPorGrupo] = useState<ProfesorDashboardGamificacionGrupo[]>([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -853,6 +1034,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
         setPendientes(data.pendientes);
         setPagos(data.pagos);
         setCalificacionesRecientesPorGrupo(data.calificacionesRecientesPorGrupo || []);
+        setGamificacionEstudiantesPorGrupo(data.gamificacionEstudiantesPorGrupo || []);
       } catch (error) {
         console.error("Error general obteniendo dashboard del profesor", error);
         setStats(emptyStats);
@@ -861,6 +1043,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
         setPendientes([]);
         setPagos([]);
         setCalificacionesRecientesPorGrupo([]);
+        setGamificacionEstudiantesPorGrupo([]);
       } finally {
         setLoading(false);
       }
@@ -878,5 +1061,6 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
     pendientes,
     pagos,
     calificacionesRecientesPorGrupo,
+    gamificacionEstudiantesPorGrupo,
   };
 };

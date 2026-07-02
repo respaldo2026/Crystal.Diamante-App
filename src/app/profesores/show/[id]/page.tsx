@@ -150,6 +150,7 @@ export default function ShowProfesorDashboard() {
         pendientes: data.pendientes,
         pagos: data.pagos,
         calificacionesRecientesPorGrupo: data.calificacionesRecientesPorGrupo,
+        gamificacionEstudiantesPorGrupo: data.gamificacionEstudiantesPorGrupo,
       }
     : null;
 

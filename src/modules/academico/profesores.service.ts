@@ -52,6 +52,7 @@ export async function obtenerDashboardProfesor(profesorId: string) {
       pendientes: [],
       pagos: [],
       calificacionesRecientesPorGrupo: [],
+      gamificacionEstudiantesPorGrupo: [],
     };
   }
 }
