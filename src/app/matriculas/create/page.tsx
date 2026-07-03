@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 import { buildEnrollmentTicketData, formatTicketReference, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
+import { abrirCajonConBridge, imprimirTicketConBridge } from "@utils/pos-print-bridge";
 import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, getPaymentPlan, normalizeModalidadPago, resolvePaymentPlanAmounts, type ModalidadPago, type ProgramaPaymentConfig } from "@/types/payment-plans";
 
 const { Title, Text } = Typography;
@@ -730,6 +731,8 @@ export default function MatriculaCreate() {
 
             const { monto, metodo_pago, referencia, fecha_pago } = values;
             const montoNumero = Number(monto ?? 0) || 0;
+            const metodoPagoNormalizado = String(metodo_pago || "").trim().toLowerCase();
+            const esPagoEfectivo = metodoPagoNormalizado === "efectivo";
             const fechaPagoISO = fecha_pago ? dayjs(fecha_pago).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
             const fechaPagoLegible = dayjs(fechaPagoISO).format("DD/MM/YYYY");
             const referenciaPago = formatTicketReference(referencia || pagoInscripcionData?.id, "MAT");
@@ -787,14 +790,15 @@ export default function MatriculaCreate() {
                         qzOutcome = "pending";
                     } else {
                         printingLockRef.current = true;
-                        const { imprimirTicketConQzTray } = await import("@utils/qz-tray");
                         const nombreImpresora = String(configAcademia?.impresora_pos || "").trim() || undefined;
-                        qzOutcome = await Promise.race<"printed" | "failed" | "pending">([
-                            imprimirTicketConQzTray(ticketData, nombreImpresora).then((ok) => (ok ? "printed" : "failed")),
-                            new Promise<"pending">((resolve) => {
-                                setTimeout(() => resolve("pending"), 4500);
-                            }),
-                        ]);
+                        const result = await imprimirTicketConBridge(ticketData, nombreImpresora);
+                        if (result.ok && result.pendingAuth) {
+                            qzOutcome = "pending";
+                        } else if (result.ok) {
+                            qzOutcome = "printed";
+                        } else {
+                            qzOutcome = "failed";
+                        }
                     }
                 } catch {
                     qzOutcome = "failed";
@@ -807,7 +811,7 @@ export default function MatriculaCreate() {
                 if (qzOutcome === "pending") {
                     message.info("QZ Tray está solicitando autorización. Confirma el aviso para completar una sola impresión.");
                 } else if (qzOutcome === "failed") {
-                    message.warning("Pago registrado, pero QZ Tray no pudo imprimir el ticket.");
+                    message.warning("Pago registrado, pero no se pudo imprimir por agente local ni por QZ Tray.");
                 }
 
                 const { publicUrl } = await subirTicketPago({
@@ -822,6 +826,18 @@ export default function MatriculaCreate() {
                     .from("pagos")
                     .update({ ticket_url: publicUrl } as any)
                     .eq("id", pagoInscripcionData.id);
+
+                if (esPagoEfectivo && montoNumero > 0) {
+                    try {
+                        const nombreImpresora = String(configAcademia?.impresora_pos || "").trim() || undefined;
+                        const cajonAbierto = await abrirCajonConBridge(nombreImpresora);
+                        if (!cajonAbierto) {
+                            message.warning("Pago registrado, pero no se pudo abrir el cajón.");
+                        }
+                    } catch {
+                        message.warning("Pago registrado, pero no se pudo abrir el cajón.");
+                    }
+                }
             } catch (ticketError) {
                 console.error("Error generando/guardando ticket de inscripción:", ticketError);
                 message.warning("Pago registrado, pero no se pudo generar el ticket PDF.");

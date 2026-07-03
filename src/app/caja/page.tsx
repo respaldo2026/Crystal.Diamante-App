@@ -35,6 +35,7 @@ import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { formatTicketReference, generarTicketPagoBlob, abrirTicketPagoDesdeBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
+import { abrirCajonConBridge, imprimirTicketConBridge } from "@utils/pos-print-bridge";
 import { obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
 import { getDescuentoAplicado, getMontoProgramado, getSaldoPendiente, getTotalAbonado, getVisiblePaymentStatus } from "@utils/payment-balances";
@@ -354,31 +355,19 @@ export default function CajaPage() {
     printingLockRef.current = true;
     try {
       const nombreImpresora = String(configuracion?.impresora_pos || "").trim() || undefined;
-      try {
-        const { imprimirTicketConQzTray } = await import("@utils/qz-tray");
-        const qzOutcome = await Promise.race<"printed" | "failed" | "pending">([
-          imprimirTicketConQzTray(ticketData, nombreImpresora).then((ok) => (ok ? "printed" : "failed")),
-          new Promise<"pending">((resolve) => {
-            setTimeout(() => resolve("pending"), 4500);
-          }),
-        ]);
-
-        if (qzOutcome === "printed") {
-          return true;
-        }
-
-        if (qzOutcome === "pending") {
+      const result = await imprimirTicketConBridge(ticketData, nombreImpresora);
+      if (result.ok) {
+        if (result.pendingAuth) {
           messageApi.info("QZ Tray está solicitando autorización. Confirma el aviso para completar una sola impresión.");
-          return true;
         }
-      } catch {
+        return true;
       }
 
-      messageApi.warning("El pago se registró, pero QZ Tray no pudo imprimir el ticket.");
+      messageApi.warning("El pago se registró, pero no se pudo imprimir por agente local ni por QZ Tray.");
       return false;
     } catch (error) {
       console.error("No se pudo imprimir el ticket:", error);
-      messageApi.warning("El pago se registró, pero QZ Tray no pudo imprimir el ticket.");
+      messageApi.warning("El pago se registró, pero no se pudo imprimir por agente local ni por QZ Tray.");
       return false;
     } finally {
       setTimeout(() => {
@@ -390,8 +379,7 @@ export default function CajaPage() {
   const intentarAbrirCajon = useCallback(async () => {
     try {
       const nombreImpresora = String(configuracion?.impresora_pos || "").trim() || undefined;
-      const { abrirCajonConQzTray } = await import("@utils/qz-tray");
-      const abierto = await abrirCajonConQzTray(nombreImpresora);
+      const abierto = await abrirCajonConBridge(nombreImpresora);
       return abierto;
     } catch {
       return false;
