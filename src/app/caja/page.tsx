@@ -1685,6 +1685,7 @@ export default function CajaPage() {
               <Form.Item name="observaciones" label="Observaciones" style={{ marginBottom: 8 }}>
                 <Input.TextArea rows={2} placeholder="Notas adicionales..." />
               </Form.Item>
+              </Form>
             </div>
 
             <div style={{ paddingTop: 8, borderTop: "1px solid #e5e7eb", marginTop: 8 }}>
@@ -1739,7 +1740,6 @@ export default function CajaPage() {
                       academia: {
                         nombre: configTicket?.nombre_academia || "Academia Crystal Diamante",
                         ruc: configTicket?.ruc || undefined,
-                        logoUrl: configTicket?.logo_url || undefined,
                         telefono: configTicket?.telefono || "",
                         direccion: configTicket?.direccion || "",
                         email: configTicket?.email || "",
