@@ -54,6 +54,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
 import { abrirTicketPagoDesdeBlob, formatTicketReference, generarTicketPagoBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
+import { construirNombreGrupo } from "@utils/grupos";
 import {
     listarMovimientos,
     crearMovimiento,
@@ -62,6 +63,7 @@ import {
     sincronizarEgresosDesdeSesionesClase,
     type MovimientoFinanciero,
 } from "@modules/finanzas/movimientos.service";
+import { obtenerCursos, type GrupoAcademico } from "@modules/academico/cursos.service";
 import { MOVIMIENTO_CATEGORIAS, MOVIMIENTO_TIPO, MOVIMIENTO_TIPO_COLOR, MOVIMIENTO_TIPO_LABEL } from "@constants/movimientos";
 import { normalizeModalidadPago } from "@/types/payment-plans";
 
@@ -156,7 +158,7 @@ export default function TesoreriaPage() {
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [registrando, setRegistrando] = useState(false);
     const [ejecutandoLiquidacion, setEjecutandoLiquidacion] = useState(false);
-    const [cursosDisponibles, setCursosDisponibles] = useState<Array<{ id: string; nombre: string }>>([]);
+    const [cursosDisponibles, setCursosDisponibles] = useState<GrupoAcademico[]>([]);
     const [filtroGrupoRentabilidad, setFiltroGrupoRentabilidad] = useState<string | null>(null);
     const [loadingRentabilidadGrupo, setLoadingRentabilidadGrupo] = useState(false);
     const [rentabilidadRefreshTick, setRentabilidadRefreshTick] = useState(0);
@@ -442,56 +444,15 @@ export default function TesoreriaPage() {
 
     useEffect(() => {
         const cargarCursos = async () => {
-            const { data, error } = await supabaseBrowserClient
-                .from("cursos")
-                .select("id, nombre, fecha_inicio, estado")
-                .order("nombre", { ascending: true });
-
-            if (error) {
+            try {
+                const cursos = await obtenerCursos();
+                setCursosDisponibles(cursos);
+                const primerCurso = cursos[0];
+                if (!filtroGrupoRentabilidad && primerCurso) {
+                    setFiltroGrupoRentabilidad(String(primerCurso.id));
+                }
+            } catch (error) {
                 console.warn("No se pudieron cargar cursos para rentabilidad por grupo", error);
-                return;
-            }
-
-            const cursosOrdenados = (data || []).map((c: any) => ({
-                id: String(c.id),
-                nombre: String(c.nombre || "Sin nombre").trim(),
-                fecha_inicio: c.fecha_inicio || null,
-                estado: String(c.estado || "").toLowerCase().trim(),
-            }));
-
-            const cursosUnicos = Array.from(
-                cursosOrdenados.reduce((map, curso) => {
-                    const key = curso.nombre.toLowerCase();
-                    const existente = map.get(key);
-
-                    if (!existente) {
-                        map.set(key, curso);
-                        return map;
-                    }
-
-                    const prioridadEstado = (estado: string) => (estado === "activo" ? 3 : estado === "proximo" ? 2 : 1);
-                    const prioridadActual = prioridadEstado(curso.estado);
-                    const prioridadExistente = prioridadEstado(existente.estado);
-
-                    if (prioridadActual > prioridadExistente) {
-                        map.set(key, curso);
-                        return map;
-                    }
-
-                    const fechaActual = curso.fecha_inicio ? dayjs(curso.fecha_inicio).valueOf() : 0;
-                    const fechaExistente = existente.fecha_inicio ? dayjs(existente.fecha_inicio).valueOf() : 0;
-                    if (fechaActual > fechaExistente) {
-                        map.set(key, curso);
-                    }
-
-                    return map;
-                }, new Map<string, { id: string; nombre: string; fecha_inicio: string | null; estado: string }>()).values()
-            );
-
-            setCursosDisponibles(cursosUnicos.map((curso) => ({ id: curso.id, nombre: curso.nombre })));
-            const primerCurso = cursosUnicos[0];
-            if (!filtroGrupoRentabilidad && primerCurso) {
-                setFiltroGrupoRentabilidad(primerCurso.id);
             }
         };
 
@@ -1396,10 +1357,21 @@ export default function TesoreriaPage() {
                     <Col xs={24} md={12} lg={10}>
                         <Select
                             allowClear
-                            placeholder="Selecciona grupo/curso"
+                            placeholder="Selecciona grupo real"
                             value={filtroGrupoRentabilidad ?? undefined}
                             onChange={(val) => setFiltroGrupoRentabilidad(val ?? null)}
-                            options={cursosDisponibles.map((curso) => ({ value: curso.id, label: curso.nombre }))}
+                            options={cursosDisponibles.map((curso) => ({
+                                value: String(curso.id),
+                                label: (
+                                    <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+                                        <span style={{ fontWeight: 600 }}>{construirNombreGrupo(curso)}</span>
+                                        <span style={{ fontSize: 12, color: "#64748b" }}>
+                                            {curso.fecha_inicio ? `Inicio ${dayjs(curso.fecha_inicio).format("DD MMM YYYY")}` : "Sin fecha de inicio"}
+                                            {curso.estado ? ` · ${curso.estado}` : ""}
+                                        </span>
+                                    </div>
+                                ),
+                            }))}
                             style={{ width: "100%" }}
                         />
                     </Col>
