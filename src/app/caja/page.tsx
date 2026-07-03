@@ -1412,30 +1412,31 @@ export default function CajaPage() {
   };
 
   return (
-    <div style={{ padding: "24px", maxWidth: 1400, margin: "0 auto" }}>
+    <div style={{ padding: "16px", maxWidth: 1400, margin: "0 auto" }}>
       <Card
         style={{
           background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          marginBottom: 24,
+          marginBottom: 16,
           border: "none",
+          borderRadius: 18,
         }}
       >
-        <Space align="center" size="large">
-          <ShoppingCartOutlined style={{ fontSize: 48, color: "#fff" }} />
+        <Space align="center" size="middle">
+          <ShoppingCartOutlined style={{ fontSize: 38, color: "#fff" }} />
           <div>
-            <Title level={2} style={{ color: "#fff", margin: 0 }}>
+            <Title level={3} style={{ color: "#fff", margin: 0 }}>
               Caja - Punto de Venta
             </Title>
-            <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 16 }}>
+            <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 14 }}>
               Registro de pagos de estudiantes
             </Text>
           </div>
         </Space>
       </Card>
 
-      <Row gutter={24}>
+      <Row gutter={16} align="top">
         <Col xs={24} lg={14}>
-          <Card title="Información del Estudiante" style={{ marginBottom: 24 }}>
+          <Card title="Información del Estudiante" style={{ marginBottom: 16, borderRadius: 18 }} bodyStyle={{ padding: 16 }}>
             <Form form={form} layout="vertical">
               <Form.Item
                 name="estudiante_id"
@@ -1473,14 +1474,14 @@ export default function CajaPage() {
           </Card>
 
           {loading ? (
-            <Card>
-              <div style={{ textAlign: "center", padding: 40 }}>
+            <Card style={{ borderRadius: 18 }}>
+              <div style={{ textAlign: "center", padding: 24 }}>
                 <Spin size="large" />
               </div>
             </Card>
           ) : (
             cuotas.length > 0 && (
-              <Card title="Cuotas Pendientes" style={{ marginBottom: 24 }}>
+              <Card title="Cuotas Pendientes" style={{ marginBottom: 16, borderRadius: 18 }} bodyStyle={{ padding: 12 }}>
                 <Table
                   rowSelection={rowSelection}
                   columns={cuotasColumns}
@@ -1498,23 +1499,32 @@ export default function CajaPage() {
           <Card
             title="Resumen de Pago"
             style={{
-              marginBottom: 24,
+              marginBottom: 16,
               position: "sticky",
-              top: 24,
+              top: 16,
+              borderRadius: 18,
+              height: "calc(100vh - 32px)",
+            }}
+            bodyStyle={{
+              padding: 16,
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            <Statistic
-              title="Total a Pagar"
-              value={totalAPagar}
-              precision={0}
-              prefix="$"
-              valueStyle={{ color: "#3f8600", fontSize: 36, fontWeight: "bold" }}
-              suffix="COP"
-            />
+            <div style={{ flex: 1, overflowY: "auto", paddingRight: 4 }}>
+              <Statistic
+                title="Total a Pagar"
+                value={totalAPagar}
+                precision={0}
+                prefix="$"
+                valueStyle={{ color: "#3f8600", fontSize: 30, fontWeight: "bold" }}
+                suffix="COP"
+              />
 
-            <Divider style={{ margin: "12px 0" }} />
+              <Divider style={{ margin: "10px 0" }} />
 
-            <Form form={form} layout="vertical">
+              <Form form={form} layout="vertical">
               {cuotasSeleccionadas.length === 1 && (() => {
                 const cuotaSeleccionada = cuotas.find((item) => item.id === cuotasSeleccionadas[0]);
                 if (!cuotaSeleccionada) return null;
@@ -1528,7 +1538,7 @@ export default function CajaPage() {
                     <Alert
                       type="info"
                       showIcon
-                      style={{ marginBottom: 16 }}
+                      style={{ marginBottom: 12 }}
                       message={getPeriodoPagoLegible(cuotaSeleccionada, matriculas.find((m) => String(m.id) === String(cuotaSeleccionada.matricula_id))?.modalidad_pago)}
                       description={
                         <div>
@@ -1542,7 +1552,7 @@ export default function CajaPage() {
                       }
                     />
 
-                    <Form.Item label="Descuento aplicado" name="descuento_aplicado">
+                    <Form.Item label="Descuento aplicado" name="descuento_aplicado" style={{ marginBottom: 12 }}>
                       <InputNumber<number>
                         placeholder="$0"
                         formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -1554,7 +1564,7 @@ export default function CajaPage() {
                       />
                     </Form.Item>
 
-                    <Form.Item label="Valor a registrar (neto)" name="monto_a_registrar">
+                    <Form.Item label="Valor a registrar (neto)" name="monto_a_registrar" style={{ marginBottom: 12 }}>
                       <InputNumber<number>
                         placeholder="$0"
                         formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -1575,7 +1585,7 @@ export default function CajaPage() {
                       Aplicar solo descuento (sin abono)
                     </Button>
 
-                    <Form.Item name="motivo_descuento" label="Motivo del descuento">
+                    <Form.Item name="motivo_descuento" label="Motivo del descuento" style={{ marginBottom: 12 }}>
                       <Input placeholder="Obligatorio si aplicas descuento" size="large" />
                     </Form.Item>
                   </>
@@ -1586,14 +1596,14 @@ export default function CajaPage() {
                 <Alert
                   type="warning"
                   showIcon
-                  style={{ marginBottom: 16 }}
+                  style={{ marginBottom: 12 }}
                   message="Pago múltiple"
                   description="Para varias cuotas se cobra saldo completo. Si necesitas descuento, selecciona una sola cuota."
                 />
               )}
 
               {/* Valor entregado y cambio - Al inicio para fácil acceso */}
-              <Form.Item label="Valor entregado por el cliente">
+              <Form.Item label="Valor entregado por el cliente" style={{ marginBottom: 12 }}>
                 <InputNumber<number>
                   placeholder="$0"
                   formatter={(value) => `$${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -1608,10 +1618,10 @@ export default function CajaPage() {
 
               {valorEntregado && valorEntregado >= totalAPagar && (
                 <div style={{ 
-                  padding: "12px", 
+                  padding: "10px", 
                   backgroundColor: "#f0f5ff", 
                   borderRadius: "4px", 
-                  marginBottom: "16px",
+                  marginBottom: "12px",
                   border: "1px solid #b3d9ff"
                 }}>
                   <div style={{ marginBottom: "8px" }}>
@@ -1625,13 +1635,14 @@ export default function CajaPage() {
                 </div>
               )}
 
-              <Divider style={{ margin: "12px 0" }} />
+              <Divider style={{ margin: "10px 0" }} />
 
               <Form.Item
                 name="metodo_pago"
                 label="Método de Pago"
                 rules={[{ required: true, message: "Seleccione método de pago" }]}
                 initialValue={mediosPago[0]?.codigo || "efectivo"}
+                style={{ marginBottom: 12 }}
               >
                 <Radio.Group buttonStyle="solid" style={{ width: "100%" }}>
                   <Row gutter={[6, 6]}>
@@ -1643,7 +1654,7 @@ export default function CajaPage() {
                         <Col key={medio.codigo} xs={12} sm={8} md={12}>
                           <Radio.Button
                             value={medio.codigo}
-                            style={{ width: "100%", height: "auto", padding: "6px 8px", textAlign: "center" }}
+                            style={{ width: "100%", height: "auto", padding: "5px 8px", textAlign: "center" }}
                           >
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
                               <span style={{ fontSize: 14 }}>{icono}</span>
@@ -1661,6 +1672,7 @@ export default function CajaPage() {
                 name="referencia" 
                 label="Comprobante / Factura"
                 rules={[{ required: true, message: "Campo requerido" }]}
+                style={{ marginBottom: 12 }}
               >
                 <Input 
                   placeholder="Generado automáticamente" 
@@ -1669,24 +1681,25 @@ export default function CajaPage() {
                 />
               </Form.Item>
 
-              <Form.Item name="observaciones" label="Observaciones">
+              <Form.Item name="observaciones" label="Observaciones" style={{ marginBottom: 12 }}>
                 <Input.TextArea rows={2} placeholder="Notas adicionales..." />
               </Form.Item>
+              </Form.Item>
+            </div>
 
-              <Divider />
-
-              <Space direction="vertical" style={{ width: "100%" }} size="middle">
+            <div style={{ paddingTop: 10, borderTop: "1px solid #e5e7eb", marginTop: 10 }}>
+              <Space direction="vertical" style={{ width: "100%" }} size="small">
                 <Button
                   type="primary"
-                  size="large"
+                  size="middle"
                   block
                   icon={<CheckCircleOutlined />}
                   onClick={handleRegistrarPago}
                   loading={procesando}
                   disabled={cuotasSeleccionadas.length === 0}
                   style={{
-                    height: 56,
-                    fontSize: 18,
+                    height: 48,
+                    fontSize: 16,
                     fontWeight: "bold",
                   }}
                 >
@@ -1694,7 +1707,7 @@ export default function CajaPage() {
                 </Button>
 
                 <Button
-                  size="large"
+                  size="middle"
                   block
                   icon={<PrinterOutlined />}
                   disabled={cuotasSeleccionadas.length === 0}
@@ -1763,10 +1776,12 @@ export default function CajaPage() {
                       abrirTicketPagoDesdeBlob(blob);
                     }
                   }}
+                  style={{ height: 44, fontSize: 15 }}
                 >
                   Vista Previa
                 </Button>
               </Space>
+            </div>
             </Form>
           </Card>
         </Col>
