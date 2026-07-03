@@ -17,6 +17,7 @@ import {
     Progress,
     Row,
     Select,
+    Switch,
     Space,
     Spin,
     Statistic,
@@ -160,6 +161,13 @@ export default function TesoreriaPage() {
     const [ejecutandoLiquidacion, setEjecutandoLiquidacion] = useState(false);
     const [cursosDisponibles, setCursosDisponibles] = useState<GrupoAcademico[]>([]);
     const [filtroGrupoRentabilidad, setFiltroGrupoRentabilidad] = useState<string | null>(null);
+    const [verSoloMovimientosGrupo, setVerSoloMovimientosGrupo] = useState(true);
+    const [loadingRelacionGrupo, setLoadingRelacionGrupo] = useState(false);
+    const [relacionGrupoMovimientos, setRelacionGrupoMovimientos] = useState<{
+        pagoIds: string[];
+        pagoAbonoIds: string[];
+        sesionesRefs: string[];
+    }>({ pagoIds: [], pagoAbonoIds: [], sesionesRefs: [] });
     const [loadingRentabilidadGrupo, setLoadingRentabilidadGrupo] = useState(false);
     const [rentabilidadRefreshTick, setRentabilidadRefreshTick] = useState(0);
     const [rentabilidadGrupo, setRentabilidadGrupo] = useState({
@@ -460,6 +468,54 @@ export default function TesoreriaPage() {
     }, []);
 
     useEffect(() => {
+        const cargarRelacionGrupoMovimientos = async () => {
+            if (!filtroGrupoRentabilidad) {
+                setRelacionGrupoMovimientos({ pagoIds: [], pagoAbonoIds: [], sesionesRefs: [] });
+                return;
+            }
+
+            try {
+                setLoadingRelacionGrupo(true);
+
+                const { data: pagosGrupo, error: pagosError } = await supabaseBrowserClient
+                    .from("pagos")
+                    .select("id, pagos_abonos(id), matriculas!inner(curso_id)")
+                    .eq("estado", "pagado")
+                    .eq("matriculas.curso_id", filtroGrupoRentabilidad);
+
+                if (pagosError) throw pagosError;
+
+                const pagoIds = (pagosGrupo || []).map((p: any) => String(p.id || "")).filter(Boolean);
+                const pagoAbonoIds = (pagosGrupo || [])
+                    .flatMap((p: any) => (Array.isArray(p?.pagos_abonos) ? p.pagos_abonos : []))
+                    .map((ab: any) => String(ab?.id || ""))
+                    .filter(Boolean);
+
+                const { data: sesionesGrupo, error: sesionesError } = await supabaseBrowserClient
+                    .from("sesiones_clase")
+                    .select("id")
+                    .eq("curso_id", filtroGrupoRentabilidad);
+
+                if (sesionesError) throw sesionesError;
+
+                const sesionesRefs = (sesionesGrupo || [])
+                    .map((s: any) => String(s?.id || ""))
+                    .filter(Boolean)
+                    .map((id) => `sesion_clase_${id}`);
+
+                setRelacionGrupoMovimientos({ pagoIds, pagoAbonoIds, sesionesRefs });
+            } catch (err) {
+                console.warn("No se pudo cargar la relación de movimientos por grupo", err);
+                setRelacionGrupoMovimientos({ pagoIds: [], pagoAbonoIds: [], sesionesRefs: [] });
+            } finally {
+                setLoadingRelacionGrupo(false);
+            }
+        };
+
+        void cargarRelacionGrupoMovimientos();
+    }, [filtroGrupoRentabilidad]);
+
+    useEffect(() => {
         const calcularRentabilidadGrupo = async () => {
             if (!filtroGrupoRentabilidad) {
                 setRentabilidadGrupo({ ingresos: 0, egresosNomina: 0, ganancia: 0, margen: 0, cobertura: 0 });
@@ -473,18 +529,15 @@ export default function TesoreriaPage() {
 
                 const { data: ingresosData, error: ingresosError } = await supabaseBrowserClient
                     .from("pagos")
-                    .select("monto, fecha_pago, matriculas!pagos_matricula_id_fkey(curso_id)")
+                    .select("monto, fecha_pago, matriculas!inner(curso_id)")
                     .eq("estado", "pagado")
+                    .eq("matriculas.curso_id", filtroGrupoRentabilidad)
                     .gte("fecha_pago", inicio)
                     .lte("fecha_pago", fin);
 
                 if (ingresosError) throw ingresosError;
 
-                const ingresos = (ingresosData || []).reduce((sum: number, p: any) => {
-                    const cursoIdPago = String(p?.matriculas?.curso_id || "");
-                    if (cursoIdPago !== String(filtroGrupoRentabilidad)) return sum;
-                    return sum + Number(p?.monto || 0);
-                }, 0);
+                const ingresos = (ingresosData || []).reduce((sum: number, p: any) => sum + Number(p?.monto || 0), 0);
 
                 let egresosNomina = 0;
                 const { data: sesionesConPerfil, error: sesionesPerfilError } = await supabaseBrowserClient
@@ -669,6 +722,38 @@ export default function TesoreriaPage() {
             return true;
         });
     }, [movimientosFiltrados]);
+
+    const movimientosTabla = useMemo(() => {
+        if (!verSoloMovimientosGrupo || !filtroGrupoRentabilidad) {
+            return movimientosUnicos;
+        }
+
+        const pagoIdsSet = new Set(relacionGrupoMovimientos.pagoIds);
+        const pagoAbonoIdsSet = new Set(relacionGrupoMovimientos.pagoAbonoIds);
+        const sesionesRefsSet = new Set(relacionGrupoMovimientos.sesionesRefs);
+
+        return movimientosUnicos.filter((mov) => {
+            const tipo = String(mov.tipo || "").toLowerCase();
+
+            if (tipo === "ingreso") {
+                if (mov.pago_abono_id) {
+                    return pagoAbonoIdsSet.has(String(mov.pago_abono_id));
+                }
+                if (mov.pago_id) {
+                    return pagoIdsSet.has(String(mov.pago_id));
+                }
+                return false;
+            }
+
+            if (tipo === "egreso") {
+                const ref = String(mov.referencia || "");
+                if (!ref.startsWith("sesion_clase_")) return false;
+                return sesionesRefsSet.has(ref);
+            }
+
+            return false;
+        });
+    }, [filtroGrupoRentabilidad, movimientosUnicos, relacionGrupoMovimientos, verSoloMovimientosGrupo]);
 
     const totalIngresos = useMemo(
         () => movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
@@ -1441,9 +1526,26 @@ export default function TesoreriaPage() {
             ) : error ? (
                 <Alert type="error" message={error} showIcon closable />
             ) : (
+                <>
+                <div style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <Space size="small">
+                        <Switch
+                            checked={verSoloMovimientosGrupo}
+                            onChange={setVerSoloMovimientosGrupo}
+                            disabled={!filtroGrupoRentabilidad}
+                        />
+                        <Text style={{ fontSize: 12 }}>
+                            Ver solo movimientos vinculados al grupo seleccionado
+                        </Text>
+                        {loadingRelacionGrupo ? <Spin size="small" /> : null}
+                    </Space>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                        Filtro estricto: pagos de matrículas del grupo y sesiones del mismo grupo.
+                    </Text>
+                </div>
                 <Table
                     rowKey="id"
-                    dataSource={movimientosFiltrados}
+                    dataSource={movimientosTabla}
                     scroll={{ x: isMobile ? 700 : 1000 }}
                     size={isMobile ? "small" : "middle"}
                     pagination={{ 
@@ -1640,6 +1742,7 @@ export default function TesoreriaPage() {
                         }}
                     />
                 </Table>
+                </>
             )}
 
             <Drawer
