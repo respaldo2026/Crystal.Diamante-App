@@ -444,7 +444,7 @@ export default function TesoreriaPage() {
         const cargarCursos = async () => {
             const { data, error } = await supabaseBrowserClient
                 .from("cursos")
-                .select("id, nombre")
+                .select("id, nombre, fecha_inicio, estado")
                 .order("nombre", { ascending: true });
 
             if (error) {
@@ -452,9 +452,44 @@ export default function TesoreriaPage() {
                 return;
             }
 
-            const cursos = (data || []).map((c: any) => ({ id: String(c.id), nombre: String(c.nombre || "Sin nombre") }));
-            setCursosDisponibles(cursos);
-            const primerCurso = cursos[0];
+            const cursosOrdenados = (data || []).map((c: any) => ({
+                id: String(c.id),
+                nombre: String(c.nombre || "Sin nombre").trim(),
+                fecha_inicio: c.fecha_inicio || null,
+                estado: String(c.estado || "").toLowerCase().trim(),
+            }));
+
+            const cursosUnicos = Array.from(
+                cursosOrdenados.reduce((map, curso) => {
+                    const key = curso.nombre.toLowerCase();
+                    const existente = map.get(key);
+
+                    if (!existente) {
+                        map.set(key, curso);
+                        return map;
+                    }
+
+                    const prioridadEstado = (estado: string) => (estado === "activo" ? 3 : estado === "proximo" ? 2 : 1);
+                    const prioridadActual = prioridadEstado(curso.estado);
+                    const prioridadExistente = prioridadEstado(existente.estado);
+
+                    if (prioridadActual > prioridadExistente) {
+                        map.set(key, curso);
+                        return map;
+                    }
+
+                    const fechaActual = curso.fecha_inicio ? dayjs(curso.fecha_inicio).valueOf() : 0;
+                    const fechaExistente = existente.fecha_inicio ? dayjs(existente.fecha_inicio).valueOf() : 0;
+                    if (fechaActual > fechaExistente) {
+                        map.set(key, curso);
+                    }
+
+                    return map;
+                }, new Map<string, { id: string; nombre: string; fecha_inicio: string | null; estado: string }>()).values()
+            );
+
+            setCursosDisponibles(cursosUnicos.map((curso) => ({ id: curso.id, nombre: curso.nombre })));
+            const primerCurso = cursosUnicos[0];
             if (!filtroGrupoRentabilidad && primerCurso) {
                 setFiltroGrupoRentabilidad(primerCurso.id);
             }
@@ -655,33 +690,52 @@ export default function TesoreriaPage() {
         });
     }, [busqueda, filtroCategoria, filtroConciliado, filtroMes, filtroMetodo, filtroPeriodo, filtroRango, filtroTipo, movimientos]);
 
+    const movimientosUnicos = useMemo(() => {
+        const vistos = new Set<string>();
+        return movimientosFiltrados.filter((mov) => {
+            const tipo = String(mov.tipo || "").toLowerCase();
+            const key =
+                tipo === "egreso" && mov.referencia
+                    ? `egreso:${mov.referencia}`
+                    : tipo === "ingreso" && mov.pago_abono_id
+                      ? `ingreso-abono:${mov.pago_abono_id}`
+                      : tipo === "ingreso" && mov.pago_id
+                        ? `ingreso-pago:${mov.pago_id}`
+                        : `id:${mov.id}`;
+
+            if (vistos.has(key)) return false;
+            vistos.add(key);
+            return true;
+        });
+    }, [movimientosFiltrados]);
+
     const totalIngresos = useMemo(
-        () => movimientosFiltrados.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosFiltrados]
+        () => movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosUnicos]
     );
 
     const totalEgresos = useMemo(
-        () => movimientosFiltrados.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosFiltrados]
+        () => movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosUnicos]
     );
 
     const saldoNeto = useMemo(() => totalIngresos - totalEgresos, [totalIngresos, totalEgresos]);
 
     const totalIngresosCaja = useMemo(
         () =>
-            movimientosFiltrados
+            movimientosUnicos
                 .filter(
                     (m) =>
                         m.tipo === MOVIMIENTO_TIPO.INGRESO &&
                         ["matriculas", "inscripciones"].includes(String(m.categoria || "").toLowerCase())
                 )
                 .reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosFiltrados]
+        [movimientosUnicos]
     );
 
     const totalIngresosEfectivo = useMemo(
         () =>
-            movimientosFiltrados
+            movimientosUnicos
                 .filter(
                     (m) =>
                         m.tipo === MOVIMIENTO_TIPO.INGRESO &&
@@ -689,29 +743,29 @@ export default function TesoreriaPage() {
                         String(m.metodo_pago || "").toLowerCase() === "efectivo"
                 )
                 .reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosFiltrados]
+        [movimientosUnicos]
     );
 
     const totalSalidasReales = useMemo(
-        () => movimientosFiltrados.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosFiltrados]
+        () => movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosUnicos]
     );
 
     const totalSalidasEfectivo = useMemo(
         () =>
-            movimientosFiltrados
+            movimientosUnicos
                 .filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO && String(m.metodo_pago || "").toLowerCase() === "efectivo")
                 .reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosFiltrados]
+        [movimientosUnicos]
     );
 
     const saldoCajaEfectivo = useMemo(() => totalIngresosEfectivo - totalSalidasEfectivo, [totalIngresosEfectivo, totalSalidasEfectivo]);
 
     const analisisFinanciero = useMemo(() => {
-        const ingresos = movimientosFiltrados
+        const ingresos = movimientosUnicos
             .filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO)
             .reduce((acc, m) => acc + Number(m.monto || 0), 0);
-        const egresos = movimientosFiltrados
+        const egresos = movimientosUnicos
             .filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO)
             .reduce((acc, m) => acc + Number(m.monto || 0), 0);
         const ganancia = ingresos - egresos;
@@ -722,7 +776,7 @@ export default function TesoreriaPage() {
         const margen = ingresos > 0 ? Math.round((ganancia / ingresos) * 100) : 0;
         const superoPE = ingresos >= egresos;
         return { ingresos, egresos, ganancia, pctIngresos, pctEgresos, cobertura, margen, superoPE };
-    }, [movimientosFiltrados]);
+    }, [movimientosUnicos]);
 
     const etiquetaPeriodo = useMemo(() => {
         const hoy = dayjs();
