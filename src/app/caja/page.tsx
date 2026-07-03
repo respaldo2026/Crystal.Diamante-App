@@ -1782,7 +1782,6 @@ export default function CajaPage() {
                 </Button>
               </Space>
             </div>
-            </Form>
           </Card>
         </Col>
       </Row>
