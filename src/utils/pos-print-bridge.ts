@@ -147,14 +147,7 @@ export const imprimirTicketConBridge = async (
   data: TicketPagoData,
   preferredPrinter?: string
 ): Promise<BridgeResult> => {
-  try {
-    const ok = await imprimirConAgenteLocal(data, preferredPrinter);
-    if (ok) {
-      return { ok: true, channel: "local-agent" };
-    }
-  } catch {
-  }
-
+  // 1) Priorizar QZ para conservar el ticket visual (logo/estilos)
   try {
     const { imprimirTicketConQzTray } = await import("@utils/qz-tray");
     const qzOutcome = await Promise.race<"printed" | "failed" | "pending">([
@@ -170,6 +163,15 @@ export const imprimirTicketConBridge = async (
 
     if (qzOutcome === "pending") {
       return { ok: true, channel: "qz", pendingAuth: true };
+    }
+  } catch {
+  }
+
+  // 2) Si QZ no está disponible, usar agente local RAW como respaldo
+  try {
+    const ok = await imprimirConAgenteLocal(data, preferredPrinter);
+    if (ok) {
+      return { ok: true, channel: "local-agent" };
     }
   } catch {
   }
