@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm, useSelect } from "@refinedev/antd";
 import { Form, Select, DatePicker, Input, Card, message, Alert, Button, Space, Divider, Modal, Col, Row, Descriptions, Result, Typography, Tag } from "antd";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { construirNombreGrupo } from "@utils/grupos";
-import { BookOutlined, SearchOutlined, PlusOutlined, PrinterOutlined, DollarCircleOutlined, CheckCircleOutlined } from "@ant-design/icons";
+import { BookOutlined, SearchOutlined, PlusOutlined, DollarCircleOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { formatDate } from "@utils/date";
 import { useRouter } from "next/navigation";
@@ -29,7 +29,6 @@ const POS_ROUTE = "/caja";
 export default function MatriculaCreate() {
     const router = useRouter();
     const { formProps, saveButtonProps, onFinish } = useForm({ redirect: false });
-    const printRef = useRef<HTMLDivElement>(null);
 
     // Estados para fase 1: crear inscripción
     const [cuposInfo, setCuposInfo] = useState<{ ocupados: number; total: number } | null>(null);
@@ -893,31 +892,6 @@ export default function MatriculaCreate() {
         }
     };
 
-    const handlePrint = () => {
-        if (printRef.current) {
-            const printWindow = window.open("", "_blank");
-            if (printWindow) {
-                printWindow.document.write(`
-                    <html>
-                        <head>
-                            <title>Recibo de Inscripción</title>
-                            <style>
-                                body { font-family: Arial, sans-serif; padding: 20px; }
-                                .header { text-align: center; margin-bottom: 30px; }
-                                h3 { margin: 10px 0; }
-                            </style>
-                        </head>
-                        <body>
-                            ${printRef.current.innerHTML}
-                        </body>
-                    </html>
-                `);
-                printWindow.document.close();
-                printWindow.print();
-            }
-        }
-    };
-
     const handleReenviarAccesoPortal = async () => {
         if (!estudianteData?.telefono) {
             message.warning("El estudiante no tiene teléfono registrado");
@@ -1257,13 +1231,8 @@ export default function MatriculaCreate() {
                 <Col xs={24} md={12}>
                     <Card
                         title="📄 Recibo de Inscripción"
-                        extra={
-                            <Button icon={<PrinterOutlined />} onClick={handlePrint}>
-                                Imprimir
-                            </Button>
-                        }
                     >
-                        <div ref={printRef}>
+                        <div>
                             <div style={{ textAlign: "center", marginBottom: 30 }}>
                                 <Title level={3}>Academia Crystal Diamante</Title>
                                 <Text>Recibo de Inscripción</Text>

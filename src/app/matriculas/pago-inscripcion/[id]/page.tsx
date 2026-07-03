@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Card, Typography, Descriptions, Button, Space, message, Spin, Alert, Form, Select, Input, DatePicker, Divider, Row, Col, Result, Tag } from "antd";
-import { PrinterOutlined, DollarCircleOutlined, WhatsAppOutlined, CheckCircleOutlined } from "@ant-design/icons";
+import { DollarCircleOutlined, WhatsAppOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
@@ -27,7 +27,6 @@ export default function PagoInscripcionPage() {
     const params = useParams();
     const router = useRouter();
     const matriculaId = params?.id as string;
-    const printRef = useRef<HTMLDivElement>(null);
 
     const [loading, setLoading] = useState(true);
     const [matricula, setMatricula] = useState<any>(null);
@@ -131,37 +130,6 @@ export default function PagoInscripcionPage() {
             cargarDatos();
         }
     }, [matriculaId, cargarDatos]);
-
-    const handlePrint = () => {
-        if (printRef.current) {
-            const printWindow = window.open("", "_blank");
-            if (printWindow) {
-                printWindow.document.write(`
-                    <html>
-                        <head>
-                            <title>Recibo de Inscripción</title>
-                            <style>
-                                body { font-family: Arial, sans-serif; padding: 20px; }
-                                .header { text-align: center; margin-bottom: 30px; }
-                                .info { margin: 20px 0; }
-                                .row { display: flex; margin: 10px 0; }
-                                .label { font-weight: bold; width: 200px; }
-                                .value { flex: 1; }
-                                .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #666; }
-                                .pending { color: red; font-weight: bold; }
-                                .paid { color: green; font-weight: bold; }
-                            </style>
-                        </head>
-                        <body>
-                            ${printRef.current.innerHTML}
-                        </body>
-                    </html>
-                `);
-                printWindow.document.close();
-                printWindow.print();
-            }
-        }
-    };
 
     const handleRegistrarPago = async (values: any) => {
         try {
@@ -462,13 +430,8 @@ export default function PagoInscripcionPage() {
                     {/* Recibo/Factura */}
                     <Card
                         title="📄 Recibo de Inscripción"
-                        extra={
-                            <Button icon={<PrinterOutlined />} onClick={handlePrint}>
-                                Imprimir
-                            </Button>
-                        }
                     >
-                        <div ref={printRef}>
+                        <div>
                             <div className="header" style={{ textAlign: "center", marginBottom: 30 }}>
                                 <Title level={3}>Academia Crystal Diamante</Title>
                                 <Text>Recibo de Inscripción</Text>
