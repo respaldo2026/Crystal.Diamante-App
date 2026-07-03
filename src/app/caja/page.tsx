@@ -350,7 +350,12 @@ export default function CajaPage() {
       const nombreImpresora = String(configuracion?.impresora_pos || "").trim() || undefined;
       try {
         const { imprimirTicketConQzTray } = await import("@utils/qz-tray");
-        const impresoEnQz = await imprimirTicketConQzTray(ticketData, nombreImpresora);
+        const impresoEnQz = await Promise.race<boolean>([
+          imprimirTicketConQzTray(ticketData, nombreImpresora),
+          new Promise<boolean>((resolve) => {
+            setTimeout(() => resolve(false), 2500);
+          }),
+        ]);
         if (impresoEnQz) {
           if (preOpenedWindow && !preOpenedWindow.closed) {
             preOpenedWindow.close();
@@ -371,6 +376,12 @@ export default function CajaPage() {
       return true;
     } catch (error) {
       console.error("No se pudo imprimir el ticket:", error);
+      if (preOpenedWindow && !preOpenedWindow.closed) {
+        try {
+          preOpenedWindow.close();
+        } catch {
+        }
+      }
       messageApi.warning("El pago se registró, pero no se pudo abrir la ventana de impresión. Revisa el bloqueador de ventanas emergentes.");
       return false;
     }
@@ -1038,9 +1049,16 @@ export default function CajaPage() {
           };
 
           printPlaceholderUsed = true;
-          await intentarImprimirTicket(ticketData, printPlaceholder);
+          const impreso = await intentarImprimirTicket(ticketData, printPlaceholder);
 
           const blob = await generarTicketPagoBlob(ticketData);
+
+          if (!impreso) {
+            try {
+              abrirTicketPagoDesdeBlob(blob, printPlaceholder);
+            } catch {
+            }
+          }
 
           try {
             const { publicUrl } = await subirTicketPago({
@@ -1236,9 +1254,16 @@ export default function CajaPage() {
       };
 
       printPlaceholderUsed = true;
-      await intentarImprimirTicket(ticketData, printPlaceholder);
+      const impreso = await intentarImprimirTicket(ticketData, printPlaceholder);
 
       const blob = await generarTicketPagoBlob(ticketData);
+
+      if (!impreso) {
+        try {
+          abrirTicketPagoDesdeBlob(blob, printPlaceholder);
+        } catch {
+        }
+      }
 
       // Subir ticket a storage y asociarlo a todos los pagos del lote
       if (pagosActualizados.length > 0) {
