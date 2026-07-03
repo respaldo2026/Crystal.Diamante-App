@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useForm, useSelect } from "@refinedev/antd";
 import { Form, Select, DatePicker, Input, Card, message, Alert, Button, Space, Divider, Modal, Col, Row, Descriptions, Result, Typography, Tag } from "antd";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -51,6 +51,7 @@ export default function MatriculaCreate() {
     const [cursoData, setCursoData] = useState<any>(null);
     const [pagoInscripcionData, setPagoInscripcionData] = useState<any>(null);
     const [procesandoPago, setProcesandoPago] = useState(false);
+    const printingLockRef = useRef(false);
     const [reenviandoAcceso, setReenviandoAcceso] = useState(false);
     const [estadoAccesoPortal, setEstadoAccesoPortal] = useState<string | null>(null);
     const [consultandoEstadoAcceso, setConsultandoEstadoAcceso] = useState(false);
@@ -782,16 +783,25 @@ export default function MatriculaCreate() {
 
                 let qzOutcome: "printed" | "failed" | "pending" = "failed";
                 try {
-                    const { imprimirTicketConQzTray } = await import("@utils/qz-tray");
-                    const nombreImpresora = String(configAcademia?.impresora_pos || "").trim() || undefined;
-                    qzOutcome = await Promise.race<"printed" | "failed" | "pending">([
-                        imprimirTicketConQzTray(ticketData, nombreImpresora).then((ok) => (ok ? "printed" : "failed")),
-                        new Promise<"pending">((resolve) => {
-                            setTimeout(() => resolve("pending"), 4500);
-                        }),
-                    ]);
+                    if (printingLockRef.current) {
+                        qzOutcome = "pending";
+                    } else {
+                        printingLockRef.current = true;
+                        const { imprimirTicketConQzTray } = await import("@utils/qz-tray");
+                        const nombreImpresora = String(configAcademia?.impresora_pos || "").trim() || undefined;
+                        qzOutcome = await Promise.race<"printed" | "failed" | "pending">([
+                            imprimirTicketConQzTray(ticketData, nombreImpresora).then((ok) => (ok ? "printed" : "failed")),
+                            new Promise<"pending">((resolve) => {
+                                setTimeout(() => resolve("pending"), 4500);
+                            }),
+                        ]);
+                    }
                 } catch {
                     qzOutcome = "failed";
+                } finally {
+                    setTimeout(() => {
+                        printingLockRef.current = false;
+                    }, 2500);
                 }
 
                 if (qzOutcome === "pending") {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   App,
   Card,
@@ -344,8 +344,14 @@ export default function CajaPage() {
   const [configuracion, setConfiguracion] = useState<any>(null);
   const [valorEntregado, setValorEntregado] = useState<number | null>(null);
   const [mediosPago, setMediosPago] = useState<any[]>([]);
+  const printingLockRef = useRef(false);
 
   const intentarImprimirTicket = useCallback(async (ticketData: any) => {
+    if (printingLockRef.current) {
+      return true;
+    }
+
+    printingLockRef.current = true;
     try {
       const nombreImpresora = String(configuracion?.impresora_pos || "").trim() || undefined;
       try {
@@ -374,6 +380,10 @@ export default function CajaPage() {
       console.error("No se pudo imprimir el ticket:", error);
       messageApi.warning("El pago se registró, pero QZ Tray no pudo imprimir el ticket.");
       return false;
+    } finally {
+      setTimeout(() => {
+        printingLockRef.current = false;
+      }, 2500);
     }
   }, [configuracion, messageApi]);
 
