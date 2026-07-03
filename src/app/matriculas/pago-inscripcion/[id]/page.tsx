@@ -8,7 +8,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import dayjs from "dayjs";
 import { enviarWhatsappConPlantilla } from "@utils/whatsapp";
 import { registrarIngresoDesdePago } from "@modules/finanzas/movimientos.service";
-import { abrirTicketPagoDesdeBlob, buildEnrollmentTicketData, formatTicketReference, generarTicketPagoBlob } from "@utils/pago-ticket";
+import { abrirTicketPagoDesdeBlob, buildEnrollmentTicketData, formatTicketReference, generarTicketPagoBlob, imprimirTicketPagoDesdeBlob } from "@utils/pago-ticket";
 import { subirTicketPago } from "@utils/ticket-storage";
 
 const { Title, Text } = Typography;
@@ -164,6 +164,17 @@ export default function PagoInscripcionPage() {
     };
 
     const handleRegistrarPago = async (values: any) => {
+        let printPlaceholder: Window | null = null;
+        try {
+            printPlaceholder = window.open("", "_blank");
+            if (printPlaceholder && printPlaceholder.document) {
+                printPlaceholder.document.write("<html><head><title>Imprimiendo ticket...</title></head><body style=\"font-family:Arial,sans-serif;padding:16px;\">Preparando ticket...</body></html>");
+                printPlaceholder.document.close();
+            }
+        } catch {
+            printPlaceholder = null;
+        }
+
         try {
             setProcesandoPago(true);
 
@@ -219,11 +230,31 @@ export default function PagoInscripcionPage() {
                 });
 
                 const blob = await generarTicketPagoBlob(ticketData);
-                const placeholder = window.open("", "_blank");
-                if (placeholder) {
-                    abrirTicketPagoDesdeBlob(blob, placeholder);
+
+                let impresoConQz = false;
+                try {
+                    const { imprimirTicketConQzTray } = await import("@utils/qz-tray");
+                    const nombreImpresora = String(configAcademia?.impresora_pos || "").trim() || undefined;
+                    impresoConQz = await Promise.race<boolean>([
+                        imprimirTicketConQzTray(ticketData, nombreImpresora),
+                        new Promise<boolean>((resolve) => {
+                            setTimeout(() => resolve(false), 2500);
+                        }),
+                    ]);
+                } catch {
+                    impresoConQz = false;
+                }
+
+                if (impresoConQz) {
+                    if (printPlaceholder && !printPlaceholder.closed) {
+                        printPlaceholder.close();
+                    }
                 } else {
-                    abrirTicketPagoDesdeBlob(blob);
+                    try {
+                        await imprimirTicketPagoDesdeBlob(blob, printPlaceholder);
+                    } catch {
+                        abrirTicketPagoDesdeBlob(blob, printPlaceholder);
+                    }
                 }
 
                 const { publicUrl } = await subirTicketPago({
@@ -318,6 +349,12 @@ export default function PagoInscripcionPage() {
             console.error("Error registrando pago:", error);
             message.error("Error al registrar el pago");
         } finally {
+            if (printPlaceholder && !printPlaceholder.closed && printPlaceholder.location.href === "about:blank") {
+                try {
+                    printPlaceholder.close();
+                } catch {
+                }
+            }
             setProcesandoPago(false);
         }
     };
