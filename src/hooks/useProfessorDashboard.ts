@@ -9,6 +9,11 @@ dayjs.extend(isBetween);
 
 const HOURS_PER_CLASS = 3;
 const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automaticamente para calculo de ciclos/i;
+const XP_POR_ASISTENCIA = 40;
+const XP_POR_QUIZ = 30;
+const XP_BONO_ASISTENCIA = 80;
+const XP_POR_CURSO_TERMINADO = 120;
+const XP_POR_NIVEL = 250;
 
 export interface ProfesorDashboardCurso {
   id: string;
@@ -97,6 +102,8 @@ export interface ProfesorDashboardCalificacionesGrupo {
 export interface ProfesorDashboardGamificacionEstudiante {
   matriculaId: number;
   estudiante: string;
+  xpSemanal: number;
+  xpTotal: number;
   score: number;
   nivel: number;
   asistenciaPercent: number;
@@ -482,7 +489,7 @@ export const fetchProfessorDashboardData = async (
     console.error("Error obteniendo pagos extraordinarios", pagosProfesoresResult.error);
   }
 
-  const [asistenciasResult, calificacionesResult] = await Promise.all([
+  const [asistenciasResult, calificacionesResult, asistenciasGamificacionResult, calificacionesGamificacionResult] = await Promise.all([
     matriculaIds.length > 0
       ? supabaseBrowserClient
           .from("asistencias")
@@ -499,6 +506,20 @@ export const fetchProfessorDashboardData = async (
           .gte("fecha_evaluacion", dayjs().subtract(90, "day").format("YYYY-MM-DD"))
           .order("fecha_evaluacion", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
+    matriculaIds.length > 0
+      ? supabaseBrowserClient
+          .from("asistencias")
+          .select("id, fecha, estado, matricula_id")
+          .in("matricula_id", matriculaIds)
+          .order("fecha", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    matriculaIds.length > 0
+      ? supabaseBrowserClient
+          .from("calificaciones")
+          .select("id, matricula_id, concepto, nota, calificacion, fecha_evaluacion, tipo_evaluacion")
+          .in("matricula_id", matriculaIds)
+          .order("fecha_evaluacion", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (asistenciasResult.error) {
@@ -507,9 +528,17 @@ export const fetchProfessorDashboardData = async (
   if (calificacionesResult.error) {
     console.error("Error obteniendo calificaciones", calificacionesResult.error);
   }
+  if (asistenciasGamificacionResult.error) {
+    console.error("Error obteniendo asistencias para XP", asistenciasGamificacionResult.error);
+  }
+  if (calificacionesGamificacionResult.error) {
+    console.error("Error obteniendo calificaciones para XP", calificacionesGamificacionResult.error);
+  }
 
   const asistenciasData = asistenciasResult.data || [];
   const calificacionesData = calificacionesResult.data || [];
+  const asistenciasGamificacionData = asistenciasGamificacionResult.data || asistenciasData;
+  const calificacionesGamificacionData = calificacionesGamificacionResult.data || calificacionesData;
 
   const estudiantesPorCurso = new Map<string, number>();
   const matriculaCursoMap = new Map<number, string>();
@@ -891,7 +920,7 @@ export const fetchProfessorDashboardData = async (
   });
 
   const asistenciaPorMatricula = new Map<number, { total: number; presentes: number; weekKeys: string[] }>();
-  asistenciasData.forEach((asistencia: any) => {
+  asistenciasGamificacionData.forEach((asistencia: any) => {
     const matriculaId = Number(asistencia?.matricula_id);
     if (!Number.isFinite(matriculaId)) return;
 
@@ -908,7 +937,9 @@ export const fetchProfessorDashboardData = async (
   });
 
   const quizAprobadosPorMatricula = new Map<number, number>();
-  calificacionesData.forEach((calificacion: any) => {
+  const quizAprobadosSemanaPorMatricula = new Map<number, number>();
+  const semanaActualKey = dayjs().startOf("week").format("YYYY-MM-DD");
+  calificacionesGamificacionData.forEach((calificacion: any) => {
     const matriculaId = Number(calificacion?.matricula_id);
     if (!Number.isFinite(matriculaId)) return;
 
@@ -919,6 +950,11 @@ export const fetchProfessorDashboardData = async (
     if (!Number.isFinite(nota) || !isPassingGrade(nota)) return;
 
     quizAprobadosPorMatricula.set(matriculaId, (quizAprobadosPorMatricula.get(matriculaId) || 0) + 1);
+
+    const weekKeyEvaluacion = getWeekKey(calificacion?.fecha_evaluacion);
+    if (weekKeyEvaluacion === semanaActualKey) {
+      quizAprobadosSemanaPorMatricula.set(matriculaId, (quizAprobadosSemanaPorMatricula.get(matriculaId) || 0) + 1);
+    }
   });
 
   const gamificacionPorCurso = new Map<string, ProfesorDashboardGamificacionEstudiante[]>();
@@ -936,6 +972,23 @@ export const fetchProfessorDashboardData = async (
     const semanasConAsistencia = Array.from(new Set(asistencia.weekKeys)).length;
     const { actual: rachaActual } = calculateWeeklyStreak(asistencia.weekKeys);
     const quizAprobados = quizAprobadosPorMatricula.get(matriculaId) || 0;
+    const presentesSemana = asistencia.weekKeys.filter((weekKey) => weekKey === semanaActualKey).length;
+    const quizAprobadosSemana = quizAprobadosSemanaPorMatricula.get(matriculaId) || 0;
+
+    const matriculaEstado = normalizeStateText(matricula?.estado);
+    const cursoTerminado = ["aprobado", "finalizado", "completado", "graduado", "egresado"].some((estado) =>
+      matriculaEstado.includes(estado)
+    );
+
+    const xpTotal =
+      (asistencia.presentes * XP_POR_ASISTENCIA) +
+      (quizAprobados * XP_POR_QUIZ) +
+      (cursoTerminado ? XP_POR_CURSO_TERMINADO : 0) +
+      (asistenciaPercent >= 80 ? XP_BONO_ASISTENCIA : 0);
+
+    const xpSemanal =
+      (presentesSemana * XP_POR_ASISTENCIA) +
+      (quizAprobadosSemana * XP_POR_QUIZ);
 
     const asistenciaScore = Math.min(100, asistenciaPercent);
     const quizScore = Math.min(100, quizAprobados * 30);
@@ -955,12 +1008,14 @@ export const fetchProfessorDashboardData = async (
       )
     );
 
-    const nivel = Math.max(1, Math.min(5, Math.ceil(score / 20)));
+    const nivel = Math.floor(xpTotal / XP_POR_NIVEL) + 1;
     const estado: "alto" | "medio" | "bajo" = score >= 80 ? "alto" : score >= 55 ? "medio" : "bajo";
 
     const payload: ProfesorDashboardGamificacionEstudiante = {
       matriculaId,
       estudiante: matriculaEstudianteMap.get(matriculaId) || "Estudiante",
+      xpSemanal,
+      xpTotal,
       score,
       nivel,
       asistenciaPercent,
@@ -977,7 +1032,7 @@ export const fetchProfessorDashboardData = async (
 
   const gamificacionEstudiantesPorGrupo: ProfesorDashboardGamificacionGrupo[] = cursosEnriquecidos.map((curso) => {
     const estudiantes = (gamificacionPorCurso.get(String(curso.id)) || [])
-      .sort((a, b) => b.score - a.score || a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }));
+      .sort((a, b) => b.xpTotal - a.xpTotal || b.xpSemanal - a.xpSemanal || b.score - a.score || a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }));
 
     const promedioScore = estudiantes.length
       ? Math.round(estudiantes.reduce((acc, item) => acc + item.score, 0) / estudiantes.length)

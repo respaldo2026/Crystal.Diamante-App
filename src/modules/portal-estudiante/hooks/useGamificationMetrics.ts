@@ -142,6 +142,7 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
     const xpPorCurso = cursosTerminados * 120;
     const xpBonoAsistencia = asistenciaPromedio >= 80 ? 80 : 0;
     const totalXp = xpPorAsistencia + xpPorQuiz + xpPorCurso + xpBonoAsistencia;
+    const xpSemanal = (presentesSemana * 40) + (quizAprobadosSemana * 30);
 
     const nivel = Math.floor(totalXp / XP_POR_NIVEL) + 1;
     const xpNivelActual = totalXp % XP_POR_NIVEL;
@@ -235,6 +236,7 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
     const misionSiguiente = misiones.find((m) => !m.completada) || null;
 
     return {
+      xpSemanal,
       totalXp,
       nivel,
       xpNivelActual,

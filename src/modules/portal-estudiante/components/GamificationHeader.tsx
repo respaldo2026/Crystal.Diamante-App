@@ -6,6 +6,7 @@ const { Text } = Typography;
 
 type Props = {
   nivel: number;
+  xpSemanal: number;
   totalXp: number;
   xpNivelActual: number;
   xpPorNivel: number;
@@ -14,6 +15,7 @@ type Props = {
 
 export const GamificationHeader: React.FC<Props> = ({
   nivel,
+  xpSemanal,
   totalXp,
   xpNivelActual,
   xpPorNivel,
@@ -33,6 +35,7 @@ export const GamificationHeader: React.FC<Props> = ({
       <Space direction="vertical" size={8} style={{ width: "100%" }}>
         <Space align="center" wrap>
           <Tag color="magenta" icon={<RocketOutlined />}>Nivel {nivel}</Tag>
+          <Text style={{ fontSize: 14, color: "#be185d", fontWeight: 600 }}>XP semanal: {xpSemanal}</Text>
           <Text strong style={{ fontSize: 15 }}>XP total: {totalXp}</Text>
         </Space>
 

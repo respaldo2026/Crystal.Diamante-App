@@ -40,7 +40,7 @@ import {
   Typography,
 } from "antd";
 import dayjs from "dayjs";
-import { ProfessorDashboardData, ProfesorDashboardCalificacionUltimaClase, ProfesorDashboardCalificacionesGrupo } from "@hooks/useProfessorDashboard";
+import { ProfessorDashboardData, ProfesorDashboardCalificacionUltimaClase, ProfesorDashboardCalificacionesGrupo, ProfesorDashboardGamificacionGrupo } from "@hooks/useProfessorDashboard";
 import { construirNombreGrupo } from "@utils/grupos";
 import { obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas, obtenerMaterialesPorProgramas, obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { getMaterialCoverageRuleDisplay } from "@/types/payment-plans";
@@ -248,7 +248,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     gamificacionEstudiantesPorGrupo: [],
   };
 
-  const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre, calificacionesRecientesPorGrupo } = resolvedDashboard;
+  const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre, calificacionesRecientesPorGrupo, gamificacionEstudiantesPorGrupo } = resolvedDashboard;
   const statsData = stats ?? fallbackStats;
   const proximasSesionesData = dedupeByKey(proximasSesiones || [], (sesion: any) => `${sesion.cursoId ?? ""}-${sesion.fecha ?? ""}-${sesion.tema ?? ""}-${sesion.claseNumero ?? ""}`);
   const pendientesData = dedupeByKey(pendientes || [], (pendiente: any) => `${pendiente.cursoId ?? ""}-${pendiente.concepto ?? ""}-${pendiente.fecha ?? ""}`);
@@ -478,6 +478,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   const hasAsistenciaData = (statsData.asistenciaChart || []).length > 0;
   const hasCalificacionesRecientes = (calificacionesRecientesPorGrupo || []).length > 0;
   const hasTopCursos = (topCursos || []).length > 0;
+  const hasGamificacionEstudiantes = (gamificacionEstudiantesPorGrupo || []).some((grupo) => (grupo?.estudiantes || []).length > 0);
 
   const menuProfesor = [
     { key: "cursos", label: "Cursos", icon: <BookOutlined /> },
@@ -1230,6 +1231,93 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                 </Card>
               </Col>
             )}
+          </Row>
+        )}
+
+        {hasGamificacionEstudiantes && (
+          <Row gutter={[12, 12]} style={{ marginTop: 10 }}>
+            <Col xs={24}>
+              <Card
+                variant="borderless"
+                title={<Space><TrophyOutlined />XP de estudiantes (semanal y total)</Space>}
+                extra={<Tag color="gold">Seguimiento de dedicacion</Tag>}
+                style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+              >
+                <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                  {(gamificacionEstudiantesPorGrupo || []).map((grupo: ProfesorDashboardGamificacionGrupo) => {
+                    const topEstudiante = (grupo.estudiantes || [])[0];
+                    return (
+                      <Card
+                        key={grupo.cursoId}
+                        size="small"
+                        title={grupo.curso}
+                        extra={
+                          topEstudiante
+                            ? <Tag color="volcano">Mas dedicado: {topEstudiante.estudiante}</Tag>
+                            : <Tag>Sin datos</Tag>
+                        }
+                        styles={{ body: { padding: isMobile ? 8 : 12 } }}
+                      >
+                        <Table
+                          size="small"
+                          pagination={false}
+                          rowKey="matriculaId"
+                          dataSource={grupo.estudiantes || []}
+                          scroll={{ x: 620 }}
+                          columns={[
+                            {
+                              title: "Estudiante",
+                              dataIndex: "estudiante",
+                              key: "estudiante",
+                              render: (value: string, record: any, index: number) => (
+                                <Space size={6}>
+                                  <Typography.Text strong>{value}</Typography.Text>
+                                  {index === 0 ? <Tag color="gold">Top</Tag> : null}
+                                </Space>
+                              ),
+                            },
+                            {
+                              title: "XP semanal",
+                              dataIndex: "xpSemanal",
+                              key: "xpSemanal",
+                              width: 120,
+                              align: "right",
+                              render: (value: number) => <Typography.Text strong>{Number(value || 0)}</Typography.Text>,
+                            },
+                            {
+                              title: "XP total",
+                              dataIndex: "xpTotal",
+                              key: "xpTotal",
+                              width: 110,
+                              align: "right",
+                              render: (value: number) => <Typography.Text>{Number(value || 0)}</Typography.Text>,
+                            },
+                            {
+                              title: "Nivel",
+                              dataIndex: "nivel",
+                              key: "nivel",
+                              width: 88,
+                              align: "center",
+                              render: (value: number) => <Tag color="magenta">Nv {value}</Tag>,
+                            },
+                            {
+                              title: "Dedicacion",
+                              dataIndex: "estado",
+                              key: "estado",
+                              width: 120,
+                              render: (value: "alto" | "medio" | "bajo") => {
+                                const color = value === "alto" ? "green" : value === "medio" ? "gold" : "red";
+                                return <Tag color={color}>{String(value || "bajo").toUpperCase()}</Tag>;
+                              },
+                            },
+                          ]}
+                        />
+                      </Card>
+                    );
+                  })}
+                </Space>
+              </Card>
+            </Col>
           </Row>
         )}
 

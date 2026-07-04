@@ -1659,6 +1659,7 @@ export default function PortalEstudiante() {
           <Space direction="vertical" size={12} style={{ width: "100%", marginBottom: 12 }}>
             <GamificationHeader
               nivel={gamification.nivel}
+              xpSemanal={gamification.xpSemanal}
               totalXp={gamification.totalXp}
               xpNivelActual={gamification.xpNivelActual}
               xpPorNivel={gamification.xpPorNivel}
