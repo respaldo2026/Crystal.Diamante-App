@@ -382,6 +382,16 @@ export default function TesoreriaPage() {
         }
     }, [puedeVerTodo, reconciliarTesoreria, user?.id]);
 
+    const obtenerMatriculaIdsPorGrupo = useCallback(async (cursoId: string) => {
+        const { data, error } = await supabaseBrowserClient
+            .from("matriculas")
+            .select("id")
+            .eq("curso_id", cursoId);
+
+        if (error) throw error;
+        return (data || []).map((m: any) => Number(m?.id)).filter((id: number) => Number.isFinite(id));
+    }, []);
+
     useEffect(() => {
         void cargarMovimientos({ reconciliar: true });
     }, [cargarMovimientos]);
@@ -508,13 +518,19 @@ export default function TesoreriaPage() {
             try {
                 setLoadingRelacionGrupo(true);
 
-                const { data: pagosGrupo, error: pagosError } = await supabaseBrowserClient
-                    .from("pagos")
-                    .select("id, pagos_abonos(id), matriculas!inner(curso_id)")
-                    .eq("estado", "pagado")
-                    .eq("matriculas.curso_id", filtroGrupoRentabilidad);
+                const matriculaIds = await obtenerMatriculaIdsPorGrupo(filtroGrupoRentabilidad);
 
-                if (pagosError) throw pagosError;
+                let pagosGrupo: any[] = [];
+                if (matriculaIds.length > 0) {
+                    const { data: pagosData, error: pagosError } = await supabaseBrowserClient
+                        .from("pagos")
+                        .select("id, pagos_abonos(id), matricula_id")
+                        .eq("estado", "pagado")
+                        .in("matricula_id", matriculaIds);
+
+                    if (pagosError) throw pagosError;
+                    pagosGrupo = pagosData || [];
+                }
 
                 const pagoIds = (pagosGrupo || []).map((p: any) => String(p.id || "")).filter(Boolean);
                 const pagoAbonoIds = (pagosGrupo || [])
@@ -544,7 +560,7 @@ export default function TesoreriaPage() {
         };
 
         void cargarRelacionGrupoMovimientos();
-    }, [filtroGrupoRentabilidad]);
+    }, [filtroGrupoRentabilidad, obtenerMatriculaIdsPorGrupo]);
 
     useEffect(() => {
         const calcularRentabilidadGrupo = async () => {
@@ -558,17 +574,22 @@ export default function TesoreriaPage() {
                 const inicio = rangoPeriodoSeleccionado.inicio.format("YYYY-MM-DD");
                 const fin = rangoPeriodoSeleccionado.fin.format("YYYY-MM-DD");
 
-                const { data: ingresosData, error: ingresosError } = await supabaseBrowserClient
-                    .from("pagos")
-                    .select("monto, fecha_pago, matriculas!inner(curso_id)")
-                    .eq("estado", "pagado")
-                    .eq("matriculas.curso_id", filtroGrupoRentabilidad)
-                    .gte("fecha_pago", inicio)
-                    .lte("fecha_pago", fin);
+                const matriculaIds = await obtenerMatriculaIdsPorGrupo(filtroGrupoRentabilidad);
 
-                if (ingresosError) throw ingresosError;
+                let ingresos = 0;
+                if (matriculaIds.length > 0) {
+                    const { data: ingresosData, error: ingresosError } = await supabaseBrowserClient
+                        .from("pagos")
+                        .select("monto, fecha_pago")
+                        .eq("estado", "pagado")
+                        .in("matricula_id", matriculaIds)
+                        .gte("fecha_pago", inicio)
+                        .lte("fecha_pago", fin);
 
-                const ingresos = (ingresosData || []).reduce((sum: number, p: any) => sum + Number(p?.monto || 0), 0);
+                    if (ingresosError) throw ingresosError;
+
+                    ingresos = (ingresosData || []).reduce((sum: number, p: any) => sum + Number(p?.monto || 0), 0);
+                }
 
                 let egresosNomina = 0;
                 const { data: sesionesConPerfil, error: sesionesPerfilError } = await supabaseBrowserClient
@@ -640,7 +661,7 @@ export default function TesoreriaPage() {
         };
 
         void calcularRentabilidadGrupo();
-    }, [filtroGrupoRentabilidad, rangoPeriodoSeleccionado, rentabilidadRefreshTick]);
+    }, [filtroGrupoRentabilidad, obtenerMatriculaIdsPorGrupo, rangoPeriodoSeleccionado, rentabilidadRefreshTick]);
 
     const movimientosFiltrados = useMemo(() => {
         return movimientos.filter((mov) => {
@@ -786,33 +807,35 @@ export default function TesoreriaPage() {
         });
     }, [filtroGrupoRentabilidad, movimientosUnicos, relacionGrupoMovimientos, verSoloMovimientosGrupo]);
 
+    const movimientosBaseAnalisis = useMemo(() => movimientosTabla, [movimientosTabla]);
+
     const totalIngresos = useMemo(
-        () => movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosUnicos]
+        () => movimientosBaseAnalisis.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosBaseAnalisis]
     );
 
     const totalEgresos = useMemo(
-        () => movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosUnicos]
+        () => movimientosBaseAnalisis.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosBaseAnalisis]
     );
 
     const saldoNeto = useMemo(() => totalIngresos - totalEgresos, [totalIngresos, totalEgresos]);
 
     const totalIngresosCaja = useMemo(
         () =>
-            movimientosUnicos
+            movimientosBaseAnalisis
                 .filter(
                     (m) =>
                         m.tipo === MOVIMIENTO_TIPO.INGRESO &&
                         ["matriculas", "inscripciones"].includes(String(m.categoria || "").toLowerCase())
                 )
                 .reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosUnicos]
+        [movimientosBaseAnalisis]
     );
 
     const totalIngresosEfectivo = useMemo(
         () =>
-            movimientosUnicos
+            movimientosBaseAnalisis
                 .filter(
                     (m) =>
                         m.tipo === MOVIMIENTO_TIPO.INGRESO &&
@@ -820,29 +843,29 @@ export default function TesoreriaPage() {
                         String(m.metodo_pago || "").toLowerCase() === "efectivo"
                 )
                 .reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosUnicos]
+        [movimientosBaseAnalisis]
     );
 
     const totalSalidasReales = useMemo(
-        () => movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosUnicos]
+        () => movimientosBaseAnalisis.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO).reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
+        [movimientosBaseAnalisis]
     );
 
     const totalSalidasEfectivo = useMemo(
         () =>
-            movimientosUnicos
+            movimientosBaseAnalisis
                 .filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO && String(m.metodo_pago || "").toLowerCase() === "efectivo")
                 .reduce((acc, mov) => acc + Number(mov.monto || 0), 0),
-        [movimientosUnicos]
+        [movimientosBaseAnalisis]
     );
 
     const saldoCajaEfectivo = useMemo(() => totalIngresosEfectivo - totalSalidasEfectivo, [totalIngresosEfectivo, totalSalidasEfectivo]);
 
     const analisisFinanciero = useMemo(() => {
-        const ingresos = movimientosUnicos
+        const ingresos = movimientosBaseAnalisis
             .filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO)
             .reduce((acc, m) => acc + Number(m.monto || 0), 0);
-        const egresos = movimientosUnicos
+        const egresos = movimientosBaseAnalisis
             .filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO)
             .reduce((acc, m) => acc + Number(m.monto || 0), 0);
         const ganancia = ingresos - egresos;
@@ -853,7 +876,7 @@ export default function TesoreriaPage() {
         const margen = ingresos > 0 ? Math.round((ganancia / ingresos) * 100) : 0;
         const superoPE = ingresos >= egresos;
         return { ingresos, egresos, ganancia, pctIngresos, pctEgresos, cobertura, margen, superoPE };
-    }, [movimientosUnicos]);
+    }, [movimientosBaseAnalisis]);
 
     const etiquetaPeriodo = useMemo(() => {
         const hoy = dayjs();
@@ -889,17 +912,17 @@ export default function TesoreriaPage() {
     }, [busqueda, etiquetaPeriodo, filtroCategoria, filtroConciliado, filtroGrupoRentabilidad, filtroMetodo, filtroTipo, verSoloMovimientosGrupo]);
 
     const baseCalculoPuntoEquilibrio = useMemo(() => {
-        const ingresosMov = movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO);
-        const egresosMov = movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO);
+        const ingresosMov = movimientosBaseAnalisis.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO);
+        const egresosMov = movimientosBaseAnalisis.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO);
         return {
-            totalRegistros: movimientosUnicos.length,
+            totalRegistros: movimientosBaseAnalisis.length,
             ingresosRegistros: ingresosMov.length,
             egresosRegistros: egresosMov.length,
             ingresosMonto: analisisFinanciero.ingresos,
             egresosMonto: analisisFinanciero.egresos,
             cobertura: analisisFinanciero.cobertura,
         };
-    }, [analisisFinanciero.cobertura, analisisFinanciero.egresos, analisisFinanciero.ingresos, movimientosUnicos]);
+    }, [analisisFinanciero.cobertura, analisisFinanciero.egresos, analisisFinanciero.ingresos, movimientosBaseAnalisis]);
 
     const handleRegistrarMovimiento = useCallback(async () => {
         try {
