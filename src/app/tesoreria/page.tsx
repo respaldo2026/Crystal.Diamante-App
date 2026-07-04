@@ -50,6 +50,7 @@ import {
     WhatsAppOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import isBetween from "dayjs/plugin/isBetween";
 import { useCurrentUser } from "@hooks/useCurrentUser";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { enviarWhatsapp } from "@utils/whatsapp";
@@ -72,6 +73,8 @@ const { useBreakpoint } = Grid;
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
+
+dayjs.extend(isBetween);
 
 const formatoCOP = (valor: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(valor);
