@@ -11,6 +11,7 @@ const HOURS_PER_CLASS = 3;
 const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automaticamente para calculo de ciclos/i;
 const XP_POR_ASISTENCIA = 40;
 const XP_POR_QUIZ = 30;
+const XP_POR_EVIDENCIA = 25;
 const XP_BONO_ASISTENCIA = 80;
 const XP_POR_CURSO_TERMINADO = 120;
 const XP_POR_NIVEL = 250;
@@ -120,6 +121,17 @@ export interface ProfesorDashboardGamificacionGrupo {
   estudiantes: ProfesorDashboardGamificacionEstudiante[];
 }
 
+export interface ProfesorDashboardEvidenciaTarea {
+  id: string;
+  matriculaId: number;
+  cursoId: string;
+  pensumCursoId: string;
+  estudiante: string;
+  urlImagen: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface ProfessorDashboardData {
   loading: boolean;
   profesorNombre?: string;
@@ -130,6 +142,7 @@ export interface ProfessorDashboardData {
   pagos: ProfesorDashboardPago[];
   calificacionesRecientesPorGrupo: ProfesorDashboardCalificacionesGrupo[];
   gamificacionEstudiantesPorGrupo: ProfesorDashboardGamificacionGrupo[];
+  evidenciasTareas: ProfesorDashboardEvidenciaTarea[];
 }
 
 const emptyStats: ProfesorDashboardStats = {
@@ -489,7 +502,7 @@ export const fetchProfessorDashboardData = async (
     console.error("Error obteniendo pagos extraordinarios", pagosProfesoresResult.error);
   }
 
-  const [asistenciasResult, calificacionesResult, asistenciasGamificacionResult, calificacionesGamificacionResult] = await Promise.all([
+  const [asistenciasResult, calificacionesResult, asistenciasGamificacionResult, calificacionesGamificacionResult, evidenciasTareasResult] = await Promise.all([
     matriculaIds.length > 0
       ? supabaseBrowserClient
           .from("asistencias")
@@ -520,6 +533,13 @@ export const fetchProfessorDashboardData = async (
           .in("matricula_id", matriculaIds)
           .order("fecha_evaluacion", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
+    matriculaIds.length > 0
+      ? supabaseBrowserClient
+          .from("evidencias_tareas")
+          .select("id, matricula_id, curso_id, pensum_curso_id, url_imagen, created_at, updated_at")
+          .in("matricula_id", matriculaIds)
+          .order("updated_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (asistenciasResult.error) {
@@ -534,11 +554,15 @@ export const fetchProfessorDashboardData = async (
   if (calificacionesGamificacionResult.error) {
     console.error("Error obteniendo calificaciones para XP", calificacionesGamificacionResult.error);
   }
+  if (evidenciasTareasResult.error) {
+    console.error("Error obteniendo evidencias de tareas", evidenciasTareasResult.error);
+  }
 
   const asistenciasData = asistenciasResult.data || [];
   const calificacionesData = calificacionesResult.data || [];
   const asistenciasGamificacionData = asistenciasGamificacionResult.data || asistenciasData;
   const calificacionesGamificacionData = calificacionesGamificacionResult.data || calificacionesData;
+  const evidenciasTareasData = evidenciasTareasResult.data || [];
 
   const estudiantesPorCurso = new Map<string, number>();
   const matriculaCursoMap = new Map<number, string>();
@@ -938,6 +962,8 @@ export const fetchProfessorDashboardData = async (
 
   const quizAprobadosPorMatricula = new Map<number, number>();
   const quizAprobadosSemanaPorMatricula = new Map<number, number>();
+  const evidenciasTotalPorMatricula = new Map<number, number>();
+  const evidenciasSemanaPorMatricula = new Map<number, number>();
   const semanaActualKey = dayjs().startOf("week").format("YYYY-MM-DD");
   calificacionesGamificacionData.forEach((calificacion: any) => {
     const matriculaId = Number(calificacion?.matricula_id);
@@ -954,6 +980,18 @@ export const fetchProfessorDashboardData = async (
     const weekKeyEvaluacion = getWeekKey(calificacion?.fecha_evaluacion);
     if (weekKeyEvaluacion === semanaActualKey) {
       quizAprobadosSemanaPorMatricula.set(matriculaId, (quizAprobadosSemanaPorMatricula.get(matriculaId) || 0) + 1);
+    }
+  });
+
+  evidenciasTareasData.forEach((evidencia: any) => {
+    const matriculaId = Number(evidencia?.matricula_id);
+    if (!Number.isFinite(matriculaId)) return;
+
+    evidenciasTotalPorMatricula.set(matriculaId, (evidenciasTotalPorMatricula.get(matriculaId) || 0) + 1);
+
+    const weekKeyEvidencia = getWeekKey(evidencia?.updated_at || evidencia?.created_at);
+    if (weekKeyEvidencia === semanaActualKey) {
+      evidenciasSemanaPorMatricula.set(matriculaId, (evidenciasSemanaPorMatricula.get(matriculaId) || 0) + 1);
     }
   });
 
@@ -974,6 +1012,8 @@ export const fetchProfessorDashboardData = async (
     const quizAprobados = quizAprobadosPorMatricula.get(matriculaId) || 0;
     const presentesSemana = asistencia.weekKeys.filter((weekKey) => weekKey === semanaActualKey).length;
     const quizAprobadosSemana = quizAprobadosSemanaPorMatricula.get(matriculaId) || 0;
+    const evidenciasTotal = evidenciasTotalPorMatricula.get(matriculaId) || 0;
+    const evidenciasSemana = evidenciasSemanaPorMatricula.get(matriculaId) || 0;
 
     const matriculaEstado = normalizeStateText(matricula?.estado);
     const cursoTerminado = ["aprobado", "finalizado", "completado", "graduado", "egresado"].some((estado) =>
@@ -983,12 +1023,14 @@ export const fetchProfessorDashboardData = async (
     const xpTotal =
       (asistencia.presentes * XP_POR_ASISTENCIA) +
       (quizAprobados * XP_POR_QUIZ) +
+      (evidenciasTotal * XP_POR_EVIDENCIA) +
       (cursoTerminado ? XP_POR_CURSO_TERMINADO : 0) +
       (asistenciaPercent >= 80 ? XP_BONO_ASISTENCIA : 0);
 
     const xpSemanal =
       (presentesSemana * XP_POR_ASISTENCIA) +
-      (quizAprobadosSemana * XP_POR_QUIZ);
+      (quizAprobadosSemana * XP_POR_QUIZ) +
+      (evidenciasSemana * XP_POR_EVIDENCIA);
 
     const asistenciaScore = Math.min(100, asistenciaPercent);
     const quizScore = Math.min(100, quizAprobados * 30);
@@ -1046,6 +1088,20 @@ export const fetchProfessorDashboardData = async (
     };
   });
 
+  const evidenciasTareas: ProfesorDashboardEvidenciaTarea[] = (evidenciasTareasData || []).map((evidencia: any) => {
+    const matriculaId = Number(evidencia?.matricula_id);
+    return {
+      id: String(evidencia?.id || ""),
+      matriculaId,
+      cursoId: String(evidencia?.curso_id || matriculaCursoMap.get(matriculaId) || ""),
+      pensumCursoId: String(evidencia?.pensum_curso_id || ""),
+      estudiante: matriculaEstudianteMap.get(matriculaId) || "Estudiante",
+      urlImagen: String(evidencia?.url_imagen || ""),
+      createdAt: evidencia?.created_at || null,
+      updatedAt: evidencia?.updated_at || null,
+    };
+  });
+
   return {
     stats: statsPayload,
     cursos: cursosEnriquecidos,
@@ -1054,6 +1110,7 @@ export const fetchProfessorDashboardData = async (
     pagos: pagosRecientes,
     calificacionesRecientesPorGrupo,
     gamificacionEstudiantesPorGrupo,
+    evidenciasTareas,
   };
 };
 
@@ -1068,6 +1125,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
   const [pagos, setPagos] = useState<ProfesorDashboardPago[]>([]);
   const [calificacionesRecientesPorGrupo, setCalificacionesRecientesPorGrupo] = useState<ProfesorDashboardCalificacionesGrupo[]>([]);
   const [gamificacionEstudiantesPorGrupo, setGamificacionEstudiantesPorGrupo] = useState<ProfesorDashboardGamificacionGrupo[]>([]);
+  const [evidenciasTareas, setEvidenciasTareas] = useState<ProfesorDashboardEvidenciaTarea[]>([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -1090,6 +1148,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
         setPagos(data.pagos);
         setCalificacionesRecientesPorGrupo(data.calificacionesRecientesPorGrupo || []);
         setGamificacionEstudiantesPorGrupo(data.gamificacionEstudiantesPorGrupo || []);
+        setEvidenciasTareas(data.evidenciasTareas || []);
       } catch (error) {
         console.error("Error general obteniendo dashboard del profesor", error);
         setStats(emptyStats);
@@ -1099,6 +1158,7 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
         setPagos([]);
         setCalificacionesRecientesPorGrupo([]);
         setGamificacionEstudiantesPorGrupo([]);
+        setEvidenciasTareas([]);
       } finally {
         setLoading(false);
       }
@@ -1117,5 +1177,6 @@ export const useProfessorDashboard = (profesorId?: string): ProfessorDashboardDa
     pagos,
     calificacionesRecientesPorGrupo,
     gamificacionEstudiantesPorGrupo,
+    evidenciasTareas,
   };
 };

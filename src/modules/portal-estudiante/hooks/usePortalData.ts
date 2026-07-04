@@ -22,6 +22,7 @@ type PortalPayload = {
   materiales: any[];
   materialesCiclo: any[];
   materialesClase: any[];
+  evidenciasTareas: any[];
   quizzesClase: any[];
   avancePorCurso: any[];
   certificados: any[];

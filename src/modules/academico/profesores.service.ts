@@ -53,6 +53,7 @@ export async function obtenerDashboardProfesor(profesorId: string) {
       pagos: [],
       calificacionesRecientesPorGrupo: [],
       gamificacionEstudiantesPorGrupo: [],
+      evidenciasTareas: [],
     };
   }
 }

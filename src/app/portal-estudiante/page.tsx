@@ -294,6 +294,8 @@ export default function PortalEstudiante() {
   const [quizIntentos, setQuizIntentos] = useState<any[]>([]);
   const [calificacionesActividad, setCalificacionesActividad] = useState<any[]>([]);
   const [calificaciones, setCalificaciones] = useState<any[]>([]);
+  const [evidenciasTareas, setEvidenciasTareas] = useState<any[]>([]);
+  const [evidenciaUploadByTema, setEvidenciaUploadByTema] = useState<Record<string, boolean>>({});
   const logrocardRef = useRef<HTMLDivElement>(null);
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [whatsappAgente, setWhatsappAgente] = useState<string | null>(null);
@@ -331,6 +333,7 @@ export default function PortalEstudiante() {
     setMateriales(payload.materiales);
     setMaterialesCiclo(payload.materialesCiclo);
     setMaterialesClase(payload.materialesClase);
+    setEvidenciasTareas(payload.evidenciasTareas || []);
     setQuizzesClase(payload.quizzesClase);
     setAvancePorCurso(payload.avancePorCurso);
     setCertificados(payload.certificados);
@@ -735,6 +738,138 @@ export default function PortalEstudiante() {
   const abrirWhatsappSoporte = (destino: "agente" | "academia", mensajeBase: string) => {
     const telefono = destino === "agente" ? whatsappAgente : whatsappAdmisiones;
     abrirWhatsapp(telefono, mensajeBase);
+  };
+
+  const comprimirImagenEvidencia = async (file: File): Promise<Blob> => {
+    const bitmap = await createImageBitmap(file);
+
+    const maxSide = 1280;
+    const ratio = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * ratio));
+    const height = Math.max(1, Math.round(bitmap.height * ratio));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("No se pudo inicializar el compresor de imagen");
+    }
+
+    ctx.drawImage(bitmap, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((out) => resolve(out), "image/webp", 0.78);
+    });
+
+    bitmap.close();
+
+    if (!blob) {
+      throw new Error("No se pudo comprimir la imagen");
+    }
+
+    return blob;
+  };
+
+  const subirEvidenciaTema = async (temaId: string, temaNombre: string, file: File) => {
+    const temaIdSafe = String(temaId || "");
+    if (!temaIdSafe) {
+      message.warning("Tema inválido para subir evidencia");
+      return;
+    }
+
+    if (!matriculaSeleccionada?.id || !estudiante?.id) {
+      message.warning("No se encontró la matrícula activa");
+      return;
+    }
+
+    if (!String(file?.type || "").startsWith("image/")) {
+      message.warning("Solo se permiten imágenes");
+      return;
+    }
+
+    setEvidenciaUploadByTema((prev) => ({ ...prev, [temaIdSafe]: true }));
+
+    try {
+      const existente = (evidenciasTareas || []).find((item: any) =>
+        String(item?.matricula_id || "") === String(matriculaSeleccionada.id)
+        && String(item?.pensum_curso_id || "") === temaIdSafe
+      );
+
+      const blob = await comprimirImagenEvidencia(file);
+      const extension = "webp";
+      const filename = `${temaIdSafe}-${Date.now()}.${extension}`;
+      const storagePath = `${estudiante.id}/${matriculaSeleccionada.id}/${filename}`;
+
+      const { error: uploadError } = await supabaseBrowserClient.storage
+        .from("evidencias-tareas")
+        .upload(storagePath, blob, {
+          contentType: "image/webp",
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicData } = supabaseBrowserClient.storage
+        .from("evidencias-tareas")
+        .getPublicUrl(storagePath);
+
+      const payload = {
+        matricula_id: matriculaSeleccionada.id,
+        curso_id: matriculaSeleccionada?.curso_id || matriculaSeleccionada?.cursos?.id || null,
+        pensum_curso_id: temaIdSafe,
+        estudiante_id: estudiante.id,
+        url_imagen: publicData?.publicUrl || "",
+        storage_path: storagePath,
+        nombre_archivo: file.name,
+        mime_type: "image/webp",
+        tamano_bytes: blob.size,
+        updated_at: new Date().toISOString(),
+      } as any;
+
+      let persisted: any = null;
+
+      if (existente?.id) {
+        const { data, error } = await supabaseBrowserClient
+          .from("evidencias_tareas")
+          .update(payload)
+          .eq("id", existente.id)
+          .select("*")
+          .single();
+        if (error) throw error;
+        persisted = data;
+
+        if (existente?.storage_path && existente.storage_path !== storagePath) {
+          await supabaseBrowserClient.storage.from("evidencias-tareas").remove([String(existente.storage_path)]);
+        }
+      } else {
+        const { data, error } = await supabaseBrowserClient
+          .from("evidencias_tareas")
+          .insert({
+            ...payload,
+            created_at: new Date().toISOString(),
+          })
+          .select("*")
+          .single();
+        if (error) throw error;
+        persisted = data;
+      }
+
+      setEvidenciasTareas((prev) => {
+        const rest = (prev || []).filter((item: any) => String(item?.id || "") !== String(persisted?.id || ""));
+        return [persisted, ...rest];
+      });
+
+      message.success(`Evidencia subida en ${temaNombre || "el tema"}. +25 XP semanal`);
+    } catch (error: any) {
+      logger.error("Error subiendo evidencia de tarea", error);
+      message.error(error?.message || "No se pudo subir la evidencia");
+    } finally {
+      setEvidenciaUploadByTema((prev) => ({ ...prev, [temaIdSafe]: false }));
+    }
   };
 
   const whatsappSoporteItems = React.useMemo(
@@ -1228,6 +1363,8 @@ export default function PortalEstudiante() {
       certificados={certificados}
       cicloRutaId={cicloRutaId}
       actividadPorTemaMatricula={actividadPorTemaMatricula}
+      evidenciasTareas={evidenciasTareas}
+      evidenciaUploadByTema={evidenciaUploadByTema}
       parseNumeroCuotaAction={parseNumeroCuota}
       getVisiblePaymentStatusWithGraceAction={getVisiblePaymentStatusWithGrace}
       getFechaVencimientoEfectivaAction={getFechaVencimientoEfectiva}
@@ -1253,6 +1390,7 @@ export default function PortalEstudiante() {
       getMaterialIconAction={getMaterialIcon}
       onOpenMaterialAction={abrirMaterialDidactico}
       onOpenQuizAction={abrirQuiz}
+      onUploadEvidenceAction={subirEvidenciaTema}
       onWarnAction={(warnMessage) => message.warning(warnMessage)}
       renderMobileListCardsAction={renderMobileListCards}
       onDownloadCertificadoAction={descargarCertificado}
@@ -1650,6 +1788,7 @@ export default function PortalEstudiante() {
     misCursosResumen,
     asistencias,
     quizIntentos,
+    evidenciasTareas,
   });
 
   const renderSeccionActiva = () => {

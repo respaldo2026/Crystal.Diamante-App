@@ -16,6 +16,7 @@ import {
   SafetyCertificateOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  CameraOutlined,
 } from "@ant-design/icons";
 import {
   Badge,
@@ -41,7 +42,13 @@ import {
   Typography,
 } from "antd";
 import dayjs from "dayjs";
-import { ProfessorDashboardData, ProfesorDashboardCalificacionUltimaClase, ProfesorDashboardCalificacionesGrupo, ProfesorDashboardGamificacionGrupo } from "@hooks/useProfessorDashboard";
+import {
+  ProfessorDashboardData,
+  ProfesorDashboardCalificacionUltimaClase,
+  ProfesorDashboardCalificacionesGrupo,
+  ProfesorDashboardEvidenciaTarea,
+  ProfesorDashboardGamificacionGrupo,
+} from "@hooks/useProfessorDashboard";
 import { construirNombreGrupo } from "@utils/grupos";
 import { obtenerMaterialesCicloPorProgramas, obtenerMaterialesClasePorProgramas, obtenerMaterialesPorProgramas, obtenerPensumPorProgramas } from "@modules/academico/pensum.service";
 import { getMaterialCoverageRuleDisplay } from "@/types/payment-plans";
@@ -247,9 +254,21 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     pagos: [],
     calificacionesRecientesPorGrupo: [],
     gamificacionEstudiantesPorGrupo: [],
+    evidenciasTareas: [],
   };
 
-  const { loading, stats, cursos, proximasSesiones, pendientes, pagos, profesorNombre, calificacionesRecientesPorGrupo, gamificacionEstudiantesPorGrupo } = resolvedDashboard;
+  const {
+    loading,
+    stats,
+    cursos,
+    proximasSesiones,
+    pendientes,
+    pagos,
+    profesorNombre,
+    calificacionesRecientesPorGrupo,
+    gamificacionEstudiantesPorGrupo,
+    evidenciasTareas,
+  } = resolvedDashboard;
   const statsData = stats ?? fallbackStats;
   const proximasSesionesData = dedupeByKey(proximasSesiones || [], (sesion: any) => `${sesion.cursoId ?? ""}-${sesion.fecha ?? ""}-${sesion.tema ?? ""}-${sesion.claseNumero ?? ""}`);
   const pendientesData = dedupeByKey(pendientes || [], (pendiente: any) => `${pendiente.cursoId ?? ""}-${pendiente.concepto ?? ""}-${pendiente.fecha ?? ""}`);
@@ -588,6 +607,19 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
       .sort((a: any, b: any) => Number(a.orden || 0) - Number(b.orden || 0));
     return { ...quiz, preguntas };
   }, [quizzesProfesor, quizPreguntasProfesor, temaSeleccionadoId]);
+
+  const evidenciasTemaSeleccionado = useMemo(() => {
+    if (!temaSeleccionadoId || !cursoMaterialSeleccionado?.id) return [];
+
+    return (evidenciasTareas || [])
+      .filter((item: ProfesorDashboardEvidenciaTarea) =>
+        String(item?.cursoId || "") === String(cursoMaterialSeleccionado.id)
+        && String(item?.pensumCursoId || "") === String(temaSeleccionadoId)
+      )
+      .sort((a: ProfesorDashboardEvidenciaTarea, b: ProfesorDashboardEvidenciaTarea) =>
+        dayjs(String(b.updatedAt || b.createdAt || "")).valueOf() - dayjs(String(a.updatedAt || a.createdAt || "")).valueOf()
+      );
+  }, [evidenciasTareas, temaSeleccionadoId, cursoMaterialSeleccionado?.id]);
 
   const abrirMaterialDidactico = (material: any, title: string) => {
     const src = extractIframeSrc(material?.url_archivo);
@@ -1539,6 +1571,51 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                       }))}
                     />
                   </Space>
+                )}
+              </Card>
+
+              <Card
+                size="small"
+                title={
+                  <Space>
+                    <CameraOutlined style={{ color: "#2563eb" }} />
+                    <span>Evidencias de tareas del tema</span>
+                  </Space>
+                }
+              >
+                {evidenciasTemaSeleccionado.length === 0 ? (
+                  <Empty description="Sin evidencias subidas por estudiantes" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                ) : (
+                  <List
+                    dataSource={evidenciasTemaSeleccionado}
+                    renderItem={(item: ProfesorDashboardEvidenciaTarea) => (
+                      <List.Item
+                        actions={[
+                          <Button
+                            key={`ver-evidencia-${item.id}`}
+                            type="link"
+                            onClick={() => window.open(item.urlImagen, "_blank", "noopener,noreferrer")}
+                          >
+                            Ver
+                          </Button>,
+                        ]}
+                      >
+                        <List.Item.Meta
+                          avatar={
+                            <img
+                              src={item.urlImagen}
+                              alt={`Evidencia ${item.estudiante}`}
+                              style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", border: "1px solid #e5e7eb" }}
+                            />
+                          }
+                          title={<Typography.Text strong>{item.estudiante}</Typography.Text>}
+                          description={dayjs(String(item.updatedAt || item.createdAt || "")).isValid()
+                            ? dayjs(String(item.updatedAt || item.createdAt)).format("DD MMM YYYY, h:mm A")
+                            : "Fecha no disponible"}
+                        />
+                      </List.Item>
+                    )}
+                  />
                 )}
               </Card>
             </Space>

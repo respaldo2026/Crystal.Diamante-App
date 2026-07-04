@@ -23,6 +23,8 @@ type Props = {
   certificados: any[];
   cicloRutaId: string | null;
   actividadPorTemaMatricula: Map<string, number>;
+  evidenciasTareas: any[];
+  evidenciaUploadByTema: Record<string, boolean>;
   parseNumeroCuotaAction: (pago: any) => number | null;
   getVisiblePaymentStatusWithGraceAction: (pago: any) => string;
   getFechaVencimientoEfectivaAction: (pago: any) => any;
@@ -48,6 +50,7 @@ type Props = {
   getMaterialIconAction: (material: any) => React.ReactNode;
   onOpenMaterialAction: (material: any, titulo: string, temaIdForQuiz?: string) => void;
   onOpenQuizAction: (quiz: any) => Promise<void>;
+  onUploadEvidenceAction: (temaId: string, temaNombre: string, file: File) => Promise<void>;
   onWarnAction: (warnMessage: string) => void;
   renderMobileListCardsAction: (items: any[], getCard: (item: any) => any, emptyText?: string) => React.ReactNode;
   onDownloadCertificadoAction: (matricula: any) => void;
@@ -68,6 +71,8 @@ export const PortalRutaAcademicaSection = ({
   certificados,
   cicloRutaId,
   actividadPorTemaMatricula,
+  evidenciasTareas,
+  evidenciaUploadByTema,
   parseNumeroCuotaAction,
   getVisiblePaymentStatusWithGraceAction,
   getFechaVencimientoEfectivaAction,
@@ -93,6 +98,7 @@ export const PortalRutaAcademicaSection = ({
   getMaterialIconAction,
   onOpenMaterialAction,
   onOpenQuizAction,
+  onUploadEvidenceAction,
   onWarnAction,
   renderMobileListCardsAction,
   onDownloadCertificadoAction,
@@ -391,6 +397,11 @@ export const PortalRutaAcademicaSection = ({
                   const quizTema = getQuizByTemaIdAction(temaId);
                   const notaQuizTema = getNotaByTemaIdAction(temaId);
                   const notaActividadTema = actividadPorTemaMatricula.get(`${matriculaSeleccionada?.id || ""}-${temaId}`) ?? null;
+                  const evidenciaTema = (evidenciasTareas || []).find((evidencia: any) =>
+                    String(evidencia?.matricula_id || "") === String(matriculaSeleccionada?.id || "")
+                    && String(evidencia?.pensum_curso_id || "") === temaId
+                  ) || null;
+                  const evidenciaUploading = Boolean(evidenciaUploadByTema?.[temaId]);
                   const colorAvatarTema = temaBloqueado ? "#bfbfbf" : temaCompletado ? "#16a34a" : colorNumeroTema;
                   const temaVisual = resolveTemaVisualAction(tema, matriculaSeleccionada?.cursos);
                   const temaImageSrc = buildTemaImageDataUriAction(tema, matriculaSeleccionada?.cursos);
@@ -454,10 +465,13 @@ export const PortalRutaAcademicaSection = ({
                               quizTema={quizTema}
                               notaQuizTema={notaQuizTema}
                               notaActividadTema={notaActividadTema}
+                              evidenciaTema={evidenciaTema}
+                              evidenciaUploading={evidenciaUploading}
                               materialIcon={recursoPrincipalTema ? getMaterialIconAction(recursoPrincipalTema) : <FilePdfOutlined />}
                               onWarnAction={(warnMessage) => onWarnAction(warnMessage)}
                               onOpenMaterialAction={onOpenMaterialAction}
                               onOpenQuizAction={onOpenQuizAction}
+                              onUploadEvidenceAction={onUploadEvidenceAction}
                             />
                           ) : insumosTema.length ? (
                             <Collapse

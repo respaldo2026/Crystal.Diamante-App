@@ -34,9 +34,11 @@ type Params = {
   misCursosResumen: CursoResumenGamificacion[];
   asistencias: any[];
   quizIntentos: any[];
+  evidenciasTareas: any[];
 };
 
 const XP_POR_NIVEL = 250;
+const XP_POR_EVIDENCIA = 25;
 const OBJETIVO_ASISTENCIA_SEMANAL = 1;
 const OBJETIVO_RACHA_SEMANAL = 3;
 const OBJETIVO_SEMANAS_RECIENTES = 4;
@@ -97,10 +99,11 @@ const calcularRachaSemanal = (fechasPresentes: dayjs.Dayjs[]) => {
   return { actual, mejor };
 };
 
-export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizIntentos }: Params) => {
+export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizIntentos, evidenciasTareas }: Params) => {
   return useMemo(() => {
     const asistenciasArray = Array.isArray(asistencias) ? asistencias : [];
     const quizIntentosArray = Array.isArray(quizIntentos) ? quizIntentos : [];
+    const evidenciasArray = Array.isArray(evidenciasTareas) ? evidenciasTareas : [];
 
     const presentes = asistenciasArray.filter((a: any) => String(a?.estado || "").toLowerCase() === "presente");
 
@@ -128,6 +131,11 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
       return fecha.isValid() && fecha.isAfter(semanaActual.subtract(1, "millisecond")) && fecha.isBefore(semanaActualFin.add(1, "millisecond"));
     }).length;
 
+    const evidenciasSemana = evidenciasArray.filter((e: any) => {
+      const fecha = dayjs(String(e?.updated_at || e?.created_at || ""));
+      return fecha.isValid() && fecha.isAfter(semanaActual.subtract(1, "millisecond")) && fecha.isBefore(semanaActualFin.add(1, "millisecond"));
+    }).length;
+
     const asistenciaPromedio = misCursosResumen.length
       ? Math.round(misCursosResumen.reduce((acc, c) => acc + Number(c?.porcentajeAsistencia || 0), 0) / misCursosResumen.length)
       : 0;
@@ -140,9 +148,10 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
     const xpPorAsistencia = presentes.length * 40;
     const xpPorQuiz = quizzesAprobados.length * 30;
     const xpPorCurso = cursosTerminados * 120;
+    const xpPorEvidencias = evidenciasArray.length * XP_POR_EVIDENCIA;
     const xpBonoAsistencia = asistenciaPromedio >= 80 ? 80 : 0;
-    const totalXp = xpPorAsistencia + xpPorQuiz + xpPorCurso + xpBonoAsistencia;
-    const xpSemanal = (presentesSemana * 40) + (quizAprobadosSemana * 30);
+    const totalXp = xpPorAsistencia + xpPorQuiz + xpPorCurso + xpPorEvidencias + xpBonoAsistencia;
+    const xpSemanal = (presentesSemana * 40) + (quizAprobadosSemana * 30) + (evidenciasSemana * XP_POR_EVIDENCIA);
 
     const nivel = Math.floor(totalXp / XP_POR_NIVEL) + 1;
     const xpNivelActual = totalXp % XP_POR_NIVEL;
@@ -248,5 +257,5 @@ export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizInte
       logros,
       misionSiguiente,
     };
-  }, [misCursosResumen, asistencias, quizIntentos]);
+  }, [misCursosResumen, asistencias, quizIntentos, evidenciasTareas]);
 };

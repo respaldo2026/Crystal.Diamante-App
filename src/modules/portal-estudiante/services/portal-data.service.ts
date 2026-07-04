@@ -29,6 +29,7 @@ export type PortalDataResult =
         materiales: any[];
         materialesCiclo: any[];
         materialesClase: any[];
+        evidenciasTareas: any[];
         quizzesClase: any[];
         avancePorCurso: any[];
         certificados: any[];
@@ -209,6 +210,7 @@ export const fetchPortalEstudianteData = async (options?: FetchPortalDataOptions
     let quizIntentos: any[] = [];
     let calificacionesActividad: any[] = [];
     let calificaciones: any[] = [];
+    let evidenciasTareas: any[] = [];
 
     if (matriculaIds.length > 0) {
       const matriculaById = new Map<string, any>();
@@ -309,6 +311,18 @@ export const fetchPortalEstudianteData = async (options?: FetchPortalDataOptions
           };
         });
       }
+
+      const { data: evidenciasData, error: evidenciasError } = await supabaseBrowserClient
+        .from("evidencias_tareas")
+        .select("id, matricula_id, curso_id, pensum_curso_id, estudiante_id, url_imagen, storage_path, nombre_archivo, mime_type, tamano_bytes, created_at, updated_at")
+        .in("matricula_id", matriculaIds)
+        .order("updated_at", { ascending: false });
+
+      if (evidenciasError) {
+        logger.warn("No se pudieron cargar evidencias del portal:", evidenciasError);
+      } else {
+        evidenciasTareas = evidenciasData || [];
+      }
     }
 
     let pensum: any[] = [];
@@ -373,6 +387,7 @@ export const fetchPortalEstudianteData = async (options?: FetchPortalDataOptions
         materiales,
         materialesCiclo,
         materialesClase,
+        evidenciasTareas,
         quizzesClase,
         avancePorCurso,
         calificaciones,

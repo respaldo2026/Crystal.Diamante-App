@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Button, Space, Tag } from "antd";
-import { FilePdfOutlined, SafetyCertificateOutlined, ArrowRightOutlined, CheckCircleOutlined } from "@ant-design/icons";
+import { FilePdfOutlined, SafetyCertificateOutlined, ArrowRightOutlined, CheckCircleOutlined, CameraOutlined, EyeOutlined } from "@ant-design/icons";
 import { quizAprobado } from "@/modules/portal-estudiante/utils";
 
 type TemaMaterialActionsProps = {
@@ -14,10 +14,13 @@ type TemaMaterialActionsProps = {
   quizTema: any;
   notaQuizTema: number | null;
   notaActividadTema: number | null;
+  evidenciaTema?: any;
+  evidenciaUploading?: boolean;
   materialIcon?: React.ReactNode;
   onWarnAction: (message: string) => void;
   onOpenMaterialAction: (material: any, title: string, temaId: string) => void;
   onOpenQuizAction: (quiz: any) => void;
+  onUploadEvidenceAction: (temaId: string, temaNombre: string, file: File) => Promise<void>;
 };
 
 export const TemaMaterialActions = ({
@@ -29,11 +32,15 @@ export const TemaMaterialActions = ({
   quizTema,
   notaQuizTema,
   notaActividadTema,
+  evidenciaTema,
+  evidenciaUploading = false,
   materialIcon,
   onWarnAction,
   onOpenMaterialAction,
   onOpenQuizAction,
+  onUploadEvidenceAction,
 }: TemaMaterialActionsProps) => {
+  const inputFileRef = React.useRef<HTMLInputElement | null>(null);
   const mostrarEnlacePrincipal = presentacionesTema.length <= 1;
   const quizDisponible = Boolean(quizTema);
   const quizPresentado = notaQuizTema != null;
@@ -219,6 +226,67 @@ export const TemaMaterialActions = ({
             </Button>
           </div>
         )}
+
+        <div
+          style={{
+            border: `1px solid ${evidenciaTema ? "#bbf7d0" : "#e5e7eb"}`,
+            borderRadius: 14,
+            padding: 10,
+            background: evidenciaTema
+              ? "linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)"
+              : "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#166534", letterSpacing: 0.4, marginBottom: 2 }}>
+              EVIDENCIA DE TAREA
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", lineHeight: 1.3 }}>
+              Subir foto de trabajo
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+              1 foto por tarea. Al subirla ganas +25 XP semanal.
+            </div>
+          </div>
+
+          <input
+            ref={inputFileRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              await onUploadEvidenceAction(temaId, temaNombre || "Tema", file);
+              event.currentTarget.value = "";
+            }}
+          />
+
+          <Space size={8} wrap>
+            <Button
+              type="primary"
+              icon={<CameraOutlined />}
+              loading={evidenciaUploading}
+              onClick={() => inputFileRef.current?.click()}
+              style={{ borderRadius: 10, fontWeight: 700 }}
+            >
+              {evidenciaTema ? "Reemplazar evidencia" : "Subir evidencia"}
+            </Button>
+
+            {evidenciaTema?.url_imagen ? (
+              <Button
+                icon={<EyeOutlined />}
+                onClick={() => window.open(String(evidenciaTema.url_imagen), "_blank", "noopener,noreferrer")}
+                style={{ borderRadius: 10, fontWeight: 600 }}
+              >
+                Ver evidencia
+              </Button>
+            ) : null}
+          </Space>
+        </div>
       </div>
 
       <Space wrap size={8}>
