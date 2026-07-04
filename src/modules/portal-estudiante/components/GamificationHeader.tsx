@@ -39,6 +39,12 @@ export const GamificationHeader: React.FC<Props> = ({
           <Text strong style={{ fontSize: 15 }}>XP total: {totalXp}</Text>
         </Space>
 
+        <Space wrap size={6}>
+          <Tag color="blue">✅ Asistencia</Tag>
+          <Tag color="purple">🧠 Quiz</Tag>
+          <Tag color="green">📷 Tarea</Tag>
+        </Space>
+
         <Progress
           percent={percent}
           showInfo={false}
