@@ -2,7 +2,7 @@
 
 import React from "react";
 import dayjs from "dayjs";
-import { Button, Card, Checkbox, Col, Collapse, Empty, List, Row, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Checkbox, Col, Collapse, Empty, List, Progress, Row, Space, Table, Tag, Typography } from "antd";
 import { DownloadOutlined, FilePdfOutlined } from "@ant-design/icons";
 import { TemaMaterialActions } from "@/modules/portal-estudiante/components/TemaMaterialActions";
 import { getMaterialCoverageDisplay, normalizeModalidadPago } from "@/types/payment-plans";
@@ -13,6 +13,8 @@ const { Text } = Typography;
 
 type Props = {
   vista: "plan" | "kits" | "ciclo";
+  xpTotal: number;
+  xpObjetivoCurso?: number;
   showCertificates?: boolean;
   isMobile: boolean;
   matriculas: any[];
@@ -61,6 +63,8 @@ type Props = {
 
 export const PortalRutaAcademicaSection = ({
   vista,
+  xpTotal,
+  xpObjetivoCurso = 1000,
   showCertificates = false,
   isMobile,
   matriculas,
@@ -141,6 +145,10 @@ export const PortalRutaAcademicaSection = ({
       </Card>
     );
   }
+
+  const xpCursoTotal = Math.max(0, Number(xpTotal || 0));
+  const xpObjetivo = Math.max(1, Number(xpObjetivoCurso || 1000));
+  const xpPercent = Math.max(0, Math.min(100, Math.round((xpCursoTotal / xpObjetivo) * 100)));
 
   const cicloActivo =
     cicloRutaId && ciclosPrograma.some((c: any) => String(c.id) === String(cicloRutaId))
@@ -237,6 +245,28 @@ export const PortalRutaAcademicaSection = ({
   if (!ciclosPrograma.length) {
     return (
       <Card title={tituloPrincipal} size={isMobile ? "small" : "default"}>
+        <Card
+          size="small"
+          style={{
+            marginBottom: 12,
+            borderRadius: 10,
+            border: "1px solid #dbeafe",
+            background: "#f8fbff",
+          }}
+        >
+          <Space style={{ width: "100%", justifyContent: "space-between" }}>
+            <Text strong style={{ fontSize: 12 }}>Progreso XP del curso</Text>
+            <Text style={{ fontSize: 12, color: "#0369a1", fontWeight: 600 }}>{`${xpCursoTotal}/${xpObjetivo} XP`}</Text>
+          </Space>
+          <Progress
+            percent={xpPercent}
+            showInfo={false}
+            strokeColor="#16a34a"
+            trailColor="#dbeafe"
+            style={{ marginTop: 6 }}
+          />
+        </Card>
+
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Button type="text" size="small" onClick={() => setMatriculaRutaIdAction(null)}>← Volver a cursos</Button>
           <Empty description="Este curso aun no tiene modulos/ciclos configurados" />

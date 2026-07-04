@@ -1353,6 +1353,8 @@ export default function PortalEstudiante() {
   const renderRutaAcademica = (vista: "plan" | "kits" | "ciclo", showCertificates = false) => (
     <PortalRutaAcademicaSection
       vista={vista}
+      xpTotal={gamification.totalXp}
+      xpObjetivoCurso={1000}
       showCertificates={showCertificates}
       isMobile={isMobile}
       matriculas={matriculas}
