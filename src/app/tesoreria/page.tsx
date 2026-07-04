@@ -872,6 +872,32 @@ export default function TesoreriaPage() {
         return filtroPeriodo ? (labels[filtroPeriodo] ?? filtroPeriodo) : "Sin filtro de período";
     }, [filtroRango, filtroMes, filtroPeriodo]);
 
+    const filtrosActivosResumen = useMemo(() => {
+        const tags: string[] = [];
+        tags.push(`Periodo: ${etiquetaPeriodo}`);
+        if (filtroTipo) tags.push(`Tipo: ${MOVIMIENTO_TIPO_LABEL[filtroTipo as keyof typeof MOVIMIENTO_TIPO_LABEL] || filtroTipo}`);
+        if (filtroCategoria) tags.push(`Categoría: ${filtroCategoria}`);
+        if (filtroMetodo) tags.push(`Método: ${filtroMetodo}`);
+        if (filtroConciliado) tags.push(`Conciliación: ${filtroConciliado}`);
+        if (busqueda.trim()) tags.push(`Texto: "${busqueda.trim()}"`);
+        if (filtroGrupoRentabilidad) tags.push("Grupo seleccionado para rentabilidad");
+        if (verSoloMovimientosGrupo && filtroGrupoRentabilidad) tags.push("Solo movimientos vinculados al grupo");
+        return tags;
+    }, [busqueda, etiquetaPeriodo, filtroCategoria, filtroConciliado, filtroGrupoRentabilidad, filtroMetodo, filtroTipo, verSoloMovimientosGrupo]);
+
+    const baseCalculoPuntoEquilibrio = useMemo(() => {
+        const ingresosMov = movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO);
+        const egresosMov = movimientosUnicos.filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO);
+        return {
+            totalRegistros: movimientosUnicos.length,
+            ingresosRegistros: ingresosMov.length,
+            egresosRegistros: egresosMov.length,
+            ingresosMonto: analisisFinanciero.ingresos,
+            egresosMonto: analisisFinanciero.egresos,
+            cobertura: analisisFinanciero.cobertura,
+        };
+    }, [analisisFinanciero.cobertura, analisisFinanciero.egresos, analisisFinanciero.ingresos, movimientosUnicos]);
+
     const handleRegistrarMovimiento = useCallback(async () => {
         try {
             const values = await form.validateFields();
@@ -1221,7 +1247,7 @@ export default function TesoreriaPage() {
             {/* ── FILTROS ── */}
             <Card size="small" style={{ marginBottom: 16, borderRadius: 10 }} bodyStyle={{ padding: isMobile ? 10 : 16 }}>
                 <Row gutter={[8, 8]} align="middle" wrap>
-                    <Col xs={24} sm={10} md={6} lg={5}>
+                    <Col xs={24} sm={10} md={6} lg={4}>
                         <Select
                             allowClear
                             placeholder="Período rápido"
@@ -1245,7 +1271,7 @@ export default function TesoreriaPage() {
                             ]}
                         />
                     </Col>
-                    <Col xs={12} sm={5} md={3} lg={3}>
+                    <Col xs={12} sm={5} md={3} lg={2}>
                         <DatePicker
                             picker="month"
                             placeholder="Mes"
@@ -1260,7 +1286,7 @@ export default function TesoreriaPage() {
                             format="MMM YYYY"
                         />
                     </Col>
-                    <Col xs={12} sm={9} md={7} lg={6}>
+                    <Col xs={12} sm={9} md={7} lg={5}>
                         <RangePicker
                             style={{ width: "100%" }}
                             value={filtroRango as any}
@@ -1287,7 +1313,7 @@ export default function TesoreriaPage() {
                             ]}
                         />
                     </Col>
-                    <Col xs={12} sm={4} md={3} lg={3}>
+                    <Col xs={12} sm={4} md={3} lg={2}>
                         <Select
                             allowClear
                             placeholder="Categoría"
@@ -1296,6 +1322,31 @@ export default function TesoreriaPage() {
                             style={{ width: "100%" }}
                             size="middle"
                             options={FILTRO_CATEGORIA_OPTIONS}
+                        />
+                    </Col>
+                    <Col xs={12} sm={4} md={3} lg={2}>
+                        <Select
+                            allowClear
+                            placeholder="Método"
+                            value={filtroMetodo ?? undefined}
+                            onChange={(val) => setFiltroMetodo(val ?? null)}
+                            style={{ width: "100%" }}
+                            size="middle"
+                            options={metodosDisponibles.map((metodo) => ({ label: metodo, value: metodo }))}
+                        />
+                    </Col>
+                    <Col xs={12} sm={4} md={3} lg={2}>
+                        <Select
+                            allowClear
+                            placeholder="Conciliación"
+                            value={filtroConciliado ?? undefined}
+                            onChange={(val) => setFiltroConciliado(val ?? null)}
+                            style={{ width: "100%" }}
+                            size="middle"
+                            options={[
+                                { label: "Conciliado", value: "conciliado" },
+                                { label: "Pendiente", value: "pendiente" },
+                            ]}
                         />
                     </Col>
                     <Col xs={16} sm={8} md={6} lg={4}>
@@ -1313,12 +1364,30 @@ export default function TesoreriaPage() {
                             ✕
                         </Button>
                     </Col>
+                    <Col xs={24} sm={24} md={24} lg={4}>
+                        <Space size="small" style={{ width: "100%", justifyContent: "flex-end" }}>
+                            <Switch
+                                checked={verSoloMovimientosGrupo}
+                                onChange={setVerSoloMovimientosGrupo}
+                                disabled={!filtroGrupoRentabilidad}
+                            />
+                            <Text style={{ fontSize: 12 }}>Solo grupo</Text>
+                            {loadingRelacionGrupo ? <Spin size="small" /> : null}
+                        </Space>
+                    </Col>
                 </Row>
-                {(filtroPeriodo || filtroMes || filtroRango?.[0] || filtroRango?.[1]) && (
-                    <div style={{ marginTop: 6, fontSize: 11, color: "#6b7280" }}>
-                        Mostrando: <strong>{etiquetaPeriodo}</strong>
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed #e5e7eb" }}>
+                    <Space wrap size={[6, 6]}>
+                        {filtrosActivosResumen.map((item) => (
+                            <Tag key={item} color="blue">{item}</Tag>
+                        ))}
+                    </Space>
+                    <div style={{ marginTop: 8 }}>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                            Base del punto de equilibrio: {baseCalculoPuntoEquilibrio.totalRegistros} movimientos ({baseCalculoPuntoEquilibrio.ingresosRegistros} entradas y {baseCalculoPuntoEquilibrio.egresosRegistros} salidas) dentro de los filtros. Se calcula como Entradas {formatoCOP(baseCalculoPuntoEquilibrio.ingresosMonto)} / Salidas {formatoCOP(baseCalculoPuntoEquilibrio.egresosMonto)} = {baseCalculoPuntoEquilibrio.cobertura}%.
+                        </Text>
                     </div>
-                )}
+                </div>
             </Card>
 
             {/* ── ANÁLISIS FINANCIERO ── */}
@@ -1555,18 +1624,7 @@ export default function TesoreriaPage() {
                 <Alert type="error" message={error} showIcon closable />
             ) : (
                 <>
-                <div style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <Space size="small">
-                        <Switch
-                            checked={verSoloMovimientosGrupo}
-                            onChange={setVerSoloMovimientosGrupo}
-                            disabled={!filtroGrupoRentabilidad}
-                        />
-                        <Text style={{ fontSize: 12 }}>
-                            Ver solo movimientos vinculados al grupo seleccionado
-                        </Text>
-                        {loadingRelacionGrupo ? <Spin size="small" /> : null}
-                    </Space>
+                <div style={{ marginBottom: 10, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
                         Filtro estricto: pagos de matrículas del grupo y sesiones del mismo grupo.
                     </Text>
