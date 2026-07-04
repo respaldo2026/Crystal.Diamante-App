@@ -245,10 +245,10 @@ export const TemaMaterialActions = ({
               EVIDENCIA DE TAREA
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", lineHeight: 1.3 }}>
-              Subir foto de trabajo
+              Tomar foto de trabajo
             </div>
             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-              1 foto por tarea. Al subirla ganas +25 XP semanal.
+              1 foto por tarea. Se toma con la camara del dispositivo y suma +25 XP semanal.
             </div>
           </div>
 
@@ -256,6 +256,7 @@ export const TemaMaterialActions = ({
             ref={inputFileRef}
             type="file"
             accept="image/*"
+            capture="environment"
             style={{ display: "none" }}
             onChange={async (event) => {
               const file = event.target.files?.[0];
@@ -273,7 +274,7 @@ export const TemaMaterialActions = ({
               onClick={() => inputFileRef.current?.click()}
               style={{ borderRadius: 10, fontWeight: 700 }}
             >
-              {evidenciaTema ? "Reemplazar evidencia" : "Subir evidencia"}
+              {evidenciaTema ? "Tomar nueva foto" : "Tomar foto"}
             </Button>
 
             {evidenciaTema?.url_imagen ? (
