@@ -573,8 +573,19 @@ export default function TesoreriaPage() {
 
             try {
                 setLoadingRentabilidadGrupo(true);
-                const inicio = rangoPeriodoSeleccionado.inicio.format("YYYY-MM-DD");
-                const fin = rangoPeriodoSeleccionado.fin.format("YYYY-MM-DD");
+                const hoyFin = dayjs().endOf("day");
+                const inicioPeriodo = rangoPeriodoSeleccionado.inicio.startOf("day");
+                const finPeriodo = rangoPeriodoSeleccionado.fin.endOf("day");
+
+                // Nunca considerar datos futuros en rentabilidad.
+                if (inicioPeriodo.isAfter(hoyFin)) {
+                    setRentabilidadGrupo({ ingresos: 0, egresosNomina: 0, ganancia: 0, margen: 0, cobertura: 0 });
+                    return;
+                }
+
+                const finCorte = finPeriodo.isAfter(hoyFin) ? hoyFin : finPeriodo;
+                const inicio = inicioPeriodo.format("YYYY-MM-DD");
+                const fin = finCorte.format("YYYY-MM-DD");
 
                 const matriculaIds = await obtenerMatriculaIdsPorGrupo(filtroGrupoRentabilidad);
 
@@ -701,6 +712,12 @@ export default function TesoreriaPage() {
             }
 
             const fechaMov = dayjs(mov.fecha);
+            const hoyFin = dayjs().endOf("day");
+
+            // Nunca mostrar movimientos con fecha futura.
+            if (fechaMov.isAfter(hoyFin)) {
+                return false;
+            }
 
             if (filtroRango && filtroRango[0] && filtroRango[1]) {
                 const inicio = filtroRango[0];
