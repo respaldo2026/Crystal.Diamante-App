@@ -43,6 +43,7 @@ export const TemaMaterialActions = ({
   onUploadEvidenceAction,
 }: TemaMaterialActionsProps) => {
   const [materialRevisado, setMaterialRevisado] = React.useState(false);
+  const [animReady, setAnimReady] = React.useState(false);
   const inputFileRef = React.useRef<HTMLInputElement | null>(null);
   const mostrarEnlacePrincipal = presentacionesTema.length <= 1;
   const quizDisponible = Boolean(quizTema);
@@ -71,6 +72,11 @@ export const TemaMaterialActions = ({
   const paso2Disponible = quizDisponible && paso1Completo;
   const paso3Disponible = quizPresentado;
   const progreso = (paso1Completo ? 1 : 0) + (quizPresentado ? 1 : 0) + (evidenciaSubida ? 1 : 0);
+
+  React.useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setAnimReady(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const StepNumber = ({ value }: { value: number }) => {
     return (
@@ -111,6 +117,13 @@ export const TemaMaterialActions = ({
       {text}
     </span>
   );
+
+  const stepMotionStyle = (index: number, enabled: boolean) => ({
+    opacity: animReady ? (enabled ? 1 : 0.72) : 0,
+    transform: animReady ? "translateY(0px)" : "translateY(8px)",
+    transition: `opacity 260ms ease ${index * 70}ms, transform 300ms ease ${index * 70}ms`,
+    filter: enabled ? "none" : "saturate(0.75)",
+  });
 
   const renderMaterialStep = () => {
     if (mostrarEnlacePrincipal) {
@@ -203,7 +216,7 @@ export const TemaMaterialActions = ({
             }}
           >
             <div style={{ display: "grid", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, ...stepMotionStyle(0, true) }}>
                 <StepNumber value={1} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Space size={8} wrap>
@@ -221,7 +234,7 @@ export const TemaMaterialActions = ({
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, ...stepMotionStyle(1, paso2Disponible || quizPresentado) }}>
                 <StepNumber value={2} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Space size={8} wrap>
@@ -258,7 +271,7 @@ export const TemaMaterialActions = ({
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, ...stepMotionStyle(2, paso3Disponible || evidenciaSubida) }}>
                 <StepNumber value={3} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Space size={8} wrap>
