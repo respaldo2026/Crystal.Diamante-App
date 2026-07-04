@@ -900,16 +900,17 @@ export default function TesoreriaPage() {
 
     const filtrosActivosResumen = useMemo(() => {
         const tags: string[] = [];
+        const grupoSeleccionado = cursosDisponibles.find((curso) => String(curso.id) === String(filtroGrupoRentabilidad));
         tags.push(`Periodo: ${etiquetaPeriodo}`);
         if (filtroTipo) tags.push(`Tipo: ${MOVIMIENTO_TIPO_LABEL[filtroTipo as keyof typeof MOVIMIENTO_TIPO_LABEL] || filtroTipo}`);
         if (filtroCategoria) tags.push(`Categoría: ${filtroCategoria}`);
         if (filtroMetodo) tags.push(`Método: ${filtroMetodo}`);
         if (filtroConciliado) tags.push(`Conciliación: ${filtroConciliado}`);
         if (busqueda.trim()) tags.push(`Texto: "${busqueda.trim()}"`);
-        if (filtroGrupoRentabilidad) tags.push("Grupo seleccionado para rentabilidad");
+        if (filtroGrupoRentabilidad) tags.push(`Grupo: ${grupoSeleccionado ? construirNombreGrupo(grupoSeleccionado) : filtroGrupoRentabilidad}`);
         if (verSoloMovimientosGrupo && filtroGrupoRentabilidad) tags.push("Solo movimientos vinculados al grupo");
         return tags;
-    }, [busqueda, etiquetaPeriodo, filtroCategoria, filtroConciliado, filtroGrupoRentabilidad, filtroMetodo, filtroTipo, verSoloMovimientosGrupo]);
+    }, [busqueda, cursosDisponibles, etiquetaPeriodo, filtroCategoria, filtroConciliado, filtroGrupoRentabilidad, filtroMetodo, filtroTipo, verSoloMovimientosGrupo]);
 
     const baseCalculoPuntoEquilibrio = useMemo(() => {
         const ingresosMov = movimientosBaseAnalisis.filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO);
@@ -1339,6 +1340,23 @@ export default function TesoreriaPage() {
                             ]}
                         />
                     </Col>
+                    <Col xs={24} sm={10} md={6} lg={4}>
+                        <Select
+                            allowClear
+                            showSearch
+                            optionFilterProp="search"
+                            placeholder="Grupo rentabilidad"
+                            value={filtroGrupoRentabilidad ?? undefined}
+                            onChange={(val) => setFiltroGrupoRentabilidad(val ?? null)}
+                            options={cursosDisponibles.map((curso) => ({
+                                value: String(curso.id),
+                                label: construirNombreGrupo(curso),
+                                search: `${construirNombreGrupo(curso)} ${curso.estado || ""}`.toLowerCase(),
+                            }))}
+                            style={{ width: "100%" }}
+                            size="middle"
+                        />
+                    </Col>
                     <Col xs={12} sm={4} md={3} lg={2}>
                         <Select
                             allowClear
@@ -1562,28 +1580,19 @@ export default function TesoreriaPage() {
                 }
             >
                 <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
-                    <Col xs={24} md={12} lg={10}>
-                        <Select
-                            allowClear
-                            placeholder="Selecciona grupo real"
-                            value={filtroGrupoRentabilidad ?? undefined}
-                            onChange={(val) => setFiltroGrupoRentabilidad(val ?? null)}
-                            options={cursosDisponibles.map((curso) => ({
-                                value: String(curso.id),
-                                label: (
-                                    <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
-                                        <span style={{ fontWeight: 600 }}>{construirNombreGrupo(curso)}</span>
-                                        <span style={{ fontSize: 12, color: "#64748b" }}>
-                                            {curso.fecha_inicio ? `Inicio ${dayjs(curso.fecha_inicio).format("DD MMM YYYY")}` : "Sin fecha de inicio"}
-                                            {curso.estado ? ` · ${curso.estado}` : ""}
-                                        </span>
-                                    </div>
-                                ),
-                            }))}
-                            style={{ width: "100%" }}
-                        />
+                    <Col xs={24}>
+                        <Space direction="vertical" size={2}>
+                            <Text strong style={{ fontSize: 13 }}>
+                                {filtroGrupoRentabilidad
+                                    ? (construirNombreGrupo(cursosDisponibles.find((curso) => String(curso.id) === String(filtroGrupoRentabilidad)) || null) || "Grupo seleccionado")
+                                    : "Sin grupo seleccionado"}
+                            </Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                                Usa el filtro "Grupo rentabilidad" en la barra superior para cambiar este análisis.
+                            </Text>
+                        </Space>
                     </Col>
-                    <Col xs={24} md={12} lg={14}>
+                    <Col xs={24}>
                         <Text type="secondary" style={{ fontSize: 12 }}>
                             Este cuadro usa el mismo filtro de tiempo de Tesorería y compara Ingresos pagados del grupo vs Egresos de nómina por clases dictadas del grupo.
                         </Text>
