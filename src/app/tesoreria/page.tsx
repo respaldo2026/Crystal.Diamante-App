@@ -517,6 +517,8 @@ export default function TesoreriaPage() {
 
             try {
                 setLoadingRelacionGrupo(true);
+                // Evita mostrar cruces del grupo anterior mientras se recalcula la relación.
+                setRelacionGrupoMovimientos({ pagoIds: [], pagoAbonoIds: [], sesionesRefs: [] });
 
                 const matriculaIds = await obtenerMatriculaIdsPorGrupo(filtroGrupoRentabilidad);
 
@@ -806,6 +808,47 @@ export default function TesoreriaPage() {
             return false;
         });
     }, [filtroGrupoRentabilidad, movimientosUnicos, relacionGrupoMovimientos, verSoloMovimientosGrupo]);
+
+    const rentabilidadGrupoDesdeMovimientos = useMemo(() => {
+        if (!filtroGrupoRentabilidad) {
+            return { ingresos: 0, egresosNomina: 0, ganancia: 0, margen: 0, cobertura: 0 };
+        }
+
+        const pagoIdsSet = new Set(relacionGrupoMovimientos.pagoIds);
+        const pagoAbonoIdsSet = new Set(relacionGrupoMovimientos.pagoAbonoIds);
+        const sesionesRefsSet = new Set(relacionGrupoMovimientos.sesionesRefs);
+
+        const movimientosGrupo = movimientosUnicos.filter((mov) => {
+            const tipo = String(mov.tipo || "").toLowerCase();
+
+            if (tipo === "ingreso") {
+                if (mov.pago_abono_id) return pagoAbonoIdsSet.has(String(mov.pago_abono_id));
+                if (mov.pago_id) return pagoIdsSet.has(String(mov.pago_id));
+                return false;
+            }
+
+            if (tipo === "egreso") {
+                const ref = String(mov.referencia || "");
+                return ref.startsWith("sesion_clase_") && sesionesRefsSet.has(ref);
+            }
+
+            return false;
+        });
+
+        const ingresos = movimientosGrupo
+            .filter((m) => m.tipo === MOVIMIENTO_TIPO.INGRESO)
+            .reduce((sum, m) => sum + Number(m.monto || 0), 0);
+
+        const egresosNomina = movimientosGrupo
+            .filter((m) => m.tipo === MOVIMIENTO_TIPO.EGRESO)
+            .reduce((sum, m) => sum + Number(m.monto || 0), 0);
+
+        const ganancia = ingresos - egresosNomina;
+        const margen = ingresos > 0 ? Math.round((ganancia / ingresos) * 100) : 0;
+        const cobertura = egresosNomina > 0 ? Math.round((ingresos / egresosNomina) * 100) : 100;
+
+        return { ingresos, egresosNomina, ganancia, margen, cobertura };
+    }, [filtroGrupoRentabilidad, movimientosUnicos, relacionGrupoMovimientos]);
 
     const movimientosBaseAnalisis = useMemo(() => movimientosTabla, [movimientosTabla]);
 
@@ -1599,7 +1642,7 @@ export default function TesoreriaPage() {
                     </Col>
                 </Row>
 
-                {loadingRentabilidadGrupo ? (
+                {loadingRelacionGrupo ? (
                     <div style={{ display: "flex", justifyContent: "center", padding: 18 }}>
                         <Spin />
                     </div>
@@ -1609,22 +1652,22 @@ export default function TesoreriaPage() {
                             <Col xs={24} sm={8}>
                                 <Card size="small" bordered style={{ background: "#f0fdf4" }}>
                                     <Text type="secondary">Ingresos grupo</Text>
-                                    <div style={{ color: "#15803d", fontWeight: 700, fontSize: 22 }}>{formatoCOP(rentabilidadGrupo.ingresos)}</div>
+                                    <div style={{ color: "#15803d", fontWeight: 700, fontSize: 22 }}>{formatoCOP(rentabilidadGrupoDesdeMovimientos.ingresos)}</div>
                                 </Card>
                             </Col>
                             <Col xs={24} sm={8}>
                                 <Card size="small" bordered style={{ background: "#fff1f2" }}>
                                     <Text type="secondary">Egresos nómina grupo</Text>
-                                    <div style={{ color: "#b91c1c", fontWeight: 700, fontSize: 22 }}>{formatoCOP(rentabilidadGrupo.egresosNomina)}</div>
+                                    <div style={{ color: "#b91c1c", fontWeight: 700, fontSize: 22 }}>{formatoCOP(rentabilidadGrupoDesdeMovimientos.egresosNomina)}</div>
                                 </Card>
                             </Col>
                             <Col xs={24} sm={8}>
-                                <Card size="small" bordered style={{ background: rentabilidadGrupo.ganancia >= 0 ? "#eff6ff" : "#fff7ed" }}>
+                                <Card size="small" bordered style={{ background: rentabilidadGrupoDesdeMovimientos.ganancia >= 0 ? "#eff6ff" : "#fff7ed" }}>
                                     <Text type="secondary">Rentabilidad grupo</Text>
-                                    <div style={{ color: rentabilidadGrupo.ganancia >= 0 ? "#1d4ed8" : "#c2410c", fontWeight: 700, fontSize: 22 }}>
-                                        {formatoCOP(rentabilidadGrupo.ganancia)}
+                                    <div style={{ color: rentabilidadGrupoDesdeMovimientos.ganancia >= 0 ? "#1d4ed8" : "#c2410c", fontWeight: 700, fontSize: 22 }}>
+                                        {formatoCOP(rentabilidadGrupoDesdeMovimientos.ganancia)}
                                     </div>
-                                    <Text type="secondary">Margen {rentabilidadGrupo.margen}%</Text>
+                                    <Text type="secondary">Margen {rentabilidadGrupoDesdeMovimientos.margen}%</Text>
                                 </Card>
                             </Col>
                         </Row>
@@ -1632,14 +1675,14 @@ export default function TesoreriaPage() {
                         <div style={{ marginTop: 14 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                                 <Text style={{ fontSize: 12 }}>Cobertura (ingresos / egresos nómina)</Text>
-                                <Text strong style={{ fontSize: 12, color: rentabilidadGrupo.cobertura >= 100 ? "#15803d" : "#b45309" }}>
-                                    {rentabilidadGrupo.cobertura}% {rentabilidadGrupo.cobertura >= 100 ? "✓" : "↓"}
+                                <Text strong style={{ fontSize: 12, color: rentabilidadGrupoDesdeMovimientos.cobertura >= 100 ? "#15803d" : "#b45309" }}>
+                                    {rentabilidadGrupoDesdeMovimientos.cobertura}% {rentabilidadGrupoDesdeMovimientos.cobertura >= 100 ? "✓" : "↓"}
                                 </Text>
                             </div>
                             <Progress
-                                percent={Math.max(0, Math.min(rentabilidadGrupo.cobertura, 100))}
+                                percent={Math.max(0, Math.min(rentabilidadGrupoDesdeMovimientos.cobertura, 100))}
                                 showInfo={false}
-                                strokeColor={rentabilidadGrupo.cobertura >= 100 ? "#16a34a" : "#f59e0b"}
+                                strokeColor={rentabilidadGrupoDesdeMovimientos.cobertura >= 100 ? "#16a34a" : "#f59e0b"}
                                 trailColor="#e5e7eb"
                                 size={["100%", 14]}
                             />
