@@ -301,7 +301,6 @@ export default function TesoreriaPage() {
         return generados;
     }, []);
 
-    const role = (user?.rol || "").toLowerCase();
     const puedeVerTodo =
         role === "admin" ||
         role === "director" ||
