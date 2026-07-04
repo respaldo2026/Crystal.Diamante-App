@@ -9,6 +9,7 @@ import {
   TeamOutlined,
   ClockCircleOutlined,
   StarOutlined,
+  TrophyOutlined,
   UserAddOutlined,
   PrinterOutlined,
   GiftOutlined,
