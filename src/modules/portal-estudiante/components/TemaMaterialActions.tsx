@@ -66,25 +66,64 @@ export const TemaMaterialActions = ({
       ? (quizAprobadoTema ? "green" : "blue")
       : "gold";
 
-  const StepNumber = ({ value }: { value: number }) => (
-    <span
-      style={{
-        width: 26,
-        minWidth: 26,
-        height: 26,
-        borderRadius: 999,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#e2e8f0",
-        color: "#0f172a",
-        fontSize: 12,
-        fontWeight: 700,
-      }}
-    >
-      {value}
-    </span>
-  );
+  const StepNumber = ({ value }: { value: number }) => {
+    return (
+      <span
+        style={{
+          width: 26,
+          minWidth: 26,
+          height: 26,
+          borderRadius: 999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#e2e8f0",
+          color: "#0f172a",
+          fontSize: 12,
+          fontWeight: 700,
+        }}
+      >
+        {value}
+      </span>
+    );
+  };
+
+  const renderMaterialStep = () => {
+    if (mostrarEnlacePrincipal) {
+      return (
+        <Button
+          type="default"
+          icon={materialIcon || <FilePdfOutlined />}
+          onClick={() => {
+            if (!recursoPrincipalTema) {
+              onWarnAction("Este tema aún no tiene material didáctico disponible.");
+              return;
+            }
+            onOpenMaterialAction(recursoPrincipalTema, tituloRecursoPrincipal, temaId);
+          }}
+          style={{ borderRadius: 10, fontWeight: 600 }}
+        >
+          {quizPresentado ? "Repasar clase" : "Ver clase"}
+        </Button>
+      );
+    }
+
+    return (
+      <Space wrap size={6}>
+        {presentacionesTema.map((presentacion, index) => (
+          <Button
+            key={presentacion.id || `material-${index}`}
+            size="small"
+            type="default"
+            onClick={() => onOpenMaterialAction(presentacion.material, presentacion.titulo, temaId)}
+            style={{ borderRadius: 10 }}
+          >
+            {String(presentacion.titulo || presentacion?.material?.nombre_archivo || "Material")}
+          </Button>
+        ))}
+      </Space>
+    );
+  };
 
   return (
     <Space direction="vertical" size={10} style={{ width: "100%" }}>
@@ -128,38 +167,13 @@ export const TemaMaterialActions = ({
                 <StepNumber value={1} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Text strong style={{ fontSize: 13 }}>Ver clase</Text>
-                  <div><Text type="secondary" style={{ fontSize: 12 }}>Revisa el material antes de responder.</Text></div>
+                  <div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Revisa el material antes de responder.
+                    </Text>
+                  </div>
                   <div style={{ marginTop: 8 }}>
-                    {mostrarEnlacePrincipal ? (
-                      <Button
-                        type="default"
-                        icon={materialIcon || <FilePdfOutlined />}
-                        onClick={() => {
-                          if (!recursoPrincipalTema) {
-                            onWarnAction("Este tema aún no tiene material didáctico disponible.");
-                            return;
-                          }
-                          onOpenMaterialAction(recursoPrincipalTema, tituloRecursoPrincipal, temaId);
-                        }}
-                        style={{ borderRadius: 10, fontWeight: 600 }}
-                      >
-                        {quizPresentado ? "Repasar clase" : "Ver clase"}
-                      </Button>
-                    ) : (
-                      <Space wrap size={6}>
-                        {presentacionesTema.map((presentacion, index) => (
-                          <Button
-                            key={presentacion.id || `material-${index}`}
-                            size="small"
-                            type="default"
-                            onClick={() => onOpenMaterialAction(presentacion.material, presentacion.titulo, temaId)}
-                            style={{ borderRadius: 10 }}
-                          >
-                            {String(presentacion.titulo || presentacion?.material?.nombre_archivo || "Material")}
-                          </Button>
-                        ))}
-                      </Space>
-                    )}
+                    {renderMaterialStep()}
                   </div>
                 </div>
               </div>
@@ -172,7 +186,11 @@ export const TemaMaterialActions = ({
                     <Tag color={estadoQuizColor} style={{ marginInlineEnd: 0, borderRadius: 999 }}>{estadoQuizLabel}</Tag>
                     <Tag color="default" style={{ marginInlineEnd: 0, borderRadius: 999 }}>+30 XP</Tag>
                   </Space>
-                  <div><Text type="secondary" style={{ fontSize: 12 }}>Responde el quiz para sumar puntos por aprendizaje.</Text></div>
+                  <div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Responde el quiz para sumar puntos por aprendizaje.
+                    </Text>
+                  </div>
                   <div style={{ marginTop: 8 }}>
                     <Button
                       type={quizDisponible && !quizPresentado ? "primary" : "default"}
@@ -245,7 +263,7 @@ export const TemaMaterialActions = ({
               </div>
             </div>
           </div>
-        </div>
+        </Space>
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
