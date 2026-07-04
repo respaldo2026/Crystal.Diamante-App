@@ -162,6 +162,31 @@ const getActividadColor = (nota?: number | null): string => {
   return "red";
 };
 
+const XP_TOTAL_CURSO = 1000;
+const CLASES_OBJETIVO_CURSO = 20;
+const XP_ASISTENCIA_POR_CLASE = 20;
+const XP_QUIZ_MAX_POR_CLASE = 20;
+const XP_EVIDENCIA_POR_CLASE = 10;
+
+const normalizarNotaQuizA5 = (notaRaw: number) => {
+  const nota = Number(notaRaw);
+  if (!Number.isFinite(nota)) return 0;
+  if (nota > 5 && nota <= 100) return Number((nota / 20).toFixed(2));
+  return Math.max(0, Math.min(5, nota));
+};
+
+const calcularXpQuizPorNota = (notaRaw: number) => {
+  const nota = normalizarNotaQuizA5(notaRaw);
+  if (nota >= 4.8) return 20;
+  if (nota >= 4.5) return 18;
+  if (nota >= 4.0) return 16;
+  if (nota >= 3.5) return 14;
+  if (nota >= 3.0) return 10;
+  if (nota >= 2.0) return 6;
+  if (nota > 0) return 3;
+  return 0;
+};
+
 const normalizarClaveOpcionQuiz = (valor?: string | null) => {
   const raw = String(valor || "").trim().toUpperCase();
   if (!raw) return "";
@@ -243,6 +268,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [temas, setTemas] = useState<Tema[]>([]);
   const [materiales, setMateriales] = useState<any[]>([]);
   const [materialesClase, setMaterialesClase] = useState<any[]>([]);
+  const [evidenciasTareas, setEvidenciasTareas] = useState<any[]>([]);
   const [quizzesClase, setQuizzesClase] = useState<any[]>([]);
   const [resultadosQuiz, setResultadosQuiz] = useState<any[]>([]);
   const [quizProfesorSeleccionadoId, setQuizProfesorSeleccionadoId] = useState<string | null>(null);
@@ -1033,7 +1059,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
     const tabBySection: Record<string, string> = {
       attendance: "3",
-      grades: "5",
+      grades: "4",
       materials: "2",
       default: "1",
     };
@@ -1547,6 +1573,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     try {
       let matriculaIdsCurso: number[] = [];
       let califDataCurso: any[] = [];
+      let evidenciasDataCurso: any[] = [];
       let temasDataCurso: any[] = [];
       const cursoIdNumerico = parseInt(id);
 
@@ -1699,14 +1726,25 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         const matriculaIds = estudiantesConMora.map((e) => e.id);
         matriculaIdsCurso = matriculaIds;
         if (matriculaIds.length > 0) {
-          const { data: califData } = await supabaseBrowserClient
-            .from("calificaciones")
-            .select("matricula_id, tema_id, concepto, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
-            .in("matricula_id", matriculaIds)
-            .in("tipo_evaluacion", ["actividad", "tema", "quiz"])
-            .order("fecha_evaluacion", { ascending: false });
-          califDataCurso = califData || [];
+          const [califRes, evidenciasRes] = await Promise.all([
+            supabaseBrowserClient
+              .from("calificaciones")
+              .select("matricula_id, tema_id, concepto, nota, calificacion, tipo_evaluacion, fecha_evaluacion")
+              .in("matricula_id", matriculaIds)
+              .in("tipo_evaluacion", ["actividad", "tema", "quiz"])
+              .order("fecha_evaluacion", { ascending: false }),
+            supabaseBrowserClient
+              .from("evidencias_tareas")
+              .select("id, matricula_id, pensum_curso_id, created_at, updated_at")
+              .in("matricula_id", matriculaIds)
+              .order("updated_at", { ascending: false }),
+          ]);
+
+          califDataCurso = califRes.data || [];
+          evidenciasDataCurso = evidenciasRes.data || [];
         }
+
+        setEvidenciasTareas(evidenciasDataCurso);
       }
 
       // Temario desde programa académico
@@ -1837,6 +1875,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         setTemas([]);
         setMateriales([]);
         setMaterialesClase([]);
+        setEvidenciasTareas([]);
         setQuizzesClase([]);
         setResultadosQuiz([]);
       }
@@ -2551,15 +2590,33 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     });
 
     const quizAprobadosPorMatricula = new Map<number, number>();
+    const quizXpPorMatricula = new Map<number, number>();
     (resultadosQuizResumen || []).forEach((item: any) => {
       const matriculaId = Number(item?.matricula_id);
       const nota = Number(item?.calificacion ?? item?.nota);
       if (!Number.isFinite(matriculaId) || !Number.isFinite(nota)) return;
-      if (!notaEsAprobada(nota)) return;
 
-      quizAprobadosPorMatricula.set(
+      const xpQuiz = calcularXpQuizPorNota(nota);
+      quizXpPorMatricula.set(
         matriculaId,
-        (quizAprobadosPorMatricula.get(matriculaId) || 0) + 1
+        (quizXpPorMatricula.get(matriculaId) || 0) + xpQuiz
+      );
+
+      if (notaEsAprobada(nota)) {
+        quizAprobadosPorMatricula.set(
+          matriculaId,
+          (quizAprobadosPorMatricula.get(matriculaId) || 0) + 1
+        );
+      }
+    });
+
+    const evidenciasPorMatricula = new Map<number, number>();
+    (evidenciasTareas || []).forEach((item: any) => {
+      const matriculaId = Number(item?.matricula_id);
+      if (!Number.isFinite(matriculaId)) return;
+      evidenciasPorMatricula.set(
+        matriculaId,
+        (evidenciasPorMatricula.get(matriculaId) || 0) + 1
       );
     });
 
@@ -2572,32 +2629,26 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         const semanasConAsistencia = Array.from(new Set(asistencia.weekKeys)).length;
         const { actual: rachaActual } = calcularRachaSemanal(asistencia.weekKeys);
         const quizAprobados = quizAprobadosPorMatricula.get(matriculaId) || 0;
+        const quizXp = Math.min(quizXpPorMatricula.get(matriculaId) || 0, CLASES_OBJETIVO_CURSO * XP_QUIZ_MAX_POR_CLASE);
+        const evidenciasCount = Math.min(evidenciasPorMatricula.get(matriculaId) || 0, CLASES_OBJETIVO_CURSO);
 
-        const asistenciaScore = Math.min(100, asistenciaPercent);
-        const quizScore = Math.min(100, quizAprobados * 30);
-        const rachaScore = Math.min(100, rachaActual * 25);
-        const constanciaScore = Math.min(100, semanasConAsistencia * 12);
+        const xpAsistencia = Math.min(asistencia.presentes, CLASES_OBJETIVO_CURSO) * XP_ASISTENCIA_POR_CLASE;
+        const xpEvidencia = evidenciasCount * XP_EVIDENCIA_POR_CLASE;
+        const xpTotal = Math.min(XP_TOTAL_CURSO, xpAsistencia + quizXp + xpEvidencia);
 
-        const score = Math.max(
-          0,
-          Math.min(
-            100,
-            Math.round(
-              (asistenciaScore * 0.45) +
-              (quizScore * 0.25) +
-              (rachaScore * 0.2) +
-              (constanciaScore * 0.1)
-            )
-          )
-        );
+        const score = Math.max(0, Math.min(100, Math.round(xpTotal / 10)));
 
-        const nivel = Math.max(1, Math.min(5, Math.ceil(score / 20)));
+        const nivel = Math.max(1, Math.ceil(xpTotal / 100));
         const estadoGamificacion = score >= 80 ? "alto" : score >= 55 ? "medio" : "bajo";
 
         return {
           key: String(est.id),
           id: est.id,
           estudiante: est.nombre_completo,
+          xpTotal,
+          xpAsistencia,
+          xpQuiz: quizXp,
+          xpEvidencia,
           score,
           nivel,
           rachaActual,
@@ -2608,7 +2659,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         };
       })
       .sort((a, b) => b.score - a.score || a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }));
-  }, [asistenciasRaw, estudiantes, resultadosQuizResumen]);
+  }, [asistenciasRaw, estudiantes, resultadosQuizResumen, evidenciasTareas]);
 
   if (loading) {
     return (
@@ -2837,7 +2888,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   })();
 
   const promedioGamificacionGrupo = gamificacionPorEstudiante.length
-    ? Math.round(gamificacionPorEstudiante.reduce((acc, item) => acc + item.score, 0) / gamificacionPorEstudiante.length)
+    ? Math.round(gamificacionPorEstudiante.reduce((acc, item: any) => acc + Number(item.xpTotal || 0), 0) / gamificacionPorEstudiante.length)
     : 0;
 
   const columnasGamificacionGrupo = [
@@ -2848,26 +2899,47 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       render: (value: string) => <Text strong>{value}</Text>,
     },
     {
-      title: "Score",
-      dataIndex: "score",
-      key: "score",
+      title: "XP total",
+      dataIndex: "xpTotal",
+      key: "xpTotal",
       width: 170,
       render: (value: number) => (
         <Space direction="vertical" size={2} style={{ width: "100%" }}>
-          <Text strong>{value}/100</Text>
+          <Text strong>{`${value}/1000 XP`}</Text>
           <div style={{ width: "100%", maxWidth: 140 }}>
             <div style={{ height: 8, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" }}>
               <div
                 style={{
-                  width: `${Math.max(0, Math.min(100, value))}%`,
+                  width: `${Math.max(0, Math.min(100, value / 10))}%`,
                   height: "100%",
-                  background: value >= 80 ? "#16a34a" : value >= 55 ? "#f59e0b" : "#ef4444",
+                  background: value >= 800 ? "#16a34a" : value >= 550 ? "#f59e0b" : "#ef4444",
                 }}
               />
             </div>
           </div>
         </Space>
       ),
+    },
+    {
+      title: "A/XP",
+      dataIndex: "xpAsistencia",
+      key: "xpAsistencia",
+      width: 85,
+      render: (value: number) => <Tag color="blue">{value}</Tag>,
+    },
+    {
+      title: "Q/XP",
+      dataIndex: "xpQuiz",
+      key: "xpQuiz",
+      width: 85,
+      render: (value: number) => <Tag color="purple">{value}</Tag>,
+    },
+    {
+      title: "T/XP",
+      dataIndex: "xpEvidencia",
+      key: "xpEvidencia",
+      width: 85,
+      render: (value: number) => <Tag color="green">{value}</Tag>,
     },
     {
       title: "Nivel",
@@ -2970,14 +3042,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               size="small"
               type="primary"
               onClick={() => {
-                if (!temaSeleccionadoId && clasesPensum.length > 0) {
-                  setTemaSeleccionadoId(String(clasesPensum[0]?.id || ""));
-                }
-                setActiveTab("5");
-                abrirModalActividad(true, String(record.key));
+                setActiveTab("4");
               }}
             >
-              Calificar
+              Ver gamificacion
             </Button>
             <Button
               size="small"
@@ -3129,8 +3197,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             <Button size="small" icon={<ClockCircleOutlined />} onClick={() => setActiveTab("3")}>
               Registrar sesión
             </Button>
-            <Button size="small" type="primary" icon={<FormOutlined />} onClick={() => abrirModalActividad()}>
-              Calificar clase
+            <Button size="small" type="primary" icon={<BarChartOutlined />} onClick={() => setActiveTab("4")}>
+              Ver gamificacion
             </Button>
             <Button size="small" icon={<BarChartOutlined />} onClick={() => setModalRadarVisible(true)}>
               Ver radar pedagógico
@@ -3539,7 +3607,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
                 <Card
                   title="Gamificación del grupo"
-                  extra={<Tag color="blue">Score promedio: {promedioGamificacionGrupo}</Tag>}
+                  extra={<Tag color="blue">XP promedio: {promedioGamificacionGrupo}/1000</Tag>}
                 >
                   <Text type="secondary" style={{ display: "block", marginBottom: 10 }}>
                     Ranking de motivación por estudiante dentro de este grupo, con foco en constancia semanal, asistencia y quizzes.
@@ -3969,7 +4037,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               />
             ),
           },
-        ]}
+        ].filter((item) => item.key !== "5")}
       />
 
       <Modal
@@ -4072,11 +4140,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               size="small"
               type="primary"
               onClick={() => {
-                setActiveTab("5");
+                setActiveTab("4");
                 setModalRadarVisible(false);
               }}
             >
-              Ir a calificaciones
+              Ir a estudiantes
             </Button>
             <Button
               size="small"

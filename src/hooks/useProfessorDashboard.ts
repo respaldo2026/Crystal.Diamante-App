@@ -9,12 +9,31 @@ dayjs.extend(isBetween);
 
 const HOURS_PER_CLASS = 3;
 const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automaticamente para calculo de ciclos/i;
-const XP_POR_ASISTENCIA = 40;
-const XP_POR_QUIZ = 30;
-const XP_POR_EVIDENCIA = 25;
-const XP_BONO_ASISTENCIA = 80;
-const XP_POR_CURSO_TERMINADO = 120;
-const XP_POR_NIVEL = 250;
+const XP_TOTAL_CURSO = 1000;
+const CLASES_OBJETIVO_CURSO = 20;
+const XP_ASISTENCIA_POR_CLASE = 20;
+const XP_QUIZ_MAX_POR_CLASE = 20;
+const XP_EVIDENCIA_POR_CLASE = 10;
+const XP_POR_NIVEL = 100;
+
+const normalizarNotaQuizA5 = (notaRaw: number) => {
+  const nota = Number(notaRaw);
+  if (!Number.isFinite(nota)) return 0;
+  if (nota > 5 && nota <= 100) return Number((nota / 20).toFixed(2));
+  return Math.max(0, Math.min(5, nota));
+};
+
+const calcularXpQuizPorNota = (notaRaw: number) => {
+  const nota = normalizarNotaQuizA5(notaRaw);
+  if (nota >= 4.8) return 20;
+  if (nota >= 4.5) return 18;
+  if (nota >= 4.0) return 16;
+  if (nota >= 3.5) return 14;
+  if (nota >= 3.0) return 10;
+  if (nota >= 2.0) return 6;
+  if (nota > 0) return 3;
+  return 0;
+};
 
 export interface ProfesorDashboardCurso {
   id: string;
@@ -961,7 +980,8 @@ export const fetchProfessorDashboardData = async (
   });
 
   const quizAprobadosPorMatricula = new Map<number, number>();
-  const quizAprobadosSemanaPorMatricula = new Map<number, number>();
+  const quizXpTotalPorMatricula = new Map<number, number>();
+  const quizXpSemanaPorMatricula = new Map<number, number>();
   const evidenciasTotalPorMatricula = new Map<number, number>();
   const evidenciasSemanaPorMatricula = new Map<number, number>();
   const semanaActualKey = dayjs().startOf("week").format("YYYY-MM-DD");
@@ -973,13 +993,21 @@ export const fetchProfessorDashboardData = async (
     if (kind !== "quiz") return;
 
     const nota = Number(calificacion?.nota ?? calificacion?.calificacion);
-    if (!Number.isFinite(nota) || !isPassingGrade(nota)) return;
+    if (!Number.isFinite(nota)) return;
 
-    quizAprobadosPorMatricula.set(matriculaId, (quizAprobadosPorMatricula.get(matriculaId) || 0) + 1);
+    const xpQuiz = calcularXpQuizPorNota(nota);
+    quizXpTotalPorMatricula.set(matriculaId, (quizXpTotalPorMatricula.get(matriculaId) || 0) + xpQuiz);
+
+    if (isPassingGrade(nota)) {
+      quizAprobadosPorMatricula.set(
+        matriculaId,
+        (quizAprobadosPorMatricula.get(matriculaId) || 0) + 1
+      );
+    }
 
     const weekKeyEvaluacion = getWeekKey(calificacion?.fecha_evaluacion);
     if (weekKeyEvaluacion === semanaActualKey) {
-      quizAprobadosSemanaPorMatricula.set(matriculaId, (quizAprobadosSemanaPorMatricula.get(matriculaId) || 0) + 1);
+      quizXpSemanaPorMatricula.set(matriculaId, (quizXpSemanaPorMatricula.get(matriculaId) || 0) + xpQuiz);
     }
   });
 
@@ -1011,46 +1039,24 @@ export const fetchProfessorDashboardData = async (
     const { actual: rachaActual } = calculateWeeklyStreak(asistencia.weekKeys);
     const quizAprobados = quizAprobadosPorMatricula.get(matriculaId) || 0;
     const presentesSemana = asistencia.weekKeys.filter((weekKey) => weekKey === semanaActualKey).length;
-    const quizAprobadosSemana = quizAprobadosSemanaPorMatricula.get(matriculaId) || 0;
+    const quizXpTotal = quizXpTotalPorMatricula.get(matriculaId) || 0;
+    const quizXpSemana = quizXpSemanaPorMatricula.get(matriculaId) || 0;
     const evidenciasTotal = evidenciasTotalPorMatricula.get(matriculaId) || 0;
     const evidenciasSemana = evidenciasSemanaPorMatricula.get(matriculaId) || 0;
 
-    const matriculaEstado = normalizeStateText(matricula?.estado);
-    const cursoTerminado = ["aprobado", "finalizado", "completado", "graduado", "egresado"].some((estado) =>
-      matriculaEstado.includes(estado)
-    );
-
-    const xpTotal =
-      (asistencia.presentes * XP_POR_ASISTENCIA) +
-      (quizAprobados * XP_POR_QUIZ) +
-      (evidenciasTotal * XP_POR_EVIDENCIA) +
-      (cursoTerminado ? XP_POR_CURSO_TERMINADO : 0) +
-      (asistenciaPercent >= 80 ? XP_BONO_ASISTENCIA : 0);
+    const xpAsistencia = Math.min(asistencia.presentes, CLASES_OBJETIVO_CURSO) * XP_ASISTENCIA_POR_CLASE;
+    const xpQuiz = Math.min(quizXpTotal, CLASES_OBJETIVO_CURSO * XP_QUIZ_MAX_POR_CLASE);
+    const xpEvidencia = Math.min(evidenciasTotal, CLASES_OBJETIVO_CURSO) * XP_EVIDENCIA_POR_CLASE;
+    const xpTotal = Math.min(XP_TOTAL_CURSO, xpAsistencia + xpQuiz + xpEvidencia);
 
     const xpSemanal =
-      (presentesSemana * XP_POR_ASISTENCIA) +
-      (quizAprobadosSemana * XP_POR_QUIZ) +
-      (evidenciasSemana * XP_POR_EVIDENCIA);
+      (presentesSemana * XP_ASISTENCIA_POR_CLASE) +
+      quizXpSemana +
+      (evidenciasSemana * XP_EVIDENCIA_POR_CLASE);
 
-    const asistenciaScore = Math.min(100, asistenciaPercent);
-    const quizScore = Math.min(100, quizAprobados * 30);
-    const rachaScore = Math.min(100, rachaActual * 25);
-    const constanciaScore = Math.min(100, semanasConAsistencia * 12);
+    const score = Math.max(0, Math.min(100, Math.round(xpTotal / 10)));
 
-    const score = Math.max(
-      0,
-      Math.min(
-        100,
-        Math.round(
-          (asistenciaScore * 0.45) +
-          (quizScore * 0.25) +
-          (rachaScore * 0.2) +
-          (constanciaScore * 0.1)
-        )
-      )
-    );
-
-    const nivel = Math.floor(xpTotal / XP_POR_NIVEL) + 1;
+    const nivel = Math.max(1, Math.ceil(xpTotal / XP_POR_NIVEL));
     const estado: "alto" | "medio" | "bajo" = score >= 80 ? "alto" : score >= 55 ? "medio" : "bajo";
 
     const payload: ProfesorDashboardGamificacionEstudiante = {
