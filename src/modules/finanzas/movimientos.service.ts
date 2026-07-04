@@ -371,11 +371,13 @@ export async function sincronizarEgresosDesdeSesionesClase(createdBy?: string | 
             created_by: createdBy || null,
         };
 
-        if (existingRows && existingRows.length > 0) {
+        const existingId = existingRows?.[0]?.id;
+
+        if (existingId) {
             await supabaseBrowserClient
                 .from("movimientos_financieros")
                 .update(payload)
-                .eq("id", existingRows[0].id);
+                .eq("id", existingId);
             continue;
         }
 
