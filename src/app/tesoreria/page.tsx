@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { List } from "@refinedev/antd";
 import {
     Alert,
@@ -178,6 +178,9 @@ export default function TesoreriaPage() {
         cobertura: 0,
     });
     const [form] = Form.useForm();
+    const reconciliandoRef = useRef(false);
+    const reconciliacionInicialHechaRef = useRef(false);
+    const recargaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const role = (user?.rol || "").toLowerCase();
     const puedeEjecutarLiquidacion =
@@ -298,25 +301,25 @@ export default function TesoreriaPage() {
         return generados;
     }, []);
 
-    const cargarMovimientos = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const role = (user?.rol || "").toLowerCase();
-            const puedeVerTodo =
-                role === "admin" ||
-                role === "director" ||
-                role === "administrador" ||
-                role === "administrativo" ||
-                role === "secretaria" ||
-                role === "tesoreria" ||
-                role === "tesorero" ||
-                role === "caja" ||
-                role === "cajero" ||
-                role === "contador" ||
-                role === "finanzas" ||
-                role.includes("admin");
+    const role = (user?.rol || "").toLowerCase();
+    const puedeVerTodo =
+        role === "admin" ||
+        role === "director" ||
+        role === "administrador" ||
+        role === "administrativo" ||
+        role === "secretaria" ||
+        role === "tesoreria" ||
+        role === "tesorero" ||
+        role === "caja" ||
+        role === "cajero" ||
+        role === "contador" ||
+        role === "finanzas" ||
+        role.includes("admin");
 
+    const reconciliarTesoreria = useCallback(async () => {
+        if (reconciliandoRef.current) return;
+        reconciliandoRef.current = true;
+        try {
             try {
                 await sincronizarIngresosDesdePagos(user?.id || null);
             } catch (syncError) {
@@ -329,7 +332,6 @@ export default function TesoreriaPage() {
                 console.warn("No se pudo sincronizar egresos de sesiones clase", syncError);
             }
 
-            // Limpiar duplicados automáticamente (solo si es admin)
             if (puedeVerTodo) {
                 try {
                     const resLimpieza = await fetch("/api/tesoreria/limpiar-duplicados", { method: "POST" });
@@ -353,27 +355,50 @@ export default function TesoreriaPage() {
 
             const data = await listarMovimientos({}, { userId: user?.id || null, esAdmin: puedeVerTodo });
             setMovimientos(data);
+        } finally {
+            reconciliandoRef.current = false;
+        }
+    }, [generarTicketsFaltantes, puedeVerTodo, user?.id]);
+
+    const cargarMovimientos = useCallback(async (opts?: { reconciliar?: boolean }) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await listarMovimientos({}, { userId: user?.id || null, esAdmin: puedeVerTodo });
+            setMovimientos(data);
         } catch (err: any) {
             console.error("Error cargando movimientos", err);
             setError(err.message ?? "No se pudieron cargar los movimientos");
         } finally {
             setLoading(false);
         }
-    }, [generarTicketsFaltantes, user?.id, user?.rol]);
+
+        const debeReconciliar = opts?.reconciliar || !reconciliacionInicialHechaRef.current;
+        if (debeReconciliar) {
+            reconciliacionInicialHechaRef.current = true;
+            void reconciliarTesoreria();
+        }
+    }, [puedeVerTodo, reconciliarTesoreria, user?.id]);
 
     useEffect(() => {
-        void cargarMovimientos();
+        void cargarMovimientos({ reconciliar: true });
     }, [cargarMovimientos]);
 
     useEffect(() => {
         const channel = supabaseBrowserClient
             .channel("tesoreria-live-sync")
             .on("postgres_changes", { event: "*", schema: "public", table: "sesiones_clase" }, () => {
-                void cargarMovimientos();
+                if (recargaDebounceRef.current) clearTimeout(recargaDebounceRef.current);
+                recargaDebounceRef.current = setTimeout(() => {
+                    void cargarMovimientos({ reconciliar: false });
+                }, 500);
                 setRentabilidadRefreshTick((prev) => prev + 1);
             })
             .on("postgres_changes", { event: "*", schema: "public", table: "pagos" }, () => {
-                void cargarMovimientos();
+                if (recargaDebounceRef.current) clearTimeout(recargaDebounceRef.current);
+                recargaDebounceRef.current = setTimeout(() => {
+                    void cargarMovimientos({ reconciliar: false });
+                }, 500);
                 setRentabilidadRefreshTick((prev) => prev + 1);
             })
             .on("postgres_changes", { event: "*", schema: "public", table: "perfiles" }, () => {
@@ -382,6 +407,10 @@ export default function TesoreriaPage() {
             .subscribe();
 
         return () => {
+            if (recargaDebounceRef.current) {
+                clearTimeout(recargaDebounceRef.current);
+                recargaDebounceRef.current = null;
+            }
             supabaseBrowserClient.removeChannel(channel);
         };
     }, [cargarMovimientos]);
