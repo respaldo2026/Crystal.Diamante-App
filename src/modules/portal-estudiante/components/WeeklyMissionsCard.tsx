@@ -9,6 +9,51 @@ type Props = {
   misiones: MisionSemanal[];
 };
 
+const getMissionEmoji = (missionId: string) => {
+  switch (missionId) {
+    case "asistencia-semanal":
+      return "✅";
+    case "quiz-semanal":
+      return "🧠";
+    case "racha-semanal":
+      return "🔥";
+    case "constancia-mensual":
+      return "📷";
+    default:
+      return "⭐";
+  }
+};
+
+const getMissionTagColor = (missionId: string): "blue" | "purple" | "green" | "orange" | "gold" => {
+  switch (missionId) {
+    case "asistencia-semanal":
+      return "blue";
+    case "quiz-semanal":
+      return "purple";
+    case "constancia-mensual":
+      return "green";
+    case "racha-semanal":
+      return "orange";
+    default:
+      return "gold";
+  }
+};
+
+const getMissionProgressColor = (missionId: string) => {
+  switch (missionId) {
+    case "asistencia-semanal":
+      return "#1677ff";
+    case "quiz-semanal":
+      return "#722ed1";
+    case "constancia-mensual":
+      return "#16a34a";
+    case "racha-semanal":
+      return "#fa8c16";
+    default:
+      return "#d81b87";
+  }
+};
+
 export const WeeklyMissionsCard: React.FC<Props> = ({ misiones }) => {
   return (
     <Card size="small" title="Misiones semanales" style={{ borderRadius: 14 }}>
@@ -25,12 +70,12 @@ export const WeeklyMissionsCard: React.FC<Props> = ({ misiones }) => {
           >
             <Space style={{ width: "100%", justifyContent: "space-between" }} align="start">
               <div>
-                <Text strong>{mision.titulo}</Text>
+                <Text strong>{`${getMissionEmoji(String(mision.id || ""))} ${mision.titulo}`}</Text>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>{mision.descripcion}</Text>
                 </div>
               </div>
-              <Tag color={mision.completada ? "green" : "blue"}>
+              <Tag color={mision.completada ? "green" : getMissionTagColor(String(mision.id || ""))}>
                 +{mision.recompensaXp} XP
               </Tag>
             </Space>
@@ -39,7 +84,7 @@ export const WeeklyMissionsCard: React.FC<Props> = ({ misiones }) => {
               percent={mision.progresoPercent}
               size="small"
               showInfo={false}
-              strokeColor={mision.completada ? "#16a34a" : "#d81b87"}
+              strokeColor={mision.completada ? "#16a34a" : getMissionProgressColor(String(mision.id || ""))}
               trailColor="#e5e7eb"
               style={{ marginTop: 8, marginBottom: 4 }}
             />
