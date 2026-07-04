@@ -336,6 +336,7 @@ export async function sincronizarEgresosDesdeSesionesClase(createdBy?: string | 
     const { data: sesiones, error } = await supabaseBrowserClient
         .from("sesiones_clase")
         .select("id, fecha, horas_dictadas, profesor_id, perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora)")
+        .eq("estado_pago", "pagado")
         .not("fecha", "is", null)
         .gt("horas_dictadas", 0);
 

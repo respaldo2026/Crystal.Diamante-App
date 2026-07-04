@@ -610,6 +610,7 @@ export default function TesoreriaPage() {
                     .from("sesiones_clase")
                     .select("fecha, horas_dictadas, profesor_id, perfiles!sesiones_clase_profesor_id_fkey(valor_hora)")
                     .eq("curso_id", filtroGrupoRentabilidad)
+                    .eq("estado_pago", "pagado")
                     .gte("fecha", inicio)
                     .lte("fecha", fin)
                     .gt("horas_dictadas", 0);
@@ -625,6 +626,7 @@ export default function TesoreriaPage() {
                         .from("sesiones_clase")
                         .select("profesor_id, horas_dictadas")
                         .eq("curso_id", filtroGrupoRentabilidad)
+                        .eq("estado_pago", "pagado")
                         .gte("fecha", inicio)
                         .lte("fecha", fin)
                         .gt("horas_dictadas", 0);
