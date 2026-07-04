@@ -132,48 +132,126 @@ export default function RentabilidadPage() {
     }
     // modoFiltro === "todo" => sin filtro de fechas
 
-    // Ingresos
-    let qPagos = supabaseBrowserClient
-      .from("pagos")
-      .select("id, fecha_pago, monto, numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
-      .eq("estado", "pagado");
-    if (inicio) qPagos = qPagos.gte("fecha_pago", inicio);
-    if (fin) qPagos = qPagos.lte("fecha_pago", fin);
+    try {
+      const hoy = dayjs().endOf("day");
 
-    const { data: pagosData } = await qPagos;
+      // 1) Ingresos por abonos (fuente prioritaria cuando existen abonos)
+      let qAbonos = supabaseBrowserClient
+        .from("pagos_abonos")
+        .select("id, pago_id, fecha_pago, monto_abono, pagos!pagos_abonos_pago_id_fkey(numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre)))")
+        .gt("monto_abono", 0);
+      if (inicio) qAbonos = qAbonos.gte("fecha_pago", inicio);
+      if (fin) qAbonos = qAbonos.lte("fecha_pago", fin);
 
-    const parsed: PagoEstudiante[] = ((pagosData as any[]) || []).map((p) => ({
-      id: p.id,
-      fecha_pago: p.fecha_pago,
-      monto: Number(p.monto) || 0,
-      tipo:
-        p.numero_cuota === 0 ||
-        String(p.tipo_cuota || "").toLowerCase().includes("inscripcion")
-          ? "inscripcion"
-          : "mensualidad",
-      curso_nombre: p.matriculas?.cursos?.nombre || "Sin curso",
-    }));
-    setPagosEstudiantes(parsed);
+      const { data: abonosData, error: abonosError } = await qAbonos;
+      if (abonosError) throw abonosError;
 
-    // Egresos
-    let qNomina = supabaseBrowserClient
-      .from("pagos_nomina")
-      .select("id, fecha_pago, total_pagado, total_horas, perfiles(nombre_completo)");
-    if (inicio) qNomina = qNomina.gte("fecha_pago", inicio);
-    if (fin) qNomina = qNomina.lte("fecha_pago", fin);
+      const pagoConAbonoIds = new Set(
+        ((abonosData as any[]) || [])
+          .map((a: any) => String(a?.pago_id || ""))
+          .filter(Boolean)
+      );
 
-    const { data: nominaData } = await qNomina;
+      const ingresosAbonos: PagoEstudiante[] = ((abonosData as any[]) || [])
+        .map((a: any) => {
+          const fecha = dayjs(a?.fecha_pago);
+          if (!fecha.isValid() || fecha.isAfter(hoy)) return null;
 
-    const nominaParsed: PagoNomina[] = ((nominaData as any[]) || []).map((n) => ({
-      id: n.id,
-      fecha_pago: n.fecha_pago,
-      total_pagado: Number(n.total_pagado) || 0,
-      total_horas: Number(n.total_horas) || 0,
-      profesor_nombre: n.perfiles?.nombre_completo || "Sin nombre",
-    }));
-    setPagosNomina(nominaParsed);
+          const pagoBase = a?.pagos;
+          const tipo: "inscripcion" | "mensualidad" =
+            Number(pagoBase?.numero_cuota || 0) === 0 ||
+            String(pagoBase?.tipo_cuota || "").toLowerCase().includes("inscripcion")
+              ? "inscripcion"
+              : "mensualidad";
 
-    setLoading(false);
+          return {
+            id: `abono:${String(a?.id || "")}`,
+            fecha_pago: String(a?.fecha_pago || ""),
+            monto: Number(a?.monto_abono || 0),
+            tipo,
+            curso_nombre: pagoBase?.matriculas?.cursos?.nombre || "Sin curso",
+          } as PagoEstudiante;
+        })
+        .filter(Boolean) as PagoEstudiante[];
+
+      // 2) Ingresos por pagos completos (solo pagos que NO tienen abonos)
+      let qPagos = supabaseBrowserClient
+        .from("pagos")
+        .select("id, fecha_pago, monto, numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
+        .eq("estado", "pagado");
+      if (inicio) qPagos = qPagos.gte("fecha_pago", inicio);
+      if (fin) qPagos = qPagos.lte("fecha_pago", fin);
+
+      const { data: pagosData, error: pagosError } = await qPagos;
+      if (pagosError) throw pagosError;
+
+      const ingresosPagos: PagoEstudiante[] = ((pagosData as any[]) || [])
+        .filter((p: any) => !pagoConAbonoIds.has(String(p?.id || "")))
+        .map((p: any) => {
+          const fecha = dayjs(p?.fecha_pago);
+          if (!fecha.isValid() || fecha.isAfter(hoy)) return null;
+
+          return {
+            id: `pago:${String(p?.id || "")}`,
+            fecha_pago: String(p?.fecha_pago || ""),
+            monto: Number(p?.monto || 0),
+            tipo:
+              Number(p?.numero_cuota || 0) === 0 ||
+              String(p?.tipo_cuota || "").toLowerCase().includes("inscripcion")
+                ? "inscripcion"
+                : "mensualidad",
+            curso_nombre: p?.matriculas?.cursos?.nombre || "Sin curso",
+          } as PagoEstudiante;
+        })
+        .filter(Boolean) as PagoEstudiante[];
+
+      // Dedupe defensivo por id lógico
+      const ingresosMap = new Map<string, PagoEstudiante>();
+      [...ingresosAbonos, ...ingresosPagos].forEach((ing) => {
+        if (!ing?.id) return;
+        ingresosMap.set(ing.id, ing);
+      });
+      setPagosEstudiantes(Array.from(ingresosMap.values()));
+
+      // 3) Egresos reales por clases ya pagadas (sin doble conteo por id de sesión)
+      const HORAS_FIJAS_POR_CLASE = 3;
+      let qSesionesPagadas = supabaseBrowserClient
+        .from("sesiones_clase")
+        .select("id, fecha, estado_pago, profesor_id, perfiles!sesiones_clase_profesor_id_fkey(nombre_completo, valor_hora)")
+        .eq("estado_pago", "pagado");
+      if (inicio) qSesionesPagadas = qSesionesPagadas.gte("fecha", inicio);
+      if (fin) qSesionesPagadas = qSesionesPagadas.lte("fecha", fin);
+
+      const { data: sesionesPagadas, error: sesionesError } = await qSesionesPagadas;
+      if (sesionesError) throw sesionesError;
+
+      const nominaMap = new Map<string, PagoNomina>();
+      ((sesionesPagadas as any[]) || []).forEach((s: any) => {
+        const fecha = dayjs(s?.fecha);
+        if (!fecha.isValid() || fecha.isAfter(hoy)) return;
+
+        const idSesion = String(s?.id || "");
+        if (!idSesion || nominaMap.has(idSesion)) return;
+
+        const valorHora = Number(s?.perfiles?.valor_hora || 0);
+        nominaMap.set(idSesion, {
+          id: idSesion,
+          fecha_pago: String(s?.fecha || ""),
+          total_horas: HORAS_FIJAS_POR_CLASE,
+          total_pagado: HORAS_FIJAS_POR_CLASE * valorHora,
+          profesor_nombre: s?.perfiles?.nombre_completo || "Sin nombre",
+        });
+      });
+
+      setPagosNomina(Array.from(nominaMap.values()));
+    } catch (err) {
+      console.error("Error cargando rentabilidad:", err);
+      message.error("No se pudieron cargar datos de rentabilidad");
+      setPagosEstudiantes([]);
+      setPagosNomina([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
