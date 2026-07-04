@@ -1408,9 +1408,9 @@ export default function PortalEstudiante() {
 
   const menuSecciones = [
     { key: "1", label: "Mis Cursos", icon: <BookOutlined /> },
+    { key: "5", label: enMoraBloqueante ? "🔒 Pensum" : "Pensum", icon: <BookOutlined /> },
     { key: "2", label: enMora ? "💰 Financiero ⚠️" : "Financiero", icon: <DollarCircleOutlined /> },
     { key: "3", label: enMoraBloqueante ? "🔒 Materiales" : (isMobile ? "Materiales" : "Lista de materiales"), icon: <FileOutlined /> },
-    { key: "5", label: enMoraBloqueante ? "🔒 Pensum" : "Pensum", icon: <BookOutlined /> },
   ];
 
   const programaIdPorCursoId = React.useMemo(() => {
