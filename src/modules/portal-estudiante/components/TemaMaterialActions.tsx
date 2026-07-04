@@ -42,6 +42,7 @@ export const TemaMaterialActions = ({
   onOpenQuizAction,
   onUploadEvidenceAction,
 }: TemaMaterialActionsProps) => {
+  const [materialRevisado, setMaterialRevisado] = React.useState(false);
   const inputFileRef = React.useRef<HTMLInputElement | null>(null);
   const mostrarEnlacePrincipal = presentacionesTema.length <= 1;
   const quizDisponible = Boolean(quizTema);
@@ -66,6 +67,11 @@ export const TemaMaterialActions = ({
       ? (quizAprobadoTema ? "green" : "blue")
       : "gold";
 
+  const paso1Completo = materialRevisado || quizPresentado;
+  const paso2Disponible = quizDisponible && paso1Completo;
+  const paso3Disponible = quizPresentado;
+  const progreso = (paso1Completo ? 1 : 0) + (quizPresentado ? 1 : 0) + (evidenciaSubida ? 1 : 0);
+
   const StepNumber = ({ value }: { value: number }) => {
     return (
       <span
@@ -88,6 +94,24 @@ export const TemaMaterialActions = ({
     );
   };
 
+  const Pill = ({ text, done = false }: { text: string; done?: boolean }) => (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "2px 10px",
+        borderRadius: 999,
+        border: `1px solid ${done ? "#86efac" : "#d1d5db"}`,
+        background: done ? "#f0fdf4" : "#f8fafc",
+        color: done ? "#166534" : "#475569",
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      {text}
+    </span>
+  );
+
   const renderMaterialStep = () => {
     if (mostrarEnlacePrincipal) {
       return (
@@ -99,6 +123,7 @@ export const TemaMaterialActions = ({
               onWarnAction("Este tema aún no tiene material didáctico disponible.");
               return;
             }
+            setMaterialRevisado(true);
             onOpenMaterialAction(recursoPrincipalTema, tituloRecursoPrincipal, temaId);
           }}
           style={{ borderRadius: 10, fontWeight: 600 }}
@@ -115,7 +140,10 @@ export const TemaMaterialActions = ({
             key={presentacion.id || `material-${index}`}
             size="small"
             type="default"
-            onClick={() => onOpenMaterialAction(presentacion.material, presentacion.titulo, temaId)}
+            onClick={() => {
+              setMaterialRevisado(true);
+              onOpenMaterialAction(presentacion.material, presentacion.titulo, temaId);
+            }}
             style={{ borderRadius: 10 }}
           >
             {String(presentacion.titulo || presentacion?.material?.nombre_archivo || "Material")}
@@ -129,10 +157,11 @@ export const TemaMaterialActions = ({
     <Space direction="vertical" size={10} style={{ width: "100%" }}>
       <div
         style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 14,
+          border: "1px solid #e5e7eb",
+          borderRadius: 16,
           background: "#ffffff",
-          padding: 12,
+          padding: 14,
+          boxShadow: "0 10px 24px -22px rgba(15,23,42,0.35)",
           width: "100%",
         }}
       >
@@ -142,31 +171,45 @@ export const TemaMaterialActions = ({
               <Text strong style={{ fontSize: 14 }}>Ruta del tema: {temaNombre || "Tema"}</Text>
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  Sigue el orden para avanzar sin confusiones.
+                  Paso a paso para que sea fácil y claro.
                 </Text>
               </div>
             </div>
-            <Tag color="default" style={{ marginInlineEnd: 0, borderRadius: 999 }}>
+            <Tag color="default" style={{ marginInlineEnd: 0, borderRadius: 999, borderColor: "#d1d5db", color: "#334155" }}>
               XP del tema: {puntosGanados}/{puntosPosibles}
             </Tag>
           </div>
 
+          <div style={{ width: "100%", height: 8, borderRadius: 999, background: "#f1f5f9", overflow: "hidden" }}>
+            <div
+              style={{
+                width: `${Math.round((progreso / 3) * 100)}%`,
+                height: "100%",
+                background: "linear-gradient(90deg, #64748b 0%, #0f172a 100%)",
+                transition: "width 220ms ease",
+              }}
+            />
+          </div>
+
           <div
             style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 12,
-              padding: 10,
-              background: "#f8fafc",
+              border: "1px solid #e5e7eb",
+              borderRadius: 14,
+              padding: 12,
+              background: "#fcfcfd",
               display: "flex",
               flexDirection: "column",
-              gap: 10,
+              gap: 12,
             }}
           >
             <div style={{ display: "grid", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                 <StepNumber value={1} />
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <Text strong style={{ fontSize: 13 }}>Ver clase</Text>
+                  <Space size={8} wrap>
+                    <Text strong style={{ fontSize: 13 }}>Ver clase</Text>
+                    <Pill text={paso1Completo ? "Completado" : "Pendiente"} done={paso1Completo} />
+                  </Space>
                   <div>
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       Revisa el material antes de responder.
@@ -183,19 +226,26 @@ export const TemaMaterialActions = ({
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Space size={8} wrap>
                     <Text strong style={{ fontSize: 13 }}>Presentar quiz</Text>
-                    <Tag color={estadoQuizColor} style={{ marginInlineEnd: 0, borderRadius: 999 }}>{estadoQuizLabel}</Tag>
-                    <Tag color="default" style={{ marginInlineEnd: 0, borderRadius: 999 }}>+30 XP</Tag>
+                    <Pill text={estadoQuizLabel} done={quizPresentado} />
+                    <Pill text="+30 XP" done={quizAprobadoTema} />
                   </Space>
                   <div>
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       Responde el quiz para sumar puntos por aprendizaje.
                     </Text>
                   </div>
+                  {!paso2Disponible && !quizPresentado ? (
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        Primero revisa la clase para habilitar este paso.
+                      </Text>
+                    </div>
+                  ) : null}
                   <div style={{ marginTop: 8 }}>
                     <Button
-                      type={quizDisponible && !quizPresentado ? "primary" : "default"}
+                      type={paso2Disponible && !quizPresentado ? "primary" : "default"}
                       icon={<SafetyCertificateOutlined />}
-                      disabled={!quizDisponible}
+                      disabled={!paso2Disponible && !quizPresentado}
                       onClick={() => {
                         if (!quizTema) return;
                         onOpenQuizAction(quizTema);
@@ -213,16 +263,21 @@ export const TemaMaterialActions = ({
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Space size={8} wrap>
                     <Text strong style={{ fontSize: 13 }}>Subir evidencia</Text>
-                    <Tag color={evidenciaSubida ? "green" : "gold"} style={{ marginInlineEnd: 0, borderRadius: 999 }}>
-                      {evidenciaSubida ? "Subida" : "Pendiente"}
-                    </Tag>
-                    <Tag color="default" style={{ marginInlineEnd: 0, borderRadius: 999 }}>+25 XP</Tag>
+                    <Pill text={evidenciaSubida ? "Subida" : "Pendiente"} done={evidenciaSubida} />
+                    <Pill text="+25 XP" done={evidenciaSubida} />
                   </Space>
                   <div>
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       Toma una foto con la camara del dispositivo y envíala.
                     </Text>
                   </div>
+                  {!paso3Disponible ? (
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        Este paso se activa cuando ya hayas presentado el quiz.
+                      </Text>
+                    </div>
+                  ) : null}
 
                   <input
                     ref={inputFileRef}
@@ -240,9 +295,10 @@ export const TemaMaterialActions = ({
 
                   <Space size={8} wrap style={{ marginTop: 8 }}>
                     <Button
-                      type={!evidenciaSubida ? "primary" : "default"}
+                      type={!evidenciaSubida && paso3Disponible ? "primary" : "default"}
                       icon={evidenciaSubida ? <CheckCircleOutlined /> : <CameraOutlined />}
                       loading={evidenciaUploading}
+                      disabled={!paso3Disponible}
                       onClick={() => inputFileRef.current?.click()}
                       style={{ borderRadius: 10, fontWeight: 600 }}
                     >
