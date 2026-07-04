@@ -55,6 +55,7 @@ type PagoEstudiante = {
   tipo: "inscripcion" | "mensualidad";
   curso_nombre: string;
   fuente: "abono" | "pago_completo";
+  persona_nombre: string;
 };
 
 type PagoNomina = {
@@ -140,7 +141,7 @@ export default function RentabilidadPage() {
       // 1) Ingresos por abonos (fuente prioritaria cuando existen abonos)
       let qAbonos = supabaseBrowserClient
         .from("pagos_abonos")
-        .select("id, pago_id, fecha_pago, monto_abono, pagos!pagos_abonos_pago_id_fkey(numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre)))")
+        .select("id, pago_id, fecha_pago, monto_abono, pagos!pagos_abonos_pago_id_fkey(numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(estudiante_id, cursos(nombre)))")
         .gt("monto_abono", 0);
       if (inicio) qAbonos = qAbonos.gte("fecha_pago", inicio);
       if (fin) qAbonos = qAbonos.lte("fecha_pago", fin);
@@ -174,6 +175,7 @@ export default function RentabilidadPage() {
             tipo,
             curso_nombre: pagoBase?.matriculas?.cursos?.nombre || "Sin curso",
             fuente: "abono",
+            persona_nombre: "Estudiante",
           } as PagoEstudiante;
         })
         .filter(Boolean) as PagoEstudiante[];
@@ -181,7 +183,7 @@ export default function RentabilidadPage() {
       // 2) Ingresos por pagos completos (solo pagos que NO tienen abonos)
       let qPagos = supabaseBrowserClient
         .from("pagos")
-        .select("id, fecha_pago, monto, numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(cursos(nombre))")
+        .select("id, fecha_pago, monto, numero_cuota, tipo_cuota, matriculas!pagos_matricula_id_fkey(estudiante_id, cursos(nombre))")
         .eq("estado", "pagado");
       if (inicio) qPagos = qPagos.gte("fecha_pago", inicio);
       if (fin) qPagos = qPagos.lte("fecha_pago", fin);
@@ -207,13 +209,59 @@ export default function RentabilidadPage() {
                 : "mensualidad",
             curso_nombre: p?.matriculas?.cursos?.nombre || "Sin curso",
             fuente: "pago_completo",
+            persona_nombre: "Estudiante",
           } as PagoEstudiante;
         })
         .filter(Boolean) as PagoEstudiante[];
 
+      const estudianteIds = Array.from(
+        new Set(
+          [
+            ...((abonosData as any[]) || []).map((a: any) => String(a?.pagos?.matriculas?.estudiante_id || "")),
+            ...((pagosData as any[]) || []).map((p: any) => String(p?.matriculas?.estudiante_id || "")),
+          ].filter(Boolean)
+        )
+      );
+
+      const estudiantesMap = new Map<string, string>();
+      if (estudianteIds.length > 0) {
+        const { data: perfilesData, error: perfilesError } = await supabaseBrowserClient
+          .from("perfiles")
+          .select("id, nombre_completo")
+          .in("id", estudianteIds);
+
+        if (perfilesError) throw perfilesError;
+
+        (perfilesData || []).forEach((perfil: any) => {
+          const id = String(perfil?.id || "");
+          if (!id) return;
+          estudiantesMap.set(id, String(perfil?.nombre_completo || "Estudiante"));
+        });
+      }
+
+      const ingresosAbonosConPersona = ingresosAbonos.map((ing, index) => {
+        const estudianteId = String((abonosData as any[])?.[index]?.pagos?.matriculas?.estudiante_id || "");
+        return {
+          ...ing,
+          persona_nombre: estudiantesMap.get(estudianteId) || "Estudiante",
+        };
+      });
+
+      const pagosSinAbonoFuente = ((pagosData as any[]) || []).filter(
+        (p: any) => !pagoConAbonoIds.has(String(p?.id || ""))
+      );
+
+      const ingresosPagosConPersona = ingresosPagos.map((ing, index) => {
+        const estudianteId = String(pagosSinAbonoFuente?.[index]?.matriculas?.estudiante_id || "");
+        return {
+          ...ing,
+          persona_nombre: estudiantesMap.get(estudianteId) || "Estudiante",
+        };
+      });
+
       // Dedupe defensivo por id lógico
       const ingresosMap = new Map<string, PagoEstudiante>();
-      [...ingresosAbonos, ...ingresosPagos].forEach((ing) => {
+      [...ingresosAbonosConPersona, ...ingresosPagosConPersona].forEach((ing) => {
         if (!ing?.id) return;
         ingresosMap.set(ing.id, ing);
       });
@@ -697,6 +745,12 @@ export default function RentabilidadPage() {
                 ellipsis: true,
               },
               {
+                title: "Persona",
+                dataIndex: "persona_nombre",
+                key: "persona_nombre",
+                ellipsis: true,
+              },
+              {
                 title: "ID origen",
                 dataIndex: "origen_id",
                 key: "origen_id",
@@ -714,10 +768,10 @@ export default function RentabilidadPage() {
             locale={{ emptyText: "Sin ingresos en este periodo" }}
             summary={() => (
               <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={5}>
+                <Table.Summary.Cell index={0} colSpan={6}>
                   <Text strong>Total ingresos considerados</Text>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={5} align="right">
+                <Table.Summary.Cell index={6} align="right">
                   <Text strong style={{ color: "#52c41a" }}>{formatoCOP(totalIngresos)}</Text>
                 </Table.Summary.Cell>
               </Table.Summary.Row>
