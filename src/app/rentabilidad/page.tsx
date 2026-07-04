@@ -49,10 +49,12 @@ const formatoCOP = (valor: number) =>
 
 type PagoEstudiante = {
   id: string;
+  origen_id: string;
   fecha_pago: string;
   monto: number;
   tipo: "inscripcion" | "mensualidad";
   curso_nombre: string;
+  fuente: "abono" | "pago_completo";
 };
 
 type PagoNomina = {
@@ -166,10 +168,12 @@ export default function RentabilidadPage() {
 
           return {
             id: `abono:${String(a?.id || "")}`,
+            origen_id: String(a?.id || ""),
             fecha_pago: String(a?.fecha_pago || ""),
             monto: Number(a?.monto_abono || 0),
             tipo,
             curso_nombre: pagoBase?.matriculas?.cursos?.nombre || "Sin curso",
+            fuente: "abono",
           } as PagoEstudiante;
         })
         .filter(Boolean) as PagoEstudiante[];
@@ -193,6 +197,7 @@ export default function RentabilidadPage() {
 
           return {
             id: `pago:${String(p?.id || "")}`,
+            origen_id: String(p?.id || ""),
             fecha_pago: String(p?.fecha_pago || ""),
             monto: Number(p?.monto || 0),
             tipo:
@@ -201,6 +206,7 @@ export default function RentabilidadPage() {
                 ? "inscripcion"
                 : "mensualidad",
             curso_nombre: p?.matriculas?.cursos?.nombre || "Sin curso",
+            fuente: "pago_completo",
           } as PagoEstudiante;
         })
         .filter(Boolean) as PagoEstudiante[];
@@ -279,6 +285,17 @@ export default function RentabilidadPage() {
     () => pagosNomina.reduce((s, p) => s + p.total_horas, 0),
     [pagosNomina]
   );
+
+  const resumenFuentesIngreso = useMemo(() => {
+    const abonos = pagosEstudiantes.filter((p) => p.fuente === "abono");
+    const pagosCompletos = pagosEstudiantes.filter((p) => p.fuente === "pago_completo");
+    return {
+      abonosCount: abonos.length,
+      pagosCompletosCount: pagosCompletos.length,
+      abonosMonto: abonos.reduce((s, p) => s + p.monto, 0),
+      pagosCompletosMonto: pagosCompletos.reduce((s, p) => s + p.monto, 0),
+    };
+  }, [pagosEstudiantes]);
 
   const ganancia = totalIngresos - totalEgresos;
   const margen = totalIngresos > 0 ? (ganancia / totalIngresos) * 100 : 0;
@@ -532,6 +549,11 @@ export default function RentabilidadPage() {
               <Text type="secondary" style={{ fontSize: 11 }}>
                 Inscripciones + Mensualidades
               </Text>
+              <div style={{ marginTop: 6 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  {pagosEstudiantes.length} registros: {resumenFuentesIngreso.abonosCount} abonos ({formatoCOP(resumenFuentesIngreso.abonosMonto)}) + {resumenFuentesIngreso.pagosCompletosCount} pagos completos ({formatoCOP(resumenFuentesIngreso.pagosCompletosMonto)})
+                </Text>
+              </div>
             </Card>
           </Col>
           <Col xs={12} sm={12} lg={6}>
@@ -634,6 +656,74 @@ export default function RentabilidadPage() {
         )}
 
         <Divider />
+
+        <Card
+          title="Trazabilidad de ingresos considerados"
+          extra={<Text type="secondary" style={{ fontSize: 12 }}>Origen exacto del total de ingresos del periodo</Text>}
+          style={{ marginBottom: 24 }}
+        >
+          <Table<PagoEstudiante>
+            dataSource={pagosEstudiantes}
+            rowKey="id"
+            size="small"
+            pagination={{ pageSize: 12, hideOnSinglePage: true }}
+            columns={[
+              {
+                title: "Fecha",
+                dataIndex: "fecha_pago",
+                key: "fecha_pago",
+                render: (v: string) => (v ? dayjs(v).format("DD MMM YYYY") : "-"),
+              },
+              {
+                title: "Fuente",
+                dataIndex: "fuente",
+                key: "fuente",
+                render: (v: PagoEstudiante["fuente"]) => (
+                  <Tag color={v === "abono" ? "gold" : "blue"}>{v === "abono" ? "Abono" : "Pago completo"}</Tag>
+                ),
+              },
+              {
+                title: "Tipo",
+                dataIndex: "tipo",
+                key: "tipo",
+                render: (v: PagoEstudiante["tipo"]) => (
+                  <Tag color={v === "inscripcion" ? "green" : "geekblue"}>{v === "inscripcion" ? "Inscripción" : "Mensualidad"}</Tag>
+                ),
+              },
+              {
+                title: "Curso",
+                dataIndex: "curso_nombre",
+                key: "curso_nombre",
+                ellipsis: true,
+              },
+              {
+                title: "ID origen",
+                dataIndex: "origen_id",
+                key: "origen_id",
+                ellipsis: true,
+                render: (v: string) => <Text type="secondary" style={{ fontSize: 12 }}>{v}</Text>,
+              },
+              {
+                title: "Monto",
+                dataIndex: "monto",
+                key: "monto",
+                align: "right",
+                render: (v: number) => <Text strong>{formatoCOP(v)}</Text>,
+              },
+            ]}
+            locale={{ emptyText: "Sin ingresos en este periodo" }}
+            summary={() => (
+              <Table.Summary.Row>
+                <Table.Summary.Cell index={0} colSpan={5}>
+                  <Text strong>Total ingresos considerados</Text>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={5} align="right">
+                  <Text strong style={{ color: "#52c41a" }}>{formatoCOP(totalIngresos)}</Text>
+                </Table.Summary.Cell>
+              </Table.Summary.Row>
+            )}
+          />
+        </Card>
 
         <Row gutter={[24, 24]}>
           {/* Ingresos por curso */}
