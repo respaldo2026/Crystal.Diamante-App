@@ -2,6 +2,8 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import type { MovimientoCategoria, MovimientoTipo } from "@constants/movimientos";
 import { normalizeModalidadPago } from "@/types/payment-plans";
 
+const HORAS_FIJAS_POR_CLASE = 3;
+
 const getPeriodoPagoLegible = (pago: {
     periodo_pagado?: string | null;
     numero_cuota?: number | null;
@@ -343,7 +345,7 @@ export async function sincronizarEgresosDesdeSesionesClase(createdBy?: string | 
     let sincronizados = 0;
     for (const sesion of sesiones as any[]) {
         const valorHora = Number(sesion.perfiles?.valor_hora || 0);
-        const horas = Number(sesion.horas_dictadas || 0);
+        const horas = HORAS_FIJAS_POR_CLASE;
         const monto = horas * valorHora;
         if (monto <= 0) continue;
 
@@ -355,10 +357,9 @@ export async function sincronizarEgresosDesdeSesionesClase(createdBy?: string | 
             .eq("referencia", refClave)
             .limit(1);
 
-        if (existingRows && existingRows.length > 0) continue; // ya sincronizado
-
         const nombre = sesion.perfiles?.nombre_completo || "Profesora";
-        await supabaseBrowserClient.from("movimientos_financieros").insert({
+
+        const payload = {
             fecha: String(sesion.fecha).slice(0, 10),
             tipo: "egreso" as MovimientoTipo,
             monto,
@@ -368,7 +369,17 @@ export async function sincronizarEgresosDesdeSesionesClase(createdBy?: string | 
             proveedor_id: sesion.profesor_id || null,
             conciliado: false,
             created_by: createdBy || null,
-        });
+        };
+
+        if (existingRows && existingRows.length > 0) {
+            await supabaseBrowserClient
+                .from("movimientos_financieros")
+                .update(payload)
+                .eq("id", existingRows[0].id);
+            continue;
+        }
+
+        await supabaseBrowserClient.from("movimientos_financieros").insert(payload);
         sincronizados++;
     }
 

@@ -511,10 +511,8 @@ export default function TomarAsistencia() {
       return;
     }
 
-    // Usar las horas configuradas en el curso, si existen; de lo contrario 3 horas por defecto
-    const HORAS_POR_SESION = Number(cursoSeleccionadoData?.duracion_horas) > 0
-      ? Number(cursoSeleccionadoData.duracion_horas)
-      : 3;
+    // Regla de negocio: toda clase se registra con 3 horas.
+    const HORAS_POR_SESION = 3;
 
     setGuardando(true);
     try {

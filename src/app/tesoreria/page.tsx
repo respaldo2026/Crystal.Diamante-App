@@ -73,6 +73,7 @@ const { useBreakpoint } = Grid;
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
+const HORAS_FIJAS_POR_CLASE = 3;
 
 dayjs.extend(isBetween);
 
@@ -615,7 +616,7 @@ export default function TesoreriaPage() {
 
                 if (!sesionesPerfilError) {
                     egresosNomina = (sesionesConPerfil || []).reduce((sum: number, s: any) => {
-                        const horas = Number(s?.horas_dictadas || 0);
+                        const horas = HORAS_FIJAS_POR_CLASE;
                         const valorHora = Number(s?.perfiles?.valor_hora || 0);
                         return sum + (horas * valorHora);
                     }, 0);
@@ -649,7 +650,7 @@ export default function TesoreriaPage() {
                     }
 
                     egresosNomina = (sesionesBase || []).reduce((sum: number, s: any) => {
-                        const horas = Number(s?.horas_dictadas || 0);
+                        const horas = HORAS_FIJAS_POR_CLASE;
                         const valorHora = valorHoraPorProfesor.get(String(s?.profesor_id || "")) || 0;
                         return sum + (horas * valorHora);
                     }, 0);

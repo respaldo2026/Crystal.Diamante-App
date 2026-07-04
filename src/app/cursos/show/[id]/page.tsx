@@ -2424,7 +2424,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         curso_id: parseInt(cursoId),
         profesor_id: curso.profesor_id,
         fecha: fechaSesion,
-        horas_dictadas: values.horas_dictadas,
+        horas_dictadas: 3,
         tema_visto: temaVisto,
       };
 
@@ -2436,7 +2436,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         const { error: updateError } = await supabaseBrowserClient
           .from("sesiones_clase")
           .update({
-            horas_dictadas: values.horas_dictadas,
+            horas_dictadas: 3,
             tema_visto: temaVisto,
           })
           .eq("curso_id", parseInt(cursoId))
@@ -3444,7 +3444,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
                       formSesion.setFieldsValue({
                         fecha: dayjs(),
-                        horas_dictadas: Number(curso?.horas || 3) || 3,
+                        horas_dictadas: 3,
                         pensum_curso_id: claseSugerida ? String(claseSugerida.id) : undefined,
                         observaciones: "",
                       });
@@ -4361,8 +4361,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               })}
             />
           </Form.Item>
-          <Form.Item label="Horas Dictadas" name="horas_dictadas" rules={[{ required: true }]}>
-            <InputNumber min={0.5} step={0.5} placeholder="Ej: 2" />
+          <Form.Item label="Horas Dictadas (fijo)" name="horas_dictadas" rules={[{ required: true }]}>
+            <InputNumber min={3} max={3} step={0} disabled />
           </Form.Item>
           <Form.Item label="Observaciones" name="observaciones">
             <Input.TextArea rows={3} placeholder="Notas sobre la clase..." />

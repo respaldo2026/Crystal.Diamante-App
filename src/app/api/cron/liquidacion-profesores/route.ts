@@ -11,6 +11,7 @@ const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALLOW_TEXT_FALLBACK || "
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_MAX_BULK_PER_RUN || 60);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_DELAY_BETWEEN_SENDS_MS || 1000);
 const BOGOTA_TIMEZONE = "America/Bogota";
+const HORAS_FIJAS_POR_CLASE = 3;
 
 type ResumenProfesor = {
   profesorId: string;
@@ -286,7 +287,7 @@ async function runLiquidacionJob() {
     const perfil = perfilById.get(profesorId);
     if (!perfil) return;
 
-    const horas = Number(sesion?.horas_dictadas || 0);
+    const horas = HORAS_FIJAS_POR_CLASE;
     if (!Number.isFinite(horas) || horas <= 0) return;
 
     const valorHoraPerfil = Number(perfil?.valor_hora || 0);
