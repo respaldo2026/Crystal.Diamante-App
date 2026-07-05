@@ -2896,13 +2896,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     ? Math.round(gamificacionPorEstudiante.reduce((acc, item: any) => acc + Number(item.xpTotal || 0), 0) / gamificacionPorEstudiante.length)
     : 0;
 
-  const abrirDetalleGamificacion = useCallback((tipo: GamificationDetailType, estudiante: any) => {
+  const abrirDetalleGamificacion = (tipo: GamificationDetailType, estudiante: any) => {
     setGamificacionDetalleTipo(tipo);
     setGamificacionDetalleEstudiante(estudiante);
     setModalGamificacionDetalleVisible(true);
-  }, []);
+  };
 
-  const detalleAsistenciaRows = useMemo(() => {
+  const detalleAsistenciaRows = (() => {
     const matriculaId = Number(gamificacionDetalleEstudiante?.id || 0);
     if (!Number.isFinite(matriculaId) || !matriculaId) return [];
     return (asistenciasRaw || [])
@@ -2918,10 +2918,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           observaciones: a?.observaciones || null,
         };
       })
-      .sort((a: any, b: any) => dayjs(b?.fecha || "").valueOf() - dayjs(a?.fecha || "").valueOf());
-  }, [asistenciasRaw, gamificacionDetalleEstudiante?.id]);
+        .sort((a: any, b: any) => dayjs(b?.fecha || "").valueOf() - dayjs(a?.fecha || "").valueOf());
+      })();
 
-  const detalleQuizRows = useMemo(() => {
+      const detalleQuizRows = (() => {
     const matriculaId = String(gamificacionDetalleEstudiante?.id || "");
     if (!matriculaId) return [];
 
@@ -2940,9 +2940,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         estado: intento ? "presentado" : "pendiente",
       };
     });
-  }, [gamificacionDetalleEstudiante?.id, quizzesOrdenadosPorPensum, resultadosQuizResumen, nombreTemaPorId]);
+  })();
 
-  const detalleTareaRows = useMemo(() => {
+  const detalleTareaRows = (() => {
     const matriculaId = String(gamificacionDetalleEstudiante?.id || "");
     if (!matriculaId) return [];
 
@@ -2966,7 +2966,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         url: evidencia?.url_imagen || null,
       };
     });
-  }, [gamificacionDetalleEstudiante?.id, evidenciasTareas, clasesPensum, formatearNombreClase]);
+  })();
 
   const columnasGamificacionGrupo = [
     {
