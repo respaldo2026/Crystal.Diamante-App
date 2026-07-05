@@ -17,6 +17,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   CameraOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import {
   Badge,
@@ -47,6 +48,7 @@ import {
   ProfesorDashboardCalificacionUltimaClase,
   ProfesorDashboardCalificacionesGrupo,
   ProfesorDashboardEvidenciaTarea,
+  ProfesorDashboardGamificacionEstudiante,
   ProfesorDashboardGamificacionGrupo,
 } from "@hooks/useProfessorDashboard";
 import { construirNombreGrupo } from "@utils/grupos";
@@ -55,6 +57,20 @@ import { getMaterialCoverageRuleDisplay } from "@/types/payment-plans";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 
 type CourseActionContext = "attendance" | "grades" | "materials" | "default";
+type GamificationDetailType = "asistencia" | "quiz" | "tarea";
+
+type GamificationDetailState = {
+  open: boolean;
+  loading: boolean;
+  type: GamificationDetailType;
+  cursoId: string;
+  curso: string;
+  estudiante: string;
+  matriculaId: number;
+  rows: any[];
+  faltantes: number;
+  total: number;
+};
 
 type SessionCycleDivider = {
   id: string;
@@ -153,6 +169,14 @@ const getActividadColor = (nota?: number | null): string => {
   if (value >= 4) return "green";
   if (value >= 3) return "gold";
   return "red";
+};
+const isAsistenciaPositiva = (estado?: string | null) => {
+  const normalized = String(estado || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  return normalized.includes("presente") || normalized.includes("asistio");
 };
 
 const normalizeHttpUrl = (value?: string | null) => {
@@ -292,6 +316,18 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
     src: "",
   });
   const [logoAcademia, setLogoAcademia] = useState<string | null>(null);
+    const [gamificationDetail, setGamificationDetail] = useState<GamificationDetailState>({
+      open: false,
+      loading: false,
+      type: "asistencia",
+      cursoId: "",
+      curso: "",
+      estudiante: "",
+      matriculaId: 0,
+      rows: [],
+      faltantes: 0,
+      total: 0,
+    });
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.sm;
   const cursosSectionRef = useRef<HTMLDivElement | null>(null);
@@ -748,6 +784,170 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
 
     cargarLogo();
   }, []);
+
+  const openGamificationDetail = async (
+    type: GamificationDetailType,
+    grupo: ProfesorDashboardGamificacionGrupo,
+    estudiante: ProfesorDashboardGamificacionEstudiante,
+  ) => {
+    const curso = (cursos || []).find((item: any) => String(item?.id || "") === String(grupo.cursoId || ""));
+    const programaId = String(curso?.programaId || "");
+    const matriculaId = Number(estudiante?.matriculaId || 0);
+
+    setGamificationDetail({
+      open: true,
+      loading: true,
+      type,
+      cursoId: String(grupo.cursoId || ""),
+      curso: grupo.curso,
+      estudiante: estudiante.estudiante,
+      matriculaId,
+      rows: [],
+      faltantes: 0,
+      total: 0,
+    });
+
+    try {
+      if (type === "asistencia") {
+        const { data, error } = await supabaseBrowserClient
+          .from("asistencias")
+          .select("id, fecha, estado, observaciones")
+          .eq("matricula_id", matriculaId)
+          .order("fecha", { ascending: false });
+
+        if (error) throw error;
+
+        const rows = (data || []).map((item: any) => {
+          const presente = isAsistenciaPositiva(item?.estado);
+          return {
+            id: String(item?.id || ""),
+            fecha: item?.fecha || null,
+            estado: String(item?.estado || "sin_registro"),
+            presente,
+            observaciones: item?.observaciones || null,
+          };
+        });
+
+        const faltantes = rows.filter((item: any) => !item.presente).length;
+        setGamificationDetail((prev) => ({
+          ...prev,
+          loading: false,
+          rows,
+          faltantes,
+          total: rows.length,
+        }));
+        return;
+      }
+
+      if (!programaId) {
+        setGamificationDetail((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      const pensumData = await obtenerPensumPorProgramas([programaId]);
+      const temas = (pensumData || [])
+        .flatMap((ciclo: any) => (Array.isArray(ciclo?.pensum_cursos) ? ciclo.pensum_cursos : []))
+        .map((tema: any, idx: number) => ({
+          id: String(tema?.id || `tema-${idx}`),
+          nombre: String(tema?.nombre_curso || tema?.titulo || "Tema"),
+        }));
+
+      if (type === "quiz") {
+        const { data: quizzes, error: errQuizzes } = await supabaseBrowserClient
+          .from("quizzes_clase")
+          .select("id, titulo, pensum_curso_id")
+          .eq("programa_id", programaId)
+          .eq("activo", true)
+          .eq("publicado", true);
+
+        if (errQuizzes) throw errQuizzes;
+
+        const quizIds = (quizzes || []).map((q: any) => q.id);
+        const { data: intentos, error: errIntentos } = quizIds.length > 0
+          ? await supabaseBrowserClient
+              .from("quiz_intentos_clase")
+              .select("id, quiz_id, matricula_id, calificacion, enviado_at, respuestas_correctas, total_preguntas")
+              .in("quiz_id", quizIds)
+              .eq("matricula_id", matriculaId)
+              .order("enviado_at", { ascending: false })
+          : { data: [], error: null } as any;
+
+        if (errIntentos) throw errIntentos;
+
+        const ultimoIntentoPorQuiz = new Map<string, any>();
+        (intentos || []).forEach((intento: any) => {
+          const quizId = String(intento?.quiz_id || "");
+          if (!quizId || ultimoIntentoPorQuiz.has(quizId)) return;
+          ultimoIntentoPorQuiz.set(quizId, intento);
+        });
+
+        const temaNombreMap = new Map(temas.map((tema: any) => [String(tema.id), tema.nombre]));
+        const rows = (quizzes || []).map((quiz: any) => {
+          const intento = ultimoIntentoPorQuiz.get(String(quiz?.id || "")) || null;
+          const nota = intento ? Number(intento?.calificacion || 0) : null;
+          return {
+            id: String(quiz?.id || ""),
+            tema: temaNombreMap.get(String(quiz?.pensum_curso_id || "")) || String(quiz?.titulo || "Quiz"),
+            quiz: String(quiz?.titulo || "Quiz"),
+            nota,
+            fecha: intento?.enviado_at || null,
+            estado: intento ? "presentado" : "pendiente",
+            aciertos: intento?.respuestas_correctas,
+            totalPreguntas: intento?.total_preguntas,
+          };
+        });
+
+        const faltantes = rows.filter((item: any) => item.estado === "pendiente").length;
+        setGamificationDetail((prev) => ({
+          ...prev,
+          loading: false,
+          rows,
+          faltantes,
+          total: rows.length,
+        }));
+        return;
+      }
+
+      const { data: evidencias, error: errEvidencias } = await supabaseBrowserClient
+        .from("evidencias_tareas")
+        .select("id, pensum_curso_id, url_imagen, created_at, updated_at")
+        .eq("matricula_id", matriculaId)
+        .eq("curso_id", Number(grupo.cursoId || 0))
+        .order("updated_at", { ascending: false });
+
+      if (errEvidencias) throw errEvidencias;
+
+      const evidenciaPorTema = new Map<string, any>();
+      (evidencias || []).forEach((item: any) => {
+        const key = String(item?.pensum_curso_id || "");
+        if (!key || evidenciaPorTema.has(key)) return;
+        evidenciaPorTema.set(key, item);
+      });
+
+      const rows = temas.map((tema: any) => {
+        const evidencia = evidenciaPorTema.get(String(tema.id)) || null;
+        return {
+          id: String(tema.id),
+          tema: tema.nombre,
+          fecha: evidencia?.updated_at || evidencia?.created_at || null,
+          estado: evidencia ? "subida" : "pendiente",
+          url: evidencia?.url_imagen || null,
+        };
+      });
+
+      const faltantes = rows.filter((item: any) => item.estado === "pendiente").length;
+      setGamificationDetail((prev) => ({
+        ...prev,
+        loading: false,
+        rows,
+        faltantes,
+        total: rows.length,
+      }));
+    } catch (error) {
+      console.error("Error cargando detalle de gamificación", error);
+      setGamificationDetail((prev) => ({ ...prev, loading: false, rows: [], faltantes: 0, total: 0 }));
+    }
+  };
 
   if (loading) {
     return (
@@ -1272,9 +1472,14 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             <Col xs={24}>
               <Card
                 variant="borderless"
-                title={<Space><TrophyOutlined />XP de estudiantes (semanal y total)</Space>}
-                extra={<Tag color="gold">Seguimiento de dedicacion</Tag>}
-                style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
+                title={<Space><TrophyOutlined />Gamificación del grupo</Space>}
+                extra={<Tag color="magenta">Meta: 1000 XP por curso</Tag>}
+                style={{
+                  borderRadius: 18,
+                  boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)",
+                  border: "1px solid #f3d0e6",
+                  background: "linear-gradient(135deg, #fff8fc 0%, #ffffff 100%)",
+                }}
               >
                 <Space direction="vertical" size={10} style={{ width: "100%" }}>
                   {(gamificacionEstudiantesPorGrupo || []).map((grupo: ProfesorDashboardGamificacionGrupo) => {
@@ -1286,17 +1491,23 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                         title={grupo.curso}
                         extra={
                           topEstudiante
-                            ? <Tag color="volcano">Mas dedicado: {topEstudiante.estudiante}</Tag>
+                            ? <Tag color="gold">Top: {topEstudiante.estudiante}</Tag>
                             : <Tag>Sin datos</Tag>
                         }
                         styles={{ body: { padding: isMobile ? 8 : 12 } }}
                       >
+                        <Space wrap size={6} style={{ marginBottom: 8 }}>
+                          <Tag color="blue">✅ Asistencia</Tag>
+                          <Tag color="purple">🧠 Quiz</Tag>
+                          <Tag color="green">📷 Tarea</Tag>
+                        </Space>
+
                         <Table
                           size="small"
                           pagination={false}
                           rowKey="matriculaId"
                           dataSource={grupo.estudiantes || []}
-                          scroll={{ x: 620 }}
+                          scroll={{ x: 860 }}
                           columns={[
                             {
                               title: "Estudiante",
@@ -1310,20 +1521,81 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                               ),
                             },
                             {
+                              title: "XP total",
+                              dataIndex: "xpTotal",
+                              key: "xpTotal",
+                              width: 160,
+                              render: (value: number) => (
+                                <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                                  <Typography.Text strong>{`${Number(value || 0)}/1000 XP`}</Typography.Text>
+                                  <Progress
+                                    percent={Math.max(0, Math.min(100, Math.round(Number(value || 0) / 10)))}
+                                    showInfo={false}
+                                    size="small"
+                                    strokeColor="#16a34a"
+                                    trailColor="#dbeafe"
+                                  />
+                                </Space>
+                              ),
+                            },
+                            {
                               title: "XP semanal",
                               dataIndex: "xpSemanal",
                               key: "xpSemanal",
-                              width: 120,
+                              width: 105,
                               align: "right",
                               render: (value: number) => <Typography.Text strong>{Number(value || 0)}</Typography.Text>,
                             },
                             {
-                              title: "XP total",
-                              dataIndex: "xpTotal",
-                              key: "xpTotal",
-                              width: 110,
-                              align: "right",
-                              render: (value: number) => <Typography.Text>{Number(value || 0)}</Typography.Text>,
+                              title: "✅ Asistencia",
+                              key: "detalleAsistencia",
+                              width: 130,
+                              align: "center",
+                              render: (_: any, record: ProfesorDashboardGamificacionEstudiante) => (
+                                <Button
+                                  size="small"
+                                  type="link"
+                                  onClick={() => openGamificationDetail("asistencia", grupo, record)}
+                                >
+                                  {`${record.asistenciaPercent}%`}
+                                </Button>
+                              ),
+                            },
+                            {
+                              title: "🧠 Quiz",
+                              key: "detalleQuiz",
+                              width: 115,
+                              align: "center",
+                              render: (_: any, record: ProfesorDashboardGamificacionEstudiante) => (
+                                <Button
+                                  size="small"
+                                  type="link"
+                                  onClick={() => openGamificationDetail("quiz", grupo, record)}
+                                >
+                                  {record.quizAprobados}
+                                </Button>
+                              ),
+                            },
+                            {
+                              title: "📷 Tarea",
+                              key: "detalleTarea",
+                              width: 115,
+                              align: "center",
+                              render: (_: any, record: ProfesorDashboardGamificacionEstudiante) => {
+                                const tareasSubidas = (evidenciasTareas || []).filter((item: ProfesorDashboardEvidenciaTarea) =>
+                                  Number(item?.matriculaId || 0) === Number(record.matriculaId)
+                                  && String(item?.cursoId || "") === String(grupo.cursoId || "")
+                                ).length;
+                                return (
+                                  <Button
+                                    size="small"
+                                    type="link"
+                                    onClick={() => openGamificationDetail("tarea", grupo, record)}
+                                  >
+                                    {tareasSubidas}
+                                  </Button>
+                                );
+                              },
                             },
                             {
                               title: "Nivel",
@@ -1332,16 +1604,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                               width: 88,
                               align: "center",
                               render: (value: number) => <Tag color="magenta">Nv {value}</Tag>,
-                            },
-                            {
-                              title: "Dedicacion",
-                              dataIndex: "estado",
-                              key: "estado",
-                              width: 120,
-                              render: (value: "alto" | "medio" | "bajo") => {
-                                const color = value === "alto" ? "green" : value === "medio" ? "gold" : "red";
-                                return <Tag color={color}>{String(value || "bajo").toUpperCase()}</Tag>;
-                              },
                             },
                           ]}
                         />
@@ -1353,6 +1615,155 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
             </Col>
           </Row>
         )}
+
+        <Modal
+          title={`Detalle ${gamificationDetail.type.toUpperCase()} · ${gamificationDetail.estudiante}`}
+          open={gamificationDetail.open}
+          onCancel={() => setGamificationDetail((prev) => ({ ...prev, open: false }))}
+          footer={null}
+          width={isMobile ? "96%" : 980}
+        >
+          <Space direction="vertical" size={10} style={{ width: "100%" }}>
+            <Space wrap size={8}>
+              <Tag color="blue">Curso: {gamificationDetail.curso || "-"}</Tag>
+              <Tag color={gamificationDetail.faltantes > 0 ? "volcano" : "green"}>
+                {`Faltantes: ${gamificationDetail.faltantes}/${gamificationDetail.total}`}
+              </Tag>
+              <Tag color="magenta">Matrícula: {gamificationDetail.matriculaId || "-"}</Tag>
+            </Space>
+
+            {gamificationDetail.loading ? (
+              <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Spin />
+              </div>
+            ) : gamificationDetail.type === "asistencia" ? (
+              <Table
+                size="small"
+                pagination={{ pageSize: 8 }}
+                rowKey={(row: any) => String(row?.id || row?.fecha || "row")}
+                dataSource={gamificationDetail.rows}
+                columns={[
+                  {
+                    title: "Fecha",
+                    dataIndex: "fecha",
+                    width: 140,
+                    render: (value: string | null) => value ? dayjs(value).format("DD/MM/YYYY") : "-",
+                  },
+                  {
+                    title: "Estado",
+                    dataIndex: "estado",
+                    width: 130,
+                    render: (_: any, row: any) => row.presente ? <Tag color="green">Presente</Tag> : <Tag color="red">Faltó</Tag>,
+                  },
+                  {
+                    title: "Observación",
+                    dataIndex: "observaciones",
+                    render: (value: string | null) => value || "-",
+                  },
+                  {
+                    title: "Acción sugerida",
+                    width: 220,
+                    render: (_: any, row: any) => (
+                      row.presente
+                        ? <Typography.Text type="secondary">Sin novedad</Typography.Text>
+                        : <Typography.Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Faltaste el ${row.fecha ? dayjs(row.fecha).format("DD/MM") : "día"}`}</Typography.Text>
+                    ),
+                  },
+                ]}
+              />
+            ) : gamificationDetail.type === "quiz" ? (
+              <Table
+                size="small"
+                pagination={{ pageSize: 8 }}
+                rowKey={(row: any) => String(row?.id || row?.tema || "row")}
+                dataSource={gamificationDetail.rows}
+                columns={[
+                  { title: "Tema", dataIndex: "tema", render: (value: string) => <Typography.Text strong>{value}</Typography.Text> },
+                  { title: "Quiz", dataIndex: "quiz", render: (value: string) => value || "Quiz" },
+                  {
+                    title: "Nota",
+                    dataIndex: "nota",
+                    width: 110,
+                    align: "center",
+                    render: (value: number | null) => {
+                      if (value == null || !Number.isFinite(value)) return <Typography.Text type="secondary">Pendiente</Typography.Text>;
+                      const nota = Number(value);
+                      return <Tag color={nota >= 4 ? "green" : nota >= 3 ? "gold" : "red"}>{`${nota.toFixed(1)}/5`}</Tag>;
+                    },
+                  },
+                  {
+                    title: "Estado",
+                    dataIndex: "estado",
+                    width: 120,
+                    render: (value: string) => value === "presentado" ? <Tag color="green">Presentado</Tag> : <Tag color="volcano">Pendiente</Tag>,
+                  },
+                  {
+                    title: "Fecha",
+                    dataIndex: "fecha",
+                    width: 150,
+                    render: (value: string | null) => value ? dayjs(value).format("DD/MM/YYYY") : "-",
+                  },
+                  {
+                    title: "Acción sugerida",
+                    width: 200,
+                    render: (_: any, row: any) => (
+                      row.estado === "presentado"
+                        ? <Typography.Text type="secondary">Quiz completado</Typography.Text>
+                        : <Typography.Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Te falta este quiz: ${row.tema}`}</Typography.Text>
+                    ),
+                  },
+                ]}
+              />
+            ) : (
+              <Table
+                size="small"
+                pagination={{ pageSize: 8 }}
+                rowKey={(row: any) => String(row?.id || row?.tema || "row")}
+                dataSource={gamificationDetail.rows}
+                columns={[
+                  { title: "Tema", dataIndex: "tema", render: (value: string) => <Typography.Text strong>{value}</Typography.Text> },
+                  {
+                    title: "Estado",
+                    dataIndex: "estado",
+                    width: 120,
+                    render: (value: string) => value === "subida" ? <Tag color="green">Subida</Tag> : <Tag color="volcano">Pendiente</Tag>,
+                  },
+                  {
+                    title: "Fecha",
+                    dataIndex: "fecha",
+                    width: 150,
+                    render: (value: string | null) => value ? dayjs(value).format("DD/MM/YYYY") : "-",
+                  },
+                  {
+                    title: "Evidencia",
+                    width: 110,
+                    align: "center",
+                    render: (_: any, row: any) => row.url
+                      ? (
+                        <Button
+                          size="small"
+                          icon={<EyeOutlined />}
+                          onClick={() => window.open(String(row.url), "_blank", "noopener,noreferrer")}
+                        >
+                          Ver
+                        </Button>
+                      )
+                      : <Typography.Text type="secondary">-</Typography.Text>,
+                  },
+                  {
+                    title: "Acción sugerida",
+                    width: 220,
+                    render: (_: any, row: any) => (
+                      row.estado === "subida"
+                        ? <Typography.Text type="secondary">Tarea completa</Typography.Text>
+                        : <Typography.Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Te falta esta tarea: ${row.tema}`}</Typography.Text>
+                    ),
+                  },
+                ]}
+              />
+            )}
+          </Space>
+        </Modal>
 
         <Drawer
           title={`Materiales del curso: ${cursoMaterialSeleccionado ? construirNombreGrupo(cursoMaterialSeleccionado) : "Curso"}`}
