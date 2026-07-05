@@ -26,6 +26,7 @@ import {
   CheckOutlined,
   FormOutlined,
   FullscreenOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -247,6 +248,7 @@ const obtenerTextoOpcionQuiz = (pregunta: any, opcion?: string | null) => {
 };
 
 type ParamsLike = Promise<{ id: string }>;
+type GamificationDetailType = "asistencia" | "quiz" | "tarea";
 
 export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const screens = Grid.useBreakpoint();
@@ -263,6 +265,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [temaSeleccionadoId, setTemaSeleccionadoId] = useState<string | null>(null);
   const [modalActividadVisible, setModalActividadVisible] = useState(false);
   const [modalRadarVisible, setModalRadarVisible] = useState(false);
+  const [modalGamificacionDetalleVisible, setModalGamificacionDetalleVisible] = useState(false);
+  const [gamificacionDetalleTipo, setGamificacionDetalleTipo] = useState<GamificationDetailType>("asistencia");
+  const [gamificacionDetalleEstudiante, setGamificacionDetalleEstudiante] = useState<any | null>(null);
   const [soloPendientesActividad, setSoloPendientesActividad] = useState(false);
   const [estudianteFocoActividadId, setEstudianteFocoActividadId] = useState<string | null>(null);
   const [temas, setTemas] = useState<Tema[]>([]);
@@ -2891,6 +2896,78 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     ? Math.round(gamificacionPorEstudiante.reduce((acc, item: any) => acc + Number(item.xpTotal || 0), 0) / gamificacionPorEstudiante.length)
     : 0;
 
+  const abrirDetalleGamificacion = useCallback((tipo: GamificationDetailType, estudiante: any) => {
+    setGamificacionDetalleTipo(tipo);
+    setGamificacionDetalleEstudiante(estudiante);
+    setModalGamificacionDetalleVisible(true);
+  }, []);
+
+  const detalleAsistenciaRows = useMemo(() => {
+    const matriculaId = Number(gamificacionDetalleEstudiante?.id || 0);
+    if (!Number.isFinite(matriculaId) || !matriculaId) return [];
+    return (asistenciasRaw || [])
+      .filter((a: any) => Number(a?.matricula_id) === matriculaId)
+      .map((a: any) => {
+        const estado = String(a?.estado || "sin_registro");
+        const presente = estado.toLowerCase() === "presente";
+        return {
+          id: String(a?.id || `${a?.fecha || ""}-${estado}`),
+          fecha: a?.fecha || null,
+          estado,
+          presente,
+          observaciones: a?.observaciones || null,
+        };
+      })
+      .sort((a: any, b: any) => dayjs(b?.fecha || "").valueOf() - dayjs(a?.fecha || "").valueOf());
+  }, [asistenciasRaw, gamificacionDetalleEstudiante?.id]);
+
+  const detalleQuizRows = useMemo(() => {
+    const matriculaId = String(gamificacionDetalleEstudiante?.id || "");
+    if (!matriculaId) return [];
+
+    return (quizzesOrdenadosPorPensum || []).map((quiz: any) => {
+      const intento = (resultadosQuizResumen || []).find(
+        (item: any) => String(item?.quiz_id || "") === String(quiz?.id || "") && String(item?.matricula_id || "") === matriculaId
+      );
+      const temaId = String(quiz?.pensum_curso_id || "");
+      const tema = nombreTemaPorId.get(temaId) || quiz?.titulo || "Quiz";
+      return {
+        id: String(quiz?.id || `${temaId}-quiz`),
+        tema,
+        quiz: String(quiz?.titulo || "Quiz"),
+        nota: intento ? Number(intento?.calificacion || 0) : null,
+        fecha: intento?.enviado_at || null,
+        estado: intento ? "presentado" : "pendiente",
+      };
+    });
+  }, [gamificacionDetalleEstudiante?.id, quizzesOrdenadosPorPensum, resultadosQuizResumen, nombreTemaPorId]);
+
+  const detalleTareaRows = useMemo(() => {
+    const matriculaId = String(gamificacionDetalleEstudiante?.id || "");
+    if (!matriculaId) return [];
+
+    const evidenciaPorTema = new Map<string, any>();
+    (evidenciasTareas || [])
+      .filter((e: any) => String(e?.matricula_id || "") === matriculaId)
+      .forEach((e: any) => {
+        const temaId = String(e?.pensum_curso_id || "");
+        if (!temaId || evidenciaPorTema.has(temaId)) return;
+        evidenciaPorTema.set(temaId, e);
+      });
+
+    return (clasesPensum || []).map((tema: any) => {
+      const temaId = String(tema?.id || "");
+      const evidencia = evidenciaPorTema.get(temaId) || null;
+      return {
+        id: temaId,
+        tema: formatearNombreClase(tema),
+        estado: evidencia ? "subida" : "pendiente",
+        fecha: evidencia?.updated_at || evidencia?.created_at || null,
+        url: evidencia?.url_imagen || null,
+      };
+    });
+  }, [gamificacionDetalleEstudiante?.id, evidenciasTareas, clasesPensum, formatearNombreClase]);
+
   const columnasGamificacionGrupo = [
     {
       title: "Estudiante",
@@ -2924,22 +3001,34 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       title: "✅ Asistencia",
       dataIndex: "xpAsistencia",
       key: "xpAsistencia",
-      width: 85,
-      render: (value: number) => <Tag color="blue">{value}</Tag>,
+      width: 120,
+      render: (_value: number, record: any) => (
+        <Button size="small" icon={<EyeOutlined />} onClick={() => abrirDetalleGamificacion("asistencia", record)}>
+          {record.asistenciaPercent}%
+        </Button>
+      ),
     },
     {
       title: "🧠 Quiz",
       dataIndex: "xpQuiz",
       key: "xpQuiz",
-      width: 85,
-      render: (value: number) => <Tag color="purple">{value}</Tag>,
+      width: 110,
+      render: (_value: number, record: any) => (
+        <Button size="small" icon={<EyeOutlined />} onClick={() => abrirDetalleGamificacion("quiz", record)}>
+          {record.quizAprobados}
+        </Button>
+      ),
     },
     {
       title: "📷 Tarea",
       dataIndex: "xpEvidencia",
       key: "xpEvidencia",
-      width: 85,
-      render: (value: number) => <Tag color="green">{value}</Tag>,
+      width: 110,
+      render: (value: number, record: any) => (
+        <Button size="small" icon={<EyeOutlined />} onClick={() => abrirDetalleGamificacion("tarea", record)}>
+          {Math.round(Number(value || 0) / 10)}
+        </Button>
+      ),
     },
     {
       title: "Nivel",
@@ -3572,39 +3661,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             label: <span><UserOutlined /> Estudiantes ({totalEstudiantes})</span>,
             children: (
               <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                <Card title="Lista de Estudiantes Matriculados">
-                  {(() => {
-                    const enMoraCount = estudiantes.filter((e) => e.enMora).length;
-                    return enMoraCount > 0 ? (
-                      <Alert
-                        type="error"
-                        showIcon
-                        style={{ marginBottom: 12, borderRadius: 8 }}
-                        message={
-                          <span style={{ fontWeight: 700 }}>
-                            ⚠️ {enMoraCount} estudiante{enMoraCount > 1 ? "s" : ""} con pago vencido
-                          </span>
-                        }
-                        description="Los estudiantes marcados en rojo tienen cuotas vencidas sin pagar. Aparecen resaltados en la tabla."
-                      />
-                    ) : null;
-                  })()}
-                  <Table
-                    dataSource={estudiantes}
-                    rowKey="id"
-                    pagination={{ pageSize: 20 }}
-                    columns={columnasEstudiantes}
-                    size={isMobile ? "small" : "middle"}
-                    tableLayout="fixed"
-                    scroll={{ x: "max-content" }}
-                    onRow={(record: Student) =>
-                      record.enMora
-                        ? { style: { background: "#fff1f0", borderLeft: "4px solid #ff4d4f" } }
-                        : {}
-                    }
-                  />
-                </Card>
-
                 <Card
                   title="Gamificación del grupo"
                   extra={<Tag color="blue">XP promedio: {promedioGamificacionGrupo}/1000</Tag>}
@@ -4165,6 +4221,98 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               Reforzar temas del pensum
             </Button>
           </Space>
+        </Space>
+      </Modal>
+
+      <Modal
+        title={`Detalle ${String(gamificacionDetalleTipo || "").toUpperCase()} · ${gamificacionDetalleEstudiante?.estudiante || "Estudiante"}`}
+        open={modalGamificacionDetalleVisible}
+        onCancel={() => setModalGamificacionDetalleVisible(false)}
+        footer={null}
+        width={isMobile ? "95%" : 980}
+      >
+        <Space direction="vertical" size={10} style={{ width: "100%" }}>
+          <Tag color="blue">{`Estudiante: ${gamificacionDetalleEstudiante?.estudiante || "-"}`}</Tag>
+
+          {gamificacionDetalleTipo === "asistencia" ? (
+            <Table
+              size="small"
+              rowKey={(row: any) => String(row?.id || row?.fecha || "row")}
+              dataSource={detalleAsistenciaRows}
+              pagination={{ pageSize: 8 }}
+              scroll={{ x: "max-content" }}
+              columns={[
+                { title: "Fecha", dataIndex: "fecha", width: 140, render: (v: string | null) => v ? dayjs(v).format("DD/MM/YYYY") : "-" },
+                { title: "Estado", dataIndex: "estado", width: 120, render: (_: any, row: any) => row.presente ? <Tag color="green">Presente</Tag> : <Tag color="red">Faltó</Tag> },
+                { title: "Observación", dataIndex: "observaciones", render: (v: string | null) => v || "-" },
+                {
+                  title: "Acción sugerida",
+                  width: 220,
+                  render: (_: any, row: any) => row.presente
+                    ? <Text type="secondary">Sin novedad</Text>
+                    : <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Faltaste el ${row.fecha ? dayjs(row.fecha).format("DD/MM") : "día"}`}</Text>,
+                },
+              ]}
+            />
+          ) : gamificacionDetalleTipo === "quiz" ? (
+            <Table
+              size="small"
+              rowKey={(row: any) => String(row?.id || row?.tema || "row")}
+              dataSource={detalleQuizRows}
+              pagination={{ pageSize: 8 }}
+              scroll={{ x: "max-content" }}
+              columns={[
+                { title: "Tema", dataIndex: "tema", render: (v: string) => <Text strong>{v}</Text> },
+                { title: "Quiz", dataIndex: "quiz" },
+                {
+                  title: "Nota",
+                  dataIndex: "nota",
+                  width: 110,
+                  align: "center",
+                  render: (v: number | null) => (v == null || !Number.isFinite(v))
+                    ? <Text type="secondary">Pendiente</Text>
+                    : <Tag color={v >= 4 ? "green" : v >= 3 ? "gold" : "red"}>{`${Number(v).toFixed(1)}/5`}</Tag>,
+                },
+                { title: "Estado", dataIndex: "estado", width: 120, render: (v: string) => v === "presentado" ? <Tag color="green">Presentado</Tag> : <Tag color="volcano">Pendiente</Tag> },
+                { title: "Fecha", dataIndex: "fecha", width: 150, render: (v: string | null) => v ? dayjs(v).format("DD/MM/YYYY") : "-" },
+                {
+                  title: "Acción sugerida",
+                  width: 220,
+                  render: (_: any, row: any) => row.estado === "presentado"
+                    ? <Text type="secondary">Quiz completado</Text>
+                    : <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Te falta este quiz: ${row.tema}`}</Text>,
+                },
+              ]}
+            />
+          ) : (
+            <Table
+              size="small"
+              rowKey={(row: any) => String(row?.id || row?.tema || "row")}
+              dataSource={detalleTareaRows}
+              pagination={{ pageSize: 8 }}
+              scroll={{ x: "max-content" }}
+              columns={[
+                { title: "Tema", dataIndex: "tema", render: (v: string) => <Text strong>{v}</Text> },
+                { title: "Estado", dataIndex: "estado", width: 120, render: (v: string) => v === "subida" ? <Tag color="green">Subida</Tag> : <Tag color="volcano">Pendiente</Tag> },
+                { title: "Fecha", dataIndex: "fecha", width: 150, render: (v: string | null) => v ? dayjs(v).format("DD/MM/YYYY") : "-" },
+                {
+                  title: "Evidencia",
+                  width: 110,
+                  align: "center",
+                  render: (_: any, row: any) => row.url
+                    ? <Button size="small" icon={<EyeOutlined />} onClick={() => window.open(String(row.url), "_blank", "noopener,noreferrer")}>Ver</Button>
+                    : <Text type="secondary">-</Text>,
+                },
+                {
+                  title: "Acción sugerida",
+                  width: 220,
+                  render: (_: any, row: any) => row.estado === "subida"
+                    ? <Text type="secondary">Tarea completa</Text>
+                    : <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Te falta esta tarea: ${row.tema}`}</Text>,
+                },
+              ]}
+            />
+          )}
         </Space>
       </Modal>
 
