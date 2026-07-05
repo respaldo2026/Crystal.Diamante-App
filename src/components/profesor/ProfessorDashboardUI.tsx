@@ -532,7 +532,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
   }, [cursosOrdenados]);
 
   const hasAsistenciaData = (statsData.asistenciaChart || []).length > 0;
-  const hasCalificacionesRecientes = (calificacionesRecientesPorGrupo || []).length > 0;
   const hasTopCursos = (topCursos || []).length > 0;
   const hasGamificacionEstudiantes = (gamificacionEstudiantesPorGrupo || []).some((grupo) => (grupo?.estudiantes || []).length > 0);
 
@@ -1348,10 +1347,10 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
           </Col>
         </Row>
 
-        {(hasAsistenciaData || hasCalificacionesRecientes || hasTopCursos) && (
+        {(hasAsistenciaData || hasTopCursos) && (
           <Row ref={analiticaSectionRef} gutter={[12, 12]} style={{ marginTop: 10 }}>
             {hasAsistenciaData && (
-              <Col xs={24} lg={hasCalificacionesRecientes ? 12 : 24}>
+              <Col xs={24} lg={hasTopCursos ? 16 : 24}>
                 <Card
                   variant="borderless"
                   title={<span style={{ fontWeight: 600 }}>Tendencia de asistencia</span>}
@@ -1359,80 +1358,6 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                   style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
                 >
                   <Line {...asistenciaConfig} />
-                </Card>
-              </Col>
-            )}
-
-            {hasCalificacionesRecientes && (
-              <Col xs={24} lg={hasAsistenciaData ? 12 : 24}>
-                <Card
-                  variant="borderless"
-                  title={<span style={{ fontWeight: 600 }}>Últimas calificaciones por grupo</span>}
-                  extra={<Tag color="geekblue">Última clase</Tag>}
-                  style={{ borderRadius: 18, boxShadow: "0 12px 28px -22px rgba(15,23,42,0.3)" }}
-                >
-                  <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                    {(calificacionesRecientesPorGrupo || []).map((grupo: ProfesorDashboardCalificacionesGrupo) => (
-                      <Card
-                        key={grupo.cursoId}
-                        size="small"
-                        title={grupo.curso}
-                        extra={grupo.fechaUltimaClase ? dayjs(grupo.fechaUltimaClase).format("DD MMM YYYY") : "Sin clase"}
-                        styles={{ body: { padding: isMobile ? 8 : 12 } }}
-                      >
-                        {grupo.fechaUltimaClase ? (
-                          <>
-                            {grupo.temaUltimaClase ? (
-                              <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
-                                Tema: {grupo.temaUltimaClase}
-                              </Typography.Text>
-                            ) : null}
-                            <Table<ProfesorDashboardCalificacionUltimaClase>
-                              size="small"
-                              pagination={false}
-                              rowKey="matriculaId"
-                              dataSource={grupo.estudiantes || []}
-                              scroll={{ x: 380 }}
-                              columns={[
-                                {
-                                  title: "Estudiante",
-                                  dataIndex: "estudiante",
-                                  key: "estudiante",
-                                  render: (value) => <Typography.Text strong>{value}</Typography.Text>,
-                                },
-                                {
-                                  title: "Quiz",
-                                  dataIndex: "quiz",
-                                  key: "quiz",
-                                  width: 92,
-                                  render: (value) =>
-                                    typeof value === "number" ? (
-                                      <Tag color={getActividadColor(value)}>{value.toFixed(1)}</Tag>
-                                    ) : (
-                                      <Typography.Text type="secondary">—</Typography.Text>
-                                    ),
-                                },
-                                {
-                                  title: "Actividad",
-                                  dataIndex: "actividad",
-                                  key: "actividad",
-                                  width: 110,
-                                  render: (value) =>
-                                    typeof value === "number" ? (
-                                      <Tag color={getActividadColor(value)}>{value.toFixed(1)}</Tag>
-                                    ) : (
-                                      <Typography.Text type="secondary">—</Typography.Text>
-                                    ),
-                                },
-                              ]}
-                            />
-                          </>
-                        ) : (
-                          <Empty description="Sin clase registrada para este grupo" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                        )}
-                      </Card>
-                    ))}
-                  </Space>
                 </Card>
               </Col>
             )}
@@ -1549,12 +1474,12 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                             {
                               title: "✅ Asistencia",
                               key: "detalleAsistencia",
-                              width: 130,
+                              width: 150,
                               align: "center",
                               render: (_: any, record: ProfesorDashboardGamificacionEstudiante) => (
                                 <Button
                                   size="small"
-                                  type="link"
+                                  icon={<EyeOutlined />}
                                   onClick={() => openGamificationDetail("asistencia", grupo, record)}
                                 >
                                   {`${record.asistenciaPercent}%`}
@@ -1564,12 +1489,12 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                             {
                               title: "🧠 Quiz",
                               key: "detalleQuiz",
-                              width: 115,
+                              width: 130,
                               align: "center",
                               render: (_: any, record: ProfesorDashboardGamificacionEstudiante) => (
                                 <Button
                                   size="small"
-                                  type="link"
+                                  icon={<EyeOutlined />}
                                   onClick={() => openGamificationDetail("quiz", grupo, record)}
                                 >
                                   {record.quizAprobados}
@@ -1579,7 +1504,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                             {
                               title: "📷 Tarea",
                               key: "detalleTarea",
-                              width: 115,
+                              width: 130,
                               align: "center",
                               render: (_: any, record: ProfesorDashboardGamificacionEstudiante) => {
                                 const tareasSubidas = (evidenciasTareas || []).filter((item: ProfesorDashboardEvidenciaTarea) =>
@@ -1589,7 +1514,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                                 return (
                                   <Button
                                     size="small"
-                                    type="link"
+                                    icon={<EyeOutlined />}
                                     onClick={() => openGamificationDetail("tarea", grupo, record)}
                                   >
                                     {tareasSubidas}
