@@ -631,6 +631,9 @@ export default function TomarAsistencia() {
         observaciones: string;
       }>;
 
+      // Fuente de verdad: primero se asegura la sesión en bitácora.
+      await guardarTemaSesion();
+
       const actualizarAsistenciaExistente = async () => {
         for (const registro of registros) {
           const { error: updateError } = await supabaseBrowserClient
@@ -658,7 +661,6 @@ export default function TomarAsistencia() {
         if (error.code === "23505" || error.message.includes("duplicate") || error.message.includes("unique")) {
           try {
             await actualizarAsistenciaExistente();
-            await guardarTemaSesion();
             asistenciaExistenteActualizada = true;
           } catch (sesionError: any) {
             console.error(sesionError);
@@ -669,15 +671,6 @@ export default function TomarAsistencia() {
         if (!asistenciaExistenteActualizada) {
           message.error("Error guardando: " + error.message);
           return;
-        }
-      }
-
-      if (!asistenciaExistenteActualizada) {
-        try {
-          await guardarTemaSesion();
-        } catch (sesionError: any) {
-          console.error(sesionError);
-          message.warning("Asistencia guardada, pero no se pudo guardar el tema del día.");
         }
       }
 
