@@ -2131,6 +2131,27 @@ export default function GestorPensum({
     return map;
   }, [quizzesClase]);
 
+  const materialesNecesariosCountPorTemaId = useMemo(() => {
+    const map = new Map<string, number>();
+    (materialesClaseCiclo || []).forEach((material) => {
+      const key = String(material?.pensum_curso_id || "");
+      if (!key) return;
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return map;
+  }, [materialesClaseCiclo]);
+
+  const materialesDidacticosCountPorTemaNorm = useMemo(() => {
+    const map = new Map<string, number>();
+    (materialesCicloDidactico || []).forEach((material) => {
+      const { tema } = parseTemaFromTitulo(material?.titulo);
+      const temaNorm = normalizarTema(tema || material?.titulo || "");
+      if (!temaNorm) return;
+      map.set(temaNorm, (map.get(temaNorm) || 0) + 1);
+    });
+    return map;
+  }, [materialesCicloDidactico]);
+
   const clasesMaestrasPrograma = useMemo(() => {
     const cicloOrderById = new Map<string, number>();
     const cicloLabelById = new Map<string, string>();
@@ -2156,9 +2177,19 @@ export default function GestorPensum({
         horas: HORAS_CLASE_FIJAS,
         tipo: curso?.tipo_curso || "obligatorio",
         quiz: quizzesPorTemaId.get(String(curso?.id || "")) || null,
+        tieneQuiz: quizzesPorTemaId.has(String(curso?.id || "")),
+        cantidadMateriales: materialesNecesariosCountPorTemaId.get(String(curso?.id || "")) || 0,
+        cantidadDidacticos:
+          materialesDidacticosCountPorTemaNorm.get(normalizarTema(curso?.nombre_curso || "")) || 0,
       };
     });
-  }, [cursosPrograma, pensums, quizzesPorTemaId]);
+  }, [
+    cursosPrograma,
+    pensums,
+    quizzesPorTemaId,
+    materialesNecesariosCountPorTemaId,
+    materialesDidacticosCountPorTemaNorm,
+  ]);
 
   const getTemaCompletoPorVista = useCallback((curso: PensumCurso) => {
     const materialesTema = materialesCicloDidactico.filter((material) => {
@@ -2314,7 +2345,7 @@ export default function GestorPensum({
                 rowKey="key"
                 dataSource={clasesMaestrasPrograma}
                 pagination={{ pageSize: 20, hideOnSinglePage: true }}
-                scroll={{ x: 980 }}
+                scroll={{ x: 1280 }}
                 columns={[
                   {
                     title: "Clase #",
@@ -2337,6 +2368,28 @@ export default function GestorPensum({
                         {value}
                       </Text>
                     ),
+                  },
+                  {
+                    title: "Estado rápido",
+                    key: "estadoRapido",
+                    width: 330,
+                    render: (_: any, record: any) => {
+                      const didacticoOk = Number(record?.cantidadDidacticos || 0) > 0;
+                      const materialesOk = Number(record?.cantidadMateriales || 0) > 0;
+                      const quizOk = Boolean(record?.tieneQuiz);
+
+                      return (
+                        <Space size={6} wrap>
+                          <Tag color={quizOk ? "green" : "volcano"}>{quizOk ? "Quiz" : "Sin quiz"}</Tag>
+                          <Tag color={didacticoOk ? "blue" : "volcano"}>
+                            {didacticoOk ? `Didáctico (${record?.cantidadDidacticos || 0})` : "Sin didáctico"}
+                          </Tag>
+                          <Tag color={materialesOk ? "geekblue" : "volcano"}>
+                            {materialesOk ? `Materiales (${record?.cantidadMateriales || 0})` : "Sin materiales"}
+                          </Tag>
+                        </Space>
+                      );
+                    },
                   },
                   {
                     title: "Horas",
