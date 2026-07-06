@@ -50,7 +50,7 @@ create table if not exists public.audit_sesiones_clase_deleted (
 );
 
 create table if not exists public.audit_asistencias_deleted (
-  asistencia_id bigint primary key,
+  asistencia_id uuid primary key,
   matricula_id bigint not null,
   fecha date not null,
   estado text null,
