@@ -54,17 +54,25 @@ export default function MatriculaEdit() {
 
         cargarDatosOriginales();
     }, [matriculaId]);
-    // Obtenemos datos de las tablas relacionadas para los selectores (aunque sean solo lectura)
+    // Obtenemos datos de las tablas relacionadas para los selectores
     const { selectProps: studentSelectProps } = useSelect({
         resource: "perfiles",
         optionLabel: "nombre_completo",
         optionValue: "id",
+        pagination: {
+            mode: "off",
+        },
+        sorters: [{ field: "nombre_completo", order: "asc" }],
     });
 
     const { selectProps: courseSelectProps } = useSelect({
         resource: "cursos",
         optionLabel: "nombre",
         optionValue: "id",
+        pagination: {
+            mode: "off",
+        },
+        sorters: [{ field: "nombre", order: "asc" }],
     });
 
     const { selectProps: programaSelectProps } = useSelect({
@@ -323,9 +331,15 @@ export default function MatriculaEdit() {
                 
                 <Card title="Datos de la Matrícula" variant="borderless">
                     
-                    {/* ESTUDIANTE (Deshabilitado para no cambiarlo por error) */}
+                    {/* ESTUDIANTE */}
                     <Form.Item label="Estudiante" name="estudiante_id">
-                        <Select {...studentSelectProps} disabled suffixIcon={<UserOutlined />} />
+                        <Select
+                            {...studentSelectProps}
+                            suffixIcon={<UserOutlined />}
+                            showSearch
+                            optionFilterProp="label"
+                            placeholder="Selecciona el estudiante"
+                        />
                     </Form.Item>
 
                     {/* PROGRAMA (solo lectura) */}
