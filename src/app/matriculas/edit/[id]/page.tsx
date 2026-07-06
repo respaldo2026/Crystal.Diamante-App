@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Edit, useForm, useSelect } from "@refinedev/antd";
 import { Form, Input, Select, DatePicker, Card, Alert, Typography, message } from "antd";
 import { 
@@ -81,6 +81,12 @@ export default function MatriculaEdit() {
         optionValue: "id",
     });
 
+    const programaNombre = useMemo(() => {
+        const options = (programaSelectProps.options || []) as Array<{ value?: string | number; label?: React.ReactNode }>;
+        const found = options.find((opt) => String(opt?.value || "") === String(programaId || ""));
+        return String(found?.label || "");
+    }, [programaSelectProps.options, programaId]);
+
     const supabaseFetchPrograma = useCallback(async (cursoId: string) => {
         try {
             const { data } = await supabaseBrowserClient
@@ -90,12 +96,11 @@ export default function MatriculaEdit() {
                 .maybeSingle();
             if (data?.programa_id) {
                 setProgramaId(String(data.programa_id));
-                formProps.form?.setFieldValue('programa_id', data.programa_id);
             }
         } catch (e) {
             console.warn('No se pudo cargar el programa del curso', e);
         }
-    }, [formProps.form]);
+    }, []);
 
     useEffect(() => {
         const cursoId = formProps.form?.getFieldValue('curso_id');
@@ -342,9 +347,13 @@ export default function MatriculaEdit() {
                         />
                     </Form.Item>
 
-                    {/* PROGRAMA (solo lectura) */}
-                    <Form.Item label="Programa" name="programa_id">
-                        <Select {...programaSelectProps} disabled placeholder="Programa del curso" />
+                    {/* PROGRAMA (solo visual, no se guarda en matriculas) */}
+                    <Form.Item label="Programa">
+                        <Input
+                            value={programaNombre}
+                            readOnly
+                            placeholder="Programa del curso"
+                        />
                     </Form.Item>
 
                     {/* CURSO / GRUPO */}
