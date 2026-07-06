@@ -4093,7 +4093,18 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               />
             ),
           },
-        ].filter((item) => item.key !== "5")}
+        ]
+          .filter((item) => item.key !== "5")
+          .sort((a, b) => {
+            const ordenDeseado: Record<string, number> = {
+              "1": 1,
+              "4": 2,
+              "2": 3,
+              "3": 4,
+              "6": 5,
+            };
+            return (ordenDeseado[a.key] ?? 99) - (ordenDeseado[b.key] ?? 99);
+          })}
       />
 
       <Modal
