@@ -202,6 +202,8 @@ interface MaterialDidactico {
   subido_por_nombre: string;
   created_at: string;
   pensum_id?: string;
+  pensum_curso_id?: string | null;
+  tema_relacionado?: string | null;
   nombre_ciclo?: string | null;
   programa_nombre?: string | null;
 }
@@ -2131,26 +2133,36 @@ export default function GestorPensum({
     return map;
   }, [quizzesClase]);
 
-  const materialesNecesariosCountPorTemaId = useMemo(() => {
+  const materialesNecesariosProgramaCountPorTemaId = useMemo(() => {
     const map = new Map<string, number>();
-    (materialesClaseCiclo || []).forEach((material) => {
+    (materialesClase || []).forEach((material) => {
       const key = String(material?.pensum_curso_id || "");
       if (!key) return;
       map.set(key, (map.get(key) || 0) + 1);
     });
     return map;
-  }, [materialesClaseCiclo]);
+  }, [materialesClase]);
 
-  const materialesDidacticosCountPorTemaNorm = useMemo(() => {
+  const materialesDidacticosProgramaCountPorTemaId = useMemo(() => {
     const map = new Map<string, number>();
-    (materialesCicloDidactico || []).forEach((material) => {
+    (materiales || []).forEach((material) => {
+      const temaId = String((material as any)?.pensum_curso_id || "");
+      if (!temaId) return;
+      map.set(temaId, (map.get(temaId) || 0) + 1);
+    });
+    return map;
+  }, [materiales]);
+
+  const materialesDidacticosProgramaCountPorTemaNorm = useMemo(() => {
+    const map = new Map<string, number>();
+    (materiales || []).forEach((material) => {
       const { tema } = parseTemaFromTitulo(material?.titulo);
-      const temaNorm = normalizarTema(tema || material?.titulo || "");
+      const temaNorm = normalizarTema((material as any)?.tema_relacionado || tema || material?.titulo || "");
       if (!temaNorm) return;
       map.set(temaNorm, (map.get(temaNorm) || 0) + 1);
     });
     return map;
-  }, [materialesCicloDidactico]);
+  }, [materiales]);
 
   const clasesMaestrasPrograma = useMemo(() => {
     const cicloOrderById = new Map<string, number>();
@@ -2165,6 +2177,10 @@ export default function GestorPensum({
 
     return (cursosPrograma || []).map((curso, index) => {
       const cicloId = String(curso?.pensum_id || "");
+      const temaNorm = normalizarTema(curso?.nombre_curso || "");
+      const didacticosPorTemaId = materialesDidacticosProgramaCountPorTemaId.get(String(curso?.id || "")) || 0;
+      const didacticosPorNombre = materialesDidacticosProgramaCountPorTemaNorm.get(temaNorm) || 0;
+
       return {
         id: String(curso?.id || `clase-${index + 1}`),
         key: String(curso?.id || `clase-${index + 1}`),
@@ -2179,17 +2195,17 @@ export default function GestorPensum({
         cursoOriginal: curso,
         quiz: quizzesPorTemaId.get(String(curso?.id || "")) || null,
         tieneQuiz: quizzesPorTemaId.has(String(curso?.id || "")),
-        cantidadMateriales: materialesNecesariosCountPorTemaId.get(String(curso?.id || "")) || 0,
-        cantidadDidacticos:
-          materialesDidacticosCountPorTemaNorm.get(normalizarTema(curso?.nombre_curso || "")) || 0,
+        cantidadMateriales: materialesNecesariosProgramaCountPorTemaId.get(String(curso?.id || "")) || 0,
+        cantidadDidacticos: didacticosPorTemaId > 0 ? didacticosPorTemaId : didacticosPorNombre,
       };
     });
   }, [
     cursosPrograma,
     pensums,
     quizzesPorTemaId,
-    materialesNecesariosCountPorTemaId,
-    materialesDidacticosCountPorTemaNorm,
+    materialesNecesariosProgramaCountPorTemaId,
+    materialesDidacticosProgramaCountPorTemaId,
+    materialesDidacticosProgramaCountPorTemaNorm,
   ]);
 
   const clasesMaestrasProgramaConDivisores = useMemo(() => {
@@ -2370,11 +2386,12 @@ export default function GestorPensum({
               <Text type="secondary">Aún no hay clases creadas en el programa.</Text>
             ) : (
               <Table
+                className="tabla-maestra-clases-premium"
                 size="small"
                 loading={loadingQuizzesClase}
                 rowKey="key"
                 dataSource={clasesMaestrasProgramaConDivisores}
-                pagination={{ pageSize: 20, hideOnSinglePage: true }}
+                pagination={false}
                 scroll={{ x: 1040 }}
                 onRow={(record: any) => {
                   if (!record?.esDivisorCiclo) {
@@ -3780,6 +3797,12 @@ export default function GestorPensum({
           />
         ) : null}
       </Modal>
+
+      <style jsx global>{`
+        .tabla-maestra-clases-premium .ant-table-tbody > tr.ant-table-row:hover > td {
+          background: inherit !important;
+        }
+      `}</style>
     </Drawer>
   );
 }
