@@ -5,8 +5,7 @@
  * 1. Descargar audio desde URL
  * 2. STT: Convertir audio → texto (Google Generative AI)
  * 3. Procesar con agente IA (personalidad + conocimiento)
- * 4. TTS: Convertir respuesta → audio (Elevenlabs)
- * 5. Devolver URL del audio generado
+ * 4. Devolver respuesta del agente en texto
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -2734,278 +2733,6 @@ async function generateResponse(apiKey: string, prompt: string): Promise<string>
 }
 
 /**
- * Convertir texto a audio (TTS) usando Elevenlabs
- */
-async function textToSpeech(text: string): Promise<Buffer> {
-  const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
-  if (!elevenLabsApiKey) {
-    throw new Error("ELEVENLABS_API_KEY no configurada");
-  }
-
-  try {
-    // Voice ID personalizado de ElevenLabs configurado para el agente
-    const voiceId = "ECOET12tGKHdXyB0CfqU";
-
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": elevenLabsApiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.35,
-            similarity_boost: 0.7,
-            style: 0.2,
-            use_speaker_boost: true,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Elevenlabs error: ${response.status} - ${error}`);
-    }
-
-    const audioBuffer = await response.arrayBuffer();
-    return Buffer.from(audioBuffer);
-  } catch (err) {
-    console.error("[textToSpeech] Error:", err);
-    throw err;
-  }
-}
-
-/**
- * Eliminar emojis del texto para texto-a-voz (TTS)
- * Los emojis no se pronuncian bien en audio
- */
-function removeEmojis(text: string): string {
-  // Expresión regular usando códigos Unicode hexadecimales
-  return text
-    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Emojis misceláneos y símbolos
-    .replace(/[\u{2600}-\u{26FF}]/gu, '')   // Símbolos misceláneos
-    .replace(/[\u{2700}-\u{27BF}]/gu, '')   // Dingbats
-    .replace(/[\u{1F600}-\u{1F64F}]/gu, '') // Emoticones
-    .replace(/[\u{1F680}-\u{1F6FF}]/gu, '') // Transporte y símbolos de mapa
-    .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '') // Banderas
-    // Limpiar espacios múltiples que quedan
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function numberToSpanishUnder100(n: number): string {
-  const units = [
-    'cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve',
-    'diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciseis', 'diecisiete', 'dieciocho', 'diecinueve',
-    'veinte', 'veintiuno', 'veintidos', 'veintitres', 'veinticuatro', 'veinticinco', 'veintiseis', 'veintisiete', 'veintiocho', 'veintinueve'
-  ];
-
-  if (n < 30) return units[n] || String(n);
-
-  const tensMap: Record<number, string> = {
-    30: 'treinta',
-    40: 'cuarenta',
-    50: 'cincuenta',
-    60: 'sesenta',
-    70: 'setenta',
-    80: 'ochenta',
-    90: 'noventa',
-  };
-
-  const tens = Math.floor(n / 10) * 10;
-  const remainder = n % 10;
-  const tensText = tensMap[tens] || String(tens);
-  return remainder ? `${tensText} y ${units[remainder]}` : tensText;
-}
-
-function numberToSpanish(n: number): string {
-  if (!Number.isFinite(n)) return String(n);
-  if (n < 0) return `menos ${numberToSpanish(Math.abs(n))}`;
-  if (n < 100) return numberToSpanishUnder100(n);
-
-  if (n < 1000) {
-    if (n === 100) return 'cien';
-
-    const hundredsMap: Record<number, string> = {
-      100: 'ciento',
-      200: 'doscientos',
-      300: 'trescientos',
-      400: 'cuatrocientos',
-      500: 'quinientos',
-      600: 'seiscientos',
-      700: 'setecientos',
-      800: 'ochocientos',
-      900: 'novecientos',
-    };
-
-    const hundreds = Math.floor(n / 100) * 100;
-    const remainder = n % 100;
-    const hundredsText = hundredsMap[hundreds] || String(hundreds);
-    return remainder ? `${hundredsText} ${numberToSpanish(remainder)}` : hundredsText;
-  }
-
-  if (n < 1000000) {
-    const thousands = Math.floor(n / 1000);
-    const remainder = n % 1000;
-    const thousandsText = thousands === 1 ? 'mil' : `${numberToSpanish(thousands)} mil`;
-    return remainder ? `${thousandsText} ${numberToSpanish(remainder)}` : thousandsText;
-  }
-
-  if (n < 1000000000) {
-    const millions = Math.floor(n / 1000000);
-    const remainder = n % 1000000;
-    const millionsText = millions === 1 ? 'un millon' : `${numberToSpanish(millions)} millones`;
-    return remainder ? `${millionsText} ${numberToSpanish(remainder)}` : millionsText;
-  }
-
-  return String(n);
-}
-
-function normalizeAmountToken(raw: string): string {
-  const digits = raw.replace(/[^\d]/g, '');
-  if (!digits) return raw;
-
-  const value = Number.parseInt(digits, 10);
-  if (!Number.isFinite(value)) return raw;
-
-  return numberToSpanish(value);
-}
-
-function normalizeCurrencyForSpeech(text: string): string {
-  if (!text) return '';
-
-  return text
-    .replace(/\$\s*([\d.,]+)/g, (_, amount: string) => `${normalizeAmountToken(amount)} pesos`)
-    .replace(/\b(?:cop|pesos?)\s*([\d.,]+)/gi, (_, amount: string) => `${normalizeAmountToken(amount)} pesos`)
-    .replace(/\b([\d.,]+)\s*pesos?\b/gi, (_, amount: string) => `${normalizeAmountToken(amount)} pesos`);
-}
-
-function periodForHour(hour24: number): string {
-  if (hour24 < 12) return 'de la manana';
-  if (hour24 < 19) return 'de la tarde';
-  return 'de la noche';
-}
-
-function formatHourForSpeech(hour: number, minute: number, meridiem?: string): string {
-  const normalizedMeridiem = (meridiem || '').toUpperCase().replace(/\./g, '');
-  const hour24 = normalizedMeridiem === 'PM' && hour < 12
-    ? hour + 12
-    : normalizedMeridiem === 'AM' && hour === 12
-      ? 0
-      : hour;
-  const spokenHour = normalizedMeridiem ? (hour % 12 || 12) : hour;
-  const period = normalizedMeridiem ? periodForHour(hour24) : '';
-
-  if (minute === 0) {
-    return period
-      ? `${numberToSpanish(spokenHour)} ${period}`
-      : numberToSpanish(spokenHour);
-  }
-
-  const minuteText = numberToSpanish(minute);
-  return period
-    ? `${numberToSpanish(spokenHour)} y ${minuteText} ${period}`
-    : `${numberToSpanish(spokenHour)} y ${minuteText}`;
-}
-
-function normalizeTimesForSpeech(text: string): string {
-  if (!text) return '';
-
-  return text
-    .replace(/(\d{1,2}:\d{2}\s*(?:a\.?m\.?|p\.?m\.?|am|pm))\s*[-–]\s*(\d{1,2}:\d{2}\s*(?:a\.?m\.?|p\.?m\.?|am|pm))/gi, '$1 a $2')
-    .replace(/\b(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?|am|pm)\b/gi, (_, hour: string, minute: string, meridiem: string) => {
-      return formatHourForSpeech(Number(hour), Number(minute), meridiem);
-    })
-    .replace(/\b(\d{1,2})\s*(a\.?m\.?|p\.?m\.?|am|pm)\b/gi, (_, hour: string, meridiem: string) => {
-      return formatHourForSpeech(Number(hour), 0, meridiem);
-    });
-}
-
-function normalizeCountPhrasesForSpeech(text: string): string {
-  if (!text) return '';
-
-  return text.replace(/\b(\d{1,3})\s*(horas?|dias?|semanas?|meses?|clases?|modulos?|niveles?)\b/gi, (_, amount: string, unit: string) => {
-    return `${numberToSpanish(Number(amount))} ${unit}`;
-  });
-}
-
-function normalizeDatesForSpeech(text: string): string {
-  if (!text) return '';
-
-  const monthNames = [
-    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-  ];
-
-  const buildSpokenDate = (yearRaw: string | undefined, monthRaw: string, dayRaw: string) => {
-    const day = Number(dayRaw);
-    const month = Number(monthRaw);
-    const year = yearRaw ? Number(yearRaw) : null;
-
-    if (!Number.isFinite(day) || !Number.isFinite(month) || day < 1 || day > 31 || month < 1 || month > 12) {
-      return null;
-    }
-
-    const dayText = numberToSpanish(day);
-    const monthText = monthNames[month - 1];
-    if (!monthText) return null;
-
-    if (year && Number.isFinite(year)) {
-      return `${dayText} de ${monthText} de ${numberToSpanish(year)}`;
-    }
-
-    return `${dayText} de ${monthText}`;
-  };
-
-  return text
-    .replace(/\b(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})\b/g, (match, year, month, day) => {
-      return buildSpokenDate(year, month, day) || match;
-    })
-    .replace(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](20\d{2}))?\b/g, (match, day, month, year) => {
-      return buildSpokenDate(year, month, day) || match;
-    });
-}
-
-/**
- * Limpiar texto para TTS y evitar pausas extra o caracteres raros
- */
-function cleanForTTS(text: string): string {
-  if (!text) return '';
-
-  let output = removeEmojis(text);
-
-  // Quitar markdown simple y símbolos comunes
-  output = output
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/[~`_]/g, '')
-    .replace(/^\s*[•\-]\s+/gm, '')
-    .replace(/\s*✅\s*/g, ' ')
-    .replace(/\s*•\s*/g, ' ');
-
-  output = normalizeCurrencyForSpeech(output);
-  output = normalizeTimesForSpeech(output);
-  output = normalizeDatesForSpeech(output);
-  output = normalizeCountPhrasesForSpeech(output);
-
-  // Unificar saltos y evitar pausas largas
-  output = output
-    .replace(/\n+/g, '. ')
-    .replace(/\s*\.\s*\.\s*\.+/g, '. ')
-    .replace(/([!?])\1+/g, '$1')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s*([,.!?])\s*/g, '$1 ')
-    .trim();
-
-  return output;
-}
-
-/**
  * Sanitizar texto para JSON válido
  * Solo remover caracteres de control problemáticos
  * JSON.stringify ya maneja escape de comillas, saltos de línea, etc.
@@ -3291,39 +3018,6 @@ function isRepetitiveResponse(
   return (almostEqual || overlap >= 0.9) && Boolean(userMessagesAreDifferent);
 }
 
-/**
- * Subir audio a Supabase storage y obtener URL pública
- */
-async function uploadAudioToSupabase(
-  supabase: any,
-  audioBuffer: Buffer,
-  filename: string
-): Promise<string> {
-  try {
-    const { data, error } = await supabase.storage
-      .from("agent_audio_responses")
-      .upload(filename, audioBuffer, {
-        contentType: "audio/mpeg",
-        upsert: false,
-      });
-
-    if (error) {
-      console.error("[uploadAudioToSupabase] Error:", error);
-      throw error;
-    }
-
-    // Obtener URL pública
-    const { data: publicUrl } = supabase.storage
-      .from("agent_audio_responses")
-      .getPublicUrl(data.path);
-
-    return publicUrl?.publicUrl || "";
-  } catch (err) {
-    console.error("[uploadAudioToSupabase] Error:", err);
-    throw err;
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     // 1. Validar autenticación
@@ -3469,24 +3163,11 @@ export async function POST(req: NextRequest) {
       const finalNotFound = formatFinalWhatsAppResponse(notFoundMessage);
       await saveConversation(supabase, resolvedPhone, transcription, finalNotFound, transcription);
 
-      const cleaned = cleanForTTS(finalNotFound);
-      let audioUrl = "";
-      try {
-        if (process.env.ELEVENLABS_API_KEY) {
-          const responseAudioBuffer = await textToSpeech(cleaned);
-          const timestamp = Date.now();
-          const filename = `responses/${timestamp}-${resolvedPhone}.mp3`;
-          audioUrl = await uploadAudioToSupabase(supabase, responseAudioBuffer, filename);
-        }
-      } catch (ttsErr) {
-        console.warn("[POST /api/ai/audio] Error en TTS para no-encontrado:", ttsErr);
-      }
-
       return NextResponse.json(withMediaSuggestion({
         ok: true,
         transcription: sanitizeForJSON(transcription) || "",
         agent_response: sanitizeForJSON(finalNotFound) || "",
-        audio_url: audioUrl || "",
+        audio_url: "",
         agent: sanitizeForJSON(settings?.persona_name || "Dany") || "Dany",
         historyLength: Number(history.length) || 0,
       }, mediaSuggestion));
@@ -3605,9 +3286,6 @@ export async function POST(req: NextRequest) {
     let hierarchicalContext = studentContext?.contextText
       ? `${hierarchicalContextBase}\n\n${studentContext.contextText}`
       : hierarchicalContextBase;
-    
-    // 7.10. IMPORTANTE: Eliminar emojis del contexto para que el agente no los use en respuestas de audio
-    hierarchicalContext = removeEmojis(hierarchicalContext);
 
     let agentResponse = directStudentResponse || directTodayResponse || directNextGroupResponse || directIntentResponse || "";
     if (!agentResponse) {
@@ -3658,31 +3336,8 @@ export async function POST(req: NextRequest) {
     );
     agentResponse = formatFinalWhatsAppResponse(agentResponse);
 
-    // 9.5. IMPORTANTE: Eliminar emojis de la respuesta antes de convertir a audio
-    const agentResponseClean = cleanForTTS(agentResponse);
-
     // 10. Guardar en historial de conversación (con emojis originales)
     await saveConversation(supabase, resolvedPhone, transcription, agentResponse, transcription);
-
-    // 11. TTS: Convertir respuesta a audio (OPCIONAL - solo si Elevenlabs está configurado)
-    let audioUrl = "";
-    try {
-      if (process.env.ELEVENLABS_API_KEY) {
-        console.log("[POST /api/ai/audio] Convirtiendo respuesta a audio (TTS)...");
-        // Usar la versión sin emojis para TTS
-        const responseAudioBuffer = await textToSpeech(agentResponseClean);
-
-        // 12. Subir audio a Supabase storage
-        const timestamp = Date.now();
-        const filename = `responses/${timestamp}-${resolvedPhone}.mp3`;
-        console.log("[POST /api/ai/audio] Subiendo audio a Supabase:", filename);
-        audioUrl = await uploadAudioToSupabase(supabase, responseAudioBuffer, filename);
-      } else {
-        console.warn("[POST /api/ai/audio] ELEVENLABS_API_KEY no configurada, omitiendo TTS");
-      }
-    } catch (ttsErr) {
-      console.warn("[POST /api/ai/audio] Error en TTS, continuando sin audio:", ttsErr);
-    }
 
     // Sanitizar respuesta para JSON válido
     const sanitizedResponse = sanitizeForJSON(agentResponse);
@@ -3693,7 +3348,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       transcription: sanitizedTranscription || "",
       agent_response: sanitizedResponse || "",
-      audio_url: audioUrl || "",
+      audio_url: "",
       agent: sanitizedAgent || "Dany",
       historyLength: Number(history.length) || 0,
     }, mediaSuggestion));
