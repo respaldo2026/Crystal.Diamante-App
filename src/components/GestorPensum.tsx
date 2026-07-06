@@ -1054,13 +1054,18 @@ export default function GestorPensum({
 
     const temaCursoNorm = normalizarTema(curso.nombre_curso);
 
-    // Recopilar PDFs del tema/clase actual
-    const pdfsTema = materialesCicloDidactico
+    // Recopilar PDFs de la clase actual (estricto por clase; sin mezclar con todo el ciclo)
+    const cursoId = String(curso.id || "");
+    const pdfsTema = (materiales || [])
       .filter((m) => {
         if (!isPdfMaterial(m) || !m.url_archivo) return false;
+        const temaIdMaterial = String((m as any)?.pensum_curso_id || "");
+        if (temaIdMaterial && cursoId && temaIdMaterial === cursoId) return true;
+
+        const temaRelacionadoNorm = normalizarTema((m as any)?.tema_relacionado || "");
         const { tema: temaMaterial } = parseTemaFromTitulo(m.titulo);
         const temaMaterialNorm = normalizarTema(temaMaterial || m.titulo);
-        return temaMaterialNorm === temaCursoNorm;
+        return temaRelacionadoNorm === temaCursoNorm || temaMaterialNorm === temaCursoNorm;
       })
       .map((m) => ({
         id: m.id,
@@ -1069,31 +1074,15 @@ export default function GestorPensum({
         titulo: m.titulo,
       }));
 
-    // Fallback: si no hay coincidencias de tema, usar PDFs del ciclo activo
-    const pensumIdBuscar = curso.pensum_id || selectedCicloId;
-    const todosPdfsCiclo = materiales
-      .filter(
-        (m) =>
-          isPdfMaterial(m) &&
-          m.url_archivo &&
-          (pensumIdBuscar ? m.pensum_id === pensumIdBuscar : true)
-      )
-      .map((m) => ({
-        id: m.id,
-        url: m.url_archivo,
-        nombre: m.nombre_archivo || m.titulo,
-        titulo: m.titulo,
-      }));
-    const todosPdfs = pdfsTema.length > 0 ? pdfsTema : todosPdfsCiclo;
-    setPdfsCiclo(todosPdfs);
+    setPdfsCiclo(pdfsTema);
 
     // Preseleccionar el PDF cuyo título contenga el nombre del curso (coincidencia parcial)
     const nombreCursoNorm = curso.nombre_curso.toLowerCase();
     const pdfPreseleccionado =
-      todosPdfs.find((p) =>
+      pdfsTema.find((p) =>
         p.titulo.toLowerCase().includes(nombreCursoNorm) ||
         p.nombre.toLowerCase().includes(nombreCursoNorm)
-      ) || todosPdfs[0] || null;
+      ) || pdfsTema[0] || null;
     setPdfClaseActual(pdfPreseleccionado);
 
     formQuiz.setFieldsValue({
