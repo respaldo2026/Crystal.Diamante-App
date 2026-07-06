@@ -448,7 +448,7 @@ export default function GestorPensum({
   const [mostrarListaCompletaCiclo, setMostrarListaCompletaCiclo] = useState(false);
   const [mostrarListaCompletaNecesarios, setMostrarListaCompletaNecesarios] = useState(false);
   const [filtroCoberturaMateriales, setFiltroCoberturaMateriales] = useState<"todos" | "NINGUNO" | "MENSUAL_100">("todos");
-  const [mostrarTablaMaestraClases, setMostrarTablaMaestraClases] = useState(false);
+  const [mostrarTablaMaestraClases, setMostrarTablaMaestraClases] = useState(true);
   const [vistaCicloActiva, setVistaCicloActiva] = useState<"temas" | "material" | "necesarios" | "quiz">("temas");
   const [filtroTemas, setFiltroTemas] = useState<"todos" | "pendientes" | "completos">("todos");
   const [horasNormalizadas, setHorasNormalizadas] = useState(false);
@@ -2347,44 +2347,25 @@ export default function GestorPensum({
       {/* Vista Principal - Seleccionar Ciclo */}
       {!selectedCicloId ? (
         <div>
-          {programaData && (
-            <Alert
-              message={`Ciclos generados automáticamente`}
-              description={`Este programa tiene configurados ${pensums.length} ciclo(s) según la duración "${programaData.duracion}". Clases del programa: ${totalTemasPrograma}${totalClasesEsperadasPrograma > 0 ? ` / ${totalClasesEsperadasPrograma}` : ""}. Selecciona un ciclo para gestionar sus temas y materiales.`}
-              type="info"
-              showIcon
-              style={{ marginBottom: 24 }}
-            />
-          )}
-
-          <Card size="small" style={{ marginBottom: 16 }}>
-            <Space wrap size={12}>
-              <Tag color={faltantesPrograma > 0 ? "orange" : "green"}>
-                Lista de clases: {totalTemasPrograma}{totalClasesEsperadasPrograma > 0 ? ` / ${totalClasesEsperadasPrograma}` : ""}
-              </Tag>
-              {totalClasesEsperadasPrograma > 0 && (
-                <Button type="primary" onClick={sincronizarListaClasesPrograma}>
-                  {faltantesPrograma > 0 ? `Completar ${faltantesPrograma} clases faltantes` : "Sincronizar lista de clases"}
-                </Button>
-              )}
-            </Space>
-          </Card>
-
           <Card
             size="small"
             title="Tabla maestra de clases (vista completa)"
-            style={{ marginBottom: 16 }}
+            style={{ marginBottom: 16, borderRadius: 14, border: "1px solid #dbeafe", overflow: "hidden" }}
+            headStyle={{
+              background: "linear-gradient(90deg, #eff6ff 0%, #eef2ff 60%, #f5f3ff 100%)",
+              borderBottom: "1px solid #dbeafe",
+            }}
             extra={(
               <Button
                 type={mostrarTablaMaestraClases ? "primary" : "default"}
                 onClick={() => setMostrarTablaMaestraClases((prev) => !prev)}
               >
-                {mostrarTablaMaestraClases ? "Ocultar tabla" : "Ver tabla completa"}
+                {mostrarTablaMaestraClases ? "Minimizar" : "Ver tabla completa"}
               </Button>
             )}
           >
             {!mostrarTablaMaestraClases ? (
-              <Text type="secondary">Pulsa &quot;Ver tabla completa&quot; para visualizar y gestionar todas las clases de una sola mirada.</Text>
+              <Text type="secondary">Pulsa &quot;Ver tabla completa&quot; para visualizar y gestionar todo el pensum desde un único panel.</Text>
             ) : clasesMaestrasPrograma.length === 0 ? (
               <Text type="secondary">Aún no hay clases creadas en el programa.</Text>
             ) : (
@@ -2394,9 +2375,15 @@ export default function GestorPensum({
                 rowKey="key"
                 dataSource={clasesMaestrasProgramaConDivisores}
                 pagination={{ pageSize: 20, hideOnSinglePage: true }}
-                scroll={{ x: 1280 }}
+                scroll={{ x: 1040 }}
                 onRow={(record: any) => {
-                  if (!record?.esDivisorCiclo) return {};
+                  if (!record?.esDivisorCiclo) {
+                    return {
+                      style: {
+                        background: Number(record?.numero || 0) % 2 === 0 ? "#fcfcfd" : "#ffffff",
+                      },
+                    };
+                  }
                   return {
                     style: {
                       background: "linear-gradient(90deg, #eff6ff 0%, #eef2ff 100%)",
@@ -2407,9 +2394,9 @@ export default function GestorPensum({
                 }}
                 columns={[
                   {
-                    title: "Clase #",
+                    title: <Text strong>Clase</Text>,
                     dataIndex: "numero",
-                    width: 90,
+                    width: 110,
                     render: (value: number, record: any) => {
                       if (!record?.esDivisorCiclo) return value;
                       return {
@@ -2419,36 +2406,34 @@ export default function GestorPensum({
                             <Text strong style={{ color: "#1d4ed8", fontSize: 14 }}>{record?.cicloNombre || "Sin ciclo"}</Text>
                           </Space>
                         ),
-                        props: { colSpan: 7 },
+                        props: { colSpan: 5 },
                       };
                     },
                   },
                   {
-                    title: "Ciclo",
-                    dataIndex: "cicloNombre",
-                    width: 240,
-                    render: (value: string, record: any) => {
-                      if (record?.esDivisorCiclo) return { children: null, props: { colSpan: 0 } };
-                      return <Tag color="blue">{value}</Tag>;
-                    },
-                  },
-                  {
-                    title: "Tema/Clase",
+                    title: <Text strong>Tema o clase</Text>,
                     dataIndex: "tema",
-                    width: 360,
+                    width: 420,
                     render: (value: string, record: any) => {
                       if (record?.esDivisorCiclo) return { children: null, props: { colSpan: 0 } };
                       return (
-                        <Text style={{ display: "block" }} ellipsis={{ tooltip: value }}>
-                          {value}
-                        </Text>
+                        <Space direction="vertical" size={0} style={{ width: "100%" }}>
+                          <Text strong style={{ display: "block" }} ellipsis={{ tooltip: value }}>
+                            {value}
+                          </Text>
+                          {record?.descripcion ? (
+                            <Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: record.descripcion }}>
+                              {record.descripcion}
+                            </Text>
+                          ) : null}
+                        </Space>
                       );
                     },
                   },
                   {
-                    title: "Estado rápido",
+                    title: <Text strong>Estado rápido</Text>,
                     key: "estadoRapido",
-                    width: 330,
+                    width: 350,
                     render: (_: any, record: any) => {
                       if (record?.esDivisorCiclo) return { children: null, props: { colSpan: 0 } };
                       const didacticoOk = Number(record?.cantidadDidacticos || 0) > 0;
@@ -2483,7 +2468,7 @@ export default function GestorPensum({
                     },
                   },
                   {
-                    title: "Horas",
+                    title: <Text strong>Horas</Text>,
                     dataIndex: "horas",
                     width: 90,
                     align: "center",
@@ -2493,16 +2478,7 @@ export default function GestorPensum({
                     },
                   },
                   {
-                    title: "Tipo",
-                    dataIndex: "tipo",
-                    width: 130,
-                    render: (v: string, record: any) => {
-                      if (record?.esDivisorCiclo) return { children: null, props: { colSpan: 0 } };
-                      return <Tag>{v || "obligatorio"}</Tag>;
-                    },
-                  },
-                  {
-                    title: "Acciones",
+                    title: <Text strong>Acciones</Text>,
                     key: "acciones",
                     width: 170,
                     render: (_: any, record: any) => (
@@ -2520,6 +2496,29 @@ export default function GestorPensum({
                 ]}
               />
             )}
+          </Card>
+
+          {programaData && (
+            <Alert
+              message={`Ciclos generados automáticamente`}
+              description={`Este programa tiene configurados ${pensums.length} ciclo(s) según la duración "${programaData.duracion}". Clases del programa: ${totalTemasPrograma}${totalClasesEsperadasPrograma > 0 ? ` / ${totalClasesEsperadasPrograma}` : ""}. Selecciona un ciclo para gestionar sus temas y materiales.`}
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Space wrap size={12}>
+              <Tag color={faltantesPrograma > 0 ? "orange" : "green"}>
+                Lista de clases: {totalTemasPrograma}{totalClasesEsperadasPrograma > 0 ? ` / ${totalClasesEsperadasPrograma}` : ""}
+              </Tag>
+              {totalClasesEsperadasPrograma > 0 && (
+                <Button type="primary" onClick={sincronizarListaClasesPrograma}>
+                  {faltantesPrograma > 0 ? `Completar ${faltantesPrograma} clases faltantes` : "Sincronizar lista de clases"}
+                </Button>
+              )}
+            </Space>
           </Card>
 
           <div style={{ marginBottom: 24 }}>
