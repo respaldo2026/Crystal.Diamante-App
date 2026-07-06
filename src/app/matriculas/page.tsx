@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { List, useTable, EditButton, DeleteButton, CreateButton, useSelect } from "@refinedev/antd";
-import { Table, Space, Tag, Typography, Button, Tooltip, Progress, Select, Modal, message, Tabs, Card, Row, Col, App, Grid, Dropdown } from "antd";
+import { Table, Space, Tag, Typography, Button, Tooltip, Progress, Select, Modal, message, Tabs, Card, Row, Col, App, Grid, Dropdown, Input } from "antd";
 import type { MenuProps } from "antd";
 import { 
   FileTextOutlined, 
@@ -38,6 +38,7 @@ export default function MatriculasList() {
     const [loadingAsistencias, setLoadingAsistencias] = useState(false);
     const [activeTab, setActiveTab] = useState<string>('nuevo');
     const [listFilter, setListFilter] = useState<'all' | 'sin_pagos' | 'con_pagos' | 'bajo_asistencia'>('all');
+    const [studentSearch, setStudentSearch] = useState("");
     const router = useRouter();
 
     // Construcción de filtros según rol
@@ -144,15 +145,32 @@ export default function MatriculasList() {
                 return s && s.tieneDatos && !s.cumple;
             });
         }
+
+        const search = String(studentSearch || "").trim().toLowerCase();
+        if (search) {
+            arr = arr.filter((m: any) => {
+                const nombre = String(m?.perfiles?.nombre_completo || "").toLowerCase();
+                const email = String(m?.perfiles?.email || "").toLowerCase();
+                return nombre.includes(search) || email.includes(search);
+            });
+        }
+
         return arr;
     })();
 
-    // Selector para filtrar por curso
-    const { selectProps: cursoFilterSelect } = useSelect({
-        resource: "cursos",
-        optionLabel: "nombre",
-        optionValue: "id",
-    });
+    const cursoFilterOptions = useMemo(() => {
+        const map = new Map<string, string>();
+        (matriculas || []).forEach((item: any) => {
+            const cursoId = String(item?.curso_id || "").trim();
+            if (!cursoId) return;
+            const nombreGrupo = construirNombreGrupo(item?.cursos) || String(item?.cursos?.nombre || "Grupo").trim();
+            map.set(cursoId, nombreGrupo || "Grupo");
+        });
+
+        return Array.from(map.entries())
+            .map(([value, label]) => ({ value, label }))
+            .sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
+    }, [matriculas]);
 
     const { selectProps: programaFilterSelect } = useSelect({
         resource: "programas",
@@ -481,12 +499,19 @@ export default function MatriculasList() {
                             onChange={(val) => onFilterPrograma(val as string)}
                         />
                         <Select
-                            options={cursoFilterSelect.options}
-                            loading={cursoFilterSelect.loading}
+                            options={cursoFilterOptions}
                             allowClear
-                            placeholder="Filtrar por curso"
+                            showSearch
+                            optionFilterProp="label"
+                            placeholder="Filtrar por grupo"
                             style={{ minWidth: isMobile ? "100%" : 260, width: isMobile ? "100%" : undefined }}
                             onChange={(val) => onFilterCurso(val as string)}
+                        />
+                        <Input.Search
+                            allowClear
+                            placeholder="Buscar estudiante (nombre o email)"
+                            style={{ minWidth: isMobile ? "100%" : 280, width: isMobile ? "100%" : undefined }}
+                            onChange={(e) => setStudentSearch(e.target.value)}
                         />
                     </Space>
                 </>
@@ -502,12 +527,19 @@ export default function MatriculasList() {
                             onChange={(val) => onFilterPrograma(val as string)}
                         />
                         <Select
-                            options={cursoFilterSelect.options}
-                            loading={cursoFilterSelect.loading}
+                            options={cursoFilterOptions}
                             allowClear
-                            placeholder="Filtrar por curso"
+                            showSearch
+                            optionFilterProp="label"
+                            placeholder="Filtrar por grupo"
                             style={{ minWidth: isMobile ? "100%" : 260, width: isMobile ? "100%" : undefined }}
                             onChange={(val) => onFilterCurso(val as string)}
+                        />
+                        <Input.Search
+                            allowClear
+                            placeholder="Buscar estudiante (nombre o email)"
+                            style={{ minWidth: isMobile ? "100%" : 280, width: isMobile ? "100%" : undefined }}
+                            onChange={(e) => setStudentSearch(e.target.value)}
                         />
                         <CreateButton type="primary" icon={<FileTextOutlined />} block={isMobile}>Nueva Matrícula</CreateButton>
                     </Space>
