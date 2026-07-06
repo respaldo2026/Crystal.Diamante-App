@@ -26,6 +26,7 @@ export default function MatriculaEdit() {
     const [programaId, setProgramaId] = useState<string | undefined>(undefined);
     const [programaPricing, setProgramaPricing] = useState<ProgramaPaymentConfig | null>(null);
     const [originalModalidad, setOriginalModalidad] = useState(MODALIDAD_PAGO_DEFAULT);
+    const [originalCursoId, setOriginalCursoId] = useState<string>("");
     const planSeleccionado = normalizeModalidadPago(Form.useWatch("modalidad_pago", formProps.form));
     const infoPlanSeleccionado = {
         ...getPaymentPlan(planSeleccionado),
@@ -33,24 +34,25 @@ export default function MatriculaEdit() {
     };
 
     useEffect(() => {
-        const cargarModalidadOriginal = async () => {
+        const cargarDatosOriginales = async () => {
             if (!matriculaId) return;
 
             const { data, error } = await supabaseBrowserClient
                 .from("matriculas")
-                .select("modalidad_pago")
+                .select("modalidad_pago, curso_id")
                 .eq("id", matriculaId)
                 .maybeSingle();
 
             if (error) {
-                console.warn("No se pudo cargar la modalidad original de la matrícula", error);
+                console.warn("No se pudieron cargar los datos originales de la matrícula", error);
                 return;
             }
 
             setOriginalModalidad(normalizeModalidadPago(data?.modalidad_pago ?? null));
+            setOriginalCursoId(String(data?.curso_id || ""));
         };
 
-        cargarModalidadOriginal();
+        cargarDatosOriginales();
     }, [matriculaId]);
     // Obtenemos datos de las tablas relacionadas para los selectores (aunque sean solo lectura)
     const { selectProps: studentSelectProps } = useSelect({
@@ -167,9 +169,115 @@ export default function MatriculaEdit() {
         }
     }, [matriculaId]);
 
+    const adaptarFechasCobroAlNuevoGrupo = useCallback(async (nuevoCursoId: string, modalidadPagoActual: string) => {
+        if (!matriculaId) return;
+
+        const modalidadNormalizada = normalizeModalidadPago(modalidadPagoActual);
+        if (modalidadNormalizada === "POR_CLASE") return;
+
+        const { data: matriculasGrupo, error: errMatriculasGrupo } = await supabaseBrowserClient
+            .from("matriculas")
+            .select("id")
+            .eq("curso_id", Number(nuevoCursoId))
+            .neq("id", matriculaId);
+
+        if (errMatriculasGrupo) throw errMatriculasGrupo;
+
+        const matriculasReferencia = (matriculasGrupo || []).map((m: any) => String(m.id || "")).filter(Boolean);
+        if (matriculasReferencia.length === 0) return;
+
+        const { data: pagosReferenciaRaw, error: errPagosReferencia } = await supabaseBrowserClient
+            .from("pagos")
+            .select("numero_cuota, fecha_vencimiento, tipo_cuota, periodo_pagado")
+            .in("matricula_id", matriculasReferencia)
+            .not("fecha_vencimiento", "is", null)
+            .gt("numero_cuota", 0)
+            .order("numero_cuota", { ascending: true });
+
+        if (errPagosReferencia) throw errPagosReferencia;
+
+        const esPagoPorClase = (pago: { tipo_cuota?: string | null; periodo_pagado?: string | null }) => {
+            const tipoCuota = String(pago?.tipo_cuota || "").toLowerCase().trim();
+            const periodo = String(pago?.periodo_pagado || "").toLowerCase().trim();
+            return tipoCuota === "por_clase" || /^clase\s*#?\s*\d+/i.test(periodo);
+        };
+
+        const pagosReferencia = (pagosReferenciaRaw || []).filter((pago: any) => !esPagoPorClase(pago));
+        if (pagosReferencia.length === 0) return;
+
+        const conteoDia = new Map<number, number>();
+        const referenciaPorCuota = new Map<number, string>();
+
+        pagosReferencia.forEach((pago: any) => {
+            const numeroCuota = Number(pago?.numero_cuota || 0);
+            const fecha = String(pago?.fecha_vencimiento || "");
+            if (!numeroCuota || !fecha) return;
+
+            if (!referenciaPorCuota.has(numeroCuota)) {
+                referenciaPorCuota.set(numeroCuota, fecha);
+            }
+
+            const dia = dayjs(fecha).date();
+            if (!Number.isFinite(dia) || dia <= 0) return;
+            conteoDia.set(dia, (conteoDia.get(dia) || 0) + 1);
+        });
+
+        const diaAnclaGrupo = Array.from(conteoDia.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+        if (!diaAnclaGrupo) return;
+
+        const { data: pagosPropiosRaw, error: errPagosPropios } = await supabaseBrowserClient
+            .from("pagos")
+            .select("id, numero_cuota, fecha_vencimiento, estado, tipo_cuota, periodo_pagado")
+            .eq("matricula_id", matriculaId)
+            .in("estado", ["pendiente", "vencido"])
+            .gt("numero_cuota", 0)
+            .order("numero_cuota", { ascending: true });
+
+        if (errPagosPropios) throw errPagosPropios;
+
+        const pagosPropios = (pagosPropiosRaw || []).filter((pago: any) => !esPagoPorClase(pago));
+        if (pagosPropios.length === 0) return;
+
+        for (const pago of pagosPropios) {
+            const numeroCuota = Number(pago?.numero_cuota || 0);
+            if (!numeroCuota) continue;
+
+            const referenciaExacta = referenciaPorCuota.get(numeroCuota);
+            let nuevaFecha = referenciaExacta || null;
+
+            if (!nuevaFecha) {
+                const base = dayjs(String(pago?.fecha_vencimiento || ""));
+                const baseValida = base.isValid() ? base : dayjs();
+                const diaMes = Math.min(diaAnclaGrupo, baseValida.daysInMonth());
+                nuevaFecha = baseValida.date(diaMes).format("YYYY-MM-DD");
+            }
+
+            if (!nuevaFecha || nuevaFecha === String(pago?.fecha_vencimiento || "")) continue;
+
+            const { error: errUpdatePago } = await supabaseBrowserClient
+                .from("pagos")
+                .update({ fecha_vencimiento: nuevaFecha })
+                .eq("id", pago.id);
+
+            if (errUpdatePago) throw errUpdatePago;
+        }
+    }, [matriculaId]);
+
     const handleOnFinish = useCallback(async (values: any) => {
         const result = await onFinish(values);
+        const cursoNuevo = String(values?.curso_id || "");
         const nuevaModalidad = normalizeModalidadPago(values.modalidad_pago);
+
+        if (cursoNuevo && originalCursoId && cursoNuevo !== originalCursoId) {
+            try {
+                await adaptarFechasCobroAlNuevoGrupo(cursoNuevo, nuevaModalidad);
+                message.success("Grupo actualizado. Las fechas de cobro pendientes se ajustaron al calendario del nuevo grupo.");
+            } catch (err: any) {
+                message.warning("El grupo se guardó, pero no se pudieron ajustar automáticamente las fechas de cobro.");
+                console.error("Error adaptando fechas de cobro al nuevo grupo:", err);
+            }
+        }
+
         if (nuevaModalidad !== originalModalidad) {
             try {
                 const montos = resolvePaymentPlanAmounts(nuevaModalidad, programaPricing);
@@ -181,7 +289,14 @@ export default function MatriculaEdit() {
             }
         }
         return result;
-    }, [onFinish, originalModalidad, programaPricing, sincronizarPagosAlCambiarPlan]);
+    }, [
+        onFinish,
+        originalCursoId,
+        originalModalidad,
+        programaPricing,
+        sincronizarPagosAlCambiarPlan,
+        adaptarFechasCobroAlNuevoGrupo,
+    ]);
 
     return (
         <Edit saveButtonProps={saveButtonProps} title="Actualizar Matrícula">
