@@ -2176,6 +2176,7 @@ export default function GestorPensum({
         descripcion: curso?.descripcion || "",
         horas: HORAS_CLASE_FIJAS,
         tipo: curso?.tipo_curso || "obligatorio",
+        cursoOriginal: curso,
         quiz: quizzesPorTemaId.get(String(curso?.id || "")) || null,
         tieneQuiz: quizzesPorTemaId.has(String(curso?.id || "")),
         cantidadMateriales: materialesNecesariosCountPorTemaId.get(String(curso?.id || "")) || 0,
@@ -2190,6 +2191,27 @@ export default function GestorPensum({
     materialesNecesariosCountPorTemaId,
     materialesDidacticosCountPorTemaNorm,
   ]);
+
+  const clasesMaestrasProgramaConDivisores = useMemo(() => {
+    const rows: any[] = [];
+    let cicloActual = "";
+
+    (clasesMaestrasPrograma || []).forEach((item) => {
+      const cicloId = String(item?.cicloId || "sin-ciclo");
+      if (cicloId !== cicloActual) {
+        cicloActual = cicloId;
+        rows.push({
+          key: `divider-${cicloId}`,
+          esDivisorCiclo: true,
+          cicloNombre: item?.cicloNombre || "Sin ciclo",
+          cicloOrden: Number(item?.cicloOrden || 9999),
+        });
+      }
+      rows.push(item);
+    });
+
+    return rows;
+  }, [clasesMaestrasPrograma]);
 
   const getTemaCompletoPorVista = useCallback((curso: PensumCurso) => {
     const materialesTema = materialesCicloDidactico.filter((material) => {
@@ -2286,6 +2308,33 @@ export default function GestorPensum({
     setModalCursoVisible(true);
   }, [cursosPrograma, formCurso]);
 
+  const abrirAccionRapidaDesdeTabla = (tipo: "quiz" | "didactico" | "materiales", record: any) => {
+    if (!record || record?.esDivisorCiclo) return;
+
+    const cicloId = String(record?.cicloId || "");
+    if (cicloId) {
+      setSelectedCicloId(cicloId);
+    }
+
+    const curso = (record?.cursoOriginal || (cursosPrograma || []).find((item) => String(item?.id) === String(record?.id))) as PensumCurso | undefined;
+    if (!curso) return;
+
+    if (tipo === "quiz") {
+      setVistaCicloActiva("quiz");
+      abrirModalQuiz(curso, record?.quiz || null);
+      return;
+    }
+
+    if (tipo === "didactico") {
+      setVistaCicloActiva("material");
+      abrirDrawerMaterialParaTema(curso.nombre_curso);
+      return;
+    }
+
+    setVistaCicloActiva("necesarios");
+    abrirModalMaterialClase(String(curso.id));
+  };
+
   return (
     <Drawer
       title={`Gestión: ${programaNombre}`}
@@ -2343,48 +2392,90 @@ export default function GestorPensum({
                 size="small"
                 loading={loadingQuizzesClase}
                 rowKey="key"
-                dataSource={clasesMaestrasPrograma}
+                dataSource={clasesMaestrasProgramaConDivisores}
                 pagination={{ pageSize: 20, hideOnSinglePage: true }}
                 scroll={{ x: 1280 }}
+                onRow={(record: any) => {
+                  if (!record?.esDivisorCiclo) return {};
+                  return {
+                    style: {
+                      background: "linear-gradient(90deg, #eff6ff 0%, #eef2ff 100%)",
+                      borderTop: "2px solid #93c5fd",
+                      borderBottom: "1px solid #dbeafe",
+                    },
+                  };
+                }}
                 columns={[
                   {
                     title: "Clase #",
                     dataIndex: "numero",
                     width: 90,
-                    sorter: (a, b) => Number(a.numero) - Number(b.numero),
+                    render: (value: number, record: any) => {
+                      if (!record?.esDivisorCiclo) return value;
+                      return {
+                        children: (
+                          <Space size={10} align="center">
+                            <Tag color="blue" style={{ marginInlineEnd: 0 }}>Ciclo</Tag>
+                            <Text strong style={{ color: "#1d4ed8", fontSize: 14 }}>{record?.cicloNombre || "Sin ciclo"}</Text>
+                          </Space>
+                        ),
+                        props: { colSpan: 7 },
+                      };
+                    },
                   },
                   {
                     title: "Ciclo",
                     dataIndex: "cicloNombre",
                     width: 240,
-                    render: (value: string) => <Tag color="blue">{value}</Tag>,
+                    render: (value: string, record: any) => {
+                      if (record?.esDivisorCiclo) return { children: null, props: { colSpan: 0 } };
+                      return <Tag color="blue">{value}</Tag>;
+                    },
                   },
                   {
                     title: "Tema/Clase",
                     dataIndex: "tema",
                     width: 360,
-                    render: (value: string) => (
-                      <Text style={{ display: "block" }} ellipsis={{ tooltip: value }}>
-                        {value}
-                      </Text>
-                    ),
+                    render: (value: string, record: any) => {
+                      if (record?.esDivisorCiclo) return { children: null, props: { colSpan: 0 } };
+                      return (
+                        <Text style={{ display: "block" }} ellipsis={{ tooltip: value }}>
+                          {value}
+                        </Text>
+                      );
+                    },
                   },
                   {
                     title: "Estado rápido",
                     key: "estadoRapido",
                     width: 330,
                     render: (_: any, record: any) => {
+                      if (record?.esDivisorCiclo) return { children: null, props: { colSpan: 0 } };
                       const didacticoOk = Number(record?.cantidadDidacticos || 0) > 0;
                       const materialesOk = Number(record?.cantidadMateriales || 0) > 0;
                       const quizOk = Boolean(record?.tieneQuiz);
 
                       return (
                         <Space size={6} wrap>
-                          <Tag color={quizOk ? "green" : "volcano"}>{quizOk ? "Quiz" : "Sin quiz"}</Tag>
-                          <Tag color={didacticoOk ? "blue" : "volcano"}>
+                          <Tag
+                            color={quizOk ? "green" : "volcano"}
+                            style={{ cursor: "pointer" }}
+                            onClick={() => abrirAccionRapidaDesdeTabla("quiz", record)}
+                          >
+                            {quizOk ? "Quiz" : "Sin quiz"}
+                          </Tag>
+                          <Tag
+                            color={didacticoOk ? "blue" : "volcano"}
+                            style={{ cursor: "pointer" }}
+                            onClick={() => abrirAccionRapidaDesdeTabla("didactico", record)}
+                          >
                             {didacticoOk ? `Didáctico (${record?.cantidadDidacticos || 0})` : "Sin didáctico"}
                           </Tag>
-                          <Tag color={materialesOk ? "geekblue" : "volcano"}>
+                          <Tag
+                            color={materialesOk ? "geekblue" : "volcano"}
+                            style={{ cursor: "pointer" }}
+                            onClick={() => abrirAccionRapidaDesdeTabla("materiales", record)}
+                          >
                             {materialesOk ? `Materiales (${record?.cantidadMateriales || 0})` : "Sin materiales"}
                           </Tag>
                         </Space>
@@ -2396,19 +2487,26 @@ export default function GestorPensum({
                     dataIndex: "horas",
                     width: 90,
                     align: "center",
-                    render: () => HORAS_CLASE_FIJAS,
+                    render: (_: any, record: any) => {
+                      if (record?.esDivisorCiclo) return { children: null, props: { colSpan: 0 } };
+                      return HORAS_CLASE_FIJAS;
+                    },
                   },
                   {
                     title: "Tipo",
                     dataIndex: "tipo",
                     width: 130,
-                    render: (v: string) => <Tag>{v || "obligatorio"}</Tag>,
+                    render: (v: string, record: any) => {
+                      if (record?.esDivisorCiclo) return { children: null, props: { colSpan: 0 } };
+                      return <Tag>{v || "obligatorio"}</Tag>;
+                    },
                   },
                   {
                     title: "Acciones",
                     key: "acciones",
                     width: 170,
                     render: (_: any, record: any) => (
+                      record?.esDivisorCiclo ? { children: null, props: { colSpan: 0 } } :
                       <Space size={8}>
                         <Button size="small" onClick={() => abrirClaseDesdeTabla(record)}>
                           Entrar
