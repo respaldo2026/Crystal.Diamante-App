@@ -1663,7 +1663,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           perfilesMap.set(String(perfil.id), perfil);
         });
 
-        const asistenciasCurso = (asistenciasRes.data || []).filter((asistencia: any) => {
+        const asistenciasTodas = (asistenciasRes.data || []) as any[];
+        const asistenciasCurso = asistenciasTodas.filter((asistencia: any) => {
           const fecha = String(asistencia?.fecha || "").slice(0, 10);
           return fecha && fechasSesionesCursoSet.has(fecha);
         });
@@ -1728,7 +1729,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           enMora: moraSet.has(e.id),
         }));
 
-        setAsistenciasRaw(asistenciasCurso);
+        // Conservamos el historial completo en memoria para detectar sesiones faltantes
+        // sin depender de texto manual ni alterar la bitácora persistida.
+        setAsistenciasRaw(asistenciasTodas);
         setEstudiantes(estudiantesConMora);
         const notasIniciales: Record<string, number | null> = {};
         const estadosIniciales: Record<string, string> = {};
@@ -2087,14 +2090,48 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   }, [asistenciasRaw, estudiantes, sesiones]);
 
   const sesionesCanonicas = useMemo(() => {
-    const sourceRows = (sesiones || [])
+    const sesionesBase = (sesiones || [])
       .map((sesion: any) => ({
         ...sesion,
         clase_numero: extractClassNumber(String(sesion?.tema_visto || sesion?.observaciones || "")),
         _fecha: dayjs(String(sesion?.fecha || "")),
         _created: sesion?.created_at ? dayjs(String(sesion?.created_at || "")) : null,
       }))
-      .filter((sesion: any) => sesion?._fecha?.isValid?.())
+      .filter((sesion: any) => sesion?._fecha?.isValid?.());
+
+    const fechasSesionesBase = new Set(
+      sesionesBase.map((sesion: any) => String(sesion?.fecha || "").slice(0, 10)).filter(Boolean)
+    );
+
+    // Solo inferimos una sesión faltante cuando la fecha tiene lista tomada de forma colectiva.
+    const umbralMinimoRegistros = Math.max(2, Math.ceil(Math.max(estudiantes.length, 1) * 0.25));
+    const fallbackDesdeAsistencias = Array.from(asistenciasDetallePorFecha.entries())
+      .filter(([fecha, detalle]) => {
+        if (!fecha || fechasSesionesBase.has(String(fecha))) return false;
+        const registrosTomados = (detalle?.lista || []).filter((item: any) => {
+          const estado = String(item?.estado || "").toLowerCase();
+          return estado === "presente" || estado === "ausente" || estado === "justificada";
+        }).length;
+        return registrosTomados >= umbralMinimoRegistros;
+      })
+      .map(([fecha, detalle]) => {
+        const observacionPrincipal =
+          (detalle?.lista || []).find((item: any) => String(item?.observaciones || "").trim())?.observaciones || "Clase registrada";
+        return {
+          id: `fallback-${fecha}`,
+          key: `fallback-${fecha}`,
+          fecha,
+          horas_dictadas: HORAS_POR_CLASE,
+          observaciones: observacionPrincipal,
+          tema_visto: String(observacionPrincipal || "Clase registrada"),
+          created_at: null,
+          clase_numero: null,
+          _fecha: dayjs(fecha),
+          _created: null,
+        };
+      });
+
+    const sourceRows = [...sesionesBase, ...fallbackDesdeAsistencias]
       .sort((a: any, b: any) => {
         const diffFecha = a._fecha.valueOf() - b._fecha.valueOf();
         if (diffFecha !== 0) return diffFecha;
@@ -2110,7 +2147,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         return String(a?.id || "").localeCompare(String(b?.id || ""));
       });
 
-    // Regla de negocio: solo usamos la bitácora real (sesiones_clase) y numeramos por fecha.
+    // Regla de negocio: numeración cronológica por fecha real de clase.
     sourceRows.forEach((row: any, index: number) => {
       row.clase_numero = index + 1;
     });
