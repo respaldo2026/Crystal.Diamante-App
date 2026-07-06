@@ -25,6 +25,7 @@ import {
   Alert,
   Radio,
   Dropdown,
+  Skeleton,
 } from "antd";
 import {
   PlusOutlined,
@@ -415,6 +416,7 @@ export default function GestorPensum({
   const [cursosPensum, setCursosPensum] = useState<PensumCurso[]>([]);
   const [cursosPrograma, setCursosPrograma] = useState<PensumCurso[]>([]);
   const [loadingCursos, setLoadingCursos] = useState(false);
+  const [loadingCursosPrograma, setLoadingCursosPrograma] = useState(false);
   const [modalCursoVisible, setModalCursoVisible] = useState(false);
   const [editingCurso, setEditingCurso] = useState<PensumCurso | null>(null);
 
@@ -753,6 +755,7 @@ export default function GestorPensum({
   }, [message, normalizarOrdenTemas]);
 
   const cargarCursosPrograma = useCallback(async (pensumsActuales?: Pensum[]) => {
+    setLoadingCursosPrograma(true);
     try {
       const sourcePensums = Array.isArray(pensumsActuales) ? pensumsActuales : pensums;
       const ids = (sourcePensums || []).map((p) => String(p.id)).filter(Boolean);
@@ -791,6 +794,8 @@ export default function GestorPensum({
     } catch (error) {
       console.error(error);
       setCursosPrograma([]);
+    } finally {
+      setLoadingCursosPrograma(false);
     }
   }, [pensums]);
 
@@ -2371,6 +2376,8 @@ export default function GestorPensum({
           >
             {!mostrarTablaMaestraClases ? (
               <Text type="secondary">Pulsa &quot;Ver tabla completa&quot; para visualizar y gestionar todo el pensum desde un único panel.</Text>
+            ) : loadingPensums || loadingCursosPrograma ? (
+              <Skeleton active title={{ width: "35%" }} paragraph={{ rows: 4 }} />
             ) : clasesMaestrasPrograma.length === 0 ? (
               <Text type="secondary">Aún no hay clases creadas en el programa.</Text>
             ) : (
