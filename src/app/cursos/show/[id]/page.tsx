@@ -1613,6 +1613,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         .select("fecha, tema_visto")
         .eq("curso_id", cursoIdNumerico);
 
+      const fechasSesionesCursoSet = new Set(
+        (sesionesParaAsistencia || [])
+          .map((sesion: any) => String(sesion?.fecha || "").slice(0, 10))
+          .filter(Boolean)
+      );
+
       const temaPorFecha = new Map<string, string>();
       (sesionesParaAsistencia || []).forEach((sesion: any) => {
         const fecha = String(sesion?.fecha || "").trim();
@@ -1657,8 +1663,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           perfilesMap.set(String(perfil.id), perfil);
         });
 
+        const asistenciasCurso = (asistenciasRes.data || []).filter((asistencia: any) => {
+          const fecha = String(asistencia?.fecha || "").slice(0, 10);
+          return fecha && fechasSesionesCursoSet.has(fecha);
+        });
+
         const asistenciasPorMatricula = new Map<number, any[]>();
-        (asistenciasRes.data || []).forEach((asistencia: any) => {
+        asistenciasCurso.forEach((asistencia: any) => {
           const matriculaId = Number(asistencia?.matricula_id);
           if (!Number.isFinite(matriculaId)) return;
           const current = asistenciasPorMatricula.get(matriculaId) || [];
@@ -1717,7 +1728,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           enMora: moraSet.has(e.id),
         }));
 
-        setAsistenciasRaw(asistenciasRes.data || []);
+        setAsistenciasRaw(asistenciasCurso);
         setEstudiantes(estudiantesConMora);
         const notasIniciales: Record<string, number | null> = {};
         const estadosIniciales: Record<string, string> = {};
@@ -2068,54 +2079,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   }, [asistenciasRaw, estudiantes]);
 
   const sesionesCanonicas = useMemo(() => {
-    const sesionesBase = (sesiones || []).map((sesion: any) => ({
-      ...sesion,
-      clase_numero: extractClassNumber(String(sesion?.tema_visto || sesion?.observaciones || "")),
-      _fecha: dayjs(String(sesion?.fecha || "")),
-      _created: sesion?.created_at ? dayjs(String(sesion?.created_at || "")) : null,
-    }));
-
-    const clasesRegistradasEnSesiones = new Set<number>();
-    const fechasRegistradasEnSesiones = new Set<string>();
-    sesionesBase.forEach((sesion: any) => {
-      const claseNumero = Number(sesion?.clase_numero || 0);
-      const fecha = String(sesion?.fecha || "").slice(0, 10);
-      if (Number.isFinite(claseNumero) && claseNumero > 0) {
-        clasesRegistradasEnSesiones.add(claseNumero);
-      }
-      if (fecha) {
-        fechasRegistradasEnSesiones.add(fecha);
-      }
-    });
-
-    const fallbackDesdeAsistencias = Array.from(asistenciasDetallePorFecha.entries())
-      .map(([fecha, detalle]) => {
-        const observacionPrincipal =
-          detalle.lista.find((item) => String(item?.observaciones || "").trim())?.observaciones || "Clase registrada";
-        const claseNumero = extractClassNumber(String(observacionPrincipal || ""));
-
-        return {
-          id: `fallback-${fecha}`,
-          key: `fallback-${fecha}`,
-          fecha,
-          horas_dictadas: HORAS_POR_CLASE,
-          observaciones: observacionPrincipal,
-          tema_visto: String(observacionPrincipal || "Clase registrada"),
-          created_at: null,
-          clase_numero: claseNumero,
-          _fecha: dayjs(fecha),
-          _created: null,
-        };
-      })
-      .filter((sesion: any) => {
-        const fecha = String(sesion?.fecha || "").slice(0, 10);
-        const claseNumero = Number(sesion?.clase_numero || 0);
-        const claseYaExiste = Number.isFinite(claseNumero) && claseNumero > 0 && clasesRegistradasEnSesiones.has(claseNumero);
-        const fechaYaExiste = fecha ? fechasRegistradasEnSesiones.has(fecha) : false;
-        return !claseYaExiste && !fechaYaExiste;
-      });
-
-    const sourceRows = [...sesionesBase, ...fallbackDesdeAsistencias]
+    const sourceRows = (sesiones || [])
+      .map((sesion: any) => ({
+        ...sesion,
+        clase_numero: extractClassNumber(String(sesion?.tema_visto || sesion?.observaciones || "")),
+        _fecha: dayjs(String(sesion?.fecha || "")),
+        _created: sesion?.created_at ? dayjs(String(sesion?.created_at || "")) : null,
+      }))
       .filter((sesion: any) => sesion?._fecha?.isValid?.())
       .sort((a: any, b: any) => {
         const diffFecha = a._fecha.valueOf() - b._fecha.valueOf();
@@ -2132,7 +2102,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         return String(a?.id || "").localeCompare(String(b?.id || ""));
       });
 
-    // Regla de negocio: la numeración de clase siempre sigue el orden cronológico.
+    // Regla de negocio: solo usamos la bitácora real (sesiones_clase) y numeramos por fecha.
     sourceRows.forEach((row: any, index: number) => {
       row.clase_numero = index + 1;
     });

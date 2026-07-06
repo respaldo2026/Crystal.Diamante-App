@@ -276,6 +276,54 @@ export default function MatriculaEdit() {
         }
     }, [matriculaId]);
 
+    const sincronizarAsistenciasAlCambiarGrupo = useCallback(async (nuevoCursoId: string) => {
+        if (!matriculaId) return;
+
+        const hoy = dayjs().format("YYYY-MM-DD");
+        const { data: sesionesNuevoGrupo, error: errSesiones } = await supabaseBrowserClient
+            .from("sesiones_clase")
+            .select("fecha")
+            .eq("curso_id", Number(nuevoCursoId))
+            .lte("fecha", hoy)
+            .order("fecha", { ascending: true });
+
+        if (errSesiones) throw errSesiones;
+
+        const fechasGrupo = Array.from(
+            new Set((sesionesNuevoGrupo || []).map((s: any) => String(s?.fecha || "").slice(0, 10)).filter(Boolean))
+        );
+        if (fechasGrupo.length === 0) return;
+
+        const { data: asistenciasActuales, error: errAsistencias } = await supabaseBrowserClient
+            .from("asistencias")
+            .select("fecha")
+            .eq("matricula_id", Number(matriculaId))
+            .in("fecha", fechasGrupo);
+
+        if (errAsistencias) throw errAsistencias;
+
+        const fechasConRegistro = new Set(
+            (asistenciasActuales || []).map((a: any) => String(a?.fecha || "").slice(0, 10)).filter(Boolean)
+        );
+
+        const faltantes = fechasGrupo
+            .filter((fecha) => !fechasConRegistro.has(fecha))
+            .map((fecha) => ({
+                matricula_id: Number(matriculaId),
+                fecha,
+                estado: "ausente",
+                observaciones: "Falta por ingreso posterior al grupo",
+            }));
+
+        if (faltantes.length === 0) return;
+
+        const { error: errInsert } = await supabaseBrowserClient
+            .from("asistencias")
+            .insert(faltantes);
+
+        if (errInsert) throw errInsert;
+    }, [matriculaId]);
+
     const handleOnFinish = useCallback(async (values: any) => {
         const result = await onFinish(values);
         const cursoNuevo = String(values?.curso_id || "");
@@ -284,10 +332,11 @@ export default function MatriculaEdit() {
         if (cursoNuevo && originalCursoId && cursoNuevo !== originalCursoId) {
             try {
                 await adaptarFechasCobroAlNuevoGrupo(cursoNuevo, nuevaModalidad);
-                message.success("Grupo actualizado. Las fechas de cobro pendientes se ajustaron al calendario del nuevo grupo.");
+                await sincronizarAsistenciasAlCambiarGrupo(cursoNuevo);
+                message.success("Grupo actualizado. Se ajustaron cobros pendientes y se registraron faltas en clases anteriores del nuevo grupo.");
             } catch (err: any) {
-                message.warning("El grupo se guardó, pero no se pudieron ajustar automáticamente las fechas de cobro.");
-                console.error("Error adaptando fechas de cobro al nuevo grupo:", err);
+                message.warning("El grupo se guardó, pero falló la sincronización automática de cobros o asistencias.");
+                console.error("Error sincronizando datos al cambiar de grupo:", err);
             }
         }
 
@@ -309,6 +358,7 @@ export default function MatriculaEdit() {
         programaPricing,
         sincronizarPagosAlCambiarPlan,
         adaptarFechasCobroAlNuevoGrupo,
+        sincronizarAsistenciasAlCambiarGrupo,
     ]);
 
     return (
