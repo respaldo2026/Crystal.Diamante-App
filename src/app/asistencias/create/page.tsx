@@ -15,25 +15,6 @@ const { Title, Text } = Typography;
 
 const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automatic[ae]mente para calculo de ciclos/i;
 
-const extractClassNumber = (value?: string | null): number | null => {
-  const text = String(value || "");
-  const patterns = [
-    /clase\s*#?\s*(\d{1,3})/i,
-    /^\s*(\d{1,3})\s*[\).:-]/,
-  ];
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (!match?.[1]) continue;
-    const parsed = Number(match[1]);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-
-  return null;
-};
-
 type ClaseOption = { value: number; label: string; disabled: boolean };
 type ClaseOptionGroup = { label: string; options: ClaseOption[] };
 
@@ -317,16 +298,26 @@ export default function TomarAsistencia() {
         const registradas = new Set<number>();
         let claseDeLaFecha: number | null = null;
 
-        (sesionesData || []).forEach((sesion: any) => {
-          const tema = String(sesion?.tema_visto || "").trim();
-          if (!tema || AUTO_SESSION_TOPIC_PATTERN.test(tema)) return;
+        const sesionesOrdenadas = (sesionesData || [])
+          .map((sesion: any) => ({
+            ...sesion,
+            _fecha: dayjs(String(sesion?.fecha || "")),
+          }))
+          .filter((sesion: any) => {
+            const tema = String(sesion?.tema_visto || "").trim();
+            return sesion?._fecha?.isValid?.() && tema && !AUTO_SESSION_TOPIC_PATTERN.test(tema);
+          })
+          .sort((a: any, b: any) => {
+            const diffFecha = a._fecha.valueOf() - b._fecha.valueOf();
+            if (diffFecha !== 0) return diffFecha;
+            return String(a?.id || "").localeCompare(String(b?.id || ""));
+          });
 
-          const numero = extractClassNumber(tema);
-          if (!numero || !Number.isFinite(numero) || numero <= 0) return;
-
-          registradas.add(numero);
-          if (String(sesion?.fecha || "") === fechaSesion) {
-            claseDeLaFecha = numero;
+        sesionesOrdenadas.forEach((sesion: any, index: number) => {
+          const numeroSecuencial = index + 1;
+          registradas.add(numeroSecuencial);
+          if (String(sesion?.fecha || "").slice(0, 10) === fechaSesion) {
+            claseDeLaFecha = numeroSecuencial;
           }
         });
 
@@ -338,6 +329,15 @@ export default function TomarAsistencia() {
           setNumeroClase(claseDeLaFecha);
           const clase = uniqueByNumero.find((item) => item.numero === claseDeLaFecha);
           setTemaVisto(clase?.nombre || "");
+        } else {
+          const siguienteSugerida = registradas.size + 1;
+          const maximoDisponible = uniqueByNumero.length;
+          if (maximoDisponible > 0) {
+            const sugerida = Math.min(Math.max(siguienteSugerida, 1), maximoDisponible);
+            setNumeroClase(sugerida);
+            const clase = uniqueByNumero.find((item) => item.numero === sugerida);
+            setTemaVisto(clase?.nombre || "");
+          }
         }
       } catch (error) {
         console.error(error);
