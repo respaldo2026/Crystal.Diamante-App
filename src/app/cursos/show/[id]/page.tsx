@@ -2036,6 +2036,14 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   }, [params, cargarDatos]);
 
   const asistenciasDetallePorFecha = useMemo(() => {
+    const temaSesionPorFecha = new Map<string, string>();
+    (sesiones || []).forEach((sesion: any) => {
+      const fecha = String(sesion?.fecha || "").slice(0, 10);
+      const tema = String(sesion?.tema_visto || "").trim();
+      if (!fecha || !tema || temaSesionPorFecha.has(fecha)) return;
+      temaSesionPorFecha.set(fecha, tema);
+    });
+
     const asistPorFecha = new Map<string, Map<number, any>>();
 
     (asistenciasRaw || []).forEach((asistencia: any) => {
@@ -2060,7 +2068,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             nombre_completo: est.nombre_completo,
             identificacion: est.identificacion,
             estado: asistencia?.estado || "sin_registro",
-            observaciones: asistencia?.observaciones || null,
+            observaciones: temaSesionPorFecha.get(fecha) || asistencia?.observaciones || null,
           };
         })
         .sort((a, b) => {
@@ -2076,7 +2084,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       return acc;
     }, new Map<string, { lista: any[]; presentes: number; totalEsperados: number }>());
-  }, [asistenciasRaw, estudiantes]);
+  }, [asistenciasRaw, estudiantes, sesiones]);
 
   const sesionesCanonicas = useMemo(() => {
     const sourceRows = (sesiones || [])
@@ -2383,9 +2391,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       const observacionClase = claseOrden
         ? `Clase #${claseOrden}`
         : "Clase registrada";
-      const observacionesFinal = [observacionClase, String(values.observaciones || "").trim()]
-        .filter(Boolean)
-        .join(" · ");
 
       const payloadSesion = {
         curso_id: parseInt(cursoId),
@@ -2453,10 +2458,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           .filter((matriculaId) => existentesPorMatricula.has(matriculaId))
           .map(async (matriculaId) => {
             const actual = existentesPorMatricula.get(matriculaId);
-            const observacionesActuales = String(actual?.observaciones || "").trim();
-            const observacionesAsistencia = observacionesActuales
-              ? `${observacionClase} · ${observacionesActuales}`
-              : observacionClase;
+            const observacionesAsistencia = temaVisto;
 
             return supabaseBrowserClient
               .from("asistencias")
@@ -2476,7 +2478,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             matricula_id: matriculaId,
             fecha: fechaSesion,
             estado: "presente",
-            observaciones: observacionClase,
+            observaciones: temaVisto,
           }));
 
         if (inserts.length > 0) {
