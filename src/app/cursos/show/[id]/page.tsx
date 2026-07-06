@@ -2111,11 +2111,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   const asistenciasDetallePorFecha = useMemo(() => {
     const temaSesionPorFecha = new Map<string, string>();
-    const fechasSesionValidas = new Set<string>();
     (sesiones || []).forEach((sesion: any) => {
       const fecha = String(sesion?.fecha || "").slice(0, 10);
       const tema = String(sesion?.tema_visto || "").trim();
-      if (fecha) fechasSesionValidas.add(fecha);
       if (!fecha || !tema || temaSesionPorFecha.has(fecha)) return;
       temaSesionPorFecha.set(fecha, tema);
     });
@@ -2125,7 +2123,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     (asistenciasRaw || []).forEach((asistencia: any) => {
       const fecha = String(asistencia?.fecha || "").slice(0, 10);
       const matriculaId = Number(asistencia?.matricula_id);
-      if (!fecha || !fechasSesionValidas.has(fecha) || !Number.isFinite(matriculaId)) return;
+      if (!fecha || !Number.isFinite(matriculaId)) return;
 
       if (!asistPorFecha.has(fecha)) {
         asistPorFecha.set(fecha, new Map());
@@ -2163,66 +2161,34 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   }, [asistenciasRaw, estudiantes, sesiones]);
 
   const sesionesCanonicas = useMemo(() => {
-    const sourceRows = (sesiones || [])
-      .map((sesion: any) => ({
-        ...sesion,
-        clase_numero: extractClassNumber(String(sesion?.tema_visto || sesion?.observaciones || "")),
-        _fecha: dayjs(String(sesion?.fecha || "")),
-        _created: sesion?.created_at ? dayjs(String(sesion?.created_at || "")) : null,
-      }))
-      .filter((sesion: any) => sesion?._fecha?.isValid?.())
-      .sort((a: any, b: any) => {
-        const diffFecha = a._fecha.valueOf() - b._fecha.valueOf();
-        if (diffFecha !== 0) return diffFecha;
-
-        const classA = Number(a?.clase_numero || 0);
-        const classB = Number(b?.clase_numero || 0);
-        if (classA !== classB) return classA - classB;
-
-        const createdA = a?._created?.isValid?.() ? a._created.valueOf() : 0;
-        const createdB = b?._created?.isValid?.() ? b._created.valueOf() : 0;
-        if (createdA !== createdB) return createdA - createdB;
-
-        return String(a?.id || "").localeCompare(String(b?.id || ""));
-      });
-
-    // Regla de negocio: bitácora es fuente de verdad y se numera cronológicamente.
-    sourceRows.forEach((row: any, index: number) => {
-      row.clase_numero = index + 1;
-    });
-
-    const registrosPorClase = new Map<number, any[]>();
-    sourceRows.forEach((row: any) => {
-      const claseNumero = Number(row?.clase_numero || 0);
-      if (!Number.isFinite(claseNumero) || claseNumero <= 0) return;
-
-      const current = registrosPorClase.get(claseNumero) || [];
-      current.push(row);
-      registrosPorClase.set(claseNumero, current);
-    });
-
-    return Array.from(registrosPorClase.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([claseNumero, registros]) => {
-        const principal = registros[0];
+    return Array.from(asistenciasDetallePorFecha.entries())
+      .filter(([, detalle]) => Number(detalle?.presentes || 0) > 0)
+      .sort((a, b) => dayjs(String(a[0] || "")).valueOf() - dayjs(String(b[0] || "")).valueOf())
+      .map(([fecha, detalle], index) => {
+        const claseNumero = index + 1;
         const nombreOficial = nombreOficialClasePorNumero.get(claseNumero);
-        const detalleAsistencia = asistenciasDetallePorFecha.get(String(principal?.fecha || ""));
+        const observacionPrincipal = String(
+          (detalle?.lista || []).find((item: any) => String(item?.observaciones || "").trim())?.observaciones || ""
+        ).trim();
+        const temaLimpio = observacionPrincipal.replace(/^clase\s*#?\s*\d+\s*[·\-:–—]?\s*/i, "").trim();
 
         return {
-          ...principal,
-          key: String(principal?.id || `clase-${claseNumero}`),
+          id: `asistencia-${fecha}`,
+          key: `asistencia-${fecha}`,
+          fecha,
           clase_numero: claseNumero,
           tema_visto: nombreOficial
             ? `Clase #${claseNumero} - ${nombreOficial}`
-            : String(principal?.tema_visto || principal?.observaciones || `Clase #${claseNumero}`),
+            : `Clase #${claseNumero} - ${String(temaLimpio || observacionPrincipal || `Clase ${claseNumero}`).trim()}`,
           horas_dictadas: HORAS_POR_CLASE,
-          lista: detalleAsistencia?.lista || [],
-          presentes: detalleAsistencia?.presentes || 0,
-          totalEsperados: detalleAsistencia?.totalEsperados || estudiantes.length,
-          registros_duplicados: registros.length,
+          observaciones: null,
+          lista: detalle?.lista || [],
+          presentes: detalle?.presentes || 0,
+          totalEsperados: detalle?.totalEsperados || estudiantes.length,
+          registros_duplicados: 1,
         };
       });
-  }, [asistenciasDetallePorFecha, estudiantes.length, nombreOficialClasePorNumero, sesiones]);
+  }, [asistenciasDetallePorFecha, estudiantes.length, nombreOficialClasePorNumero]);
 
   const columnasEstudiantes = useMemo(
     () => [
