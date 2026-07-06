@@ -1581,6 +1581,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       let evidenciasDataCurso: any[] = [];
       let temasDataCurso: any[] = [];
       let asistenciasTodasCurso: any[] = [];
+      let totalMatriculasActivasCurso = 0;
       const cursoIdNumerico = parseInt(id);
 
       // Curso
@@ -1639,6 +1640,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         .eq("curso_id", parseInt(id));
 
       if (matriculasData) {
+        totalMatriculasActivasCurso = (matriculasData || []).filter((m: any) => {
+          const estado = String(m?.estado || "").toLowerCase();
+          return estado === "activo" || estado === "en curso" || estado === "pendiente_pago";
+        }).length;
+
         const matriculaIdsTemp = matriculasData.map((m: any) => Number(m.id)).filter((value: number) => Number.isFinite(value));
         const estudianteIds = matriculasData
           .map((m: any) => String(m.estudiante_id || ""))
@@ -1930,9 +1936,36 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       const sesionesData = await cargarSesionesClase();
 
+      const registrosAsistenciaPorFecha = new Map<string, number>();
+      (asistenciasTodasCurso || []).forEach((asistencia: any) => {
+        const fecha = String(asistencia?.fecha || "").slice(0, 10);
+        const estado = String(asistencia?.estado || "").toLowerCase();
+        if (!fecha) return;
+        if (!(estado === "presente" || estado === "ausente" || estado === "justificada")) return;
+        registrosAsistenciaPorFecha.set(fecha, (registrosAsistenciaPorFecha.get(fecha) || 0) + 1);
+      });
+
+      const umbralAsistencia = Math.max(2, Math.ceil(Math.max(totalMatriculasActivasCurso, 1) * 0.25));
+      const ahora = dayjs();
+
       const sesionesRaw = (sesionesData || []).filter((sesion: any) => {
         const temaSesion = String(sesion?.tema_visto || sesion?.observaciones || "").trim();
-        return !AUTO_SESSION_TOPIC_PATTERN.test(temaSesion);
+        if (AUTO_SESSION_TOPIC_PATTERN.test(temaSesion)) return false;
+
+        const fechaSesion = String(sesion?.fecha || "").slice(0, 10);
+        const createdAt = sesion?.created_at ? dayjs(String(sesion.created_at)) : null;
+        const fechaValida = dayjs(fechaSesion);
+        const registrosTomados = registrosAsistenciaPorFecha.get(fechaSesion) || 0;
+
+        // Protección post-incidente: excluye sesiones antiguas creadas recientemente con evidencia débil.
+        const esSospechosa =
+          Boolean(createdAt?.isValid?.()) &&
+          Boolean(fechaValida?.isValid?.()) &&
+          createdAt!.isAfter(ahora.subtract(2, "day")) &&
+          fechaValida.isBefore(ahora.subtract(7, "day")) &&
+          registrosTomados < umbralAsistencia;
+
+        return !esSospechosa;
       });
       const temasOrdenadosGlobal = (temasDataCurso || [])
         .slice()
@@ -1962,92 +1995,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         }
       });
 
-      const fechasSesionesRegistradas = new Set(
-        (sesionesRaw || []).map((sesion: any) => String(sesion?.fecha || "").slice(0, 10)).filter(Boolean)
-      );
-
-      const asistenciasPorFechaSinSesion = new Map<string, any[]>();
-      (asistenciasTodasCurso || []).forEach((asistencia: any) => {
-        const fecha = String(asistencia?.fecha || "").slice(0, 10);
-        if (!fecha || fechasSesionesRegistradas.has(fecha)) return;
-        const current = asistenciasPorFechaSinSesion.get(fecha) || [];
-        current.push(asistencia);
-        asistenciasPorFechaSinSesion.set(fecha, current);
-      });
-
-      const sesionesBackfill: any[] = [];
-      const fechasFaltantes = Array.from(asistenciasPorFechaSinSesion.keys()).sort((a, b) => dayjs(a).valueOf() - dayjs(b).valueOf());
-      for (const fechaFaltante of fechasFaltantes) {
-        const listaFecha = asistenciasPorFechaSinSesion.get(fechaFaltante) || [];
-        const registrosTomados = listaFecha.filter((item: any) => {
-          const estado = String(item?.estado || "").toLowerCase();
-          return estado === "presente" || estado === "ausente" || estado === "justificada";
-        });
-        const hayPresente = registrosTomados.some((item: any) => String(item?.estado || "").toLowerCase() === "presente");
-
-        // Evita crear sesiones por registros aislados de traslados.
-        if (!hayPresente && registrosTomados.length < 3) continue;
-
-        const observacionRef = String(
-          registrosTomados.find((item: any) => String(item?.observaciones || "").trim())?.observaciones || ""
-        ).trim();
-        const numeroObservado = extractClassNumber(observacionRef);
-        const nombreOficial = numeroObservado ? nombreOficialPorNumero.get(numeroObservado) : "";
-        const temaLimpio = observacionRef.replace(/^clase\s*#?\s*\d+\s*[·\-:–—]?\s*/i, "").trim();
-        const temaBackfill = numeroObservado
-          ? `Clase #${numeroObservado} - ${String(nombreOficial || temaLimpio || `Clase ${numeroObservado}`).trim()}`
-          : String(temaLimpio || observacionRef || "Clase registrada").trim();
-
-        const payloadBackfill = {
-          curso_id: cursoIdNumerico,
-          profesor_id: cursoConProfesor?.profesor_id || null,
-          fecha: fechaFaltante,
-          horas_dictadas: HORAS_POR_CLASE,
-          tema_visto: temaBackfill,
-        };
-
-        const { data: insertData, error: insertError } = await supabaseBrowserClient
-          .from("sesiones_clase")
-          .insert(payloadBackfill)
-          .select("id, fecha, tema_visto")
-          .maybeSingle();
-
-        if (insertError && insertError.code !== "23505") {
-          console.warn("No se pudo crear sesión faltante desde asistencias:", insertError);
-          continue;
-        }
-
-        if (insertData?.id) {
-          sesionesBackfill.push({
-            ...insertData,
-            observaciones: null,
-            horas_dictadas: HORAS_POR_CLASE,
-            created_at: null,
-          });
-          continue;
-        }
-
-        const { data: sesionExistente } = await supabaseBrowserClient
-          .from("sesiones_clase")
-          .select("id, fecha, tema_visto")
-          .eq("curso_id", cursoIdNumerico)
-          .eq("fecha", fechaFaltante)
-          .maybeSingle();
-
-        if (sesionExistente?.id) {
-          sesionesBackfill.push({
-            ...sesionExistente,
-            observaciones: null,
-            horas_dictadas: HORAS_POR_CLASE,
-            created_at: null,
-          });
-        }
-      }
-
-      const sesionesTotales = [...sesionesRaw, ...sesionesBackfill];
-
       const totalClasesPensum = nombreOficialPorNumero.size;
-      const sesionesAsc = sesionesTotales
+      const sesionesAsc = sesionesRaw
         .map((sesion: any) => ({
           ...sesion,
           _fecha: dayjs(String(sesion?.fecha || "")),
@@ -2068,7 +2017,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         numeroClasePorSesionId.set(String(sesion?.id || ""), index + 1);
       });
 
-      const sesionesNormalizadas = sesionesTotales.map((sesion: any) => {
+      const sesionesNormalizadas = sesionesRaw.map((sesion: any) => {
         const numeroClase = numeroClasePorSesionId.get(String(sesion?.id || ""));
         const nombreOficial = numeroClase ? nombreOficialPorNumero.get(numeroClase) : null;
         const temaOriginal = String(sesion?.tema_visto || "").trim();
@@ -2086,7 +2035,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       });
 
       const updates = sesionesNormalizadas.filter((sesion: any) => {
-        const original = sesionesTotales.find((item: any) => String(item?.id || "") === String(sesion?.id || ""));
+        const original = sesionesRaw.find((item: any) => String(item?.id || "") === String(sesion?.id || ""));
         const actual = String(original?.tema_visto || "").trim();
         const canonico = String(sesion?.tema_visto || "").trim();
         return canonico && actual !== canonico;
