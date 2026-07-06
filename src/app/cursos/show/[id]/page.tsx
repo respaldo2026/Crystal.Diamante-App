@@ -2110,6 +2110,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   }, [params, cargarDatos]);
 
   const asistenciasDetallePorFecha = useMemo(() => {
+    const inicioCurso = curso?.fecha_inicio ? dayjs(String(curso.fecha_inicio)).startOf("day") : null;
+    const finCurso = curso?.fecha_fin ? dayjs(String(curso.fecha_fin)).endOf("day") : null;
+
     const temaSesionPorFecha = new Map<string, string>();
     (sesiones || []).forEach((sesion: any) => {
       const fecha = String(sesion?.fecha || "").slice(0, 10);
@@ -2124,6 +2127,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       const fecha = String(asistencia?.fecha || "").slice(0, 10);
       const matriculaId = Number(asistencia?.matricula_id);
       if (!fecha || !Number.isFinite(matriculaId)) return;
+
+      const fechaAsistencia = dayjs(fecha);
+      if (!fechaAsistencia.isValid()) return;
+      if (inicioCurso?.isValid?.() && fechaAsistencia.isBefore(inicioCurso, "day")) return;
+      if (finCurso?.isValid?.() && fechaAsistencia.isAfter(finCurso, "day")) return;
 
       if (!asistPorFecha.has(fecha)) {
         asistPorFecha.set(fecha, new Map());
@@ -2158,7 +2166,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       return acc;
     }, new Map<string, { lista: any[]; presentes: number; totalEsperados: number }>());
-  }, [asistenciasRaw, estudiantes, sesiones]);
+  }, [asistenciasRaw, estudiantes, sesiones, curso]);
 
   const sesionesCanonicas = useMemo(() => {
     return Array.from(asistenciasDetallePorFecha.entries())
