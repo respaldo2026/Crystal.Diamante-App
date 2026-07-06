@@ -1936,36 +1936,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       const sesionesData = await cargarSesionesClase();
 
-      const registrosAsistenciaPorFecha = new Map<string, number>();
-      (asistenciasTodasCurso || []).forEach((asistencia: any) => {
-        const fecha = String(asistencia?.fecha || "").slice(0, 10);
-        const estado = String(asistencia?.estado || "").toLowerCase();
-        if (!fecha) return;
-        if (!(estado === "presente" || estado === "ausente" || estado === "justificada")) return;
-        registrosAsistenciaPorFecha.set(fecha, (registrosAsistenciaPorFecha.get(fecha) || 0) + 1);
-      });
-
-      const umbralAsistencia = Math.max(2, Math.ceil(Math.max(totalMatriculasActivasCurso, 1) * 0.25));
-      const ahora = dayjs();
-
       const sesionesRaw = (sesionesData || []).filter((sesion: any) => {
         const temaSesion = String(sesion?.tema_visto || sesion?.observaciones || "").trim();
-        if (AUTO_SESSION_TOPIC_PATTERN.test(temaSesion)) return false;
-
-        const fechaSesion = String(sesion?.fecha || "").slice(0, 10);
-        const createdAt = sesion?.created_at ? dayjs(String(sesion.created_at)) : null;
-        const fechaValida = dayjs(fechaSesion);
-        const registrosTomados = registrosAsistenciaPorFecha.get(fechaSesion) || 0;
-
-        // Protección post-incidente: excluye sesiones antiguas creadas recientemente con evidencia débil.
-        const esSospechosa =
-          Boolean(createdAt?.isValid?.()) &&
-          Boolean(fechaValida?.isValid?.()) &&
-          createdAt!.isAfter(ahora.subtract(2, "day")) &&
-          fechaValida.isBefore(ahora.subtract(7, "day")) &&
-          registrosTomados < umbralAsistencia;
-
-        return !esSospechosa;
+        return !AUTO_SESSION_TOPIC_PATTERN.test(temaSesion);
       });
       const temasOrdenadosGlobal = (temasDataCurso || [])
         .slice()
@@ -1995,8 +1968,72 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         }
       });
 
+      const fechasConSesion = new Set(
+        (sesionesRaw || []).map((sesion: any) => String(sesion?.fecha || "").slice(0, 10)).filter(Boolean)
+      );
+
+      const asistenciasPorFechaSinSesion = new Map<string, any[]>();
+      (asistenciasTodasCurso || []).forEach((asistencia: any) => {
+        const fecha = String(asistencia?.fecha || "").slice(0, 10);
+        if (!fecha || fechasConSesion.has(fecha)) return;
+        const current = asistenciasPorFechaSinSesion.get(fecha) || [];
+        current.push(asistencia);
+        asistenciasPorFechaSinSesion.set(fecha, current);
+      });
+
+      const sesionesInferidas = Array.from(asistenciasPorFechaSinSesion.entries())
+        .map((entry: [string, any[]]) => {
+          const [fecha, lista] = entry;
+          const validos = (lista || []).filter((item: any) => {
+            const estado = String(item?.estado || "").toLowerCase();
+            return estado === "presente" || estado === "ausente" || estado === "justificada";
+          });
+
+          const presentes = validos.filter((item: any) => String(item?.estado || "").toLowerCase() === "presente").length;
+          const numeros = validos
+            .map((item: any) => extractClassNumber(String(item?.observaciones || "")))
+            .filter((n: any) => Number.isFinite(Number(n)) && Number(n) > 0)
+            .map((n: any) => Number(n));
+
+          const numeroFrecuente = numeros.length
+            ? Array.from(
+                numeros.reduce((freq, n) => {
+                  freq.set(n, (freq.get(n) || 0) + 1);
+                  return freq;
+                }, new Map<number, number>()).entries()
+              ).sort((a, b) => b[1] - a[1])[0]?.[0]
+            : null;
+
+          const primeraObservacion = String(
+            validos.find((item: any) => String(item?.observaciones || "").trim())?.observaciones || ""
+          ).trim();
+
+          const evidenciaSuficiente = presentes > 0 || Boolean(numeroFrecuente);
+          if (!evidenciaSuficiente) return null;
+
+          const nombreOficial = numeroFrecuente ? nombreOficialPorNumero.get(numeroFrecuente) : null;
+          const temaLimpio = primeraObservacion.replace(/^clase\s*#?\s*\d+\s*[·\-:–—]?\s*/i, "").trim();
+          const tema = numeroFrecuente
+            ? `Clase #${numeroFrecuente} - ${String(nombreOficial || temaLimpio || `Clase ${numeroFrecuente}`).trim()}`
+            : String(temaLimpio || primeraObservacion || "Clase registrada").trim();
+
+          return {
+            id: `inferred-${fecha}`,
+            fecha,
+            tema_visto: tema,
+            observaciones: null,
+            horas_dictadas: HORAS_POR_CLASE,
+            created_at: null,
+          };
+        })
+        .filter(Boolean) as any[];
+
+      const sesionesTotales = [...sesionesRaw, ...sesionesInferidas].sort(
+        (a: any, b: any) => dayjs(String(a?.fecha || "")).valueOf() - dayjs(String(b?.fecha || "")).valueOf()
+      );
+
       const totalClasesPensum = nombreOficialPorNumero.size;
-      const sesionesAsc = sesionesRaw
+      const sesionesAsc = sesionesTotales
         .map((sesion: any) => ({
           ...sesion,
           _fecha: dayjs(String(sesion?.fecha || "")),
@@ -2017,7 +2054,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         numeroClasePorSesionId.set(String(sesion?.id || ""), index + 1);
       });
 
-      const sesionesNormalizadas = sesionesRaw.map((sesion: any) => {
+      const sesionesNormalizadas = sesionesTotales.map((sesion: any) => {
         const numeroClase = numeroClasePorSesionId.get(String(sesion?.id || ""));
         const nombreOficial = numeroClase ? nombreOficialPorNumero.get(numeroClase) : null;
         const temaOriginal = String(sesion?.tema_visto || "").trim();
@@ -2036,6 +2073,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       const updates = sesionesNormalizadas.filter((sesion: any) => {
         const original = sesionesRaw.find((item: any) => String(item?.id || "") === String(sesion?.id || ""));
+        if (!original) return false;
         const actual = String(original?.tema_visto || "").trim();
         const canonico = String(sesion?.tema_visto || "").trim();
         return canonico && actual !== canonico;
