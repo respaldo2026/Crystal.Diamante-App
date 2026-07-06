@@ -333,10 +333,29 @@ export default function MatriculaEdit() {
                         <Select {...programaSelectProps} disabled placeholder="Programa del curso" />
                     </Form.Item>
 
-                    {/* CURSO (Deshabilitado) */}
+                    {/* CURSO / GRUPO */}
                     <Form.Item label="Curso" name="curso_id">
-                        <Select {...courseSelectProps} disabled suffixIcon={<BookOutlined />} />
+                        <Select
+                            {...courseSelectProps}
+                            suffixIcon={<BookOutlined />}
+                            showSearch
+                            optionFilterProp="label"
+                            placeholder="Selecciona el grupo"
+                            onChange={(value) => {
+                                const cursoSeleccionado = String(value || "");
+                                if (!cursoSeleccionado) return;
+                                supabaseFetchPrograma(cursoSeleccionado);
+                            }}
+                        />
                     </Form.Item>
+
+                    <Alert
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 16 }}
+                        message="Cambio de grupo"
+                        description="Si cambias de grupo, al guardar se ajustarán automáticamente las fechas de cobro pendientes al calendario del nuevo grupo."
+                    />
 
                     <Form.Item
                         label="Modalidad de Pago"
