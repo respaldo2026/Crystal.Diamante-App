@@ -1966,48 +1966,19 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         });
 
       const numeroClasePorSesionId = new Map<string, number>();
-      if (totalClasesPensum > 0) {
-        const usados = new Set<number>();
-        const pendientes: any[] = [];
-
-        sesionesAsc.forEach((sesion: any) => {
-          const numeroDeclarado = extractClassNumber(String(sesion?.tema_visto || sesion?.observaciones || ""));
-          if (
-            numeroDeclarado &&
-            Number.isFinite(numeroDeclarado) &&
-            numeroDeclarado > 0 &&
-            numeroDeclarado <= totalClasesPensum &&
-            !usados.has(numeroDeclarado)
-          ) {
-            usados.add(numeroDeclarado);
-            numeroClasePorSesionId.set(String(sesion.id), numeroDeclarado);
-          } else {
-            pendientes.push(sesion);
-          }
-        });
-
-        let siguiente = 1;
-        const obtenerSiguienteLibre = () => {
-          while (siguiente <= totalClasesPensum && usados.has(siguiente)) {
-            siguiente += 1;
-          }
-          return siguiente <= totalClasesPensum ? siguiente : null;
-        };
-
-        pendientes.forEach((sesion: any) => {
-          const libre = obtenerSiguienteLibre();
-          if (!libre) return;
-          usados.add(libre);
-          numeroClasePorSesionId.set(String(sesion.id), libre);
-        });
-      }
+      sesionesAsc.forEach((sesion: any, index: number) => {
+        numeroClasePorSesionId.set(String(sesion?.id || ""), index + 1);
+      });
 
       const sesionesNormalizadas = sesionesRaw.map((sesion: any) => {
         const numeroClase = numeroClasePorSesionId.get(String(sesion?.id || ""));
         const nombreOficial = numeroClase ? nombreOficialPorNumero.get(numeroClase) : null;
-        const temaCanonico = numeroClase && nombreOficial
-          ? `Clase #${numeroClase} - ${nombreOficial}`
-          : String(sesion?.tema_visto || "");
+        const temaOriginal = String(sesion?.tema_visto || "").trim();
+        const temaOriginalSinPrefijo = temaOriginal.replace(/^clase\s*#?\s*\d+\s*[-:–—]\s*/i, "").trim();
+        const temaReferencia = (nombreOficial || temaOriginalSinPrefijo || `Clase ${numeroClase || ""}`).trim();
+        const temaCanonico = numeroClase
+          ? `Clase #${numeroClase} - ${temaReferencia}`
+          : temaOriginal;
 
         return {
           ...sesion,
@@ -2161,27 +2132,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         return String(a?.id || "").localeCompare(String(b?.id || ""));
       });
 
-    const usadas = new Set<number>();
-    let siguienteInferida = 1;
-
-    sourceRows.forEach((row: any) => {
-      const claseNumero = Number(row?.clase_numero || 0);
-      if (Number.isFinite(claseNumero) && claseNumero > 0) {
-        usadas.add(claseNumero);
-      }
-    });
-
-    sourceRows.forEach((row: any) => {
-      const claseNumero = Number(row?.clase_numero || 0);
-      if (Number.isFinite(claseNumero) && claseNumero > 0) return;
-
-      while (usadas.has(siguienteInferida)) {
-        siguienteInferida += 1;
-      }
-
-      row.clase_numero = siguienteInferida;
-      usadas.add(siguienteInferida);
-      siguienteInferida += 1;
+    // Regla de negocio: la numeración de clase siempre sigue el orden cronológico.
+    sourceRows.forEach((row: any, index: number) => {
+      row.clase_numero = index + 1;
     });
 
     const registrosPorClase = new Map<number, any[]>();
