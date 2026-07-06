@@ -81,14 +81,14 @@ const definitions = {
         descripcion: "Mensaje motivacional anti-deserción para estudiantes ausentes: les recuerda la importancia de asistir y ofrece apoyo.",
         variables: ["nombre", "curso", "fecha_clase"],
         fallback:
-            "Hola {{nombre}}, notamos tu ausencia en {{curso}} el {{fecha_clase}}. Queremos motivarte a seguir firme: cada clase suma a tu meta. Te esperamos en la próxima clase. Si necesitas apoyo, responde este mensaje. Academia Crystal.",
+            "Hola {{nombre}}. Te escribimos porque no pudiste asistir a {{curso}} el {{fecha_clase}}. Cada clase suma mucho en tu proceso y queremos acompañarte para que no te quedes atrás. Si necesitas apoyo para ponerte al día, cuéntanos por aquí y te ayudamos.",
     },
     seguimiento_faltas_mensual: {
         nombre: "seguimiento_faltas_mensual",
         descripcion: "Seguimiento mensual a estudiantes con 1 a 4 faltas para entender su situacion y reforzar continuidad.",
         variables: ["nombre", "curso", "faltas"],
         fallback:
-            "Hola {{nombre}}, vimos que en {{curso}} acumulas {{faltas}} faltas este proceso. Queremos saber que ha pasado y como podemos apoyarte para que sigas y termines con exito. Tu continuidad es muy importante para lograr tu meta. Academia Crystal.",
+            "Hola {{nombre}}. Queríamos hacerte seguimiento de tu proceso en {{curso}}: en este período vemos {{faltas}} faltas registradas. Si te parece, revisamos juntas cómo ponerte al día para que avances tranquila y no pierdas ritmo. Estamos para apoyarte.",
     },
 } satisfies Record<string, WhatsappTemplateDefinition>;
 

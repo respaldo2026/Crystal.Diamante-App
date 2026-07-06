@@ -62,6 +62,20 @@ function isDentroVentanaCurso(hoy: string, fechaInicio?: string | null, fechaFin
   return hoy >= inicio && hoy <= finReal;
 }
 
+function formatFaltasLabel(faltas: number): string {
+  const total = Number(faltas || 0);
+  return `${total} ${total === 1 ? 'falta' : 'faltas'}`;
+}
+
+function buildHumanFollowupMessage(input: { nombre: string; curso: string; faltas: number }): string {
+  return (
+    `Hola ${input.nombre}. Queríamos hacerte seguimiento de tu proceso en ${input.curso}: ` +
+    `en este período vemos ${formatFaltasLabel(input.faltas)} registradas. ` +
+    `Si te parece, revisamos juntas cómo ponerte al día para que avances tranquila y no pierdas ritmo. ` +
+    `Estamos para apoyarte.`
+  );
+}
+
 function countAusenciasEnVentana(
   fechasAusencias: string[],
   fechaInicio?: string | null,
@@ -151,16 +165,20 @@ async function saveAuditConversation(
     }
 
     // Mensaje amigable que representa lo que se envió al cliente
+    const mensajeHumano = buildHumanFollowupMessage({
+      nombre: input.templateVariables[0] || input.profileName || 'Estudiante',
+      curso: input.templateVariables[1] || input.cursoNombre,
+      faltas: Number(input.faltas || 0),
+    });
+
     const agentResponse =
       `💬 Mensaje de seguimiento por faltas\n` +
       `Estudiante: ${input.profileName || 'N/A'}\n` +
       `Curso: ${input.cursoNombre}\n` +
-      `Faltas registradas: ${input.faltas}\n` +
+      `Faltas registradas: ${formatFaltasLabel(input.faltas)}\n` +
       `\n` +
       `Mensaje enviado:\n` +
-      `"${input.templateVariables[0]}, vimos que en ${input.templateVariables[1]} acumulas ${input.templateVariables[2]} faltas. ` +
-      `Queremos saber que ha pasado y como podemos apoyarte para que sigas y termines con exito. ` +
-      `Tu continuidad es muy importante para lograr tu meta. Academia Crystal."\n` +
+      `"${mensajeHumano}"\n` +
       `\n` +
       `Meta Message ID: ${input.messageId || 'sin ID'}\n` +
       `Período: ${input.monthKey}`;
@@ -198,11 +216,7 @@ async function saveAuditConversation(
 }
 
 function buildFallbackText(input: { nombre: string; curso: string; faltas: number }): string {
-  return (
-    `Hola ${input.nombre}, notamos que en ${input.curso} registras ${input.faltas} faltas. ` +
-    `Queremos saber que ha pasado y como podemos apoyarte para que sigas y termines el proceso. ` +
-    `Tu continuidad es muy importante para lograr tu meta. Academia Crystal.`
-  );
+  return buildHumanFollowupMessage(input);
 }
 
 async function runSeguimientoFaltasJob(request: NextRequest): Promise<NextResponse> {
