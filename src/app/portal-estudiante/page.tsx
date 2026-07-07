@@ -1828,13 +1828,13 @@ export default function PortalEstudiante() {
                     <div className="course-card__hero">
                       <div>
                         <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
-                          Progreso del curso
+                          Curso dictado
                         </Text>
                         <Text strong style={{ fontSize: isMobile ? 22 : 24, lineHeight: 1.1 }}>
                           {curso.clasesDictadas}{curso.totalClases ? `/${curso.totalClases}` : ""}
                         </Text>
                         <Text type="secondary" style={{ display: "block", marginTop: 2, fontSize: 12 }}>
-                          clases registradas
+                          clases dictadas
                         </Text>
                       </div>
                       <div style={{ textAlign: "right" }}>
@@ -1843,7 +1843,7 @@ export default function PortalEstudiante() {
                           {curso.tieneRegistrosAcademicos ? `${curso.progresoCursoPercent}%` : "Sin avance"}
                         </Text>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          avance actual
+                          del curso ya dictado
                         </Text>
                       </div>
                     </div>
@@ -1870,7 +1870,7 @@ export default function PortalEstudiante() {
                             <Text strong>{curso.notaDisplay}</Text>
                           </div>
                           <div className="course-card__stat-box">
-                            <Text type="secondary">Asistencia</Text>
+                            <Text type="secondary">Asistencia personal</Text>
                             <Text strong>{curso.porcentajeAsistencia}%</Text>
                           </div>
                           <div className="course-card__stat-box">
