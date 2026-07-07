@@ -13,6 +13,7 @@ const SEND_NO_GROUPS_WHATSAPP =
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_ALERTA_MAX_GRUPOS_POR_CORRIDA || 20);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_ALERTA_DELAY_MS || 900);
 const TEMPLATE_NAME = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES || "").trim();
+const TEMPLATE_NAME_NO_GROUPS = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES_NO_GROUPS || "").trim();
 const TEMPLATE_LANG = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES_LANG || "es_CO").trim();
 const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALERTA_ALLOW_TEXT_FALLBACK || "true").toLowerCase() === "true";
 const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automaticamente para calculo de ciclos/i;
@@ -210,6 +211,20 @@ function buildTemplateVariables(item: GrupoConPensum, materiales: MaterialCiclo[
   ];
 }
 
+function buildNoGroupsTemplateVariables(input: {
+  targetDate: string;
+  daysAhead: number;
+  totalRegistrosFecha: number;
+  totalElegibles: number;
+}): string[] {
+  return [
+    String(input.daysAhead),
+    formatDateEs(input.targetDate),
+    String(input.totalRegistrosFecha),
+    String(input.totalElegibles),
+  ];
+}
+
 async function wasAlreadySent(supabase: any, alertKey: string): Promise<boolean> {
   const { data, error } = await supabase
     .from("agent_conversations")
@@ -400,12 +415,40 @@ async function runAlertaMaterialesCiclo() {
       let envioResumenExitoso = false;
       let errorEnvioResumen: string | null = null;
       let noGroupsMessageId: string | undefined;
+      let envioResumenUsado: "template" | "text" | "none" = "none";
 
       if (SEND_NO_GROUPS_WHATSAPP) {
         try {
-          const response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+          let response: any = null;
+          let envioUsado: "template" | "text" = "text";
+
+          if (TEMPLATE_NAME_NO_GROUPS) {
+            const variables = buildNoGroupsTemplateVariables({
+              targetDate,
+              daysAhead,
+              totalRegistrosFecha: 0,
+              totalElegibles: 0,
+            });
+
+            try {
+              response = await WhatsAppService.sendTemplate(alertPhone, TEMPLATE_NAME_NO_GROUPS, variables, TEMPLATE_LANG);
+              envioUsado = "template";
+            } catch (templateError) {
+              if (!ALLOW_TEXT_FALLBACK) {
+                throw templateError;
+              }
+              console.warn("[Cron Alerta Materiales] Fallo plantilla no-groups, usando fallback texto:", templateError);
+              response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+              envioUsado = "text";
+            }
+          } else {
+            response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+            envioUsado = "text";
+          }
+
           noGroupsMessageId = response?.messages?.[0]?.id;
           envioResumenExitoso = true;
+          envioResumenUsado = envioUsado;
 
           await saveWhatsAppMessageRecord(supabase, {
             phone: alertPhone,
@@ -414,6 +457,9 @@ async function runAlertaMaterialesCiclo() {
             messageId: noGroupsMessageId,
             metadata: {
               mode: "no-groups-summary",
+              envio_usado: envioUsado,
+              template_name: envioUsado === "template" ? TEMPLATE_NAME_NO_GROUPS : null,
+              template_lang: envioUsado === "template" ? TEMPLATE_LANG : null,
               days_ahead: daysAhead,
               classes_per_cycle: classesPerCycle,
               target_date: targetDate,
@@ -423,7 +469,10 @@ async function runAlertaMaterialesCiclo() {
 
           await saveAudit(supabase, {
             phone: alertPhone,
-            message: `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
+            message:
+              envioUsado === "template"
+                ? `${noGroupsMessage}\n\n[ENVIO_USADO] template:${TEMPLATE_NAME_NO_GROUPS} lang:${TEMPLATE_LANG}\n[MODO] no-groups`
+                : `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
             messageId: noGroupsMessageId,
           });
         } catch (error: any) {
@@ -439,6 +488,9 @@ async function runAlertaMaterialesCiclo() {
               classes_per_cycle: classesPerCycle,
               target_date: targetDate,
               alert_key: noGroupsKey,
+              envio_usado: envioResumenUsado,
+              template_name: envioResumenUsado === "template" ? TEMPLATE_NAME_NO_GROUPS : null,
+              template_lang: envioResumenUsado === "template" ? TEMPLATE_LANG : null,
               error: errorEnvioResumen,
             },
           });
@@ -628,12 +680,40 @@ async function runAlertaMaterialesCiclo() {
       let envioResumenExitoso = false;
       let errorEnvioResumen: string | null = null;
       let noGroupsMessageId: string | undefined;
+      let envioResumenUsado: "template" | "text" | "none" = "none";
 
       if (SEND_NO_GROUPS_WHATSAPP) {
         try {
-          const response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+          let response: any = null;
+          let envioUsado: "template" | "text" = "text";
+
+          if (TEMPLATE_NAME_NO_GROUPS) {
+            const variables = buildNoGroupsTemplateVariables({
+              targetDate,
+              daysAhead,
+              totalRegistrosFecha: candidatosFecha.length,
+              totalElegibles: gruposUnicos.length,
+            });
+
+            try {
+              response = await WhatsAppService.sendTemplate(alertPhone, TEMPLATE_NAME_NO_GROUPS, variables, TEMPLATE_LANG);
+              envioUsado = "template";
+            } catch (templateError) {
+              if (!ALLOW_TEXT_FALLBACK) {
+                throw templateError;
+              }
+              console.warn("[Cron Alerta Materiales] Fallo plantilla no-groups, usando fallback texto:", templateError);
+              response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+              envioUsado = "text";
+            }
+          } else {
+            response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+            envioUsado = "text";
+          }
+
           noGroupsMessageId = response?.messages?.[0]?.id;
           envioResumenExitoso = true;
+          envioResumenUsado = envioUsado;
 
           await saveWhatsAppMessageRecord(supabase, {
             phone: alertPhone,
@@ -642,6 +722,9 @@ async function runAlertaMaterialesCiclo() {
             messageId: noGroupsMessageId,
             metadata: {
               mode: "no-groups-summary",
+              envio_usado: envioUsado,
+              template_name: envioUsado === "template" ? TEMPLATE_NAME_NO_GROUPS : null,
+              template_lang: envioUsado === "template" ? TEMPLATE_LANG : null,
               days_ahead: daysAhead,
               classes_per_cycle: classesPerCycle,
               target_date: targetDate,
@@ -651,7 +734,10 @@ async function runAlertaMaterialesCiclo() {
 
           await saveAudit(supabase, {
             phone: alertPhone,
-            message: `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
+            message:
+              envioUsado === "template"
+                ? `${noGroupsMessage}\n\n[ENVIO_USADO] template:${TEMPLATE_NAME_NO_GROUPS} lang:${TEMPLATE_LANG}\n[MODO] no-groups`
+                : `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
             messageId: noGroupsMessageId,
           });
         } catch (error: any) {
@@ -667,6 +753,9 @@ async function runAlertaMaterialesCiclo() {
               classes_per_cycle: classesPerCycle,
               target_date: targetDate,
               alert_key: noGroupsKey,
+              envio_usado: envioResumenUsado,
+              template_name: envioResumenUsado === "template" ? TEMPLATE_NAME_NO_GROUPS : null,
+              template_lang: envioResumenUsado === "template" ? TEMPLATE_LANG : null,
               error: errorEnvioResumen,
             },
           });
