@@ -5,6 +5,7 @@ import {
   Card,
   Typography,
   Button,
+  Checkbox,
   Spin,
   Row,
   Col,
@@ -18,7 +19,6 @@ import {
   Grid,
   Flex,
   Modal,
-  List,
 } from "antd";
 import {
   PlusOutlined,
@@ -391,6 +391,7 @@ export default function CursosList() {
   const [materialesModalLoading, setMaterialesModalLoading] = useState(false);
   const [materialesModalGrupo, setMaterialesModalGrupo] = useState<GrupoAcademico | null>(null);
   const [materialesProximoCiclo, setMaterialesProximoCiclo] = useState<any[]>([]);
+  const [materialesMarcados, setMaterialesMarcados] = useState<string[]>([]);
 
   const cargarGrupos = useCallback(async () => {
     try {
@@ -480,6 +481,7 @@ export default function CursosList() {
       setMaterialesModalGrupo(grupo);
       setMaterialesModalVisible(true);
       setMaterialesModalLoading(true);
+      setMaterialesMarcados([]);
 
       try {
         const { data, error } = await supabaseBrowserClient
@@ -503,6 +505,110 @@ export default function CursosList() {
     },
     [message]
   );
+
+  const toggleMaterialMarcado = useCallback((materialId: string, checked: boolean) => {
+    setMaterialesMarcados((prev) => {
+      if (checked) {
+        return prev.includes(materialId) ? prev : [...prev, materialId];
+      }
+      return prev.filter((id) => id !== materialId);
+    });
+  }, []);
+
+  const imprimirChecklistMateriales = useCallback(() => {
+    if (!materialesModalGrupo || materialesProximoCiclo.length === 0 || typeof window === "undefined") {
+      return;
+    }
+
+    const cicloLabel = String(
+      materialesModalGrupo.proximo_ciclo_nombre || materialesModalGrupo.proximo_ciclo_numero || "Próximo ciclo"
+    );
+    const grupoLabel = construirNombreGrupo(materialesModalGrupo);
+    const printedAt = dayjs().format("DD/MM/YYYY hh:mm A");
+    const itemsHtml = materialesProximoCiclo
+      .map((item: any) => {
+        const id = String(item?.id || "");
+        const checked = materialesMarcados.includes(id);
+        const cantidad = item?.cantidad ? `x${item.cantidad}` : "x1";
+        const nombre = String(item?.nombre || "Material").trim();
+        return `
+          <div class="item-row">
+            <div class="check">${checked ? "[x]" : "[ ]"}</div>
+            <div class="name">${cantidad} ${nombre}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+    const printWindow = window.open("", "_blank", "width=420,height=760");
+    if (!printWindow) {
+      message.warning("No se pudo abrir la ventana de impresión.");
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Checklist materiales</title>
+          <style>
+            @page { size: 80mm auto; margin: 4mm; }
+            body {
+              font-family: Arial, sans-serif;
+              width: 72mm;
+              margin: 0 auto;
+              color: #111827;
+              font-size: 12px;
+              line-height: 1.35;
+            }
+            .title {
+              font-size: 15px;
+              font-weight: 700;
+              margin-bottom: 2mm;
+            }
+            .meta {
+              font-size: 11px;
+              margin-bottom: 1mm;
+            }
+            .divider {
+              border-top: 1px dashed #000;
+              margin: 3mm 0;
+            }
+            .item-row {
+              display: flex;
+              gap: 2mm;
+              padding: 1.5mm 0;
+              border-bottom: 1px dotted #cbd5e1;
+            }
+            .check {
+              width: 10mm;
+              font-weight: 700;
+            }
+            .name {
+              flex: 1;
+              font-weight: 600;
+              word-break: break-word;
+            }
+            .footer {
+              margin-top: 4mm;
+              font-size: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="title">Checklist de materiales</div>
+          <div class="meta"><strong>Grupo:</strong> ${grupoLabel}</div>
+          <div class="meta"><strong>Ciclo:</strong> ${cicloLabel}</div>
+          <div class="meta"><strong>Impreso:</strong> ${printedAt}</div>
+          <div class="divider"></div>
+          ${itemsHtml}
+          <div class="footer">Marca esta lista al alistar materiales.</div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  }, [materialesMarcados, materialesModalGrupo, materialesProximoCiclo, message]);
 
   const renderGrupo = (grupo: GrupoAcademico) => {
     const estado = obtenerEstado(grupo);
@@ -788,16 +894,33 @@ export default function CursosList() {
       <Modal
         title={
           materialesModalGrupo
-            ? `Materiales - ${construirNombreGrupo(materialesModalGrupo)} (${String(materialesModalGrupo.proximo_ciclo_nombre || materialesModalGrupo.proximo_ciclo_numero || "Próximo ciclo")})`
-            : "Materiales del próximo ciclo"
+            ? `Checklist de materiales - ${String(materialesModalGrupo.proximo_ciclo_nombre || materialesModalGrupo.proximo_ciclo_numero || "Próximo ciclo")}`
+            : "Checklist de materiales"
         }
         open={materialesModalVisible}
         onCancel={() => {
           setMaterialesModalVisible(false);
           setMaterialesModalGrupo(null);
           setMaterialesProximoCiclo([]);
+          setMaterialesMarcados([]);
         }}
-        footer={null}
+        footer={[
+          <Button key="print" onClick={imprimirChecklistMateriales} disabled={materialesProximoCiclo.length === 0}>
+            Imprimir 80mm
+          </Button>,
+          <Button
+            key="close"
+            type="primary"
+            onClick={() => {
+              setMaterialesModalVisible(false);
+              setMaterialesModalGrupo(null);
+              setMaterialesProximoCiclo([]);
+              setMaterialesMarcados([]);
+            }}
+          >
+            Cerrar
+          </Button>,
+        ]}
         width={isMobile ? "95%" : 680}
       >
         {materialesModalLoading ? (
@@ -807,24 +930,73 @@ export default function CursosList() {
         ) : materialesProximoCiclo.length === 0 ? (
           <Empty description="No hay materiales cargados para el próximo ciclo" />
         ) : (
-          <List
-            dataSource={materialesProximoCiclo}
-            rowKey="id"
-            renderItem={(item: any) => (
-              <List.Item>
-                <List.Item.Meta
-                  title={item.nombre || "Material"}
-                  description={
-                    <Space size={8} wrap>
-                      {item.cantidad ? <Tag color="blue">Cantidad: {item.cantidad}</Tag> : null}
-                      {item.incluido_kit ? <Tag color="green">Incluido en kit</Tag> : null}
-                      {item.cobertura_material ? <Tag>{item.cobertura_material}</Tag> : null}
-                    </Space>
-                  }
-                />
-              </List.Item>
-            )}
-          />
+          <Space direction="vertical" size={10} style={{ width: "100%" }}>
+            {materialesModalGrupo ? (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  background: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <Text strong style={{ display: "block" }}>
+                  {construirNombreGrupo(materialesModalGrupo)}
+                </Text>
+                <Text type="secondary" style={{ display: "block", marginTop: 2 }}>
+                  {`Ciclo a preparar: ${String(materialesModalGrupo.proximo_ciclo_nombre || materialesModalGrupo.proximo_ciclo_numero || "Próximo ciclo")}`}
+                </Text>
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                border: "1px solid #E5E7EB",
+                borderRadius: 14,
+                overflow: "hidden",
+              }}
+            >
+              {materialesProximoCiclo.map((item: any, index: number) => {
+                const id = String(item?.id || index);
+                const checked = materialesMarcados.includes(id);
+                const cantidad = item?.cantidad ? `x${item.cantidad}` : "x1";
+                const nombre = String(item?.nombre || "Material").trim();
+
+                return (
+                  <label
+                    key={id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "12px 14px",
+                      borderBottom: index === materialesProximoCiclo.length - 1 ? "none" : "1px solid #F1F5F9",
+                      background: checked ? "#F0FDF4" : "#FFFFFF",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onChange={(event) => toggleMaterialMarcado(id, event.target.checked)}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        style={{
+                          display: "block",
+                          fontWeight: 600,
+                          color: "#0F172A",
+                          textDecoration: checked ? "line-through" : "none",
+                          opacity: checked ? 0.75 : 1,
+                        }}
+                      >
+                        {`${cantidad} ${nombre}`}
+                      </Text>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </Space>
         )}
       </Modal>
     </Card>
