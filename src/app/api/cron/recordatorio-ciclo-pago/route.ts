@@ -33,7 +33,7 @@ const ALLOW_TEXT_FALLBACK = String(process.env.CICLO_PAGO_ALLOW_TEXT_FALLBACK ||
 const MAX_SENDS_PER_RUN = Number(process.env.CICLO_PAGO_MAX_SENDS || 50);
 const DELAY_MS = Number(process.env.CICLO_PAGO_DELAY_MS || 1200);
 const MIN_HOURS_COOLDOWN = Number(process.env.CICLO_PAGO_COOLDOWN_HOURS || 20);
-const AUTO_SESSION_PATTERN = /sesion programada automaticamente para calculo de ciclos/i;
+const AUTO_SESSION_PATTERN = /sesi[oó]n programada autom[aá]ticamente para c[aá]lculo de ciclos/i;
 const AUDIT_MARKER = '[SISTEMA] Recordatorio ciclo pago';
 
 // ------- Utilidades -------

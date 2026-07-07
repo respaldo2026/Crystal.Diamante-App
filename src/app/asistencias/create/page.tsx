@@ -13,7 +13,7 @@ import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
 
 const { Title, Text } = Typography;
 
-const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automatic[ae]mente para calculo de ciclos/i;
+const AUTO_SESSION_TOPIC_PATTERN = /sesi[oó]n programada autom[aá]ticamente para c[aá]lculo de ciclos/i;
 
 function extractClaseNumeroFromSession(session: any): number | null {
   const candidates = [session?.tema_visto, session?.observaciones]

@@ -2,7 +2,7 @@
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { extractClassNumber } from "@/modules/portal-estudiante/utils";
 
-const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automatic[ae]mente para calculo de ciclos/i;
+const AUTO_SESSION_TOPIC_PATTERN = /sesi[oó]n programada autom[aá]ticamente para c[aá]lculo de ciclos/i;
 
 export interface GrupoAcademico {
   id: number;

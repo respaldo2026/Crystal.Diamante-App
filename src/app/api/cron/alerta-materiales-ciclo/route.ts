@@ -16,7 +16,7 @@ const TEMPLATE_NAME = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES || 
 const TEMPLATE_NAME_NO_GROUPS = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES_NO_GROUPS || "").trim();
 const TEMPLATE_LANG = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES_LANG || "es_CO").trim();
 const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALERTA_ALLOW_TEXT_FALLBACK || "true").toLowerCase() === "true";
-const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automaticamente para calculo de ciclos/i;
+const AUTO_SESSION_TOPIC_PATTERN = /sesi[oó]n programada autom[aá]ticamente para c[aá]lculo de ciclos/i;
 
 type GrupoConPensum = {
   grupo_id: number;

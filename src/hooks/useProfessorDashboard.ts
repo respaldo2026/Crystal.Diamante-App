@@ -8,7 +8,7 @@ import isBetween from "dayjs/plugin/isBetween";
 dayjs.extend(isBetween);
 
 const HOURS_PER_CLASS = 3;
-const AUTO_SESSION_TOPIC_PATTERN = /sesion programada automaticamente para calculo de ciclos/i;
+const AUTO_SESSION_TOPIC_PATTERN = /sesi[oó]n programada autom[aá]ticamente para c[aá]lculo de ciclos/i;
 const XP_TOTAL_CURSO = 1000;
 const CLASES_OBJETIVO_CURSO = 20;
 const XP_ASISTENCIA_POR_CLASE = 20;
