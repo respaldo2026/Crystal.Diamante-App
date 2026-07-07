@@ -6,6 +6,7 @@ import {
   Typography,
   Button,
   Checkbox,
+  Dropdown,
   Spin,
   Row,
   Col,
@@ -24,6 +25,7 @@ import {
   PlusOutlined,
   EditOutlined,
   ReloadOutlined,
+  MoreOutlined,
   CalendarOutlined,
   ClockCircleOutlined,
   TeamOutlined,
@@ -644,7 +646,6 @@ export default function CursosList() {
     const estado = obtenerEstado(grupo);
     const inscritos = obtenerInscritos(grupo);
     const capacidad = Number(grupo.cupos || 0);
-    const ocupacion = capacidad > 0 ? Math.round((inscritos / capacidad) * 100) : 0;
     const mensajeInicio = construirMensajeInicio(grupo.fecha_inicio);
     const metaCapacidad = obtenerMetaCapacidad(inscritos, capacidad);
     const avanceGrupo = construirAvanceGrupo(grupo);
@@ -662,6 +663,21 @@ export default function CursosList() {
       : avanceGrupo.maximoAlcanzado
         ? `Plan completado (${avanceGrupo.totalClasesPrograma || 0} clases)`
         : "Sin próxima clase";
+    const menuAcciones = {
+      items: [
+        { key: "edit", label: "Editar" },
+        { key: "show", label: "Ver detalle" },
+      ],
+      onClick: ({ key }: { key: string }) => {
+        if (key === "edit") {
+          edit("cursos", grupo.id);
+          return;
+        }
+        if (key === "show") {
+          show("cursos", grupo.id);
+        }
+      },
+    };
 
     return (
       <Card
@@ -788,47 +804,29 @@ export default function CursosList() {
           </Col>
 
           <Col xs={24} md={5} xl={2}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Progreso</Text>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>{avanceGrupo.titulo}</div>
-            <Tooltip title={`Cupos libres: ${Math.max((capacidad || 0) - inscritos, 0)}`}>
-              <Progress
-                percent={ocupacion}
-                size="small"
-                strokeColor={ocupacion >= 100 ? "#EF4444" : ocupacion >= 80 ? "#F59E0B" : "#10B981"}
-                trailColor="#E5E7EB"
-                showInfo={false}
-              />
-            </Tooltip>
-          </Col>
-
-          <Col xs={24} xl={5}>
-            <Flex justify={isMobile ? "flex-start" : "flex-end"} align="center" gap={6} wrap="wrap">
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => edit("cursos", grupo.id)}
-                style={{ borderRadius: 10 }}
-              >
-                Editar
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                onClick={() => show("cursos", grupo.id)}
-                style={{ paddingInline: 4, fontWeight: 600 }}
-              >
-                Ver detalle
-              </Button>
+            <Text type="secondary" style={{ fontSize: 12 }}>Ver materiales</Text>
+            <div style={{ marginTop: 4 }}>
               <Button
                 type="link"
                 size="small"
                 icon={<FileTextOutlined />}
-                style={{ paddingInline: 4, fontWeight: 700 }}
+                style={{ paddingInline: 0, fontWeight: 700 }}
                 disabled={!grupo.proximo_ciclo_pensum_id}
                 onClick={() => void abrirMaterialesProximoCiclo(grupo)}
               >
-                {proximoCicloVisible ? `Materiales ${proximoCicloVisible}` : "Materiales"}
+                {proximoCicloVisible ? proximoCicloVisible : "Ver"}
               </Button>
+            </div>
+          </Col>
+
+          <Col xs={24} xl={5}>
+            <Flex justify={isMobile ? "flex-start" : "flex-end"} align="center" gap={6} wrap="wrap">
+              <Text type="secondary" style={{ fontSize: 12, marginRight: 4 }}>
+                {avanceGrupo.titulo}
+              </Text>
+              <Dropdown menu={menuAcciones} trigger={["click"]} placement="bottomRight">
+                <Button size="small" icon={<MoreOutlined />} style={{ borderRadius: 10 }} />
+              </Dropdown>
             </Flex>
           </Col>
         </Row>
