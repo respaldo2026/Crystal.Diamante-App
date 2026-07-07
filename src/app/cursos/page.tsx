@@ -320,16 +320,21 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
   };
 }
 
-function formatearLabelCambioCiclo(ciclo?: string | null): string | null {
+function normalizarLabelCiclo(ciclo?: string | null): string | null {
   const value = String(ciclo || "").trim();
   if (!value) return null;
-
   const match = value.match(/(\d+)/);
-  if (match) {
-    return `Pasa a: Ciclo #${match[1]}`;
-  }
+  if (match) return `Ciclo #${match[1]}`;
+  return value;
+}
 
-  return `Pasa a: ${value}`;
+function formatearLineaCambioCiclo(cicloActual?: string | null, cicloSiguiente?: string | null): string | null {
+  const actual = normalizarLabelCiclo(cicloActual);
+  const siguiente = normalizarLabelCiclo(cicloSiguiente);
+
+  if (actual && siguiente) return `${actual} -> ${siguiente}`;
+  if (siguiente) return `Pasa a ${siguiente}`;
+  return null;
 }
 
 function getCycleUrgency(days?: number | null) {
@@ -631,7 +636,8 @@ export default function CursosList() {
     const metaCapacidad = obtenerMetaCapacidad(inscritos, capacidad);
     const avanceGrupo = construirAvanceGrupo(grupo);
     const urgenciaCiclo = getCycleUrgency(avanceGrupo.diasParaProximoCiclo);
-    const cambioCicloLabel = formatearLabelCambioCiclo(avanceGrupo.proximoCiclo);
+    const cambioCicloLabel = formatearLineaCambioCiclo(avanceGrupo.cicloActual, avanceGrupo.proximoCiclo);
+    const tituloSemaforo = urgenciaCiclo.level === "rojo" ? "Preparar materiales" : "Seguimiento de ciclo";
     const proximaClaseTexto = avanceGrupo.proximaClaseHorario
       ? `#${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""} · ${avanceGrupo.proximaClaseHorario}`
       : avanceGrupo.maximoAlcanzado
@@ -683,9 +689,9 @@ export default function CursosList() {
                     alignItems: "center",
                     padding: "4px 10px",
                     borderRadius: 999,
-                    background: "linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)",
-                    border: "1px solid #c4b5fd",
-                    color: "#5b21b6",
+                    background: urgenciaCiclo.bg,
+                    border: `1px solid ${urgenciaCiclo.border}`,
+                    color: urgenciaCiclo.title,
                     fontSize: 12,
                     fontWeight: 800,
                     letterSpacing: 0.2,
@@ -731,7 +737,7 @@ export default function CursosList() {
                   }}
                 />
                 <Text style={{ fontSize: 12, color: urgenciaCiclo.title, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.3 }}>
-                  Preparar materiales
+                  {tituloSemaforo}
                 </Text>
               </Space>
               <div style={{ fontWeight: 700, lineHeight: 1.35, marginTop: 4, color: "#0f172a" }}>
