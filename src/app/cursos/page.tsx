@@ -513,211 +513,129 @@ export default function CursosList() {
     const metaCapacidad = obtenerMetaCapacidad(inscritos, capacidad);
     const avanceGrupo = construirAvanceGrupo(grupo);
     const urgenciaCiclo = getCycleUrgency(avanceGrupo.diasParaProximoCiclo);
-    const temaUltimaClase = String(avanceGrupo.tema || "")
-      .replace(/^Clase\s*#?\d+\s*[-:.·]?\s*/i, "")
-      .trim();
+    const proximaClaseTexto = avanceGrupo.proximaClaseHorario
+      ? `#${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""} · ${avanceGrupo.proximaClaseHorario}`
+      : avanceGrupo.maximoAlcanzado
+        ? `Plan completado (${avanceGrupo.totalClasesPrograma || 0} clases)`
+        : "Sin próxima clase";
 
     return (
       <Card
         key={grupo.id}
         hoverable
         style={{
-          marginBottom: 12,
-          borderRadius: 16,
+          marginBottom: 8,
+          borderRadius: 12,
           border: "1px solid #E5E7EB",
-          boxShadow: "0 8px 20px rgba(15, 23, 42, 0.05)",
-          overflow: "hidden",
-          background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
+          boxShadow: "0 3px 10px rgba(15, 23, 42, 0.04)",
         }}
-        bodyStyle={{ padding: isMobile ? 12 : 14 }}
+        bodyStyle={{ padding: isMobile ? 10 : 11 }}
       >
-        <Space direction="vertical" size={10} style={{ width: "100%" }}>
-          <Flex
-            justify="space-between"
-            align={isMobile ? "flex-start" : "center"}
-            gap={12}
-            vertical={isMobile}
-          >
-            <div style={{ width: isMobile ? "100%" : "auto" }}>
-              <Space size={8} wrap style={{ marginBottom: 6 }}>
-                <Tag
-                  bordered={false}
-                  style={{
-                    borderRadius: 999,
-                    paddingInline: 10,
-                    paddingBlock: 4,
-                    fontWeight: 600,
-                    background: "#F5F3FF",
-                    color: "#6D28D9",
-                    marginInlineEnd: 0,
-                  }}
-                >
-                  {grupo.programas?.nombre || "Programa sin asignar"}
-                </Tag>
-                <Tag color={estado.color} style={{ borderRadius: 999, marginInlineEnd: 0 }}>
-                  {estado.label}
-                </Tag>
-              </Space>
-              <Title level={isMobile ? 5 : 4} style={{ marginBottom: 2, marginTop: 0 }}>
-                {construirNombreGrupo(grupo)}
-              </Title>
-              <Space size={8} wrap>
-                {mensajeInicio ? (
-                  <Tag bordered={false} color="blue" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
-                    {mensajeInicio}
-                  </Tag>
-                ) : null}
-                <Tag bordered={false} color="cyan" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
-                  {formatearDias(grupo.dias_semana)}
-                </Tag>
-                <Tag bordered={false} color={metaCapacidad.color} style={{ borderRadius: 999, marginInlineEnd: 0 }}>
-                  {metaCapacidad.texto}
-                </Tag>
-              </Space>
+        <Row gutter={[10, 8]} align="middle">
+          <Col xs={24} xl={6}>
+            <Space size={6} wrap style={{ marginBottom: 4 }}>
+              <Tag
+                bordered={false}
+                style={{
+                  borderRadius: 999,
+                  fontWeight: 600,
+                  background: "#F5F3FF",
+                  color: "#6D28D9",
+                  marginInlineEnd: 0,
+                }}
+              >
+                {grupo.programas?.nombre || "Programa"}
+              </Tag>
+              <Tag color={estado.color} style={{ borderRadius: 999, marginInlineEnd: 0 }}>
+                {estado.label}
+              </Tag>
+            </Space>
+            <Text strong style={{ fontSize: 14 }}>{construirNombreGrupo(grupo)}</Text>
+            <div style={{ marginTop: 2 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {grupo.profesor?.nombre_completo || "Profesor por definir"}
+              </Text>
             </div>
-            <Space wrap size={isMobile ? 4 : 8}>
-              <Button 
-                size={isMobile ? "small" : "middle"}
-                icon={<EditOutlined />} 
+          </Col>
+
+          <Col xs={12} sm={8} md={6} xl={3}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Días y horario</Text>
+            <div style={{ fontWeight: 600 }}>{formatearDias(grupo.dias_semana)}</div>
+            <div style={{ fontSize: 12, color: "#334155" }}>{formatearHorario(grupo.hora_inicio, grupo.hora_fin)}</div>
+          </Col>
+
+          <Col xs={12} sm={8} md={4} xl={2}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Inicio</Text>
+            <div style={{ fontWeight: 600 }}>{grupo.fecha_inicio ? dayjs(grupo.fecha_inicio).format("DD MMM YYYY") : "Sin fecha"}</div>
+            {mensajeInicio ? <div style={{ fontSize: 12, color: "#2563EB" }}>{mensajeInicio}</div> : null}
+          </Col>
+
+          <Col xs={24} sm={8} md={5} xl={3}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Próxima clase</Text>
+            <div style={{ fontWeight: 600, lineHeight: 1.35 }}>{proximaClaseTexto}</div>
+            <Space size={6} style={{ marginTop: 4 }}>
+              <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700, color: urgenciaCiclo.chipColor, background: urgenciaCiclo.chipBg }}>
+                {urgenciaCiclo.label}
+              </Tag>
+              {typeof avanceGrupo.diasParaProximoCiclo === "number" ? (
+                <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0 }}>{`${avanceGrupo.diasParaProximoCiclo} días`}</Tag>
+              ) : null}
+            </Space>
+          </Col>
+
+          <Col xs={24} md={4} xl={2}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Cupos</Text>
+            <div style={{ fontWeight: 700 }}>{`${inscritos}/${capacidad || 0}`}</div>
+            <div style={{ fontSize: 12, color: "#334155" }}>
+              {capacidad > 0 ? `${metaCapacidad.libres} libres` : "Por definir"}
+            </div>
+          </Col>
+
+          <Col xs={24} md={5} xl={2}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Progreso</Text>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{avanceGrupo.titulo}</div>
+            <Tooltip title={`Cupos libres: ${Math.max((capacidad || 0) - inscritos, 0)}`}>
+              <Progress
+                percent={ocupacion}
+                size="small"
+                strokeColor={ocupacion >= 100 ? "#EF4444" : ocupacion >= 80 ? "#F59E0B" : "#10B981"}
+                trailColor="#E5E7EB"
+                showInfo={false}
+              />
+            </Tooltip>
+          </Col>
+
+          <Col xs={24} xl={6}>
+            <Flex justify={isMobile ? "flex-start" : "flex-end"} align="center" gap={6} wrap="wrap">
+              <Button
+                size="small"
+                icon={<EditOutlined />}
                 onClick={() => edit("cursos", grupo.id)}
-                style={{ borderRadius: 12 }}
+                style={{ borderRadius: 10 }}
               >
                 Editar
               </Button>
-              <Button 
-                type="link" 
-                size={isMobile ? "small" : "middle"}
+              <Button
+                type="link"
+                size="small"
                 onClick={() => show("cursos", grupo.id)}
                 style={{ paddingInline: 4, fontWeight: 600 }}
               >
-                {isMobile ? "Ver" : "Ver detalle"}
+                Ver detalle
               </Button>
-            </Space>
-          </Flex>
-
-          <div
-            style={{
-              borderRadius: 12,
-              padding: isMobile ? 10 : 12,
-              background: "#FAFCFF",
-              border: "1px solid #E2E8F0",
-            }}
-          >
-            <Row gutter={[10, 8]}>
-              <Col xs={24} lg={16}>
-                <Space size={10} wrap>
-                  <Tag bordered={false} color="geekblue" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
-                    <CalendarOutlined /> {grupo.fecha_inicio ? dayjs(grupo.fecha_inicio).format("DD MMM YYYY") : "Sin fecha"}
-                  </Tag>
-                  <Tag bordered={false} color="green" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
-                    <ClockCircleOutlined /> {formatearHorario(grupo.hora_inicio, grupo.hora_fin)}
-                  </Tag>
-                  <Tag bordered={false} color="cyan" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
-                    <TeamOutlined /> {`${inscritos}/${capacidad || 0} estudiantes`}
-                  </Tag>
-                </Space>
-              </Col>
-              <Col xs={24} lg={8}>
-                <Tooltip title={`Cupos libres: ${Math.max((capacidad || 0) - inscritos, 0)}`}>
-                  <Progress
-                    percent={ocupacion}
-                    size="small"
-                    strokeColor={ocupacion >= 100 ? "#EF4444" : ocupacion >= 80 ? "#F59E0B" : "#10B981"}
-                    trailColor="#E5E7EB"
-                    showInfo={false}
-                    style={{ marginTop: isMobile ? 0 : 6 }}
-                  />
-                </Tooltip>
-              </Col>
-              <Col xs={24} md={10}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Profesor</Text>
-                <div style={{ fontWeight: 600, color: "#0F172A" }}>{grupo.profesor?.nombre_completo || "Por definir"}</div>
-              </Col>
-              <Col xs={24} md={7}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Disponibilidad</Text>
-                <div style={{ fontWeight: 600, color: "#0F172A" }}>
-                  {capacidad > 0 ? `${metaCapacidad.libres}/${capacidad} libres` : "Por definir"}
-                </div>
-              </Col>
-              <Col xs={24} md={7}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Progreso</Text>
-                <div style={{ fontWeight: 600, color: "#0F172A" }}>{avanceGrupo.titulo}</div>
-              </Col>
-            </Row>
-          </div>
-
-          <div
-            style={{
-              borderRadius: 12,
-              padding: isMobile ? 10 : 12,
-              background: avanceGrupo.fondo,
-              border: `1px solid ${avanceGrupo.borde}`,
-            }}
-          >
-            <Row gutter={[10, 8]}>
-              <Col xs={24} md={14}>
-                <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 4, fontSize: 13 }}>
-                  Actividad reciente
-                </Text>
-                <Text style={{ display: "block", color: "#334155", fontWeight: 600, fontSize: 13 }}>
-                  {`Último registro: ${avanceGrupo.detalle.replace(/^Último registro:\s*/i, "")}`}
-                </Text>
-                <Text style={{ display: "block", color: "#0F172A", fontWeight: 700, fontSize: 13, marginTop: 2 }}>
-                  {`Tema: ${temaUltimaClase || "Sin tema registrado"}`}
-                </Text>
-              </Col>
-              <Col xs={24} md={10}>
-                {avanceGrupo.proximaClaseHorario ? (
-                  <div
-                    style={{
-                      background: urgenciaCiclo.bg,
-                      border: `1px solid ${urgenciaCiclo.border}`,
-                      borderRadius: 10,
-                      padding: "8px 10px",
-                    }}
-                  >
-                    <Space size={6} wrap>
-                      <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700, color: urgenciaCiclo.chipColor, background: urgenciaCiclo.chipBg }}>
-                        {urgenciaCiclo.label}
-                      </Tag>
-                      {typeof avanceGrupo.diasParaProximoCiclo === "number" ? (
-                        <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0 }}>{`${avanceGrupo.diasParaProximoCiclo} días`}</Tag>
-                      ) : null}
-                    </Space>
-                    <Text style={{ display: "block", marginTop: 6, fontWeight: 800, color: "#0f172a" }}>
-                      {`Clase #${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""}`}
-                    </Text>
-                    <Text style={{ display: "block", color: urgenciaCiclo.accent, fontWeight: 700 }}>
-                      {avanceGrupo.proximaClaseHorario}
-                    </Text>
-                    {avanceGrupo.fechaProximoCicloTexto ? (
-                      <Text type="secondary" style={{ display: "block", marginTop: 2, fontSize: 12 }}>
-                        {`Inicio estimado de ciclo: ${avanceGrupo.fechaProximoCicloTexto}`}
-                      </Text>
-                    ) : null}
-                  </div>
-                ) : null}
-                {avanceGrupo.maximoAlcanzado ? (
-                  <Tag color="gold" style={{ marginTop: 8, borderRadius: 999 }}>
-                    {`Límite alcanzado: ${avanceGrupo.totalClasesPrograma || 0} clases`}
-                  </Tag>
-                ) : null}
-                <div>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<FileTextOutlined />}
-                    style={{ paddingInline: 0, marginTop: 6, fontWeight: 700 }}
-                    disabled={!grupo.proximo_ciclo_pensum_id}
-                    onClick={() => void abrirMaterialesProximoCiclo(grupo)}
-                  >
-                    Lista de materiales
-                  </Button>
-                </div>
-              </Col>
-            </Row>
-          </div>
-        </Space>
+              <Button
+                type="link"
+                size="small"
+                icon={<FileTextOutlined />}
+                style={{ paddingInline: 4, fontWeight: 700 }}
+                disabled={!grupo.proximo_ciclo_pensum_id}
+                onClick={() => void abrirMaterialesProximoCiclo(grupo)}
+              >
+                Materiales
+              </Button>
+            </Flex>
+          </Col>
+        </Row>
       </Card>
     );
   };
