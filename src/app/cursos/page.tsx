@@ -290,7 +290,9 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
       proximaClaseNumero: maximoAlcanzado ? null : proximaClaseNumero,
       proximaClaseNombre: maximoAlcanzado ? null : proximaClaseNombre,
       cicloActual,
+      cicloActualNumero,
       proximoCiclo,
+      proximoCicloNumero,
       fechaProximoCicloTexto,
       diasParaProximoCiclo,
       maximoAlcanzado,
@@ -309,7 +311,9 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
     proximaClaseNumero,
     proximaClaseNombre,
     cicloActual,
+    cicloActualNumero,
     proximoCiclo,
+    proximoCicloNumero,
     fechaProximoCicloTexto,
     diasParaProximoCiclo,
     maximoAlcanzado: false,
@@ -320,7 +324,11 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
   };
 }
 
-function normalizarLabelCiclo(ciclo?: string | null): string | null {
+function normalizarLabelCiclo(numero?: number | null, ciclo?: string | null): string | null {
+  if (Number.isFinite(numero) && Number(numero) > 0) {
+    return `Ciclo #${Number(numero)}`;
+  }
+
   const value = String(ciclo || "").trim();
   if (!value) return null;
   const match = value.match(/(\d+)/);
@@ -328,9 +336,14 @@ function normalizarLabelCiclo(ciclo?: string | null): string | null {
   return value;
 }
 
-function formatearLineaCambioCiclo(cicloActual?: string | null, cicloSiguiente?: string | null): string | null {
-  const actual = normalizarLabelCiclo(cicloActual);
-  const siguiente = normalizarLabelCiclo(cicloSiguiente);
+function formatearLineaCambioCiclo(
+  cicloActualNumero?: number | null,
+  cicloSiguienteNumero?: number | null,
+  cicloActual?: string | null,
+  cicloSiguiente?: string | null
+): string | null {
+  const actual = normalizarLabelCiclo(cicloActualNumero, cicloActual);
+  const siguiente = normalizarLabelCiclo(cicloSiguienteNumero, cicloSiguiente);
 
   if (actual && siguiente) return `${actual} -> ${siguiente}`;
   if (siguiente) return `Pasa a ${siguiente}`;
@@ -636,7 +649,13 @@ export default function CursosList() {
     const metaCapacidad = obtenerMetaCapacidad(inscritos, capacidad);
     const avanceGrupo = construirAvanceGrupo(grupo);
     const urgenciaCiclo = getCycleUrgency(avanceGrupo.diasParaProximoCiclo);
-    const cambioCicloLabel = formatearLineaCambioCiclo(avanceGrupo.cicloActual, avanceGrupo.proximoCiclo);
+    const cambioCicloLabel = formatearLineaCambioCiclo(
+      avanceGrupo.cicloActualNumero,
+      avanceGrupo.proximoCicloNumero,
+      avanceGrupo.cicloActual,
+      avanceGrupo.proximoCiclo
+    );
+    const proximoCicloVisible = normalizarLabelCiclo(avanceGrupo.proximoCicloNumero, avanceGrupo.proximoCiclo);
     const tituloSemaforo = urgenciaCiclo.level === "rojo" ? "Preparar materiales" : "Seguimiento de ciclo";
     const proximaClaseTexto = avanceGrupo.proximaClaseHorario
       ? `#${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""} · ${avanceGrupo.proximaClaseHorario}`
@@ -743,10 +762,10 @@ export default function CursosList() {
               <div style={{ fontWeight: 700, lineHeight: 1.35, marginTop: 4, color: "#0f172a" }}>
                 {proximaClaseTexto}
               </div>
-              {avanceGrupo.proximoCiclo ? (
+              {proximoCicloVisible ? (
                 <div style={{ marginTop: 4 }}>
                   <Text style={{ fontSize: 12, color: "#334155", fontWeight: 700 }}>
-                    {`Ciclo por iniciar: ${avanceGrupo.proximoCiclo}`}
+                    {`Ciclo por iniciar: ${proximoCicloVisible}`}
                   </Text>
                 </div>
               ) : null}
@@ -808,7 +827,7 @@ export default function CursosList() {
                 disabled={!grupo.proximo_ciclo_pensum_id}
                 onClick={() => void abrirMaterialesProximoCiclo(grupo)}
               >
-                {avanceGrupo.proximoCiclo ? `Materiales ${avanceGrupo.proximoCiclo}` : "Materiales"}
+                {proximoCicloVisible ? `Materiales ${proximoCicloVisible}` : "Materiales"}
               </Button>
             </Flex>
           </Col>
