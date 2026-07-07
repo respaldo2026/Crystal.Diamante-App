@@ -320,6 +320,18 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
   };
 }
 
+function formatearLabelCambioCiclo(ciclo?: string | null): string | null {
+  const value = String(ciclo || "").trim();
+  if (!value) return null;
+
+  const match = value.match(/(\d+)/);
+  if (match) {
+    return `Pasa a: Ciclo #${match[1]}`;
+  }
+
+  return `Pasa a: ${value}`;
+}
+
 function getCycleUrgency(days?: number | null) {
   if (days === null || days === undefined || !Number.isFinite(days)) {
     return {
@@ -619,6 +631,7 @@ export default function CursosList() {
     const metaCapacidad = obtenerMetaCapacidad(inscritos, capacidad);
     const avanceGrupo = construirAvanceGrupo(grupo);
     const urgenciaCiclo = getCycleUrgency(avanceGrupo.diasParaProximoCiclo);
+    const cambioCicloLabel = formatearLabelCambioCiclo(avanceGrupo.proximoCiclo);
     const proximaClaseTexto = avanceGrupo.proximaClaseHorario
       ? `#${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""} · ${avanceGrupo.proximaClaseHorario}`
       : avanceGrupo.maximoAlcanzado
@@ -662,6 +675,26 @@ export default function CursosList() {
                 {grupo.profesor?.nombre_completo || "Profesor por definir"}
               </Text>
             </div>
+            {cambioCicloLabel ? (
+              <div style={{ marginTop: 6 }}>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    background: "linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)",
+                    border: "1px solid #c4b5fd",
+                    color: "#5b21b6",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {cambioCicloLabel}
+                </span>
+              </div>
+            ) : null}
           </Col>
 
           <Col xs={12} sm={8} md={6} xl={3}>
