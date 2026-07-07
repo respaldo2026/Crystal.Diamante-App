@@ -323,15 +323,15 @@ function construirAvanceGrupo(grupo: GrupoAcademico) {
 function getCycleUrgency(days?: number | null) {
   if (days === null || days === undefined || !Number.isFinite(days)) {
     return {
-      bg: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
-      border: "#93c5fd",
-      shadow: "rgba(37, 99, 235, 0.18)",
-      title: "#1e3a8a",
-      accent: "#1d4ed8",
-      chipBg: "#dbeafe",
-      chipColor: "#1e3a8a",
-      level: "normal",
-      label: "Sin fecha definida",
+      bg: "linear-gradient(180deg, #fff8e1 0%, #ffecb3 100%)",
+      border: "#f59e0b",
+      shadow: "rgba(217, 119, 6, 0.18)",
+      title: "#92400e",
+      accent: "#b45309",
+      chipBg: "#fde68a",
+      chipColor: "#92400e",
+      level: "amarillo",
+      label: "Amarillo",
     };
   }
 
@@ -346,8 +346,8 @@ function getCycleUrgency(days?: number | null) {
       accent: "#be123c",
       chipBg: "#fecdd3",
       chipColor: "#9f1239",
-      level: "urgente",
-      label: "Urgente",
+      level: "rojo",
+      label: "Rojo",
     };
   }
 
@@ -360,8 +360,8 @@ function getCycleUrgency(days?: number | null) {
       accent: "#b45309",
       chipBg: "#fde68a",
       chipColor: "#92400e",
-      level: "proximo",
-      label: "Próximo",
+      level: "amarillo",
+      label: "Amarillo",
     };
   }
 
@@ -373,8 +373,8 @@ function getCycleUrgency(days?: number | null) {
     accent: "#047857",
     chipBg: "#a7f3d0",
     chipColor: "#065f46",
-    level: "planificable",
-    label: "Planificable",
+    level: "verde",
+    label: "Verde",
   };
 }
 
@@ -570,17 +570,33 @@ export default function CursosList() {
             {mensajeInicio ? <div style={{ fontSize: 12, color: "#2563EB" }}>{mensajeInicio}</div> : null}
           </Col>
 
-          <Col xs={24} sm={8} md={5} xl={3}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Próxima clase</Text>
-            <div style={{ fontWeight: 600, lineHeight: 1.35 }}>{proximaClaseTexto}</div>
-            <Space size={6} style={{ marginTop: 4 }}>
-              <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700, color: urgenciaCiclo.chipColor, background: urgenciaCiclo.chipBg }}>
-                {urgenciaCiclo.label}
-              </Tag>
-              {typeof avanceGrupo.diasParaProximoCiclo === "number" ? (
-                <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0 }}>{`${avanceGrupo.diasParaProximoCiclo} días`}</Tag>
-              ) : null}
-            </Space>
+          <Col xs={24} sm={12} md={7} xl={4}>
+            <div
+              style={{
+                background: urgenciaCiclo.bg,
+                border: `1px solid ${urgenciaCiclo.border}`,
+                borderRadius: 12,
+                padding: isMobile ? "8px 10px" : "10px 12px",
+                boxShadow: `0 8px 18px ${urgenciaCiclo.shadow}`,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: urgenciaCiclo.title, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                Preparar materiales
+              </Text>
+              <div style={{ fontWeight: 700, lineHeight: 1.35, marginTop: 4, color: "#0f172a" }}>
+                {proximaClaseTexto}
+              </div>
+              <Space size={6} style={{ marginTop: 6 }} wrap>
+                <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 800, color: urgenciaCiclo.chipColor, background: urgenciaCiclo.chipBg }}>
+                  {`Semáforo ${urgenciaCiclo.label}`}
+                </Tag>
+                {typeof avanceGrupo.diasParaProximoCiclo === "number" ? (
+                  <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700 }}>{`${avanceGrupo.diasParaProximoCiclo} días`}</Tag>
+                ) : (
+                  <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700 }}>Sin fecha exacta</Tag>
+                )}
+              </Space>
+            </div>
           </Col>
 
           <Col xs={24} md={4} xl={2}>
@@ -605,7 +621,7 @@ export default function CursosList() {
             </Tooltip>
           </Col>
 
-          <Col xs={24} xl={6}>
+          <Col xs={24} xl={5}>
             <Flex justify={isMobile ? "flex-start" : "flex-end"} align="center" gap={6} wrap="wrap">
               <Button
                 size="small"
