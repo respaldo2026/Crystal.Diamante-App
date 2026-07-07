@@ -35,6 +35,27 @@ function extractClaseNumeroFromSession(session: any): number | null {
 type ClaseOption = { value: number; label: string; disabled: boolean };
 type ClaseOptionGroup = { label: string; options: ClaseOption[] };
 
+function formatFechaHoraReposicion(fechaIso: string, horaInicio?: string | null): string {
+  const horaTexto = String(horaInicio || "08:00").trim();
+  const soloHora = horaTexto.split(":");
+  const hora = String(soloHora[0] || "08").padStart(2, "0");
+  const minuto = String(soloHora[1] || "00").padStart(2, "0");
+  const fecha = new Date(`${fechaIso}T${hora}:${minuto}:00`);
+
+  if (Number.isNaN(fecha.getTime())) {
+    return fechaIso;
+  }
+
+  return fecha.toLocaleString("es-CO", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 export default function TomarAsistencia() {
   const { message } = App.useApp();
   const [form] = Form.useForm();
@@ -717,18 +738,112 @@ export default function TomarAsistencia() {
       let enviadosWhatsapp = 0;
       if (ausentesInfo.length > 0) {
         const fechaTexto = formatDate(fecha);
+
+        const construirMensajeReposicion = async () => {
+          const numeroObjetivo = Number(numeroClase || 0);
+          const programaId = Number(cursoSeleccionadoData?.programa_id || 0);
+
+          const fallbackNoFechas =
+            "Por ahora no tenemos fechas proximas para esta clase en otros grupos. " +
+            "Por favor comunicate con la academia para coordinar la reposicion.";
+
+          if (!numeroObjetivo || !programaId) {
+            return fallbackNoFechas;
+          }
+
+          try {
+            const { data: cursosAlternos, error: errorCursosAlternos } = await supabaseBrowserClient
+              .from("cursos")
+              .select("id, nombre, hora_inicio")
+              .eq("estado", "activo")
+              .eq("programa_id", programaId)
+              .neq("id", Number(cursoSeleccionado));
+
+            if (errorCursosAlternos || !cursosAlternos?.length) {
+              return fallbackNoFechas;
+            }
+
+            const cursoById = new Map<number, { nombre: string; hora_inicio?: string | null }>();
+            const cursoIds: number[] = [];
+
+            for (const curso of cursosAlternos) {
+              const cursoId = Number(curso?.id || 0);
+              if (!cursoId) continue;
+              cursoIds.push(cursoId);
+              cursoById.set(cursoId, {
+                nombre: String(curso?.nombre || `Grupo ${cursoId}`),
+                hora_inicio: curso?.hora_inicio || null,
+              });
+            }
+
+            if (!cursoIds.length) {
+              return fallbackNoFechas;
+            }
+
+            const limiteBusqueda = dayjs(fechaSesion).add(45, "day").format("YYYY-MM-DD");
+
+            const { data: sesionesAlternas, error: errorSesionesAlternas } = await supabaseBrowserClient
+              .from("sesiones_clase")
+              .select("curso_id, fecha, tema_visto, observaciones")
+              .in("curso_id", cursoIds)
+              .gte("fecha", fechaSesion)
+              .lte("fecha", limiteBusqueda)
+              .order("fecha", { ascending: true });
+
+            if (errorSesionesAlternas || !sesionesAlternas?.length) {
+              return fallbackNoFechas;
+            }
+
+            const opciones = (sesionesAlternas || [])
+              .filter((sesion: any) => extractClaseNumeroFromSession(sesion) === numeroObjetivo)
+              .map((sesion: any) => {
+                const cursoId = Number(sesion?.curso_id || 0);
+                const cursoInfo = cursoById.get(cursoId);
+                const fechaItem = String(sesion?.fecha || "").slice(0, 10);
+                if (!fechaItem || !cursoInfo) return null;
+
+                return {
+                  key: `${cursoId}-${fechaItem}`,
+                  texto: `${formatFechaHoraReposicion(fechaItem, cursoInfo.hora_inicio)} · ${cursoInfo.nombre}`,
+                };
+              })
+              .filter(Boolean) as Array<{ key: string; texto: string }>;
+
+            if (!opciones.length) {
+              return fallbackNoFechas;
+            }
+
+            const opcionesUnicas = Array.from(new Map(opciones.map((item) => [item.key, item])).values())
+              .slice(0, 3)
+              .map((item, idx) => `${idx + 1}. ${item.texto}`)
+              .join("\n");
+
+            return (
+              `Opciones para reponer la clase #${numeroObjetivo} en otros grupos:\n` +
+              `${opcionesUnicas}\n` +
+              "Si te sirve alguno, responde este mensaje y te ayudamos con la reposicion."
+            );
+          } catch (errorReposicion) {
+            console.error("Error construyendo opciones de reposicion:", errorReposicion);
+            return fallbackNoFechas;
+          }
+        };
+
+        const mensajeReposicion = await construirMensajeReposicion();
+
         await Promise.all(
           ausentesInfo.map(async (alumno) => {
             const nombre = alumno.perfiles?.nombre_completo || "Estudiante";
             const telefono = String(alumno?.perfiles?.telefono || "");
             
             // Intentar enviar por plantilla de Meta con fallback de texto
-            const templateName = "inasistencia_motivacion";
-            const templateFallback = buildWhatsappFallbackMessage(templateName, {
+            const templateName = "inasistencia_motivacion_reposicion";
+            const baseMensaje = buildWhatsappFallbackMessage("inasistencia_motivacion", {
               nombre,
               curso: cursoNombre || "tu curso",
               fecha_clase: fechaTexto,
             }) || "Notamos tu ausencia. Te esperamos en la próxima clase.";
+            const templateFallback = `${baseMensaje}\n\n${mensajeReposicion}`;
 
             try {
               // Intenta enviar como template de Meta primero
@@ -739,7 +854,7 @@ export default function TomarAsistencia() {
                   phone: telefono,
                   type: "template",
                   template: templateName,
-                  templateVariables: [nombre, cursoNombre || "tu curso", fechaTexto],
+                  templateVariables: [nombre, cursoNombre || "tu curso", fechaTexto, mensajeReposicion],
                   templateLanguage: "es_CO",
                 }),
               });
