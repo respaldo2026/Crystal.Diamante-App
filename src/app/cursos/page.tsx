@@ -125,6 +125,41 @@ function parseDays(diasSemana?: string | null): number[] {
   return Array.from(new Set(dias));
 }
 
+function getMondayFirstRank(day: number): number {
+  // dayjs: domingo=0 ... sabado=6. Queremos lunes primero.
+  return day === 0 ? 6 : day - 1;
+}
+
+function getPrimaryGroupDayRank(grupo: GrupoAcademico): number {
+  const dias = parseDays(grupo.dias_semana || null);
+  if (!dias.length) return Number.POSITIVE_INFINITY;
+  return Math.min(...dias.map(getMondayFirstRank));
+}
+
+function getHourSortValue(hora?: string | null): number {
+  if (!hora) return Number.POSITIVE_INFINITY;
+  const parsed = dayjs(hora, "HH:mm:ss", true);
+  if (parsed.isValid()) return parsed.hour() * 60 + parsed.minute();
+  const fallback = dayjs(hora, "HH:mm", true);
+  if (fallback.isValid()) return fallback.hour() * 60 + fallback.minute();
+  return Number.POSITIVE_INFINITY;
+}
+
+function sortGroupsBySchedule(a: GrupoAcademico, b: GrupoAcademico): number {
+  const dayRankDiff = getPrimaryGroupDayRank(a) - getPrimaryGroupDayRank(b);
+  if (dayRankDiff !== 0) return dayRankDiff;
+
+  const hourDiff = getHourSortValue(a.hora_inicio) - getHourSortValue(b.hora_inicio);
+  if (hourDiff !== 0) return hourDiff;
+
+  const startDiff =
+    (a.fecha_inicio ? dayjs(a.fecha_inicio).valueOf() : Number.POSITIVE_INFINITY) -
+    (b.fecha_inicio ? dayjs(b.fecha_inicio).valueOf() : Number.POSITIVE_INFINITY);
+  if (startDiff !== 0) return startDiff;
+
+  return construirNombreGrupo(a).localeCompare(construirNombreGrupo(b), "es", { sensitivity: "base" });
+}
+
 function applyHourToDate(base: dayjs.Dayjs, horaInicio?: string | null): dayjs.Dayjs {
   if (!horaInicio) return base.startOf("day");
   const partes = String(horaInicio).split(":");
@@ -386,17 +421,19 @@ export default function CursosList() {
 
   const gruposActivos = useMemo(() => {
     const hoy = dayjs();
-    return grupos.filter((grupo) => {
-      if ((grupo.estado || "").toLowerCase() === "activo") {
-        return true;
-      }
-      const fechaInicio = grupo.fecha_inicio ? dayjs(grupo.fecha_inicio) : null;
-      return (
-        (grupo.estado || "").toLowerCase() === "proximo" &&
-        fechaInicio &&
-        !fechaInicio.isAfter(hoy.add(1, "day"))
-      );
-    });
+    return grupos
+      .filter((grupo) => {
+        if ((grupo.estado || "").toLowerCase() === "activo") {
+          return true;
+        }
+        const fechaInicio = grupo.fecha_inicio ? dayjs(grupo.fecha_inicio) : null;
+        return (
+          (grupo.estado || "").toLowerCase() === "proximo" &&
+          fechaInicio &&
+          !fechaInicio.isAfter(hoy.add(1, "day"))
+        );
+      })
+      .sort(sortGroupsBySchedule);
   }, [grupos]);
 
   const gruposProximos = useMemo(() => {
@@ -408,18 +445,16 @@ export default function CursosList() {
         if (!fechaInicio) return estado === "proximo";
         return estado === "proximo" && fechaInicio.isAfter(hoy.add(1, "day"));
       })
-      .sort((a, b) => {
-        const fechaA = a.fecha_inicio ? dayjs(a.fecha_inicio).valueOf() : Number.POSITIVE_INFINITY;
-        const fechaB = b.fecha_inicio ? dayjs(b.fecha_inicio).valueOf() : Number.POSITIVE_INFINITY;
-        return fechaA - fechaB;
-      });
+      .sort(sortGroupsBySchedule);
   }, [grupos]);
 
   const gruposArchivados = useMemo(() => {
-    return grupos.filter((grupo) => {
-      const estado = (grupo.estado || "").toLowerCase();
-      return !["activo", "proximo"].includes(estado);
-    });
+    return grupos
+      .filter((grupo) => {
+        const estado = (grupo.estado || "").toLowerCase();
+        return !["activo", "proximo"].includes(estado);
+      })
+      .sort(sortGroupsBySchedule);
   }, [grupos]);
 
   const totalInscritosActivos = useMemo(
@@ -487,16 +522,16 @@ export default function CursosList() {
         key={grupo.id}
         hoverable
         style={{
-          marginBottom: 18,
-          borderRadius: 22,
+          marginBottom: 12,
+          borderRadius: 16,
           border: "1px solid #E5E7EB",
-          boxShadow: "0 14px 34px rgba(15, 23, 42, 0.06)",
+          boxShadow: "0 8px 20px rgba(15, 23, 42, 0.05)",
           overflow: "hidden",
           background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
         }}
-        bodyStyle={{ padding: isMobile ? 14 : 22 }}
+        bodyStyle={{ padding: isMobile ? 12 : 14 }}
       >
-        <Space direction="vertical" size={isMobile ? 12 : 16} style={{ width: "100%" }}>
+        <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <Flex
             justify="space-between"
             align={isMobile ? "flex-start" : "center"}
@@ -523,7 +558,7 @@ export default function CursosList() {
                   {estado.label}
                 </Tag>
               </Space>
-              <Title level={isMobile ? 5 : 4} style={{ marginBottom: 4, marginTop: 0 }}>
+              <Title level={isMobile ? 5 : 4} style={{ marginBottom: 2, marginTop: 0 }}>
                 {construirNombreGrupo(grupo)}
               </Title>
               <Space size={8} wrap>
@@ -560,248 +595,127 @@ export default function CursosList() {
             </Space>
           </Flex>
 
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={8}>
-              <Space align="start">
-                <CalendarOutlined style={{ fontSize: 20, color: "#7C3AED" }} />
-                <div>
-                  <Text strong>Inicio</Text>
-                  <div>{grupo.fecha_inicio ? dayjs(grupo.fecha_inicio).format("DD MMM YYYY") : "Sin fecha"}</div>
-                  {mensajeInicio && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {mensajeInicio}
-                    </Text>
-                  )}
-                </div>
-              </Space>
-            </Col>
-            <Col xs={24} md={8}>
-              <Space align="start">
-                <ClockCircleOutlined style={{ fontSize: 20, color: "#15803D" }} />
-                <div>
-                  <Text strong>Horario</Text>
-                  <div>{formatearHorario(grupo.hora_inicio, grupo.hora_fin)}</div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {formatearDias(grupo.dias_semana)}
-                  </Text>
-                </div>
-              </Space>
-            </Col>
-            <Col xs={24} md={8}>
-              <Space align="start">
-                <TeamOutlined style={{ fontSize: 20, color: "#0284C7" }} />
-                <div style={{ width: "100%" }}>
-                  <Text strong>Ocupación</Text>
-                  <div>{`${inscritos}/${capacidad || 0} estudiantes`}</div>
-                  <Tooltip title={`Cupos libres: ${Math.max((capacidad || 0) - inscritos, 0)}`}>
-                    <Progress
-                      percent={ocupacion}
-                      size="small"
-                      strokeColor={ocupacion >= 100 ? "#EF4444" : ocupacion >= 80 ? "#F59E0B" : "#10B981"}
-                      trailColor="#E5E7EB"
-                      showInfo={false}
-                      style={{ marginTop: 4 }}
-                    />
-                  </Tooltip>
-                </div>
-              </Space>
-            </Col>
-          </Row>
-
           <div
             style={{
-              borderRadius: 16,
-              padding: isMobile ? 12 : 14,
-              background: "#F8FAFC",
+              borderRadius: 12,
+              padding: isMobile ? 10 : 12,
+              background: "#FAFCFF",
               border: "1px solid #E2E8F0",
             }}
           >
-            <Row gutter={[16, 12]}>
-              <Col xs={24} md={8}>
-                <Text type="secondary">Profesor asignado</Text>
+            <Row gutter={[10, 8]}>
+              <Col xs={24} lg={16}>
+                <Space size={10} wrap>
+                  <Tag bordered={false} color="geekblue" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
+                    <CalendarOutlined /> {grupo.fecha_inicio ? dayjs(grupo.fecha_inicio).format("DD MMM YYYY") : "Sin fecha"}
+                  </Tag>
+                  <Tag bordered={false} color="green" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
+                    <ClockCircleOutlined /> {formatearHorario(grupo.hora_inicio, grupo.hora_fin)}
+                  </Tag>
+                  <Tag bordered={false} color="cyan" style={{ borderRadius: 999, marginInlineEnd: 0 }}>
+                    <TeamOutlined /> {`${inscritos}/${capacidad || 0} estudiantes`}
+                  </Tag>
+                </Space>
+              </Col>
+              <Col xs={24} lg={8}>
+                <Tooltip title={`Cupos libres: ${Math.max((capacidad || 0) - inscritos, 0)}`}>
+                  <Progress
+                    percent={ocupacion}
+                    size="small"
+                    strokeColor={ocupacion >= 100 ? "#EF4444" : ocupacion >= 80 ? "#F59E0B" : "#10B981"}
+                    trailColor="#E5E7EB"
+                    showInfo={false}
+                    style={{ marginTop: isMobile ? 0 : 6 }}
+                  />
+                </Tooltip>
+              </Col>
+              <Col xs={24} md={10}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Profesor</Text>
+                <div style={{ fontWeight: 600, color: "#0F172A" }}>{grupo.profesor?.nombre_completo || "Por definir"}</div>
+              </Col>
+              <Col xs={24} md={7}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Disponibilidad</Text>
                 <div style={{ fontWeight: 600, color: "#0F172A" }}>
-                  {grupo.profesor?.nombre_completo || "Por definir"}
+                  {capacidad > 0 ? `${metaCapacidad.libres}/${capacidad} libres` : "Por definir"}
                 </div>
               </Col>
-              <Col xs={24} md={8}>
-                <Text type="secondary">Disponibilidad actual</Text>
-                <div style={{ fontWeight: 600, color: "#0F172A" }}>
-                  {capacidad > 0 ? `${metaCapacidad.libres} de ${capacidad} cupos libres` : "Capacidad por definir"}
-                </div>
-              </Col>
-              <Col xs={24} md={8}>
-                <Text type="secondary">Progreso del grupo</Text>
-                <div style={{ fontWeight: 600, color: "#0F172A" }}>
-                  {avanceGrupo.titulo}
-                </div>
+              <Col xs={24} md={7}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Progreso</Text>
+                <div style={{ fontWeight: 600, color: "#0F172A" }}>{avanceGrupo.titulo}</div>
               </Col>
             </Row>
           </div>
 
           <div
             style={{
-              borderRadius: 16,
-              padding: isMobile ? 12 : 14,
+              borderRadius: 12,
+              padding: isMobile ? 10 : 12,
               background: avanceGrupo.fondo,
               border: `1px solid ${avanceGrupo.borde}`,
             }}
           >
-            <Flex justify="space-between" align="stretch" gap={isMobile ? 12 : 16} wrap="wrap">
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  background: "rgba(255,255,255,0.72)",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 12,
-                  padding: isMobile ? "10px 12px" : "11px 13px",
-                }}
-              >
-                <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 6, fontSize: 14 }}>
+            <Row gutter={[10, 8]}>
+              <Col xs={24} md={14}>
+                <Text strong style={{ color: avanceGrupo.color, display: "block", marginBottom: 4, fontSize: 13 }}>
                   Actividad reciente
                 </Text>
-                <Row gutter={[10, 8]}>
-                  <Col xs={24} sm={12}>
-                    <Text type="secondary" style={{ display: "block", fontSize: 12 }}>
-                      Último registro
+                <Text style={{ display: "block", color: "#334155", fontWeight: 600, fontSize: 13 }}>
+                  {`Último registro: ${avanceGrupo.detalle.replace(/^Último registro:\s*/i, "")}`}
+                </Text>
+                <Text style={{ display: "block", color: "#0F172A", fontWeight: 700, fontSize: 13, marginTop: 2 }}>
+                  {`Tema: ${temaUltimaClase || "Sin tema registrado"}`}
+                </Text>
+              </Col>
+              <Col xs={24} md={10}>
+                {avanceGrupo.proximaClaseHorario ? (
+                  <div
+                    style={{
+                      background: urgenciaCiclo.bg,
+                      border: `1px solid ${urgenciaCiclo.border}`,
+                      borderRadius: 10,
+                      padding: "8px 10px",
+                    }}
+                  >
+                    <Space size={6} wrap>
+                      <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700, color: urgenciaCiclo.chipColor, background: urgenciaCiclo.chipBg }}>
+                        {urgenciaCiclo.label}
+                      </Tag>
+                      {typeof avanceGrupo.diasParaProximoCiclo === "number" ? (
+                        <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0 }}>{`${avanceGrupo.diasParaProximoCiclo} días`}</Tag>
+                      ) : null}
+                    </Space>
+                    <Text style={{ display: "block", marginTop: 6, fontWeight: 800, color: "#0f172a" }}>
+                      {`Clase #${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""}`}
                     </Text>
-                    <Text style={{ display: "block", color: "#334155", fontWeight: 600, fontSize: 13 }}>
-                      {avanceGrupo.detalle.replace(/^Último registro:\s*/i, "")}
+                    <Text style={{ display: "block", color: urgenciaCiclo.accent, fontWeight: 700 }}>
+                      {avanceGrupo.proximaClaseHorario}
                     </Text>
-                  </Col>
-                  <Col xs={24} sm={12}>
-                    <Text type="secondary" style={{ display: "block", fontSize: 12 }}>
-                      Tema de la última clase
-                    </Text>
-                    <Text style={{ display: "block", color: "#0F172A", fontWeight: 700, fontSize: 13 }}>
-                      {temaUltimaClase || "Sin tema registrado"}
-                    </Text>
-                  </Col>
-                </Row>
+                    {avanceGrupo.fechaProximoCicloTexto ? (
+                      <Text type="secondary" style={{ display: "block", marginTop: 2, fontSize: 12 }}>
+                        {`Inicio estimado de ciclo: ${avanceGrupo.fechaProximoCicloTexto}`}
+                      </Text>
+                    ) : null}
+                  </div>
+                ) : null}
                 {avanceGrupo.maximoAlcanzado ? (
                   <Tag color="gold" style={{ marginTop: 8, borderRadius: 999 }}>
                     {`Límite alcanzado: ${avanceGrupo.totalClasesPrograma || 0} clases`}
                   </Tag>
                 ) : null}
-              </div>
-              {avanceGrupo.proximaClaseHorario ? (
-                <div
-                  style={{
-                    background: urgenciaCiclo.bg,
-                    border: `1px solid ${urgenciaCiclo.border}`,
-                    borderRadius: 14,
-                    padding: isMobile ? "12px 13px" : "14px 16px",
-                    flexShrink: 0,
-                    width: isMobile ? "100%" : 380,
-                    boxShadow: `0 12px 26px ${urgenciaCiclo.shadow}`,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 2,
-                  }}
-                >
-                  <Text style={{ display: "block", fontSize: 12, fontWeight: 800, color: urgenciaCiclo.title, textTransform: "uppercase", letterSpacing: 0.45 }}>
-                    Siguiente paso del grupo
-                  </Text>
-                  <span
-                    style={{
-                      marginTop: 6,
-                      alignSelf: "flex-start",
-                      fontSize: 11,
-                      fontWeight: 800,
-                      color: urgenciaCiclo.chipColor,
-                      background: urgenciaCiclo.chipBg,
-                      borderRadius: 999,
-                      padding: "3px 10px",
-                      textTransform: "uppercase",
-                      letterSpacing: 0.35,
-                    }}
-                  >
-                    {urgenciaCiclo.label}
-                  </span>
-                  <Text style={{ display: "block", fontSize: isMobile ? 16 : 18, fontWeight: 800, color: "#0f172a", marginTop: 6, lineHeight: 1.35 }}>
-                    {`Clase #${avanceGrupo.proximaClaseNumero}${avanceGrupo.proximaClaseNombre ? ` · ${avanceGrupo.proximaClaseNombre}` : ""}`}
-                  </Text>
-                  <Text style={{ display: "block", marginTop: 4, lineHeight: 1.4, color: urgenciaCiclo.accent, fontWeight: 700, fontSize: 14 }}>
-                    {avanceGrupo.proximaClaseHorario}
-                  </Text>
-                  {avanceGrupo.proximoCiclo ? (
-                    <Text style={{ display: "block", marginTop: 8, color: "#334155", fontWeight: 700, lineHeight: 1.45, fontSize: 14 }}>
-                      {`Próximo ciclo: ${avanceGrupo.proximoCiclo}`}
-                    </Text>
-                  ) : null}
-                  {avanceGrupo.fechaProximoCicloTexto ? (
-                    <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 10, background: "rgba(255,255,255,0.62)", border: `1px solid ${urgenciaCiclo.border}` }}>
-                      <Text style={{ display: "block", color: "#0f172a", fontWeight: 700, lineHeight: 1.4, fontSize: 13 }}>
-                        {`Inicio estimado: ${avanceGrupo.fechaProximoCicloTexto}`}
-                      </Text>
-                      {typeof avanceGrupo.diasParaProximoCiclo === "number" ? (
-                        <div style={{ marginTop: 4, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                          <Text style={{ fontSize: isMobile ? 22 : 26, lineHeight: 1, fontWeight: 900, color: urgenciaCiclo.accent }}>
-                            {avanceGrupo.diasParaProximoCiclo}
-                          </Text>
-                          <Text style={{ fontSize: 14, fontWeight: 800, color: urgenciaCiclo.title }}>
-                            días restantes
-                          </Text>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: urgenciaCiclo.chipColor, background: urgenciaCiclo.chipBg, borderRadius: 999, padding: "2px 8px", textTransform: "uppercase" }}>
-                            {urgenciaCiclo.label}
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <Text style={{ display: "block", marginTop: 8, color: "#166534", fontWeight: 800, fontSize: 13 }}>
-                    Preparar materiales desde ahora
-                  </Text>
+                <div>
                   <Button
                     type="link"
                     size="small"
                     icon={<FileTextOutlined />}
-                    style={{ paddingInline: 0, marginTop: 8, fontWeight: 700, alignSelf: "flex-start" }}
+                    style={{ paddingInline: 0, marginTop: 6, fontWeight: 700 }}
                     disabled={!grupo.proximo_ciclo_pensum_id}
                     onClick={() => void abrirMaterialesProximoCiclo(grupo)}
                   >
-                    Lista de materiales visible
+                    Lista de materiales
                   </Button>
                 </div>
-              ) : avanceGrupo.maximoAlcanzado ? (
-                <div
-                  style={{
-                    background: "linear-gradient(180deg, #ffffff 0%, #f7fff9 100%)",
-                    border: "1px solid #bbf7d0",
-                    borderRadius: 14,
-                    padding: isMobile ? "10px 12px" : "12px 14px",
-                    flexShrink: 0,
-                    minWidth: isMobile ? "100%" : 250,
-                    boxShadow: "0 8px 24px rgba(34, 197, 94, 0.10)",
-                  }}
-                >
-                  <Text type="secondary" style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                    Estado del grupo
-                  </Text>
-                  <Text style={{ display: "block", fontSize: 14, fontWeight: 700, color: "#166534", marginTop: 4 }}>
-                    Plan completado
-                  </Text>
-                  <Text type="secondary" style={{ display: "block", marginTop: 2, lineHeight: 1.4 }}>
-                    {`Clase final registrada: #${avanceGrupo.totalClasesPrograma || 0}`}
-                  </Text>
-                  {avanceGrupo.proximoCiclo ? (
-                    <Text style={{ display: "block", marginTop: 8, color: "#334155", fontWeight: 600, lineHeight: 1.4 }}>
-                      {`Siguiente ciclo sugerido: ${avanceGrupo.proximoCiclo}`}
-                    </Text>
-                  ) : null}
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<FileTextOutlined />}
-                    style={{ paddingInline: 0, marginTop: 8, fontWeight: 600 }}
-                    disabled={!grupo.proximo_ciclo_pensum_id}
-                    onClick={() => void abrirMaterialesProximoCiclo(grupo)}
-                  >
-                    Lista de materiales visible
-                  </Button>
-                </div>
-              ) : null}
-            </Flex>
+              </Col>
+            </Row>
           </div>
         </Space>
       </Card>
