@@ -3646,7 +3646,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   <Table
                     dataSource={gamificacionPorEstudiante}
                     rowKey="key"
-                    pagination={{ pageSize: 10 }}
+                    pagination={false}
                     columns={columnasGamificacionGrupo as any}
                     size={isMobile ? "small" : "middle"}
                     scroll={{ x: "max-content" }}
