@@ -331,13 +331,13 @@ function getCycleUrgency(days?: number | null) {
       chipBg: "#fde68a",
       chipColor: "#92400e",
       level: "amarillo",
-      label: "Amarillo",
+      label: "#f59e0b",
     };
   }
 
   const d = days;
 
-  if (d <= 3) {
+  if (d <= 8) {
     return {
       bg: "linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)",
       border: "#fb7185",
@@ -347,11 +347,11 @@ function getCycleUrgency(days?: number | null) {
       chipBg: "#fecdd3",
       chipColor: "#9f1239",
       level: "rojo",
-      label: "Rojo",
+      label: "#ef4444",
     };
   }
 
-  if (d <= 7) {
+  if (d <= 15) {
     return {
       bg: "linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)",
       border: "#f59e0b",
@@ -361,7 +361,7 @@ function getCycleUrgency(days?: number | null) {
       chipBg: "#fde68a",
       chipColor: "#92400e",
       level: "amarillo",
-      label: "Amarillo",
+      label: "#f59e0b",
     };
   }
 
@@ -374,7 +374,7 @@ function getCycleUrgency(days?: number | null) {
     chipBg: "#a7f3d0",
     chipColor: "#065f46",
     level: "verde",
-    label: "Verde",
+    label: "#22c55e",
   };
 }
 
@@ -580,16 +580,25 @@ export default function CursosList() {
                 boxShadow: `0 8px 18px ${urgenciaCiclo.shadow}`,
               }}
             >
-              <Text style={{ fontSize: 12, color: urgenciaCiclo.title, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.3 }}>
-                Preparar materiales
-              </Text>
+              <Space size={6} align="center" style={{ marginBottom: 2 }}>
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 999,
+                    background: urgenciaCiclo.label,
+                    display: "inline-block",
+                    boxShadow: `0 0 0 3px ${urgenciaCiclo.chipBg}`,
+                  }}
+                />
+                <Text style={{ fontSize: 12, color: urgenciaCiclo.title, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                  Preparar materiales
+                </Text>
+              </Space>
               <div style={{ fontWeight: 700, lineHeight: 1.35, marginTop: 4, color: "#0f172a" }}>
                 {proximaClaseTexto}
               </div>
               <Space size={6} style={{ marginTop: 6 }} wrap>
-                <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 800, color: urgenciaCiclo.chipColor, background: urgenciaCiclo.chipBg }}>
-                  {`Semáforo ${urgenciaCiclo.label}`}
-                </Tag>
                 {typeof avanceGrupo.diasParaProximoCiclo === "number" ? (
                   <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700 }}>{`${avanceGrupo.diasParaProximoCiclo} días`}</Tag>
                 ) : (
