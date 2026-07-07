@@ -304,7 +304,7 @@ export default function TomarAsistencia() {
         const fechaSesion = fecha.format("YYYY-MM-DD");
         const { data: sesionesData, error: errorSesiones } = await supabaseBrowserClient
           .from("sesiones_clase")
-          .select("id, fecha, tema_visto, observaciones")
+          .select("id, fecha, tema_visto")
           .eq("curso_id", cursoSeleccionado)
           .order("fecha", { ascending: true });
 
@@ -556,7 +556,6 @@ export default function TomarAsistencia() {
       const nombreClase = temaLimpio || claseSeleccionada?.nombre || `Clase ${numeroClase}`;
       const referenciaClase = `Clase #${numeroClase}`;
       const detalleClase = `${referenciaClase} · ${nombreClase}`;
-      const observacionSesion = `${detalleClase}. Sesión registrada desde llamado de lista`;
 
       const guardarTemaSesion = async () => {
         if (!nombreClase) return;
@@ -567,7 +566,6 @@ export default function TomarAsistencia() {
           fecha: fechaSesion,
           horas_dictadas: HORAS_POR_SESION,
           tema_visto: detalleClase,
-          observaciones: observacionSesion,
         };
 
         const { error: upsertError } = await supabaseBrowserClient
@@ -608,7 +606,6 @@ export default function TomarAsistencia() {
               profesor_id: cursoSeleccionadoData?.profesor_id || null,
               horas_dictadas: HORAS_POR_SESION,
               tema_visto: detalleClase,
-              observaciones: observacionSesion,
             })
             .eq("id", sesionExistente.id);
           if (errUpdate) throw errUpdate;
@@ -637,7 +634,6 @@ export default function TomarAsistencia() {
                   profesor_id: cursoSeleccionadoData?.profesor_id || null,
                   horas_dictadas: HORAS_POR_SESION,
                   tema_visto: detalleClase,
-                  observaciones: observacionSesion,
                 })
                 .eq("id", id2);
             }
