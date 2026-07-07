@@ -2040,6 +2040,48 @@ function hasRecentPaymentConfirmedContext(history: Array<{ user: string; agent: 
   return /\b(pago_recibido_v2|pagorecibidov2|confirmamos\s+que\s+hemos\s+recibido\s+correctamente\s+tu\s+pago|mensaje\s+de\s+plantilla\s+enviado\s*\(\s*pagorecibidov2\s*\)|plantilla\s*:\s*pago_recibido_v2)\b/i.test(recentText);
 }
 
+function hasRecentAttendanceSupportContext(history: Array<{ user: string; agent: string }>): boolean {
+  const recentText = normalizeForMatch(
+    (Array.isArray(history) ? history : [])
+      .slice(-8)
+      .map((turn) => `${turn?.user || ""} ${turn?.agent || ""}`)
+      .join(" ")
+  );
+
+  if (!recentText) return false;
+
+  return /\b(inasistencia_motivacion|seguimiento_faltas_mensual|no\s+pudiste\s+asistir|no\s+te\s+quedes\s+atras|acompanarte|acompañarte|ponerte\s+al\s+dia|ponerte\s+al\s+día|faltas\s+registradas|estamos\s+para\s+apoyarte|cada\s+clase\s+suma\s+mucho)\b/i.test(recentText);
+}
+
+function isAttendanceSupportAffirmation(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /^(si|sip|sii|si necesito|claro|dale|listo|ok|okay|esta bien|está bien|si por favor|sí por favor|me ayudas|ayudame|ayudame por favor|necesito ayuda|necesito apoyo|quiero ponerme al dia|quiero ponerme al día)$/i.test(text);
+}
+
+function isAttendanceSupportQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+
+  return /\b(ponerme\s+al\s+dia|ponerme\s+al\s+día|que\s+vieron|que\s+tema\s+vieron|tema\s+de\s+la\s+clase|materiales?|tarea|proxima\s+clase|proxima\s+fecha|me\s+ayudas|necesito\s+apoyo|como\s+me\s+pongo\s+al\s+dia|cómo\s+me\s+pongo\s+al\s+día)\b/i.test(text);
+}
+
+function buildAttendanceSupportReply(studentContext?: any | null): string {
+  const nextClass = studentContext?.nextClass;
+  const nextClassLine = nextClass
+    ? `\n\nPor ejemplo, tu próxima clase registrada es: *${nextClass.cursoNombre}* el *${nextClass.fechaHoraTexto}*.`
+    : "";
+
+  return `Claro, te ayudamos con eso 😊\n\nPara ponerte al día, dime qué necesitas primero: *qué tema vieron*, *materiales o tarea* o *cuándo es tu próxima clase*. Si me dices una de esas, te respondo por aquí mismo.${nextClassLine}`;
+}
+
+function hasAttendanceTopicQuestion(message: string): boolean {
+  const text = normalizeForMatch(message);
+  if (!text) return false;
+  return /\b(que\s+vieron|que\s+tema\s+vieron|tema\s+de\s+la\s+clase|que\s+hicieron|que\s+dieron|ultima\s+clase|última\s+clase)\b/i.test(text);
+}
+
 function isGenericAckAfterReminder(message: string): boolean {
   return isThanksOnlyMessage(message)
     || isPureGreeting(message)
@@ -4669,6 +4711,7 @@ function buildIntentFocusedDirectResponse(
   }
 
   const hasPaymentReminderContext = hasRecentPaymentReminderContext(history);
+  const hasAttendanceSupportContext = hasRecentAttendanceSupportContext(history);
 
   if (hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
     return buildPostPaymentThanksReply(academy);
@@ -4701,6 +4744,14 @@ function buildIntentFocusedDirectResponse(
     if (!isBillingComplaint && !isPriceConflict && !isFrustrated) {
       return buildReminderFollowupReply();
     }
+  }
+
+  if (hasAttendanceSupportContext && (isAttendanceSupportAffirmation(message) || isAttendanceSupportQuestion(message))) {
+    return buildAttendanceSupportReply();
+  }
+
+  if (hasAttendanceSupportContext && isShortNegativeReply(message)) {
+    return "Entiendo 😊 Si más adelante necesitas ayuda para ponerte al día, me escribes por aquí y con gusto te apoyamos.";
   }
 
   if (isThanksOnlyMessage(message)) {
@@ -5859,11 +5910,12 @@ async function buildLinkAccessDirectResponse(
   return null;
 }
 
-function buildStudentDirectResponse(message: string, studentContext: any, mediosPago: any[] = []): string | null {
+function buildStudentDirectResponse(message: string, studentContext: any, mediosPago: any[] = [], history: Array<{ user: string; agent: string }> = []): string | null {
   if (!studentContext) return null;
 
   const text = normalizeForMatch(message);
   const mentionsMaterials = /\b(material|materiales|kit|kits|insumo|insumos|implemento|implementos|esmalte|esmaltes|electrodo|primer|pincel|lima|removedor|acetona|monomero|acrilico)\b/i.test(text);
+  const hasAttendanceSupportContext = hasRecentAttendanceSupportContext(history);
 
   // Detectar si la estudiante dice que YA ESTÁ MATRICULADA/INSCRITA → modo soporte
   const claimsEnrolled = /\b(ya\s+estoy\s+(matriculada|inscrita|inscrito|matriculado)|ya\s+(me\s+)?(inscrib[ií]|matricul[eé])|ya\s+pagu[eé]\s+la\s+inscripcion|ya\s+soy\s+estudiante)\b/i.test(text);
@@ -5892,6 +5944,19 @@ function buildStudentDirectResponse(message: string, studentContext: any, medios
     && /\b(hora|empieza|inicio|comienza|clase|curso)\b/i.test(text);
   const asksEnrolledCourses = /\b(en que curso|que cursos|mis cursos|inscrita|inscrito)\b/i.test(text);
   const asksPersonalMaterials = hasStudentMaterialSupportIntent(text);
+
+  if (hasAttendanceSupportContext && isAttendanceSupportAffirmation(message)) {
+    return buildAttendanceSupportReply(studentContext);
+  }
+
+  if (hasAttendanceSupportContext && hasAttendanceTopicQuestion(message)) {
+    const lastClass = studentContext?.lastClass;
+    if (!lastClass) {
+      return "No veo una clase anterior registrada para decirte el tema exacto. Si quieres, sí te confirmo tu próxima clase o revisamos materiales por aquí mismo.";
+    }
+
+    return `La última clase registrada fue *${lastClass.tema}*, el *${formatDateShort(lastClass.fecha)}*${lastClass.cursoNombre ? ` en *${lastClass.cursoNombre}*` : ""}.\n\nSi quieres, también te confirmo *materiales/tarea* o *tu próxima clase*.`;
+  }
 
   if (asksPersonalMaterials) {
     const deliveriesBlock = formatStudentMaterialDeliveries(studentContext);
@@ -6966,7 +7031,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext, mediosPago);
+    const directStudentResponse = buildStudentDirectResponse(effectiveMessage, studentContext, mediosPago, history);
     if (directStudentResponse) {
       const truncatedResponse = truncateResponse(directStudentResponse, 1000);
 

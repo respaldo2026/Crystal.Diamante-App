@@ -173,6 +173,12 @@ export interface StudentAgentContext {
     fechaHoraIso: string
     fechaHoraTexto: string
   } | null
+  lastClass: {
+    cursoNombre: string
+    programaNombre: string | null
+    fecha: string
+    tema: string
+  } | null
   contextText: string
 }
 
@@ -552,6 +558,39 @@ export async function getStudentContextByIdentification(rawIdentification: strin
       }
     }
 
+    let lastClass: StudentAgentContext['lastClass'] = null
+    const activeCourseIds = activeEnrollments
+      .map((item) => Number(item.cursoId))
+      .filter((value) => Number.isFinite(value) && value > 0)
+
+    if (activeCourseIds.length > 0) {
+      const { data: sesionesRows, error: sesionesError } = await supabase
+        .from('sesiones_clase')
+        .select('curso_id, fecha, tema_visto')
+        .in('curso_id', activeCourseIds)
+        .order('fecha', { ascending: false })
+        .limit(20)
+
+      if (sesionesError) {
+        console.error('[getStudentContextByIdentification] Error sesiones_clase:', sesionesError)
+      } else {
+        const session = ((sesionesRows || []) as any[]).find((row: any) => {
+          const tema = String(row?.tema_visto || '').trim()
+          return tema && !/sesi[oó]n programada autom[aá]ticamente para c[aá]lculo de ciclos/i.test(tema)
+        })
+
+        if (session?.curso_id && session?.fecha) {
+          const matchedEnrollment = activeEnrollments.find((item) => Number(item.cursoId) === Number(session.curso_id)) || null
+          lastClass = {
+            cursoNombre: matchedEnrollment?.cursoNombre || 'Curso',
+            programaNombre: matchedEnrollment?.programaNombre || null,
+            fecha: String(session.fecha),
+            tema: String(session.tema_visto || '').trim(),
+          }
+        }
+      }
+    }
+
     const enrolledProgramIds = Array.from(
       new Set(activeEnrollments.map((item) => Number(item.programaId)).filter((value) => Number.isFinite(value) && value > 0))
     )
@@ -575,6 +614,10 @@ export async function getStudentContextByIdentification(rawIdentification: strin
     const nextClassText = nextClass
       ? `- ${nextClass.cursoNombre}${nextClass.programaNombre ? ` (${nextClass.programaNombre})` : ''}: ${nextClass.fechaHoraTexto}`
       : '- No se pudo calcular próxima clase (faltan días/horarios en la matrícula).'
+
+    const lastClassText = lastClass
+      ? `- ${lastClass.cursoNombre}${lastClass.programaNombre ? ` (${lastClass.programaNombre})` : ''}: ${lastClass.tema} | Fecha: ${formatDateShort(lastClass.fecha)}`
+      : '- No hay una clase anterior registrada para consultar tema visto.'
 
     const nextMonthlyText = nextMonthlyPayment
       ? `- Cuota ${nextMonthlyPayment.numeroCuota ?? '?'} | Vence: ${formatDateShort(nextMonthlyPayment.fechaVencimiento)} | Valor: ${formatCurrency(nextMonthlyPayment.monto)}`
@@ -601,6 +644,9 @@ ${coursesText}
 
 Próxima clase estimada:
 ${nextClassText}
+
+Última clase registrada:
+${lastClassText}
 
 Estado financiero del estudiante:
 - Deuda total pendiente: ${formatCurrency(deudaTotal)}
@@ -629,6 +675,7 @@ Reglas obligatorias con este contexto:
       deudaTotal,
       nextMonthlyPayment,
       nextClass,
+      lastClass,
       contextText,
     }
   } catch (error) {
