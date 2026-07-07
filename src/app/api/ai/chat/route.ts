@@ -681,7 +681,7 @@ Responde con empatía, una sola idea por mensaje y cierre con pregunta breve.
 - Precio (formato obligatorio): muestra siempre *2 opciones de pago* en este orden y con negrilla: *Por Clase*, *Mensual*. Hazlo en formato corto y comercial (sin texto técnico largo). Debes aclarar materiales en cada una: Por Clase = no incluye materiales; Mensual = incluye 100% de materiales del mes ($300.000/mes).
 - "Efectivo" / confirmación de medio de pago: NO reinicies el embudo. Confirma que efectivo está disponible y da el siguiente paso. Si la promo de abril está activa, usa: "¡Perfecto! Entonces puedes separar tu cupo pagando *$120.000* en efectivo directamente en la academia hasta el *30 de abril* (antes *$190.000*). Ese valor ya incluye camisa uniforme, ceremonia de grado, certificado, alquiler de toga, guías y plataforma educativa. ¿Quieres que te diga los pasos para hacerlo?"
 - "Sí" / "sí porfavor" / "porfavor" después de preguntar si quiere medios y fechas de pago: da inmediatamente la lista de medios de pago y la fecha límite de mensualidad. NO preguntes de nuevo qué quiere saber.
-- Medios/fechas de pago: lista los medios disponibles (💵 Efectivo • 💜 Nequi: 3006402575 • 🟡 Bancolombia • 🟢 Sistecredito • 💳 Tarjeta), indica que la mensualidad tiene plazo hasta la segunda clase, y pregunta si quiere guía de inscripción.
+- Medios/fechas de pago: lista los medios disponibles (💵 Efectivo • 💜 Nequi: 3006402575 • 🟡 Bancolombia • 🟢 Sistecredito • 💳 Tarjeta). Regla obligatoria: la inscripción separa cupo; si la modalidad es mensual, cada mensualidad debe pagarse antes o en la fecha de inicio del nuevo ciclo porque con ese pago se entregan materiales. Pregunta si quiere guía de inscripción.
 - "¿Por todo cuánto se paga?" / "¿Cuánto es en total?": responde inscripción + (mensualidad × meses del programa). Si la promo de abril está activa, usa la inscripción en *$120.000* y aclara que es válida *hasta el 30 de abril*; si no, usa el valor regular. Luego pregunta si quiere separar cupo.
 - Horarios (cuando ya se identificó el programa): da directamente la información de días y horarios del programa en cuestión. NO preguntes de nuevo qué quiere saber.
 - Sábados (cuando hay grupo en sábado): confirma el horario disponible y pregunta si le queda bien.
@@ -4324,10 +4324,23 @@ function buildPaymentMethodsAndDatesReply(
     ? `\n\n💳 *Modalidades de pago:*\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}`
     : "\n\n💳 *Modalidades de pago:*\n• *Por Clase:* no incluye materiales.\n• *Mensual:* $300.000/mes (incluye 100% de materiales del mes).";  
 
-  return `¡Claro! Te respondo puntual 🙌\n\n${methodsBlock}${modalidadesBlock}\n\nLa *matrícula* se paga anticipada para separar cupo y la *mensualidad* se puede pagar hasta la segunda clase.\n\n¿Quieres que te recomiende la modalidad según tu presupuesto?`;
+  return `¡Claro! Te respondo puntual 🙌\n\n${methodsBlock}${modalidadesBlock}\n\nLa *inscripción* se paga anticipada para separar cupo.\nSi manejas *mensualidad*, cada pago debe quedar *antes o el mismo día de inicio del nuevo ciclo*, porque con ese pago se entregan los materiales del mes.\n\n¿Quieres que te recomiende la modalidad según tu presupuesto?`;
 }
 
-function buildStudentPaymentSupportReply(message: string, mediosPago: any[] = []): string {
+function resolveStudentPaymentTimingContext(studentContext?: any | null): {
+  dueDateText: string | null;
+  nextClassText: string | null;
+} {
+  const nextPayment = studentContext?.nextMonthlyPayment;
+  const nextClass = studentContext?.nextClass;
+
+  return {
+    dueDateText: nextPayment?.fechaVencimiento ? formatDateShort(nextPayment.fechaVencimiento) : null,
+    nextClassText: nextClass?.fechaHoraTexto ? String(nextClass.fechaHoraTexto) : null,
+  };
+}
+
+function buildStudentPaymentSupportReply(message: string, mediosPago: any[] = [], studentContext?: any | null): string {
   const text = normalizeForMatch(message);
   const methods = Array.isArray(mediosPago)
     ? mediosPago
@@ -4348,11 +4361,18 @@ function buildStudentPaymentSupportReply(message: string, mediosPago: any[] = []
 
   const dayMatch = text.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/i);
   const mentionedDay = dayMatch?.[1] || "";
+  const timingContext = resolveStudentPaymentTimingContext(studentContext);
   const dayLine = mentionedDay
-    ? `Sí, te sirve pagar el *${mentionedDay}* ✅\n\n`
-    : "Sí, está bien ✅\n\n";
+    ? `Si ese *${mentionedDay}* coincide con el *inicio del nuevo ciclo*, sí te sirve ✅\n\n`
+    : "Sí, pero ten en cuenta este punto ✅\n\n";
+  const timingLine = timingContext.dueDateText
+    ? `La *mensualidad* debe quedar paga *antes o el mismo día de inicio del nuevo ciclo*, porque con ese pago se entregan los materiales correspondientes.\n\nEn tu caso, la próxima mensualidad registrada vence el *${timingContext.dueDateText}*.`
+    : "La *mensualidad* debe quedar paga *antes o el mismo día de inicio del nuevo ciclo*, porque con ese pago se entregan los materiales correspondientes.\n\nSi quieres, te confirmo con Secretaría la *fecha exacta del próximo ciclo* para que no te quede ninguna duda.";
+  const nextClassLine = timingContext.nextClassText
+    ? `\n\nTu próxima clase registrada es el *${timingContext.nextClassText}*.`
+    : "";
 
-  return `${dayLine}La *mensualidad* se puede pagar hasta la *segunda clase* del mes correspondiente.\n\n${methodsBlock}\n\nSi quieres, te confirmo el valor pendiente exacto de este mes.`;
+  return `${dayLine}${timingLine}${nextClassLine}\n\n${methodsBlock}\n\nSi quieres, te confirmo el valor pendiente exacto de este mes.`;
 }
 
 function isStudentPaymentSupportQuestion(message: string): boolean {
@@ -4379,8 +4399,16 @@ function isPaymentDatesOnlyQuestion(message: string): boolean {
   return asksDates && !asksMethods;
 }
 
-function buildPaymentDatesOnlyReply(): string {
-  return "¡Claro! 🙌 Te confirmo las fechas de pago:\n\n• La *matrícula* se paga anticipada para separar el cupo.\n• La *mensualidad* la puedes pagar hasta la *segunda clase*.\n• Si eliges *Por Clase*, vas pagando cada clase que asistas.\n\nSi quieres, también te paso los *medios de pago*.";
+function buildPaymentDatesOnlyReply(studentContext?: any | null): string {
+  const timingContext = resolveStudentPaymentTimingContext(studentContext);
+  const monthlyLine = timingContext.dueDateText
+    ? `• Si eliges *Mensual*, cada mensualidad debe pagarse *antes o en la fecha de inicio del nuevo ciclo* (en tu registro actual, la próxima vence el *${timingContext.dueDateText}*), porque con ese pago se entregan materiales.`
+    : "• Si eliges *Mensual*, cada mensualidad debe pagarse *antes o en la fecha de inicio del nuevo ciclo*, porque con ese pago se entregan materiales.";
+  const fallbackLine = timingContext.dueDateText
+    ? ""
+    : "\n• Si quieres, te confirmo con Secretaría la *fecha exacta del próximo ciclo*.";
+
+  return `¡Claro! 🙌 Te confirmo las fechas de pago:\n\n• La *inscripción* se paga anticipada para separar el cupo.\n${monthlyLine}\n• Si eliges *Por Clase*, vas pagando cada clase que asistas.${fallbackLine}\n\nSi quieres, también te paso los *medios de pago*.`;
 }
 
 function isEnrollmentTimingQuestion(message: string): boolean {
@@ -4676,7 +4704,8 @@ function buildIntentFocusedDirectResponse(
   mediosPago: any[] = [],
   isKnownStudentByPhone: boolean = false,
   isKnownTeacherByPhone: boolean = false,
-  knownProfileName: string | null = null
+  knownProfileName: string | null = null,
+  studentContext: any | null = null
 ): string | null {
   const hasPaymentConfirmedContext = hasRecentPaymentConfirmedContext(history);
 
@@ -4702,7 +4731,7 @@ function buildIntentFocusedDirectResponse(
     }
 
     if (isStudentPaymentSupportQuestion(message)) {
-      return buildStudentPaymentSupportReply(message, mediosPago);
+      return buildStudentPaymentSupportReply(message, mediosPago, studentContext);
     }
   }
 
@@ -4722,7 +4751,7 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (hasPaymentReminderContext && !hasPaymentConfirmedContext && isStudentPaymentSupportQuestion(message)) {
-    return buildStudentPaymentSupportReply(message, mediosPago);
+    return buildStudentPaymentSupportReply(message, mediosPago, studentContext);
   }
 
   if (hasPaymentReminderContext && !hasPaymentConfirmedContext && isGenericAckAfterReminder(message)) {
@@ -4797,7 +4826,7 @@ function buildIntentFocusedDirectResponse(
     const reminderOrPaymentContext = /\b(recordatorio|pago|fecha\s+de\s+pago|mensualidad|cuota|cuotas|vencimiento|vence)\b/i.test(`${pendingNorm} ${lastNorm}`);
 
     if (reminderOrPaymentContext) {
-      return buildStudentPaymentSupportReply(message, mediosPago);
+      return buildStudentPaymentSupportReply(message, mediosPago, studentContext);
     }
 
     if (pricingContext && detectedProgram) {
@@ -4943,11 +4972,11 @@ function buildIntentFocusedDirectResponse(
     const options = resolveProgramPaymentOptions(detectedProgram, primaryCourse);
 
     if (paymentOptionSelection === "a") {
-      return `Perfecto 🙌 Quedas con *Mensual* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción separa tu cupo y la mensualidad la puedes pagar hasta la segunda clase. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
+      return `Perfecto 🙌 Quedas con *Mensual* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción separa tu cupo y, desde cada nuevo ciclo, la mensualidad debe quedar paga *antes o ese mismo día de inicio* porque allí se entregan materiales. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
     }
 
     if (paymentOptionSelection === "b") {
-      return `Excelente 🙌 Quedas con *Mensual* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción separa tu cupo y la mensualidad la puedes pagar hasta la segunda clase. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
+      return `Excelente 🙌 Quedas con *Mensual* en *${options.mensual100Text}/mes* (incluye 100% de materiales del mes).\n\nLa inscripción separa tu cupo y, desde cada nuevo ciclo, la mensualidad debe quedar paga *antes o ese mismo día de inicio* porque allí se entregan materiales. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
     }
 
     return `Perfecto 🙌 Quedas en *Por Clase* con *${options.porClaseText}* por clase (no incluye materiales).\n\nLa inscripción separa tu cupo y luego pagas por asistencia. ¿Quieres que te pase los pasos de inscripción en 1 mensaje?`;
@@ -4969,7 +4998,7 @@ function buildIntentFocusedDirectResponse(
   }
 
   if (isPaymentDatesOnlyQuestion(message)) {
-    return buildPaymentDatesOnlyReply();
+    return buildPaymentDatesOnlyReply(studentContext);
   }
 
   const shortAckContinuationReply = buildShortAckContinuationReply(
@@ -5600,11 +5629,11 @@ ${catalogReply}`;
         ? formatCurrencyCOP(inscripcion + priceOptions.mensual100)
         : "Por confirmar";
 
-      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con Mensual:* ${totalInicio100}\n• *Inicio con Por Clase:* inscripción + ${porClaseText} por cada clase que asistas\n\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n✅ Empiezas con inscripción y eliges la modalidad que mejor te funcione.\nSi lo necesitas, la mensualidad puede completarse hasta la segunda clase.`;
+      return `💸 Si quieres iniciar de una, te queda así:\n• *Inscripción:* ${insText}\n• *Inicio con Mensual:* ${totalInicio100}\n• *Inicio con Por Clase:* inscripción + ${porClaseText} por cada clase que asistas\n\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\n✅ Empiezas con inscripción y eliges la modalidad que mejor te funcione.\nSi manejas *Mensual*, cada nuevo ciclo debe iniciarse con la mensualidad paga porque allí se entregan los materiales.`;
     }
 
     if (asksPartialPayment) {
-      return `Buena pregunta 👌\n\nPara iniciar hoy, se maneja:\n💰 *Inscripción:* ${insText}\n💳 Luego eliges modalidad:\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\nSi no te queda fácil pagar todo junto, te orientamos para arrancar y completar mensualidad hasta la segunda clase.`;
+      return `Buena pregunta 👌\n\nPara iniciar hoy, se maneja:\n💰 *Inscripción:* ${insText}\n💳 Luego eliges modalidad:\n${buildHumanPaymentModalitiesBlock(detectedProgram, primaryCourse)}\n\nSi eliges *Mensual*, ten presente que cada ciclo nuevo debe iniciar con la mensualidad paga porque en ese momento se entregan los materiales.`;
     }
 
     const recentConversationText = (Array.isArray(history) ? history : [])
@@ -7110,7 +7139,8 @@ export async function POST(req: NextRequest) {
       mediosPago,
       knownStudentByPhone,
       knownTeacherByPhone,
-      phoneProfileName || studentContext?.estudianteNombre || null
+      phoneProfileName || studentContext?.estudianteNombre || null,
+      studentContext
     );
     const prioritizeCurrentQuestion = shouldPrioritizeCurrentQuestion(effectiveMessage);
     if (directIntentResponse && isRepetitiveResponse(directIntentResponse, history, effectiveMessage)) {
@@ -7126,7 +7156,8 @@ export async function POST(req: NextRequest) {
           mediosPago,
           knownStudentByPhone,
           knownTeacherByPhone,
-          phoneProfileName || studentContext?.estudianteNombre || null
+          phoneProfileName || studentContext?.estudianteNombre || null,
+          studentContext
         );
 
         if (retriedDirectResponse && !isRepetitiveResponse(retriedDirectResponse, history, effectiveMessage)) {
@@ -7156,7 +7187,8 @@ export async function POST(req: NextRequest) {
           mediosPago,
           knownStudentByPhone,
           knownTeacherByPhone,
-          phoneProfileName || studentContext?.estudianteNombre || null
+          phoneProfileName || studentContext?.estudianteNombre || null,
+          studentContext
         );
 
         if (forcedProgressResponse) {
