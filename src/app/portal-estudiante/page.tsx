@@ -1822,7 +1822,12 @@ export default function PortalEstudiante() {
             <Empty description="No estás inscrito en ningún curso activo" />
           ) : (
             <Row gutter={16}>
-              {misCursosResumen.map((curso: any, idx: number) => (
+              {misCursosResumen.map((curso: any, idx: number) => {
+                const asistenciaSobreCursoPercent = curso.totalClases > 0
+                  ? Math.max(0, Math.min(100, Math.round((Number(curso.asistencias || 0) / Number(curso.totalClases || 1)) * 100)))
+                  : 0;
+
+                return (
                 <Col xs={24} sm={12} lg={8} key={idx}>
                   <Card className="course-card" title={curso.curso}>
                     <div className="course-card__hero">
@@ -1849,17 +1854,22 @@ export default function PortalEstudiante() {
                     </div>
 
                     <div style={{ marginTop: 10 }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Tu avance de asistencia en el curso
+                      </Text>
                       <Progress
-                        percent={curso.tieneRegistrosAcademicos ? curso.progresoCursoPercent : 0}
+                        percent={curso.tieneRegistrosAcademicos ? asistenciaSobreCursoPercent : 0}
                         showInfo={false}
                         strokeColor={curso.estado === "aprobado" ? "#16a34a" : "#d81b87"}
                         trailColor="#e5e7eb"
+                        style={{ marginTop: 4 }}
                       />
                     </div>
 
                     <CourseFinishTrack
-                      completadas={curso.clasesDictadas}
+                      completadas={curso.asistencias}
                       total={curso.totalClases}
+                      tipo="asistencia"
                     />
 
                     <div style={{ marginTop: 12 }}>
@@ -1931,7 +1941,7 @@ export default function PortalEstudiante() {
                     })()}
                   </Card>
                 </Col>
-              ))}
+              );})}
             </Row>
           )}
 

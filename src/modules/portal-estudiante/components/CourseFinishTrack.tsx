@@ -3,9 +3,10 @@ import React from "react";
 type Props = {
   completadas: number;
   total: number;
+  tipo?: "curso" | "asistencia";
 };
 
-export const CourseFinishTrack: React.FC<Props> = ({ completadas, total }) => {
+export const CourseFinishTrack: React.FC<Props> = ({ completadas, total, tipo = "curso" }) => {
   const totalVisual = Math.max(0, Math.min(total || 0, 20));
   const completadasVisual = Math.max(0, Math.min(completadas || 0, totalVisual));
 
@@ -34,7 +35,11 @@ export const CourseFinishTrack: React.FC<Props> = ({ completadas, total }) => {
         })}
       </div>
       <div style={{ fontSize: 12, color: "#6b7280" }}>
-        {faltantes > 0 ? `Te faltan ${faltantes} clase(s) para completar el curso.` : "Curso completado. ¡Excelente trabajo!"}
+        {faltantes > 0
+          ? tipo === "asistencia"
+            ? `Te faltan ${faltantes} clase(s) por asistir para completar el curso.`
+            : `Te faltan ${faltantes} clase(s) para completar el curso.`
+          : "Curso completado. ¡Excelente trabajo!"}
       </div>
     </div>
   );
