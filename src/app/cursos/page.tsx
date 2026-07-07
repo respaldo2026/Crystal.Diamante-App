@@ -598,6 +598,13 @@ export default function CursosList() {
               <div style={{ fontWeight: 700, lineHeight: 1.35, marginTop: 4, color: "#0f172a" }}>
                 {proximaClaseTexto}
               </div>
+              {avanceGrupo.proximoCiclo ? (
+                <div style={{ marginTop: 4 }}>
+                  <Text style={{ fontSize: 12, color: "#334155", fontWeight: 700 }}>
+                    {`Ciclo por iniciar: ${avanceGrupo.proximoCiclo}`}
+                  </Text>
+                </div>
+              ) : null}
               <Space size={6} style={{ marginTop: 6 }} wrap>
                 {typeof avanceGrupo.diasParaProximoCiclo === "number" ? (
                   <Tag bordered={false} style={{ borderRadius: 999, marginInlineEnd: 0, fontWeight: 700 }}>{`${avanceGrupo.diasParaProximoCiclo} días`}</Tag>
@@ -656,7 +663,7 @@ export default function CursosList() {
                 disabled={!grupo.proximo_ciclo_pensum_id}
                 onClick={() => void abrirMaterialesProximoCiclo(grupo)}
               >
-                Materiales
+                {avanceGrupo.proximoCiclo ? `Materiales ${avanceGrupo.proximoCiclo}` : "Materiales"}
               </Button>
             </Flex>
           </Col>
