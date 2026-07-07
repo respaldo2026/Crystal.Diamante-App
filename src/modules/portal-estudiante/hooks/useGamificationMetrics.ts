@@ -1,6 +1,15 @@
 import { useMemo } from "react";
 import dayjs from "dayjs";
 import { quizAprobado } from "@/modules/portal-estudiante/utils";
+import {
+  XP_TOTAL_CURSO,
+  CLASES_OBJETIVO_CURSO,
+  XP_ASISTENCIA_POR_CLASE,
+  XP_QUIZ_MAX_POR_CLASE,
+  XP_EVIDENCIA_POR_CLASE,
+  XP_POR_NIVEL,
+  calcularXpQuizPorNota,
+} from "@/modules/gamification/scoring";
 
 export type CursoResumenGamificacion = {
   matriculaId: string;
@@ -37,12 +46,6 @@ type Params = {
   evidenciasTareas: any[];
 };
 
-const XP_TOTAL_CURSO = 1000;
-const CLASES_OBJETIVO_CURSO = 20;
-const XP_ASISTENCIA_POR_CLASE = 20;
-const XP_QUIZ_MAX_POR_CLASE = 20;
-const XP_EVIDENCIA_POR_CLASE = 10;
-const XP_POR_NIVEL = 100;
 const OBJETIVO_ASISTENCIA_SEMANAL = 1;
 const OBJETIVO_RACHA_SEMANAL = 3;
 const OBJETIVO_SEMANAS_RECIENTES = 4;
@@ -103,24 +106,6 @@ const calcularRachaSemanal = (fechasPresentes: dayjs.Dayjs[]) => {
   return { actual, mejor };
 };
 
-const normalizarNotaQuizA5 = (notaRaw: number) => {
-  const nota = Number(notaRaw);
-  if (!Number.isFinite(nota)) return 0;
-  if (nota > 5 && nota <= 100) return Number((nota / 20).toFixed(2));
-  return Math.max(0, Math.min(5, nota));
-};
-
-const calcularXpQuizPorNota = (notaRaw: number) => {
-  const nota = normalizarNotaQuizA5(notaRaw);
-  if (nota >= 4.8) return 20;
-  if (nota >= 4.5) return 18;
-  if (nota >= 4.0) return 16;
-  if (nota >= 3.5) return 14;
-  if (nota >= 3.0) return 10;
-  if (nota >= 2.0) return 6;
-  if (nota > 0) return 3;
-  return 0;
-};
 
 export const useGamificationMetrics = ({ misCursosResumen, asistencias, quizIntentos, evidenciasTareas }: Params) => {
   return useMemo(() => {

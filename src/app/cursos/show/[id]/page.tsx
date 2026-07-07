@@ -30,6 +30,14 @@ import {
 } from "@ant-design/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
+import {
+  XP_TOTAL_CURSO,
+  CLASES_OBJETIVO_CURSO,
+  XP_ASISTENCIA_POR_CLASE,
+  XP_QUIZ_MAX_POR_CLASE,
+  XP_EVIDENCIA_POR_CLASE,
+  calcularXpQuizPorNota,
+} from "@/modules/gamification/scoring";
 import dayjs from "dayjs";
 import { construirNombreGrupo } from "@utils/grupos";
 import { obtenerPensumPorProgramas, obtenerMaterialesPorProgramas, obtenerMaterialesClasePorProgramas } from "@modules/academico/pensum.service";
@@ -163,30 +171,6 @@ const getActividadColor = (nota?: number | null): string => {
   return "red";
 };
 
-const XP_TOTAL_CURSO = 1000;
-const CLASES_OBJETIVO_CURSO = 20;
-const XP_ASISTENCIA_POR_CLASE = 20;
-const XP_QUIZ_MAX_POR_CLASE = 20;
-const XP_EVIDENCIA_POR_CLASE = 10;
-
-const normalizarNotaQuizA5 = (notaRaw: number) => {
-  const nota = Number(notaRaw);
-  if (!Number.isFinite(nota)) return 0;
-  if (nota > 5 && nota <= 100) return Number((nota / 20).toFixed(2));
-  return Math.max(0, Math.min(5, nota));
-};
-
-const calcularXpQuizPorNota = (notaRaw: number) => {
-  const nota = normalizarNotaQuizA5(notaRaw);
-  if (nota >= 4.8) return 20;
-  if (nota >= 4.5) return 18;
-  if (nota >= 4.0) return 16;
-  if (nota >= 3.5) return 14;
-  if (nota >= 3.0) return 10;
-  if (nota >= 2.0) return 6;
-  if (nota > 0) return 3;
-  return 0;
-};
 
 const normalizarClaveOpcionQuiz = (valor?: string | null) => {
   const raw = String(valor || "").trim().toUpperCase();
