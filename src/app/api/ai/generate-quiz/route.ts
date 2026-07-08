@@ -201,6 +201,7 @@ async function generateQuizWithModelFallback(apiKey: string, promptTexto: string
 }
 
 export async function POST(req: NextRequest) {
+  let apiKeySource = "";
   try {
     const body = await req.json();
     const { pdf_url, pdf_urls, titulo_clase, pensum_curso_id } = body as {
@@ -235,6 +236,7 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+    apiKeySource = apiKeyResolution.source;
 
     // Descargar PDFs
     let documentosPdf: Array<{ base64: string; mimeType: string; url: string }> = [];
@@ -306,6 +308,7 @@ export async function POST(req: NextRequest) {
         {
           error: "Gemini devolvió límite de cuota (429). Verifica facturación/cuota de la API key activa o usa otra key en GEMINI_API_KEY.",
           details: String(error?.message || ""),
+          api_key_source: apiKeySource || "desconocida",
         },
         { status: 429 }
       );
@@ -316,13 +319,14 @@ export async function POST(req: NextRequest) {
         {
           error: "Acceso denegado por Gemini (401/403). Revisa que la key activa tenga permisos para Generative Language API.",
           details: String(error?.message || ""),
+          api_key_source: apiKeySource || "desconocida",
         },
         { status: 403 }
       );
     }
 
     return NextResponse.json(
-      { error: error?.message || "Error interno generando quiz." },
+      { error: error?.message || "Error interno generando quiz.", api_key_source: apiKeySource || "desconocida" },
       { status: 500 }
     );
   }
