@@ -3521,63 +3521,6 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                 </List.Item>
                               );
 
-                                        <Modal
-                                          open={modalEdicionManualVisible}
-                                          title={edicionManualTipo === "asistencia" ? "Editar asistencia" : "Editar tarea"}
-                                          onCancel={cerrarEdicionManual}
-                                          onOk={() => formEdicionManual.submit()}
-                                          okText="Guardar"
-                                          cancelText="Cancelar"
-                                          confirmLoading={edicionManualSaving}
-                                          destroyOnClose
-                                        >
-                                          <Form
-                                            form={formEdicionManual}
-                                            layout="vertical"
-                                            onFinish={guardarEdicionManual}
-                                          >
-                                            {edicionManualTipo === "asistencia" ? (
-                                              <>
-                                                <Alert
-                                                  type="info"
-                                                  showIcon
-                                                  message={edicionManualContexto?.fecha ? `Fecha: ${dayjs(edicionManualContexto.fecha).format("DD/MM/YYYY")}` : "Editar asistencia manual"}
-                                                  style={{ marginBottom: 12 }}
-                                                />
-                                                <Form.Item
-                                                  name="estado"
-                                                  label="Estado"
-                                                  rules={[{ required: true, message: "Selecciona un estado" }]}
-                                                >
-                                                  <Select
-                                                    options={[
-                                                      { label: "Presente", value: "presente" },
-                                                      { label: "Ausente", value: "ausente" },
-                                                      { label: "Tardanza", value: "tardanza" },
-                                                      { label: "Justificado", value: "justificado" },
-                                                    ]}
-                                                  />
-                                                </Form.Item>
-                                                <Form.Item name="observaciones" label="Observaciones">
-                                                  <Input.TextArea rows={3} placeholder="Notas opcionales" />
-                                                </Form.Item>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <Alert
-                                                  type="info"
-                                                  showIcon
-                                                  message={edicionManualContexto?.tema ? `Tema: ${edicionManualContexto.tema}` : "Editar tarea manual"}
-                                                  description="Si dejas la URL vacía y ya existe evidencia, se eliminará. Si no existe, se creará una evidencia manual de respaldo."
-                                                  style={{ marginBottom: 12 }}
-                                                />
-                                                <Form.Item name="evidenciaUrl" label="URL de la evidencia">
-                                                  <Input placeholder="Pega una URL de imagen o deja vacío para evidencia manual" />
-                                                </Form.Item>
-                                              </>
-                                            )}
-                                          </Form>
-                                        </Modal>
                             }}
                           />
                         ) : (
