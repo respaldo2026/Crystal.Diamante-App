@@ -2596,7 +2596,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       .map((est) => {
         const matriculaId = Number(est.id);
         const asistencia = asistenciasPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
-        const asistenciaPercent = Number(est.asistencia_porcentaje || 0);
+        const asistenciaPercent = asistencia.total > 0
+          ? Math.round((asistencia.presentes / asistencia.total) * 100)
+          : 0;
         const semanasConAsistencia = Array.from(new Set(asistencia.weekKeys)).length;
         const { actual: rachaActual } = calcularRachaSemanal(asistencia.weekKeys);
         const quizAprobados = quizAprobadosPorMatricula.get(matriculaId) || 0;
