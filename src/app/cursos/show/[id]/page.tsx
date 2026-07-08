@@ -2952,6 +2952,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     });
       })();
 
+  const detalleAsistenciaRowsConDivisores = injectCycleDividers(detalleAsistenciaRows);
+
       const detalleQuizRows = (() => {
     const matriculaId = String(gamificacionDetalleEstudiante?.id || "");
     if (!matriculaId) return [];
@@ -2988,10 +2990,14 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
     return (clasesPensum || []).map((tema: any) => {
       const temaId = String(tema?.id || "");
+      const claseNumero = Number(ordenTemaPorId.get(temaId) || 0);
+      const nombreClase = String(tema?.nombre_curso || tema?.titulo || `Clase ${claseNumero || ""}`).trim();
       const evidencia = evidenciaPorTema.get(temaId) || null;
       return {
         id: temaId,
+        claseNumero,
         tema: formatearNombreClase(tema),
+        observaciones: `Clase #${claseNumero || ""} - ${nombreClase}`,
         estado: evidencia ? "subida" : "pendiente",
         fecha: evidencia?.updated_at || evidencia?.created_at || null,
         url: evidencia?.url_imagen || null,
@@ -3000,6 +3006,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       };
     });
   })();
+
+  const detalleTareaRowsConDivisores = injectCycleDividers(detalleTareaRows);
 
   const cerrarEdicionManual = useCallback(() => {
     setModalEdicionManualVisible(false);
@@ -4421,23 +4429,51 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           {gamificacionDetalleTipo === "asistencia" ? (
             <Table
               size="small"
-              rowKey={(row: any) => String(row?.id || row?.fecha || "row")}
-              dataSource={detalleAsistenciaRows}
+              rowKey={(row: any) => String(row?.key || row?.id || row?.fecha || "row")}
+              dataSource={detalleAsistenciaRowsConDivisores}
               pagination={false}
-              scroll={{ x: "max-content" }}
+              tableLayout="fixed"
+              scroll={{ y: isMobile ? 360 : 520 }}
+              onRow={(record: any) => {
+                if (record?.es_divisor_ciclo) {
+                  const palette = getCycleDividerPalette(Number(record?.cicloNumero || 1));
+                  return { style: { background: palette.background, borderTop: "2px solid #d9d9d9" } };
+                }
+                return {};
+              }}
               columns={[
                 {
                   title: "Clase",
                   dataIndex: "claseNumero",
-                  width: 90,
+                  width: 110,
                   align: "center",
-                  render: (v: number) => <Tag color="blue">#{v}</Tag>,
+                  render: (v: number, row: any) => {
+                    if (row?.es_divisor_ciclo) {
+                      const palette = getCycleDividerPalette(Number(row?.cicloNumero || 1));
+                      return {
+                        children: (
+                          <Text strong style={{ color: palette.accent }}>
+                            {`Ciclo ${row?.cicloNumero || 1}: ${row?.cicloNombre || ""}`}
+                          </Text>
+                        ),
+                        props: { colSpan: 6 },
+                      };
+                    }
+                    return <Tag color="blue">#{v}</Tag>;
+                  },
                 },
-                { title: "Fecha", dataIndex: "fecha", width: 140, render: (v: string | null) => v ? dayjs(v).format("DD/MM/YYYY") : "-" },
+                {
+                  title: "Fecha",
+                  dataIndex: "fecha",
+                  width: 110,
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
+                  render: (v: string | null) => v ? dayjs(v).format("DD/MM/YYYY") : "-",
+                },
                 {
                   title: "Estado",
                   dataIndex: "estado",
-                  width: 120,
+                  width: 110,
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
                   render: (v: string, row: any) => {
                     if (row.presente) return <Tag color="green">Presente</Tag>;
                     if (String(v || "").toLowerCase() === "sin_registro") return <Tag>Sin registro</Tag>;
@@ -4445,10 +4481,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     return <Tag color="red">Faltó</Tag>;
                   },
                 },
-                { title: "Observación", dataIndex: "observaciones", render: (v: string | null) => v || "-" },
+                {
+                  title: "Observación",
+                  dataIndex: "observaciones",
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
+                  render: (v: string | null) => <Text style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{v || "-"}</Text>,
+                },
                 {
                   title: "Acción sugerida",
-                  width: 220,
+                  width: 170,
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
                   render: (_: any, row: any) => {
                     const estado = String(row?.estado || "").toLowerCase();
                     if (estado === "sin_registro") {
@@ -4462,8 +4504,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 },
                 {
                   title: "Editar",
-                  width: 120,
+                  width: 90,
                   align: "center",
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
                   render: (_: any, row: any) => (
                     <Button
                       size="small"
@@ -4509,25 +4552,72 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           ) : (
             <Table
               size="small"
-              rowKey={(row: any) => String(row?.id || row?.tema || "row")}
-              dataSource={detalleTareaRows}
-              pagination={{ pageSize: 8 }}
-              scroll={{ x: "max-content" }}
+              rowKey={(row: any) => String(row?.key || row?.id || row?.tema || "row")}
+              dataSource={detalleTareaRowsConDivisores}
+              pagination={false}
+              tableLayout="fixed"
+              scroll={{ y: isMobile ? 360 : 520 }}
+              onRow={(record: any) => {
+                if (record?.es_divisor_ciclo) {
+                  const palette = getCycleDividerPalette(Number(record?.cicloNumero || 1));
+                  return { style: { background: palette.background, borderTop: "2px solid #d9d9d9" } };
+                }
+                return {};
+              }}
               columns={[
-                { title: "Tema", dataIndex: "tema", render: (v: string) => <Text strong>{v}</Text> },
-                { title: "Estado", dataIndex: "estado", width: 120, render: (v: string) => v === "subida" ? <Tag color="green">Subida</Tag> : <Tag color="volcano">Pendiente</Tag> },
-                { title: "Fecha", dataIndex: "fecha", width: 150, render: (v: string | null) => v ? dayjs(v).format("DD/MM/YYYY") : "-" },
                 {
-                  title: "Evidencia",
+                  title: "Clase",
+                  dataIndex: "claseNumero",
                   width: 110,
                   align: "center",
+                  render: (v: number, row: any) => {
+                    if (row?.es_divisor_ciclo) {
+                      const palette = getCycleDividerPalette(Number(row?.cicloNumero || 1));
+                      return {
+                        children: (
+                          <Text strong style={{ color: palette.accent }}>
+                            {`Ciclo ${row?.cicloNumero || 1}: ${row?.cicloNombre || ""}`}
+                          </Text>
+                        ),
+                        props: { colSpan: 6 },
+                      };
+                    }
+                    return <Tag color="blue">#{v}</Tag>;
+                  },
+                },
+                {
+                  title: "Tema",
+                  dataIndex: "tema",
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
+                  render: (v: string) => <Text strong>{v}</Text>,
+                },
+                {
+                  title: "Estado",
+                  dataIndex: "estado",
+                  width: 120,
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
+                  render: (v: string) => v === "subida" ? <Tag color="green">Subida</Tag> : <Tag color="volcano">Pendiente</Tag>,
+                },
+                {
+                  title: "Fecha",
+                  dataIndex: "fecha",
+                  width: 130,
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
+                  render: (v: string | null) => v ? dayjs(v).format("DD/MM/YYYY") : "-",
+                },
+                {
+                  title: "Evidencia",
+                  width: 95,
+                  align: "center",
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
                   render: (_: any, row: any) => row.url
                     ? <Button size="small" icon={<EyeOutlined />} onClick={() => window.open(String(row.url), "_blank", "noopener,noreferrer")}>Ver</Button>
                     : <Text type="secondary">-</Text>,
                 },
                 {
                   title: "Acción sugerida",
-                  width: 220,
+                  width: 170,
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
                   render: (_: any, row: any) => row.estado === "subida"
                     ? <Text type="secondary">Tarea completa</Text>
                     : <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Te falta esta tarea: ${row.tema}`}</Text>,
@@ -4536,6 +4626,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   title: "Editar",
                   width: 120,
                   align: "center",
+                  onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
                   render: (_: any, row: any) => (
                     <Button
                       size="small"
