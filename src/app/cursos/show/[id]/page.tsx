@@ -2542,6 +2542,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
   const gamificacionPorEstudiante = useMemo(() => {
     const asistenciasPorMatricula = new Map<number, { total: number; presentes: number; weekKeys: string[] }>();
+    const totalClasesReferencia = Math.max(CLASES_OBJETIVO_CURSO, clasesPensum.length || 0);
 
     (asistenciasRaw || []).forEach((asistencia: any) => {
       const matriculaId = Number(asistencia?.matricula_id);
@@ -2596,8 +2597,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       .map((est) => {
         const matriculaId = Number(est.id);
         const asistencia = asistenciasPorMatricula.get(matriculaId) || { total: 0, presentes: 0, weekKeys: [] };
-        const asistenciaPercent = asistencia.total > 0
-          ? Math.round((asistencia.presentes / asistencia.total) * 100)
+        const asistenciaPercent = totalClasesReferencia > 0
+          ? Math.round((asistencia.presentes / totalClasesReferencia) * 100)
           : 0;
         const semanasConAsistencia = Array.from(new Set(asistencia.weekKeys)).length;
         const { actual: rachaActual } = calcularRachaSemanal(asistencia.weekKeys);
@@ -2633,7 +2634,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         };
       })
       .sort((a, b) => b.score - a.score || a.estudiante.localeCompare(b.estudiante, "es", { sensitivity: "base" }));
-  }, [asistenciasRaw, estudiantes, resultadosQuizResumen, evidenciasTareas]);
+  }, [asistenciasRaw, clasesPensum.length, estudiantes, resultadosQuizResumen, evidenciasTareas]);
 
   const hoy = dayjs();
   const finDeHoy = hoy.endOf("day");
@@ -2845,49 +2846,55 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     const matriculaId = Number(gamificacionDetalleEstudiante?.id || 0);
     if (!Number.isFinite(matriculaId) || !matriculaId) return [];
     const asistenciaPorFecha = new Map<string, any>();
+    const asistenciaPorClase = new Map<number, any>();
+    const fechaPorClase = new Map<number, string>();
+
+    (sesionesCanonicas || []).forEach((sesion: any) => {
+      const numeroClase = Number(sesion?.clase_numero || 0);
+      const fecha = String(sesion?.fecha || "").slice(0, 10);
+      if (!numeroClase || !fecha || fechaPorClase.has(numeroClase)) return;
+      fechaPorClase.set(numeroClase, fecha);
+    });
+
     (asistenciasRaw || [])
       .filter((a: any) => Number(a?.matricula_id) === matriculaId)
       .forEach((a: any) => {
         const fecha = String(a?.fecha || "").slice(0, 10);
         if (!fecha || asistenciaPorFecha.has(fecha)) return;
         asistenciaPorFecha.set(fecha, a);
+
+        const numeroPorObservacion = Number(extractClassNumber(String(a?.observaciones || "")) || 0);
+        const numeroPorFecha = (() => {
+          for (const [numeroClase, fechaClase] of fechaPorClase.entries()) {
+            if (fechaClase === fecha) return numeroClase;
+          }
+          return 0;
+        })();
+
+        const numeroClase = numeroPorObservacion || numeroPorFecha;
+        if (numeroClase && !asistenciaPorClase.has(numeroClase)) {
+          asistenciaPorClase.set(numeroClase, a);
+        }
       });
 
-    const fechasSesion = new Set<string>();
-    const rowsFromSesiones = (sesionesCanonicas || []).map((sesion: any) => {
-      const fecha = String(sesion?.fecha || "").slice(0, 10);
-      if (fecha) fechasSesion.add(fecha);
-      const asistencia = fecha ? asistenciaPorFecha.get(fecha) : null;
+    const totalClasesDetalle = Math.max(CLASES_OBJETIVO_CURSO, clasesPensum.length || 0);
+    return Array.from({ length: totalClasesDetalle }, (_, index) => {
+      const claseNumero = index + 1;
+      const fecha = fechaPorClase.get(claseNumero) || null;
+      const asistencia = asistenciaPorClase.get(claseNumero) || (fecha ? asistenciaPorFecha.get(fecha) : null);
       const estado = String(asistencia?.estado || "sin_registro").toLowerCase();
-      const presente = estado === "presente";
+      const nombreClase = String(nombreOficialClasePorNumero.get(claseNumero) || `Clase ${claseNumero}`).trim();
       return {
-        id: String(asistencia?.id || `sesion-${fecha || sesion?.id || ""}`),
+        id: String(asistencia?.id || `clase-${claseNumero}`),
+        claseNumero,
         attendanceId: asistencia?.id || null,
-        fecha: fecha || null,
+        fecha,
         estado,
-        presente,
-        observaciones: asistencia?.observaciones || sesion?.tema_visto || null,
+        presente: estado === "presente",
+        observaciones: asistencia?.observaciones || `Clase #${claseNumero} - ${nombreClase}`,
         matriculaId,
       };
     });
-
-    const rowsExtra = Array.from(asistenciaPorFecha.entries())
-      .filter(([fecha]) => !fechasSesion.has(fecha))
-      .map(([, a]) => {
-        const estado = String(a?.estado || "sin_registro").toLowerCase();
-        return {
-          id: String(a?.id || `${a?.fecha || ""}-${estado}`),
-          attendanceId: a?.id || null,
-          fecha: a?.fecha ? String(a.fecha).slice(0, 10) : null,
-          estado,
-          presente: estado === "presente",
-          observaciones: a?.observaciones || null,
-          matriculaId,
-        };
-      });
-
-    return [...rowsFromSesiones, ...rowsExtra]
-      .sort((a: any, b: any) => dayjs(b?.fecha || "").valueOf() - dayjs(a?.fecha || "").valueOf());
       })();
 
       const detalleQuizRows = (() => {
@@ -2972,8 +2979,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
     setEdicionManualSaving(true);
     try {
+      const action = edicionManualTipo === "asistencia" ? "attendance" : edicionManualTipo === "tarea" ? "task" : "";
+      if (!action) {
+        throw new Error("No se pudo determinar la acción a guardar");
+      }
+
       const payload: any = {
-        action: edicionManualTipo,
+        action,
       };
 
       if (edicionManualTipo === "asistencia") {
@@ -2983,6 +2995,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         payload.fecha = edicionManualContexto.fecha || null;
         payload.estado = values.estado;
         payload.observaciones = values.observaciones || null;
+
+        if (!payload.attendanceId && !payload.fecha) {
+          message.warning("Esta clase aún no tiene fecha registrada. Primero registra la sesión para poder editar asistencia.");
+          return;
+        }
       } else {
         payload.matriculaId = Number(gamificacionDetalleEstudiante.id || 0);
         payload.cursoId = Number(cursoId || 0);
@@ -4351,18 +4368,42 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               size="small"
               rowKey={(row: any) => String(row?.id || row?.fecha || "row")}
               dataSource={detalleAsistenciaRows}
-              pagination={{ pageSize: 8 }}
+              pagination={false}
               scroll={{ x: "max-content" }}
               columns={[
+                {
+                  title: "Clase",
+                  dataIndex: "claseNumero",
+                  width: 90,
+                  align: "center",
+                  render: (v: number) => <Tag color="blue">#{v}</Tag>,
+                },
                 { title: "Fecha", dataIndex: "fecha", width: 140, render: (v: string | null) => v ? dayjs(v).format("DD/MM/YYYY") : "-" },
-                { title: "Estado", dataIndex: "estado", width: 120, render: (_: any, row: any) => row.presente ? <Tag color="green">Presente</Tag> : <Tag color="red">Faltó</Tag> },
+                {
+                  title: "Estado",
+                  dataIndex: "estado",
+                  width: 120,
+                  render: (v: string, row: any) => {
+                    if (row.presente) return <Tag color="green">Presente</Tag>;
+                    if (String(v || "").toLowerCase() === "sin_registro") return <Tag>Sin registro</Tag>;
+                    if (String(v || "").toLowerCase() === "justificado") return <Tag color="gold">Justificado</Tag>;
+                    return <Tag color="red">Faltó</Tag>;
+                  },
+                },
                 { title: "Observación", dataIndex: "observaciones", render: (v: string | null) => v || "-" },
                 {
                   title: "Acción sugerida",
                   width: 220,
-                  render: (_: any, row: any) => row.presente
-                    ? <Text type="secondary">Sin novedad</Text>
-                    : <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Faltaste el ${row.fecha ? dayjs(row.fecha).format("DD/MM") : "día"}`}</Text>,
+                  render: (_: any, row: any) => {
+                    const estado = String(row?.estado || "").toLowerCase();
+                    if (estado === "sin_registro") {
+                      return <Text type="secondary">Pendiente de registro</Text>;
+                    }
+                    if (row.presente) {
+                      return <Text type="secondary">Sin novedad</Text>;
+                    }
+                    return <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Faltaste el ${row.fecha ? dayjs(row.fecha).format("DD/MM") : "día"}`}</Text>;
+                  },
                 },
                 {
                   title: "Editar",
