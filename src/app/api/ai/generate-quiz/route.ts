@@ -21,6 +21,11 @@ export interface PreguntaGenerada {
   respuesta_correcta: "A" | "B" | "C" | "D";
 }
 
+type ApiKeyResolution = {
+  key: string;
+  source: string;
+};
+
 const PROMPT_GENERAR_QUIZ = `Eres un experto en educación de belleza y cosmetología.
 A continuación recibirás el contenido de uno o varios PDFs de estudio de una clase de academia de belleza.
 Genera EXACTAMENTE 25 preguntas de opción múltiple en español basadas en TODO el contenido recibido.
@@ -112,6 +117,89 @@ function validarPreguntas(preguntas: PreguntaGenerada[]): PreguntaGenerada[] {
     }));
 }
 
+function resolveGeminiApiKey(): ApiKeyResolution | null {
+  const candidates: Array<{ source: string; value?: string }> = [
+    { source: "GEMINI_API_KEY", value: process.env.GEMINI_API_KEY },
+    { source: "GOOGLE_GENERATIVE_AI_API_KEY", value: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+    { source: "GOOGLE_API_KEY", value: process.env.GOOGLE_API_KEY },
+    { source: "GOOGLE_AI_API_KEY", value: process.env.GOOGLE_AI_API_KEY },
+  ];
+
+  for (const candidate of candidates) {
+    const key = String(candidate.value || "").trim();
+    if (key) {
+      return { key, source: candidate.source };
+    }
+  }
+
+  return null;
+}
+
+function isGeminiRateLimitError(error: any): boolean {
+  const status = Number(error?.status || error?.statusCode || error?.code || 0);
+  const message = String(error?.message || "").toLowerCase();
+  return status === 429 || message.includes("429") || message.includes("too many requests") || message.includes("quota") || message.includes("resource exhausted") || message.includes("prepayment credits are depleted");
+}
+
+function isGeminiAccessDeniedError(error: any): boolean {
+  const status = Number(error?.status || error?.statusCode || error?.code || 0);
+  const message = String(error?.message || "").toLowerCase();
+  return status === 401 || status === 403 || message.includes("permission denied") || message.includes("api key") || message.includes("access denied") || message.includes("unauthorized");
+}
+
+function isGeminiModelNotFoundError(error: any): boolean {
+  const status = Number(error?.status || error?.statusCode || error?.code || 0);
+  const message = String(error?.message || "").toLowerCase();
+  return status === 404 || message.includes("not found") || message.includes("is not found for api version") || message.includes("unsupported model");
+}
+
+async function generateQuizWithModelFallback(apiKey: string, promptTexto: string, documentosPdf: Array<{ base64: string; mimeType: string; url: string }>) {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const candidates = Array.from(
+    new Set(
+      [
+        process.env.GEMINI_MODEL_ECONOMY,
+        process.env.GEMINI_MODEL_CHAT,
+        process.env.GEMINI_MODEL_SUMMARY,
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-1.5-flash-002",
+        "gemini-1.5-flash",
+      ]
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  let lastError: any = null;
+
+  for (const modelName of candidates) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const partesContenido = [
+        ...documentosPdf.map((doc) => ({
+          inlineData: {
+            data: doc.base64,
+            mimeType: doc.mimeType,
+          },
+        })),
+        promptTexto,
+      ];
+
+      const result = await model.generateContent(partesContenido);
+      return { result, modelName };
+    } catch (error: any) {
+      lastError = error;
+      if (isGeminiModelNotFoundError(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError || new Error("No hay modelos Gemini disponibles para generar el quiz");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -140,10 +228,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-    if (!apiKey) {
+    const apiKeyResolution = resolveGeminiApiKey();
+    if (!apiKeyResolution?.key) {
       return NextResponse.json(
-        { error: "API key no configurada." },
+        { error: "API key no configurada. Define GEMINI_API_KEY (o GOOGLE_GENERATIVE_AI_API_KEY/GOOGLE_API_KEY)." },
         { status: 500 }
       );
     }
@@ -164,28 +252,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Llamar a Gemini con el PDF
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const modelName = String(process.env.GEMINI_MODEL_ECONOMY || "gemini-2.5-flash-lite").trim();
-    const model = genAI.getGenerativeModel({ model: modelName });
-
     const promptTextoBase = titulo_clase
       ? `${PROMPT_GENERAR_QUIZ}\n\nEl tema de esta clase es: "${titulo_clase}". Enfoca las preguntas en este tema específico.`
       : PROMPT_GENERAR_QUIZ;
 
     const promptTexto = `${promptTextoBase}\n\nCantidad de PDFs recibidos: ${documentosPdf.length}. Usa de forma integrada el contenido de todos los PDFs.`;
 
-    const partesContenido = [
-      ...documentosPdf.map((doc) => ({
-        inlineData: {
-          data: doc.base64,
-          mimeType: doc.mimeType,
-        },
-      })),
-      promptTexto,
-    ];
-
-    const result = await model.generateContent(partesContenido);
+    const { result, modelName } = await generateQuizWithModelFallback(apiKeyResolution.key, promptTexto, documentosPdf);
 
     const rawText = result.response.text();
 
@@ -219,12 +292,35 @@ export async function POST(req: NextRequest) {
       preguntas,
       total: preguntas.length,
       total_pdfs_procesados: documentosPdf.length,
+      model_usado: modelName,
+      api_key_source: apiKeyResolution.source,
       titulo_sugerido: titulo_clase
         ? `Quiz: ${titulo_clase}`
         : "Quiz de la clase",
     });
   } catch (error: any) {
     console.error("[generate-quiz] Error:", error);
+
+    if (isGeminiRateLimitError(error)) {
+      return NextResponse.json(
+        {
+          error: "Gemini devolvió límite de cuota (429). Verifica facturación/cuota de la API key activa o usa otra key en GEMINI_API_KEY.",
+          details: String(error?.message || ""),
+        },
+        { status: 429 }
+      );
+    }
+
+    if (isGeminiAccessDeniedError(error)) {
+      return NextResponse.json(
+        {
+          error: "Acceso denegado por Gemini (401/403). Revisa que la key activa tenga permisos para Generative Language API.",
+          details: String(error?.message || ""),
+        },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json(
       { error: error?.message || "Error interno generando quiz." },
       { status: 500 }
