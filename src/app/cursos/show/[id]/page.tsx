@@ -1650,7 +1650,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           matriculaIdsTemp.length > 0
             ? supabaseBrowserClient
                 .from("asistencias")
-                .select("matricula_id, estado, fecha, observaciones")
+              .select("id, matricula_id, estado, fecha, observaciones")
                 .in("matricula_id", matriculaIdsTemp)
             : Promise.resolve({ data: [], error: null } as any),
         ]);
@@ -2079,6 +2079,61 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               .eq("id", sesion.id)
           )
         );
+      }
+
+      // Corrige asistencias antiguas cuyo número de clase en observación no coincide con la clase canónica por fecha.
+      const temaCanonicoPorFecha = new Map<string, string>();
+      (sesionesNormalizadas || []).forEach((sesion: any) => {
+        const fecha = String(sesion?.fecha || "").slice(0, 10);
+        const tema = String(sesion?.tema_visto || "").trim();
+        if (!fecha || !tema || temaCanonicoPorFecha.has(fecha)) return;
+        temaCanonicoPorFecha.set(fecha, tema);
+      });
+
+      const asistenciasConTemaDesalineado = (asistenciasTodasCurso || []).filter((asistencia: any) => {
+        const fecha = String(asistencia?.fecha || "").slice(0, 10);
+        if (!fecha) return false;
+        const temaCanonico = String(temaCanonicoPorFecha.get(fecha) || "").trim();
+        if (!temaCanonico) return false;
+
+        const observacion = String(asistencia?.observaciones || "").trim();
+        const numeroCanonico = Number(extractClassNumber(temaCanonico) || 0);
+        const numeroObservacion = Number(extractClassNumber(observacion) || 0);
+
+        if (numeroCanonico > 0 && numeroObservacion > 0 && numeroCanonico !== numeroObservacion) {
+          return true;
+        }
+
+        if (!observacion && numeroCanonico > 0) {
+          return true;
+        }
+
+        return false;
+      });
+
+      if (asistenciasConTemaDesalineado.length > 0) {
+        await Promise.all(
+          asistenciasConTemaDesalineado.map((asistencia: any) => {
+            const fecha = String(asistencia?.fecha || "").slice(0, 10);
+            const temaCanonico = String(temaCanonicoPorFecha.get(fecha) || "").trim();
+            if (!asistencia?.id || !temaCanonico) return Promise.resolve();
+            return supabaseBrowserClient
+              .from("asistencias")
+              .update({ observaciones: temaCanonico })
+              .eq("id", asistencia.id);
+          })
+        );
+
+        asistenciasTodasCurso = (asistenciasTodasCurso || []).map((asistencia: any) => {
+          const fecha = String(asistencia?.fecha || "").slice(0, 10);
+          const temaCanonico = String(temaCanonicoPorFecha.get(fecha) || "").trim();
+          const fueCorregida = asistenciasConTemaDesalineado.some((item: any) => String(item?.id || "") === String(asistencia?.id || ""));
+          if (!fueCorregida || !temaCanonico) return asistencia;
+          return {
+            ...asistencia,
+            observaciones: temaCanonico,
+          };
+        });
       }
 
       setSesiones(sesionesNormalizadas);
@@ -2891,7 +2946,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         fecha,
         estado,
         presente: estado === "presente",
-        observaciones: asistencia?.observaciones || `Clase #${claseNumero} - ${nombreClase}`,
+        observaciones: `Clase #${claseNumero} - ${nombreClase}`,
         matriculaId,
       };
     });
