@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import { createClient } from "@supabase/supabase-js";
 import { getAgentImageSuggestion, withMediaSuggestion } from "@/utils/agent-media-suggestions";
 import { shouldSkipGeminiRequest } from "@/utils/ai-request-guards";
@@ -6538,7 +6539,37 @@ function buildContextualDirective(
   ].filter(Boolean).join('\n');
 }
 
+async function generateResponseWithGroq(prompt: string, timeoutMs: number = 25000): Promise<string | null> {
+  const groqKey = String(process.env.GROQ_API_KEY || "").trim();
+  if (!groqKey) return null;
+  try {
+    const groq = new Groq({ apiKey: groqKey });
+    const modelName = String(process.env.GROQ_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct").trim();
+    const timeoutPromise = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error(`Groq timeout después de ${timeoutMs}ms`)), timeoutMs)
+    );
+    const completionPromise = groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: modelName,
+      max_tokens: 1024,
+      temperature: 0.7,
+    }).then(c => c.choices[0]?.message?.content || null);
+    const text = await Promise.race([completionPromise, timeoutPromise]);
+    if (text && String(text).trim()) {
+      console.log(`[generateResponse] Éxito con Groq (${modelName})`);
+      return String(text).trim();
+    }
+    return null;
+  } catch (err: any) {
+    console.warn("[generateResponse] Groq falló, usando Gemini:", String(err?.message || ""));
+    return null;
+  }
+}
+
 async function generateResponse(apiKey: string, prompt: string, timeoutMs: number = 25000): Promise<string> {
+  const groqResponse = await generateResponseWithGroq(prompt, timeoutMs);
+  if (groqResponse) return groqResponse;
+
   const genAI = new GoogleGenerativeAI(apiKey);
   const economyModel = String(process.env.GEMINI_MODEL_ECONOMY || "gemini-2.5-flash-lite").trim();
   const unsupportedModels = new Set([
