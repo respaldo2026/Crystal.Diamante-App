@@ -46,6 +46,7 @@ const { Title, Text } = Typography;
 
 interface Student {
   id: number;
+  estudiante_id?: string;
   nombre_completo: string;
   email: string;
   identificacion: string;
@@ -250,6 +251,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [modalActividadVisible, setModalActividadVisible] = useState(false);
   const [modalRadarVisible, setModalRadarVisible] = useState(false);
   const [modalGamificacionDetalleVisible, setModalGamificacionDetalleVisible] = useState(false);
+  const [modalEdicionManualVisible, setModalEdicionManualVisible] = useState(false);
+  const [edicionManualTipo, setEdicionManualTipo] = useState<GamificationDetailType>("asistencia");
+  const [edicionManualSaving, setEdicionManualSaving] = useState(false);
+  const [edicionManualContexto, setEdicionManualContexto] = useState<any | null>(null);
   const [gamificacionDetalleTipo, setGamificacionDetalleTipo] = useState<GamificationDetailType>("asistencia");
   const [gamificacionDetalleEstudiante, setGamificacionDetalleEstudiante] = useState<any | null>(null);
   const [soloPendientesActividad, setSoloPendientesActividad] = useState(false);
@@ -266,6 +271,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const [quizProfesorPreguntas, setQuizProfesorPreguntas] = useState<any[]>([]);
   const [quizProfesorRespuestas, setQuizProfesorRespuestas] = useState<Record<string, string>>({});
   const [quizProfesorSaving, setQuizProfesorSaving] = useState(false);
+  const [formEdicionManual] = Form.useForm();
   const [quizProfesorResultado, setQuizProfesorResultado] = useState<{
     quizId: string;
     titulo: string;
@@ -1688,6 +1694,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
           return {
             id: matricula.id,
+            estudiante_id: String(matricula.estudiante_id || ""),
             nombre_completo: estudiante?.nombre_completo || "Sin nombre",
             email: estudiante?.email || "-",
             identificacion: estudiante?.identificacion || "-",
@@ -2608,6 +2615,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         return {
           key: String(est.id),
           id: est.id,
+          estudianteId: String(est.estudiante_id || ""),
           estudiante: est.nombre_completo,
           xpTotal,
           xpAsistencia,
@@ -2875,6 +2883,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           estado,
           presente,
           observaciones: a?.observaciones || null,
+          matriculaId,
         };
       })
         .sort((a: any, b: any) => dayjs(b?.fecha || "").valueOf() - dayjs(a?.fecha || "").valueOf());
@@ -2923,9 +2932,90 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         estado: evidencia ? "subida" : "pendiente",
         fecha: evidencia?.updated_at || evidencia?.created_at || null,
         url: evidencia?.url_imagen || null,
+        evidenciaId: evidencia?.id || null,
+        matriculaId,
       };
     });
   })();
+
+  const cerrarEdicionManual = useCallback(() => {
+    setModalEdicionManualVisible(false);
+    setEdicionManualContexto(null);
+    formEdicionManual.resetFields();
+  }, [formEdicionManual]);
+
+  const abrirEdicionManual = useCallback((tipo: GamificationDetailType, row: any) => {
+    if (!gamificacionDetalleEstudiante) {
+      message.warning("Selecciona un estudiante primero.");
+      return;
+    }
+
+    setEdicionManualTipo(tipo);
+    setEdicionManualContexto(row);
+    setModalEdicionManualVisible(true);
+
+    if (tipo === "asistencia") {
+      formEdicionManual.setFieldsValue({
+        estado: row?.estado || "presente",
+        observaciones: row?.observaciones || "",
+      });
+    } else {
+      formEdicionManual.setFieldsValue({
+        evidenciaUrl: row?.url || "",
+      });
+    }
+  }, [formEdicionManual, gamificacionDetalleEstudiante, message]);
+
+  const guardarEdicionManual = useCallback(async (values: any) => {
+    if (!gamificacionDetalleEstudiante || !edicionManualContexto) return;
+
+    setEdicionManualSaving(true);
+    try {
+      const payload: any = {
+        action: edicionManualTipo,
+      };
+
+      if (edicionManualTipo === "asistencia") {
+        payload.attendanceId = edicionManualContexto.id;
+        payload.estado = values.estado;
+        payload.observaciones = values.observaciones || null;
+      } else {
+        payload.matriculaId = Number(gamificacionDetalleEstudiante.id || 0);
+        payload.cursoId = Number(cursoId || 0);
+        payload.temaId = String(edicionManualContexto.id || "");
+        payload.estudianteId = String(gamificacionDetalleEstudiante.estudianteId || "");
+        payload.evidenciaUrl = values.evidenciaUrl || "";
+        payload.tema = String(edicionManualContexto.tema || "");
+      }
+
+      const response = await fetch("/api/gamificacion/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || "No se pudo guardar la modificación manual");
+      }
+
+      message.success(
+        edicionManualTipo === "asistencia"
+          ? "Asistencia actualizada"
+          : result?.action === "task_deleted"
+            ? "Tarea eliminada"
+            : "Tarea actualizada"
+      );
+
+      cerrarEdicionManual();
+      await cargarDatos(cursoId);
+    } catch (error: any) {
+      console.error(error);
+      message.error(error?.message || "No se pudo guardar la modificación manual");
+    } finally {
+      setEdicionManualSaving(false);
+    }
+  }, [cerrarEdicionManual, curso, cursoId, edicionManualContexto, edicionManualTipo, gamificacionDetalleEstudiante, gamificacionDetalleTipo, gamificacionPorEstudiante, message]);
 
   const columnasGamificacionGrupo = [
     {
@@ -3015,6 +3105,21 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       dataIndex: "quizAprobados",
       key: "quizAprobados",
       width: 90,
+    },
+    {
+      title: "Acciones",
+      key: "acciones",
+      width: 170,
+      render: (_: any, record: any) => (
+        <Space wrap size={6}>
+          <Button size="small" icon={<EditOutlined />} onClick={() => abrirDetalleGamificacion("asistencia", record)}>
+            Asistencia
+          </Button>
+          <Button size="small" icon={<EditOutlined />} onClick={() => abrirDetalleGamificacion("tarea", record)}>
+            Tarea
+          </Button>
+        </Space>
+      ),
     },
   ];
 
@@ -3340,6 +3445,46 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                       <Space direction="vertical" size={4}>
                                         {tema.descripcion ? <Text type="secondary">{tema.descripcion}</Text> : null}
                                         <Space wrap size={8}>
+                                          {mostrarEnlacePrincipal ? (
+                                            <Button
+                                              size="small"
+                                              type="link"
+                                              icon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FileTextOutlined />}
+                                              onClick={() => {
+                                                if (!recursoPrincipalTema) {
+                                                  message.warning("Este tema aún no tiene material didáctico disponible.");
+                                                  return;
+                                                }
+                                                abrirMaterialTema(recursoPrincipalTema, tema.nombre_curso || tema.titulo || "Tema", materialesTema);
+                                              }}
+                                              style={{ paddingInline: 0 }}
+                                            >
+                                              {tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}
+                                            </Button>
+                                          ) : null}
+                                          {presentacionesTema.length > 1 ? (
+                                            <Space size={6} wrap>
+                                              {presentacionesTema.map((presentacion: any, indexPresentacion: number) => {
+                                                const tituloBtn = String(parseTemaFromTitulo(presentacion?.titulo || "").tituloLimpio || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material");
+                                                return (
+                                                  <React.Fragment key={String(presentacion?.id || `${temaId}-gamma-${indexPresentacion}`)}>
+                                                    {indexPresentacion > 0 && (
+                                                      <span style={{ color: "#d9d9d9", userSelect: "none" }}>|</span>
+                                                    )}
+                                                    <Button
+                                                      size="small"
+                                                      type="link"
+                                                      icon={<PlayCircleOutlined />}
+                                                      style={{ paddingInline: 0 }}
+                                                      onClick={() => abrirMaterialTema(presentacion, tituloBtn, materialesTema)}
+                                                    >
+                                                      {tituloBtn}
+                                                    </Button>
+                                                  </React.Fragment>
+                                                );
+                                              })}
+                                            </Space>
+                                          ) : null}
                                           {(() => {
                                             const quizTema = (quizzesClase || []).find(
                                               (quiz: any) =>
@@ -3350,65 +3495,23 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                             const quizTemaDisponible = (quizzesClase || []).find(
                                               (quiz: any) => String(quiz?.pensum_curso_id || "") === String(temaId)
                                             );
+
+                                            if (!quizTema && quizTemaDisponible) {
+                                              return <Tag color="gold">Quiz no habilitado</Tag>;
+                                            }
+
+                                            if (!quizTema) return null;
+
                                             return (
-                                              <>
-                                                {mostrarEnlacePrincipal ? (
-                                                  <Button
-                                                    size="small"
-                                                    type="link"
-                                                    icon={recursoPrincipalTema ? getMaterialIcon(recursoPrincipalTema) : <FileTextOutlined />}
-                                                    onClick={() => {
-                                                      if (!recursoPrincipalTema) {
-                                                        message.warning("Este tema aún no tiene material didáctico disponible.");
-                                                        return;
-                                                      }
-                                                      abrirMaterialTema(recursoPrincipalTema, tema.nombre_curso || tema.titulo || "Tema", materialesTema);
-                                                    }}
-                                                    style={{ paddingInline: 0 }}
-                                                  >
-                                                    {tema.nombre_curso || tema.titulo || `Tema ${temaIndex + 1}`}
-                                                  </Button>
-                                                ) : null}
-                                                {presentacionesTema.length > 1 ? (
-                                                  <Space size={6} wrap>
-                                                    {presentacionesTema.map((presentacion: any, indexPresentacion: number) => {
-                                                      const tituloBtn = String(parseTemaFromTitulo(presentacion?.titulo || "").tituloLimpio || presentacion?.nombre_archivo || tema.nombre_curso || tema.titulo || "Material");
-                                                      return (
-                                                        <React.Fragment key={String(presentacion?.id || `${temaId}-gamma-${indexPresentacion}`)}>
-                                                          {indexPresentacion > 0 && (
-                                                            <span style={{ color: "#d9d9d9", userSelect: "none" }}>|</span>
-                                                          )}
-                                                          <Button
-                                                            size="small"
-                                                            type="link"
-                                                            icon={<PlayCircleOutlined />}
-                                                            style={{ paddingInline: 0 }}
-                                                            onClick={() => abrirMaterialTema(presentacion, tituloBtn, materialesTema)}
-                                                          >
-                                                            {tituloBtn}
-                                                          </Button>
-                                                        </React.Fragment>
-                                                      );
-                                                    })}
-                                                  </Space>
-                                                ) : null}
-                                                <Button
-                                                  size="small"
-                                                  type={quizTema ? "primary" : "default"}
-                                                  ghost
-                                                  icon={<FormOutlined />}
-                                                  disabled={!quizTema}
-                                                  onClick={() => {
-                                                    if (!quizTema) return;
-                                                    abrirQuizProfesor(quizTema);
-                                                  }}
-                                                >
-                                                  Quiz
-                                                </Button>
-                                                {!quizTema && quizTemaDisponible ? (
-                                                  <Tag color="gold">Quiz no habilitado</Tag>
-                                                ) : null}
-                                              </>
+                                              <Button
+                                                size="small"
+                                                type="primary"
+                                                ghost
+                                                icon={<FormOutlined />}
+                                                onClick={() => abrirQuizProfesor(quizTema)}
+                                              >
+                                                Quiz
+                                              </Button>
                                             );
                                           })()}
                                         </Space>
@@ -3417,6 +3520,64 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                                   />
                                 </List.Item>
                               );
+
+                                        <Modal
+                                          open={modalEdicionManualVisible}
+                                          title={edicionManualTipo === "asistencia" ? "Editar asistencia" : "Editar tarea"}
+                                          onCancel={cerrarEdicionManual}
+                                          onOk={() => formEdicionManual.submit()}
+                                          okText="Guardar"
+                                          cancelText="Cancelar"
+                                          confirmLoading={edicionManualSaving}
+                                          destroyOnClose
+                                        >
+                                          <Form
+                                            form={formEdicionManual}
+                                            layout="vertical"
+                                            onFinish={guardarEdicionManual}
+                                          >
+                                            {edicionManualTipo === "asistencia" ? (
+                                              <>
+                                                <Alert
+                                                  type="info"
+                                                  showIcon
+                                                  message={edicionManualContexto?.fecha ? `Fecha: ${dayjs(edicionManualContexto.fecha).format("DD/MM/YYYY")}` : "Editar asistencia manual"}
+                                                  style={{ marginBottom: 12 }}
+                                                />
+                                                <Form.Item
+                                                  name="estado"
+                                                  label="Estado"
+                                                  rules={[{ required: true, message: "Selecciona un estado" }]}
+                                                >
+                                                  <Select
+                                                    options={[
+                                                      { label: "Presente", value: "presente" },
+                                                      { label: "Ausente", value: "ausente" },
+                                                      { label: "Tardanza", value: "tardanza" },
+                                                      { label: "Justificado", value: "justificado" },
+                                                    ]}
+                                                  />
+                                                </Form.Item>
+                                                <Form.Item name="observaciones" label="Observaciones">
+                                                  <Input.TextArea rows={3} placeholder="Notas opcionales" />
+                                                </Form.Item>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Alert
+                                                  type="info"
+                                                  showIcon
+                                                  message={edicionManualContexto?.tema ? `Tema: ${edicionManualContexto.tema}` : "Editar tarea manual"}
+                                                  description="Si dejas la URL vacía y ya existe evidencia, se eliminará. Si no existe, se creará una evidencia manual de respaldo."
+                                                  style={{ marginBottom: 12 }}
+                                                />
+                                                <Form.Item name="evidenciaUrl" label="URL de la evidencia">
+                                                  <Input placeholder="Pega una URL de imagen o deja vacío para evidencia manual" />
+                                                </Form.Item>
+                                              </>
+                                            )}
+                                          </Form>
+                                        </Modal>
                             }}
                           />
                         ) : (
