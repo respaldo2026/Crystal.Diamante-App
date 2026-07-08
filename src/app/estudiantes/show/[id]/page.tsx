@@ -570,9 +570,9 @@ export default function StudentDetailView() {
             const cursoId = cursoData?.id;
             const key = `${cursoId || ""}-${asistencia?.fecha || ""}`;
             const claseNumero =
-              extractClassNumber(asistencia?.observaciones || "") ??
               claseNumeroPorCursoFecha.get(key) ??
               extractClassNumber(temaPorCursoFecha.get(key) || "") ??
+              extractClassNumber(asistencia?.observaciones || "") ??
               null;
             const temaSesion = String(temaPorCursoFecha.get(key) || "").trim();
             const temaSesionEsGenerico = !temaSesion || /^clase\s*#?\s*\d+/i.test(temaSesion) || /^[-–—]$/.test(temaSesion);

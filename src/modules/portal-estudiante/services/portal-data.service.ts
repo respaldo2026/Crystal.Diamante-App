@@ -306,7 +306,7 @@ export const fetchPortalEstudianteData = async (options?: FetchPortalDataOptions
           return {
             ...asistencia,
             tema_visto: temaSesion || temaAsistencia,
-            clase_numero: extractClassNumber(asistencia?.observaciones) ?? claseNumeroPorCursoFecha.get(key) ?? null,
+            clase_numero: claseNumeroPorCursoFecha.get(key) ?? extractClassNumber(temaSesion || temaAsistencia || asistencia?.observaciones || "") ?? null,
             registro_clase: detalleRegistro || temaSesion || temaAsistencia || null,
           };
         });
