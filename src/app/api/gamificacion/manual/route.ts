@@ -33,21 +33,90 @@ export async function POST(req: NextRequest) {
 
     if (action === "attendance") {
       const attendanceId = String(body?.attendanceId || body?.id || "").trim();
+      const matriculaId = Number(body?.matriculaId || body?.matricula_id || 0);
+      const fecha = String(body?.fecha || "").slice(0, 10);
       const estado = String(body?.estado || "").trim().toLowerCase();
       const observaciones = body?.observaciones == null ? null : String(body.observaciones).trim() || null;
-
-      if (!attendanceId) {
-        return NextResponse.json({ error: "attendanceId es requerido" }, { status: 400 });
-      }
 
       if (!estado) {
         return NextResponse.json({ error: "estado es requerido" }, { status: 400 });
       }
 
+      if (!attendanceId && (!Number.isFinite(matriculaId) || matriculaId <= 0 || !fecha)) {
+        return NextResponse.json({ error: "attendanceId o (matriculaId + fecha) son requeridos" }, { status: 400 });
+      }
+
+      let existente: any = null;
+
+      if (attendanceId) {
+        const { data, error } = await supabaseAdmin
+          .from("asistencias")
+          .select("id, matricula_id, fecha, estado, observaciones")
+          .eq("id", attendanceId)
+          .maybeSingle();
+
+        if (error) {
+          return NextResponse.json({ error: error.message, details: error.details }, { status: 400 });
+        }
+
+        existente = data || null;
+      }
+
+      if (!existente && Number.isFinite(matriculaId) && matriculaId > 0 && fecha) {
+        const { data, error } = await supabaseAdmin
+          .from("asistencias")
+          .select("id, matricula_id, fecha, estado, observaciones")
+          .eq("matricula_id", matriculaId)
+          .eq("fecha", fecha)
+          .maybeSingle();
+
+        if (error) {
+          return NextResponse.json({ error: error.message, details: error.details }, { status: 400 });
+        }
+
+        existente = data || null;
+      }
+
+      if (estado === "sin_registro") {
+        if (!existente?.id) {
+          return NextResponse.json({ ok: true, action: "attendance_deleted", data: null });
+        }
+
+        const { error } = await supabaseAdmin
+          .from("asistencias")
+          .delete()
+          .eq("id", existente.id);
+
+        if (error) {
+          return NextResponse.json({ error: error.message, details: error.details }, { status: 400 });
+        }
+
+        return NextResponse.json({ ok: true, action: "attendance_deleted", data: { id: existente.id } });
+      }
+
+      if (existente?.id) {
+        const { data, error } = await supabaseAdmin
+          .from("asistencias")
+          .update({ estado, observaciones })
+          .eq("id", existente.id)
+          .select("id, matricula_id, fecha, estado, observaciones")
+          .single();
+
+        if (error) {
+          return NextResponse.json({ error: error.message, details: error.details }, { status: 400 });
+        }
+
+        return NextResponse.json({ ok: true, action: "attendance_updated", data });
+      }
+
       const { data, error } = await supabaseAdmin
         .from("asistencias")
-        .update({ estado, observaciones })
-        .eq("id", attendanceId)
+        .insert({
+          matricula_id: matriculaId,
+          fecha,
+          estado,
+          observaciones,
+        })
         .select("id, matricula_id, fecha, estado, observaciones")
         .single();
 
@@ -55,7 +124,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: error.message, details: error.details }, { status: 400 });
       }
 
-      return NextResponse.json({ ok: true, action: "attendance", data });
+      return NextResponse.json({ ok: true, action: "attendance_created", data });
     }
 
     if (action === "task") {

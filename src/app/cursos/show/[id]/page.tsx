@@ -2844,21 +2844,50 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const detalleAsistenciaRows = (() => {
     const matriculaId = Number(gamificacionDetalleEstudiante?.id || 0);
     if (!Number.isFinite(matriculaId) || !matriculaId) return [];
-    return (asistenciasRaw || [])
+    const asistenciaPorFecha = new Map<string, any>();
+    (asistenciasRaw || [])
       .filter((a: any) => Number(a?.matricula_id) === matriculaId)
-      .map((a: any) => {
-        const estado = String(a?.estado || "sin_registro");
-        const presente = estado.toLowerCase() === "presente";
+      .forEach((a: any) => {
+        const fecha = String(a?.fecha || "").slice(0, 10);
+        if (!fecha || asistenciaPorFecha.has(fecha)) return;
+        asistenciaPorFecha.set(fecha, a);
+      });
+
+    const fechasSesion = new Set<string>();
+    const rowsFromSesiones = (sesionesCanonicas || []).map((sesion: any) => {
+      const fecha = String(sesion?.fecha || "").slice(0, 10);
+      if (fecha) fechasSesion.add(fecha);
+      const asistencia = fecha ? asistenciaPorFecha.get(fecha) : null;
+      const estado = String(asistencia?.estado || "sin_registro").toLowerCase();
+      const presente = estado === "presente";
+      return {
+        id: String(asistencia?.id || `sesion-${fecha || sesion?.id || ""}`),
+        attendanceId: asistencia?.id || null,
+        fecha: fecha || null,
+        estado,
+        presente,
+        observaciones: asistencia?.observaciones || sesion?.tema_visto || null,
+        matriculaId,
+      };
+    });
+
+    const rowsExtra = Array.from(asistenciaPorFecha.entries())
+      .filter(([fecha]) => !fechasSesion.has(fecha))
+      .map(([, a]) => {
+        const estado = String(a?.estado || "sin_registro").toLowerCase();
         return {
           id: String(a?.id || `${a?.fecha || ""}-${estado}`),
-          fecha: a?.fecha || null,
+          attendanceId: a?.id || null,
+          fecha: a?.fecha ? String(a.fecha).slice(0, 10) : null,
           estado,
-          presente,
+          presente: estado === "presente",
           observaciones: a?.observaciones || null,
           matriculaId,
         };
-      })
-        .sort((a: any, b: any) => dayjs(b?.fecha || "").valueOf() - dayjs(a?.fecha || "").valueOf());
+      });
+
+    return [...rowsFromSesiones, ...rowsExtra]
+      .sort((a: any, b: any) => dayjs(b?.fecha || "").valueOf() - dayjs(a?.fecha || "").valueOf());
       })();
 
       const detalleQuizRows = (() => {
@@ -2928,7 +2957,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
     if (tipo === "asistencia") {
       formEdicionManual.setFieldsValue({
-        estado: row?.estado || "presente",
+        estado: row?.estado && row?.estado !== "sin_registro" ? row.estado : "presente",
         observaciones: row?.observaciones || "",
       });
     } else {
@@ -2948,7 +2977,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       };
 
       if (edicionManualTipo === "asistencia") {
-        payload.attendanceId = edicionManualContexto.id;
+        payload.attendanceId = edicionManualContexto.attendanceId || null;
+        payload.matriculaId = Number(gamificacionDetalleEstudiante.id || 0);
+        payload.cursoId = Number(cursoId || 0);
+        payload.fecha = edicionManualContexto.fecha || null;
         payload.estado = values.estado;
         payload.observaciones = values.observaciones || null;
       } else {
@@ -2973,7 +3005,11 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       message.success(
         edicionManualTipo === "asistencia"
-          ? "Asistencia actualizada"
+          ? result?.action === "attendance_deleted"
+            ? "Asistencia eliminada"
+            : result?.action === "attendance_created"
+              ? "Asistencia creada"
+              : "Asistencia actualizada"
           : result?.action === "task_deleted"
             ? "Tarea eliminada"
             : "Tarea actualizada"
@@ -4328,6 +4364,20 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     ? <Text type="secondary">Sin novedad</Text>
                     : <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Faltaste el ${row.fecha ? dayjs(row.fecha).format("DD/MM") : "día"}`}</Text>,
                 },
+                {
+                  title: "Editar",
+                  width: 120,
+                  align: "center",
+                  render: (_: any, row: any) => (
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => abrirEdicionManual("asistencia", row)}
+                    >
+                      Editar
+                    </Button>
+                  ),
+                },
               ]}
             />
           ) : gamificacionDetalleTipo === "quiz" ? (
@@ -4386,10 +4436,84 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     ? <Text type="secondary">Tarea completa</Text>
                     : <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Te falta esta tarea: ${row.tema}`}</Text>,
                 },
+                {
+                  title: "Editar",
+                  width: 120,
+                  align: "center",
+                  render: (_: any, row: any) => (
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => abrirEdicionManual("tarea", row)}
+                    >
+                      Editar
+                    </Button>
+                  ),
+                },
               ]}
             />
           )}
         </Space>
+      </Modal>
+
+      <Modal
+        open={modalEdicionManualVisible}
+        title={edicionManualTipo === "asistencia" ? "Editar asistencia" : "Editar tarea"}
+        onCancel={cerrarEdicionManual}
+        onOk={() => formEdicionManual.submit()}
+        okText="Guardar"
+        cancelText="Cancelar"
+        confirmLoading={edicionManualSaving}
+        destroyOnClose
+      >
+        <Form
+          form={formEdicionManual}
+          layout="vertical"
+          onFinish={guardarEdicionManual}
+        >
+          {edicionManualTipo === "asistencia" ? (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                message={edicionManualContexto?.fecha ? `Fecha: ${dayjs(edicionManualContexto.fecha).format("DD/MM/YYYY")}` : "Editar asistencia manual"}
+                description="Puedes marcar asistencia, ausencia o quitar completamente el registro de esa clase."
+                style={{ marginBottom: 12 }}
+              />
+              <Form.Item
+                name="estado"
+                label="Estado"
+                rules={[{ required: true, message: "Selecciona un estado" }]}
+              >
+                <Select
+                  options={[
+                    { label: "Presente", value: "presente" },
+                    { label: "Ausente", value: "ausente" },
+                    { label: "Tardanza", value: "tardanza" },
+                    { label: "Justificado", value: "justificado" },
+                    { label: "Quitar registro", value: "sin_registro" },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="observaciones" label="Observaciones">
+                <Input.TextArea rows={3} placeholder="Notas opcionales" />
+              </Form.Item>
+            </>
+          ) : (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                message={edicionManualContexto?.tema ? `Tema: ${edicionManualContexto.tema}` : "Editar tarea manual"}
+                description="Si dejas la URL vacía y ya existe evidencia, se eliminará. Si no existe, se creará una evidencia manual de respaldo."
+                style={{ marginBottom: 12 }}
+              />
+              <Form.Item name="evidenciaUrl" label="URL de la evidencia">
+                <Input placeholder="Pega una URL de imagen o deja vacío para evidencia manual" />
+              </Form.Item>
+            </>
+          )}
+        </Form>
       </Modal>
 
       {/* MODAL REGISTRAR SESIÓN */}
