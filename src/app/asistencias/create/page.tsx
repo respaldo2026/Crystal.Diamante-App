@@ -14,6 +14,9 @@ import { buildWhatsappFallbackMessage } from "@/constants/whatsappTemplates";
 const { Title, Text } = Typography;
 
 const AUTO_SESSION_TOPIC_PATTERN = /sesi[oó]n programada autom[aá]ticamente para c[aá]lculo de ciclos/i;
+const TEMPLATE_INASISTENCIA_REPOSICION =
+  String(process.env.NEXT_PUBLIC_WHATSAPP_TEMPLATE_INASISTENCIA_REPOSICION || "asistencia_inasistencia_reposicion_v1").trim() ||
+  "asistencia_inasistencia_reposicion_v1";
 
 function extractClaseNumeroFromSession(session: any): number | null {
   const candidates = [session?.tema_visto, session?.observaciones]
@@ -837,7 +840,7 @@ export default function TomarAsistencia() {
             const telefono = String(alumno?.perfiles?.telefono || "");
             
             // Intentar enviar por plantilla de Meta con fallback de texto
-            const templateName = "inasistencia_motivacion_reposicion";
+            const templateName = TEMPLATE_INASISTENCIA_REPOSICION;
             const baseMensaje = buildWhatsappFallbackMessage("inasistencia_motivacion", {
               nombre,
               curso: cursoNombre || "tu curso",
