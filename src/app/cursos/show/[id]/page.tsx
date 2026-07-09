@@ -95,6 +95,7 @@ type CycleDividerRow = {
 };
 
 const AUTO_SESSION_TOPIC_PATTERN = /sesi[oó]n programada autom[aá]tic[ae]mente para c[aá]lculo de ciclos/i;
+const EXTRA_CLASS_OPTION_VALUE = "__extra_next_class__";
 
 const dedupeByKey = <T,>(items: T[] = [], keySelector: (item: T) => string): T[] => {
   const map = new Map<string, T>();
@@ -2449,8 +2450,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     try {
       const fechaSesion = values.fecha.format("YYYY-MM-DD");
       const temaSeleccionadoId = String(values.pensum_curso_id || "");
+      const esClaseExtra = temaSeleccionadoId === EXTRA_CLASS_OPTION_VALUE;
 
-      if (clasesRegistradasIds.has(temaSeleccionadoId)) {
+      if (!esClaseExtra && clasesRegistradasIds.has(temaSeleccionadoId)) {
         message.warning("Esa clase ya fue registrada. Selecciona una clase pendiente.");
         return;
       }
@@ -2487,10 +2489,19 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       }
 
       const claseSeleccionada = clasesPensum.find((tema: any) => String(tema.id) === String(values.pensum_curso_id || ""));
-      const claseOrden = claseSeleccionada ? ordenTemaPorId.get(String(claseSeleccionada.id)) : null;
+      const clasesHistoricasConPresencia = Array.from(asistenciasDetallePorFecha.entries()).filter(([fecha, detalle]) => {
+        const fechaSesionActual = dayjs(String(fecha || ""));
+        if (!fechaSesionActual.isValid()) return false;
+        if (fechaSesionActual.isAfter(dayjs().endOf("day"), "day")) return false;
+        return Number(detalle?.presentes || 0) > 0;
+      }).length;
+
+      const claseOrdenCalculada = claseSeleccionada ? ordenTemaPorId.get(String(claseSeleccionada.id)) : null;
+      const claseOrden = claseOrdenCalculada || (esClaseExtra ? clasesHistoricasConPresencia + 1 : null);
+      const nombreClaseOficial = claseOrden ? nombreOficialClasePorNumero.get(claseOrden) : null;
       const nombreClase = claseSeleccionada
         ? String(claseSeleccionada?.nombre_curso || claseSeleccionada?.titulo || "Clase")
-        : String(values.tema_visto || "Clase sin nombre");
+        : String(nombreClaseOficial || values.tema_visto || `Clase ${claseOrden || "sin nombre"}`);
       const temaVisto = claseOrden
         ? `Clase #${claseOrden} - ${nombreClase}`
         : nombreClase;
@@ -3783,17 +3794,12 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                         return;
                       }
 
-                      if (clasesPendientesPensum.length === 0) {
-                        message.info("Todas las clases del pensum ya fueron registradas.");
-                        return;
-                      }
-
                       const claseSugerida = clasesPendientesPensum[0];
 
                       formSesion.setFieldsValue({
                         fecha: dayjs(),
                         horas_dictadas: 3,
-                        pensum_curso_id: claseSugerida ? String(claseSugerida.id) : undefined,
+                        pensum_curso_id: claseSugerida ? String(claseSugerida.id) : EXTRA_CLASS_OPTION_VALUE,
                         observaciones: "",
                       });
                       setModalSesionVisible(true);
@@ -4963,15 +4969,22 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               showSearch
               optionFilterProp="label"
               placeholder="Selecciona la clase del pensum"
-              options={clasesPensum.map((tema: any) => {
-                const temaId = String(tema?.id || "");
-                const estaRegistrada = clasesRegistradasIds.has(temaId);
-                return {
-                  value: temaId,
-                  label: `${formatearNombreClase(tema)}${estaRegistrada ? " (ya registrada)" : ""}`,
-                  disabled: estaRegistrada,
-                };
-              })}
+              options={[
+                ...clasesPensum.map((tema: any) => {
+                  const temaId = String(tema?.id || "");
+                  const estaRegistrada = clasesRegistradasIds.has(temaId);
+                  return {
+                    value: temaId,
+                    label: `${formatearNombreClase(tema)}${estaRegistrada ? " (ya registrada)" : ""}`,
+                    disabled: estaRegistrada,
+                  };
+                }),
+                {
+                  value: EXTRA_CLASS_OPTION_VALUE,
+                  label: "Siguiente clase secuencial (continuar registro)",
+                  disabled: false,
+                },
+              ]}
             />
           </Form.Item>
           <Form.Item label="Horas Dictadas (fijo)" name="horas_dictadas" rules={[{ required: true }]}>
