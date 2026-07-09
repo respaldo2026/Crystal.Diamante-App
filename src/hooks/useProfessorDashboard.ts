@@ -239,6 +239,20 @@ const extractClassNumber = (value?: string | null): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const syncThemeClassPrefix = (tema?: string | null, classNumber?: number | null): string | null => {
+  const raw = String(tema || "").trim();
+  const numero = Number(classNumber || 0);
+
+  if (!raw) return raw || null;
+  if (!Number.isFinite(numero) || numero <= 0) return raw;
+
+  if (/^clase\s*#?\s*\d{1,3}\b/i.test(raw)) {
+    return raw.replace(/^clase\s*#?\s*\d{1,3}/i, `Clase #${numero}`);
+  }
+
+  return raw;
+};
+
 const getWeekKey = (value?: string | null) => {
   const date = dayjs(String(value || "")).startOf("week");
   if (!date.isValid()) return "";
@@ -751,16 +765,33 @@ export const fetchProfessorDashboardData = async (
     ? Number((notasValidas.reduce((acc, nota) => acc + nota, 0) / notasValidas.length).toFixed(1))
     : 0;
 
-  const proximasSesionesList: ProfesorDashboardSesion[] = proximasSesionesData.map((sesion: any) => ({
-    id: sesion.id,
-    fecha: sesion.fecha,
-    cursoId: String(sesion.curso_id),
-    curso: cursoNombreMap.get(String(sesion.curso_id)) || "Curso",
-    horaInicio: cursoHoraInicioMap.get(String(sesion.curso_id)) || null,
-    tema: sesion.tema_visto,
-    claseNumero: extractClassNumber(sesion.tema_visto),
-    horas: HOURS_PER_CLASS,
-  }));
+  const clasesCompletadasPorCurso = new Map<string, number>();
+  (sesionesHistoricas || []).forEach((sesion: any) => {
+    const cursoId = String(sesion?.curso_id || "");
+    if (!cursoId) return;
+    clasesCompletadasPorCurso.set(cursoId, (clasesCompletadasPorCurso.get(cursoId) || 0) + 1);
+  });
+
+  const proximasCalculadasPorCurso = new Map<string, number>();
+  const proximasSesionesList: ProfesorDashboardSesion[] = (proximasSesionesData || []).map((sesion: any) => {
+    const cursoId = String(sesion?.curso_id || "");
+    const baseCompletadas = Number(clasesCompletadasPorCurso.get(cursoId) || 0);
+    const nextOffset = Number(proximasCalculadasPorCurso.get(cursoId) || 0) + 1;
+    proximasCalculadasPorCurso.set(cursoId, nextOffset);
+
+    const claseNumero = baseCompletadas + nextOffset;
+
+    return {
+      id: sesion.id,
+      fecha: sesion.fecha,
+      cursoId,
+      curso: cursoNombreMap.get(cursoId) || "Curso",
+      horaInicio: cursoHoraInicioMap.get(cursoId) || null,
+      tema: syncThemeClassPrefix(sesion.tema_visto, claseNumero),
+      claseNumero,
+      horas: HOURS_PER_CLASS,
+    };
+  });
 
   const proximasSesionPorCurso = new Map<string, { fecha: string; tema?: string | null }>();
   proximasSesionesList.forEach((sesion) => {

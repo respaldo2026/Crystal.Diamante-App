@@ -630,6 +630,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       return map;
     }
 
+    const finDeHoy = dayjs().endOf("day");
+
     const usadas = new Set<number>();
     const sinNumero: Array<{ id: string; fecha: dayjs.Dayjs; createdAt: dayjs.Dayjs | null }> = [];
 
@@ -641,7 +643,10 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         tema: String(sesion?.tema_visto || ""),
         observaciones: String(sesion?.observaciones || ""),
       }))
-      .filter((sesion) => sesion.id && sesion.fecha.isValid())
+      .filter((sesion) => {
+        if (!sesion.id || !sesion.fecha.isValid()) return false;
+        return sesion.fecha.isBefore(finDeHoy) || sesion.fecha.isSame(finDeHoy, "day");
+      })
       .sort((a, b) => {
         const diffFecha = a.fecha.valueOf() - b.fecha.valueOf();
         if (diffFecha !== 0) return diffFecha;
@@ -2040,8 +2045,13 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           return String(a?.id || "").localeCompare(String(b?.id || ""));
         });
 
+      const finDeHoyCarga = dayjs().endOf("day");
+      const sesionesHistoricasAsc = sesionesAsc.filter((sesion: any) => {
+        return sesion._fecha.isBefore(finDeHoyCarga) || sesion._fecha.isSame(finDeHoyCarga, "day");
+      });
+
       const numeroClasePorSesionId = new Map<string, number>();
-      sesionesAsc.forEach((sesion: any, index: number) => {
+      sesionesHistoricasAsc.forEach((sesion: any, index: number) => {
         numeroClasePorSesionId.set(String(sesion?.id || ""), index + 1);
       });
 
