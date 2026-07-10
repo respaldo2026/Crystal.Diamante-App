@@ -688,44 +688,13 @@ export default function TomarAsistencia() {
       // Fuente de verdad: primero se asegura la sesión en bitácora.
       await guardarTemaSesion();
 
-      const actualizarAsistenciaExistente = async () => {
-        for (const registro of registros) {
-          const { error: updateError } = await supabaseBrowserClient
-            .from("asistencias")
-            .update({
-              estado: registro.estado,
-              observaciones: registro.observaciones,
-            })
-            .eq("matricula_id", registro.matricula_id)
-            .eq("fecha", registro.fecha);
-
-          if (updateError) {
-            throw updateError;
-          }
-        }
-      };
-
       const { error } = await supabaseBrowserClient
         .from("asistencias")
-        .insert(registros);
-
-      let asistenciaExistenteActualizada = false;
+        .upsert(registros, { onConflict: "matricula_id,fecha" });
 
       if (error) {
-        if (error.code === "23505" || error.message.includes("duplicate") || error.message.includes("unique")) {
-          try {
-            await actualizarAsistenciaExistente();
-            asistenciaExistenteActualizada = true;
-          } catch (sesionError: any) {
-            console.error(sesionError);
-            message.warning("⚠️ La asistencia ya existía y no se pudo actualizar completamente.");
-            return;
-          }
-        }
-        if (!asistenciaExistenteActualizada) {
-          message.error("Error guardando: " + error.message);
-          return;
-        }
+        message.error("Error guardando: " + error.message);
+        return;
       }
 
       // Notificar automáticamente a ausentes habilitadas en ciclo activo y enviar WhatsApp al cerrar lista.
@@ -896,11 +865,7 @@ export default function TomarAsistencia() {
         );
       }
 
-      const mensajeGuardadoBase = asistenciaExistenteActualizada
-        ? (nombreClase
-            ? "✅ Asistencia existente actualizada y sesión registrada correctamente."
-            : "✅ Asistencia existente actualizada correctamente.")
-        : `✅ ¡Asistencia y sesión guardadas correctamente! Se registraron ${HORAS_POR_SESION} horas para ${referenciaClase}.`;
+      const mensajeGuardadoBase = `✅ ¡Asistencia y sesión guardadas correctamente! Se registraron ${HORAS_POR_SESION} horas para ${referenciaClase}.`;
 
       if (ausentesInfo.length > 0) {
         message.success(`${mensajeGuardadoBase} WhatsApp enviados a ausentes: ${enviadosWhatsapp}/${ausentesInfo.length}.`);
