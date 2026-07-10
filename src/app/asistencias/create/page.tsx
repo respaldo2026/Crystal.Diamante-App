@@ -557,6 +557,17 @@ export default function TomarAsistencia() {
       return;
     }
 
+    if (
+      Number(claseRegistradaEnFecha || 0) > 0
+      && Number(numeroClase) !== Number(claseRegistradaEnFecha)
+    ) {
+      message.warning(
+        `La fecha seleccionada ya tiene registrada la clase #${claseRegistradaEnFecha}. ` +
+        "Para avanzar a una clase nueva, elige una fecha sin sesión registrada."
+      );
+      return;
+    }
+
     if (clasesRegistradas.has(Number(numeroClase)) && Number(numeroClase) !== Number(claseRegistradaEnFecha || 0)) {
       message.warning(`La clase #${numeroClase} ya fue registrada en otra fecha. Usa la clase correcta o corrige la sesión existente.`);
       return;
