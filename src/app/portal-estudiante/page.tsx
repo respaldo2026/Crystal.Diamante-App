@@ -2361,7 +2361,7 @@ export default function PortalEstudiante() {
 
   const compartirLogro = async (plataforma: "whatsapp" | "facebook" | "instagram") => {
     if (!quizResultado) return;
-    const texto = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`;
+    const texto = `🏆 ¡Quiz aprobado! Obtuve ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%).`;
 
     const imageFile = await generarImagenLogro();
 

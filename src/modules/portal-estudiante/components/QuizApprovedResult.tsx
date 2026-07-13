@@ -30,7 +30,7 @@ export const QuizApprovedResult = ({
   onCloseAction,
 }: QuizApprovedResultProps) => {
   const firstName = estudianteNombre ? estudianteNombre.split(" ")[0] : "";
-  const mensajeLogro = `🏆 ¡Acabo de aprobar con ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%)${quizResultado.tituloQuiz ? ` el quiz "${quizResultado.tituloQuiz}"` : ""} en Academia Crystal Diamante! 💪✨ Sigo superando mis metas. ¿Y tú? #AcademiaCrystalDiamante #Logro #Aprendizaje`;
+  const mensajeLogro = `🏆 ¡Quiz aprobado! Obtuve ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%).`;
 
   return (
     <div style={{ color: "#fff" }}>
