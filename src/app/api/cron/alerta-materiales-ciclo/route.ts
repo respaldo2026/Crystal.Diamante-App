@@ -9,7 +9,9 @@ const DEFAULT_ALERT_PHONE = "3006402575";
 const DEFAULT_DAYS_AHEAD = 7;
 const DEFAULT_CLASSES_PER_CYCLE = 4;
 const SEND_NO_GROUPS_WHATSAPP =
-  String(process.env.WHATSAPP_ALERTA_ENVIAR_RESUMEN_SIN_GRUPOS || "true").toLowerCase() === "true";
+  String(process.env.WHATSAPP_ALERTA_ENVIAR_RESUMEN_SIN_GRUPOS || "false").toLowerCase() === "true";
+const SEND_ONLY_NEAREST_GROUP =
+  String(process.env.WHATSAPP_ALERTA_SOLO_GRUPO_MAS_CERCANO || "true").toLowerCase() === "true";
 const MAX_SENDS_PER_RUN = Number(process.env.WHATSAPP_ALERTA_MAX_GRUPOS_POR_CORRIDA || 20);
 const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_ALERTA_DELAY_MS || 900);
 const TEMPLATE_NAME = String(process.env.WHATSAPP_TEMPLATE_ALERTA_MATERIALES || "").trim();
@@ -225,6 +227,14 @@ function buildNoGroupsTemplateVariables(input: {
   ];
 }
 
+function hasMeaningfulContent(message?: string | null): boolean {
+  const normalized = String(message || "")
+    .replace(/\*|_|~|`/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized.length >= 20;
+}
+
 async function wasAlreadySent(supabase: any, alertKey: string): Promise<boolean> {
   const { data, error } = await supabase
     .from("agent_conversations")
@@ -417,34 +427,28 @@ async function runAlertaMaterialesCiclo() {
       let noGroupsMessageId: string | undefined;
       let envioResumenUsado: "template" | "text" | "none" = "none";
 
+      if (!hasMeaningfulContent(noGroupsMessage)) {
+        return NextResponse.json({
+          success: false,
+          mensaje: "Se evitó envío de resumen sin grupos por contenido vacío.",
+          targetDate,
+          enviados: 0,
+          resumen: {
+            totalDetectados: 0,
+            enviados: 0,
+            enviadosConPlantilla: 0,
+            enviadosConTexto: 0,
+            omitidos: 1,
+            fallidos: 1,
+          },
+          errores: ["Mensaje de resumen sin grupos vacío o inválido"],
+        });
+      }
+
       if (SEND_NO_GROUPS_WHATSAPP) {
         try {
-          let response: any = null;
-          let envioUsado: "template" | "text" = "text";
-
-          if (TEMPLATE_NAME_NO_GROUPS) {
-            const variables = buildNoGroupsTemplateVariables({
-              targetDate,
-              daysAhead,
-              totalRegistrosFecha: 0,
-              totalElegibles: 0,
-            });
-
-            try {
-              response = await WhatsAppService.sendTemplate(alertPhone, TEMPLATE_NAME_NO_GROUPS, variables, TEMPLATE_LANG);
-              envioUsado = "template";
-            } catch (templateError) {
-              if (!ALLOW_TEXT_FALLBACK) {
-                throw templateError;
-              }
-              console.warn("[Cron Alerta Materiales] Fallo plantilla no-groups, usando fallback texto:", templateError);
-              response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
-              envioUsado = "text";
-            }
-          } else {
-            response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
-            envioUsado = "text";
-          }
+          const response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+          const envioUsado = "text" as const;
 
           noGroupsMessageId = response?.messages?.[0]?.id;
           envioResumenExitoso = true;
@@ -458,8 +462,8 @@ async function runAlertaMaterialesCiclo() {
             metadata: {
               mode: "no-groups-summary",
               envio_usado: envioUsado,
-              template_name: envioUsado === "template" ? TEMPLATE_NAME_NO_GROUPS : null,
-              template_lang: envioUsado === "template" ? TEMPLATE_LANG : null,
+              template_name: null,
+              template_lang: null,
               days_ahead: daysAhead,
               classes_per_cycle: classesPerCycle,
               target_date: targetDate,
@@ -469,10 +473,7 @@ async function runAlertaMaterialesCiclo() {
 
           await saveAudit(supabase, {
             phone: alertPhone,
-            message:
-              envioUsado === "template"
-                ? `${noGroupsMessage}\n\n[ENVIO_USADO] template:${TEMPLATE_NAME_NO_GROUPS} lang:${TEMPLATE_LANG}\n[MODO] no-groups`
-                : `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
+            message: `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
             messageId: noGroupsMessageId,
           });
         } catch (error: any) {
@@ -489,8 +490,8 @@ async function runAlertaMaterialesCiclo() {
               target_date: targetDate,
               alert_key: noGroupsKey,
               envio_usado: envioResumenUsado,
-              template_name: envioResumenUsado === "template" ? TEMPLATE_NAME_NO_GROUPS : null,
-              template_lang: envioResumenUsado === "template" ? TEMPLATE_LANG : null,
+              template_name: null,
+              template_lang: null,
               error: errorEnvioResumen,
             },
           });
@@ -682,34 +683,28 @@ async function runAlertaMaterialesCiclo() {
       let noGroupsMessageId: string | undefined;
       let envioResumenUsado: "template" | "text" | "none" = "none";
 
+      if (!hasMeaningfulContent(noGroupsMessage)) {
+        return NextResponse.json({
+          success: false,
+          mensaje: "Se evitó envío de resumen sin grupos por contenido vacío.",
+          targetDate,
+          enviados: 0,
+          resumen: {
+            totalDetectados: gruposUnicos.length,
+            enviados: 0,
+            enviadosConPlantilla: 0,
+            enviadosConTexto: 0,
+            omitidos: 1,
+            fallidos: 1,
+          },
+          errores: ["Mensaje de resumen sin grupos vacío o inválido"],
+        });
+      }
+
       if (SEND_NO_GROUPS_WHATSAPP) {
         try {
-          let response: any = null;
-          let envioUsado: "template" | "text" = "text";
-
-          if (TEMPLATE_NAME_NO_GROUPS) {
-            const variables = buildNoGroupsTemplateVariables({
-              targetDate,
-              daysAhead,
-              totalRegistrosFecha: candidatosFecha.length,
-              totalElegibles: gruposUnicos.length,
-            });
-
-            try {
-              response = await WhatsAppService.sendTemplate(alertPhone, TEMPLATE_NAME_NO_GROUPS, variables, TEMPLATE_LANG);
-              envioUsado = "template";
-            } catch (templateError) {
-              if (!ALLOW_TEXT_FALLBACK) {
-                throw templateError;
-              }
-              console.warn("[Cron Alerta Materiales] Fallo plantilla no-groups, usando fallback texto:", templateError);
-              response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
-              envioUsado = "text";
-            }
-          } else {
-            response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
-            envioUsado = "text";
-          }
+          const response = await WhatsAppService.sendText(alertPhone, noGroupsMessage);
+          const envioUsado = "text" as const;
 
           noGroupsMessageId = response?.messages?.[0]?.id;
           envioResumenExitoso = true;
@@ -723,8 +718,8 @@ async function runAlertaMaterialesCiclo() {
             metadata: {
               mode: "no-groups-summary",
               envio_usado: envioUsado,
-              template_name: envioUsado === "template" ? TEMPLATE_NAME_NO_GROUPS : null,
-              template_lang: envioUsado === "template" ? TEMPLATE_LANG : null,
+              template_name: null,
+              template_lang: null,
               days_ahead: daysAhead,
               classes_per_cycle: classesPerCycle,
               target_date: targetDate,
@@ -734,10 +729,7 @@ async function runAlertaMaterialesCiclo() {
 
           await saveAudit(supabase, {
             phone: alertPhone,
-            message:
-              envioUsado === "template"
-                ? `${noGroupsMessage}\n\n[ENVIO_USADO] template:${TEMPLATE_NAME_NO_GROUPS} lang:${TEMPLATE_LANG}\n[MODO] no-groups`
-                : `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
+            message: `${noGroupsMessage}\n\n[ENVIO_USADO] text\n[MODO] no-groups`,
             messageId: noGroupsMessageId,
           });
         } catch (error: any) {
@@ -754,8 +746,8 @@ async function runAlertaMaterialesCiclo() {
               target_date: targetDate,
               alert_key: noGroupsKey,
               envio_usado: envioResumenUsado,
-              template_name: envioResumenUsado === "template" ? TEMPLATE_NAME_NO_GROUPS : null,
-              template_lang: envioResumenUsado === "template" ? TEMPLATE_LANG : null,
+              template_name: null,
+              template_lang: null,
               error: errorEnvioResumen,
             },
           });
@@ -820,7 +812,22 @@ async function runAlertaMaterialesCiclo() {
     let enviadosConPlantilla = 0;
     let enviadosConTexto = 0;
 
-    for (const item of gruposUnicos.slice(0, Math.max(1, MAX_SENDS_PER_RUN))) {
+    const gruposOrdenados = [...gruposUnicos].sort((a, b) => {
+      const fechaDiff = a.fecha_inicio_ciclo.localeCompare(b.fecha_inicio_ciclo);
+      if (fechaDiff !== 0) return fechaDiff;
+
+      const cicloA = Number(a.numero_ciclo || 0);
+      const cicloB = Number(b.numero_ciclo || 0);
+      if (cicloA !== cicloB) return cicloA - cicloB;
+
+      return Number(a.grupo_id || 0) - Number(b.grupo_id || 0);
+    });
+
+    const gruposParaEnviar = SEND_ONLY_NEAREST_GROUP
+      ? gruposOrdenados.slice(0, 1)
+      : gruposOrdenados.slice(0, Math.max(1, MAX_SENDS_PER_RUN));
+
+    for (const item of gruposParaEnviar) {
       const key = buildAlertKey(item);
       const alreadySent = await wasAlreadySent(supabase, key);
       if (alreadySent) {
@@ -830,6 +837,29 @@ async function runAlertaMaterialesCiclo() {
 
       const mats = materialesByPensum.get(String(item.pensum_id)) || [];
       const message = buildAlertMessage(item, mats, daysAhead);
+
+      if (!hasMeaningfulContent(message)) {
+        fallidos += 1;
+        errores.push(`Grupo ${item.grupo_nombre || item.grupo_id}: mensaje vacío o inválido`);
+
+        await saveWhatsAppMessageRecord(supabase, {
+          phone: alertPhone,
+          content: String(message || ""),
+          estado: "fallido",
+          metadata: {
+            days_ahead: daysAhead,
+            classes_per_cycle: classesPerCycle,
+            target_date: targetDate,
+            alert_key: key,
+            grupo_id: item.grupo_id,
+            pensum_id: item.pensum_id,
+            numero_ciclo: item.numero_ciclo,
+            fecha_inicio_ciclo: item.fecha_inicio_ciclo,
+            error: "Mensaje vacío o inválido",
+          },
+        });
+        continue;
+      }
 
       try {
         let response: any = null;
