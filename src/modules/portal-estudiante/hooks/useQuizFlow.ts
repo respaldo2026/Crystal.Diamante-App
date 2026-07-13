@@ -7,6 +7,7 @@ import { supabaseBrowserClient } from "@utils/supabase/client";
 import { quizAprobado } from "@/modules/portal-estudiante/utils";
 
 type QuizResultado = {
+  quizId?: string;
   calificacion: number;
   porcentaje: number;
   aprobado: boolean;
@@ -235,6 +236,7 @@ export const useQuizFlow = ({
       resetQuizModalState();
 
       setQuizResultado({
+        quizId: String(quizActivo?.id || ""),
         calificacion,
         porcentaje,
         aprobado,

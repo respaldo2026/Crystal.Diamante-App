@@ -3,6 +3,7 @@
 import React from "react";
 import { Button, Col, Row } from "antd";
 import { WhatsAppOutlined } from "@ant-design/icons";
+import { resolveQuizShareBackground } from "@/modules/portal-estudiante/quiz-share-backgrounds";
 
 type QuizApprovedResultProps = {
   isMobile: boolean;
@@ -31,6 +32,10 @@ export const QuizApprovedResult = ({
 }: QuizApprovedResultProps) => {
   const firstName = estudianteNombre ? estudianteNombre.split(" ")[0] : "";
   const mensajeLogro = `🏆 ¡Quiz aprobado! Obtuve ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%).`;
+  const bgImageUrl = resolveQuizShareBackground({
+    quizId: (quizResultado as any)?.quizId,
+    quizTitle: quizResultado.tituloQuiz,
+  });
 
   return (
     <div style={{ color: "#fff" }}>
@@ -45,7 +50,7 @@ export const QuizApprovedResult = ({
           width: "100%",
           maxWidth: 340,
           aspectRatio: "9 / 16",
-          backgroundImage: "url('/quiz-card-bg.png')",
+          backgroundImage: `url('${bgImageUrl}')`,
           backgroundSize: "cover",
           backgroundPosition: "center top",
           boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
