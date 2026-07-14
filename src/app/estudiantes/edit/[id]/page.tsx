@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select, message, Card, Typography, Spin, Avatar, Upload, Space, Button } from "antd";
+import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select, message, Card, Typography, Spin, Avatar, Space, Button, Modal } from "antd";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -54,6 +54,11 @@ export default function EditEstudiante() {
     const [loadingMatriculas, setLoadingMatriculas] = useState(true);
     const [fotoPreviewUrl, setFotoPreviewUrl] = useState<string>("");
     const [subiendoFoto, setSubiendoFoto] = useState(false);
+    const [camaraAbierta, setCamaraAbierta] = useState(false);
+    const [capturandoFoto, setCapturandoFoto] = useState(false);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
 
   const { formProps, saveButtonProps, formLoading, onFinish } = useForm({
     resource: "perfiles", // Guardamos en la tabla perfiles
@@ -100,6 +105,64 @@ export default function EditEstudiante() {
             setFotoPreviewUrl(fotoUrlWatch);
         }
     }, [fotoUrlWatch]);
+
+    const detenerCamara = useCallback(() => {
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+    }, []);
+
+    const abrirCamara = useCallback(async () => {
+        try {
+            setCamaraAbierta(true);
+        } catch (error) {
+            console.error("No se pudo abrir la cámara:", error);
+            message.error("No se pudo abrir la cámara");
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!camaraAbierta) {
+            detenerCamara();
+            return;
+        }
+
+        let cancelado = false;
+
+        const iniciarCamara = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" } },
+                    audio: false,
+                });
+
+                if (cancelado) {
+                    stream.getTracks().forEach((track) => track.stop());
+                    return;
+                }
+
+                streamRef.current = stream;
+
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    await videoRef.current.play();
+                }
+            } catch (error: any) {
+                console.error("Error accediendo a la cámara:", error);
+                message.error(error?.message || "No se pudo acceder a la cámara del PC");
+                setCamaraAbierta(false);
+            }
+        };
+
+        iniciarCamara();
+
+        return () => {
+            cancelado = true;
+            detenerCamara();
+        };
+    }, [camaraAbierta, detenerCamara]);
 
     const cargarMatriculas = useCallback(async () => {
         if (!id) return;
@@ -185,6 +248,46 @@ export default function EditEstudiante() {
         }
 
         return false;
+    };
+
+    const capturarFotoDesdeCamara = async () => {
+        try {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            if (!video || !canvas) {
+                message.error("La cámara todavía no está lista");
+                return;
+            }
+
+            setCapturandoFoto(true);
+
+            const width = video.videoWidth || 1280;
+            const height = video.videoHeight || 720;
+            canvas.width = width;
+            canvas.height = height;
+
+            const context = canvas.getContext("2d");
+            if (!context) throw new Error("No se pudo preparar la captura");
+
+            context.drawImage(video, 0, 0, width, height);
+
+            const blob = await new Promise<Blob | null>((resolve) => {
+                canvas.toBlob(resolve, "image/jpeg", 0.92);
+            });
+
+            if (!blob) throw new Error("No se pudo capturar la imagen");
+
+            const fileName = `foto_${String(id || "estudiante")}_${Date.now()}.jpg`;
+            const file = new File([blob], fileName, { type: "image/jpeg" });
+
+            await subirFotoPerfil(file);
+            setCamaraAbierta(false);
+        } catch (error: any) {
+            console.error("Error capturando foto:", error);
+            message.error(error?.message || "No se pudo capturar la foto");
+        } finally {
+            setCapturandoFoto(false);
+        }
     };
 
     useEffect(() => {
@@ -447,21 +550,43 @@ export default function EditEstudiante() {
                 <Card size="small" style={{ textAlign: "center" }}>
                     <Space direction="vertical" size={10} style={{ width: "100%" }}>
                         <Avatar size={96} src={fotoPreviewUrl || undefined} icon={<UserOutlined />} />
-                        <Upload
-                            accept="image/*"
-                            capture="user"
-                            showUploadList={false}
-                            beforeUpload={subirFotoPerfil}
-                        >
-                            <Button icon={<CameraOutlined />} loading={subiendoFoto}>Tomar / Subir foto</Button>
-                        </Upload>
+                        <Button icon={<CameraOutlined />} onClick={abrirCamara} loading={subiendoFoto}>
+                            Abrir cámara y tomar foto
+                        </Button>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                            Puedes cargar la foto aquí si no se subió en matrícula.
+                            Se abrirá la cámara del PC para capturar la foto.
                         </Text>
                     </Space>
                 </Card>
             </Col>
         </Row>
+
+        <Modal
+            title="Tomar foto del estudiante"
+            open={camaraAbierta}
+            onCancel={() => setCamaraAbierta(false)}
+            onOk={capturarFotoDesdeCamara}
+            okText="Capturar y guardar"
+            cancelText="Cerrar"
+            confirmLoading={capturandoFoto}
+            destroyOnClose
+            afterClose={detenerCamara}
+            styles={{ body: { maxHeight: "70vh", overflow: "auto" } }}
+            style={{ top: 20 }}
+            width="min(92vw, 720px)"
+        >
+            <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{ width: "100%", borderRadius: 12, background: "#111", maxHeight: "55vh", objectFit: "cover" }}
+                />
+                <canvas ref={canvasRef} style={{ display: "none" }} />
+                <Text type="secondary">Autoriza el acceso a la cámara cuando el navegador lo solicite.</Text>
+            </Space>
+        </Modal>
 
         <Row gutter={24}>
             <Col xs={24} md={12}>
