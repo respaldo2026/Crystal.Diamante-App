@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Grid, Select } from "antd";
+import { Form, DatePicker, Card, Table, Switch, Button, Row, Col, Alert, Tag, Space, Statistic, Typography, Spin, App, Grid, Select, Avatar } from "antd";
 import { CheckOutlined, CloseOutlined, ArrowLeftOutlined, SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -200,7 +200,7 @@ export default function TomarAsistencia() {
         // Buscamos matriculas ACTIVAS de este curso
         const { data, error } = await supabaseBrowserClient
           .from("matriculas")
-          .select(`id, estudiante_id, estado, fecha_inicio, created_at, perfiles(nombre_completo, email, telefono, notif_whatsapp)`) 
+          .select(`id, estudiante_id, estado, fecha_inicio, created_at, perfiles(nombre_completo, email, telefono, notif_whatsapp, foto_url)`) 
           .eq("curso_id", cursoSeleccionado)
           .order("perfiles(nombre_completo)");
 
@@ -463,20 +463,23 @@ export default function TomarAsistencia() {
         dataIndex: ["perfiles", "nombre_completo"],
         width: isMobile ? 210 : 320,
         ellipsis: true,
-        render: (txt: string) => (
-          <Text
-            strong
-            style={{
-              display: "inline-block",
-              maxWidth: "100%",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-            title={txt || "Sin nombre"}
-          >
-            {txt || "Sin nombre"}
-          </Text>
+        render: (txt: string, record: any) => (
+          <Space>
+            <Avatar src={record?.perfiles?.foto_url || undefined} alt={txt || "Sin nombre"} />
+            <Text
+              strong
+              style={{
+                display: "inline-block",
+                maxWidth: "100%",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              title={txt || "Sin nombre"}
+            >
+              {txt || "Sin nombre"}
+            </Text>
+          </Space>
         ),
       },
       {

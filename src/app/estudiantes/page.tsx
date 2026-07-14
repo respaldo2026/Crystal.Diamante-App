@@ -757,7 +757,7 @@ export default function EstudiantesList() {
 
                                 <Space direction="vertical" size={6} style={{ width: "100%", paddingRight: 56 }}>
                                     <Space>
-                                        <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />
+                                        <Avatar src={record?.foto_url || undefined} icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />
                                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                                             <Text strong>{record.nombre_completo || "Sin Nombre"}</Text>
                                             <Text type="secondary" style={{ fontSize: 12 }}>ID: {record.identificacion || 'N/A'}</Text>
@@ -815,7 +815,7 @@ export default function EstudiantesList() {
                     title="Estudiante"
                     render={(value, record: any) => (
                         <Space>
-                            <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />
+                            <Avatar src={record?.foto_url || undefined} icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <span style={{ fontWeight: 600, fontSize: '15px' }}>{value || "Sin Nombre"}</span>
                                 {/* Badge de asistencia (peor caso entre sus matrículas) */}

@@ -2,10 +2,10 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useForm, useSelect } from "@refinedev/antd";
-import { Form, Select, DatePicker, Input, Card, message, Alert, Button, Space, Divider, Modal, Col, Row, Descriptions, Result, Typography, Tag } from "antd";
+import { Form, Select, DatePicker, Input, Card, message, Alert, Button, Space, Divider, Modal, Col, Row, Descriptions, Result, Typography, Tag, Avatar, Upload } from "antd";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { construirNombreGrupo } from "@utils/grupos";
-import { BookOutlined, SearchOutlined, PlusOutlined, DollarCircleOutlined, CheckCircleOutlined } from "@ant-design/icons";
+import { BookOutlined, SearchOutlined, PlusOutlined, DollarCircleOutlined, CheckCircleOutlined, CameraOutlined, UserOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { formatDate } from "@utils/date";
 import { useRouter } from "next/navigation";
@@ -44,6 +44,8 @@ export default function MatriculaCreate() {
     const [cursoOptions, setCursoOptions] = useState<{ label: string; value: string | number }[]>([]);
     const [cursosLoading, setCursosLoading] = useState(false);
     const [programaPricingCurso, setProgramaPricingCurso] = useState<ProgramaPaymentConfig | null>(null);
+    const [fotoPreviewUrl, setFotoPreviewUrl] = useState<string>("");
+    const [subiendoFoto, setSubiendoFoto] = useState(false);
 
     // Estados para fase 2: inscripción creada, mostrando recibo y pago
     const [inscripcionCreada, setInscripcionCreada] = useState(false);
@@ -225,6 +227,40 @@ export default function MatriculaCreate() {
         cargarMediosPago();
     }, []);
 
+    const subirFotoEstudiante = async (file: File) => {
+        try {
+            setSubiendoFoto(true);
+
+            const identificacion = String(createForm.getFieldValue("identificacion") || "").replace(/\D/g, "").trim() || "estudiante";
+            const fileExt = file.name.split(".").pop() || "jpg";
+            const filePath = `perfiles/${identificacion}_${Date.now()}.${fileExt}`;
+
+            const { error: uploadError } = await supabaseBrowserClient.storage
+                .from("avatars")
+                .upload(filePath, file, { upsert: true, contentType: file.type });
+
+            if (uploadError) throw uploadError;
+
+            const { data: publicData } = supabaseBrowserClient.storage
+                .from("avatars")
+                .getPublicUrl(filePath);
+
+            const publicUrl = publicData?.publicUrl || "";
+            if (!publicUrl) throw new Error("No se pudo obtener la URL pública de la foto");
+
+            setFotoPreviewUrl(publicUrl);
+            createForm.setFieldValue("foto_url", publicUrl);
+            message.success("Foto cargada correctamente");
+        } catch (error: any) {
+            console.error("Error subiendo foto del estudiante:", error);
+            message.error(error?.message || "No se pudo subir la foto");
+        } finally {
+            setSubiendoFoto(false);
+        }
+
+        return false;
+    };
+
     const cargarEstadoAccesoPortal = async (usuarioId?: string) => {
         if (!usuarioId) {
             setEstadoAccesoPortal(null);
@@ -354,6 +390,7 @@ export default function MatriculaCreate() {
                 }
             } else {
                 message.info("No se encontró estudiante con esa identificación");
+                setFotoPreviewUrl("");
                 createForm.setFieldsValue({ identificacion: identificacionBuscar });
                 setCreateModalOpen(true);
             }
@@ -394,6 +431,7 @@ export default function MatriculaCreate() {
                         identificacion,
                         nombre_completo: values.nombre_completo,
                         telefono: values.telefono,
+                        foto_url: values.foto_url || null,
                         email,
                         fecha_nacimiento: values.fecha_nacimiento ? dayjs(values.fecha_nacimiento).format("YYYY-MM-DD") : null,
                         genero: values.genero || null,
@@ -1118,6 +1156,7 @@ export default function MatriculaCreate() {
                     onCancel={() => {
                         setCreateModalOpen(false);
                         createForm.resetFields();
+                        setFotoPreviewUrl("");
                     }}
                     footer={null}
                 >
@@ -1147,6 +1186,25 @@ export default function MatriculaCreate() {
                             label={<span style={{ color: "#e2e8f0" }}>Teléfono</span>}
                             rules={[{ required: true }]}
                         >
+                            <Input />
+                        </Form.Item>
+                        <Form.Item
+                            label={<span style={{ color: "#e2e8f0" }}>Foto del estudiante</span>}
+                            help={<span style={{ color: "#94a3b8" }}>Toma la foto con la cámara del PC o súbela desde archivo.</span>}
+                        >
+                            <Space align="center" size={12} style={{ width: "100%", flexWrap: "wrap" }}>
+                                <Avatar size={72} src={fotoPreviewUrl || undefined} icon={<UserOutlined />} />
+                                <Upload
+                                    accept="image/*"
+                                    capture="user"
+                                    showUploadList={false}
+                                    beforeUpload={subirFotoEstudiante}
+                                >
+                                    <Button icon={<CameraOutlined />} loading={subiendoFoto}>Tomar / Subir foto</Button>
+                                </Upload>
+                            </Space>
+                        </Form.Item>
+                        <Form.Item name="foto_url" hidden>
                             <Input />
                         </Form.Item>
                         <Form.Item

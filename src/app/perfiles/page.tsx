@@ -33,9 +33,9 @@ export default function ListPerfiles() {
         <Table.Column 
             title="Estudiante"
             dataIndex="nombre_completo"
-            render={(value) => (
+          render={(value, record: any) => (
                 <Space>
-                    <Avatar icon={<UserOutlined />} />
+              <Avatar src={record?.foto_url || undefined} icon={<UserOutlined />} />
                     {value}
                 </Space>
             )}

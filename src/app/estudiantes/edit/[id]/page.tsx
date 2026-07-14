@@ -2,11 +2,12 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { Edit, useForm } from "@refinedev/antd";
-import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select, message, Card, Typography, Spin } from "antd";
+import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select, message, Card, Typography, Spin, Avatar, Upload, Space, Button } from "antd";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, normalizeModalidadPago, resolvePaymentPlanAmounts, type ModalidadPago, type ProgramaPaymentConfig } from "@/types/payment-plans";
+import { CameraOutlined, UserOutlined } from "@ant-design/icons";
 
 type MatriculaEditable = {
     id: string;
@@ -51,6 +52,8 @@ export default function EditEstudiante() {
 
     const [matriculasEditable, setMatriculasEditable] = useState<MatriculaEditable[]>([]);
     const [loadingMatriculas, setLoadingMatriculas] = useState(true);
+    const [fotoPreviewUrl, setFotoPreviewUrl] = useState<string>("");
+    const [subiendoFoto, setSubiendoFoto] = useState(false);
 
   const { formProps, saveButtonProps, formLoading, onFinish } = useForm({
     resource: "perfiles", // Guardamos en la tabla perfiles
@@ -89,6 +92,14 @@ export default function EditEstudiante() {
 
         return 4;
     }, []);
+
+    const fotoUrlWatch = Form.useWatch("foto_url", formProps.form);
+
+    useEffect(() => {
+        if (typeof fotoUrlWatch === "string") {
+            setFotoPreviewUrl(fotoUrlWatch);
+        }
+    }, [fotoUrlWatch]);
 
     const cargarMatriculas = useCallback(async () => {
         if (!id) return;
@@ -141,6 +152,40 @@ export default function EditEstudiante() {
         formProps.form?.setFieldValue("modalidades_matricula", modalidadesIniciales);
         setLoadingMatriculas(false);
     }, [formProps.form, id]);
+
+    const subirFotoPerfil = async (file: File) => {
+        try {
+            setSubiendoFoto(true);
+
+            const identificacion = String(formProps.form?.getFieldValue("identificacion") || "").replace(/\D/g, "").trim() || String(id || "estudiante");
+            const fileExt = file.name.split(".").pop() || "jpg";
+            const filePath = `perfiles/${identificacion}_${Date.now()}.${fileExt}`;
+
+            const { error: uploadError } = await supabaseBrowserClient.storage
+                .from("avatars")
+                .upload(filePath, file, { upsert: true, contentType: file.type });
+
+            if (uploadError) throw uploadError;
+
+            const { data: publicData } = supabaseBrowserClient.storage
+                .from("avatars")
+                .getPublicUrl(filePath);
+
+            const publicUrl = publicData?.publicUrl || "";
+            if (!publicUrl) throw new Error("No se pudo obtener la URL pública de la foto");
+
+            setFotoPreviewUrl(publicUrl);
+            formProps.form?.setFieldValue("foto_url", publicUrl);
+            message.success("Foto actualizada correctamente");
+        } catch (error: any) {
+            console.error("Error subiendo foto del perfil:", error);
+            message.error(error?.message || "No se pudo subir la foto");
+        } finally {
+            setSubiendoFoto(false);
+        }
+
+        return false;
+    };
 
     useEffect(() => {
         cargarMatriculas();
@@ -391,10 +436,32 @@ export default function EditEstudiante() {
         
         {/* ROL OCULTO (Seguridad) */}
         <Form.Item name="rol" hidden><Input /></Form.Item>
+        <Form.Item name="foto_url" hidden><Input /></Form.Item>
 
         <Alert message="Edita los datos personales y académicos del alumno aquí." type="info" showIcon style={{marginBottom: 20}} />
 
         <h3 style={{ color: '#722ed1' }}>Datos Personales</h3>
+
+        <Row gutter={24} style={{ marginBottom: 16 }}>
+            <Col xs={24} md={12}>
+                <Card size="small" style={{ textAlign: "center" }}>
+                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                        <Avatar size={96} src={fotoPreviewUrl || undefined} icon={<UserOutlined />} />
+                        <Upload
+                            accept="image/*"
+                            capture="user"
+                            showUploadList={false}
+                            beforeUpload={subirFotoPerfil}
+                        >
+                            <Button icon={<CameraOutlined />} loading={subiendoFoto}>Tomar / Subir foto</Button>
+                        </Upload>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                            Puedes cargar la foto aquí si no se subió en matrícula.
+                        </Text>
+                    </Space>
+                </Card>
+            </Col>
+        </Row>
 
         <Row gutter={24}>
             <Col xs={24} md={12}>
