@@ -123,6 +123,7 @@ function normalizeText(value?: string | null): string {
 export function resolveQuizShareBackground(input: {
   quizId?: string | number | null;
   quizTitle?: string | null;
+  quizClassNumber?: string | number | null;
 }): string {
   return resolveQuizShareBackgroundCandidates(input)[0] || DEFAULT_QUIZ_SHARE_BG;
 }
@@ -130,6 +131,7 @@ export function resolveQuizShareBackground(input: {
 export function resolveQuizShareBackgroundCandidates(input: {
   quizId?: string | number | null;
   quizTitle?: string | null;
+  quizClassNumber?: string | number | null;
 }): string[] {
   const candidates: string[] = [];
   const quizId = String(input.quizId || "").trim();
@@ -142,7 +144,9 @@ export function resolveQuizShareBackgroundCandidates(input: {
     candidates.push(QUIZ_BG_BY_TITLE[titleKey]);
   }
 
+  const classNumberFromQuiz = String(input.quizClassNumber || "").trim();
   const classNumberFromTitle = extractClassNumberFromTitle(input.quizTitle);
+  candidates.push(...buildCandidatesByClassNumber(classNumberFromQuiz));
   candidates.push(...buildCandidatesByClassNumber(classNumberFromTitle));
   candidates.push(...buildCandidatesByQuizTitle(input.quizTitle));
   candidates.push(...buildCandidatesByQuizId(input.quizId));

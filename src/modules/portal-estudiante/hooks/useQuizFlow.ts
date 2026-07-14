@@ -15,6 +15,7 @@ type QuizResultado = {
   totalPreguntas: number;
   correctas: number;
   tituloQuiz?: string;
+  claseNumero?: number | string | null;
 };
 
 type UseQuizFlowParams = {
@@ -244,6 +245,7 @@ export const useQuizFlow = ({
         totalPreguntas: total,
         correctas,
         tituloQuiz: quizActivo?.titulo || "",
+        claseNumero: quizActivo?.clase_numero ?? null,
       });
       setQuizResultadoVisible(true);
 

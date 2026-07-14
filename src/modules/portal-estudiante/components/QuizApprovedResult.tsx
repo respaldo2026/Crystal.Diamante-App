@@ -16,6 +16,7 @@ type QuizApprovedResultProps = {
     totalPreguntas: number;
     porcentaje: number;
     tituloQuiz?: string;
+    claseNumero?: number | string | null;
   };
   estudianteNombre?: string | null;
   logoAcademia?: string | null;
@@ -43,10 +44,12 @@ export const QuizApprovedResult = ({
   const bgCandidates = useMemo(() => resolveQuizShareBackgroundCandidates({
     quizId: (quizResultado as any)?.quizId,
     quizTitle: quizResultado.tituloQuiz,
+    quizClassNumber: quizResultado.claseNumero,
   }), [quizResultado]);
   const [bgImageUrl, setBgImageUrl] = useState<string>(() => resolveQuizShareBackground({
     quizId: (quizResultado as any)?.quizId,
     quizTitle: quizResultado.tituloQuiz,
+    quizClassNumber: quizResultado.claseNumero,
   }));
 
   useEffect(() => {
@@ -73,6 +76,7 @@ export const QuizApprovedResult = ({
       if (!isCancelled) setBgImageUrl(resolveQuizShareBackground({
         quizId: (quizResultado as any)?.quizId,
         quizTitle: quizResultado.tituloQuiz,
+        quizClassNumber: quizResultado.claseNumero,
       }));
     };
 
