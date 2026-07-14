@@ -50,6 +50,44 @@ function buildCandidatesByQuizId(quizId?: string | number | null): string[] {
   return unique(candidates);
 }
 
+function extractClassNumberFromTitle(quizTitle?: string | null): string {
+  const normalized = normalizeText(quizTitle);
+  if (!normalized) return "";
+
+  const classMatch = normalized.match(/(?:^|\s)clase\s*(\d{1,3})(?:\s|$)/);
+  if (classMatch?.[1]) return classMatch[1];
+
+  const leadingNumber = normalized.match(/^(\d{1,3})(?:\s|$)/);
+  if (leadingNumber?.[1]) return leadingNumber[1];
+
+  return "";
+}
+
+function buildCandidatesByClassNumber(classNumber?: string | null): string[] {
+  const raw = String(classNumber || "").trim();
+  if (!raw) return [];
+
+  const numericOnly = raw.replace(/\D/g, "");
+  if (!numericOnly) return [];
+
+  const variants = unique([
+    numericOnly,
+    numericOnly.padStart(2, "0"),
+  ]);
+  const prefixes = ["clase-", "quiz-", "", "fondo-quiz-"];
+  const candidates: string[] = [];
+
+  variants.forEach((variant) => {
+    prefixes.forEach((prefix) => {
+      QUIZ_BG_EXTENSIONS.forEach((ext) => {
+        candidates.push(`${QUIZ_LOGROS_BASE_PATH}/${prefix}${variant}.${ext}`);
+      });
+    });
+  });
+
+  return unique(candidates);
+}
+
 function buildCandidatesByQuizTitle(quizTitle?: string | null): string[] {
   const slug = slugify(quizTitle);
   if (!slug) return [];
@@ -104,8 +142,10 @@ export function resolveQuizShareBackgroundCandidates(input: {
     candidates.push(QUIZ_BG_BY_TITLE[titleKey]);
   }
 
-  candidates.push(...buildCandidatesByQuizId(input.quizId));
+  const classNumberFromTitle = extractClassNumberFromTitle(input.quizTitle);
+  candidates.push(...buildCandidatesByClassNumber(classNumberFromTitle));
   candidates.push(...buildCandidatesByQuizTitle(input.quizTitle));
+  candidates.push(...buildCandidatesByQuizId(input.quizId));
   candidates.push(DEFAULT_QUIZ_SHARE_BG);
 
   return unique(candidates);

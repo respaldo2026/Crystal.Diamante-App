@@ -34,6 +34,12 @@ export const QuizApprovedResult = ({
   onCloseAction,
 }: QuizApprovedResultProps) => {
   const firstName = estudianteNombre ? estudianteNombre.split(" ")[0] : "";
+  const normalizedQuizTitle = String(quizResultado.tituloQuiz || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  const isBioseguridadBasica = normalizedQuizTitle.includes("bioseguridad basica");
   const bgCandidates = useMemo(() => resolveQuizShareBackgroundCandidates({
     quizId: (quizResultado as any)?.quizId,
     quizTitle: quizResultado.tituloQuiz,
@@ -94,76 +100,93 @@ export const QuizApprovedResult = ({
           backgroundSize: "cover",
           backgroundPosition: "center top",
           boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          padding: "0 24px 32px",
+          padding: "22px 20px 24px",
+          boxSizing: "border-box",
         }}
       >
         {/* Capa semitransparente para legibilidad del texto */}
         <div style={{
           position: "absolute", inset: 0, borderRadius: 20,
-          background: "linear-gradient(to bottom, transparent 45%, rgba(10,5,30,0.82) 68%, rgba(10,5,30,0.96) 100%)",
+          background: isBioseguridadBasica
+            ? "linear-gradient(to bottom, transparent 54%, rgba(8,4,24,0.72) 75%, rgba(8,4,24,0.94) 100%)"
+            : "linear-gradient(to bottom, transparent 58%, rgba(10,5,30,0.62) 78%, rgba(10,5,30,0.9) 100%)",
           pointerEvents: "none",
         }} />
 
-        {/* ── Contenido dinámico (parte inferior) ── */}
-        <div style={{ width: "100%", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+        {/* ── Contenido dinámico ── */}
+        <div style={{ width: "100%", height: "100%", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
 
-          {/* Nota en círculo dorado */}
-          <div style={{
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            width: 112, height: 112, borderRadius: "50%",
-            background: "linear-gradient(135deg, #ffd700 0%, #ff8c00 100%)",
-            boxShadow: "0 0 48px rgba(255,215,0,0.7), 0 6px 28px rgba(0,0,0,0.5)",
-          }}>
-            <span style={{ color: "#1a0533", fontSize: 42, fontWeight: 900, lineHeight: 1 }}>
-              {quizResultado.calificacion.toFixed(1)}
-            </span>
-            <span style={{ color: "rgba(26,5,51,0.65)", fontSize: 13, fontWeight: 700 }}>/5.0</span>
-          </div>
+          {/* Bloque superior en zona iluminada */}
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, paddingTop: "30%" }}>
 
-          {/* Nombre + Quiz */}
-          <div style={{ textAlign: "center", width: "100%", padding: "0 4px" }}>
-            <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.25, marginBottom: 6, textShadow: "0 2px 12px rgba(0,0,0,0.7)" }}>
-              {`¡Lo lograste${firstName ? `, ${firstName}` : ""}! 🎉`}
+            {/* Nota en círculo dorado */}
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              width: 112, height: 112, borderRadius: "50%",
+              background: "linear-gradient(135deg, #ffd700 0%, #ff8c00 100%)",
+              boxShadow: "0 0 48px rgba(255,215,0,0.7), 0 6px 28px rgba(0,0,0,0.5)",
+            }}>
+              <span style={{ color: "#1a0533", fontSize: 42, fontWeight: 900, lineHeight: 1 }}>
+                {quizResultado.calificacion.toFixed(1)}
+              </span>
+              <span style={{ color: "rgba(26,5,51,0.65)", fontSize: 13, fontWeight: 700 }}>/5.0</span>
             </div>
-            {quizResultado.tituloQuiz && (
-              <div style={{ color: "rgba(255,215,0,0.95)", fontSize: 13, fontWeight: 600, wordBreak: "break-word", overflowWrap: "anywhere" }}>
-                📚 <em>{quizResultado.tituloQuiz}</em>
+
+            {/* Nombre + Quiz */}
+            <div style={{ textAlign: "center", width: "100%", padding: "0 4px" }}>
+              <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.25, marginBottom: 6, textShadow: "0 2px 12px rgba(0,0,0,0.7)" }}>
+                {`¡Lo lograste${firstName ? `, ${firstName}` : ""}! 🎉`}
               </div>
-            )}
-          </div>
-
-          {/* Porcentaje + stats */}
-          <div style={{
-            width: "100%", padding: "12px 16px 10px", borderRadius: 14,
-            background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,215,0,0.30)",
-            textAlign: "center",
-          }}>
-            <div style={{ fontSize: 38, fontWeight: 900, color: "#ffd700", lineHeight: 1 }}>
-              {quizResultado.porcentaje}%
+              {quizResultado.tituloQuiz && (
+                  <div style={{
+                    color: "#ffe58f",
+                    fontSize: 13,
+                    fontWeight: 800,
+                    textShadow: "0 2px 10px rgba(0,0,0,0.9)",
+                    background: "rgba(15, 8, 35, 0.42)",
+                    border: "1px solid rgba(255,229,143,0.35)",
+                    borderRadius: 10,
+                    padding: "5px 10px",
+                    wordBreak: "break-word",
+                    overflowWrap: "anywhere",
+                  }}>
+                  📚 <em>{quizResultado.tituloQuiz}</em>
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 3, letterSpacing: 1.2, textTransform: "uppercase" }}>
-              {quizResultado.correctas} de {quizResultado.totalPreguntas} correctas
+          </div>
+
+          {/* Bloque inferior */}
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, marginTop: "auto" }}>
+            {/* Porcentaje + stats */}
+            <div style={{
+              width: "100%", padding: "12px 16px 10px", borderRadius: 14,
+              background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,215,0,0.30)",
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: 38, fontWeight: 900, color: "#ffd700", lineHeight: 1 }}>
+                {quizResultado.porcentaje}%
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 3, letterSpacing: 1.2, textTransform: "uppercase" }}>
+                {quizResultado.correctas} de {quizResultado.totalPreguntas} correctas
+              </div>
             </div>
-          </div>
 
-          {/* Badges */}
-          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-            <span style={{ fontSize: 11, color: "#1b073a", background: "#ffd700", borderRadius: 999, padding: "4px 14px", fontWeight: 900, letterSpacing: 0.5 }}>
-              ✓ APROBADO
-            </span>
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.9)", background: "rgba(255,255,255,0.15)", borderRadius: 999, padding: "4px 14px", fontWeight: 700 }}>
-              🎯 Meta cumplida
-            </span>
-          </div>
+            {/* Badges */}
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <span style={{ fontSize: 11, color: "#1b073a", background: "#ffd700", borderRadius: 999, padding: "4px 14px", fontWeight: 900, letterSpacing: 0.5 }}>
+                ✓ APROBADO
+              </span>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.9)", background: "rgba(255,255,255,0.15)", borderRadius: 999, padding: "4px 14px", fontWeight: 700 }}>
+                🎯 Meta cumplida
+              </span>
+            </div>
 
-          {/* Hashtags */}
-          <div style={{ textAlign: "center" }}>
-            <div style={{ color: "rgba(255,215,0,0.4)", fontSize: 10.5, letterSpacing: 0.3, lineHeight: 1.8 }}>
-              #AcademiaCrystalDiamante · #Logro · #Aprendizaje
+            {/* Hashtags */}
+            <div style={{ textAlign: "center" }}>
+              <div style={{ color: "rgba(255,215,0,0.4)", fontSize: 10.5, letterSpacing: 0.3, lineHeight: 1.8 }}>
+                #AcademiaCrystalDiamante · #Logro · #Aprendizaje
+              </div>
             </div>
           </div>
         </div>
