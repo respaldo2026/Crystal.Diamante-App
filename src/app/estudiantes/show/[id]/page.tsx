@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Image from "next/image";
 import { Show } from "@refinedev/antd";
 import {
@@ -164,8 +164,13 @@ export default function StudentDetailView() {
   const [registrandoClase, setRegistrandoClase] = useState(false);
   const [formRegistrarClase] = Form.useForm();
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [cameraVisible, setCameraVisible] = useState(false);
+  const [capturingPhoto, setCapturingPhoto] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState("");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [estadisticasGlobales, setEstadisticasGlobales] = useState<Estadisticas>({
     totalCursos: 0,
     cursosActivos: 0,
@@ -820,6 +825,54 @@ export default function StudentDetailView() {
     cargarDatosCompletos();
   }, [cargarDatosCompletos]);
 
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!cameraVisible) {
+      stopCamera();
+      return;
+    }
+
+    let cancelled = false;
+
+    const startCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+      } catch (error: any) {
+        console.error("Error accediendo a la cámara:", error);
+        message.error(error?.message || "No se pudo acceder a la cámara");
+        setCameraVisible(false);
+      }
+    };
+
+    void startCamera();
+
+    return () => {
+      cancelled = true;
+      stopCamera();
+    };
+  }, [cameraVisible, stopCamera]);
+
   const handleUploadPhoto = async (file: File) => {
     try {
       setUploadingPhoto(true);
@@ -860,6 +913,44 @@ export default function StudentDetailView() {
       setUploadingPhoto(false);
     }
     return false; // Prevenir upload automático de antd
+  };
+
+  const handleCapturePhoto = async () => {
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) {
+        message.error("La cámara todavía no está lista");
+        return;
+      }
+
+      setCapturingPhoto(true);
+
+      const width = video.videoWidth || 1280;
+      const height = video.videoHeight || 720;
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("No se pudo preparar la captura");
+
+      context.drawImage(video, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/jpeg", 0.92);
+      });
+
+      if (!blob) throw new Error("No se pudo capturar la imagen");
+
+      const file = new File([blob], `foto_${idEstudiante}_${Date.now()}.jpg`, { type: "image/jpeg" });
+      await handleUploadPhoto(file);
+      setCameraVisible(false);
+    } catch (error: any) {
+      console.error("Error capturando foto:", error);
+      message.error(error?.message || "No se pudo capturar la foto");
+    } finally {
+      setCapturingPhoto(false);
+    }
   };
 
   const handleWhatsAppClick = () => {
@@ -1848,28 +1939,20 @@ export default function StudentDetailView() {
                   }
                 }}
               />
-              <Upload
-                showUploadList={false}
-                beforeUpload={(file) => {
-                  handleUploadPhoto(file);
-                  return false;
+              <Button
+                icon={<CameraOutlined />}
+                shape="circle"
+                size="small"
+                loading={uploadingPhoto}
+                onClick={() => setCameraVisible(true)}
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  right: 0,
+                  backgroundColor: "#fff",
+                  border: "2px solid #667eea",
                 }}
-                accept="image/*"
-              >
-                <Button
-                  icon={<CameraOutlined />}
-                  shape="circle"
-                  size="small"
-                  loading={uploadingPhoto}
-                  style={{
-                    position: "absolute",
-                    bottom: 0,
-                    right: 0,
-                    backgroundColor: "#fff",
-                    border: "2px solid #667eea",
-                  }}
-                />
-              </Upload>
+              />
             </div>
           </Col>
           <Col flex={1}>
@@ -2354,6 +2437,33 @@ export default function StudentDetailView() {
           height={600}
           style={{ width: "100%", height: "auto" }}
         />
+      </Modal>
+
+      <Modal
+        title="Tomar foto del estudiante"
+        open={cameraVisible}
+        onCancel={() => setCameraVisible(false)}
+        onOk={handleCapturePhoto}
+        okText="Capturar y guardar"
+        cancelText="Cerrar"
+        confirmLoading={capturingPhoto}
+        destroyOnClose
+        afterClose={stopCamera}
+        styles={{ body: { maxHeight: "70vh", overflow: "auto" } }}
+        style={{ top: 20 }}
+        width="min(92vw, 720px)"
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size={12}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{ width: "100%", borderRadius: 12, background: "#111", maxHeight: "55vh", objectFit: "cover" }}
+          />
+          <canvas ref={canvasRef} style={{ display: "none" }} />
+          <Text type="secondary">Autoriza el acceso a la cámara cuando el navegador lo solicite.</Text>
+        </Space>
       </Modal>
 
       {/* ── Modal: Registrar Asistencia Por Clase ─────────────────── */}
