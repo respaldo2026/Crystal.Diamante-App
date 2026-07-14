@@ -26,6 +26,7 @@ import { enviarWhatsapp } from "@utils/whatsapp";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { construirNombreGrupo } from "@utils/grupos";
 import { getPaymentPlan, getPaymentPlanDisplay } from "@/types/payment-plans";
+import { getVisiblePaymentStatus } from "@utils/payment-balances";
 const { Text } = Typography;
 
 export default function EstudiantesList() {
@@ -421,22 +422,26 @@ export default function EstudiantesList() {
                     const fechaPago = p.fecha_pago ? dayjs(p.fecha_pago) : null;
                     const esExigibleEsteMes = !fechaVencimiento || !fechaVencimiento.endOf('day').isAfter(finMesActual);
 
-                    if (p.estado === 'pagado') stats[matriculaId].pagados += 1;
-                    if (p.estado === 'pagado' && esInscripcion) stats[matriculaId].inscripcionPagada += 1;
-                    if (p.estado === 'pagado' && !esInscripcion) {
+                    const visibleStatus = getVisiblePaymentStatus(p);
+                    const isPaid = visibleStatus === 'pagado';
+                    const isOverdue = visibleStatus === 'vencido';
+                    const isPendingLike = visibleStatus === 'pendiente' || visibleStatus === 'abono_parcial' || visibleStatus === 'vencido';
+
+                    if (isPaid) stats[matriculaId].pagados += 1;
+                    if (isPaid && esInscripcion) stats[matriculaId].inscripcionPagada += 1;
+                    if (isPaid && !esInscripcion) {
                         stats[matriculaId].mensualidadesPagadas += 1;
                         if ((fechaPago && fechaPago.isSame(hoy, 'month')) || esExigibleEsteMes) {
                             stats[matriculaId].mensualidadesPagadasMesActual += 1;
                         }
                     }
-                    if (p.estado === 'pendiente' || p.estado === 'vencido') {
+                    if (isPendingLike) {
                         stats[matriculaId].pendientes += 1;
                         if (!esInscripcion) {
                             stats[matriculaId].mensualidadesPendientes += 1;
                             if (esExigibleEsteMes) stats[matriculaId].mensualidadesPendientesMesActual += 1;
                         }
-                        // estado='vencido' siempre es vencido; estado='pendiente' lo es si fecha_vencimiento < hoy
-                        const esVencido = p.estado === 'vencido' || (p.fecha_vencimiento && dayjs(p.fecha_vencimiento).endOf('day').isBefore(hoy));
+                        const esVencido = isOverdue;
                         if (esVencido) {
                             stats[matriculaId].pendientesVencidos += 1;
                             if (!esInscripcion) {

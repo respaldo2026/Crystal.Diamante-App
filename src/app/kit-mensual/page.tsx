@@ -299,7 +299,7 @@ export default function KitMensualPage() {
           const ultimoPago = pagosPagados[0] || null;
 
           const pagosPendientes = pagosMatricula
-            .filter((p: any) => String(p?.estado || "").toLowerCase() !== "pagado")
+            .filter((p: any) => getVisiblePaymentStatus(p) !== "pagado")
             .sort((a: any, b: any) => {
               const fa = dayjs(a?.fecha_vencimiento || "9999-12-31").valueOf();
               const fb = dayjs(b?.fecha_vencimiento || "9999-12-31").valueOf();
@@ -318,19 +318,30 @@ export default function KitMensualPage() {
             proximoPago?.fecha_vencimiento && dayjs(proximoPago.fecha_vencimiento).endOf("day").isBefore(hoy),
           );
 
+          const sinPendientes = !proximoPago && pagosPagados.length > 0;
           let estadoPagoLabel: KitRow["estadoPagoLabel"] = "Sin programación";
           let estadoPagoColor: KitRow["estadoPagoColor"] = "default";
+          let puedeRecibirKit = false;
 
           if (pagoEnPeriodo) {
             estadoPagoLabel = "Pagó en el período";
             estadoPagoColor = "green";
+            puedeRecibirKit = true;
+          } else if (sinPendientes) {
+            estadoPagoLabel = "Al día";
+            estadoPagoColor = "green";
+            puedeRecibirKit = true;
           } else if (proximoVencido) {
             estadoPagoLabel = "Pendiente vencido";
             estadoPagoColor = "red";
+            puedeRecibirKit = false;
           } else if (proximoPago) {
             estadoPagoLabel = "Pendiente por pagar";
             estadoPagoColor = "orange";
+            puedeRecibirKit = false;
           }
+
+          const referenciaCiclo = (pagoEnPeriodo || sinPendientes) ? ultimoPago : proximoPago;
 
           return {
             key: String(m.id),
@@ -341,9 +352,8 @@ export default function KitMensualPage() {
             grupoNombre: construirNombreGrupo(curso),
             planLabel,
             cicloKit: String(
-              (pagoEnPeriodo
-                ? (ultimoPago?.periodo_pagado || (Number.isFinite(Number(ultimoPago?.numero_cuota)) ? `Cuota ${ultimoPago?.numero_cuota}` : "-"))
-                : (proximoPago?.periodo_pagado || (Number.isFinite(Number(proximoPago?.numero_cuota)) ? `Cuota ${proximoPago?.numero_cuota}` : "-"))) || "-"
+              referenciaCiclo?.periodo_pagado ||
+              (Number.isFinite(Number(referenciaCiclo?.numero_cuota)) ? `Cuota ${referenciaCiclo?.numero_cuota}` : "-")
             ),
             ultimoPagoFecha: ultimoPago?.fecha_pago || null,
             ultimoPagoPeriodo: String(
@@ -359,7 +369,7 @@ export default function KitMensualPage() {
             proximoPagoMonto: Number(getMontoProgramado(proximoPago || {}) || proximoPago?.monto || 0),
             estadoPagoLabel,
             estadoPagoColor,
-            puedeRecibirKit: pagoEnPeriodo,
+            puedeRecibirKit,
             pagoEnPeriodo,
             vencido: proximoVencido || (proximoPago ? getVisiblePaymentStatus(proximoPago) === "vencido" : false),
           };
