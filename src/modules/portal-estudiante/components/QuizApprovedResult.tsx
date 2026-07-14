@@ -1,9 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button, Col, Row } from "antd";
 import { WhatsAppOutlined } from "@ant-design/icons";
-import { resolveQuizShareBackground } from "@/modules/portal-estudiante/quiz-share-backgrounds";
+import {
+  resolveQuizShareBackground,
+  resolveQuizShareBackgroundCandidates,
+} from "@/modules/portal-estudiante/quiz-share-backgrounds";
 
 type QuizApprovedResultProps = {
   isMobile: boolean;
@@ -31,11 +34,48 @@ export const QuizApprovedResult = ({
   onCloseAction,
 }: QuizApprovedResultProps) => {
   const firstName = estudianteNombre ? estudianteNombre.split(" ")[0] : "";
-  const mensajeLogro = `🏆 ¡Quiz aprobado! Obtuve ${quizResultado.calificacion.toFixed(1)}/5.0 (${quizResultado.porcentaje}%).`;
-  const bgImageUrl = resolveQuizShareBackground({
+  const bgCandidates = useMemo(() => resolveQuizShareBackgroundCandidates({
     quizId: (quizResultado as any)?.quizId,
     quizTitle: quizResultado.tituloQuiz,
-  });
+  }), [quizResultado]);
+  const [bgImageUrl, setBgImageUrl] = useState<string>(() => resolveQuizShareBackground({
+    quizId: (quizResultado as any)?.quizId,
+    quizTitle: quizResultado.tituloQuiz,
+  }));
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const checkImage = (url: string): Promise<boolean> =>
+      new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(true);
+        image.onerror = () => resolve(false);
+        image.src = url;
+      });
+
+    const pickBackground = async () => {
+      for (const candidate of bgCandidates) {
+        // Toma el primer asset realmente disponible para evitar fondos rotos.
+        const exists = await checkImage(candidate);
+        if (exists) {
+          if (!isCancelled) setBgImageUrl(candidate);
+          return;
+        }
+      }
+
+      if (!isCancelled) setBgImageUrl(resolveQuizShareBackground({
+        quizId: (quizResultado as any)?.quizId,
+        quizTitle: quizResultado.tituloQuiz,
+      }));
+    };
+
+    void pickBackground();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [bgCandidates, quizResultado]);
 
   return (
     <div style={{ color: "#fff" }}>
