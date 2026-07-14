@@ -2733,6 +2733,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     ? Math.round(estudiantes.reduce((sum, e) => sum + e.asistencia_porcentaje, 0) / estudiantes.length)
     : 0;
   const estudiantesEnRiesgo = estudiantes.filter(e => e.asistencia_porcentaje < (curso.porcentaje_minimo || 80)).length;
+  const totalEstudiantesEvaluables = estudiantes.filter((est) => est.estado !== "pendiente_pago").length;
   const sesionesMesActual = sesionesVisibles.filter((sesion: any) => {
     if (!sesion?.fecha) return false;
     const fechaSesion = dayjs(sesion.fecha);
