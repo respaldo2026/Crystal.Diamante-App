@@ -239,6 +239,10 @@ type GamificationDetailType = "asistencia" | "quiz" | "tarea";
 export default function CursoShowPage({ params }: { params: ParamsLike }) {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.sm;
+  const responsiveModalStyles = useMemo(
+    () => ({ body: { maxHeight: isMobile ? "72vh" : "80vh", overflow: "auto", padding: isMobile ? 12 : 20 } }),
+    [isMobile],
+  );
   const { message, modal } = App.useApp();
   const [cursoId, setCursoId] = useState<string>("");
   const [curso, setCurso] = useState<any>(null);
@@ -3484,15 +3488,15 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
       </div>
 
       <Card size="small" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: isMobile ? "flex-start" : "flex-end" }}>
-          <Space wrap>
-            <Button size="small" icon={<ClockCircleOutlined />} onClick={() => setActiveTab("3")}>
+        <div style={{ display: "flex", justifyContent: isMobile ? "stretch" : "flex-end" }}>
+          <Space wrap direction={isMobile ? "vertical" : "horizontal"} style={isMobile ? { width: "100%" } : undefined}>
+            <Button size="small" icon={<ClockCircleOutlined />} onClick={() => setActiveTab("3")} style={isMobile ? { width: "100%" } : undefined}>
               Registrar sesión
             </Button>
-            <Button size="small" type="primary" icon={<BarChartOutlined />} onClick={() => setActiveTab("4")}>
+            <Button size="small" type="primary" icon={<BarChartOutlined />} onClick={() => setActiveTab("4")} style={isMobile ? { width: "100%" } : undefined}>
               Ver gamificacion
             </Button>
-            <Button size="small" icon={<BarChartOutlined />} onClick={() => setModalRadarVisible(true)}>
+            <Button size="small" icon={<BarChartOutlined />} onClick={() => setModalRadarVisible(true)} style={isMobile ? { width: "100%" } : undefined}>
               Ver radar pedagógico
             </Button>
           </Space>
@@ -3501,13 +3505,16 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
 
       {/* TABS - OFICINA COMPLETA DEL PROFESOR */}
       <Tabs
-        type="card"
+        type={isMobile ? "line" : "card"}
         activeKey={activeTab}
         onChange={setActiveTab}
+        tabBarGutter={isMobile ? 8 : 12}
+        animated={false}
+        tabBarStyle={isMobile ? { overflowX: "auto", whiteSpace: "nowrap" } : undefined}
         items={[
           {
             key: "1",
-            label: <span><BookOutlined /> Pensum ({temas.length})</span>,
+            label: <span><BookOutlined /> {isMobile ? `Pensum (${temas.length})` : `Pensum (${temas.length})`}</span>,
             children: (
               <Card
                 title="Contenido del Curso - Pensum"
@@ -3676,7 +3683,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           },
           {
             key: "2",
-            label: <span><FileOutlined /> Lista de materiales</span>,
+            label: <span><FileOutlined /> {isMobile ? "Materiales" : "Lista de materiales"}</span>,
             children: (
               <Card
                 title="Materiales necesarios por clase"
@@ -3780,7 +3787,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           },
           {
             key: "3",
-            label: <span><ClockCircleOutlined /> Sesiones de Clase ({sesionesVisibles.length})</span>,
+            label: <span><ClockCircleOutlined /> {isMobile ? `Sesiones (${sesionesVisibles.length})` : `Sesiones de Clase (${sesionesVisibles.length})`}</span>,
             children: (
               <Card
                 title="Registro de Sesiones y Clases Dictadas"
@@ -3788,6 +3795,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   <Button
                     type="primary"
                     icon={<PlusOutlined />}
+                    size={isMobile ? "small" : "middle"}
+                    style={isMobile ? { marginTop: 8 } : undefined}
                     onClick={() => {
                       if (!clasesPensum.length) {
                         message.warning("Este curso aún no tiene clases del pensum para seleccionar.");
@@ -3855,13 +3864,18 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           },
           {
             key: "4",
-            label: <span><UserOutlined /> Estudiantes ({totalEstudiantes})</span>,
+            label: <span><UserOutlined /> {isMobile ? `Est. (${totalEstudiantes})` : `Estudiantes (${totalEstudiantes})`}</span>,
             children: (
               <Space direction="vertical" size={12} style={{ width: "100%" }}>
                 <Card
-                  title="Gamificación del grupo"
-                  extra={<Tag color="blue">XP promedio: {promedioGamificacionGrupo}/1000</Tag>}
+                  title={isMobile ? "Gamificación" : "Gamificación del grupo"}
+                  extra={!isMobile ? <Tag color="blue">XP promedio: {promedioGamificacionGrupo}/1000</Tag> : null}
                 >
+                  {isMobile ? (
+                    <div style={{ marginBottom: 10 }}>
+                      <Tag color="blue">XP promedio: {promedioGamificacionGrupo}/1000</Tag>
+                    </div>
+                  ) : null}
                   <Text type="secondary" style={{ display: "block", marginBottom: 10 }}>
                     Ranking de motivación por estudiante dentro de este grupo, con foco en constancia semanal, asistencia y quizzes.
                   </Text>
@@ -4157,14 +4171,15 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           },
           {
             key: "6",
-            label: <span><CalendarOutlined /> Bitácora ({bitacora.length})</span>,
+            label: <span><CalendarOutlined /> {isMobile ? `Bitácora (${bitacora.length})` : `Bitácora (${bitacora.length})`}</span>,
             children: (
               <Table
                 dataSource={bitacoraConDivisores}
                 rowKey="key"
                 pagination={false}
-                size="middle"
+                size={isMobile ? "small" : "middle"}
                 locale={{ emptyText: "No hay sesiones registradas" }}
+                scroll={{ x: "max-content" }}
                 expandable={{
                   expandedRowRender: (record: any) => (
                     <Table
@@ -4173,6 +4188,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                       pagination={false}
                       size="small"
                       style={{ margin: "0 0 8px 0" }}
+                      scroll={{ x: "max-content" }}
                       columns={[
                         {
                           title: "Estudiante",
@@ -4310,6 +4326,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         onCancel={() => setModalRadarVisible(false)}
         footer={null}
         width={isMobile ? "96%" : 1100}
+        style={{ top: isMobile ? 12 : 24 }}
+        styles={responsiveModalStyles}
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Space wrap size={8}>
@@ -4438,6 +4456,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         onCancel={() => setModalGamificacionDetalleVisible(false)}
         footer={null}
         width={isMobile ? "95%" : 980}
+        style={{ top: isMobile ? 12 : 24 }}
+        styles={responsiveModalStyles}
       >
         <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <Tag color="blue">{`Estudiante: ${gamificacionDetalleEstudiante?.estudiante || "-"}`}</Tag>
@@ -4448,8 +4468,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               rowKey={(row: any) => String(row?.key || row?.id || row?.fecha || "row")}
               dataSource={detalleAsistenciaRowsConDivisores}
               pagination={false}
-              tableLayout="fixed"
-              scroll={{ y: isMobile ? 360 : 520 }}
+              tableLayout={isMobile ? undefined : "fixed"}
+              scroll={{ x: "max-content", y: isMobile ? 360 : 520 }}
               onRow={(record: any) => {
                 if (record?.es_divisor_ciclo) {
                   const palette = getCycleDividerPalette(Number(record?.cicloNumero || 1));
@@ -4500,6 +4520,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 {
                   title: "Observación",
                   dataIndex: "observaciones",
+                  width: isMobile ? 180 : undefined,
                   onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
                   render: (v: string | null) => <Text style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{v || "-"}</Text>,
                 },
@@ -4515,7 +4536,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                     if (row.presente) {
                       return <Text type="secondary">Sin novedad</Text>;
                     }
-                    return <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Faltaste el ${row.fecha ? dayjs(row.fecha).format("DD/MM") : "día"}`}</Text>;
+                    return <Text style={{ color: "#b91c1c", fontWeight: 600, whiteSpace: "normal", wordBreak: "break-word" }}>{`Faltaste el ${row.fecha ? dayjs(row.fecha).format("DD/MM") : "día"}`}</Text>;
                   },
                 },
                 {
@@ -4543,8 +4564,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               pagination={{ pageSize: 8 }}
               scroll={{ x: "max-content" }}
               columns={[
-                { title: "Tema", dataIndex: "tema", render: (v: string) => <Text strong>{v}</Text> },
-                { title: "Quiz", dataIndex: "quiz" },
+                { title: "Tema", dataIndex: "tema", width: isMobile ? 180 : undefined, render: (v: string) => <Text strong style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{v}</Text> },
+                { title: "Quiz", dataIndex: "quiz", width: isMobile ? 180 : undefined, render: (v: string) => <Text style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{v}</Text> },
                 {
                   title: "Nota",
                   dataIndex: "nota",
@@ -4561,7 +4582,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   width: 220,
                   render: (_: any, row: any) => row.estado === "presentado"
                     ? <Text type="secondary">Quiz completado</Text>
-                    : <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Te falta este quiz: ${row.tema}`}</Text>,
+                    : <Text style={{ color: "#b91c1c", fontWeight: 600, whiteSpace: "normal", wordBreak: "break-word" }}>{`Te falta este quiz: ${row.tema}`}</Text>,
                 },
               ]}
             />
@@ -4571,8 +4592,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               rowKey={(row: any) => String(row?.key || row?.id || row?.tema || "row")}
               dataSource={detalleTareaRowsConDivisores}
               pagination={false}
-              tableLayout="fixed"
-              scroll={{ y: isMobile ? 360 : 520 }}
+              tableLayout={isMobile ? undefined : "fixed"}
+              scroll={{ x: "max-content", y: isMobile ? 360 : 520 }}
               onRow={(record: any) => {
                 if (record?.es_divisor_ciclo) {
                   const palette = getCycleDividerPalette(Number(record?.cicloNumero || 1));
@@ -4604,8 +4625,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 {
                   title: "Tema",
                   dataIndex: "tema",
+                  width: isMobile ? 220 : undefined,
                   onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
-                  render: (v: string) => <Text strong>{v}</Text>,
+                  render: (v: string) => <Text strong style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{v}</Text>,
                 },
                 {
                   title: "Estado",
@@ -4636,7 +4658,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                   onCell: (row: any) => row?.es_divisor_ciclo ? { colSpan: 0 } : {},
                   render: (_: any, row: any) => row.estado === "subida"
                     ? <Text type="secondary">Tarea completa</Text>
-                    : <Text style={{ color: "#b91c1c", fontWeight: 600 }}>{`Te falta esta tarea: ${row.tema}`}</Text>,
+                    : <Text style={{ color: "#b91c1c", fontWeight: 600, whiteSpace: "normal", wordBreak: "break-word" }}>{`Te falta esta tarea: ${row.tema}`}</Text>,
                 },
                 {
                   title: "Editar",
@@ -4668,6 +4690,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         cancelText="Cancelar"
         confirmLoading={edicionManualSaving}
         destroyOnClose
+        width={isMobile ? "95%" : 520}
+        style={{ top: isMobile ? 12 : 24 }}
+        styles={responsiveModalStyles}
       >
         <Form
           form={formEdicionManual}
@@ -4730,6 +4755,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         }}
         footer={null}
         width={isMobile ? "95%" : 980}
+        style={{ top: isMobile ? 12 : 24 }}
+        styles={responsiveModalStyles}
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Select
@@ -4884,6 +4911,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         }
         width={isMobile ? "96%" : 1200}
         destroyOnClose
+        style={{ top: isMobile ? 8 : 24 }}
+        styles={responsiveModalStyles}
       >
         <div ref={iframeMaterialContainerRef} style={{ width: "100%", background: "#000" }}>
           <iframe
@@ -4904,7 +4933,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
         okText="Enviar respuestas"
         okButtonProps={{ loading: quizProfesorSaving }}
         onCancel={() => setQuizProfesorModalOpen(false)}
-        width={760}
+        width={isMobile ? "95%" : 760}
+        style={{ top: isMobile ? 12 : 24 }}
+        styles={responsiveModalStyles}
       >
         {!quizProfesorPreguntas.length ? (
           <Empty description="Este quiz no tiene preguntas" />
@@ -4954,6 +4985,9 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
           setModalSesionVisible(false);
           formSesion.resetFields();
         }}
+        width={isMobile ? "95%" : 560}
+        style={{ top: isMobile ? 12 : 24 }}
+        styles={responsiveModalStyles}
       >
         <Form form={formSesion} layout="vertical" onFinish={onAddSesion}>
           <Form.Item label="Fecha" name="fecha" rules={[{ required: true }]}>
