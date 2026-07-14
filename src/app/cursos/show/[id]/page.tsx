@@ -3357,24 +3357,25 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
     ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: isMobile ? 12 : 24 }}>
       {/* ENCABEZADO - OFICINA DEL PROFESOR */}
       <div
         style={{
-          marginBottom: 28,
+          marginBottom: isMobile ? 16 : 28,
           background: "linear-gradient(135deg, #4057d6 0%, #6d3fb0 100%)",
           color: "white",
-          padding: 28,
+          padding: isMobile ? 14 : 28,
           borderRadius: 14,
           boxShadow: "0 14px 30px -18px rgba(44, 52, 124, 0.7)",
         }}
       >
-        <Space direction="vertical" style={{ width: "100%" }} size={20}>
-          <Space wrap size={20} style={{ alignItems: "center" }}>
+        <Space direction="vertical" style={{ width: "100%" }} size={isMobile ? 12 : 20}>
+          <Space wrap size={isMobile ? 10 : 20} style={{ alignItems: "center" }}>
             <Button
               type="primary"
               icon={<ArrowLeftOutlined />}
               onClick={() => router.push(returnTo)}
+              size={isMobile ? "small" : "middle"}
               style={{
                 background: "rgba(15, 23, 42, 0.28)",
                 borderColor: "rgba(255,255,255,0.35)",
@@ -3384,14 +3385,15 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
             >
               Volver
             </Button>
-            <Title level={2} style={{ margin: 0, color: "white", textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
+            <Title level={isMobile ? 3 : 2} style={{ margin: 0, color: "white", textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
               {construirNombreGrupo(curso)}
             </Title>
-            <Space wrap size={20} style={{ marginTop: 4 }}>
+            <Space wrap size={isMobile ? 8 : 20} style={{ marginTop: 4 }}>
               <Button
                 type="primary"
                 icon={<CheckOutlined />}
                 onClick={() => router.push(`/asistencias/create?curso_id=${cursoId}&curso_nombre=${encodeURIComponent(construirNombreGrupo(curso))}`)}
+                size={isMobile ? "small" : "middle"}
                 style={{ fontWeight: 600 }}
               >
                 Llamar Lista
@@ -3425,7 +3427,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               <Card
                 size="small"
                 style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
-                styles={{ body: { padding: 14 } }}
+                styles={{ body: { padding: isMobile ? 10 : 14 } }}
               >
                 <Statistic
                   title={<span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Estudiantes</span>}
@@ -3439,7 +3441,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               <Card
                 size="small"
                 style={{ background: "rgba(15, 23, 42, 0.22)", borderColor: "rgba(255,255,255,0.22)" }}
-                styles={{ body: { padding: 14 } }}
+                styles={{ body: { padding: isMobile ? 10 : 14 } }}
               >
                 <Statistic
                   title={<span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Promedio asistencia</span>}
@@ -3449,6 +3451,7 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 />
               </Card>
             </Col>
+            {!isMobile ? (
             <Col xs={12} md={8}>
               <Card
                 size="small"
@@ -3463,16 +3466,26 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
                 />
               </Card>
             </Col>
+            ) : null}
           </Row>
 
           <Card
             size="small"
-            style={{ marginBottom: 16, background: "rgba(15, 23, 42, 0.2)", borderColor: "rgba(255,255,255,0.22)" }}
+            style={{ marginBottom: isMobile ? 10 : 16, background: "rgba(15, 23, 42, 0.2)", borderColor: "rgba(255,255,255,0.22)" }}
+            styles={{ body: { padding: isMobile ? 10 : 16 } }}
           >
-            <Space direction="vertical">
+            <Space direction="vertical" size={isMobile ? 4 : 8}>
               <Text style={{ color: "#ffffff" }}><strong>Horario:</strong> {curso.dias_semana || "-"} {curso.hora_inicio && `• ${dayjs(curso.hora_inicio, 'HH:mm:ss').format('h:mm A')}`} {curso.hora_fin && ` - ${dayjs(curso.hora_fin, 'HH:mm:ss').format('h:mm A')}`}</Text>
-              <Text style={{ color: "#f8fafc" }}><strong>Fecha de inicio:</strong> {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format('DD MMM YYYY') : "-"}</Text>
-              <Text style={{ color: "#f8fafc" }}><strong>Fecha de fin:</strong> {curso.fecha_fin ? dayjs(curso.fecha_fin).format('DD MMM YYYY') : "No definida"}</Text>
+              {isMobile ? (
+                <Text style={{ color: "#f8fafc" }}>
+                  <strong>Fechas:</strong> {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format('DD MMM YYYY') : "-"} • {curso.fecha_fin ? dayjs(curso.fecha_fin).format('DD MMM YYYY') : "No definida"}
+                </Text>
+              ) : (
+                <>
+                  <Text style={{ color: "#f8fafc" }}><strong>Fecha de inicio:</strong> {curso.fecha_inicio ? dayjs(curso.fecha_inicio).format('DD MMM YYYY') : "-"}</Text>
+                  <Text style={{ color: "#f8fafc" }}><strong>Fecha de fin:</strong> {curso.fecha_fin ? dayjs(curso.fecha_fin).format('DD MMM YYYY') : "No definida"}</Text>
+                </>
+              )}
               <Space wrap size={8}>
                 <Tag color={estudiantesEnRiesgo > 0 ? "error" : "success"}>{`En riesgo: ${estudiantesEnRiesgo}`}</Tag>
                 <Tag color={estudiantesEnMora > 0 ? "error" : "success"}>{`En mora: ${estudiantesEnMora}`}</Tag>
@@ -3480,8 +3493,8 @@ export default function CursoShowPage({ params }: { params: ParamsLike }) {
               </Space>
             </Space>
           </Card>
-            <Text style={{ color: "rgba(255,255,255,0.94)", fontSize: 15 }}>
-              👨‍🏫 Profesor: <strong>{curso.perfiles?.nombre_completo || "Sin asignar"}</strong>
+            <Text style={{ color: "rgba(255,255,255,0.94)", fontSize: isMobile ? 13 : 15 }}>
+              👨‍🏫 <strong>{curso.perfiles?.nombre_completo || "Sin asignar"}</strong>
             </Text>
           </div>
         </Space>
