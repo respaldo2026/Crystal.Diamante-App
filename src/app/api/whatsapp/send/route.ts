@@ -44,12 +44,48 @@ function getSupabaseServiceClient() {
   });
 }
 
+const interpolateTemplateBody = (templateText: string, templateVariables: string[]) => {
+  let rendered = String(templateText || "");
+
+  templateVariables.forEach((value, index) => {
+    const placeholder = index + 1;
+    const safeValue = String(value ?? "");
+    rendered = rendered
+      .replace(new RegExp(`{{\\s*${placeholder}\\s*}}`, "g"), safeValue)
+      .replace(new RegExp(`{\\s*${placeholder}\\s*}`, "g"), safeValue);
+  });
+
+  return rendered.trim();
+};
+
+async function resolveTemplateRenderedText(templateName: string, templateVariables: string[]) {
+  try {
+    const supabase = getSupabaseServiceClient();
+    if (!supabase) return "";
+
+    const { data, error } = await supabase
+      .from("plantillas_whatsapp")
+      .select("plantilla")
+      .eq("nombre", templateName)
+      .maybeSingle();
+
+    if (error || !data?.plantilla) return "";
+
+    return interpolateTemplateBody(String(data.plantilla), templateVariables);
+  } catch {
+    return "";
+  }
+}
+
 async function saveTemplateAuditConversation(input: TemplateAuditLogInput) {
+  const renderedText = await resolveTemplateRenderedText(input.templateName, input.templateVariables);
+
   await saveConversationAudit({
     phone: input.phone,
     userMessage: "[SISTEMA] Envio de plantilla WhatsApp",
     agentResponse:
       `📤 Plantilla enviada: ${input.templateName}\n` +
+      `📝 Texto enviado: ${renderedText || "No disponible"}\n` +
       `Idioma: ${input.templateLanguage}\n` +
       `Variables: ${input.templateVariables.length ? input.templateVariables.join(" | ") : "-"}\n` +
       `Meta Message ID: ${input.messageId || "sin ID"}`,

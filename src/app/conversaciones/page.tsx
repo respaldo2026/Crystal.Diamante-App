@@ -157,9 +157,25 @@ const getTemplateNameFromAudit = (agentText: string): string => {
   return (match?.[1] || "Mensaje de plantilla").trim();
 };
 
-const getTemplateDisplayText = (agentText: string): string => {
+const extractTemplateRenderedTextFromAudit = (agentText: string): string => {
+  const source = String(agentText || "");
+  const match = source.match(/📝\s*Texto enviado:\s*([\s\S]*?)(?:\n(?:Idioma:|Variables:|Meta Message ID:)|$)/i);
+  const rendered = String(match?.[1] || "").trim();
+  if (!rendered || /^no disponible$/i.test(rendered)) return "";
+  return rendered;
+};
+
+const getTemplateDisplayText = (agentText: string, renderedTemplateText?: string): string => {
+  const auditRenderedText = extractTemplateRenderedTextFromAudit(agentText);
+  if (auditRenderedText) return auditRenderedText;
+  if (renderedTemplateText) return renderedTemplateText;
+
   const templateName = getTemplateNameFromAudit(agentText);
-  return `Mensaje de plantilla enviado (${templateName})`;
+  const values = extractTemplateVariablesFromAudit(agentText);
+  if (values.length > 0) {
+    return `Plantilla enviada (${templateName})\nVariables: ${values.join(" | ")}`;
+  }
+  return `Plantilla enviada (${templateName})`;
 };
 
 const normalizeTemplateKey = (value: string) =>
@@ -878,7 +894,7 @@ export default function ConversacionesPage() {
           )
         : "";
       const agentText = isTemplateAudit
-        ? (renderedTemplateText || getTemplateDisplayText(rawAgentText))
+        ? getTemplateDisplayText(rawAgentText, renderedTemplateText)
         : rawAgentText;
       if (agentText) {
         // Detectar marcador de imagen: [📷 URL|caption]\n
@@ -1626,10 +1642,10 @@ export default function ConversacionesPage() {
                             borderLeft: "3px solid #52c41a",
                           }}
                         >
-                          <p style={{ margin: 0 }}>
+                          <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                             {formatAgentResponse(
                               isTemplateAudit
-                                ? (renderedTemplateText || `Mensaje de plantilla enviado (${templateName})`)
+                                ? getTemplateDisplayText(conv.agent_response || "", renderedTemplateText)
                                 : conv.agent_response
                             )}
                           </p>
