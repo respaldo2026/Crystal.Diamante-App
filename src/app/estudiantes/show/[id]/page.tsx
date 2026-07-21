@@ -44,6 +44,7 @@ import {
   CameraOutlined,
   UploadOutlined,
   ReloadOutlined,
+  EditOutlined,
   DeleteOutlined,
   FilePdfOutlined,
   PlusOutlined,
@@ -1939,6 +1940,13 @@ export default function StudentDetailView() {
       title={`Expediente Completo: ${perfil?.nombre_completo ?? "Estudiante"}`}
       headerButtons={() => (
         <Space>
+          <Button
+            icon={<EditOutlined />}
+            onClick={() => router.push(`/estudiantes/edit/${idEstudiante}`)}
+            type="primary"
+          >
+            Editar perfil
+          </Button>
           <Button 
             icon={<ReloadOutlined />} 
             onClick={cargarDatosCompletos}

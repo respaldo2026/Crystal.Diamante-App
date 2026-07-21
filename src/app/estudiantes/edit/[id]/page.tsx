@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Edit, useForm } from "@refinedev/antd";
 import { Form, Input, Row, Col, Divider, Alert, DatePicker, Select, message, Card, Typography, Spin, Avatar, Space, Button, Modal } from "antd";
 import dayjs from "dayjs";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { MODALIDAD_PAGO_DEFAULT, PLANES_PAGO, normalizeModalidadPago, resolvePaymentPlanAmounts, type ModalidadPago, type ProgramaPaymentConfig } from "@/types/payment-plans";
 import { CameraOutlined, UserOutlined } from "@ant-design/icons";
@@ -45,6 +45,7 @@ const opcionesPlanPago = Object.values(PLANES_PAGO).map((plan) => ({
 
 export default function EditEstudiante() {
   const params = useParams();
+    const router = useRouter();
   const id = params?.id as string;
 
   console.log("🟣 [COMPONENTE] EditEstudiante montado");
@@ -64,7 +65,7 @@ export default function EditEstudiante() {
     resource: "perfiles", // Guardamos en la tabla perfiles
     action: "edit",
     id,
-    redirect: "list",     // Al terminar, volvemos a la lista
+        redirect: false,
     // Pedirle a Supabase que retorne los datos actualizados
     meta: { 
       select: "*",
@@ -562,8 +563,8 @@ export default function EditEstudiante() {
             }
       
       // Aunque Supabase no devuelva datos, el UPDATE probablemente se guardó
-      // Refine redirigirá a la lista de todas formas porque onFinish se completó
-      console.log("✅ [FORM] UPDATE completado - Redirigiendo a lista...");
+    console.log("✅ [FORM] UPDATE completado - Redirigiendo a ficha...");
+    router.push(`/estudiantes/show/${id}`);
       console.log("═══════════════════════════════════════════════");
       return result;
     } catch (error) {
