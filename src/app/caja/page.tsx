@@ -20,6 +20,7 @@ import {
   InputNumber,
   Spin,
   Alert,
+  Avatar,
 } from "antd";
 import {
   DollarOutlined,
@@ -30,6 +31,7 @@ import {
   BankOutlined,
   WalletOutlined,
   QrcodeOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { supabaseBrowserClient } from "@utils/supabase/client";
@@ -50,9 +52,17 @@ type MetodoPago = "efectivo" | "transferencia" | "tarjeta" | "nequi" | "sistecre
 interface Estudiante {
   id: string;
   nombre_completo: string;
+  foto_url?: string | null;
+  identificacion?: string | null;
   telefono?: string;
   email?: string;
   notif_whatsapp?: boolean | null;
+}
+
+interface GrupoFiltro {
+  id: string;
+  nombre: string;
+  estudianteIds: string[];
 }
 
 interface Matricula {
@@ -337,6 +347,8 @@ export default function CajaPage() {
 
   const [loading, setLoading] = useState(false);
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
+  const [grupos, setGrupos] = useState<GrupoFiltro[]>([]);
+  const [grupoSeleccionadoId, setGrupoSeleccionadoId] = useState<string | null>(null);
   const [estudianteSeleccionado, setEstudianteSeleccionado] = useState<Estudiante | null>(null);
   const [matriculas, setMatriculas] = useState<Matricula[]>([]);
   const [cuotas, setCuotas] = useState<Cuota[]>([]);
@@ -404,22 +416,79 @@ export default function CajaPage() {
     return valorEntregado - totalAPagar;
   }, [valorEntregado, totalAPagar]);
 
+  const estudiantesFiltradosPorGrupo = useMemo(() => {
+    if (!grupoSeleccionadoId) return [] as Estudiante[];
+
+    const grupo = grupos.find((item) => item.id === grupoSeleccionadoId);
+    if (!grupo) return [] as Estudiante[];
+
+    const idsGrupo = new Set(grupo.estudianteIds.map((id) => String(id)));
+    return estudiantes
+      .filter((estudiante) => idsGrupo.has(String(estudiante.id)))
+      .sort((a, b) => String(a?.nombre_completo || "").localeCompare(String(b?.nombre_completo || "")));
+  }, [grupoSeleccionadoId, grupos, estudiantes]);
+
   const cargarEstudiantes = useCallback(async () => {
     try {
-      const { data, error } = await supabaseBrowserClient
+      const { data: perfilesData, error: perfilesError } = await supabaseBrowserClient
         .from("perfiles")
-        .select("id, nombre_completo, telefono, email, notif_whatsapp")
+        .select("id, nombre_completo, foto_url, identificacion, telefono, email, notif_whatsapp")
         .eq("rol", "estudiante")
         .eq("activo", true)
         .order("nombre_completo");
 
-      if (error) throw error;
-      setEstudiantes(data || []);
+      if (perfilesError) throw perfilesError;
+
+      const { data: matriculasData, error: matriculasError } = await supabaseBrowserClient
+        .from("matriculas")
+        .select("estudiante_id, curso_id, cursos ( id, nombre )")
+        .in("estado", MATRICULA_ESTADOS_ACTIVOS);
+
+      if (matriculasError) throw matriculasError;
+
+      const gruposMap = new Map<string, { nombre: string; estudianteIds: Set<string> }>();
+      (matriculasData || []).forEach((matricula: any) => {
+        const cursoId = String(matricula?.curso_id || matricula?.cursos?.id || "").trim();
+        const cursoNombre = String(matricula?.cursos?.nombre || "Grupo sin nombre").trim();
+        const estudianteId = String(matricula?.estudiante_id || "").trim();
+
+        if (!cursoId || !estudianteId) return;
+
+        const actual = gruposMap.get(cursoId) || {
+          nombre: cursoNombre || "Grupo sin nombre",
+          estudianteIds: new Set<string>(),
+        };
+
+        actual.estudianteIds.add(estudianteId);
+        gruposMap.set(cursoId, actual);
+      });
+
+      const gruposOrdenados: GrupoFiltro[] = Array.from(gruposMap.entries())
+        .map(([id, value]) => ({
+          id,
+          nombre: value.nombre,
+          estudianteIds: Array.from(value.estudianteIds.values()),
+        }))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+      setEstudiantes((perfilesData || []) as Estudiante[]);
+      setGrupos(gruposOrdenados);
     } catch (error) {
       console.error("Error cargando estudiantes:", error);
-      messageApi.error("No se pudieron cargar los estudiantes");
+      messageApi.error("No se pudieron cargar los estudiantes y grupos");
     }
   }, [messageApi]);
+
+  const handleGrupoChange = useCallback((grupoId?: string) => {
+    const nextGrupoId = grupoId ? String(grupoId) : null;
+    setGrupoSeleccionadoId(nextGrupoId);
+    form.setFieldValue("estudiante_id", undefined);
+    setEstudianteSeleccionado(null);
+    setCuotasSeleccionadas([]);
+    setMatriculas([]);
+    setCuotas([]);
+    setValorEntregado(null);
+  }, [form]);
 
   const cargarConfiguracion = useCallback(async () => {
     try {
@@ -1440,22 +1509,70 @@ export default function CajaPage() {
           <Card title="Información del Estudiante" style={{ marginBottom: 12, borderRadius: 16 }} bodyStyle={{ padding: 14 }}>
             <Form form={form} layout="vertical">
               <Form.Item
+                label="Grupo"
+                required
+                tooltip="Selecciona primero el grupo para filtrar estudiantes"
+                style={{ marginBottom: 12 }}
+              >
+                <Select
+                  showSearch
+                  placeholder="Selecciona el grupo..."
+                  optionFilterProp="label"
+                  filterOption={(input, option) =>
+                    String(option?.label || "").toLowerCase().includes(input.toLowerCase())
+                  }
+                  options={grupos.map((grupo) => ({
+                    label: `${grupo.nombre} (${grupo.estudianteIds.length})`,
+                    value: grupo.id,
+                  }))}
+                  value={grupoSeleccionadoId || undefined}
+                  onChange={(value) => handleGrupoChange(value)}
+                  allowClear
+                  size="large"
+                />
+              </Form.Item>
+
+              <Form.Item
                 name="estudiante_id"
                 label="Estudiante"
                 rules={[{ required: true, message: "Seleccione un estudiante" }]}
               >
                 <Select
                   showSearch
-                  placeholder="Buscar estudiante..."
-                  optionFilterProp="children"
+                  placeholder={grupoSeleccionadoId ? "Buscar estudiante del grupo..." : "Primero seleccione un grupo"}
+                  optionFilterProp="searchText"
                   filterOption={(input, option) =>
-                    (option?.label ?? "").toLowerCase().includes(input.toLowerCase())
+                    String((option as any)?.searchText || "").toLowerCase().includes(input.toLowerCase())
                   }
-                  options={estudiantes.map((e) => ({ label: e.nombre_completo, value: e.id }))}
+                  options={estudiantesFiltradosPorGrupo.map((e) => ({
+                    value: e.id,
+                    searchText: `${String(e.nombre_completo || "")} ${String(e.identificacion || "")}`,
+                    label: (
+                      <Space size={10}>
+                        <Avatar src={e?.foto_url || undefined} icon={<UserOutlined />} size={34} />
+                        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+                          <span>{e.nombre_completo}</span>
+                          {e.identificacion ? (
+                            <Text type="secondary" style={{ fontSize: 12 }}>CC: {e.identificacion}</Text>
+                          ) : null}
+                        </div>
+                      </Space>
+                    ),
+                  }))}
                   onChange={handleEstudianteChange}
+                  disabled={!grupoSeleccionadoId}
                   size="large"
                 />
               </Form.Item>
+
+              {grupoSeleccionadoId && estudiantesFiltradosPorGrupo.length === 0 ? (
+                <Alert
+                  message="Este grupo no tiene estudiantes activos para facturar"
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 8 }}
+                />
+              ) : null}
 
               {estudianteSeleccionado && (
                 <Alert
