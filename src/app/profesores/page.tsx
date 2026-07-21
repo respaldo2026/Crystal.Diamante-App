@@ -115,7 +115,12 @@ export default function ProfesoresCards() {
                                 onClick={() => show("profesores", profesor.id)}
                             >
                                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                                    <Avatar size={56} style={{ backgroundColor: "#e0e7ff", color: "#4338ca" }}>
+                                    <Avatar
+                                        size={56}
+                                        src={profesor?.foto_url || undefined}
+                                        icon={<UserOutlined />}
+                                        style={{ backgroundColor: "#e0e7ff", color: "#4338ca" }}
+                                    >
                                         {profesor.nombre_completo ? profesor.nombre_completo[0].toUpperCase() : <UserOutlined />}
                                     </Avatar>
                                     <div style={{ flex: 1, minWidth: 0 }}>

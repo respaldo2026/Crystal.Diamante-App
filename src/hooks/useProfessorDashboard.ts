@@ -106,6 +106,7 @@ export interface ProfesorDashboardCalificacionesGrupo {
 export interface ProfesorDashboardGamificacionEstudiante {
   matriculaId: number;
   estudiante: string;
+  estudianteFotoUrl?: string | null;
   xpSemanal: number;
   xpTotal: number;
   score: number;
@@ -431,7 +432,7 @@ export const fetchProfessorDashboardData = async (
     cursoIds.length > 0
       ? supabaseBrowserClient
           .from("matriculas")
-          .select("id, curso_id, estudiante_id, estado, perfiles!matriculas_estudiante_id_fkey(nombre_completo)")
+          .select("id, curso_id, estudiante_id, estado, perfiles!matriculas_estudiante_id_fkey(nombre_completo, foto_url)")
           .in("curso_id", cursoIds)
       : Promise.resolve({ data: [], error: null }),
     cursoIds.length > 0
@@ -584,6 +585,7 @@ export const fetchProfessorDashboardData = async (
   const estudiantesPorCurso = new Map<string, number>();
   const matriculaCursoMap = new Map<number, string>();
   const matriculaEstudianteMap = new Map<number, string>();
+  const matriculaEstudianteFotoMap = new Map<number, string>();
   matriculasData.forEach((matricula: any) => {
     const cursoId = String(matricula.curso_id);
     const matriculaId = Number(matricula.id);
@@ -592,6 +594,7 @@ export const fetchProfessorDashboardData = async (
     if (Number.isFinite(matriculaId)) {
       matriculaCursoMap.set(matriculaId, cursoId);
       matriculaEstudianteMap.set(matriculaId, matricula?.perfiles?.nombre_completo || "Estudiante");
+      matriculaEstudianteFotoMap.set(matriculaId, String(matricula?.perfiles?.foto_url || ""));
     }
   });
 
@@ -1077,6 +1080,7 @@ export const fetchProfessorDashboardData = async (
     const payload: ProfesorDashboardGamificacionEstudiante = {
       matriculaId,
       estudiante: matriculaEstudianteMap.get(matriculaId) || "Estudiante",
+      estudianteFotoUrl: matriculaEstudianteFotoMap.get(matriculaId) || null,
       xpSemanal,
       xpTotal,
       score,

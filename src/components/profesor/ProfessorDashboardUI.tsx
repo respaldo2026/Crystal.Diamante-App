@@ -18,8 +18,10 @@ import {
   CloseCircleOutlined,
   CameraOutlined,
   EyeOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import {
+  Avatar,
   Badge,
   Button,
   Card,
@@ -1440,6 +1442,7 @@ export const ProfessorDashboardUI: React.FC<ProfessorDashboardUIProps> = ({ dash
                               key: "estudiante",
                               render: (value: string, record: any, index: number) => (
                                 <Space size={6}>
+                                  <Avatar src={record?.estudianteFotoUrl || undefined} icon={<UserOutlined />} size={30} />
                                   <Typography.Text strong>{value}</Typography.Text>
                                   {index === 0 ? <Tag color="gold">Top</Tag> : null}
                                 </Space>
