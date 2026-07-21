@@ -942,7 +942,7 @@ export default function StudentDetailView() {
       await cargarDatosCompletos();
     } catch (error: any) {
       console.error("Error subiendo foto:", error);
-      message.error("Error al subir la foto");
+      message.error(error?.message || "Error al subir la foto");
     } finally {
       setUploadingPhoto(false);
     }

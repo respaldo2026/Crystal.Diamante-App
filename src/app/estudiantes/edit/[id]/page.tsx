@@ -262,6 +262,9 @@ export default function EditEstudiante() {
             const publicUrl = publicData?.publicUrl || "";
             if (!publicUrl) throw new Error("No se pudo obtener la URL pública de la foto");
 
+            setFotoPreviewUrl(publicUrl);
+            formProps.form?.setFieldValue("foto_url", publicUrl);
+
             const { error: updateError } = await supabaseBrowserClient
                 .from("perfiles")
                 .update({ foto_url: publicUrl })
@@ -279,8 +282,6 @@ export default function EditEstudiante() {
                 }
             }
 
-            setFotoPreviewUrl(publicUrl);
-            formProps.form?.setFieldValue("foto_url", publicUrl);
             message.success("Foto actualizada y guardada correctamente");
         } catch (error: any) {
             console.error("Error subiendo foto del perfil:", error);
