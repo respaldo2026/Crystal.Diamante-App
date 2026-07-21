@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import {
   Alert,
+  Avatar,
   Button,
   Card,
   Col,
@@ -25,6 +26,7 @@ import {
   CloseCircleOutlined,
   GiftOutlined,
   TeamOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import { supabaseBrowserClient } from "@utils/supabase/client";
 import { normalizeModalidadPago } from "@/types/payment-plans";
@@ -41,6 +43,7 @@ type KitRow = {
   programaId: string;
   programaNombre: string;
   estudianteNombre: string;
+  estudianteFotoUrl: string;
   estudianteTelefono: string;
   grupoNombre: string;
   planLabel: string;
@@ -186,7 +189,7 @@ export default function KitMensualPage() {
 
         let queryMatriculas = supabaseBrowserClient
           .from("matriculas")
-          .select("id, estado, fecha_inicio, modalidad_pago, porcentaje_productos, estudiante_id, curso_id, perfiles!matriculas_estudiante_id_fkey(id, nombre_completo, telefono), cursos(id, nombre, programa_id, dias_semana, hora_inicio, programas(id, nombre))")
+          .select("id, estado, fecha_inicio, modalidad_pago, porcentaje_productos, estudiante_id, curso_id, perfiles!matriculas_estudiante_id_fkey(id, nombre_completo, telefono, foto_url), cursos(id, nombre, programa_id, dias_semana, hora_inicio, programas(id, nombre))")
           .order("fecha_inicio", { ascending: false });
 
         if (filtroGrupo) {
@@ -348,6 +351,7 @@ export default function KitMensualPage() {
             programaId: String(curso?.programa_id ?? programa?.id ?? ""),
             programaNombre: String(programa?.nombre || "Programa"),
             estudianteNombre: String(perfil?.nombre_completo || "Estudiante"),
+            estudianteFotoUrl: String(perfil?.foto_url || ""),
             estudianteTelefono: String(perfil?.telefono || ""),
             grupoNombre: construirNombreGrupo(curso),
             planLabel,
@@ -695,9 +699,16 @@ export default function KitMensualPage() {
             <Table.Column
               title="Estudiante"
               render={(_, record: KitRow) => (
-                <Space direction="vertical" size={0}>
-                  <Text strong>{record.estudianteNombre}</Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>{record.estudianteTelefono || "Sin teléfono"}</Text>
+                <Space align="center" size={10}>
+                  <Avatar
+                    src={record.estudianteFotoUrl || undefined}
+                    icon={<UserOutlined />}
+                    size={38}
+                  />
+                  <Space direction="vertical" size={0}>
+                    <Text strong>{record.estudianteNombre}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{record.estudianteTelefono || "Sin teléfono"}</Text>
+                  </Space>
                 </Space>
               )}
             />
