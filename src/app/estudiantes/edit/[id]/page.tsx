@@ -216,9 +216,33 @@ export default function EditEstudiante() {
         setLoadingMatriculas(false);
     }, [formProps.form, id]);
 
+    const extraerStoragePathDesdePublicUrl = (url?: string | null) => {
+        const valor = String(url || "").trim();
+        if (!valor) return null;
+
+        const marker = "/storage/v1/object/public/avatars/";
+        const markerIndex = valor.indexOf(marker);
+        if (markerIndex >= 0) {
+            const path = valor.slice(markerIndex + marker.length).split("?")[0];
+            return path ? decodeURIComponent(path) : null;
+        }
+
+        const fallbackMarker = "/avatars/";
+        const fallbackIndex = valor.indexOf(fallbackMarker);
+        if (fallbackIndex >= 0) {
+            const path = valor.slice(fallbackIndex + fallbackMarker.length).split("?")[0];
+            return path ? decodeURIComponent(path) : null;
+        }
+
+        return null;
+    };
+
     const subirFotoPerfil = async (file: File) => {
         try {
             setSubiendoFoto(true);
+
+            const fotoUrlAnterior = String(formProps.form?.getFieldValue("foto_url") || fotoPreviewUrl || "").trim();
+            const storagePathAnterior = extraerStoragePathDesdePublicUrl(fotoUrlAnterior);
 
             const identificacion = String(formProps.form?.getFieldValue("identificacion") || "").replace(/\D/g, "").trim() || String(id || "estudiante");
             const fileExt = file.name.split(".").pop() || "jpg";
@@ -243,6 +267,16 @@ export default function EditEstudiante() {
                 .eq("id", id);
 
             if (updateError) throw updateError;
+
+            if (storagePathAnterior && storagePathAnterior !== filePath) {
+                const { error: removeError } = await supabaseBrowserClient.storage
+                    .from("avatars")
+                    .remove([storagePathAnterior]);
+
+                if (removeError) {
+                    console.warn("No se pudo eliminar la foto anterior del bucket avatars:", removeError);
+                }
+            }
 
             setFotoPreviewUrl(publicUrl);
             formProps.form?.setFieldValue("foto_url", publicUrl);

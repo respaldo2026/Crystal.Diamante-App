@@ -873,9 +873,32 @@ export default function StudentDetailView() {
     };
   }, [cameraVisible, stopCamera]);
 
+  const extraerStoragePathDesdePublicUrl = (url?: string | null) => {
+    const valor = String(url || "").trim();
+    if (!valor) return null;
+
+    const marker = "/storage/v1/object/public/avatars/";
+    const markerIndex = valor.indexOf(marker);
+    if (markerIndex >= 0) {
+      const path = valor.slice(markerIndex + marker.length).split("?")[0];
+      return path ? decodeURIComponent(path) : null;
+    }
+
+    const fallbackMarker = "/avatars/";
+    const fallbackIndex = valor.indexOf(fallbackMarker);
+    if (fallbackIndex >= 0) {
+      const path = valor.slice(fallbackIndex + fallbackMarker.length).split("?")[0];
+      return path ? decodeURIComponent(path) : null;
+    }
+
+    return null;
+  };
+
   const handleUploadPhoto = async (file: File) => {
     try {
       setUploadingPhoto(true);
+      const fotoUrlAnterior = String(perfil?.foto_url || "").trim();
+      const storagePathAnterior = extraerStoragePathDesdePublicUrl(fotoUrlAnterior);
       
       // Crear nombre único para el archivo
       const fileExt = file.name.split(".").pop();
@@ -901,6 +924,16 @@ export default function StudentDetailView() {
         .eq("id", idEstudiante);
 
       if (updateError) throw updateError;
+
+      if (storagePathAnterior && storagePathAnterior !== filePath) {
+        const { error: removeError } = await supabaseBrowserClient.storage
+          .from("avatars")
+          .remove([storagePathAnterior]);
+
+        if (removeError) {
+          console.warn("No se pudo eliminar la foto anterior del bucket avatars:", removeError);
+        }
+      }
 
       message.success("Foto actualizada correctamente");
       
