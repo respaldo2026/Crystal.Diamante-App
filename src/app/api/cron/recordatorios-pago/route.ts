@@ -12,6 +12,7 @@ const DELAY_BETWEEN_SENDS_MS = Number(process.env.WHATSAPP_DELAY_BETWEEN_SENDS_M
 const ALLOW_TEXT_FALLBACK = String(process.env.WHATSAPP_ALLOW_TEXT_FALLBACK || 'false').toLowerCase() === 'true';
 const MAX_REMINDERS_PER_PAYMENT = Number(process.env.WHATSAPP_MAX_REMINDERS_PER_PAYMENT || 2);
 const MIN_HOURS_BETWEEN_REMINDERS = Number(process.env.WHATSAPP_MIN_HOURS_BETWEEN_REMINDERS || 20);
+const TOTAL_CLASES_DEFAULT = Number(process.env.CURSO_TOTAL_CLASES_DEFAULT || 20);
 
 function resolveReminderTemplateName(): string {
   const configured = String(DEFAULT_TEMPLATE_NAME || '').trim();
@@ -280,8 +281,29 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
 
     const [{ data: perfilesData }, { data: matriculasData }] = await Promise.all([
       supabase.from('perfiles').select('id, nombre_completo, telefono, notif_whatsapp').in('id', estudianteIds),
-      supabase.from('matriculas').select('id, modalidad_pago, valor_mensual_plan, cursos(nombre)').in('id', matriculaIds),
+      supabase.from('matriculas').select('id, modalidad_pago, valor_mensual_plan, cursos(nombre, estado, total_clases)').in('id', matriculaIds),
     ]);
+
+    const maxClasePorMatricula = new Map<string, number>();
+    if (matriculaIds.length > 0) {
+      const { data: asistenciasData, error: asistenciasError } = await supabase
+        .from('asistencias')
+        .select('matricula_id, clase_numero')
+        .in('matricula_id', matriculaIds)
+        .not('clase_numero', 'is', null);
+
+      if (asistenciasError) {
+        console.warn('[Recordatorio] Error consultando avance de clases por matrícula:', asistenciasError);
+      } else {
+        (asistenciasData || []).forEach((row: any) => {
+          const matriculaId = String(row?.matricula_id || '');
+          const claseNumero = Number(row?.clase_numero || 0);
+          if (!matriculaId || !Number.isFinite(claseNumero) || claseNumero <= 0) return;
+          const actual = Number(maxClasePorMatricula.get(matriculaId) || 0);
+          maxClasePorMatricula.set(matriculaId, Math.max(actual, claseNumero));
+        });
+      }
+    }
 
     const perfilesMap: Record<string, any> = Object.fromEntries((perfilesData || []).map((p: any) => [p.id, p]));
     const matriculasMap: Record<string, any> = Object.fromEntries((matriculasData || []).map((m: any) => [m.id, m]));
@@ -379,6 +401,22 @@ async function runRecordatoriosJob(): Promise<NextResponse> {
         }
 
         const modalidadPago = normalizeModalidadPago(matricula?.modalidad_pago);
+
+        const estadoCurso = String(matricula?.cursos?.estado || '').toLowerCase().trim();
+        const cursoFinalizado = estadoCurso === 'finalizado' || estadoCurso === 'cerrado';
+        const totalClasesCursoRaw = Number(matricula?.cursos?.total_clases || 0);
+        const totalClasesCurso = Number.isFinite(totalClasesCursoRaw) && totalClasesCursoRaw > 0
+          ? totalClasesCursoRaw
+          : TOTAL_CLASES_DEFAULT;
+        const maxClaseMatricula = Number(maxClasePorMatricula.get(String(cuota?.matricula_id || '')) || 0);
+        const cursoCompletado = maxClaseMatricula >= totalClasesCurso;
+
+        if (cursoFinalizado || cursoCompletado) {
+          console.log(`[Recordatorio] Se omite matrícula ${cuota?.matricula_id} por curso finalizado/completado (${maxClaseMatricula}/${totalClasesCurso}).`);
+          omitidos++;
+          continue;
+        }
+
         const plan = getPaymentPlan(modalidadPago);
 
         const fechaMes = cuota?.fecha_vencimiento

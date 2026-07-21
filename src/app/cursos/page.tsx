@@ -54,6 +54,8 @@ const ESTADO_META: Record<string, { label: string; color: string }> = {
   finalizado: { label: "Finalizado", color: "default" },
 };
 
+const TOTAL_CLASES_DEFAULT = 20;
+
 function formatearDias(dias?: string | null) {
   if (!dias) return "Sin días definidos";
   return dias
@@ -95,6 +97,22 @@ function obtenerInscritos(grupo: GrupoAcademico) {
 function obtenerEstado(grupo: GrupoAcademico) {
   const estado = (grupo.estado || "").toLowerCase();
   return ESTADO_META[estado] ?? { label: estado || "Sin estado", color: "default" };
+}
+
+function obtenerTotalClasesObjetivo(grupo: GrupoAcademico): number {
+  const totalCurso = Number(grupo?.total_clases || 0);
+  if (Number.isFinite(totalCurso) && totalCurso > 0) return totalCurso;
+
+  const totalPrograma = Number(grupo?.programas?.total_clases || 0);
+  if (Number.isFinite(totalPrograma) && totalPrograma > 0) return totalPrograma;
+
+  return TOTAL_CLASES_DEFAULT;
+}
+
+function grupoCompletado(grupo: GrupoAcademico): boolean {
+  const ultimaClase = Number(grupo?.ultima_clase_numero || 0);
+  if (!Number.isFinite(ultimaClase) || ultimaClase <= 0) return false;
+  return ultimaClase >= obtenerTotalClasesObjetivo(grupo);
 }
 
 function obtenerMetaCapacidad(inscritos: number, capacidad: number) {
@@ -456,6 +474,7 @@ export default function CursosList() {
     const hoy = dayjs();
     return grupos
       .filter((grupo) => {
+        if (grupoCompletado(grupo)) return false;
         if ((grupo.estado || "").toLowerCase() === "activo") {
           return true;
         }
@@ -473,6 +492,7 @@ export default function CursosList() {
     const hoy = dayjs();
     return grupos
       .filter((grupo) => {
+        if (grupoCompletado(grupo)) return false;
         const estado = (grupo.estado || "").toLowerCase();
         const fechaInicio = grupo.fecha_inicio ? dayjs(grupo.fecha_inicio) : null;
         if (!fechaInicio) return estado === "proximo";
@@ -484,6 +504,7 @@ export default function CursosList() {
   const gruposArchivados = useMemo(() => {
     return grupos
       .filter((grupo) => {
+        if (grupoCompletado(grupo)) return true;
         const estado = (grupo.estado || "").toLowerCase();
         return !["activo", "proximo"].includes(estado);
       })
@@ -643,7 +664,8 @@ export default function CursosList() {
   }, [materialesMarcados, materialesModalGrupo, materialesProximoCiclo, message]);
 
   const renderGrupo = (grupo: GrupoAcademico) => {
-    const estado = obtenerEstado(grupo);
+    const completado = grupoCompletado(grupo);
+    const estado = completado ? ESTADO_META.finalizado : obtenerEstado(grupo);
     const inscritos = obtenerInscritos(grupo);
     const capacidad = Number(grupo.cupos || 0);
     const mensajeInicio = construirMensajeInicio(grupo.fecha_inicio);

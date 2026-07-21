@@ -35,6 +35,7 @@ const DELAY_MS = Number(process.env.CICLO_PAGO_DELAY_MS || 1200);
 const MIN_HOURS_COOLDOWN = Number(process.env.CICLO_PAGO_COOLDOWN_HOURS || 20);
 const AUTO_SESSION_PATTERN = /sesi[oó]n programada autom[aá]ticamente para c[aá]lculo de ciclos/i;
 const AUDIT_MARKER = '[SISTEMA] Recordatorio ciclo pago';
+const TOTAL_CLASES_DEFAULT = Number(process.env.CURSO_TOTAL_CLASES_DEFAULT || 20);
 
 // ------- Utilidades -------
 function sleep(ms: number) {
@@ -279,7 +280,7 @@ async function runRecordatorioCicloPago(): Promise<NextResponse> {
 
   const { data: matriculasRaw, error: matriculasError } = await supabase
     .from('matriculas')
-    .select('id, estudiante_id, curso_id, modalidad_pago, valor_mensual_plan, estado')
+    .select('id, estudiante_id, curso_id, modalidad_pago, valor_mensual_plan, estado, cursos(estado, total_clases)')
     .in('curso_id', cursoIdsTrigger)
     .in('modalidad_pago', ['MENSUAL_100'])
     .in('estado', ['activa', 'activo', 'ACTIVA', 'ACTIVO']);
@@ -289,7 +290,43 @@ async function runRecordatorioCicloPago(): Promise<NextResponse> {
     return NextResponse.json({ error: 'Error obteniendo matrículas' }, { status: 500 });
   }
 
-  const matriculas = matriculasRaw || [];
+  const matriculasIniciales = matriculasRaw || [];
+
+  const maxClasePorMatricula = new Map<string, number>();
+  const matriculaIdsIniciales = matriculasIniciales.map((m: any) => m.id).filter(Boolean);
+  if (matriculaIdsIniciales.length > 0) {
+    const { data: asistenciasData, error: asistenciasError } = await supabase
+      .from('asistencias')
+      .select('matricula_id, clase_numero')
+      .in('matricula_id', matriculaIdsIniciales)
+      .not('clase_numero', 'is', null);
+
+    if (asistenciasError) {
+      console.warn('[CicloPago] Error consultando avance de clases por matrícula:', asistenciasError);
+    } else {
+      (asistenciasData || []).forEach((row: any) => {
+        const matriculaId = String(row?.matricula_id || '');
+        const claseNumero = Number(row?.clase_numero || 0);
+        if (!matriculaId || !Number.isFinite(claseNumero) || claseNumero <= 0) return;
+        const actual = Number(maxClasePorMatricula.get(matriculaId) || 0);
+        maxClasePorMatricula.set(matriculaId, Math.max(actual, claseNumero));
+      });
+    }
+  }
+
+  const matriculas = matriculasIniciales.filter((m: any) => {
+    const estadoCurso = String(m?.cursos?.estado || '').toLowerCase().trim();
+    const cursoFinalizado = estadoCurso === 'finalizado' || estadoCurso === 'cerrado';
+
+    const totalClasesRaw = Number(m?.cursos?.total_clases || 0);
+    const totalClases = Number.isFinite(totalClasesRaw) && totalClasesRaw > 0
+      ? totalClasesRaw
+      : TOTAL_CLASES_DEFAULT;
+
+    const maxClase = Number(maxClasePorMatricula.get(String(m?.id || '')) || 0);
+    const cursoCompletado = maxClase >= totalClases;
+    return !cursoFinalizado && !cursoCompletado;
+  });
   if (matriculas.length === 0) {
     console.log('[CicloPago] Sin matrículas activas mensuales para los cursos trigger.');
     return NextResponse.json({ success: true, mensaje: 'Sin matrículas activas mensuales', enviados: 0 });

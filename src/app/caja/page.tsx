@@ -46,6 +46,7 @@ import { getPaymentPlan, normalizeModalidadPago } from "@/types/payment-plans";
 const { Title, Text } = Typography;
 
 const MATRICULA_ESTADOS_ACTIVOS = ["activo", "en curso", "pendiente", "inscrito", "preinscrito", "matriculado"];
+const TOTAL_CLASES_DEFAULT = 20;
 
 type MetodoPago = "efectivo" | "transferencia" | "tarjeta" | "nequi" | "sistecredito" | "qr";
 
@@ -583,13 +584,54 @@ export default function CajaPage() {
         // Cargar matrículas del estudiante
         const { data: matriculasData, error: matriculasError } = await supabaseBrowserClient
           .from("matriculas")
-          .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, programa_id, numero_cuotas, duracion, dias_semana, precio_mensualidad, programas ( duracion, precio_mensualidad, precio_mensual_100, precio_por_clase ) )")
+          .select("id, fecha_inicio, valor_mensual_plan, modalidad_pago, porcentaje_productos, cursos ( nombre, estado, total_clases, programa_id, numero_cuotas, duracion, dias_semana, precio_mensualidad, programas ( duracion, precio_mensualidad, precio_mensual_100, precio_por_clase ) )")
           .eq("estudiante_id", estudianteId)
           .in("estado", MATRICULA_ESTADOS_ACTIVOS);
 
         if (matriculasError) throw matriculasError;
 
-        const matriculasFormat = (matriculasData || []).map((m: any) => ({
+        const matriculasRaw = (matriculasData || []) as any[];
+        const matriculaIdsRaw = matriculasRaw.map((m: any) => m?.id).filter(Boolean);
+
+        const maxClasePorMatricula = new Map<string, number>();
+        if (matriculaIdsRaw.length > 0) {
+          const { data: asistenciasData, error: asistenciasError } = await supabaseBrowserClient
+            .from("asistencias")
+            .select("matricula_id, clase_numero")
+            .in("matricula_id", matriculaIdsRaw)
+            .not("clase_numero", "is", null);
+
+          if (asistenciasError) throw asistenciasError;
+
+          (asistenciasData || []).forEach((item: any) => {
+            const matriculaId = String(item?.matricula_id || "");
+            const numeroClase = Number(item?.clase_numero || 0);
+            if (!matriculaId || !Number.isFinite(numeroClase) || numeroClase <= 0) return;
+            const actual = Number(maxClasePorMatricula.get(matriculaId) || 0);
+            maxClasePorMatricula.set(matriculaId, Math.max(actual, numeroClase));
+          });
+        }
+
+        const matriculasVigentesRaw = matriculasRaw.filter((m: any) => {
+          const estadoCurso = String(m?.cursos?.estado || "").toLowerCase().trim();
+          const cursoFinalizado = estadoCurso === "finalizado" || estadoCurso === "cerrado";
+
+          const totalClasesObjetivo = Number(m?.cursos?.total_clases || TOTAL_CLASES_DEFAULT);
+          const totalClases = Number.isFinite(totalClasesObjetivo) && totalClasesObjetivo > 0
+            ? totalClasesObjetivo
+            : TOTAL_CLASES_DEFAULT;
+
+          const maxClase = Number(maxClasePorMatricula.get(String(m?.id || "")) || 0);
+          const cursoCompletado = maxClase >= totalClases;
+
+          return !cursoFinalizado && !cursoCompletado;
+        });
+
+        if (matriculasRaw.length > 0 && matriculasVigentesRaw.length === 0) {
+          messageApi.info("Este estudiante solo tiene matrículas finalizadas/completadas. No está habilitado para cobro en POS.");
+        }
+
+        const matriculasFormat = (matriculasVigentesRaw || []).map((m: any) => ({
           id: m.id,
           curso_nombre: m.cursos?.nombre || "Sin nombre",
           curso_programa_id: m.cursos?.programa_id || null,
